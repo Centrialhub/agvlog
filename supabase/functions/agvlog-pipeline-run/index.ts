@@ -69,6 +69,7 @@ Deno.serve(async (req) => {
 
     const stats = {
       login: null as any,
+      synced_units: 0,
       polled_units: 0,
       total_inserted: 0,
       processed_vehicles: 0,
