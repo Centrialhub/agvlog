@@ -2,24 +2,54 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Index from "./pages/Index";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider, useAuth } from "@/hooks/useAuth";
+import { TenantProvider } from "@/hooks/useTenant";
+import AppLayout from "@/components/layout/AppLayout";
+import Auth from "@/pages/Auth";
+import Dashboard from "@/pages/Dashboard";
+import Vehicles from "@/pages/Vehicles";
+import Drivers from "@/pages/Drivers";
+import PlaceholderPage from "@/pages/PlaceholderPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
+
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="flex h-screen items-center justify-center text-muted-foreground">Carregando...</div>;
+  if (!user) return <Navigate to="/auth" replace />;
+  return <TenantProvider><AppLayout>{children}</AppLayout></TenantProvider>;
+}
+
+function AuthRoute() {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="flex h-screen items-center justify-center text-muted-foreground">Carregando...</div>;
+  if (user) return <Navigate to="/" replace />;
+  return <Auth />;
+}
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
+      <AuthProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/auth" element={<AuthRoute />} />
+            <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+            <Route path="/vehicles" element={<ProtectedRoute><Vehicles /></ProtectedRoute>} />
+            <Route path="/drivers" element={<ProtectedRoute><Drivers /></ProtectedRoute>} />
+            <Route path="/fleet-map" element={<ProtectedRoute><PlaceholderPage title="Mapa da Frota" description="Disponível na Fase 3 — após configurar a integração SSX" /></ProtectedRoute>} />
+            <Route path="/alerts" element={<ProtectedRoute><PlaceholderPage title="Alertas" description="Disponível na Fase 4 — inteligência básica" /></ProtectedRoute>} />
+            <Route path="/geofences" element={<ProtectedRoute><PlaceholderPage title="Geofences" description="Disponível na Fase 4 — inteligência básica" /></ProtectedRoute>} />
+            <Route path="/reports" element={<ProtectedRoute><PlaceholderPage title="Relatórios" description="Disponível na Fase 5 — relatórios e dashboards" /></ProtectedRoute>} />
+            <Route path="/settings" element={<ProtectedRoute><PlaceholderPage title="Configurações" description="Integração SSX, política de features, parâmetros" /></ProtectedRoute>} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );
