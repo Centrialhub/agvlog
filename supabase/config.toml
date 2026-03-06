@@ -8,3 +8,12 @@ verify_jwt = false
 
 [functions.ssx-poll-positions]
 verify_jwt = false
+
+[functions.agvlog-process-vehicle]
+verify_jwt = false
+
+[functions.agvlog-aggregate-daily]
+verify_jwt = false
+
+[functions.agvlog-integration-upsert]
+verify_jwt = false
