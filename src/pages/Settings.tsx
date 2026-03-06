@@ -95,6 +95,22 @@ function IntegrationSection() {
     onError: (e: any) => toast.error(`Falha: ${e.message}`),
   });
 
+  const syncUnitsMutation = useMutation({
+    mutationFn: async (accountId: string) => {
+      const { data, error } = await supabase.functions.invoke('ssx-sync-units', { body: { integration_account_id: accountId } });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['provider_units'] });
+      queryClient.invalidateQueries({ queryKey: ['vehicles'] });
+      queryClient.invalidateQueries({ queryKey: ['tracker_links'] });
+      toast.success(`Sincronizado: ${data.upserted} rastreadores, ${data.vehicles_created || 0} veículos criados, ${data.links_created || 0} vínculos`);
+    },
+    onError: (e: any) => toast.error(`Falha sync rastreadores: ${e.message}`),
+  });
+
   const pollMutation = useMutation({
     mutationFn: async (accountId: string) => {
       const { data, error } = await supabase.functions.invoke('agvlog-pipeline-run', {
@@ -167,10 +183,13 @@ function IntegrationSection() {
                   <Button size="sm" onClick={() => loginMutation.mutate(acc.id)} disabled={loginMutation.isPending}>
                     <RefreshCw className={`mr-2 h-3 w-3 ${loginMutation.isPending ? 'animate-spin' : ''}`} />Testar Login
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => syncTelemetryMutation.mutate(acc.id)} disabled={syncTelemetryMutation.isPending || acc.status !== 'ok'}>
-                    <Activity className={`mr-2 h-3 w-3 ${syncTelemetryMutation.isPending ? 'animate-spin' : ''}`} />Sync Telemetria
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => pollMutation.mutate(acc.id)} disabled={pollMutation.isPending || acc.status !== 'ok'}>
+                  <Button size="sm" variant="outline" onClick={() => syncUnitsMutation.mutate(acc.id)} disabled={syncUnitsMutation.isPending || acc.status !== 'ok'}>
+                     <Radio className={`mr-2 h-3 w-3 ${syncUnitsMutation.isPending ? 'animate-spin' : ''}`} />Sync Rastreadores
+                   </Button>
+                   <Button size="sm" variant="outline" onClick={() => syncTelemetryMutation.mutate(acc.id)} disabled={syncTelemetryMutation.isPending || acc.status !== 'ok'}>
+                     <Activity className={`mr-2 h-3 w-3 ${syncTelemetryMutation.isPending ? 'animate-spin' : ''}`} />Sync Telemetria
+                   </Button>
+                   <Button size="sm" variant="outline" onClick={() => pollMutation.mutate(acc.id)} disabled={pollMutation.isPending || acc.status !== 'ok'}>
                     <Radio className={`mr-2 h-3 w-3 ${pollMutation.isPending ? 'animate-spin' : ''}`} />Rodar Polling
                   </Button>
                   <Button size="sm" variant="ghost" onClick={() => { if (confirm('Remover integração?')) deleteMutation.mutate(acc.id); }}>

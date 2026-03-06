@@ -93,10 +93,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Call SSX TrackedUnit List
+    // Call SSX TrackedUnit List (undocumented but functional endpoint)
     const baseUrl = account.base_url.replace(/\/$/, "");
-    const apiVersion = account.settings?.api_version || "v3";
-    const listUrl = `${baseUrl}/${apiVersion}/Tracking/TrackedUnit/List`;
+    const listUrl = `${baseUrl}/Tracking/TrackedUnit/List`;
     const startTime = Date.now();
 
     let ssxResponse: Response;
@@ -159,6 +158,8 @@ Deno.serve(async (req) => {
     // Upsert into provider_units
     let upsertedCount = 0;
     let skippedCount = 0;
+    let vehiclesCreated = 0;
+    let linksCreated = 0;
     const seenCodes = new Set<string>();
 
     for (const u of units) {
@@ -173,8 +174,10 @@ Deno.serve(async (req) => {
 
       const externalId = String(u.Id || u.id || u.TrackedUnitId || "").trim() || null;
       const label = (u.Description || u.description || u.Name || u.name || u.Label || "").trim() || null;
+      const plate = (u.Plate || u.plate || "").trim() || null;
 
-      const { error: upsertErr } = await supabase
+      // Upsert provider_unit
+      const { data: upsertedUnit, error: upsertErr } = await supabase
         .from("provider_units")
         .upsert(
           {
@@ -187,13 +190,74 @@ Deno.serve(async (req) => {
             updated_at: new Date().toISOString(),
           },
           { onConflict: "tenant_id,integration_account_id,external_code", ignoreDuplicates: false }
-        );
+        )
+        .select("id")
+        .single();
 
       if (upsertErr) {
         console.error(`Upsert failed for ${externalCode}:`, upsertErr.message);
         skippedCount++;
-      } else {
-        upsertedCount++;
+        continue;
+      }
+      upsertedCount++;
+
+      // Auto-create vehicle from Plate if available
+      if (plate && upsertedUnit) {
+        const { data: existingVehicle } = await supabase
+          .from("vehicles")
+          .select("id")
+          .eq("tenant_id", account.tenant_id)
+          .eq("plate", plate)
+          .limit(1)
+          .maybeSingle();
+
+        let vehicleId: string;
+        if (existingVehicle) {
+          vehicleId = existingVehicle.id;
+        } else {
+          const { data: newVehicle, error: vErr } = await supabase
+            .from("vehicles")
+            .insert({
+              tenant_id: account.tenant_id,
+              plate,
+              nickname: label || null,
+              type: "truck",
+            })
+            .select("id")
+            .single();
+          if (vErr || !newVehicle) {
+            console.error(`Failed to create vehicle for plate ${plate}:`, vErr?.message);
+            continue;
+          }
+          vehicleId = newVehicle.id;
+          vehiclesCreated++;
+        }
+
+        // Auto-create vehicle_tracker_link if none active
+        const { data: existingLink } = await supabase
+          .from("vehicle_tracker_links")
+          .select("id")
+          .eq("tenant_id", account.tenant_id)
+          .eq("provider_unit_id", upsertedUnit.id)
+          .eq("active", true)
+          .limit(1)
+          .maybeSingle();
+
+        if (!existingLink) {
+          const { error: linkErr } = await supabase
+            .from("vehicle_tracker_links")
+            .insert({
+              tenant_id: account.tenant_id,
+              vehicle_id: vehicleId,
+              provider_unit_id: upsertedUnit.id,
+              active: true,
+            });
+          if (linkErr) {
+            console.error(`Failed to link unit ${externalCode} to vehicle ${plate}:`, linkErr.message);
+          } else {
+            linksCreated++;
+          }
+        }
       }
     }
 
@@ -209,6 +273,8 @@ Deno.serve(async (req) => {
         total_received: units.length,
         upserted: upsertedCount,
         skipped: skippedCount,
+        vehicles_created: vehiclesCreated,
+        links_created: linksCreated,
       },
     });
 
@@ -218,6 +284,8 @@ Deno.serve(async (req) => {
         total_received: units.length,
         upserted: upsertedCount,
         skipped: skippedCount,
+        vehicles_created: vehiclesCreated,
+        links_created: linksCreated,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
