@@ -95,7 +95,8 @@ Deno.serve(async (req) => {
 
     // Call SSX TrackedUnit List (undocumented but functional endpoint)
     const baseUrl = account.base_url.replace(/\/$/, "");
-    const listUrl = `${baseUrl}/Tracking/TrackedUnit/List`;
+    const apiVersion = account.settings?.api_version || "v3";
+    const listUrl = `${baseUrl}/${apiVersion}/Tracking/TrackedUnit/List`;
     const startTime = Date.now();
 
     let ssxResponse: Response;
