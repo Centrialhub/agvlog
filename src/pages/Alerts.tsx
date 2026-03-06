@@ -14,8 +14,45 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { Bell, CheckCircle2, Eye, EyeOff, Plus, AlertTriangle, Clock, X } from 'lucide-react';
+import { Bell, CheckCircle2, Eye, EyeOff, Plus, AlertTriangle, Clock, X, Play } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+
+function ProcessButton() {
+  const { currentTenant } = useTenant();
+  const isAdmin = useIsAdmin();
+  const { data: vehicles = [] } = useVehicles();
+  const [running, setRunning] = useState(false);
+
+  if (!isAdmin) return null;
+
+  const handleProcess = async () => {
+    if (!currentTenant || vehicles.length === 0) return;
+    setRunning(true);
+    try {
+      let processed = 0;
+      for (const v of vehicles) {
+        await supabase.functions.invoke('agvlog-process-vehicle', {
+          body: { tenant_id: currentTenant.id, vehicle_id: v.id },
+        });
+        processed++;
+      }
+      await supabase.functions.invoke('agvlog-aggregate-daily', {
+        body: { tenant_id: currentTenant.id },
+      });
+      toast.success(`Processamento concluído: ${processed} veículos`);
+    } catch (e: any) {
+      toast.error(`Erro: ${e.message}`);
+    }
+    setRunning(false);
+  };
+
+  return (
+    <Button onClick={handleProcess} disabled={running} variant="outline" size="sm">
+      <Play className="mr-2 h-4 w-4" />{running ? 'Processando...' : 'Rodar processamento'}
+    </Button>
+  );
+}
 import { ptBR } from 'date-fns/locale';
 
 export default function Alerts() {
