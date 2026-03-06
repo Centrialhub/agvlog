@@ -60,11 +60,14 @@ export default function Alerts() {
 
   return (
     <div className="animate-fade-in space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-          <Bell className="h-6 w-6 text-primary" /> Alertas
-        </h1>
-        <p className="text-sm text-muted-foreground">Monitore eventos e gerencie regras de alerta</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+            <Bell className="h-6 w-6 text-primary" /> Alertas
+          </h1>
+          <p className="text-sm text-muted-foreground">Monitore eventos e gerencie regras de alerta</p>
+        </div>
+        <ProcessButton />
       </div>
       <Tabs defaultValue="instances">
         <TabsList>
