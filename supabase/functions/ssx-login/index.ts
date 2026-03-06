@@ -102,8 +102,8 @@ Deno.serve(async (req) => {
     }
 
     const loginPayload: Record<string, string> = {
-      username: account.username,
-      password,
+      Username: account.username,
+      Password: password,
       HashAuth: account.hashauth || "",
     };
     if (account.hashcode) {
