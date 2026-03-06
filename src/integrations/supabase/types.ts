@@ -67,6 +67,54 @@ export type Database = {
           },
         ]
       }
+      ingestion_cursors: {
+        Row: {
+          backoff_until: string | null
+          id: string
+          last_error: string | null
+          last_error_at: string | null
+          last_polled_at: string | null
+          last_success_at: string | null
+          provider_unit_id: string
+          tenant_id: string
+        }
+        Insert: {
+          backoff_until?: string | null
+          id?: string
+          last_error?: string | null
+          last_error_at?: string | null
+          last_polled_at?: string | null
+          last_success_at?: string | null
+          provider_unit_id: string
+          tenant_id: string
+        }
+        Update: {
+          backoff_until?: string | null
+          id?: string
+          last_error?: string | null
+          last_error_at?: string | null
+          last_polled_at?: string | null
+          last_success_at?: string | null
+          provider_unit_id?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ingestion_cursors_provider_unit_id_fkey"
+            columns: ["provider_unit_id"]
+            isOneToOne: false
+            referencedRelation: "provider_units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ingestion_cursors_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       integration_accounts: {
         Row: {
           base_url: string
@@ -185,6 +233,117 @@ export type Database = {
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      positions_last: {
+        Row: {
+          captured_at: string
+          heading: number | null
+          lat: number
+          lng: number
+          received_at: string
+          source: Json | null
+          speed: number | null
+          telemetry_snapshot: Json | null
+          tenant_id: string
+          vehicle_id: string
+        }
+        Insert: {
+          captured_at: string
+          heading?: number | null
+          lat: number
+          lng: number
+          received_at?: string
+          source?: Json | null
+          speed?: number | null
+          telemetry_snapshot?: Json | null
+          tenant_id: string
+          vehicle_id: string
+        }
+        Update: {
+          captured_at?: string
+          heading?: number | null
+          lat?: number
+          lng?: number
+          received_at?: string
+          source?: Json | null
+          speed?: number | null
+          telemetry_snapshot?: Json | null
+          tenant_id?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "positions_last_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "positions_last_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      positions_raw: {
+        Row: {
+          captured_at: string
+          heading: number | null
+          id: string
+          lat: number
+          lng: number
+          provider_payload_hash: string | null
+          received_at: string
+          speed: number | null
+          telemetry: Json | null
+          tenant_id: string
+          vehicle_id: string
+        }
+        Insert: {
+          captured_at: string
+          heading?: number | null
+          id?: string
+          lat: number
+          lng: number
+          provider_payload_hash?: string | null
+          received_at?: string
+          speed?: number | null
+          telemetry?: Json | null
+          tenant_id: string
+          vehicle_id: string
+        }
+        Update: {
+          captured_at?: string
+          heading?: number | null
+          id?: string
+          lat?: number
+          lng?: number
+          provider_payload_hash?: string | null
+          received_at?: string
+          speed?: number | null
+          telemetry?: Json | null
+          tenant_id?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "positions_raw_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "positions_raw_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
             referencedColumns: ["id"]
           },
         ]

@@ -11,6 +11,8 @@ import Settings from "@/pages/Settings";
 import Dashboard from "@/pages/Dashboard";
 import Vehicles from "@/pages/Vehicles";
 import Drivers from "@/pages/Drivers";
+import FleetMap from "@/pages/FleetMap";
+import VehicleDetails from "@/pages/VehicleDetails";
 import PlaceholderPage from "@/pages/PlaceholderPage";
 import NotFound from "./pages/NotFound";
 
@@ -42,7 +44,8 @@ const App = () => (
             <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/vehicles" element={<ProtectedRoute><Vehicles /></ProtectedRoute>} />
             <Route path="/drivers" element={<ProtectedRoute><Drivers /></ProtectedRoute>} />
-            <Route path="/fleet-map" element={<ProtectedRoute><PlaceholderPage title="Mapa da Frota" description="Disponível na Fase 3 — após configurar a integração SSX" /></ProtectedRoute>} />
+            <Route path="/fleet-map" element={<ProtectedRoute><FleetMap /></ProtectedRoute>} />
+            <Route path="/vehicles/:vehicleId" element={<ProtectedRoute><VehicleDetails /></ProtectedRoute>} />
             <Route path="/alerts" element={<ProtectedRoute><PlaceholderPage title="Alertas" description="Disponível na Fase 4 — inteligência básica" /></ProtectedRoute>} />
             <Route path="/geofences" element={<ProtectedRoute><PlaceholderPage title="Geofences" description="Disponível na Fase 4 — inteligência básica" /></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute><PlaceholderPage title="Relatórios" description="Disponível na Fase 5 — relatórios e dashboards" /></ProtectedRoute>} />
