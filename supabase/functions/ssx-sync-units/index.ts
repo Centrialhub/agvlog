@@ -245,8 +245,8 @@ Deno.serve(async (req) => {
       tenant_id: account.tenant_id,
       integration_account_id,
       action: "ssx_sync_units",
-      endpoint: listUrl,
-      status_code: ssxResponse.status,
+      endpoint: unitFetch.endpoint,
+      status_code: unitFetch.status_code,
       success: true,
       duration_ms: duration,
       metadata: {
