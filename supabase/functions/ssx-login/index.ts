@@ -220,6 +220,10 @@ Deno.serve(async (req) => {
 
     const duration = Date.now() - startTime;
 
+    if (!ssxResponse) {
+      throw new Error("SSX login failed: no response received");
+    }
+
     if (!ssxResponse.ok) {
       const newStatus = ssxResponse.status === 401 ? "invalid_credentials" : "degraded";
 
@@ -241,6 +245,7 @@ Deno.serve(async (req) => {
         success: false,
         error_message: responseText.substring(0, 500),
         duration_ms: duration,
+        metadata: { request_format: requestFormat },
       });
 
       return new Response(
@@ -304,7 +309,7 @@ Deno.serve(async (req) => {
       status_code: ssxResponse.status,
       success: true,
       duration_ms: duration,
-      metadata: { token_expires_at: expiresAt },
+      metadata: { token_expires_at: expiresAt, request_format: requestFormat },
     });
 
     return new Response(
