@@ -347,6 +347,18 @@ async function fetchUnitsWithFallback(params: {
       };
     }
 
+    // 404 means endpoint doesn't exist, try next. Other errors are fatal (except 429).
+    if (response.status === 429) {
+      return {
+        success: false,
+        endpoint,
+        status_code: 429,
+        error_message: "Rate limit exceeded. Try again in a few minutes.",
+        attempted_endpoints: attemptedEndpoints,
+        attempted_formats: attemptedFormats,
+      };
+    }
+
     if (response.status !== 404) {
       return {
         success: false,
