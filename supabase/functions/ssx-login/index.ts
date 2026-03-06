@@ -3,7 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version, x-agvlog-cron-secret",
 };
 
 Deno.serve(async (req) => {
@@ -12,33 +12,40 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-    // Verify user
-    const anonClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: claimsData, error: claimsError } = await anonClient.auth.getClaims(
-      authHeader.replace("Bearer ", "")
-    );
-    if (claimsError || !claimsData?.claims) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+    let callerId: string | null = null;
+
+    // Auth: JWT or cron secret
+    const cronSecret = req.headers.get("x-agvlog-cron-secret");
+    const expectedCronSecret = Deno.env.get("AGVLOG_CRON_SECRET");
+    const isCron = !!(cronSecret && expectedCronSecret && cronSecret === expectedCronSecret);
+
+    if (!isCron) {
+      const authHeader = req.headers.get("Authorization");
+      if (!authHeader?.startsWith("Bearer ")) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const anonClient = createClient(supabaseUrl, supabaseAnonKey, {
+        global: { headers: { Authorization: authHeader } },
       });
+      const { data: claimsData, error: claimsError } = await anonClient.auth.getClaims(
+        authHeader.replace("Bearer ", "")
+      );
+      if (claimsError || !claimsData?.claims) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      callerId = claimsData.claims.sub as string;
     }
 
-    const callerId = claimsData.claims.sub as string;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { integration_account_id } = await req.json();
@@ -63,13 +70,15 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Verify caller is admin/owner of this tenant
-    const memberRole = await getTenantRole(supabase, account.tenant_id, callerId);
-    if (!memberRole || !["owner", "admin"].includes(memberRole)) {
-      return new Response(
-        JSON.stringify({ error: "Forbidden: admin role required" }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    // Verify caller is admin/owner of this tenant (skip for cron)
+    if (!isCron && callerId) {
+      const memberRole = await getTenantRole(supabase, account.tenant_id, callerId);
+      if (!memberRole || !["owner", "admin"].includes(memberRole)) {
+        return new Response(
+          JSON.stringify({ error: "Forbidden: admin role required" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     // Check if token is still valid (>60min remaining)
@@ -294,7 +303,6 @@ async function logIntegration(
     console.error("Failed to log integration event:", e);
   }
 }
-
 
 async function decryptAesGcm(encrypted: string, keyHex: string): Promise<string> {
   const parts = encrypted.split(":");
