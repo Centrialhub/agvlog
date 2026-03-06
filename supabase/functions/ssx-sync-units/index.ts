@@ -278,6 +278,240 @@ Deno.serve(async (req) => {
   }
 });
 
+type UnitFetchSuccess = {
+  success: true;
+  endpoint: string;
+  status_code: number;
+  items: any[];
+  attempted_endpoints: string[];
+  attempted_formats: string[];
+};
+
+type UnitFetchFailure = {
+  success: false;
+  endpoint: string;
+  status_code: number;
+  error_message: string;
+  attempted_endpoints: string[];
+  attempted_formats: string[];
+};
+
+async function fetchUnitsWithFallback(params: {
+  baseUrl: string;
+  apiVersion: string;
+  token: string;
+}): Promise<UnitFetchSuccess | UnitFetchFailure> {
+  const { baseUrl, apiVersion, token } = params;
+  const attemptedEndpoints: string[] = [];
+  const attemptedFormats: string[] = [];
+
+  const versionPrefix = apiVersion && apiVersion !== "v1" ? `/${apiVersion}` : "";
+  const trackedUnitEndpoints = [
+    `${baseUrl}${versionPrefix}/Tracking/TrackedUnit/List`,
+    `${baseUrl}/Tracking/TrackedUnit/List`,
+  ];
+
+  let lastStatus = 404;
+  let lastError = "Not found";
+  let lastEndpoint = trackedUnitEndpoints[0];
+
+  // 1) Try undocumented TrackedUnit/List paths
+  for (const endpoint of trackedUnitEndpoints) {
+    attemptedEndpoints.push(endpoint);
+    lastEndpoint = endpoint;
+
+    const response = await safePostJson(endpoint, token, {});
+    if (response.networkError) {
+      return {
+        success: false,
+        endpoint,
+        status_code: 502,
+        error_message: response.networkError,
+        attempted_endpoints: attemptedEndpoints,
+        attempted_formats: attemptedFormats,
+      };
+    }
+
+    lastStatus = response.status;
+    lastError = response.text.slice(0, 500);
+
+    if (response.ok) {
+      attemptedFormats.push("tracked_unit:{}");
+      return {
+        success: true,
+        endpoint,
+        status_code: response.status,
+        items: extractItems(response.parsed),
+        attempted_endpoints: attemptedEndpoints,
+        attempted_formats: attemptedFormats,
+      };
+    }
+
+    if (response.status !== 404) {
+      return {
+        success: false,
+        endpoint,
+        status_code: response.status,
+        error_message: response.text.slice(0, 500),
+        attempted_endpoints: attemptedEndpoints,
+        attempted_formats: attemptedFormats,
+      };
+    }
+  }
+
+  // 2) Fallback to PositionHistory/List to infer units
+  const positionEndpoint = `${baseUrl}${versionPrefix}/Tracking/PositionHistory/List`;
+  attemptedEndpoints.push(positionEndpoint);
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const filters = [{ PropertyName: "DateTimeGPS", Condition: ">=", Value: since }];
+
+  attemptedFormats.push("position_history:array");
+  let response = await safePostJson(positionEndpoint, token, filters);
+  if (response.networkError) {
+    return {
+      success: false,
+      endpoint: positionEndpoint,
+      status_code: 502,
+      error_message: response.networkError,
+      attempted_endpoints: attemptedEndpoints,
+      attempted_formats: attemptedFormats,
+    };
+  }
+
+  // Some SSX instances require wrapped format
+  if (!response.ok && (response.status === 400 || response.status === 415)) {
+    attemptedFormats.push("position_history:wrapped");
+    response = await safePostJson(positionEndpoint, token, { Filters: filters });
+    if (response.networkError) {
+      return {
+        success: false,
+        endpoint: positionEndpoint,
+        status_code: 502,
+        error_message: response.networkError,
+        attempted_endpoints: attemptedEndpoints,
+        attempted_formats: attemptedFormats,
+      };
+    }
+  }
+
+  if (!response.ok) {
+    return {
+      success: false,
+      endpoint: positionEndpoint,
+      status_code: response.status || lastStatus,
+      error_message: response.text.slice(0, 500) || lastError,
+      attempted_endpoints: attemptedEndpoints,
+      attempted_formats: attemptedFormats,
+    };
+  }
+
+  return {
+    success: true,
+    endpoint: `${positionEndpoint} (fallback)` ,
+    status_code: response.status,
+    items: extractItems(response.parsed),
+    attempted_endpoints: attemptedEndpoints,
+    attempted_formats: attemptedFormats,
+  };
+}
+
+async function safePostJson(endpoint: string, token: string, body: any): Promise<{
+  ok: boolean;
+  status: number;
+  text: string;
+  parsed: any;
+  networkError?: string;
+}> {
+  try {
+    const resp = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    const text = await resp.text();
+    let parsed: any = null;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      parsed = null;
+    }
+
+    return {
+      ok: resp.ok,
+      status: resp.status,
+      text,
+      parsed,
+    };
+  } catch (error: any) {
+    return {
+      ok: false,
+      status: 0,
+      text: "",
+      parsed: null,
+      networkError: `SSX unreachable: ${error.message}`,
+    };
+  }
+}
+
+function extractItems(parsed: any): any[] {
+  if (Array.isArray(parsed)) return parsed;
+  if (!parsed || typeof parsed !== "object") return [];
+
+  const candidates = [
+    parsed.data,
+    parsed.Data,
+    parsed.items,
+    parsed.Items,
+    parsed.result,
+    parsed.Result,
+    parsed.positions,
+    parsed.Positions,
+    parsed.records,
+    parsed.Records,
+  ];
+
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) return candidate;
+  }
+
+  return [];
+}
+
+function normalizeUnits(items: any[]): any[] {
+  return items.map((item) => {
+    const inferredCode =
+      item.TrackedUnitIntegrationCode ||
+      item.trackedUnitIntegrationCode ||
+      item.TrackedUnit ||
+      item.trackedUnit ||
+      item.IntegrationCode ||
+      item.integrationCode ||
+      item.Code ||
+      item.code ||
+      item.Plate ||
+      item.plate ||
+      "";
+
+    return {
+      ...item,
+      TrackedUnit: item.TrackedUnit || item.trackedUnit || inferredCode,
+      IntegrationCode:
+        item.IntegrationCode ||
+        item.integrationCode ||
+        item.TrackedUnitIntegrationCode ||
+        item.trackedUnitIntegrationCode ||
+        inferredCode,
+      Plate: item.Plate || item.plate || null,
+      Description: item.Description || item.description || item.Name || item.name || item.Plate || item.plate || null,
+    };
+  });
+}
+
 async function logIntegration(
   supabase: any,
   log: {
