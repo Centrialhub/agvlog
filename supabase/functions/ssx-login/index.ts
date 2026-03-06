@@ -12,7 +12,6 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Authenticate the caller
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -25,7 +24,7 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-    // Verify user with anon client
+    // Verify user
     const anonClient = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
     });
@@ -39,7 +38,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Use service role for DB operations (bypasses RLS)
+    const callerId = claimsData.claims.sub as string;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { integration_account_id } = await req.json();
@@ -64,6 +63,15 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Verify caller is admin/owner of this tenant
+    const memberRole = await getTenantRole(supabase, account.tenant_id, callerId);
+    if (!memberRole || !["owner", "admin"].includes(memberRole)) {
+      return new Response(
+        JSON.stringify({ error: "Forbidden: admin role required" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Check if token is still valid (>60min remaining)
     if (account.token_cache && account.token_expires_at) {
       const expiresAt = new Date(account.token_expires_at);
@@ -82,12 +90,11 @@ Deno.serve(async (req) => {
     }
 
     // Build SSX login request
-    const apiVersion = account.settings?.api_version || "v3";
     const loginUrl = `${account.base_url}/Login`;
 
     const loginPayload: Record<string, string> = {
       username: account.username,
-      password: account.password_encrypted, // In production, decrypt this
+      password: account.password_encrypted,
       HashAuth: account.hashauth || "",
     };
     if (account.hashcode) {
@@ -103,7 +110,6 @@ Deno.serve(async (req) => {
         body: JSON.stringify(loginPayload),
       });
     } catch (fetchErr: any) {
-      // SSX unreachable
       await supabase
         .from("integration_accounts")
         .update({
@@ -169,13 +175,11 @@ Deno.serve(async (req) => {
     let token: string;
     try {
       const parsed = JSON.parse(responseText);
-      // SSX may return token in different formats
       token = parsed.token || parsed.Token || parsed.access_token || parsed.AccessToken || responseText;
       if (typeof token === "object") {
         token = JSON.stringify(token);
       }
     } catch {
-      // If response is plain text token
       token = responseText.trim().replace(/^"/, "").replace(/"$/, "");
     }
 
@@ -238,6 +242,23 @@ Deno.serve(async (req) => {
     );
   }
 });
+
+async function getTenantRole(
+  supabase: any,
+  tenantId: string,
+  userId: string
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("tenant_memberships")
+    .select("role")
+    .eq("tenant_id", tenantId)
+    .eq("user_id", userId)
+    .eq("active", true)
+    .limit(1)
+    .single();
+  if (error || !data) return null;
+  return data.role;
+}
 
 async function logIntegration(
   supabase: any,

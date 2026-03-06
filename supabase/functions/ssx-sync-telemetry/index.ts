@@ -37,6 +37,7 @@ Deno.serve(async (req) => {
       });
     }
 
+    const callerId = claimsData.claims.sub as string;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { integration_account_id } = await req.json();
@@ -47,7 +48,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Fetch integration account
     const { data: account, error: accErr } = await supabase
       .from("integration_accounts")
       .select("*")
@@ -58,6 +58,15 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({ error: "Integration account not found" }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Verify caller is admin/owner of this tenant
+    const memberRole = await getTenantRole(supabase, account.tenant_id, callerId);
+    if (!memberRole || !["owner", "admin"].includes(memberRole)) {
+      return new Response(
+        JSON.stringify({ error: "Forbidden: admin role required" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -82,7 +91,7 @@ Deno.serve(async (req) => {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({}), // No filters needed
+        body: JSON.stringify({}),
       });
     } catch (fetchErr: any) {
       await logIntegration(supabase, {
@@ -122,7 +131,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Parse telemetry list
     let telemetries: any[];
     try {
       const parsed = JSON.parse(responseText);
@@ -131,7 +139,6 @@ Deno.serve(async (req) => {
       telemetries = [];
     }
 
-    // Upsert into telemetry_catalog
     let upsertCount = 0;
     for (const t of telemetries) {
       const telemetryId = String(
@@ -187,6 +194,23 @@ Deno.serve(async (req) => {
     );
   }
 });
+
+async function getTenantRole(
+  supabase: any,
+  tenantId: string,
+  userId: string
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("tenant_memberships")
+    .select("role")
+    .eq("tenant_id", tenantId)
+    .eq("user_id", userId)
+    .eq("active", true)
+    .limit(1)
+    .single();
+  if (error || !data) return null;
+  return data.role;
+}
 
 async function logIntegration(
   supabase: any,
