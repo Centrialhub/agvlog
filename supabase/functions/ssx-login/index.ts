@@ -281,7 +281,31 @@ async function logIntegration(
     error_message?: string;
     duration_ms?: number;
     metadata?: Record<string, any>;
+}
+
+async function decryptAesGcm(encrypted: string, keyHex: string): Promise<string> {
+  // Format: enc:v1:<iv_hex>:<ciphertext_hex>
+  const parts = encrypted.split(":");
+  if (parts.length !== 4) throw new Error("Invalid encrypted format");
+  const ivHex = parts[2];
+  const ctHex = parts[3];
+
+  const keyBytes = hexToBytes(keyHex.padEnd(64, "0").slice(0, 64));
+  const key = await crypto.subtle.importKey("raw", keyBytes, { name: "AES-GCM" }, false, ["decrypt"]);
+  const iv = hexToBytes(ivHex);
+  const ct = hexToBytes(ctHex);
+
+  const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ct);
+  return new TextDecoder().decode(decrypted);
+}
+
+function hexToBytes(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
   }
+  return bytes;
+}
 ) {
   try {
     await supabase.from("integration_logs").insert(log);
