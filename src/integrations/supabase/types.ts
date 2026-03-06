@@ -22,6 +22,7 @@ export type Database = {
           last_event_id: string | null
           opened_at: string
           rule_id: string | null
+          source: string | null
           status: string
           tenant_id: string
           vehicle_id: string | null
@@ -33,6 +34,7 @@ export type Database = {
           last_event_id?: string | null
           opened_at?: string
           rule_id?: string | null
+          source?: string | null
           status?: string
           tenant_id: string
           vehicle_id?: string | null
@@ -44,6 +46,7 @@ export type Database = {
           last_event_id?: string | null
           opened_at?: string
           rule_id?: string | null
+          source?: string | null
           status?: string
           tenant_id?: string
           vehicle_id?: string | null
@@ -181,6 +184,7 @@ export type Database = {
           id: string
           payload: Json | null
           severity: string
+          source: string | null
           tenant_id: string
           vehicle_id: string | null
         }
@@ -191,6 +195,7 @@ export type Database = {
           id?: string
           payload?: Json | null
           severity?: string
+          source?: string | null
           tenant_id: string
           vehicle_id?: string | null
         }
@@ -201,6 +206,7 @@ export type Database = {
           id?: string
           payload?: Json | null
           severity?: string
+          source?: string | null
           tenant_id?: string
           vehicle_id?: string | null
         }
@@ -266,6 +272,55 @@ export type Database = {
           },
           {
             foreignKeyName: "geofence_events_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      geofence_states: {
+        Row: {
+          geofence_id: string
+          is_inside: boolean
+          last_changed_at: string | null
+          last_checked_at: string | null
+          tenant_id: string
+          vehicle_id: string
+        }
+        Insert: {
+          geofence_id: string
+          is_inside?: boolean
+          last_changed_at?: string | null
+          last_checked_at?: string | null
+          tenant_id: string
+          vehicle_id: string
+        }
+        Update: {
+          geofence_id?: string
+          is_inside?: boolean
+          last_changed_at?: string | null
+          last_checked_at?: string | null
+          tenant_id?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "geofence_states_geofence_id_fkey"
+            columns: ["geofence_id"]
+            isOneToOne: false
+            referencedRelation: "geofences"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "geofence_states_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "geofence_states_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "vehicles"
@@ -540,6 +595,7 @@ export type Database = {
           category: string | null
           confidence_score: number | null
           created_at: string
+          dedupe_key: string | null
           id: string
           lat: number
           lng: number
@@ -553,6 +609,7 @@ export type Database = {
           category?: string | null
           confidence_score?: number | null
           created_at?: string
+          dedupe_key?: string | null
           id?: string
           lat: number
           lng: number
@@ -566,6 +623,7 @@ export type Database = {
           category?: string | null
           confidence_score?: number | null
           created_at?: string
+          dedupe_key?: string | null
           id?: string
           lat?: number
           lng?: number
@@ -1210,6 +1268,51 @@ export type Database = {
           },
           {
             foreignKeyName: "vehicle_driver_assignments_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vehicle_processing_queue: {
+        Row: {
+          attempts: number
+          last_error: string | null
+          last_position_at: string | null
+          processed_at: string | null
+          queued_at: string
+          tenant_id: string
+          vehicle_id: string
+        }
+        Insert: {
+          attempts?: number
+          last_error?: string | null
+          last_position_at?: string | null
+          processed_at?: string | null
+          queued_at?: string
+          tenant_id: string
+          vehicle_id: string
+        }
+        Update: {
+          attempts?: number
+          last_error?: string | null
+          last_position_at?: string | null
+          processed_at?: string | null
+          queued_at?: string
+          tenant_id?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_processing_queue_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_processing_queue_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "vehicles"
