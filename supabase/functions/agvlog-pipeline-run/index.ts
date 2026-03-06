@@ -110,7 +110,17 @@ Deno.serve(async (req) => {
           stats.login = loginResp;
         }
 
-        // Step B: Poll positions
+        // Step B: Sync units (auto-discover trackers, vehicles, links)
+        try {
+          const syncResp = await callEdgeFunction(supabaseUrl, anonKey, authHeader, isCron, cronSecret, "ssx-sync-units", {
+            integration_account_id: account.id,
+          });
+          stats.synced_units += syncResp?.upserted || 0;
+        } catch (e: any) {
+          stats.errors.push(`SyncUnits ${account.id}: ${e.message}`);
+        }
+
+        // Step C: Poll positions
         const pollResp = await callEdgeFunction(supabaseUrl, anonKey, authHeader, isCron, cronSecret, "ssx-poll-positions", {
           integration_account_id: account.id,
         });

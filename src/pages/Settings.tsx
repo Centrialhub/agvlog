@@ -95,6 +95,22 @@ function IntegrationSection() {
     onError: (e: any) => toast.error(`Falha: ${e.message}`),
   });
 
+  const syncUnitsMutation = useMutation({
+    mutationFn: async (accountId: string) => {
+      const { data, error } = await supabase.functions.invoke('ssx-sync-units', { body: { integration_account_id: accountId } });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['provider_units'] });
+      queryClient.invalidateQueries({ queryKey: ['vehicles'] });
+      queryClient.invalidateQueries({ queryKey: ['tracker_links'] });
+      toast.success(`Sincronizado: ${data.upserted} rastreadores, ${data.vehicles_created || 0} veículos criados, ${data.links_created || 0} vínculos`);
+    },
+    onError: (e: any) => toast.error(`Falha sync rastreadores: ${e.message}`),
+  });
+
   const pollMutation = useMutation({
     mutationFn: async (accountId: string) => {
       const { data, error } = await supabase.functions.invoke('agvlog-pipeline-run', {
