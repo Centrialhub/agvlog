@@ -199,14 +199,20 @@ function IntegrationDialog({ open, onOpenChange, tenantId }: { open: boolean; on
     e.preventDefault();
     if (!tenantId) return;
     setLoading(true);
-    const { error } = await supabase.from('integration_accounts').insert({
-      tenant_id: tenantId, provider: 'SSX', base_url: baseUrl, username,
-      password_encrypted: password, hashauth: hashauth || null, hashcode: hashcode || null,
-    });
-    if (error) { toast.error(error.message); } else {
+    try {
+      const { data, error } = await supabase.functions.invoke('agvlog-integration-upsert', {
+        body: {
+          tenant_id: tenantId, base_url: baseUrl, username, password,
+          hashauth: hashauth || null, hashcode: hashcode || null,
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
       toast.success('Integração criada! Faça o teste de login.');
       queryClient.invalidateQueries({ queryKey: ['integration_accounts'] });
       onOpenChange(false);
+    } catch (err: any) {
+      toast.error(err.message);
     }
     setLoading(false);
   };
