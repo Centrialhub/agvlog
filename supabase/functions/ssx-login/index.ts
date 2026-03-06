@@ -368,6 +368,22 @@ async function logIntegration(
   }
 }
 
+function toFormUrlEncoded(payload: Record<string, string>): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(payload)) {
+    if (value !== undefined && value !== null) {
+      params.append(key, value);
+    }
+  }
+  return params.toString();
+}
+
+function shouldRetryLoginWithFallback(status: number, bodyText: string): boolean {
+  if (![400, 415, 422].includes(status)) return false;
+  const normalized = bodyText.toLowerCase();
+  return normalized.includes("username") || normalized.includes("password") || normalized.includes("propriedade");
+}
+
 async function decryptAesGcm(encrypted: string, keyHex: string): Promise<string> {
   const parts = encrypted.split(":");
   if (parts.length !== 4) throw new Error("Invalid encrypted format");
