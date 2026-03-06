@@ -57,6 +57,41 @@ export function TenantProvider({ children }: { children: ReactNode }) {
           role: d.role,
           tenants: d.tenants,
         }));
+
+        // Auto-create tenant if user has none
+        if (mapped.length === 0) {
+          try {
+            const { data: newTenantId, error: createErr } = await supabase.rpc('create_tenant_with_owner', {
+              _tenant_name: user.email?.split('@')[0] || 'Minha Empresa',
+            });
+            if (!createErr && newTenantId) {
+              // Re-fetch after creation
+              const { data: newData } = await supabase
+                .from('tenant_memberships')
+                .select('tenant_id, role, tenants(id, name, plan_key, timezone)')
+                .eq('user_id', user.id)
+                .eq('active', true);
+              if (newData) {
+                const newMapped = (newData as any[]).map(d => ({
+                  tenant_id: d.tenant_id,
+                  role: d.role,
+                  tenants: d.tenants,
+                }));
+                setMemberships(newMapped);
+                if (newMapped.length > 0) {
+                  const firstId = newMapped[0].tenant_id;
+                  setCurrentTenantId(firstId);
+                  localStorage.setItem('agvlog_tenant_id', firstId);
+                }
+                setLoading(false);
+                return;
+              }
+            }
+          } catch (e) {
+            console.error('Auto-create tenant failed:', e);
+          }
+        }
+
         setMemberships(mapped);
 
         if (mapped.length > 0 && !currentTenantId) {
