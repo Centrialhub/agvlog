@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { TenantProvider } from "@/hooks/useTenant";
 import AppLayout from "@/components/layout/AppLayout";
 import Auth from "@/pages/Auth";
+import Settings from "@/pages/Settings";
 import Dashboard from "@/pages/Dashboard";
 import Vehicles from "@/pages/Vehicles";
 import Drivers from "@/pages/Drivers";
@@ -45,7 +46,7 @@ const App = () => (
             <Route path="/alerts" element={<ProtectedRoute><PlaceholderPage title="Alertas" description="Disponível na Fase 4 — inteligência básica" /></ProtectedRoute>} />
             <Route path="/geofences" element={<ProtectedRoute><PlaceholderPage title="Geofences" description="Disponível na Fase 4 — inteligência básica" /></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute><PlaceholderPage title="Relatórios" description="Disponível na Fase 5 — relatórios e dashboards" /></ProtectedRoute>} />
-            <Route path="/settings" element={<ProtectedRoute><PlaceholderPage title="Configurações" description="Integração SSX, política de features, parâmetros" /></ProtectedRoute>} />
+            <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
