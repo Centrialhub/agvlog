@@ -90,7 +90,8 @@ Deno.serve(async (req) => {
     }
 
     // Build SSX login request
-    const loginUrl = `${account.base_url}/Login`;
+    const baseUrl = account.base_url.replace(/\/$/, "");
+    const loginUrl = `${baseUrl}/Login`;
 
     // Decrypt password if encrypted
     let password = account.password_encrypted;
@@ -101,23 +102,95 @@ Deno.serve(async (req) => {
       }
     }
 
-    const loginPayload: Record<string, string> = {
+    const loginPayloadPascal: Record<string, string> = {
       Username: account.username,
       Password: password,
       HashAuth: account.hashauth || "",
     };
+
     if (account.hashcode) {
-      loginPayload.Hashcode = account.hashcode;
+      // Some SSX deployments use Hashcode, others HashCode
+      loginPayloadPascal.Hashcode = account.hashcode;
+      loginPayloadPascal.HashCode = account.hashcode;
     }
 
+    const loginPayloadLower: Record<string, string> = {
+      username: account.username,
+      password,
+      HashAuth: account.hashauth || "",
+    };
+
+    if (account.hashcode) {
+      loginPayloadLower.hashcode = account.hashcode;
+    }
+
+    const loginAttempts = [
+      {
+        format: "json_pascal",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(loginPayloadPascal),
+      },
+      {
+        format: "json_lower",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(loginPayloadLower),
+      },
+      {
+        format: "form_urlencoded_pascal",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+          Accept: "application/json",
+        },
+        body: toFormUrlEncoded(loginPayloadPascal),
+      },
+    ];
+
     const startTime = Date.now();
-    let ssxResponse: Response;
+    let ssxResponse: Response | null = null;
+    let responseText = "";
+    let requestFormat = "json_pascal";
+
     try {
-      ssxResponse = await fetch(loginUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(loginPayload),
-      });
+      let lastFetchError: Error | null = null;
+
+      for (let i = 0; i < loginAttempts.length; i++) {
+        const attempt = loginAttempts[i];
+        requestFormat = attempt.format;
+
+        try {
+          const response = await fetch(loginUrl, {
+            method: "POST",
+            headers: attempt.headers,
+            body: attempt.body,
+          });
+
+          const text = await response.text();
+          ssxResponse = response;
+          responseText = text;
+
+          const shouldRetry = shouldRetryLoginWithFallback(response.status, text);
+          const isLastAttempt = i === loginAttempts.length - 1;
+
+          if (response.ok || !shouldRetry || isLastAttempt) {
+            break;
+          }
+        } catch (fetchErr: any) {
+          lastFetchError = fetchErr;
+          if (i === loginAttempts.length - 1) {
+            throw fetchErr;
+          }
+        }
+      }
+
+      if (!ssxResponse && lastFetchError) {
+        throw lastFetchError;
+      }
     } catch (fetchErr: any) {
       await supabase
         .from("integration_accounts")
@@ -136,6 +209,7 @@ Deno.serve(async (req) => {
         success: false,
         error_message: `SSX unreachable: ${fetchErr.message}`,
         duration_ms: Date.now() - startTime,
+        metadata: { request_format: requestFormat },
       });
 
       return new Response(
@@ -145,7 +219,10 @@ Deno.serve(async (req) => {
     }
 
     const duration = Date.now() - startTime;
-    const responseText = await ssxResponse.text();
+
+    if (!ssxResponse) {
+      throw new Error("SSX login failed: no response received");
+    }
 
     if (!ssxResponse.ok) {
       const newStatus = ssxResponse.status === 401 ? "invalid_credentials" : "degraded";
@@ -168,6 +245,7 @@ Deno.serve(async (req) => {
         success: false,
         error_message: responseText.substring(0, 500),
         duration_ms: duration,
+        metadata: { request_format: requestFormat },
       });
 
       return new Response(
@@ -231,7 +309,7 @@ Deno.serve(async (req) => {
       status_code: ssxResponse.status,
       success: true,
       duration_ms: duration,
-      metadata: { token_expires_at: expiresAt },
+      metadata: { token_expires_at: expiresAt, request_format: requestFormat },
     });
 
     return new Response(
@@ -288,6 +366,22 @@ async function logIntegration(
   } catch (e) {
     console.error("Failed to log integration event:", e);
   }
+}
+
+function toFormUrlEncoded(payload: Record<string, string>): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(payload)) {
+    if (value !== undefined && value !== null) {
+      params.append(key, value);
+    }
+  }
+  return params.toString();
+}
+
+function shouldRetryLoginWithFallback(status: number, bodyText: string): boolean {
+  if (![400, 415, 422].includes(status)) return false;
+  const normalized = bodyText.toLowerCase();
+  return normalized.includes("username") || normalized.includes("password") || normalized.includes("propriedade");
 }
 
 async function decryptAesGcm(encrypted: string, keyHex: string): Promise<string> {
