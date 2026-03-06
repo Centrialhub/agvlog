@@ -122,14 +122,17 @@ Deno.serve(async (req) => {
         },
       });
 
+      const httpStatus = unitFetch.status_code === 429 ? 429 : 502;
       return new Response(
         JSON.stringify({
-          error: "SSX unit sync failed",
+          error: unitFetch.status_code === 429
+            ? "Limite de consultas SSX excedido. Aguarde alguns minutos e tente novamente."
+            : "SSX unit sync failed",
           status_code: unitFetch.status_code,
           details: unitFetch.error_message,
           endpoint: unitFetch.endpoint,
         }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: httpStatus, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -347,6 +350,18 @@ async function fetchUnitsWithFallback(params: {
       };
     }
 
+    // 404 means endpoint doesn't exist, try next. Other errors are fatal (except 429).
+    if (response.status === 429) {
+      return {
+        success: false,
+        endpoint,
+        status_code: 429,
+        error_message: "Rate limit exceeded. Try again in a few minutes.",
+        attempted_endpoints: attemptedEndpoints,
+        attempted_formats: attemptedFormats,
+      };
+    }
+
     if (response.status !== 404) {
       return {
         success: false,
@@ -395,11 +410,14 @@ async function fetchUnitsWithFallback(params: {
   }
 
   if (!response.ok) {
+    const isRateLimit = response.status === 429;
     return {
       success: false,
       endpoint: positionEndpoint,
       status_code: response.status || lastStatus,
-      error_message: response.text.slice(0, 500) || lastError,
+      error_message: isRateLimit
+        ? "Rate limit exceeded. Try again in a few minutes."
+        : (response.text.slice(0, 500) || lastError),
       attempted_endpoints: attemptedEndpoints,
       attempted_formats: attemptedFormats,
     };
