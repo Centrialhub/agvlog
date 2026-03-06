@@ -102,95 +102,25 @@ Deno.serve(async (req) => {
       }
     }
 
-    const loginPayloadPascal: Record<string, string> = {
-      Username: account.username,
-      Password: password,
-      HashAuth: account.hashauth || "",
-    };
+    // Build query string params per SSX Swagger spec
+    const params = new URLSearchParams();
+    params.append("Username", account.username);
+    params.append("Password", password);
+    if (account.hashauth) params.append("HashAuth", account.hashauth);
+    if (account.hashcode) params.append("Hashcentral", account.hashcode);
 
-    if (account.hashcode) {
-      // Some SSX deployments use Hashcode, others HashCode
-      loginPayloadPascal.Hashcode = account.hashcode;
-      loginPayloadPascal.HashCode = account.hashcode;
-    }
-
-    const loginPayloadLower: Record<string, string> = {
-      username: account.username,
-      password,
-      HashAuth: account.hashauth || "",
-    };
-
-    if (account.hashcode) {
-      loginPayloadLower.hashcode = account.hashcode;
-    }
-
-    const loginAttempts = [
-      {
-        format: "json_pascal",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: JSON.stringify(loginPayloadPascal),
-      },
-      {
-        format: "json_lower",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: JSON.stringify(loginPayloadLower),
-      },
-      {
-        format: "form_urlencoded_pascal",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-          Accept: "application/json",
-        },
-        body: toFormUrlEncoded(loginPayloadPascal),
-      },
-    ];
+    const loginUrlWithParams = `${loginUrl}?${params.toString()}`;
 
     const startTime = Date.now();
-    let ssxResponse: Response | null = null;
+    let ssxResponse: Response;
     let responseText = "";
-    let requestFormat = "json_pascal";
 
     try {
-      let lastFetchError: Error | null = null;
-
-      for (let i = 0; i < loginAttempts.length; i++) {
-        const attempt = loginAttempts[i];
-        requestFormat = attempt.format;
-
-        try {
-          const response = await fetch(loginUrl, {
-            method: "POST",
-            headers: attempt.headers,
-            body: attempt.body,
-          });
-
-          const text = await response.text();
-          ssxResponse = response;
-          responseText = text;
-
-          const shouldRetry = shouldRetryLoginWithFallback(response.status, text);
-          const isLastAttempt = i === loginAttempts.length - 1;
-
-          if (response.ok || !shouldRetry || isLastAttempt) {
-            break;
-          }
-        } catch (fetchErr: any) {
-          lastFetchError = fetchErr;
-          if (i === loginAttempts.length - 1) {
-            throw fetchErr;
-          }
-        }
-      }
-
-      if (!ssxResponse && lastFetchError) {
-        throw lastFetchError;
-      }
+      ssxResponse = await fetch(loginUrlWithParams, {
+        method: "POST",
+        headers: { Accept: "application/json" },
+      });
+      responseText = await ssxResponse.text();
     } catch (fetchErr: any) {
       await supabase
         .from("integration_accounts")
@@ -209,7 +139,6 @@ Deno.serve(async (req) => {
         success: false,
         error_message: `SSX unreachable: ${fetchErr.message}`,
         duration_ms: Date.now() - startTime,
-        metadata: { request_format: requestFormat },
       });
 
       return new Response(
