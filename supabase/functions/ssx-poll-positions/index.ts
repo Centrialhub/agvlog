@@ -126,7 +126,9 @@ Deno.serve(async (req) => {
     const settings = account.settings as any || {};
     const pollWindowMinutes = settings.poll_window_minutes || 15;
     const baseUrl = account.base_url.replace(/\/$/, "");
-    const positionUrl = `${baseUrl}/Tracking/PositionHistory/List`;
+    const apiVersion = settings.api_version || "";
+    const versionPrefix = apiVersion && apiVersion !== "v1" ? `/${apiVersion}` : "";
+    const positionUrl = `${baseUrl}${versionPrefix}/Tracking/PositionHistory/List`;
 
     const results: any[] = [];
     let totalInserted = 0;
@@ -164,9 +166,10 @@ Deno.serve(async (req) => {
       const now = new Date();
 
       // Build SSX request - send as array (per SSX manual)
+      const filterPropertyName = settings.filter_property || "TrackedUnitIntegrationCode";
       const filters = [
         {
-          PropertyName: "TrackedUnit",
+          PropertyName: filterPropertyName,
           Condition: "Equal",
           Value: unit.external_code,
         },

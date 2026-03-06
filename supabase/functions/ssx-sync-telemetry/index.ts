@@ -88,10 +88,9 @@ Deno.serve(async (req) => {
       ssxResponse = await fetch(telemetryUrl, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
+          Accept: "application/json",
         },
-        body: JSON.stringify({}),
       });
     } catch (fetchErr: any) {
       await logIntegration(supabase, {
