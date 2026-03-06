@@ -67,6 +67,128 @@ export type Database = {
           },
         ]
       }
+      integration_accounts: {
+        Row: {
+          base_url: string
+          created_at: string
+          hashauth: string | null
+          hashcode: string | null
+          id: string
+          last_error: string | null
+          last_login_at: string | null
+          password_encrypted: string
+          provider: string
+          settings: Json
+          status: string
+          tenant_id: string
+          token_cache: string | null
+          token_expires_at: string | null
+          updated_at: string
+          username: string
+        }
+        Insert: {
+          base_url?: string
+          created_at?: string
+          hashauth?: string | null
+          hashcode?: string | null
+          id?: string
+          last_error?: string | null
+          last_login_at?: string | null
+          password_encrypted: string
+          provider?: string
+          settings?: Json
+          status?: string
+          tenant_id: string
+          token_cache?: string | null
+          token_expires_at?: string | null
+          updated_at?: string
+          username: string
+        }
+        Update: {
+          base_url?: string
+          created_at?: string
+          hashauth?: string | null
+          hashcode?: string | null
+          id?: string
+          last_error?: string | null
+          last_login_at?: string | null
+          password_encrypted?: string
+          provider?: string
+          settings?: Json
+          status?: string
+          tenant_id?: string
+          token_cache?: string | null
+          token_expires_at?: string | null
+          updated_at?: string
+          username?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_accounts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      integration_logs: {
+        Row: {
+          action: string
+          created_at: string
+          duration_ms: number | null
+          endpoint: string | null
+          error_message: string | null
+          id: string
+          integration_account_id: string | null
+          metadata: Json | null
+          status_code: number | null
+          success: boolean
+          tenant_id: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          duration_ms?: number | null
+          endpoint?: string | null
+          error_message?: string | null
+          id?: string
+          integration_account_id?: string | null
+          metadata?: Json | null
+          status_code?: number | null
+          success?: boolean
+          tenant_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          duration_ms?: number | null
+          endpoint?: string | null
+          error_message?: string | null
+          id?: string
+          integration_account_id?: string | null
+          metadata?: Json | null
+          status_code?: number | null
+          success?: boolean
+          tenant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_logs_integration_account_id_fkey"
+            columns: ["integration_account_id"]
+            isOneToOne: false
+            referencedRelation: "integration_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "integration_logs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -90,6 +212,134 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      provider_units: {
+        Row: {
+          active: boolean
+          created_at: string
+          external_code: string
+          external_id: string | null
+          id: string
+          integration_account_id: string
+          label: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          external_code: string
+          external_id?: string | null
+          id?: string
+          integration_account_id: string
+          label?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          external_code?: string
+          external_id?: string | null
+          id?: string
+          integration_account_id?: string
+          label?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provider_units_integration_account_id_fkey"
+            columns: ["integration_account_id"]
+            isOneToOne: false
+            referencedRelation: "integration_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "provider_units_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      telemetry_catalog: {
+        Row: {
+          created_at: string
+          data_type: string | null
+          description: string | null
+          id: string
+          name: string | null
+          provider: string
+          raw: Json | null
+          telemetry_id: string
+          unit: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          data_type?: string | null
+          description?: string | null
+          id?: string
+          name?: string | null
+          provider?: string
+          raw?: Json | null
+          telemetry_id: string
+          unit?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          data_type?: string | null
+          description?: string | null
+          id?: string
+          name?: string | null
+          provider?: string
+          raw?: Json | null
+          telemetry_id?: string
+          unit?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      telemetry_mapping: {
+        Row: {
+          canonical_key: string
+          created_at: string
+          id: string
+          provider: string
+          telemetry_id: string
+          tenant_id: string
+          transform: Json | null
+        }
+        Insert: {
+          canonical_key: string
+          created_at?: string
+          id?: string
+          provider?: string
+          telemetry_id: string
+          tenant_id: string
+          transform?: Json | null
+        }
+        Update: {
+          canonical_key?: string
+          created_at?: string
+          id?: string
+          provider?: string
+          telemetry_id?: string
+          tenant_id?: string
+          transform?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "telemetry_mapping_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       tenant_feature_policy: {
         Row: {
@@ -239,6 +489,61 @@ export type Database = {
           },
           {
             foreignKeyName: "vehicle_driver_assignments_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vehicle_tracker_links: {
+        Row: {
+          active: boolean
+          created_at: string
+          end_at: string | null
+          id: string
+          provider_unit_id: string
+          start_at: string
+          tenant_id: string
+          vehicle_id: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          end_at?: string | null
+          id?: string
+          provider_unit_id: string
+          start_at?: string
+          tenant_id: string
+          vehicle_id: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          end_at?: string | null
+          id?: string
+          provider_unit_id?: string
+          start_at?: string
+          tenant_id?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_tracker_links_provider_unit_id_fkey"
+            columns: ["provider_unit_id"]
+            isOneToOne: false
+            referencedRelation: "provider_units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_tracker_links_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_tracker_links_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "vehicles"
