@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -9,8 +10,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Truck, Search, MapPin, Clock, Gauge, RefreshCw, Eye } from 'lucide-react';
+import { Truck, Search, MapPin, Clock, Gauge, RefreshCw, Eye, Radio } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { useIsAdmin } from '@/hooks/useTenant';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { ptBR } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
 
@@ -62,6 +65,28 @@ export default function FleetMap() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'online' | 'offline' | 'moving' | 'stopped'>('all');
   const navigate = useNavigate();
+  const isAdmin = useIsAdmin();
+
+  // Get integration accounts for SSX polling
+  const { data: accounts = [] } = useQuery({
+    queryKey: ['integration_accounts_brief', currentTenant?.id],
+    queryFn: async () => {
+      if (!currentTenant) return [];
+      const { data } = await supabase.from('integration_accounts').select('id, status').eq('tenant_id', currentTenant.id).eq('status', 'ok');
+      return data || [];
+    },
+    enabled: !!currentTenant && isAdmin,
+  });
+
+  const pollMutation = useMutation({
+    mutationFn: async () => {
+      for (const acc of accounts) {
+        await supabase.functions.invoke('ssx-login', { body: { integration_account_id: acc.id } });
+        await supabase.functions.invoke('ssx-poll-positions', { body: { integration_account_id: acc.id } });
+      }
+    },
+    onSuccess: () => { refetch(); },
+  });
 
   const vehicleMap = useMemo(() => {
     const map: Record<string, Vehicle> = {};
@@ -146,8 +171,13 @@ export default function FleetMap() {
           </div>
 
           <Button variant="outline" size="sm" className="w-full" onClick={() => refetch()}>
-            <RefreshCw className="h-4 w-4 mr-2" /> Atualizar posições
+            <RefreshCw className="h-4 w-4 mr-2" /> Recarregar do banco
           </Button>
+          {isAdmin && accounts.length > 0 && (
+            <Button variant="default" size="sm" className="w-full" onClick={() => pollMutation.mutate()} disabled={pollMutation.isPending}>
+              <Radio className={`h-4 w-4 mr-2 ${pollMutation.isPending ? 'animate-spin' : ''}`} /> Coletar da SSX agora
+            </Button>
+          )}
         </div>
 
         {/* Vehicle list */}

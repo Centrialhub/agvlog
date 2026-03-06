@@ -14,6 +14,112 @@ export type Database = {
   }
   public: {
     Tables: {
+      alert_instances: {
+        Row: {
+          closed_at: string | null
+          created_at: string
+          id: string
+          last_event_id: string | null
+          opened_at: string
+          rule_id: string | null
+          status: string
+          tenant_id: string
+          vehicle_id: string | null
+        }
+        Insert: {
+          closed_at?: string | null
+          created_at?: string
+          id?: string
+          last_event_id?: string | null
+          opened_at?: string
+          rule_id?: string | null
+          status?: string
+          tenant_id: string
+          vehicle_id?: string | null
+        }
+        Update: {
+          closed_at?: string | null
+          created_at?: string
+          id?: string
+          last_event_id?: string | null
+          opened_at?: string
+          rule_id?: string | null
+          status?: string
+          tenant_id?: string
+          vehicle_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "alert_instances_last_event_id_fkey"
+            columns: ["last_event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alert_instances_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "alert_rules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alert_instances_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alert_instances_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      alert_rules: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          id: string
+          params: Json
+          requires_capabilities: Json | null
+          requires_feature_key: string | null
+          rule_type: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          params?: Json
+          requires_capabilities?: Json | null
+          requires_feature_key?: string | null
+          rule_type: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          params?: Json
+          requires_capabilities?: Json | null
+          requires_feature_key?: string | null
+          rule_type?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "alert_rules_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       drivers: {
         Row: {
           active: boolean
@@ -60,6 +166,144 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "drivers_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      events: {
+        Row: {
+          created_at: string
+          event_at: string
+          event_type: string
+          id: string
+          payload: Json | null
+          severity: string
+          tenant_id: string
+          vehicle_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_at?: string
+          event_type: string
+          id?: string
+          payload?: Json | null
+          severity?: string
+          tenant_id: string
+          vehicle_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_at?: string
+          event_type?: string
+          id?: string
+          payload?: Json | null
+          severity?: string
+          tenant_id?: string
+          vehicle_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "events_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "events_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      geofence_events: {
+        Row: {
+          direction: string
+          event_at: string
+          geofence_id: string
+          id: string
+          payload: Json | null
+          tenant_id: string
+          vehicle_id: string
+        }
+        Insert: {
+          direction: string
+          event_at?: string
+          geofence_id: string
+          id?: string
+          payload?: Json | null
+          tenant_id: string
+          vehicle_id: string
+        }
+        Update: {
+          direction?: string
+          event_at?: string
+          geofence_id?: string
+          id?: string
+          payload?: Json | null
+          tenant_id?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "geofence_events_geofence_id_fkey"
+            columns: ["geofence_id"]
+            isOneToOne: false
+            referencedRelation: "geofences"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "geofence_events_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "geofence_events_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      geofences: {
+        Row: {
+          category: string | null
+          created_at: string
+          enabled: boolean
+          geometry: unknown
+          id: string
+          name: string
+          tenant_id: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          enabled?: boolean
+          geometry?: unknown
+          id?: string
+          name: string
+          tenant_id: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          enabled?: boolean
+          geometry?: unknown
+          id?: string
+          name?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "geofences_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -230,6 +474,110 @@ export type Database = {
           },
           {
             foreignKeyName: "integration_logs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      metrics_daily: {
+        Row: {
+          day: string
+          km_estimated: number | null
+          moving_time_seconds: number | null
+          offline_minutes: number | null
+          overspeed_events: number | null
+          stopped_time_seconds: number | null
+          stops_count: number | null
+          tenant_id: string
+          trips_count: number | null
+          vehicle_id: string
+        }
+        Insert: {
+          day: string
+          km_estimated?: number | null
+          moving_time_seconds?: number | null
+          offline_minutes?: number | null
+          overspeed_events?: number | null
+          stopped_time_seconds?: number | null
+          stops_count?: number | null
+          tenant_id: string
+          trips_count?: number | null
+          vehicle_id: string
+        }
+        Update: {
+          day?: string
+          km_estimated?: number | null
+          moving_time_seconds?: number | null
+          offline_minutes?: number | null
+          overspeed_events?: number | null
+          stopped_time_seconds?: number | null
+          stops_count?: number | null
+          tenant_id?: string
+          trips_count?: number | null
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "metrics_daily_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "metrics_daily_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pois: {
+        Row: {
+          category: string | null
+          confidence_score: number | null
+          created_at: string
+          id: string
+          lat: number
+          lng: number
+          metadata: Json | null
+          name: string | null
+          radius_m: number | null
+          source: string
+          tenant_id: string
+        }
+        Insert: {
+          category?: string | null
+          confidence_score?: number | null
+          created_at?: string
+          id?: string
+          lat: number
+          lng: number
+          metadata?: Json | null
+          name?: string | null
+          radius_m?: number | null
+          source?: string
+          tenant_id: string
+        }
+        Update: {
+          category?: string | null
+          confidence_score?: number | null
+          created_at?: string
+          id?: string
+          lat?: number
+          lng?: number
+          metadata?: Json | null
+          name?: string | null
+          radius_m?: number | null
+          source?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pois_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -500,6 +848,54 @@ export type Database = {
           },
         ]
       }
+      telemetry_observations: {
+        Row: {
+          canonical_key: string
+          first_seen_at: string
+          id: string
+          last_seen_at: string
+          last_value_type: string | null
+          tenant_id: string
+          times_seen: number
+          vehicle_id: string
+        }
+        Insert: {
+          canonical_key: string
+          first_seen_at?: string
+          id?: string
+          last_seen_at?: string
+          last_value_type?: string | null
+          tenant_id: string
+          times_seen?: number
+          vehicle_id: string
+        }
+        Update: {
+          canonical_key?: string
+          first_seen_at?: string
+          id?: string
+          last_seen_at?: string
+          last_value_type?: string | null
+          tenant_id?: string
+          times_seen?: number
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "telemetry_observations_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "telemetry_observations_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenant_feature_policy: {
         Row: {
           created_at: string
@@ -602,6 +998,172 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      trip_stops: {
+        Row: {
+          created_at: string
+          duration_seconds: number | null
+          end_at: string | null
+          id: string
+          lat: number
+          lng: number
+          poi_id: string | null
+          start_at: string
+          stop_class: string
+          tenant_id: string
+          trip_id: string | null
+          vehicle_id: string
+        }
+        Insert: {
+          created_at?: string
+          duration_seconds?: number | null
+          end_at?: string | null
+          id?: string
+          lat: number
+          lng: number
+          poi_id?: string | null
+          start_at: string
+          stop_class?: string
+          tenant_id: string
+          trip_id?: string | null
+          vehicle_id: string
+        }
+        Update: {
+          created_at?: string
+          duration_seconds?: number | null
+          end_at?: string | null
+          id?: string
+          lat?: number
+          lng?: number
+          poi_id?: string | null
+          start_at?: string
+          stop_class?: string
+          tenant_id?: string
+          trip_id?: string | null
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trip_stops_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trip_stops_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trip_stops_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trips: {
+        Row: {
+          confidence_score: number | null
+          created_at: string
+          detection_mode: string
+          distance_km_estimated: number | null
+          end_at: string | null
+          id: string
+          moving_time_seconds: number | null
+          start_at: string
+          stopped_time_seconds: number | null
+          tenant_id: string
+          vehicle_id: string
+        }
+        Insert: {
+          confidence_score?: number | null
+          created_at?: string
+          detection_mode?: string
+          distance_km_estimated?: number | null
+          end_at?: string | null
+          id?: string
+          moving_time_seconds?: number | null
+          start_at: string
+          stopped_time_seconds?: number | null
+          tenant_id: string
+          vehicle_id: string
+        }
+        Update: {
+          confidence_score?: number | null
+          created_at?: string
+          detection_mode?: string
+          distance_km_estimated?: number | null
+          end_at?: string | null
+          id?: string
+          moving_time_seconds?: number | null
+          start_at?: string
+          stopped_time_seconds?: number | null
+          tenant_id?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trips_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trips_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vehicle_capabilities: {
+        Row: {
+          capabilities: Json
+          confidence_score: number | null
+          id: string
+          last_detected_at: string | null
+          tenant_id: string
+          vehicle_id: string
+        }
+        Insert: {
+          capabilities?: Json
+          confidence_score?: number | null
+          id?: string
+          last_detected_at?: string | null
+          tenant_id: string
+          vehicle_id: string
+        }
+        Update: {
+          capabilities?: Json
+          confidence_score?: number | null
+          id?: string
+          last_detected_at?: string | null
+          tenant_id?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_capabilities_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_capabilities_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: true
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       vehicle_driver_assignments: {
         Row: {
@@ -779,6 +1341,17 @@ export type Database = {
       }
       is_tenant_admin: { Args: { _tenant_id: string }; Returns: boolean }
       is_tenant_member: { Args: { _tenant_id: string }; Returns: boolean }
+      upsert_geofence: {
+        Args: {
+          _category: string
+          _enabled: boolean
+          _geojson: string
+          _id: string
+          _name: string
+          _tenant_id: string
+        }
+        Returns: string
+      }
     }
     Enums: {
       app_role: "owner" | "admin" | "operator" | "client"
