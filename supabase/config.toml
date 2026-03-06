@@ -17,3 +17,12 @@ verify_jwt = false
 
 [functions.agvlog-integration-upsert]
 verify_jwt = false
+
+[functions.agvlog-run-queue]
+verify_jwt = false
+
+[functions.agvlog-pipeline-run]
+verify_jwt = false
+
+[functions.ssx-insert-person]
+verify_jwt = false

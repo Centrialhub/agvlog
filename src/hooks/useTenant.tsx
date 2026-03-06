@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface Tenant {
@@ -36,7 +36,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     localStorage.getItem('agvlog_tenant_id')
   );
   const [loading, setLoading] = useState(true);
-  const [isCreatingTenant, setIsCreatingTenant] = useState(false);
+  const creatingRef = useRef(false);
 
   useEffect(() => {
     const fetchMemberships = async () => {
@@ -59,13 +59,15 @@ export function TenantProvider({ children }: { children: ReactNode }) {
           tenants: d.tenants,
         }));
 
-        // Auto-create tenant if user has none (with guard against double creation)
-        if (mapped.length === 0 && !isCreatingTenant) {
-          setIsCreatingTenant(true);
+        // Auto-create tenant if user has none (with persistent guard)
+        const guardKey = `agvlog_autocreate_tenant_done_${user.id}`;
+        if (mapped.length === 0 && !creatingRef.current && !localStorage.getItem(guardKey)) {
+          creatingRef.current = true;
           try {
             const { data: newTenantId, error: createErr } = await supabase.rpc('create_tenant_with_owner', {
               _tenant_name: user.email?.split('@')[0] || 'Minha Empresa',
             });
+            localStorage.setItem(guardKey, 'true');
             if (!createErr && newTenantId) {
               const { data: newData } = await supabase
                 .from('tenant_memberships')
@@ -91,7 +93,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
           } catch (e) {
             console.error('Auto-create tenant failed:', e);
           } finally {
-            setIsCreatingTenant(false);
+            creatingRef.current = false;
           }
         }
 

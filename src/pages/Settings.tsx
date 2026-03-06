@@ -97,18 +97,19 @@ function IntegrationSection() {
 
   const pollMutation = useMutation({
     mutationFn: async (accountId: string) => {
-      // Login first, then poll
-      await supabase.functions.invoke('ssx-login', { body: { integration_account_id: accountId } });
-      const { data, error } = await supabase.functions.invoke('ssx-poll-positions', { body: { integration_account_id: accountId } });
+      const { data, error } = await supabase.functions.invoke('agvlog-pipeline-run', {
+        body: { tenant_id: currentTenant?.id, integration_account_id: accountId },
+      });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       return data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['fleet_positions'] });
-      toast.success(`Polling concluído: ${data.inserted || 0} novas posições`);
+      queryClient.invalidateQueries({ queryKey: ['positions_last'] });
+      queryClient.invalidateQueries({ queryKey: ['alert_instances'] });
+      toast.success(`Pipeline concluído: ${data.total_inserted || 0} posições, ${data.processed_vehicles || 0} veículos processados`);
     },
-    onError: (e: any) => toast.error(`Falha no polling: ${e.message}`),
+    onError: (e: any) => toast.error(`Falha no pipeline: ${e.message}`),
   });
 
   const statusBadge = (status: string) => {

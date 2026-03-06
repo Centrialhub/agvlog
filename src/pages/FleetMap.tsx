@@ -81,8 +81,9 @@ export default function FleetMap() {
   const pollMutation = useMutation({
     mutationFn: async () => {
       for (const acc of accounts) {
-        await supabase.functions.invoke('ssx-login', { body: { integration_account_id: acc.id } });
-        await supabase.functions.invoke('ssx-poll-positions', { body: { integration_account_id: acc.id } });
+        await supabase.functions.invoke('agvlog-pipeline-run', {
+          body: { tenant_id: currentTenant?.id, integration_account_id: acc.id },
+        });
       }
     },
     onSuccess: () => { refetch(); },

@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useVehicles } from '@/hooks/useVehicles';
 import { useTenant, useIsAdmin } from '@/hooks/useTenant';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -21,26 +20,20 @@ import { ptBR } from 'date-fns/locale';
 function ProcessButton() {
   const { currentTenant } = useTenant();
   const isAdmin = useIsAdmin();
-  const { data: vehicles = [] } = useVehicles();
   const [running, setRunning] = useState(false);
 
   if (!isAdmin) return null;
 
   const handleProcess = async () => {
-    if (!currentTenant || vehicles.length === 0) return;
+    if (!currentTenant) return;
     setRunning(true);
     try {
-      let processed = 0;
-      for (const v of vehicles) {
-        await supabase.functions.invoke('agvlog-process-vehicle', {
-          body: { tenant_id: currentTenant.id, vehicle_id: v.id },
-        });
-        processed++;
-      }
-      await supabase.functions.invoke('agvlog-aggregate-daily', {
+      const { data, error } = await supabase.functions.invoke('agvlog-pipeline-run', {
         body: { tenant_id: currentTenant.id },
       });
-      toast.success(`Processamento concluído: ${processed} veículos`);
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success(`Pipeline concluído: ${data.processed_vehicles || 0} veículos, ${data.total_inserted || 0} posições`);
     } catch (e: any) {
       toast.error(`Erro: ${e.message}`);
     }
