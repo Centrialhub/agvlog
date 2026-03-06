@@ -222,11 +222,18 @@ Deno.serve(async (req) => {
     }
 
     // Cache token using ExpiresIn from SSX or default 24h
-    const parsedExpires = Number(expiresInSeconds);
-    const ttlMs = (parsedExpires && isFinite(parsedExpires) && parsedExpires > 0)
-      ? parsedExpires * 1000
-      : 24 * 60 * 60 * 1000;
-    const expiresAt = new Date(Date.now() + ttlMs).toISOString();
+    let ttlMs = 24 * 60 * 60 * 1000; // default 24h
+    try {
+      const parsedExpires = Number(expiresInSeconds);
+      if (Number.isFinite(parsedExpires) && parsedExpires > 0) {
+        ttlMs = parsedExpires * 1000;
+      }
+    } catch {
+      // keep default
+    }
+    const nowMs = Date.now();
+    const expiresAt = new Date(nowMs + ttlMs).toISOString();
+    const nowIso = new Date(nowMs).toISOString();
 
     await supabase
       .from("integration_accounts")
@@ -234,9 +241,9 @@ Deno.serve(async (req) => {
         token_cache: token,
         token_expires_at: expiresAt,
         status: "ok",
-        last_login_at: new Date().toISOString(),
+        last_login_at: nowIso,
         last_error: null,
-        updated_at: new Date().toISOString(),
+        updated_at: nowIso,
       })
       .eq("id", integration_account_id);
 
