@@ -53,7 +53,6 @@ function ProcessButton() {
     </Button>
   );
 }
-import { ptBR } from 'date-fns/locale';
 
 export default function Alerts() {
   const { currentTenant } = useTenant();
