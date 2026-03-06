@@ -407,11 +407,14 @@ async function fetchUnitsWithFallback(params: {
   }
 
   if (!response.ok) {
+    const isRateLimit = response.status === 429;
     return {
       success: false,
       endpoint: positionEndpoint,
       status_code: response.status || lastStatus,
-      error_message: response.text.slice(0, 500) || lastError,
+      error_message: isRateLimit
+        ? "Rate limit exceeded. Try again in a few minutes."
+        : (response.text.slice(0, 500) || lastError),
       attempted_endpoints: attemptedEndpoints,
       attempted_formats: attemptedFormats,
     };
