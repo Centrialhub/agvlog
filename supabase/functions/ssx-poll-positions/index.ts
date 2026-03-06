@@ -133,6 +133,7 @@ Deno.serve(async (req) => {
     const results: any[] = [];
     let totalInserted = 0;
     let totalDuplicates = 0;
+    const touchedVehicles: { tenant_id: string; vehicle_id: string; captured_at: string }[] = [];
 
     for (const unit of units) {
       const mapping = unitToVehicle[unit.id];
@@ -266,6 +267,10 @@ Deno.serve(async (req) => {
         const normalized = normalizePosition(point);
         if (!normalized) continue;
 
+        // Discard points older than poll_window_minutes
+        const pointAge = (Date.now() - new Date(normalized.captured_at).getTime()) / 60000;
+        if (pointAge > pollWindowMinutes) continue;
+
         const hashInput = `${unit.external_code}|${normalized.lat}|${normalized.lng}|${normalized.captured_at}`;
         const hash = await computeHash(hashInput);
 
@@ -347,6 +352,15 @@ Deno.serve(async (req) => {
       totalInserted += inserted;
       totalDuplicates += duplicates;
 
+      // Track touched vehicles for queue
+      if (inserted > 0 && mapping) {
+        touchedVehicles.push({
+          tenant_id: mapping.tenant_id,
+          vehicle_id: mapping.vehicle_id,
+          captured_at: latestPoint?.captured_at || new Date().toISOString(),
+        });
+      }
+
       results.push({
         unit_code: unit.external_code,
         status: "ok",
@@ -356,12 +370,29 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Enqueue touched vehicles for processing
+    for (const tv of touchedVehicles) {
+      await supabase.from("vehicle_processing_queue").upsert(
+        {
+          tenant_id: tv.tenant_id,
+          vehicle_id: tv.vehicle_id,
+          queued_at: new Date().toISOString(),
+          last_position_at: tv.captured_at,
+          processed_at: null,
+          attempts: 0,
+          last_error: null,
+        },
+        { onConflict: "tenant_id,vehicle_id" }
+      );
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
         total_units: units.length,
         total_inserted: totalInserted,
         total_duplicates: totalDuplicates,
+        touched_vehicles: touchedVehicles.length,
         results,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
