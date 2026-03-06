@@ -26,3 +26,6 @@ verify_jwt = false
 
 [functions.ssx-insert-person]
 verify_jwt = false
+
+[functions.ssx-sync-units]
+verify_jwt = false
