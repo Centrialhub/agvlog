@@ -1,1 +1,7 @@
 project_id = "qcvnsdrbcchaxvawcngk"
+
+[functions.ssx-login]
+verify_jwt = false
+
+[functions.ssx-sync-telemetry]
+verify_jwt = false
