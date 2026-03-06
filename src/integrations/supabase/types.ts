@@ -1442,6 +1442,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_point_in_geofence: {
+        Args: { _geofence_id: string; _lat: number; _lng: number }
+        Returns: boolean
+      }
       is_tenant_admin: { Args: { _tenant_id: string }; Returns: boolean }
       is_tenant_member: { Args: { _tenant_id: string }; Returns: boolean }
       upsert_geofence: {
