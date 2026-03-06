@@ -122,14 +122,17 @@ Deno.serve(async (req) => {
         },
       });
 
+      const httpStatus = unitFetch.status_code === 429 ? 429 : 502;
       return new Response(
         JSON.stringify({
-          error: "SSX unit sync failed",
+          error: unitFetch.status_code === 429
+            ? "Limite de consultas SSX excedido. Aguarde alguns minutos e tente novamente."
+            : "SSX unit sync failed",
           status_code: unitFetch.status_code,
           details: unitFetch.error_message,
           endpoint: unitFetch.endpoint,
         }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: httpStatus, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
