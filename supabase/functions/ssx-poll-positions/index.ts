@@ -166,7 +166,7 @@ Deno.serve(async (req) => {
       const now = new Date();
 
       // Build SSX request - send as array (per SSX manual)
-      const filterPropertyName = settings.filter_property || "TrackedUnitIntegrationCode";
+      const filterPropertyName = settings.filter_property || "TrackedUnit";
       const filters = [
         {
           PropertyName: filterPropertyName,
