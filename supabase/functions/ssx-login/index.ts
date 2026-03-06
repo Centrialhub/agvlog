@@ -222,7 +222,10 @@ Deno.serve(async (req) => {
     }
 
     // Cache token using ExpiresIn from SSX or default 24h
-    const ttlMs = expiresInSeconds ? expiresInSeconds * 1000 : 24 * 60 * 60 * 1000;
+    const parsedExpires = Number(expiresInSeconds);
+    const ttlMs = (parsedExpires && isFinite(parsedExpires) && parsedExpires > 0)
+      ? parsedExpires * 1000
+      : 24 * 60 * 60 * 1000;
     const expiresAt = new Date(Date.now() + ttlMs).toISOString();
 
     await supabase
