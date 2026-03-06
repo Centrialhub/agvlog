@@ -281,10 +281,16 @@ async function logIntegration(
     error_message?: string;
     duration_ms?: number;
     metadata?: Record<string, any>;
+  }
+) {
+  try {
+    await supabase.from("integration_logs").insert(log);
+  } catch (e) {
+    console.error("Failed to log integration event:", e);
+  }
 }
 
 async function decryptAesGcm(encrypted: string, keyHex: string): Promise<string> {
-  // Format: enc:v1:<iv_hex>:<ciphertext_hex>
   const parts = encrypted.split(":");
   if (parts.length !== 4) throw new Error("Invalid encrypted format");
   const ivHex = parts[2];
@@ -305,11 +311,4 @@ function hexToBytes(hex: string): Uint8Array {
     bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
   }
   return bytes;
-}
-) {
-  try {
-    await supabase.from("integration_logs").insert(log);
-  } catch (e) {
-    console.error("Failed to log integration event:", e);
-  }
 }
