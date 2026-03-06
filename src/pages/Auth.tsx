@@ -101,23 +101,20 @@ function SignupForm({ loading, setLoading }: { loading: boolean; setLoading: (v:
       return;
     }
 
-    // Create tenant and membership
-    if (data.user) {
-      const { data: tenant, error: tErr } = await supabase
-        .from('tenants')
-        .insert({ name: companyName || `${fullName}'s Company` })
-        .select()
-        .single();
-
-      if (!tErr && tenant) {
-        await supabase.from('tenant_memberships').insert({
-          tenant_id: tenant.id,
-          user_id: data.user.id,
-          role: 'owner',
-        });
+    // Create tenant via RPC (SECURITY DEFINER bypasses RLS)
+    if (data.user && data.session) {
+      const tenantName = companyName || `${fullName}'s Company`;
+      const { error: rpcErr } = await supabase.rpc('create_tenant_with_owner', {
+        _tenant_name: tenantName,
+      });
+      if (rpcErr) {
+        console.error('Tenant creation error:', rpcErr);
+        toast.warning('Conta criada, mas houve erro ao criar empresa. Faça login e tente novamente.');
+      } else {
+        toast.success('Conta criada com sucesso!');
       }
-
-      toast.success('Conta criada! Verifique seu email se necessário.');
+    } else {
+      toast.success('Conta criada! Verifique seu email para confirmar.');
     }
     setLoading(false);
   };

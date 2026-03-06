@@ -28,14 +28,17 @@ Deno.serve(async (req) => {
     const anonClient = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
     });
-    const { data: { user }, error: userError } = await anonClient.auth.getUser();
-    if (userError || !user) {
+    const { data: claimsData, error: claimsError } = await anonClient.auth.getClaims(
+      authHeader.replace("Bearer ", "")
+    );
+    if (claimsError || !claimsData?.claims) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
+    const callerId = claimsData.claims.sub as string;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { integration_account_id, provider_unit_ids } = await req.json();
@@ -60,6 +63,15 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Verify caller is admin/owner of this tenant
+    const memberRole = await getTenantRole(supabase, account.tenant_id, callerId);
+    if (!memberRole || !["owner", "admin"].includes(memberRole)) {
+      return new Response(
+        JSON.stringify({ error: "Forbidden: admin role required" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Ensure token is valid
     if (!account.token_cache || !account.token_expires_at) {
       return new Response(
@@ -68,8 +80,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    const expiresAt = new Date(account.token_expires_at);
-    if (expiresAt.getTime() < Date.now()) {
+    const tokenExpiresAt = new Date(account.token_expires_at);
+    if (tokenExpiresAt.getTime() < Date.now()) {
       return new Response(
         JSON.stringify({ error: "Token expired. Run ssx-login first." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -111,9 +123,10 @@ Deno.serve(async (req) => {
       };
     }
 
-    const apiVersion = account.settings?.api_version || "v3";
+    const settings = account.settings as any || {};
+    const pollWindowMinutes = settings.poll_window_minutes || 15;
     const baseUrl = account.base_url.replace(/\/$/, "");
-    const positionUrl = `${baseUrl}/${apiVersion}/Tracking/PositionHistory/List`;
+    const positionUrl = `${baseUrl}/Tracking/PositionHistory/List`;
 
     const results: any[] = [];
     let totalInserted = 0;
@@ -148,12 +161,9 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // Build SSX request - use last 10 min window or from cursor
       const now = new Date();
-      const windowStart = cursor?.last_success_at
-        ? new Date(cursor.last_success_at)
-        : new Date(now.getTime() - 10 * 60 * 1000);
 
+      // Build SSX request - send as array (per SSX manual)
       const filters = [
         {
           PropertyName: "TrackedUnit",
@@ -164,17 +174,32 @@ Deno.serve(async (req) => {
 
       const startTime = Date.now();
       let ssxResponse: Response;
+      let requestFormat = "array";
+
       try {
+        // Try array format first (per SSX manual)
         ssxResponse = await fetch(positionUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${account.token_cache}`,
           },
-          body: JSON.stringify({ Filters: filters }),
+          body: JSON.stringify(filters),
         });
+
+        // If array fails with 400/415, try wrapped format as fallback
+        if (ssxResponse.status === 400 || ssxResponse.status === 415) {
+          requestFormat = "wrapped";
+          ssxResponse = await fetch(positionUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${account.token_cache}`,
+            },
+            body: JSON.stringify({ Filters: filters }),
+          });
+        }
       } catch (fetchErr: any) {
-        // Network error - apply backoff
         const backoffUntil = new Date(Date.now() + 60000).toISOString();
         await upsertCursor(supabase, {
           tenant_id: mapping.tenant_id,
@@ -238,11 +263,9 @@ Deno.serve(async (req) => {
         const normalized = normalizePosition(point);
         if (!normalized) continue;
 
-        // Compute hash for dedupe
         const hashInput = `${unit.external_code}|${normalized.lat}|${normalized.lng}|${normalized.captured_at}`;
         const hash = await computeHash(hashInput);
 
-        // Try insert (unique index will reject dupes)
         const { error: insertErr } = await supabase.from("positions_raw").insert({
           tenant_id: mapping.tenant_id,
           vehicle_id: mapping.vehicle_id,
@@ -314,6 +337,7 @@ Deno.serve(async (req) => {
           points_received: positions.length,
           inserted,
           duplicates,
+          request_format: requestFormat,
         },
       });
 
@@ -356,7 +380,6 @@ function normalizePosition(point: any): {
   captured_at: string;
   telemetry: Record<string, any>;
 } | null {
-  // Try multiple field name patterns from SSX
   const lat =
     point.Latitude ?? point.latitude ?? point.Lat ?? point.lat ?? point.Y ?? point.y;
   const lng =
@@ -377,7 +400,7 @@ function normalizePosition(point: any): {
   const parsedLng = typeof lng === "string" ? parseFloat(lng) : lng;
 
   if (isNaN(parsedLat) || isNaN(parsedLng)) return null;
-  if (parsedLat === 0 && parsedLng === 0) return null; // Invalid GPS
+  if (parsedLat === 0 && parsedLng === 0) return null;
 
   let captured_at: string;
   try {
@@ -386,7 +409,6 @@ function normalizePosition(point: any): {
     return null;
   }
 
-  // Collect all telemetry fields
   const knownFields = new Set([
     "Latitude", "latitude", "Lat", "lat", "Y", "y",
     "Longitude", "longitude", "Lng", "lng", "X", "x",
@@ -420,6 +442,23 @@ async function computeHash(input: string): Promise<string> {
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function getTenantRole(
+  supabase: any,
+  tenantId: string,
+  userId: string
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("tenant_memberships")
+    .select("role")
+    .eq("tenant_id", tenantId)
+    .eq("user_id", userId)
+    .eq("active", true)
+    .limit(1)
+    .single();
+  if (error || !data) return null;
+  return data.role;
 }
 
 async function upsertCursor(
