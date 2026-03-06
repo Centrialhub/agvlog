@@ -93,68 +93,47 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Call SSX TrackedUnit List (undocumented but functional endpoint)
+    // Fetch SSX units with endpoint fallback strategy
     const baseUrl = account.base_url.replace(/\/$/, "");
     const apiVersion = account.settings?.api_version || "v3";
-    const listUrl = `${baseUrl}/${apiVersion}/Tracking/TrackedUnit/List`;
     const startTime = Date.now();
 
-    let ssxResponse: Response;
-    let responseText: string;
-    try {
-      ssxResponse = await fetch(listUrl, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({}),
-      });
-      responseText = await ssxResponse.text();
-    } catch (fetchErr: any) {
-      await logIntegration(supabase, {
-        tenant_id: account.tenant_id,
-        integration_account_id,
-        action: "ssx_sync_units",
-        endpoint: listUrl,
-        success: false,
-        error_message: `SSX unreachable: ${fetchErr.message}`,
-        duration_ms: Date.now() - startTime,
-      });
-      return new Response(
-        JSON.stringify({ error: "SSX unreachable", details: fetchErr.message }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    const unitFetch = await fetchUnitsWithFallback({
+      baseUrl,
+      apiVersion,
+      token,
+    });
 
     const duration = Date.now() - startTime;
 
-    if (!ssxResponse.ok) {
+    if (!unitFetch.success) {
       await logIntegration(supabase, {
         tenant_id: account.tenant_id,
         integration_account_id,
         action: "ssx_sync_units",
-        endpoint: listUrl,
-        status_code: ssxResponse.status,
+        endpoint: unitFetch.endpoint,
+        status_code: unitFetch.status_code,
         success: false,
-        error_message: responseText.substring(0, 500),
+        error_message: unitFetch.error_message,
         duration_ms: duration,
+        metadata: {
+          attempted_endpoints: unitFetch.attempted_endpoints,
+          attempted_formats: unitFetch.attempted_formats,
+        },
       });
+
       return new Response(
-        JSON.stringify({ error: "SSX TrackedUnit/List failed", status_code: ssxResponse.status }),
+        JSON.stringify({
+          error: "SSX unit sync failed",
+          status_code: unitFetch.status_code,
+          details: unitFetch.error_message,
+          endpoint: unitFetch.endpoint,
+        }),
         { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Parse units
-    let units: any[];
-    try {
-      const parsed = JSON.parse(responseText);
-      units = Array.isArray(parsed) ? parsed : parsed.data || parsed.Data || parsed.items || parsed.Items || [];
-    } catch {
-      units = [];
-    }
+    const units = normalizeUnits(unitFetch.items);
 
     // Upsert into provider_units
     let upsertedCount = 0;
