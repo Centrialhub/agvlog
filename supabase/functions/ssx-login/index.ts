@@ -92,9 +92,18 @@ Deno.serve(async (req) => {
     // Build SSX login request
     const loginUrl = `${account.base_url}/Login`;
 
+    // Decrypt password if encrypted
+    let password = account.password_encrypted;
+    if (password.startsWith("enc:v1:")) {
+      const encryptionKey = Deno.env.get("AGVLOG_ENCRYPTION_KEY");
+      if (encryptionKey) {
+        password = await decryptAesGcm(password, encryptionKey);
+      }
+    }
+
     const loginPayload: Record<string, string> = {
       username: account.username,
-      password: account.password_encrypted,
+      password,
       HashAuth: account.hashauth || "",
     };
     if (account.hashcode) {
