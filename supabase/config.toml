@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.ssx-sync-telemetry]
 verify_jwt = false
+
+[functions.ssx-poll-positions]
+verify_jwt = false
