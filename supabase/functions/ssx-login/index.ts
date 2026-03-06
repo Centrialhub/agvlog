@@ -149,10 +149,6 @@ Deno.serve(async (req) => {
 
     const duration = Date.now() - startTime;
 
-    if (!ssxResponse) {
-      throw new Error("SSX login failed: no response received");
-    }
-
     if (!ssxResponse.ok) {
       const newStatus = ssxResponse.status === 401 ? "invalid_credentials" : "degraded";
 
@@ -174,7 +170,6 @@ Deno.serve(async (req) => {
         success: false,
         error_message: responseText.substring(0, 500),
         duration_ms: duration,
-        metadata: { request_format: requestFormat },
       });
 
       return new Response(
@@ -238,7 +233,7 @@ Deno.serve(async (req) => {
       status_code: ssxResponse.status,
       success: true,
       duration_ms: duration,
-      metadata: { token_expires_at: expiresAt, request_format: requestFormat },
+      metadata: { token_expires_at: expiresAt },
     });
 
     return new Response(
@@ -297,21 +292,6 @@ async function logIntegration(
   }
 }
 
-function toFormUrlEncoded(payload: Record<string, string>): string {
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(payload)) {
-    if (value !== undefined && value !== null) {
-      params.append(key, value);
-    }
-  }
-  return params.toString();
-}
-
-function shouldRetryLoginWithFallback(status: number, bodyText: string): boolean {
-  if (![400, 415, 422].includes(status)) return false;
-  const normalized = bodyText.toLowerCase();
-  return normalized.includes("username") || normalized.includes("password") || normalized.includes("propriedade");
-}
 
 async function decryptAesGcm(encrypted: string, keyHex: string): Promise<string> {
   const parts = encrypted.split(":");
