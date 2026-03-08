@@ -98,17 +98,35 @@ function IntegrationSection() {
   const syncUnitsMutation = useMutation({
     mutationFn: async (accountId: string) => {
       const { data, error } = await supabase.functions.invoke('ssx-sync-units', { body: { integration_account_id: accountId } });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      // Edge function may return 429 as JSON in data
+      if (error) {
+        // Try to parse the error body for structured info
+        throw error;
+      }
+      if (data?.error) {
+        const err = new Error(data.error) as any;
+        err.retryAt = data.retry_at;
+        err.cooldownActive = data.cooldown_active;
+        throw err;
+      }
       return data;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['provider_units'] });
       queryClient.invalidateQueries({ queryKey: ['vehicles'] });
       queryClient.invalidateQueries({ queryKey: ['tracker_links'] });
+      queryClient.invalidateQueries({ queryKey: ['integration_accounts'] });
       toast.success(`Sincronizado: ${data.upserted} rastreadores, ${data.vehicles_created || 0} veículos criados, ${data.links_created || 0} vínculos`);
     },
-    onError: (e: any) => toast.error(`Falha sync rastreadores: ${e.message}`),
+    onError: (e: any) => {
+      if (e.retryAt || e.cooldownActive) {
+        const retryTime = e.retryAt ? new Date(e.retryAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+        toast.error(`Limite SSX excedido. Tente novamente${retryTime ? ` às ${retryTime}` : ' em alguns minutos'}.`, { duration: 8000 });
+      } else {
+        toast.error(`Falha sync rastreadores: ${e.message}`);
+      }
+      queryClient.invalidateQueries({ queryKey: ['integration_accounts'] });
+    },
   });
 
   const pollMutation = useMutation({
