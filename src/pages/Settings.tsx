@@ -131,7 +131,12 @@ function IntegrationSection() {
       queryClient.invalidateQueries({ queryKey: ['vehicles'] });
       queryClient.invalidateQueries({ queryKey: ['tracker_links'] });
       queryClient.invalidateQueries({ queryKey: ['integration_accounts'] });
-      toast.success(`Sincronizado: ${data.upserted} rastreadores, ${data.vehicles_created || 0} veículos criados, ${data.links_created || 0} vínculos`);
+      if (data.skipped) {
+        const nextAt = data.next_sync_available_at ? new Date(data.next_sync_available_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+        toast.info(`Rastreadores já sincronizados recentemente.${nextAt ? ` Próximo sync disponível às ${nextAt}.` : ''} Use "Forçar Sync" para atualizar agora.`);
+      } else {
+        toast.success(`Sincronizado: ${data.upserted} rastreadores, ${data.vehicles_created || 0} veículos criados, ${data.links_created || 0} vínculos`);
+      }
     },
     onError: (e: any) => {
       if (e.retryAt || e.cooldownActive) {
