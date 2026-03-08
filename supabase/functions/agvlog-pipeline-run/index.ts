@@ -110,14 +110,28 @@ Deno.serve(async (req) => {
           stats.login = loginResp;
         }
 
-        // Step B: Sync units (auto-discover trackers, vehicles, links)
-        try {
-          const syncResp = await callEdgeFunction(supabaseUrl, anonKey, authHeader, isCron, cronSecret, "ssx-sync-units", {
-            integration_account_id: account.id,
-          });
-          stats.synced_units += syncResp?.upserted || 0;
-        } catch (e: any) {
-          stats.errors.push(`SyncUnits ${account.id}: ${e.message}`);
+        // Step B: Sync units — skip if backoff active or recently synced
+        const acctSettings = (account as any).settings || {};
+        const backoffUntil = acctSettings.sync_units_backoff_until;
+        const hasBackoff = backoffUntil && new Date(backoffUntil).getTime() > Date.now();
+
+        // Check if we have provider_units for this account already
+        const { count: unitCount } = await supabase
+          .from("provider_units")
+          .select("id", { count: "exact", head: true })
+          .eq("integration_account_id", account.id);
+
+        const shouldSync = !hasBackoff && (!unitCount || unitCount === 0);
+
+        if (shouldSync) {
+          try {
+            const syncResp = await callEdgeFunction(supabaseUrl, anonKey, authHeader, isCron, cronSecret, "ssx-sync-units", {
+              integration_account_id: account.id,
+            });
+            stats.synced_units += syncResp?.upserted || 0;
+          } catch (e: any) {
+            stats.errors.push(`SyncUnits ${account.id}: ${e.message}`);
+          }
         }
 
         // Step C: Poll positions
