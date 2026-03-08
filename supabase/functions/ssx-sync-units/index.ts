@@ -408,6 +408,7 @@ type UnitFetchSuccess = {
   attempted_endpoints: string[];
   attempted_formats: string[];
   used_memoized: boolean;
+  tracked_unit_404_only?: boolean;
 };
 
 type UnitFetchFailure = {
@@ -417,6 +418,7 @@ type UnitFetchFailure = {
   error_message: string;
   attempted_endpoints: string[];
   attempted_formats: string[];
+  tracked_unit_404_only?: boolean;
 };
 
 // === Fetch with memoized endpoint priority ===
