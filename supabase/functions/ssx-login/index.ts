@@ -34,16 +34,14 @@ Deno.serve(async (req) => {
       const anonClient = createClient(supabaseUrl, supabaseAnonKey, {
         global: { headers: { Authorization: authHeader } },
       });
-      const { data: claimsData, error: claimsError } = await anonClient.auth.getClaims(
-        authHeader.replace("Bearer ", "")
-      );
-      if (claimsError || !claimsData?.claims) {
+      const { data: userData, error: userError } = await anonClient.auth.getUser();
+      if (userError || !userData?.user) {
         return new Response(JSON.stringify({ error: "Unauthorized" }), {
           status: 401,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      callerId = claimsData.claims.sub as string;
+      callerId = userData.user.id;
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
