@@ -9,6 +9,7 @@ const corsHeaders = {
 // Exponential backoff tiers (ms)
 const BACKOFF_TIERS_MS = [2 * 60_000, 5 * 60_000, 15 * 60_000, 30 * 60_000];
 const CACHE_TTL_MS = 60 * 60_000; // 1 hour
+const TRACKED_UNIT_SKIP_TTL_MS = 24 * 60 * 60_000; // 24 hours
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -146,6 +147,7 @@ Deno.serve(async (req) => {
       token,
       lastSuccessfulEndpoint: settings.last_successful_endpoint || null,
       lastSuccessfulFormat: settings.last_successful_format || null,
+      skipTrackedUnitUntil: settings.skip_tracked_unit_until || null,
     });
 
     const duration = Date.now() - startTime;
@@ -162,6 +164,9 @@ Deno.serve(async (req) => {
           ...settings,
           sync_units_backoff_until: newBackoffUntil,
           sync_units_backoff_count: count + 1,
+          ...(unitFetch.tracked_unit_404_only
+            ? { skip_tracked_unit_until: new Date(Date.now() + TRACKED_UNIT_SKIP_TTL_MS).toISOString() }
+            : {}),
         };
         await supabase
           .from("integration_accounts")
@@ -339,6 +344,11 @@ Deno.serve(async (req) => {
     clearedSettings.last_units_sync_at = new Date().toISOString();
     clearedSettings.last_successful_endpoint = unitFetch.endpoint;
     clearedSettings.last_successful_format = unitFetch.attempted_formats[unitFetch.attempted_formats.length - 1] || null;
+    if (unitFetch.endpoint.includes("/TrackedUnit/List")) {
+      delete clearedSettings.skip_tracked_unit_until;
+    } else {
+      clearedSettings.skip_tracked_unit_until = new Date(Date.now() + TRACKED_UNIT_SKIP_TTL_MS).toISOString();
+    }
 
     await supabase
       .from("integration_accounts")
@@ -398,6 +408,7 @@ type UnitFetchSuccess = {
   attempted_endpoints: string[];
   attempted_formats: string[];
   used_memoized: boolean;
+  tracked_unit_404_only?: boolean;
 };
 
 type UnitFetchFailure = {
@@ -407,6 +418,7 @@ type UnitFetchFailure = {
   error_message: string;
   attempted_endpoints: string[];
   attempted_formats: string[];
+  tracked_unit_404_only?: boolean;
 };
 
 // === Fetch with memoized endpoint priority ===
@@ -417,8 +429,9 @@ async function fetchUnitsWithFallback(params: {
   token: string;
   lastSuccessfulEndpoint: string | null;
   lastSuccessfulFormat: string | null;
+  skipTrackedUnitUntil: string | null;
 }): Promise<UnitFetchSuccess | UnitFetchFailure> {
-  const { baseUrl, apiVersion, token, lastSuccessfulEndpoint, lastSuccessfulFormat } = params;
+  const { baseUrl, apiVersion, token, lastSuccessfulEndpoint, lastSuccessfulFormat, skipTrackedUnitUntil } = params;
   const attemptedEndpoints: string[] = [];
   const attemptedFormats: string[] = [];
 
@@ -434,38 +447,87 @@ async function fetchUnitsWithFallback(params: {
   }
 
   const versionPrefix = apiVersion && apiVersion !== "v1" ? `/${apiVersion}` : "";
-  const trackedUnitEndpoints = [
-    `${baseUrl}${versionPrefix}/Tracking/TrackedUnit/List`,
-    `${baseUrl}/Tracking/TrackedUnit/List`,
-  ];
+  const shouldSkipTrackedUnit = !!(
+    skipTrackedUnitUntil && new Date(skipTrackedUnitUntil).getTime() > Date.now()
+  );
 
   let lastStatus = 404;
   let lastError = "Not found";
+  let trackedUnitAll404 = false;
 
-  // 1) TrackedUnit/List paths
-  for (const endpoint of trackedUnitEndpoints) {
-    // Skip if already tried via memoized
-    if (attemptedEndpoints.includes(endpoint)) continue;
-    attemptedEndpoints.push(endpoint);
+  // 1) TrackedUnit/List paths (skip for 24h if we already learned they only return 404)
+  if (!shouldSkipTrackedUnit) {
+    const trackedUnitEndpoints = [
+      `${baseUrl}${versionPrefix}/Tracking/TrackedUnit/List`,
+      `${baseUrl}/Tracking/TrackedUnit/List`,
+    ];
 
-    const response = await safePostJson(endpoint, token, {});
-    if (response.networkError) {
-      return { success: false, endpoint, status_code: 502, error_message: response.networkError, attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats };
+    let trackedUnit404Count = 0;
+
+    for (const endpoint of trackedUnitEndpoints) {
+      // Skip if already tried via memoized
+      if (attemptedEndpoints.includes(endpoint)) continue;
+      attemptedEndpoints.push(endpoint);
+
+      const response = await safePostJson(endpoint, token, {});
+      if (response.networkError) {
+        return {
+          success: false,
+          endpoint,
+          status_code: 502,
+          error_message: response.networkError,
+          attempted_endpoints: attemptedEndpoints,
+          attempted_formats: attemptedFormats,
+          tracked_unit_404_only: trackedUnitAll404,
+        };
+      }
+
+      lastStatus = response.status;
+      lastError = response.text.slice(0, 500);
+
+      if (response.ok) {
+        attemptedFormats.push("tracked_unit:{}");
+        return {
+          success: true,
+          endpoint,
+          status_code: response.status,
+          items: extractItems(response.parsed),
+          attempted_endpoints: attemptedEndpoints,
+          attempted_formats: attemptedFormats,
+          used_memoized: false,
+          tracked_unit_404_only: false,
+        };
+      }
+      if (response.status === 429) {
+        return {
+          success: false,
+          endpoint,
+          status_code: 429,
+          error_message: "Rate limit exceeded.",
+          attempted_endpoints: attemptedEndpoints,
+          attempted_formats: attemptedFormats,
+          tracked_unit_404_only: false,
+        };
+      }
+      if (response.status !== 404) {
+        return {
+          success: false,
+          endpoint,
+          status_code: response.status,
+          error_message: response.text.slice(0, 500),
+          attempted_endpoints: attemptedEndpoints,
+          attempted_formats: attemptedFormats,
+          tracked_unit_404_only: false,
+        };
+      }
+
+      trackedUnit404Count++;
     }
 
-    lastStatus = response.status;
-    lastError = response.text.slice(0, 500);
-
-    if (response.ok) {
-      attemptedFormats.push("tracked_unit:{}");
-      return { success: true, endpoint, status_code: response.status, items: extractItems(response.parsed), attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats, used_memoized: false };
-    }
-    if (response.status === 429) {
-      return { success: false, endpoint, status_code: 429, error_message: "Rate limit exceeded.", attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats };
-    }
-    if (response.status !== 404) {
-      return { success: false, endpoint, status_code: response.status, error_message: response.text.slice(0, 500), attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats };
-    }
+    trackedUnitAll404 = trackedUnit404Count > 0 && trackedUnit404Count === trackedUnitEndpoints.length;
+  } else {
+    trackedUnitAll404 = true;
+    attemptedFormats.push("tracked_unit:skipped_cached_404");
   }
 
   // 2) PositionHistory fallback — progressive windows
@@ -482,35 +544,84 @@ async function fetchUnitsWithFallback(params: {
     let response = await safePostJson(positionEndpoint, token, filters);
 
     if (response.networkError) {
-      return { success: false, endpoint: positionEndpoint, status_code: 502, error_message: response.networkError, attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats };
+      return {
+        success: false,
+        endpoint: positionEndpoint,
+        status_code: 502,
+        error_message: response.networkError,
+        attempted_endpoints: attemptedEndpoints,
+        attempted_formats: attemptedFormats,
+        tracked_unit_404_only: trackedUnitAll404,
+      };
     }
 
     if (!response.ok && (response.status === 400 || response.status === 415)) {
       attemptedFormats.push(`position_history:${windowMin}m:wrapped`);
       response = await safePostJson(positionEndpoint, token, { Filters: filters });
       if (response.networkError) {
-        return { success: false, endpoint: positionEndpoint, status_code: 502, error_message: response.networkError, attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats };
+        return {
+          success: false,
+          endpoint: positionEndpoint,
+          status_code: 502,
+          error_message: response.networkError,
+          attempted_endpoints: attemptedEndpoints,
+          attempted_formats: attemptedFormats,
+          tracked_unit_404_only: trackedUnitAll404,
+        };
       }
     }
 
     if (response.status === 429) {
-      return { success: false, endpoint: positionEndpoint, status_code: 429, error_message: "Rate limit exceeded.", attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats };
+      return {
+        success: false,
+        endpoint: positionEndpoint,
+        status_code: 429,
+        error_message: "Rate limit exceeded.",
+        attempted_endpoints: attemptedEndpoints,
+        attempted_formats: attemptedFormats,
+        tracked_unit_404_only: trackedUnitAll404,
+      };
     }
 
     if (response.ok) {
       const items = extractItems(response.parsed);
       if (items.length > 0) {
-        return { success: true, endpoint: `${positionEndpoint} (fallback ${windowMin}m)`, status_code: response.status, items, attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats, used_memoized: false };
+        return {
+          success: true,
+          endpoint: `${positionEndpoint} (fallback ${windowMin}m)`,
+          status_code: response.status,
+          items,
+          attempted_endpoints: attemptedEndpoints,
+          attempted_formats: attemptedFormats,
+          used_memoized: false,
+          tracked_unit_404_only: trackedUnitAll404,
+        };
       }
       continue;
     }
 
     if (response.status !== 400 && response.status !== 415) {
-      return { success: false, endpoint: positionEndpoint, status_code: response.status, error_message: response.text.slice(0, 500) || lastError, attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats };
+      return {
+        success: false,
+        endpoint: positionEndpoint,
+        status_code: response.status,
+        error_message: response.text.slice(0, 500) || lastError,
+        attempted_endpoints: attemptedEndpoints,
+        attempted_formats: attemptedFormats,
+        tracked_unit_404_only: trackedUnitAll404,
+      };
     }
   }
 
-  return { success: false, endpoint: positionEndpoint, status_code: lastStatus, error_message: "No units found in any time window (5m → 24h)", attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats };
+  return {
+    success: false,
+    endpoint: positionEndpoint,
+    status_code: lastStatus,
+    error_message: "No units found in any time window (5m → 24h)",
+    attempted_endpoints: attemptedEndpoints,
+    attempted_formats: attemptedFormats,
+    tracked_unit_404_only: trackedUnitAll404,
+  };
 }
 
 // === Try memoized endpoint ===
