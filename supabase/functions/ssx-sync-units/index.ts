@@ -9,6 +9,7 @@ const corsHeaders = {
 // Exponential backoff tiers (ms)
 const BACKOFF_TIERS_MS = [2 * 60_000, 5 * 60_000, 15 * 60_000, 30 * 60_000];
 const CACHE_TTL_MS = 60 * 60_000; // 1 hour
+const TRACKED_UNIT_SKIP_TTL_MS = 24 * 60 * 60_000; // 24 hours
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
