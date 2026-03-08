@@ -344,6 +344,11 @@ Deno.serve(async (req) => {
     clearedSettings.last_units_sync_at = new Date().toISOString();
     clearedSettings.last_successful_endpoint = unitFetch.endpoint;
     clearedSettings.last_successful_format = unitFetch.attempted_formats[unitFetch.attempted_formats.length - 1] || null;
+    if (unitFetch.endpoint.includes("/TrackedUnit/List")) {
+      delete clearedSettings.skip_tracked_unit_until;
+    } else {
+      clearedSettings.skip_tracked_unit_until = new Date(Date.now() + TRACKED_UNIT_SKIP_TTL_MS).toISOString();
+    }
 
     await supabase
       .from("integration_accounts")
