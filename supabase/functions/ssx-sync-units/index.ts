@@ -147,6 +147,7 @@ Deno.serve(async (req) => {
       token,
       lastSuccessfulEndpoint: settings.last_successful_endpoint || null,
       lastSuccessfulFormat: settings.last_successful_format || null,
+      skipTrackedUnitUntil: settings.skip_tracked_unit_until || null,
     });
 
     const duration = Date.now() - startTime;
