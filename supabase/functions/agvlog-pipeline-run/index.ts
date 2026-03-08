@@ -80,7 +80,7 @@ Deno.serve(async (req) => {
     // Step 1: Get accounts to process
     let accountsQuery = supabase
       .from("integration_accounts")
-      .select("id, status, token_expires_at")
+      .select("id, status, token_expires_at, settings")
       .eq("tenant_id", tenant_id);
 
     if (integration_account_id) {

@@ -201,9 +201,18 @@ function IntegrationSection() {
                   <Button size="sm" onClick={() => loginMutation.mutate(acc.id)} disabled={loginMutation.isPending}>
                     <RefreshCw className={`mr-2 h-3 w-3 ${loginMutation.isPending ? 'animate-spin' : ''}`} />Testar Login
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => syncUnitsMutation.mutate(acc.id)} disabled={syncUnitsMutation.isPending || acc.status !== 'ok'}>
-                     <Radio className={`mr-2 h-3 w-3 ${syncUnitsMutation.isPending ? 'animate-spin' : ''}`} />Sync Rastreadores
-                   </Button>
+                   {(() => {
+                     const s = acc.settings as any;
+                     const backoffUntil = s?.sync_units_backoff_until;
+                     const isCooldown = backoffUntil && new Date(backoffUntil).getTime() > Date.now();
+                     const retryTime = isCooldown ? new Date(backoffUntil).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+                     return (
+                       <Button size="sm" variant="outline" onClick={() => syncUnitsMutation.mutate(acc.id)} disabled={syncUnitsMutation.isPending || acc.status !== 'ok' || isCooldown}>
+                         <Radio className={`mr-2 h-3 w-3 ${syncUnitsMutation.isPending ? 'animate-spin' : ''}`} />
+                         {isCooldown ? `Aguarde até ${retryTime}` : 'Sync Rastreadores'}
+                       </Button>
+                     );
+                   })()}
                    <Button size="sm" variant="outline" onClick={() => syncTelemetryMutation.mutate(acc.id)} disabled={syncTelemetryMutation.isPending || acc.status !== 'ok'}>
                      <Activity className={`mr-2 h-3 w-3 ${syncTelemetryMutation.isPending ? 'animate-spin' : ''}`} />Sync Telemetria
                    </Button>
