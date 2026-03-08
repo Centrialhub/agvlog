@@ -192,6 +192,7 @@ Deno.serve(async (req) => {
     // Parse token from response
     let token: string;
     let expiresInSeconds: number | null = null;
+    console.log("SSX login response (first 200 chars):", responseText.substring(0, 200));
     try {
       const parsed = JSON.parse(responseText);
       token = parsed.AccessToken || parsed.access_token || parsed.Token || parsed.token || responseText;
@@ -220,7 +221,8 @@ Deno.serve(async (req) => {
     }
 
     // Cache token using ExpiresIn from SSX or default 24h
-    let ttlMs = 24 * 60 * 60 * 1000; // default 24h
+    const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+    let ttlMs = DEFAULT_TTL_MS;
     try {
       const parsedExpires = Number(expiresInSeconds);
       if (Number.isFinite(parsedExpires) && parsedExpires > 0) {
@@ -229,9 +231,19 @@ Deno.serve(async (req) => {
     } catch {
       // keep default
     }
+
     const nowMs = Date.now();
-    const expiresAt = new Date(nowMs + ttlMs).toISOString();
-    const nowIso = new Date(nowMs).toISOString();
+    let expiresAt: string;
+    let nowIso: string;
+    try {
+      expiresAt = new Date(nowMs + ttlMs).toISOString();
+      nowIso = new Date(nowMs).toISOString();
+    } catch {
+      // Ultimate fallback — should never happen but prevents 500
+      expiresAt = new Date(nowMs + DEFAULT_TTL_MS).toISOString();
+      nowIso = new Date(nowMs).toISOString();
+    }
+    console.log("Token TTL calc:", { expiresInSeconds, ttlMs, expiresAt });
 
     await supabase
       .from("integration_accounts")
