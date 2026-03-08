@@ -84,6 +84,26 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Check cooldown (backoff) before calling SSX
+    const settings = (account.settings || {}) as Record<string, any>;
+    const backoffUntil = settings.sync_units_backoff_until;
+    if (backoffUntil) {
+      const backoffDate = new Date(backoffUntil);
+      const remainingMs = backoffDate.getTime() - Date.now();
+      if (remainingMs > 0) {
+        const retryAfterSeconds = Math.ceil(remainingMs / 1000);
+        return new Response(
+          JSON.stringify({
+            error: "Limite de consultas SSX excedido. Aguarde e tente novamente.",
+            retry_after_seconds: retryAfterSeconds,
+            retry_at: backoffUntil,
+            cooldown_active: true,
+          }),
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
     // Ensure valid token
     const token = account.token_cache;
     if (!token || !account.token_expires_at || new Date(account.token_expires_at).getTime() - Date.now() < 60000) {
@@ -95,7 +115,7 @@ Deno.serve(async (req) => {
 
     // Fetch SSX units with endpoint fallback strategy
     const baseUrl = account.base_url.replace(/\/$/, "");
-    const apiVersion = account.settings?.api_version || "v3";
+    const apiVersion = settings.api_version || "v3";
     const startTime = Date.now();
 
     const unitFetch = await fetchUnitsWithFallback({
@@ -107,6 +127,51 @@ Deno.serve(async (req) => {
     const duration = Date.now() - startTime;
 
     if (!unitFetch.success) {
+      // Handle 429 with backoff
+      if (unitFetch.status_code === 429) {
+        const defaultBackoffMinutes = 5;
+        const backoffMs = defaultBackoffMinutes * 60 * 1000;
+        const newBackoffUntil = new Date(Date.now() + backoffMs).toISOString();
+
+        // Save backoff to settings (no migration needed)
+        const updatedSettings = { ...settings, sync_units_backoff_until: newBackoffUntil };
+        await supabase
+          .from("integration_accounts")
+          .update({
+            settings: updatedSettings,
+            status: "degraded",
+            last_error: `Rate limit (429). Retry after ${newBackoffUntil}`,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", integration_account_id);
+
+        await logIntegration(supabase, {
+          tenant_id: account.tenant_id,
+          integration_account_id,
+          action: "ssx_sync_units",
+          endpoint: unitFetch.endpoint,
+          status_code: 429,
+          success: false,
+          error_message: `Rate limit. Backoff until ${newBackoffUntil}`,
+          duration_ms: duration,
+          metadata: {
+            attempted_endpoints: unitFetch.attempted_endpoints,
+            attempted_formats: unitFetch.attempted_formats,
+            backoff_until: newBackoffUntil,
+          },
+        });
+
+        return new Response(
+          JSON.stringify({
+            error: "Limite de consultas SSX excedido. Aguarde alguns minutos e tente novamente.",
+            retry_after_seconds: Math.ceil(backoffMs / 1000),
+            retry_at: newBackoffUntil,
+            cooldown_active: true,
+          }),
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
       await logIntegration(supabase, {
         tenant_id: account.tenant_id,
         integration_account_id,
@@ -122,17 +187,14 @@ Deno.serve(async (req) => {
         },
       });
 
-      const httpStatus = unitFetch.status_code === 429 ? 429 : 502;
       return new Response(
         JSON.stringify({
-          error: unitFetch.status_code === 429
-            ? "Limite de consultas SSX excedido. Aguarde alguns minutos e tente novamente."
-            : "SSX unit sync failed",
+          error: "SSX unit sync failed",
           status_code: unitFetch.status_code,
           details: unitFetch.error_message,
           endpoint: unitFetch.endpoint,
         }),
-        { status: httpStatus, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -244,6 +306,19 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Clear backoff on success and set status ok
+    const clearedSettings = { ...settings };
+    delete clearedSettings.sync_units_backoff_until;
+    await supabase
+      .from("integration_accounts")
+      .update({
+        settings: clearedSettings,
+        status: "ok",
+        last_error: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", integration_account_id);
+
     await logIntegration(supabase, {
       tenant_id: account.tenant_id,
       integration_account_id,
@@ -350,7 +425,6 @@ async function fetchUnitsWithFallback(params: {
       };
     }
 
-    // 404 means endpoint doesn't exist, try next. Other errors are fatal (except 429).
     if (response.status === 429) {
       return {
         success: false,
@@ -374,29 +448,19 @@ async function fetchUnitsWithFallback(params: {
     }
   }
 
-  // 2) Fallback to PositionHistory/List to infer units
+  // 2) Progressive fallback: try smaller time windows first to reduce API load
   const positionEndpoint = `${baseUrl}${versionPrefix}/Tracking/PositionHistory/List`;
   attemptedEndpoints.push(positionEndpoint);
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const filters = [{ PropertyName: "DateTimeGPS", Condition: ">=", Value: since }];
 
-  attemptedFormats.push("position_history:array");
-  let response = await safePostJson(positionEndpoint, token, filters);
-  if (response.networkError) {
-    return {
-      success: false,
-      endpoint: positionEndpoint,
-      status_code: 502,
-      error_message: response.networkError,
-      attempted_endpoints: attemptedEndpoints,
-      attempted_formats: attemptedFormats,
-    };
-  }
+  const windowsMinutes = [5, 30, 360, 1440]; // 5min, 30min, 6h, 24h
 
-  // Some SSX instances require wrapped format
-  if (!response.ok && (response.status === 400 || response.status === 415)) {
-    attemptedFormats.push("position_history:wrapped");
-    response = await safePostJson(positionEndpoint, token, { Filters: filters });
+  for (const windowMin of windowsMinutes) {
+    const since = new Date(Date.now() - windowMin * 60 * 1000).toISOString();
+    const filters = [{ PropertyName: "DateTimeGPS", Condition: ">=", Value: since }];
+
+    attemptedFormats.push(`position_history:${windowMin}m:array`);
+    let response = await safePostJson(positionEndpoint, token, filters);
+
     if (response.networkError) {
       return {
         success: false,
@@ -407,27 +471,69 @@ async function fetchUnitsWithFallback(params: {
         attempted_formats: attemptedFormats,
       };
     }
+
+    // Some SSX instances require wrapped format
+    if (!response.ok && (response.status === 400 || response.status === 415)) {
+      attemptedFormats.push(`position_history:${windowMin}m:wrapped`);
+      response = await safePostJson(positionEndpoint, token, { Filters: filters });
+      if (response.networkError) {
+        return {
+          success: false,
+          endpoint: positionEndpoint,
+          status_code: 502,
+          error_message: response.networkError,
+          attempted_endpoints: attemptedEndpoints,
+          attempted_formats: attemptedFormats,
+        };
+      }
+    }
+
+    if (response.status === 429) {
+      return {
+        success: false,
+        endpoint: positionEndpoint,
+        status_code: 429,
+        error_message: "Rate limit exceeded. Try again in a few minutes.",
+        attempted_endpoints: attemptedEndpoints,
+        attempted_formats: attemptedFormats,
+      };
+    }
+
+    if (response.ok) {
+      const items = extractItems(response.parsed);
+      if (items.length > 0) {
+        return {
+          success: true,
+          endpoint: `${positionEndpoint} (fallback ${windowMin}m)`,
+          status_code: response.status,
+          items,
+          attempted_endpoints: attemptedEndpoints,
+          attempted_formats: attemptedFormats,
+        };
+      }
+      // Empty result — try larger window
+      continue;
+    }
+
+    // Non-retryable error
+    if (response.status !== 400 && response.status !== 415) {
+      return {
+        success: false,
+        endpoint: positionEndpoint,
+        status_code: response.status,
+        error_message: response.text.slice(0, 500) || lastError,
+        attempted_endpoints: attemptedEndpoints,
+        attempted_formats: attemptedFormats,
+      };
+    }
   }
 
-  if (!response.ok) {
-    const isRateLimit = response.status === 429;
-    return {
-      success: false,
-      endpoint: positionEndpoint,
-      status_code: response.status || lastStatus,
-      error_message: isRateLimit
-        ? "Rate limit exceeded. Try again in a few minutes."
-        : (response.text.slice(0, 500) || lastError),
-      attempted_endpoints: attemptedEndpoints,
-      attempted_formats: attemptedFormats,
-    };
-  }
-
+  // All windows exhausted with no data
   return {
-    success: true,
-    endpoint: `${positionEndpoint} (fallback)` ,
-    status_code: response.status,
-    items: extractItems(response.parsed),
+    success: false,
+    endpoint: positionEndpoint,
+    status_code: lastStatus,
+    error_message: "No units found in any time window (5m → 24h)",
     attempted_endpoints: attemptedEndpoints,
     attempted_formats: attemptedFormats,
   };
@@ -481,16 +587,9 @@ function extractItems(parsed: any): any[] {
   if (!parsed || typeof parsed !== "object") return [];
 
   const candidates = [
-    parsed.data,
-    parsed.Data,
-    parsed.items,
-    parsed.Items,
-    parsed.result,
-    parsed.Result,
-    parsed.positions,
-    parsed.Positions,
-    parsed.records,
-    parsed.Records,
+    parsed.data, parsed.Data, parsed.items, parsed.Items,
+    parsed.result, parsed.Result, parsed.positions, parsed.Positions,
+    parsed.records, parsed.Records,
   ];
 
   for (const candidate of candidates) {

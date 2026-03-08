@@ -222,11 +222,35 @@ Deno.serve(async (req) => {
 
     // Cache token using ExpiresIn from SSX or default 24h
     const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+    const MAX_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days max
+    const MIN_TTL_MS = 5 * 60 * 1000; // 5 min minimum
     let ttlMs = DEFAULT_TTL_MS;
     try {
-      const parsedExpires = Number(expiresInSeconds);
+      let parsedExpires = Number(expiresInSeconds);
       if (Number.isFinite(parsedExpires) && parsedExpires > 0) {
+        // Detect .NET ticks (values > 1e12 are likely ticks or milliseconds, not seconds)
+        if (parsedExpires > 1e12) {
+          console.warn(`ExpiresIn looks like ticks/ms (${parsedExpires}), converting to seconds`);
+          // If > 1e15, it's likely .NET ticks (100ns units since epoch)
+          if (parsedExpires > 1e15) {
+            const ticksEpoch = 621355968000000000; // .NET epoch offset
+            const expiresDateMs = (parsedExpires - ticksEpoch) / 10000;
+            parsedExpires = Math.max(0, (expiresDateMs - Date.now()) / 1000);
+          } else {
+            // Likely milliseconds
+            parsedExpires = parsedExpires / 1000;
+          }
+        }
         ttlMs = parsedExpires * 1000;
+        // Clamp to safe range
+        if (ttlMs > MAX_TTL_MS) {
+          console.warn(`TTL ${ttlMs}ms exceeds max, clamping to ${MAX_TTL_MS}ms (7d)`);
+          ttlMs = MAX_TTL_MS;
+        }
+        if (ttlMs < MIN_TTL_MS) {
+          console.warn(`TTL ${ttlMs}ms below min, using default ${DEFAULT_TTL_MS}ms`);
+          ttlMs = DEFAULT_TTL_MS;
+        }
       }
     } catch {
       // keep default
