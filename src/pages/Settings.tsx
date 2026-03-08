@@ -242,10 +242,10 @@ function IntegrationSection() {
                         </>
                       );
                     })()}
-                   <Button size="sm" variant="outline" onClick={() => syncTelemetryMutation.mutate(acc.id)} disabled={syncTelemetryMutation.isPending || acc.status !== 'ok'}>
+                   <Button size="sm" variant="outline" onClick={() => syncTelemetryMutation.mutate(acc.id)} disabled={syncTelemetryMutation.isPending || !['ok', 'degraded'].includes(acc.status)}>
                      <Activity className={`mr-2 h-3 w-3 ${syncTelemetryMutation.isPending ? 'animate-spin' : ''}`} />Sync Telemetria
                    </Button>
-                   <Button size="sm" variant="outline" onClick={() => pollMutation.mutate(acc.id)} disabled={pollMutation.isPending || acc.status !== 'ok'}>
+                   <Button size="sm" variant="outline" onClick={() => pollMutation.mutate(acc.id)} disabled={pollMutation.isPending || !['ok', 'degraded'].includes(acc.status)}>
                     <Radio className={`mr-2 h-3 w-3 ${pollMutation.isPending ? 'animate-spin' : ''}`} />Rodar Polling
                   </Button>
                   <Button size="sm" variant="ghost" onClick={() => { if (confirm('Remover integração?')) deleteMutation.mutate(acc.id); }}>
