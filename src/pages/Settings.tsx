@@ -230,22 +230,22 @@ function IntegrationSection() {
                       const hasCachedSync = lastSync && (Date.now() - new Date(lastSync).getTime()) < 3600000;
                       return (
                         <>
-                          <Button size="sm" variant="outline" onClick={() => syncUnitsMutation.mutate({ accountId: acc.id })} disabled={syncUnitsMutation.isPending || acc.status !== 'ok' || isCooldown}>
-                            <Radio className={`mr-2 h-3 w-3 ${syncUnitsMutation.isPending ? 'animate-spin' : ''}`} />
-                            {isCooldown ? `Aguarde até ${retryTime}` : 'Sync Rastreadores'}
-                          </Button>
-                          {hasCachedSync && !isCooldown && (
-                            <Button size="sm" variant="ghost" onClick={() => syncUnitsMutation.mutate({ accountId: acc.id, force: true })} disabled={syncUnitsMutation.isPending || acc.status !== 'ok'}>
-                              <RefreshCw className={`mr-2 h-3 w-3 ${syncUnitsMutation.isPending ? 'animate-spin' : ''}`} />Forçar Sync
-                            </Button>
-                          )}
+                          <Button size="sm" variant="outline" onClick={() => syncUnitsMutation.mutate({ accountId: acc.id })} disabled={syncUnitsMutation.isPending || !['ok', 'degraded'].includes(acc.status) || isCooldown}>
+                             <Radio className={`mr-2 h-3 w-3 ${syncUnitsMutation.isPending ? 'animate-spin' : ''}`} />
+                             {isCooldown ? `Aguarde até ${retryTime}` : 'Sync Rastreadores'}
+                           </Button>
+                           {hasCachedSync && !isCooldown && (
+                             <Button size="sm" variant="ghost" onClick={() => syncUnitsMutation.mutate({ accountId: acc.id, force: true })} disabled={syncUnitsMutation.isPending || !['ok', 'degraded'].includes(acc.status)}>
+                               <RefreshCw className={`mr-2 h-3 w-3 ${syncUnitsMutation.isPending ? 'animate-spin' : ''}`} />Forçar Sync
+                             </Button>
+                           )}
                         </>
                       );
                     })()}
-                   <Button size="sm" variant="outline" onClick={() => syncTelemetryMutation.mutate(acc.id)} disabled={syncTelemetryMutation.isPending || acc.status !== 'ok'}>
+                   <Button size="sm" variant="outline" onClick={() => syncTelemetryMutation.mutate(acc.id)} disabled={syncTelemetryMutation.isPending || !['ok', 'degraded'].includes(acc.status)}>
                      <Activity className={`mr-2 h-3 w-3 ${syncTelemetryMutation.isPending ? 'animate-spin' : ''}`} />Sync Telemetria
                    </Button>
-                   <Button size="sm" variant="outline" onClick={() => pollMutation.mutate(acc.id)} disabled={pollMutation.isPending || acc.status !== 'ok'}>
+                   <Button size="sm" variant="outline" onClick={() => pollMutation.mutate(acc.id)} disabled={pollMutation.isPending || !['ok', 'degraded'].includes(acc.status)}>
                     <Radio className={`mr-2 h-3 w-3 ${pollMutation.isPending ? 'animate-spin' : ''}`} />Rodar Polling
                   </Button>
                   <Button size="sm" variant="ghost" onClick={() => { if (confirm('Remover integração?')) deleteMutation.mutate(acc.id); }}>
