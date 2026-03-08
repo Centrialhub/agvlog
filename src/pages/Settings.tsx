@@ -98,10 +98,25 @@ function IntegrationSection() {
   const syncUnitsMutation = useMutation({
     mutationFn: async (accountId: string) => {
       const { data, error } = await supabase.functions.invoke('ssx-sync-units', { body: { integration_account_id: accountId } });
-      // Edge function may return 429 as JSON in data
       if (error) {
-        // Try to parse the error body for structured info
-        throw error;
+        // supabase.functions.invoke puts response body as error.message for non-2xx
+        let parsed: any = null;
+        try {
+          parsed = JSON.parse(error.message);
+        } catch {
+          // Also try error.context?.body
+          try {
+            const text = typeof error.context === 'string' ? error.context : '';
+            if (text) parsed = JSON.parse(text);
+          } catch { /* ignore */ }
+        }
+        if (parsed?.cooldown_active || parsed?.retry_at) {
+          const err = new Error(parsed.error || 'Rate limit') as any;
+          err.retryAt = parsed.retry_at;
+          err.cooldownActive = parsed.cooldown_active;
+          throw err;
+        }
+        throw new Error(parsed?.error || error.message);
       }
       if (data?.error) {
         const err = new Error(data.error) as any;
