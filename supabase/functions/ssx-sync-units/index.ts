@@ -6,6 +6,10 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version, x-agvlog-cron-secret",
 };
 
+// Exponential backoff tiers (ms)
+const BACKOFF_TIERS_MS = [2 * 60_000, 5 * 60_000, 15 * 60_000, 30 * 60_000];
+const CACHE_TTL_MS = 60 * 60_000; // 1 hour
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -45,7 +49,8 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { integration_account_id } = await req.json();
+    const body = await req.json();
+    const { integration_account_id, force } = body;
     if (!integration_account_id) {
       return new Response(
         JSON.stringify({ error: "integration_account_id required" }),
@@ -84,22 +89,39 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Check cooldown (backoff) before calling SSX
     const settings = (account.settings || {}) as Record<string, any>;
+
+    // Check cooldown (backoff) — always respected, even with force
     const backoffUntil = settings.sync_units_backoff_until;
     if (backoffUntil) {
-      const backoffDate = new Date(backoffUntil);
-      const remainingMs = backoffDate.getTime() - Date.now();
+      const remainingMs = new Date(backoffUntil).getTime() - Date.now();
       if (remainingMs > 0) {
-        const retryAfterSeconds = Math.ceil(remainingMs / 1000);
         return new Response(
           JSON.stringify({
             error: "Limite de consultas SSX excedido. Aguarde e tente novamente.",
-            retry_after_seconds: retryAfterSeconds,
+            retry_after_seconds: Math.ceil(remainingMs / 1000),
             retry_at: backoffUntil,
             cooldown_active: true,
           }),
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+    // Check 1h cache — skip if recent (unless force=true)
+    const lastSyncAt = settings.last_units_sync_at;
+    if (!force && lastSyncAt) {
+      const elapsed = Date.now() - new Date(lastSyncAt).getTime();
+      if (elapsed < CACHE_TTL_MS) {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            skipped: true,
+            reason: "Units synced recently",
+            last_sync_at: lastSyncAt,
+            next_sync_available_at: new Date(new Date(lastSyncAt).getTime() + CACHE_TTL_MS).toISOString(),
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
     }
@@ -113,7 +135,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Fetch SSX units with endpoint fallback strategy
+    // Fetch SSX units — use memoized endpoint first if available
     const baseUrl = account.base_url.replace(/\/$/, "");
     const apiVersion = settings.api_version || "v3";
     const startTime = Date.now();
@@ -122,19 +144,25 @@ Deno.serve(async (req) => {
       baseUrl,
       apiVersion,
       token,
+      lastSuccessfulEndpoint: settings.last_successful_endpoint || null,
+      lastSuccessfulFormat: settings.last_successful_format || null,
     });
 
     const duration = Date.now() - startTime;
 
     if (!unitFetch.success) {
-      // Handle 429 with backoff
       if (unitFetch.status_code === 429) {
-        const defaultBackoffMinutes = 5;
-        const backoffMs = defaultBackoffMinutes * 60 * 1000;
+        // Exponential backoff
+        const count = (settings.sync_units_backoff_count || 0);
+        const tier = Math.min(count, BACKOFF_TIERS_MS.length - 1);
+        const backoffMs = BACKOFF_TIERS_MS[tier];
         const newBackoffUntil = new Date(Date.now() + backoffMs).toISOString();
 
-        // Save backoff to settings (no migration needed)
-        const updatedSettings = { ...settings, sync_units_backoff_until: newBackoffUntil };
+        const updatedSettings = {
+          ...settings,
+          sync_units_backoff_until: newBackoffUntil,
+          sync_units_backoff_count: count + 1,
+        };
         await supabase
           .from("integration_accounts")
           .update({
@@ -152,12 +180,13 @@ Deno.serve(async (req) => {
           endpoint: unitFetch.endpoint,
           status_code: 429,
           success: false,
-          error_message: `Rate limit. Backoff until ${newBackoffUntil}`,
+          error_message: `Rate limit. Backoff until ${newBackoffUntil} (tier ${tier})`,
           duration_ms: duration,
           metadata: {
             attempted_endpoints: unitFetch.attempted_endpoints,
             attempted_formats: unitFetch.attempted_formats,
             backoff_until: newBackoffUntil,
+            backoff_tier: tier,
           },
         });
 
@@ -221,7 +250,6 @@ Deno.serve(async (req) => {
       const label = (u.Description || u.description || u.Name || u.name || u.Label || "").trim() || null;
       const plate = (u.Plate || u.plate || "").trim() || null;
 
-      // Upsert provider_unit
       const { data: upsertedUnit, error: upsertErr } = await supabase
         .from("provider_units")
         .upsert(
@@ -246,7 +274,6 @@ Deno.serve(async (req) => {
       }
       upsertedCount++;
 
-      // Auto-create vehicle from Plate if available
       if (plate && upsertedUnit) {
         const { data: existingVehicle } = await supabase
           .from("vehicles")
@@ -278,7 +305,6 @@ Deno.serve(async (req) => {
           vehiclesCreated++;
         }
 
-        // Auto-create vehicle_tracker_link if none active
         const { data: existingLink } = await supabase
           .from("vehicle_tracker_links")
           .select("id")
@@ -306,9 +332,14 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Clear backoff on success and set status ok
+    // Clear backoff, save memoized endpoint, update cache timestamp
     const clearedSettings = { ...settings };
     delete clearedSettings.sync_units_backoff_until;
+    clearedSettings.sync_units_backoff_count = 0;
+    clearedSettings.last_units_sync_at = new Date().toISOString();
+    clearedSettings.last_successful_endpoint = unitFetch.endpoint;
+    clearedSettings.last_successful_format = unitFetch.attempted_formats[unitFetch.attempted_formats.length - 1] || null;
+
     await supabase
       .from("integration_accounts")
       .update({
@@ -333,6 +364,7 @@ Deno.serve(async (req) => {
         skipped: skippedCount,
         vehicles_created: vehiclesCreated,
         links_created: linksCreated,
+        used_memoized: unitFetch.used_memoized,
       },
     });
 
@@ -356,6 +388,8 @@ Deno.serve(async (req) => {
   }
 });
 
+// === Types ===
+
 type UnitFetchSuccess = {
   success: true;
   endpoint: string;
@@ -363,6 +397,7 @@ type UnitFetchSuccess = {
   items: any[];
   attempted_endpoints: string[];
   attempted_formats: string[];
+  used_memoized: boolean;
 };
 
 type UnitFetchFailure = {
@@ -374,14 +409,29 @@ type UnitFetchFailure = {
   attempted_formats: string[];
 };
 
+// === Fetch with memoized endpoint priority ===
+
 async function fetchUnitsWithFallback(params: {
   baseUrl: string;
   apiVersion: string;
   token: string;
+  lastSuccessfulEndpoint: string | null;
+  lastSuccessfulFormat: string | null;
 }): Promise<UnitFetchSuccess | UnitFetchFailure> {
-  const { baseUrl, apiVersion, token } = params;
+  const { baseUrl, apiVersion, token, lastSuccessfulEndpoint, lastSuccessfulFormat } = params;
   const attemptedEndpoints: string[] = [];
   const attemptedFormats: string[] = [];
+
+  // 0) Try memoized endpoint first if available
+  if (lastSuccessfulEndpoint && lastSuccessfulFormat) {
+    const memoResult = await tryMemoizedEndpoint(lastSuccessfulEndpoint, lastSuccessfulFormat, token, attemptedEndpoints, attemptedFormats);
+    if (memoResult) {
+      if (memoResult.success) return { ...memoResult, used_memoized: true };
+      // If 429, stop immediately
+      if (!memoResult.success && memoResult.status_code === 429) return memoResult;
+      // Otherwise fall through to full discovery
+    }
+  }
 
   const versionPrefix = apiVersion && apiVersion !== "v1" ? `/${apiVersion}` : "";
   const trackedUnitEndpoints = [
@@ -391,23 +441,16 @@ async function fetchUnitsWithFallback(params: {
 
   let lastStatus = 404;
   let lastError = "Not found";
-  let lastEndpoint = trackedUnitEndpoints[0];
 
-  // 1) Try undocumented TrackedUnit/List paths
+  // 1) TrackedUnit/List paths
   for (const endpoint of trackedUnitEndpoints) {
+    // Skip if already tried via memoized
+    if (attemptedEndpoints.includes(endpoint)) continue;
     attemptedEndpoints.push(endpoint);
-    lastEndpoint = endpoint;
 
     const response = await safePostJson(endpoint, token, {});
     if (response.networkError) {
-      return {
-        success: false,
-        endpoint,
-        status_code: 502,
-        error_message: response.networkError,
-        attempted_endpoints: attemptedEndpoints,
-        attempted_formats: attemptedFormats,
-      };
+      return { success: false, endpoint, status_code: 502, error_message: response.networkError, attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats };
     }
 
     lastStatus = response.status;
@@ -415,44 +458,21 @@ async function fetchUnitsWithFallback(params: {
 
     if (response.ok) {
       attemptedFormats.push("tracked_unit:{}");
-      return {
-        success: true,
-        endpoint,
-        status_code: response.status,
-        items: extractItems(response.parsed),
-        attempted_endpoints: attemptedEndpoints,
-        attempted_formats: attemptedFormats,
-      };
+      return { success: true, endpoint, status_code: response.status, items: extractItems(response.parsed), attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats, used_memoized: false };
     }
-
     if (response.status === 429) {
-      return {
-        success: false,
-        endpoint,
-        status_code: 429,
-        error_message: "Rate limit exceeded. Try again in a few minutes.",
-        attempted_endpoints: attemptedEndpoints,
-        attempted_formats: attemptedFormats,
-      };
+      return { success: false, endpoint, status_code: 429, error_message: "Rate limit exceeded.", attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats };
     }
-
     if (response.status !== 404) {
-      return {
-        success: false,
-        endpoint,
-        status_code: response.status,
-        error_message: response.text.slice(0, 500),
-        attempted_endpoints: attemptedEndpoints,
-        attempted_formats: attemptedFormats,
-      };
+      return { success: false, endpoint, status_code: response.status, error_message: response.text.slice(0, 500), attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats };
     }
   }
 
-  // 2) Progressive fallback: try smaller time windows first to reduce API load
+  // 2) PositionHistory fallback — progressive windows
   const positionEndpoint = `${baseUrl}${versionPrefix}/Tracking/PositionHistory/List`;
-  attemptedEndpoints.push(positionEndpoint);
+  if (!attemptedEndpoints.includes(positionEndpoint)) attemptedEndpoints.push(positionEndpoint);
 
-  const windowsMinutes = [5, 30, 360, 1440]; // 5min, 30min, 6h, 24h
+  const windowsMinutes = [5, 30, 360, 1440];
 
   for (const windowMin of windowsMinutes) {
     const since = new Date(Date.now() - windowMin * 60 * 1000).toISOString();
@@ -462,190 +482,125 @@ async function fetchUnitsWithFallback(params: {
     let response = await safePostJson(positionEndpoint, token, filters);
 
     if (response.networkError) {
-      return {
-        success: false,
-        endpoint: positionEndpoint,
-        status_code: 502,
-        error_message: response.networkError,
-        attempted_endpoints: attemptedEndpoints,
-        attempted_formats: attemptedFormats,
-      };
+      return { success: false, endpoint: positionEndpoint, status_code: 502, error_message: response.networkError, attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats };
     }
 
-    // Some SSX instances require wrapped format
     if (!response.ok && (response.status === 400 || response.status === 415)) {
       attemptedFormats.push(`position_history:${windowMin}m:wrapped`);
       response = await safePostJson(positionEndpoint, token, { Filters: filters });
       if (response.networkError) {
-        return {
-          success: false,
-          endpoint: positionEndpoint,
-          status_code: 502,
-          error_message: response.networkError,
-          attempted_endpoints: attemptedEndpoints,
-          attempted_formats: attemptedFormats,
-        };
+        return { success: false, endpoint: positionEndpoint, status_code: 502, error_message: response.networkError, attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats };
       }
     }
 
     if (response.status === 429) {
-      return {
-        success: false,
-        endpoint: positionEndpoint,
-        status_code: 429,
-        error_message: "Rate limit exceeded. Try again in a few minutes.",
-        attempted_endpoints: attemptedEndpoints,
-        attempted_formats: attemptedFormats,
-      };
+      return { success: false, endpoint: positionEndpoint, status_code: 429, error_message: "Rate limit exceeded.", attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats };
     }
 
     if (response.ok) {
       const items = extractItems(response.parsed);
       if (items.length > 0) {
-        return {
-          success: true,
-          endpoint: `${positionEndpoint} (fallback ${windowMin}m)`,
-          status_code: response.status,
-          items,
-          attempted_endpoints: attemptedEndpoints,
-          attempted_formats: attemptedFormats,
-        };
+        return { success: true, endpoint: `${positionEndpoint} (fallback ${windowMin}m)`, status_code: response.status, items, attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats, used_memoized: false };
       }
-      // Empty result — try larger window
       continue;
     }
 
-    // Non-retryable error
     if (response.status !== 400 && response.status !== 415) {
-      return {
-        success: false,
-        endpoint: positionEndpoint,
-        status_code: response.status,
-        error_message: response.text.slice(0, 500) || lastError,
-        attempted_endpoints: attemptedEndpoints,
-        attempted_formats: attemptedFormats,
-      };
+      return { success: false, endpoint: positionEndpoint, status_code: response.status, error_message: response.text.slice(0, 500) || lastError, attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats };
     }
   }
 
-  // All windows exhausted with no data
-  return {
-    success: false,
-    endpoint: positionEndpoint,
-    status_code: lastStatus,
-    error_message: "No units found in any time window (5m → 24h)",
-    attempted_endpoints: attemptedEndpoints,
-    attempted_formats: attemptedFormats,
-  };
+  return { success: false, endpoint: positionEndpoint, status_code: lastStatus, error_message: "No units found in any time window (5m → 24h)", attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats };
 }
 
+// === Try memoized endpoint ===
+
+async function tryMemoizedEndpoint(
+  endpoint: string, format: string, token: string,
+  attemptedEndpoints: string[], attemptedFormats: string[],
+): Promise<(UnitFetchSuccess & { used_memoized: true }) | UnitFetchFailure | null> {
+  attemptedEndpoints.push(endpoint);
+  attemptedFormats.push(`memo:${format}`);
+
+  // Determine body based on format
+  let body: any = {};
+  const cleanEndpoint = endpoint.replace(/ \(fallback \d+m\)$/, "");
+
+  if (format.startsWith("position_history:")) {
+    const match = format.match(/position_history:(\d+)m:(array|wrapped)/);
+    if (match) {
+      const windowMin = parseInt(match[1]);
+      const wrapped = match[2] === "wrapped";
+      const since = new Date(Date.now() - windowMin * 60 * 1000).toISOString();
+      const filters = [{ PropertyName: "DateTimeGPS", Condition: ">=", Value: since }];
+      body = wrapped ? { Filters: filters } : filters;
+    }
+  }
+
+  const response = await safePostJson(cleanEndpoint, token, body);
+  if (response.networkError) return null; // fall through to full discovery
+  if (response.status === 429) {
+    return { success: false, endpoint: cleanEndpoint, status_code: 429, error_message: "Rate limit exceeded.", attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats };
+  }
+  if (response.ok) {
+    const items = extractItems(response.parsed);
+    if (items.length > 0) {
+      return { success: true, endpoint: cleanEndpoint, status_code: response.status, items, attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats, used_memoized: true };
+    }
+  }
+  // Memoized didn't work — return null to try full discovery
+  return null;
+}
+
+// === HTTP helper ===
+
 async function safePostJson(endpoint: string, token: string, body: any): Promise<{
-  ok: boolean;
-  status: number;
-  text: string;
-  parsed: any;
-  networkError?: string;
+  ok: boolean; status: number; text: string; parsed: any; networkError?: string;
 }> {
   try {
     const resp = await fetch(endpoint, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-
     const text = await resp.text();
     let parsed: any = null;
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      parsed = null;
-    }
-
-    return {
-      ok: resp.ok,
-      status: resp.status,
-      text,
-      parsed,
-    };
+    try { parsed = JSON.parse(text); } catch { parsed = null; }
+    return { ok: resp.ok, status: resp.status, text, parsed };
   } catch (error: any) {
-    return {
-      ok: false,
-      status: 0,
-      text: "",
-      parsed: null,
-      networkError: `SSX unreachable: ${error.message}`,
-    };
+    return { ok: false, status: 0, text: "", parsed: null, networkError: `SSX unreachable: ${error.message}` };
   }
 }
+
+// === Data helpers ===
 
 function extractItems(parsed: any): any[] {
   if (Array.isArray(parsed)) return parsed;
   if (!parsed || typeof parsed !== "object") return [];
-
-  const candidates = [
-    parsed.data, parsed.Data, parsed.items, parsed.Items,
-    parsed.result, parsed.Result, parsed.positions, parsed.Positions,
-    parsed.records, parsed.Records,
-  ];
-
-  for (const candidate of candidates) {
-    if (Array.isArray(candidate)) return candidate;
-  }
-
+  const candidates = [parsed.data, parsed.Data, parsed.items, parsed.Items, parsed.result, parsed.Result, parsed.positions, parsed.Positions, parsed.records, parsed.Records];
+  for (const c of candidates) { if (Array.isArray(c)) return c; }
   return [];
 }
 
 function normalizeUnits(items: any[]): any[] {
   return items.map((item) => {
-    const inferredCode =
-      item.TrackedUnitIntegrationCode ||
-      item.trackedUnitIntegrationCode ||
-      item.TrackedUnit ||
-      item.trackedUnit ||
-      item.IntegrationCode ||
-      item.integrationCode ||
-      item.Code ||
-      item.code ||
-      item.Plate ||
-      item.plate ||
-      "";
-
+    const inferredCode = item.TrackedUnitIntegrationCode || item.trackedUnitIntegrationCode || item.TrackedUnit || item.trackedUnit || item.IntegrationCode || item.integrationCode || item.Code || item.code || item.Plate || item.plate || "";
     return {
       ...item,
       TrackedUnit: item.TrackedUnit || item.trackedUnit || inferredCode,
-      IntegrationCode:
-        item.IntegrationCode ||
-        item.integrationCode ||
-        item.TrackedUnitIntegrationCode ||
-        item.trackedUnitIntegrationCode ||
-        inferredCode,
+      IntegrationCode: item.IntegrationCode || item.integrationCode || item.TrackedUnitIntegrationCode || item.trackedUnitIntegrationCode || inferredCode,
       Plate: item.Plate || item.plate || null,
       Description: item.Description || item.description || item.Name || item.name || item.Plate || item.plate || null,
     };
   });
 }
 
-async function logIntegration(
-  supabase: any,
-  log: {
-    tenant_id: string;
-    integration_account_id: string;
-    action: string;
-    endpoint?: string;
-    status_code?: number;
-    success: boolean;
-    error_message?: string;
-    duration_ms?: number;
-    metadata?: Record<string, any>;
-  }
-) {
-  try {
-    await supabase.from("integration_logs").insert(log);
-  } catch (e) {
-    console.error("Failed to log:", e);
-  }
+// === Logging ===
+
+async function logIntegration(supabase: any, log: {
+  tenant_id: string; integration_account_id: string; action: string;
+  endpoint?: string; status_code?: number; success: boolean;
+  error_message?: string; duration_ms?: number; metadata?: Record<string, any>;
+}) {
+  try { await supabase.from("integration_logs").insert(log); } catch (e) { console.error("Failed to log:", e); }
 }
