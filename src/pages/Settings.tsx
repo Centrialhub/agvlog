@@ -96,8 +96,8 @@ function IntegrationSection() {
   });
 
   const syncUnitsMutation = useMutation({
-    mutationFn: async (accountId: string) => {
-      const { data, error } = await supabase.functions.invoke('ssx-sync-units', { body: { integration_account_id: accountId } });
+    mutationFn: async ({ accountId, force }: { accountId: string; force?: boolean }) => {
+      const { data, error } = await supabase.functions.invoke('ssx-sync-units', { body: { integration_account_id: accountId, force: !!force } });
       if (error) {
         // supabase.functions.invoke puts response body as error.message for non-2xx
         let parsed: any = null;
