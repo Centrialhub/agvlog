@@ -164,6 +164,9 @@ Deno.serve(async (req) => {
           ...settings,
           sync_units_backoff_until: newBackoffUntil,
           sync_units_backoff_count: count + 1,
+          ...(unitFetch.tracked_unit_404_only
+            ? { skip_tracked_unit_until: new Date(Date.now() + TRACKED_UNIT_SKIP_TTL_MS).toISOString() }
+            : {}),
         };
         await supabase
           .from("integration_accounts")
