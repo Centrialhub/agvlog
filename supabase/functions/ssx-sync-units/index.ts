@@ -110,11 +110,20 @@ Deno.serve(async (req) => {
     const apiVersion = settings.api_version || "v3";
     const startTime = Date.now();
 
-    // ===== PHASE 1: Administration-first fetch =====
+    // ===== PHASE 1: Administration-first fetch (skip if recently failed) =====
+    const skipAdminUntil = settings.skip_admin_until;
+    const adminSkipped = skipAdminUntil && new Date(skipAdminUntil).getTime() > Date.now();
 
-    let trackerResult = await fetchAdministrationTrackers({ baseUrl, token, settings });
+    let trackerResult: AdminFetchResult;
     let vehicleResult: AdminFetchResult | null = null;
     let usedMethod = "administration";
+
+    if (adminSkipped) {
+      console.log("Skipping Administration endpoints (skip_admin_until active)");
+      trackerResult = { success: false, endpoint: "", status_code: 0, items: [], error_message: "Admin skipped", attempted_endpoints: [], attempted_formats: [] };
+    } else {
+      trackerResult = await fetchAdministrationTrackers({ baseUrl, token, settings });
+    }
 
     // If Administration trackers worked, also try vehicles
     if (trackerResult.success && trackerResult.items.length > 0) {
@@ -125,6 +134,16 @@ Deno.serve(async (req) => {
     if (!trackerResult.success || trackerResult.items.length === 0) {
       if (trackerResult.status_code === 429) {
         return handle429(supabase, account, settings, integration_account_id, trackerResult, Date.now() - startTime);
+      }
+
+      // Remember admin failure for 24h if it was 404/not available
+      if (!adminSkipped && trackerResult.status_code !== 429) {
+        const skipUntil = new Date(Date.now() + 24 * 60 * 60_000).toISOString();
+        await supabase.from("integration_accounts").update({
+          settings: { ...settings, skip_admin_until: skipUntil },
+          updated_at: new Date().toISOString(),
+        }).eq("id", integration_account_id);
+        settings.skip_admin_until = skipUntil;
       }
 
       console.log("Administration fetch failed/empty, falling back to legacy TrackedUnit/PositionHistory...");
@@ -338,14 +357,8 @@ type AdminFetchResult = {
 
 const ADMIN_CANDIDATE_BODIES: { label: string; body: any | null }[] = [
   { label: "empty_array", body: [] },
-  { label: "array_empty_obj", body: [{}] },
-  { label: "no_body", body: null },
   { label: "empty_obj", body: {} },
-  { label: "Filters_empty", body: { Filters: [] } },
-  { label: "filters_empty", body: { filters: [] } },
   { label: "ListRequest_PascalCase", body: { Page: 1, PageSize: 5000, Filters: [] } },
-  { label: "listRequest_camelCase", body: { page: 1, pageSize: 5000, filters: [] } },
-  { label: "PageNumber_variant", body: { PageNumber: 1, PageSize: 5000, Filters: [] } },
 ];
 
 async function fetchAdministrationTrackers(params: {
@@ -459,26 +472,33 @@ async function fetchUnitsLegacyFallback(params: {
   const attemptedFormats: string[] = [];
   const versionPrefix = apiVersion && apiVersion !== "v1" ? `/${apiVersion}` : "";
 
-  // 1) TrackedUnit/List
-  const trackedUnitEndpoints = [
-    `${baseUrl}${versionPrefix}/Tracking/TrackedUnit/List`,
-    `${baseUrl}/Tracking/TrackedUnit/List`,
-  ];
+  // 1) TrackedUnit/List — skip if known to not work
+  const skipTrackedUntil = params.settings.skip_tracked_unit_until;
+  const skipTrackedUnit = skipTrackedUntil && new Date(skipTrackedUntil).getTime() > Date.now();
 
-  for (const endpoint of trackedUnitEndpoints) {
-    attemptedEndpoints.push(endpoint);
-    attemptedFormats.push("tracked_unit:{}");
-    const response = await safePostJson(endpoint, token, {});
-    if (response.networkError) continue;
-    if (response.status === 429) {
-      return { success: false, endpoint, status_code: 429, items: [], error_message: "Rate limit", attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats };
-    }
-    if (response.ok) {
-      const items = extractItems(response.parsed);
-      if (items.length > 0) {
-        return { success: true, endpoint, status_code: response.status, items, attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats, successful_format: "tracked_unit:{}" };
+  if (!skipTrackedUnit) {
+    const trackedUnitEndpoints = [
+      `${baseUrl}${versionPrefix}/Tracking/TrackedUnit/List`,
+      `${baseUrl}/Tracking/TrackedUnit/List`,
+    ];
+
+    for (const endpoint of trackedUnitEndpoints) {
+      attemptedEndpoints.push(endpoint);
+      attemptedFormats.push("tracked_unit:{}");
+      const response = await safePostJson(endpoint, token, {});
+      if (response.networkError) continue;
+      if (response.status === 429) {
+        return { success: false, endpoint, status_code: 429, items: [], error_message: "Rate limit", attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats };
+      }
+      if (response.ok) {
+        const items = extractItems(response.parsed);
+        if (items.length > 0) {
+          return { success: true, endpoint, status_code: response.status, items, attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats, successful_format: "tracked_unit:{}" };
+        }
       }
     }
+  } else {
+    console.log("Skipping TrackedUnit/List (skip_tracked_unit_until active)");
   }
 
   // 2) PositionHistory fallback
