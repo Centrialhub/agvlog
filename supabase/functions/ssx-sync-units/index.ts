@@ -472,26 +472,33 @@ async function fetchUnitsLegacyFallback(params: {
   const attemptedFormats: string[] = [];
   const versionPrefix = apiVersion && apiVersion !== "v1" ? `/${apiVersion}` : "";
 
-  // 1) TrackedUnit/List
-  const trackedUnitEndpoints = [
-    `${baseUrl}${versionPrefix}/Tracking/TrackedUnit/List`,
-    `${baseUrl}/Tracking/TrackedUnit/List`,
-  ];
+  // 1) TrackedUnit/List — skip if known to not work
+  const skipTrackedUntil = params.settings.skip_tracked_unit_until;
+  const skipTrackedUnit = skipTrackedUntil && new Date(skipTrackedUntil).getTime() > Date.now();
 
-  for (const endpoint of trackedUnitEndpoints) {
-    attemptedEndpoints.push(endpoint);
-    attemptedFormats.push("tracked_unit:{}");
-    const response = await safePostJson(endpoint, token, {});
-    if (response.networkError) continue;
-    if (response.status === 429) {
-      return { success: false, endpoint, status_code: 429, items: [], error_message: "Rate limit", attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats };
-    }
-    if (response.ok) {
-      const items = extractItems(response.parsed);
-      if (items.length > 0) {
-        return { success: true, endpoint, status_code: response.status, items, attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats, successful_format: "tracked_unit:{}" };
+  if (!skipTrackedUnit) {
+    const trackedUnitEndpoints = [
+      `${baseUrl}${versionPrefix}/Tracking/TrackedUnit/List`,
+      `${baseUrl}/Tracking/TrackedUnit/List`,
+    ];
+
+    for (const endpoint of trackedUnitEndpoints) {
+      attemptedEndpoints.push(endpoint);
+      attemptedFormats.push("tracked_unit:{}");
+      const response = await safePostJson(endpoint, token, {});
+      if (response.networkError) continue;
+      if (response.status === 429) {
+        return { success: false, endpoint, status_code: 429, items: [], error_message: "Rate limit", attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats };
+      }
+      if (response.ok) {
+        const items = extractItems(response.parsed);
+        if (items.length > 0) {
+          return { success: true, endpoint, status_code: response.status, items, attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats, successful_format: "tracked_unit:{}" };
+        }
       }
     }
+  } else {
+    console.log("Skipping TrackedUnit/List (skip_tracked_unit_until active)");
   }
 
   // 2) PositionHistory fallback
