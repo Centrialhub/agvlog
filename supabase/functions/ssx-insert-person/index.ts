@@ -1,10 +1,18 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
+/**
+ * ssx-insert-person — Inserts a driver/person into SSX via Tracking API.
+ * Uses centralized URL builder and logging from shared utils.
+ */
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+import { createClient } from "npm:@supabase/supabase-js@2";
+import {
+  corsHeaders,
+  buildSsxUrl,
+  readAccountConfig,
+  ssxPost,
+  logIntegration,
+  logSsxCall,
+  getTenantRole,
+} from "../_shared/ssx-utils.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -14,9 +22,7 @@ Deno.serve(async (req) => {
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResp({ error: "Unauthorized" }, 401);
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -26,142 +32,89 @@ Deno.serve(async (req) => {
     const anonClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
     });
-    const { data: claimsData, error: claimsError } = await anonClient.auth.getClaims(
-      authHeader.replace("Bearer ", "")
-    );
-    if (claimsError || !claimsData?.claims) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    const { data: userData, error: userError } = await anonClient.auth.getUser();
+    if (userError || !userData?.user) {
+      return jsonResp({ error: "Unauthorized" }, 401);
     }
 
-    const callerId = claimsData.claims.sub as string;
+    const callerId = userData.user.id;
     const supabase = createClient(supabaseUrl, serviceKey);
 
     const { tenant_id, driver_id, integration_account_id } = await req.json();
     if (!tenant_id || !driver_id || !integration_account_id) {
-      return new Response(
-        JSON.stringify({ error: "tenant_id, driver_id, and integration_account_id required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return jsonResp({ error: "tenant_id, driver_id, and integration_account_id required" }, 400);
     }
 
-    // Verify admin
-    const { data: membership } = await supabase
-      .from("tenant_memberships").select("role")
-      .eq("tenant_id", tenant_id).eq("user_id", callerId).eq("active", true)
-      .limit(1).single();
-
-    if (!membership || !["owner", "admin"].includes(membership.role)) {
-      return new Response(JSON.stringify({ error: "Forbidden" }), {
-        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    const role = await getTenantRole(supabase, tenant_id, callerId);
+    if (!role || !["owner", "admin"].includes(role)) {
+      return jsonResp({ error: "Forbidden" }, 403);
     }
 
-    // Get driver
     const { data: driver, error: driverErr } = await supabase
-      .from("drivers").select("*")
-      .eq("id", driver_id).eq("tenant_id", tenant_id).single();
-
+      .from("drivers").select("*").eq("id", driver_id).eq("tenant_id", tenant_id).single();
     if (driverErr || !driver) {
-      return new Response(JSON.stringify({ error: "Driver not found" }), {
-        status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResp({ error: "Driver not found" }, 404);
     }
 
-    // Get integration account
     const { data: account, error: accErr } = await supabase
-      .from("integration_accounts").select("*")
-      .eq("id", integration_account_id).eq("tenant_id", tenant_id).single();
-
+      .from("integration_accounts").select("*").eq("id", integration_account_id).eq("tenant_id", tenant_id).single();
     if (accErr || !account) {
-      return new Response(JSON.stringify({ error: "Integration account not found" }), {
-        status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResp({ error: "Integration account not found" }, 404);
     }
 
-    // Ensure token valid
     if (!account.token_cache || !account.token_expires_at || new Date(account.token_expires_at).getTime() < Date.now()) {
-      return new Response(JSON.stringify({ error: "Token expired. Run ssx-login first." }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResp({ error: "Token expired. Run ssx-login first." }, 400);
     }
 
-    const settings = (account.settings as any) || {};
-    const apiVersion = settings.api_version || "";
-    const versionPrefix = apiVersion && apiVersion !== "v1" ? `/${apiVersion}` : "";
-    const baseUrl = account.base_url.replace(/\/$/, "");
-    const insertUrl = `${baseUrl}${versionPrefix}/Tracking/Person/InsertPerson`;
+    const config = readAccountConfig(account);
 
-    // Build SSX person payload
+    // Use centralized URL builder
+    const insertUrl = buildSsxUrl(config.baseUrl, config.apiVersion, "/Tracking/Person/InsertPerson");
+
     const personPayload = {
       Name: driver.name,
       Document: driver.doc || "",
       Phone: driver.phone || "",
     };
 
-    const startTime = Date.now();
-    let ssxResponse: Response;
+    const resp = await ssxPost(insertUrl, config.token, personPayload, config.requestTimeoutMs);
 
-    try {
-      ssxResponse = await fetch(insertUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${account.token_cache}`,
-        },
-        body: JSON.stringify(personPayload),
-      });
-    } catch (fetchErr: any) {
-      await supabase.from("drivers").update({
-        provider_person_sync_status: "error",
-      }).eq("id", driver_id);
+    logSsxCall({
+      routine: "insert-person", endpoint: insertUrl, method: "POST",
+      apiVersion: config.apiVersion, attemptType: "insert_person",
+      statusCode: resp.status, durationMs: resp.durationMs,
+      responsePreview: (resp.text || "").substring(0, 150),
+      result: resp.ok ? "success" : "error",
+      errorClass: resp.errorClass,
+    });
+
+    if (!resp.ok) {
+      await supabase.from("drivers").update({ provider_person_sync_status: "error" }).eq("id", driver_id);
 
       await logIntegration(supabase, {
         tenant_id, integration_account_id,
         action: "ssx_insert_person", endpoint: insertUrl,
-        success: false, error_message: fetchErr.message,
-        duration_ms: Date.now() - startTime,
+        status_code: resp.status, success: false,
+        error_message: resp.text.substring(0, 500),
+        duration_ms: resp.durationMs,
+        metadata: { error_class: resp.errorClass },
       });
 
-      return new Response(
-        JSON.stringify({ error: "SSX unreachable", details: fetchErr.message }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return jsonResp({
+        error: "SSX insert person failed", status_code: resp.status,
+        error_class: resp.errorClass,
+        details: resp.text.substring(0, 200),
+      }, 502);
     }
 
-    const duration = Date.now() - startTime;
-    const responseText = await ssxResponse.text();
-
-    if (!ssxResponse.ok) {
-      await supabase.from("drivers").update({
-        provider_person_sync_status: "error",
-      }).eq("id", driver_id);
-
-      await logIntegration(supabase, {
-        tenant_id, integration_account_id,
-        action: "ssx_insert_person", endpoint: insertUrl,
-        status_code: ssxResponse.status, success: false,
-        error_message: responseText.substring(0, 500),
-        duration_ms: duration,
-      });
-
-      return new Response(
-        JSON.stringify({ error: "SSX insert person failed", status_code: ssxResponse.status, details: responseText.substring(0, 200) }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Parse response to get person ID
     let personId: string | null = null;
     try {
-      const parsed = JSON.parse(responseText);
-      personId = String(parsed.Id || parsed.id || parsed.PersonId || parsed.personId || "");
+      const parsed = resp.parsed;
+      personId = String(parsed?.Id || parsed?.id || parsed?.PersonId || parsed?.personId || "");
     } catch {
-      personId = responseText.trim();
+      personId = resp.text.trim();
     }
 
-    // Update driver
     await supabase.from("drivers").update({
       provider_person_id: personId || null,
       provider_person_sync_status: "synced",
@@ -170,24 +123,20 @@ Deno.serve(async (req) => {
     await logIntegration(supabase, {
       tenant_id, integration_account_id,
       action: "ssx_insert_person", endpoint: insertUrl,
-      status_code: ssxResponse.status, success: true,
-      duration_ms: duration,
+      status_code: resp.status, success: true,
+      duration_ms: resp.durationMs,
       metadata: { driver_id, person_id: personId },
     });
 
-    return new Response(
-      JSON.stringify({ success: true, person_id: personId }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return jsonResp({ success: true, person_id: personId });
   } catch (err: any) {
-    console.error("ssx-insert-person error:", err);
-    return new Response(
-      JSON.stringify({ error: "Internal error", details: err.message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    console.error("[SSX:insert-person] error:", err);
+    return jsonResp({ error: "Internal error", details: err.message }, 500);
   }
 });
 
-async function logIntegration(supabase: any, log: any) {
-  try { await supabase.from("integration_logs").insert(log); } catch (e) { console.error("Log failed:", e); }
+function jsonResp(body: any, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
 }

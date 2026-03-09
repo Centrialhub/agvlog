@@ -29,3 +29,6 @@ verify_jwt = false
 
 [functions.ssx-sync-units]
 verify_jwt = false
+
+[functions.ssx-diagnostic]
+verify_jwt = false
