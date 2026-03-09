@@ -1,13 +1,43 @@
+/**
+ * ssx-sync-units — Discovers trackers and vehicles from the SSX API.
+ *
+ * STRATEGY:
+ * 1. Administration API is the PRIMARY source (Tracker/List, Vehicle/List, Vehicle/v2/List).
+ * 2. If Administration fails, fallback to TrackedUnit/List then PositionHistory.
+ * 3. Fallback results are marked source_mode="tracking_fallback".
+ * 4. Admin skip window is SHORT (5-15 min), not 24h. Reset on credential changes.
+ * 5. Upserts are idempotent — no duplicates, no destructive deletes on partial failure.
+ * 6. Detailed logs in integration_logs with error classification.
+ */
+
 import { createClient } from "npm:@supabase/supabase-js@2";
+import {
+  corsHeaders,
+  buildSsxUrlCandidates,
+  readAccountConfig,
+  extractResponseItems,
+  normalizeTrackerItem,
+  pickTrackerCodeFromVehicle,
+  pickPlate,
+  tryEndpointWithFallback,
+  ADMIN_BODY_CANDIDATES,
+  ssxPost,
+  logIntegration,
+  logSsxCall,
+  sanitize,
+  getTenantRole,
+  classifyError,
+  isRetryable,
+  type SsxErrorClass,
+  type EndpointAttemptResult,
+  type NormalizedUnit,
+} from "../_shared/ssx-utils.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version, x-agvlog-cron-secret",
-};
-
-const BACKOFF_TIERS_MS = [2 * 60_000, 5 * 60_000, 15 * 60_000, 30 * 60_000];
+// Backoff tiers for 429 (short: 2, 5, 10, 15 min)
+const BACKOFF_TIERS_MS = [2 * 60_000, 5 * 60_000, 10 * 60_000, 15 * 60_000];
 const CACHE_TTL_MS = 60 * 60_000; // 1 hour
+// Admin skip window: 10 minutes (NOT 24h)
+const ADMIN_SKIP_MS = 10 * 60_000;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -28,18 +58,14 @@ Deno.serve(async (req) => {
     if (!isCron) {
       const authHeader = req.headers.get("Authorization");
       if (!authHeader?.startsWith("Bearer ")) {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), {
-          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return jsonResponse({ error: "Unauthorized" }, 401);
       }
       const anonClient = createClient(supabaseUrl, supabaseAnonKey, {
         global: { headers: { Authorization: authHeader } },
       });
       const { data: userData, error: userError } = await anonClient.auth.getUser();
       if (userError || !userData?.user) {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), {
-          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return jsonResponse({ error: "Unauthorized" }, 401);
       }
       callerId = userData.user.id;
     }
@@ -48,140 +74,241 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { integration_account_id, force } = body;
     if (!integration_account_id) {
-      return new Response(
-        JSON.stringify({ error: "integration_account_id required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return jsonResponse({ error: "integration_account_id required" }, 400);
     }
 
+    // ===== Fetch account =====
     const { data: account, error: accErr } = await supabase
       .from("integration_accounts").select("*").eq("id", integration_account_id).single();
     if (accErr || !account) {
-      return new Response(JSON.stringify({ error: "Integration account not found" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return jsonResponse({ error: "Integration account not found" }, 404);
     }
 
+    // ===== Authorization =====
     if (!isCron && callerId) {
-      const { data: membership } = await supabase
-        .from("tenant_memberships").select("role")
-        .eq("tenant_id", account.tenant_id).eq("user_id", callerId).eq("active", true).single();
-      if (!membership || !["owner", "admin"].includes(membership.role)) {
-        return new Response(JSON.stringify({ error: "Forbidden: admin role required" }),
-          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      const role = await getTenantRole(supabase, account.tenant_id, callerId);
+      if (!role || !["owner", "admin"].includes(role)) {
+        return jsonResponse({ error: "Forbidden: admin role required" }, 403);
       }
     }
 
-    const settings = (account.settings || {}) as Record<string, any>;
+    const config = readAccountConfig(account);
+    const settings = { ...config.settings }; // mutable copy
 
-    // Backoff check
+    // ===== Backoff check (429 protection) =====
     const backoffUntil = settings.sync_units_backoff_until;
     if (backoffUntil) {
       const remainingMs = new Date(backoffUntil).getTime() - Date.now();
       if (remainingMs > 0) {
-        return new Response(JSON.stringify({
+        return jsonResponse({
           error: "Limite de consultas SSX excedido. Aguarde e tente novamente.",
           retry_after_seconds: Math.ceil(remainingMs / 1000),
-          retry_at: backoffUntil, cooldown_active: true,
-        }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+          retry_at: backoffUntil,
+          cooldown_active: true,
+        }, 429);
       }
     }
 
-    // Cache check
+    // ===== Cache check =====
     const lastSyncAt = settings.last_units_sync_at;
     if (!force && lastSyncAt) {
       const elapsed = Date.now() - new Date(lastSyncAt).getTime();
       if (elapsed < CACHE_TTL_MS) {
-        return new Response(JSON.stringify({
+        return jsonResponse({
           success: true, skipped: true, reason: "Units synced recently",
           last_sync_at: lastSyncAt,
           next_sync_available_at: new Date(new Date(lastSyncAt).getTime() + CACHE_TTL_MS).toISOString(),
-        }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        });
       }
     }
 
-    // Token check
-    const token = account.token_cache;
-    if (!token || !account.token_expires_at || new Date(account.token_expires_at).getTime() - Date.now() < 60000) {
-      return new Response(JSON.stringify({ error: "Token expired or missing. Run ssx-login first." }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    // ===== Token check =====
+    if (!config.token || !account.token_expires_at || new Date(account.token_expires_at).getTime() - Date.now() < 60000) {
+      return jsonResponse({ error: "Token expired or missing. Run ssx-login first." }, 400);
     }
 
-    const baseUrl = account.base_url.replace(/\/$/, "");
-    const apiVersion = settings.api_version || "v3";
     const startTime = Date.now();
 
-    // ===== PHASE 1: Administration-first fetch (skip if recently failed) =====
-    const skipAdminUntil = settings.skip_admin_until;
-    const adminSkipped = skipAdminUntil && new Date(skipAdminUntil).getTime() > Date.now();
+    // ================================================================
+    // PHASE 1: Administration API — PRIMARY source for tracker catalog
+    // ================================================================
+    // The Administration API provides the authoritative list of trackers
+    // and vehicles. PositionHistory is ONLY a fallback for when Admin
+    // endpoints are genuinely unavailable.
+    // ================================================================
 
-    let trackerResult: AdminFetchResult;
-    let vehicleResult: AdminFetchResult | null = null;
+    const skipAdminUntil = settings.skip_admin_until;
+    const adminSkipped = !force && skipAdminUntil && new Date(skipAdminUntil).getTime() > Date.now();
     let usedMethod = "administration";
 
+    let trackerResult: EndpointAttemptResult;
+    let vehicleResult: EndpointAttemptResult | null = null;
+
     if (adminSkipped) {
-      console.log("Skipping Administration endpoints (skip_admin_until active)");
-      trackerResult = { success: false, endpoint: "", status_code: 0, items: [], error_message: "Admin skipped", attempted_endpoints: [], attempted_formats: [] };
+      console.log(`[SSX:sync-units] Admin skipped until ${skipAdminUntil} (last_admin_error: ${settings.last_admin_error || "none"})`);
+      trackerResult = {
+        success: false, items: [], endpoint: "", statusCode: 0,
+        errorClass: "unknown", errorMessage: "Admin temporarily skipped",
+        successfulFormat: null, attempts: [],
+      };
     } else {
-      trackerResult = await fetchAdministrationTrackers({ baseUrl, token, settings });
-    }
+      // --- Tracker List ---
+      console.log("[SSX:sync-units] Attempting Administration/Tracker/List...");
+      const trackerUrls = buildSsxUrlCandidates(config.baseUrl, config.apiVersion, "/Administration/Tracker/List");
+      trackerResult = await tryEndpointWithFallback({
+        urlCandidates: trackerUrls,
+        token: config.token,
+        bodyCandidates: ADMIN_BODY_CANDIDATES,
+        timeoutMs: config.requestTimeoutMs,
+        memoEndpoint: settings.admin_units_last_successful_endpoint,
+        memoFormat: settings.admin_units_last_successful_format,
+      });
 
-    // If Administration trackers worked, also try vehicles
-    if (trackerResult.success && trackerResult.items.length > 0) {
-      vehicleResult = await fetchAdministrationVehicles({ baseUrl, token, settings });
-    }
-
-    // If Administration didn't work, fall back to legacy
-    if (!trackerResult.success || trackerResult.items.length === 0) {
-      if (trackerResult.status_code === 429) {
-        return handle429(supabase, account, settings, integration_account_id, trackerResult, Date.now() - startTime);
+      for (const attempt of trackerResult.attempts) {
+        logSsxCall({
+          routine: "sync-units", endpoint: attempt.endpoint, method: "POST",
+          apiVersion: config.apiVersion, attemptType: `tracker:${attempt.format}`,
+          statusCode: attempt.statusCode, durationMs: attempt.durationMs,
+          responsePreview: attempt.responsePreview,
+          result: attempt.itemCount > 0 ? "success" : (attempt.errorClass === "empty_response" ? "empty" : "error"),
+          errorClass: attempt.errorClass,
+        });
       }
 
-      // Remember admin failure for 24h if it was 404/not available
-      if (!adminSkipped && trackerResult.status_code !== 429) {
-        const skipUntil = new Date(Date.now() + 24 * 60 * 60_000).toISOString();
+      // Handle 429 immediately
+      if (trackerResult.errorClass === "rate_limited") {
+        return await handle429(supabase, account, settings, integration_account_id, trackerResult, Date.now() - startTime);
+      }
+    }
+
+    // --- Vehicle List (only if trackers succeeded or we want enrichment) ---
+    if (trackerResult.success && trackerResult.items.length > 0) {
+      console.log("[SSX:sync-units] Attempting Administration/Vehicle list for enrichment...");
+      // Try multiple vehicle endpoint variants
+      const vehicleUrlsV2 = buildSsxUrlCandidates(config.baseUrl, config.apiVersion, "/Administration/Vehicle/v2/List");
+      const vehicleUrlsV1 = buildSsxUrlCandidates(config.baseUrl, config.apiVersion, "/Administration/Vehicle/List");
+      const allVehicleUrls = [...vehicleUrlsV2, ...vehicleUrlsV1];
+
+      vehicleResult = await tryEndpointWithFallback({
+        urlCandidates: allVehicleUrls,
+        token: config.token,
+        bodyCandidates: ADMIN_BODY_CANDIDATES,
+        timeoutMs: config.requestTimeoutMs,
+        memoEndpoint: settings.admin_vehicle_last_successful_endpoint,
+        memoFormat: settings.admin_vehicle_last_successful_format,
+      });
+
+      for (const attempt of vehicleResult.attempts) {
+        logSsxCall({
+          routine: "sync-units", endpoint: attempt.endpoint, method: "POST",
+          apiVersion: config.apiVersion, attemptType: `vehicle:${attempt.format}`,
+          statusCode: attempt.statusCode, durationMs: attempt.durationMs,
+          responsePreview: attempt.responsePreview,
+          result: attempt.itemCount > 0 ? "success" : (attempt.errorClass === "empty_response" ? "empty" : "error"),
+          errorClass: attempt.errorClass,
+        });
+      }
+
+      // Vehicle enrichment failure is NOT fatal — we still have trackers
+      if (!vehicleResult.success) {
+        console.log(`[SSX:sync-units] Vehicle enrichment failed (${vehicleResult.errorClass}), continuing with trackers only`);
+      }
+    }
+
+    // ================================================================
+    // PHASE 1b: If Administration failed, set SHORT skip and try fallback
+    // ================================================================
+    if (!trackerResult.success || trackerResult.items.length === 0) {
+      // Set a SHORT admin skip (10 min, not 24h) so we retry soon
+      if (!adminSkipped && trackerResult.errorClass !== "rate_limited") {
+        const skipUntil = new Date(Date.now() + ADMIN_SKIP_MS).toISOString();
+        const lastAdminError = `${trackerResult.errorClass}: ${trackerResult.errorMessage || "unknown"}`;
+        settings.skip_admin_until = skipUntil;
+        settings.last_admin_error = lastAdminError;
         await supabase.from("integration_accounts").update({
-          settings: { ...settings, skip_admin_until: skipUntil },
+          settings: { ...settings },
           updated_at: new Date().toISOString(),
         }).eq("id", integration_account_id);
-        settings.skip_admin_until = skipUntil;
+        console.log(`[SSX:sync-units] Admin failed (${trackerResult.errorClass}), skip for ${ADMIN_SKIP_MS / 60_000}min. Reason: ${lastAdminError}`);
       }
 
-      console.log("Administration fetch failed/empty, falling back to legacy TrackedUnit/PositionHistory...");
+      // ================================================================
+      // FALLBACK: TrackedUnit/List then PositionHistory
+      // These are CONTINGENCY sources only. Results are clearly marked.
+      // ================================================================
+      console.log("[SSX:sync-units] Falling back to legacy discovery...");
       usedMethod = "legacy_fallback";
-      const legacyResult = await fetchUnitsLegacyFallback({ baseUrl, apiVersion, token, settings });
+
+      const legacyResult = await fetchUnitsLegacyFallback(config);
+
+      for (const attempt of legacyResult.attempts) {
+        logSsxCall({
+          routine: "sync-units", endpoint: attempt.endpoint, method: "POST",
+          apiVersion: config.apiVersion, attemptType: `legacy:${attempt.format}`,
+          statusCode: attempt.statusCode, durationMs: attempt.durationMs,
+          responsePreview: attempt.responsePreview,
+          result: attempt.itemCount > 0 ? "success" : "error",
+          errorClass: attempt.errorClass,
+          fallbackReason: "Administration API unavailable",
+        });
+      }
+
+      if (legacyResult.errorClass === "rate_limited") {
+        return await handle429(supabase, account, settings, integration_account_id, legacyResult, Date.now() - startTime);
+      }
 
       if (!legacyResult.success) {
-        if (legacyResult.status_code === 429) {
-          return handle429(supabase, account, settings, integration_account_id, legacyResult, Date.now() - startTime);
-        }
+        // All methods failed
         await logIntegration(supabase, {
           tenant_id: account.tenant_id, integration_account_id,
           action: "ssx_sync_units", endpoint: legacyResult.endpoint,
-          status_code: legacyResult.status_code, success: false,
-          error_message: legacyResult.error_message, duration_ms: Date.now() - startTime,
+          status_code: legacyResult.statusCode, success: false,
+          error_message: `All discovery methods failed. Admin: ${trackerResult.errorClass}. Legacy: ${legacyResult.errorClass}`,
+          duration_ms: Date.now() - startTime,
           metadata: {
             method: "all_failed",
-            attempted_endpoints_trackers: trackerResult.attempted_endpoints,
-            attempted_formats_trackers: trackerResult.attempted_formats,
-            attempted_endpoints_legacy: legacyResult.attempted_endpoints,
-            attempted_formats_legacy: legacyResult.attempted_formats,
+            admin_error_class: trackerResult.errorClass,
+            legacy_error_class: legacyResult.errorClass,
+            admin_attempts: trackerResult.attempts.length,
+            legacy_attempts: legacyResult.attempts.length,
           },
         });
-        return new Response(JSON.stringify({
-          error: "SSX unit sync failed", status_code: legacyResult.status_code,
-          details: legacyResult.error_message,
-          attempted_endpoints_trackers: trackerResult.attempted_endpoints,
-          attempted_endpoints_legacy: legacyResult.attempted_endpoints,
-        }), { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        // Status = sync_inconclusive, NOT destructive
+        await supabase.from("integration_accounts").update({
+          status: "sync_inconclusive",
+          last_error: `Sync failed: admin=${trackerResult.errorClass}, legacy=${legacyResult.errorClass}`,
+          updated_at: new Date().toISOString(),
+        }).eq("id", integration_account_id);
+
+        return jsonResponse({
+          error: "SSX unit sync failed",
+          admin_error: trackerResult.errorClass,
+          legacy_error: legacyResult.errorClass,
+          admin_attempts: trackerResult.attempts.map(a => `${a.endpoint}:${a.format}→${a.statusCode}`),
+          legacy_attempts: legacyResult.attempts.map(a => `${a.endpoint}:${a.format}→${a.statusCode}`),
+        }, 502);
       }
 
-      // Legacy succeeded — use those items
-      trackerResult = { ...legacyResult, success: true };
+      trackerResult = legacyResult;
     }
 
     const duration = Date.now() - startTime;
 
-    // ===== PHASE 2: Build vehicle enrichment map =====
+    // ================================================================
+    // PHASE 2: Normalize and deduplicate
+    // ================================================================
+    const sourceMode = usedMethod === "administration" ? "admin_catalog" : "tracking_fallback";
+    const normalized: NormalizedUnit[] = [];
+    const seenCodes = new Set<string>();
+
+    for (const raw of trackerResult.items) {
+      const unit = normalizeTrackerItem(raw, trackerResult.endpoint, sourceMode as any);
+      if (!unit || seenCodes.has(unit.external_code)) continue;
+      seenCodes.add(unit.external_code);
+      normalized.push(unit);
+    }
+
+    // Build vehicle enrichment map from Administration Vehicle data
     const vehiclePlateByTrackerCode = new Map<string, string>();
     if (vehicleResult?.success && vehicleResult.items.length > 0) {
       for (const v of vehicleResult.items) {
@@ -193,492 +320,267 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ===== PHASE 3: Upsert provider_units, vehicles, links =====
+    // ================================================================
+    // PHASE 3: Idempotent upsert — no duplicates, no destructive deletes
+    // ================================================================
     let upsertedCount = 0, skippedCount = 0, vehiclesCreated = 0, linksCreated = 0;
-    const seenCodes = new Set<string>();
-    const sampleTrackerKeys = trackerResult.items.length > 0 ? Object.keys(trackerResult.items[0]) : [];
 
-    for (const item of trackerResult.items) {
-      const externalCode = pickExternalCode(item);
-      if (!externalCode || seenCodes.has(externalCode)) { skippedCount++; continue; }
-      seenCodes.add(externalCode);
-
-      const externalId = String(item.Id || item.id || "").trim() || null;
-      const label = (item.Description || item.Name || item.Model || item.TrackerModel || item.name || item.description || "").trim() || null;
-      // Plate: from vehicle enrichment or from tracker item itself
-      const plate = vehiclePlateByTrackerCode.get(externalCode) || pickPlate(item);
+    for (const unit of normalized) {
+      // Enrich plate from vehicle data if available
+      const plate = vehiclePlateByTrackerCode.get(unit.external_code) || unit.plate;
 
       const { data: upsertedUnit, error: upsertErr } = await supabase
         .from("provider_units")
         .upsert({
-          tenant_id: account.tenant_id, integration_account_id,
-          external_code: externalCode, external_id: externalId,
-          label, active: true, updated_at: new Date().toISOString(),
+          tenant_id: account.tenant_id,
+          integration_account_id,
+          external_code: unit.external_code,
+          external_id: unit.external_id,
+          label: unit.name,
+          active: true,
+          updated_at: new Date().toISOString(),
         }, { onConflict: "tenant_id,integration_account_id,external_code", ignoreDuplicates: false })
         .select("id").single();
 
-      if (upsertErr) { console.error(`Upsert failed for ${externalCode}:`, upsertErr.message); skippedCount++; continue; }
+      if (upsertErr) {
+        console.error(`[SSX:sync-units] Upsert failed for ${unit.external_code}: ${upsertErr.message}`);
+        skippedCount++;
+        continue;
+      }
       upsertedCount++;
 
+      // Auto-create vehicle and link if plate available
       if (plate && upsertedUnit) {
         const { data: existingVehicle } = await supabase
-          .from("vehicles").select("id").eq("tenant_id", account.tenant_id).eq("plate", plate).limit(1).maybeSingle();
+          .from("vehicles").select("id")
+          .eq("tenant_id", account.tenant_id).eq("plate", plate)
+          .limit(1).maybeSingle();
 
         let vehicleId: string;
         if (existingVehicle) {
           vehicleId = existingVehicle.id;
         } else {
           const { data: newVehicle, error: vErr } = await supabase
-            .from("vehicles").insert({ tenant_id: account.tenant_id, plate, nickname: label || null, type: "truck" })
-            .select("id").single();
-          if (vErr || !newVehicle) { console.error(`Failed to create vehicle for plate ${plate}:`, vErr?.message); continue; }
+            .from("vehicles").insert({
+              tenant_id: account.tenant_id, plate,
+              nickname: unit.name || null, type: "truck",
+            }).select("id").single();
+          if (vErr || !newVehicle) {
+            console.error(`[SSX:sync-units] Vehicle create failed for plate ${plate}: ${vErr?.message}`);
+            continue;
+          }
           vehicleId = newVehicle.id;
           vehiclesCreated++;
         }
 
+        // Only create link if none exists for this provider_unit
         const { data: existingLink } = await supabase
           .from("vehicle_tracker_links").select("id")
-          .eq("tenant_id", account.tenant_id).eq("provider_unit_id", upsertedUnit.id).eq("active", true)
+          .eq("tenant_id", account.tenant_id)
+          .eq("provider_unit_id", upsertedUnit.id)
+          .eq("active", true)
           .limit(1).maybeSingle();
 
         if (!existingLink) {
           const { error: linkErr } = await supabase
             .from("vehicle_tracker_links").insert({
-              tenant_id: account.tenant_id, vehicle_id: vehicleId,
-              provider_unit_id: upsertedUnit.id, active: true,
+              tenant_id: account.tenant_id,
+              vehicle_id: vehicleId,
+              provider_unit_id: upsertedUnit.id,
+              active: true,
             });
-          if (linkErr) { console.error(`Failed to link ${externalCode} to ${plate}:`, linkErr.message); }
-          else { linksCreated++; }
+          if (linkErr) {
+            console.error(`[SSX:sync-units] Link failed ${unit.external_code}→${plate}: ${linkErr.message}`);
+          } else {
+            linksCreated++;
+          }
         }
       }
     }
 
-    // ===== PHASE 4: Quick validation (up to 3 units) =====
+    // ================================================================
+    // PHASE 4: Quick validation (up to 3 units via PositionHistory)
+    // ================================================================
     const validationResults: { code: string; valid: boolean }[] = [];
     if (upsertedCount > 0 && usedMethod === "administration") {
-      const codesToValidate = Array.from(seenCodes).slice(0, 3);
-      const versionPrefix = apiVersion && apiVersion !== "v1" ? `/${apiVersion}` : "";
-      const posHistEndpoint = `${baseUrl}${versionPrefix}/Tracking/PositionHistory/List`;
+      const codesToValidate = normalized.slice(0, 3).map(u => u.external_code);
+      const posHistUrls = buildSsxUrlCandidates(config.baseUrl, config.apiVersion, "/Tracking/PositionHistory/List");
 
       for (const code of codesToValidate) {
-        try {
-          const filters = [{ PropertyName: "TrackedUnit", Condition: "Equal", Value: code }];
-          let resp = await safePostJson(posHistEndpoint, token, filters);
-          if (!resp.ok && (resp.status === 400 || resp.status === 415)) {
-            resp = await safePostJson(posHistEndpoint, token, { Filters: filters });
-          }
-          if (resp.status === 429) break; // stop validation on rate limit
-          const items = resp.ok ? extractItems(resp.parsed) : [];
-          validationResults.push({ code, valid: items.length > 0 });
-        } catch { validationResults.push({ code, valid: false }); }
+        const filters = [{ PropertyName: "TrackedUnit", Condition: "Equal", Value: code }];
+        let resp = await ssxPost(posHistUrls[0], config.token, filters, config.requestTimeoutMs);
+        if (!resp.ok && (resp.status === 400 || resp.status === 415)) {
+          resp = await ssxPost(posHistUrls[0], config.token, { Filters: filters }, config.requestTimeoutMs);
+        }
+        if (resp.errorClass === "rate_limited") break;
+        const items = resp.ok ? extractResponseItems(resp.parsed) : [];
+        validationResults.push({ code, valid: items.length > 0 });
       }
     }
 
-    // ===== Save settings & log =====
-    const clearedSettings = { ...settings };
-    delete clearedSettings.sync_units_backoff_until;
-    clearedSettings.sync_units_backoff_count = 0;
-    clearedSettings.last_units_sync_at = new Date().toISOString();
-    if (trackerResult.endpoint) {
-      clearedSettings.admin_units_last_successful_endpoint = trackerResult.endpoint;
-      clearedSettings.admin_units_last_successful_format = trackerResult.successful_format || null;
-      clearedSettings.admin_units_last_sync_at = new Date().toISOString();
-      // Also save as generic last_successful for legacy compat
-      clearedSettings.last_successful_endpoint = trackerResult.endpoint;
-      clearedSettings.last_successful_format = trackerResult.successful_format || null;
+    // ================================================================
+    // PHASE 5: Save settings & log
+    // ================================================================
+    const updatedSettings = { ...settings };
+    delete updatedSettings.sync_units_backoff_until;
+    updatedSettings.sync_units_backoff_count = 0;
+    updatedSettings.last_units_sync_at = new Date().toISOString();
+
+    if (usedMethod === "administration" && trackerResult.successfulFormat) {
+      updatedSettings.admin_units_last_successful_endpoint = trackerResult.endpoint;
+      updatedSettings.admin_units_last_successful_format = trackerResult.successfulFormat;
+      updatedSettings.admin_units_last_sync_at = new Date().toISOString();
+      // Clear admin skip on success
+      delete updatedSettings.skip_admin_until;
+      delete updatedSettings.last_admin_error;
     }
-    if (vehicleResult?.success && vehicleResult.endpoint) {
-      clearedSettings.admin_vehicle_last_successful_endpoint = vehicleResult.endpoint;
-      clearedSettings.admin_vehicle_last_successful_format = vehicleResult.successful_format || null;
+    if (vehicleResult?.success && vehicleResult.successfulFormat) {
+      updatedSettings.admin_vehicle_last_successful_endpoint = vehicleResult.endpoint;
+      updatedSettings.admin_vehicle_last_successful_format = vehicleResult.successfulFormat;
+    }
+    // Compat
+    if (trackerResult.endpoint) {
+      updatedSettings.last_successful_endpoint = trackerResult.endpoint;
+      updatedSettings.last_successful_format = trackerResult.successfulFormat || null;
     }
 
     await supabase.from("integration_accounts").update({
-      settings: clearedSettings, status: "ok", last_error: null, updated_at: new Date().toISOString(),
+      settings: updatedSettings, status: "ok", last_error: null,
+      updated_at: new Date().toISOString(),
     }).eq("id", integration_account_id);
-
-    const sampleVehicleKeys = vehicleResult?.items?.length ? Object.keys(vehicleResult.items[0]) : [];
 
     await logIntegration(supabase, {
       tenant_id: account.tenant_id, integration_account_id,
       action: "ssx_sync_units", endpoint: trackerResult.endpoint,
-      status_code: trackerResult.status_code, success: true, duration_ms: duration,
+      status_code: trackerResult.statusCode, success: true,
+      duration_ms: duration,
       metadata: {
         method: usedMethod,
-        attempted_endpoints_trackers: trackerResult.attempted_endpoints,
-        attempted_formats_trackers: trackerResult.attempted_formats,
-        attempted_endpoints_vehicles: vehicleResult?.attempted_endpoints || [],
-        attempted_formats_vehicles: vehicleResult?.attempted_formats || [],
+        source_mode: sourceMode,
         tracker_endpoint_used: trackerResult.endpoint,
         vehicle_endpoint_used: vehicleResult?.endpoint || null,
-        sample_tracker_keys: sampleTrackerKeys.slice(0, 15),
-        sample_vehicle_keys: sampleVehicleKeys.slice(0, 15),
         trackers_received: trackerResult.items.length,
         vehicles_received: vehicleResult?.items?.length || 0,
-        upserted: upsertedCount, skipped: skippedCount,
-        vehicles_created: vehiclesCreated, links_created: linksCreated,
+        normalized_count: normalized.length,
+        upserted: upsertedCount,
+        skipped: skippedCount,
+        vehicles_created: vehiclesCreated,
+        links_created: linksCreated,
         vehicle_plate_mappings: vehiclePlateByTrackerCode.size,
         validation: validationResults,
+        admin_attempts: trackerResult.attempts.map(a => `${a.format}→${a.statusCode}(${a.itemCount})`),
+        vehicle_attempts: vehicleResult?.attempts.map(a => `${a.format}→${a.statusCode}(${a.itemCount})`) || [],
       },
     });
 
-    return new Response(JSON.stringify({
-      success: true, method: usedMethod,
+    return jsonResponse({
+      success: true,
+      method: usedMethod,
+      source_mode: sourceMode,
       tracker_endpoint_used: trackerResult.endpoint,
       vehicle_endpoint_used: vehicleResult?.endpoint || null,
       trackers_received: trackerResult.items.length,
-      vehicles_received: vehicleResult?.items?.length || 0,
-      upserted: upsertedCount, skipped: skippedCount,
-      vehicles_created: vehiclesCreated, links_created: linksCreated,
-      mapping_notes: `vehicle->tracker link success: ${linksCreated}/${vehiclePlateByTrackerCode.size}`,
+      normalized_count: normalized.length,
+      upserted: upsertedCount,
+      skipped: skippedCount,
+      vehicles_created: vehiclesCreated,
+      links_created: linksCreated,
       validation: validationResults,
-    }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    });
 
   } catch (err: any) {
-    console.error("ssx-sync-units error:", err);
-    return new Response(JSON.stringify({ error: "Internal error", details: err.message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    console.error("[SSX:sync-units] Unhandled error:", err);
+    return jsonResponse({ error: "Internal error", details: err.message }, 500);
   }
 });
 
-// ==================== Types ====================
+// ==================== Legacy Fallback ====================
+// TrackedUnit/List and PositionHistory are contingency sources only.
+// Results discovered here are marked source_mode="tracking_fallback"
+// and should NOT be treated as the authoritative tracker catalog.
 
-type AdminFetchResult = {
-  success: boolean;
-  endpoint: string;
-  status_code: number;
-  items: any[];
-  error_message?: string;
-  attempted_endpoints: string[];
-  attempted_formats: string[];
-  successful_format?: string;
-};
+async function fetchUnitsLegacyFallback(config: ReturnType<typeof readAccountConfig>): Promise<EndpointAttemptResult> {
+  const allAttempts: any[] = [];
 
-// ==================== Administration Tracker Fetch ====================
+  // 1) TrackedUnit/List
+  const trackedUrls = buildSsxUrlCandidates(config.baseUrl, config.apiVersion, "/Tracking/TrackedUnit/List");
+  const trackedResult = await tryEndpointWithFallback({
+    urlCandidates: trackedUrls,
+    token: config.token,
+    bodyCandidates: [{ label: "empty_object", body: {} }],
+    timeoutMs: config.requestTimeoutMs,
+  });
+  allAttempts.push(...trackedResult.attempts);
 
-const ADMIN_CANDIDATE_BODIES: { label: string; body: any | null }[] = [
-  { label: "empty_array", body: [] },
-  { label: "empty_obj", body: {} },
-  { label: "ListRequest_PascalCase", body: { Page: 1, PageSize: 5000, Filters: [] } },
-];
-
-async function fetchAdministrationTrackers(params: {
-  baseUrl: string; token: string; settings: Record<string, any>;
-}): Promise<AdminFetchResult> {
-  const { baseUrl, token, settings } = params;
-  const attemptedEndpoints: string[] = [];
-  const attemptedFormats: string[] = [];
-  const apiVersion = settings.api_version || "v3";
-
-  // Try memoized first
-  const memoEndpoint = settings.admin_units_last_successful_endpoint;
-  const memoFormat = settings.admin_units_last_successful_format;
-  if (memoEndpoint && memoFormat && memoEndpoint.includes("/Administration/")) {
-    const result = await tryAdminEndpointWithBody(memoEndpoint, memoFormat, token, attemptedEndpoints, attemptedFormats);
-    if (result) return result;
+  if (trackedResult.errorClass === "rate_limited") {
+    return { ...trackedResult, attempts: allAttempts };
+  }
+  if (trackedResult.success && trackedResult.items.length > 0) {
+    return { ...trackedResult, attempts: allAttempts };
   }
 
-  const endpoints = [
-    `${baseUrl}/${apiVersion}/Administration/Tracker/List`,
-    `${baseUrl}/Administration/Tracker/List`,
-    `${baseUrl}/v1/Administration/Tracker/List`,
-  ];
-
-  for (const endpoint of endpoints) {
-    if (attemptedEndpoints.includes(endpoint)) continue;
-    for (const candidate of ADMIN_CANDIDATE_BODIES) {
-      attemptedEndpoints.push(endpoint);
-      attemptedFormats.push(`${endpoint}:${candidate.label}`);
-
-      const resp = candidate.body === null
-        ? await safePostNoBody(endpoint, token)
-        : await safePostJson(endpoint, token, candidate.body);
-
-      if (resp.networkError) continue;
-      if (resp.status === 429) {
-        return { success: false, endpoint, status_code: 429, items: [], error_message: "Rate limit", attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats };
-      }
-      if (resp.ok) {
-        const items = extractItemsExtended(resp.parsed);
-        if (items.length > 0) {
-          return { success: true, endpoint, status_code: resp.status, items, attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats, successful_format: candidate.label };
-        }
-      }
-      // 404 = try next endpoint, other body errors = try next body
-      if (resp.status === 404) break;
-    }
-  }
-
-  return { success: false, endpoint: endpoints[0], status_code: 404, items: [], error_message: "Administration/Tracker/List not available", attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats };
-}
-
-// ==================== Administration Vehicle Fetch ====================
-
-async function fetchAdministrationVehicles(params: {
-  baseUrl: string; token: string; settings: Record<string, any>;
-}): Promise<AdminFetchResult> {
-  const { baseUrl, token, settings } = params;
-  const attemptedEndpoints: string[] = [];
-  const attemptedFormats: string[] = [];
-  const apiVersion = settings.api_version || "v3";
-
-  // Try memoized first
-  const memoEndpoint = settings.admin_vehicle_last_successful_endpoint;
-  const memoFormat = settings.admin_vehicle_last_successful_format;
-  if (memoEndpoint && memoFormat) {
-    const result = await tryAdminEndpointWithBody(memoEndpoint, memoFormat, token, attemptedEndpoints, attemptedFormats);
-    if (result) return result;
-  }
-
-  const endpoints = [
-    `${baseUrl}/${apiVersion}/Administration/Vehicle/v2/List`,
-    `${baseUrl}/Administration/Vehicle/v2/List`,
-    `${baseUrl}/v1/Administration/Vehicle/v2/List`,
-  ];
-
-  for (const endpoint of endpoints) {
-    if (attemptedEndpoints.includes(endpoint)) continue;
-    for (const candidate of ADMIN_CANDIDATE_BODIES) {
-      attemptedEndpoints.push(endpoint);
-      attemptedFormats.push(`${endpoint}:${candidate.label}`);
-
-      const resp = candidate.body === null
-        ? await safePostNoBody(endpoint, token)
-        : await safePostJson(endpoint, token, candidate.body);
-
-      if (resp.networkError) continue;
-      if (resp.status === 429) {
-        return { success: false, endpoint, status_code: 429, items: [], error_message: "Rate limit", attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats };
-      }
-      if (resp.ok) {
-        const items = extractItemsExtended(resp.parsed);
-        if (items.length > 0) {
-          return { success: true, endpoint, status_code: resp.status, items, attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats, successful_format: candidate.label };
-        }
-      }
-      if (resp.status === 404) break;
-    }
-  }
-
-  return { success: false, endpoint: endpoints[0], status_code: 404, items: [], error_message: "Administration/Vehicle not available", attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats };
-}
-
-// ==================== Legacy Fallback (TrackedUnit + PositionHistory) ====================
-
-async function fetchUnitsLegacyFallback(params: {
-  baseUrl: string; apiVersion: string; token: string; settings: Record<string, any>;
-}): Promise<AdminFetchResult> {
-  const { baseUrl, apiVersion, token } = params;
-  const attemptedEndpoints: string[] = [];
-  const attemptedFormats: string[] = [];
-  const versionPrefix = apiVersion && apiVersion !== "v1" ? `/${apiVersion}` : "";
-
-  // 1) TrackedUnit/List — skip if known to not work
-  const skipTrackedUntil = params.settings.skip_tracked_unit_until;
-  const skipTrackedUnit = skipTrackedUntil && new Date(skipTrackedUntil).getTime() > Date.now();
-
-  if (!skipTrackedUnit) {
-    const trackedUnitEndpoints = [
-      `${baseUrl}${versionPrefix}/Tracking/TrackedUnit/List`,
-      `${baseUrl}/Tracking/TrackedUnit/List`,
-    ];
-
-    for (const endpoint of trackedUnitEndpoints) {
-      attemptedEndpoints.push(endpoint);
-      attemptedFormats.push("tracked_unit:{}");
-      const response = await safePostJson(endpoint, token, {});
-      if (response.networkError) continue;
-      if (response.status === 429) {
-        return { success: false, endpoint, status_code: 429, items: [], error_message: "Rate limit", attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats };
-      }
-      if (response.ok) {
-        const items = extractItems(response.parsed);
-        if (items.length > 0) {
-          return { success: true, endpoint, status_code: response.status, items, attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats, successful_format: "tracked_unit:{}" };
-        }
-      }
-    }
-  } else {
-    console.log("Skipping TrackedUnit/List (skip_tracked_unit_until active)");
-  }
-
-  // 2) PositionHistory fallback
-  const positionEndpoint = `${baseUrl}${versionPrefix}/Tracking/PositionHistory/List`;
-  attemptedEndpoints.push(positionEndpoint);
-  const windowsMinutes = [5, 30, 360, 1440];
+  // 2) PositionHistory fallback — extract unique TrackedUnit codes
+  const posHistUrls = buildSsxUrlCandidates(config.baseUrl, config.apiVersion, "/Tracking/PositionHistory/List");
+  const windowsMinutes = [15, 60, 360, 1440];
 
   for (const windowMin of windowsMinutes) {
-    const since = new Date(Date.now() - windowMin * 60 * 1000).toISOString();
+    const since = new Date(Date.now() - windowMin * 60_000).toISOString();
     const filters = [{ PropertyName: "DateTimeGPS", Condition: ">=", Value: since }];
 
-    attemptedFormats.push(`position_history:${windowMin}m:array`);
-    let response = await safePostJson(positionEndpoint, token, filters);
+    // Try array format then wrapped
+    let resp = await ssxPost(posHistUrls[0], config.token, filters, config.requestTimeoutMs);
+    allAttempts.push({
+      endpoint: posHistUrls[0], format: `position_history:${windowMin}m:array`,
+      statusCode: resp.status, errorClass: resp.ok ? "unknown" : resp.errorClass,
+      durationMs: resp.durationMs, itemCount: 0,
+      responsePreview: (resp.text || resp.networkError || "").substring(0, 150),
+    });
 
-    if (response.networkError) continue;
-    if (!response.ok && (response.status === 400 || response.status === 415)) {
-      attemptedFormats.push(`position_history:${windowMin}m:wrapped`);
-      response = await safePostJson(positionEndpoint, token, { Filters: filters });
-      if (response.networkError) continue;
+    if (resp.errorClass === "rate_limited") {
+      return { success: false, items: [], endpoint: posHistUrls[0], statusCode: 429, errorClass: "rate_limited", errorMessage: "Rate limit", successfulFormat: null, attempts: allAttempts };
     }
-    if (response.status === 429) {
-      return { success: false, endpoint: positionEndpoint, status_code: 429, items: [], error_message: "Rate limit", attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats };
+
+    if (!resp.ok && (resp.status === 400 || resp.status === 415)) {
+      resp = await ssxPost(posHistUrls[0], config.token, { Filters: filters }, config.requestTimeoutMs);
+      allAttempts.push({
+        endpoint: posHistUrls[0], format: `position_history:${windowMin}m:wrapped`,
+        statusCode: resp.status, errorClass: resp.ok ? "unknown" : resp.errorClass,
+        durationMs: resp.durationMs, itemCount: 0,
+        responsePreview: (resp.text || resp.networkError || "").substring(0, 150),
+      });
     }
-    if (response.ok) {
-      const items = extractItems(response.parsed);
-      if (items.length > 0) {
-        return { success: true, endpoint: `${positionEndpoint} (fallback ${windowMin}m)`, status_code: response.status, items, attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats, successful_format: `position_history:${windowMin}m` };
+
+    if (resp.ok) {
+      const positions = extractResponseItems(resp.parsed);
+      if (positions.length > 0) {
+        // Update attempt log
+        allAttempts[allAttempts.length - 1].itemCount = positions.length;
+        return {
+          success: true, items: positions,
+          endpoint: `${posHistUrls[0]} (fallback ${windowMin}m)`,
+          statusCode: resp.status, errorClass: "unknown",
+          errorMessage: null,
+          successfulFormat: `position_history:${windowMin}m`,
+          attempts: allAttempts,
+        };
       }
     }
   }
 
-  return { success: false, endpoint: positionEndpoint, status_code: 404, items: [], error_message: "No units found in any method", attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats };
+  return {
+    success: false, items: [], endpoint: posHistUrls[0] || "",
+    statusCode: 404, errorClass: "empty_response",
+    errorMessage: "No units found in any legacy method",
+    successfulFormat: null, attempts: allAttempts,
+  };
 }
 
-// ==================== Helpers: Try memoized admin endpoint ====================
-
-async function tryAdminEndpointWithBody(
-  endpoint: string, formatLabel: string, token: string,
-  attemptedEndpoints: string[], attemptedFormats: string[],
-): Promise<AdminFetchResult | null> {
-  attemptedEndpoints.push(endpoint);
-  attemptedFormats.push(`memo:${formatLabel}`);
-
-  const candidate = ADMIN_CANDIDATE_BODIES.find(c => c.label === formatLabel);
-  const resp = candidate?.body === null
-    ? await safePostNoBody(endpoint, token)
-    : await safePostJson(endpoint, token, candidate?.body ?? {});
-
-  if (resp.networkError) return null;
-  if (resp.status === 429) {
-    return { success: false, endpoint, status_code: 429, items: [], error_message: "Rate limit", attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats };
-  }
-  if (resp.ok) {
-    const items = extractItemsExtended(resp.parsed);
-    if (items.length > 0) {
-      return { success: true, endpoint, status_code: resp.status, items, attempted_endpoints: attemptedEndpoints, attempted_formats: attemptedFormats, successful_format: formatLabel };
-    }
-  }
-  return null; // fall through
-}
-
-// ==================== HTTP helpers ====================
-
-async function safePostJson(endpoint: string, token: string, body: any): Promise<{
-  ok: boolean; status: number; text: string; parsed: any; networkError?: string;
-}> {
-  try {
-    const resp = await fetch(endpoint, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const text = await resp.text();
-    let parsed: any = null;
-    try { parsed = JSON.parse(text); } catch { parsed = null; }
-    return { ok: resp.ok, status: resp.status, text, parsed };
-  } catch (error: any) {
-    return { ok: false, status: 0, text: "", parsed: null, networkError: `SSX unreachable: ${error.message}` };
-  }
-}
-
-async function safePostNoBody(endpoint: string, token: string): Promise<{
-  ok: boolean; status: number; text: string; parsed: any; networkError?: string;
-}> {
-  try {
-    const resp = await fetch(endpoint, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-    });
-    const text = await resp.text();
-    let parsed: any = null;
-    try { parsed = JSON.parse(text); } catch { parsed = null; }
-    return { ok: resp.ok, status: resp.status, text, parsed };
-  } catch (error: any) {
-    return { ok: false, status: 0, text: "", parsed: null, networkError: `SSX unreachable: ${error.message}` };
-  }
-}
-
-// ==================== Data extraction ====================
-
-function extractItems(parsed: any): any[] {
-  if (Array.isArray(parsed)) return parsed;
-  if (!parsed || typeof parsed !== "object") return [];
-  const candidates = [parsed.data, parsed.Data, parsed.items, parsed.Items, parsed.result, parsed.Result, parsed.positions, parsed.Positions, parsed.records, parsed.Records];
-  for (const c of candidates) { if (Array.isArray(c)) return c; }
-  return [];
-}
-
-function extractItemsExtended(parsed: any): any[] {
-  const basic = extractItems(parsed);
-  if (basic.length > 0) return basic;
-  if (!parsed || typeof parsed !== "object") return [];
-  // Additional candidates for Administration endpoints
-  const extra = [parsed.Trackers, parsed.trackers, parsed.Vehicles, parsed.vehicles, parsed.Units, parsed.units, parsed.Content, parsed.content, parsed.List, parsed.list];
-  for (const c of extra) { if (Array.isArray(c)) return c; }
-  // Paginated: check nested .Items inside .Data etc
-  for (const outer of [parsed.Data, parsed.data, parsed.Result, parsed.result]) {
-    if (outer && typeof outer === "object" && !Array.isArray(outer)) {
-      for (const inner of [outer.Items, outer.items, outer.Data, outer.data, outer.Records, outer.records]) {
-        if (Array.isArray(inner)) return inner;
-      }
-    }
-  }
-  return [];
-}
-
-// ==================== Field pickers ====================
-
-function pickExternalCode(item: any): string {
-  const candidates = [
-    item.TrackedUnitIntegrationCode, item.TrackerIntegrationCode,
-    item.IntegrationCode, item.Code, item.TrackedUnit,
-    item.TrackerCode, item.SerialNumber, item.IMEI, item.Imei,
-    item.integrationCode, item.code, item.trackedUnit,
-    item.Id, item.id,
-  ];
-  for (const c of candidates) {
-    if (c && typeof c === "string" && c.trim()) return c.trim();
-    if (c && typeof c === "number") return String(c);
-  }
-  return "";
-}
-
-function pickPlate(item: any): string | null {
-  const candidates = [item.Plate, item.plate, item.LicensePlate, item.licensePlate, item.VehiclePlate, item.vehiclePlate];
-  for (const c of candidates) {
-    if (c && typeof c === "string" && c.trim()) return c.trim();
-  }
-  return null;
-}
-
-function pickTrackerCodeFromVehicle(item: any): string | null {
-  // Direct fields
-  const direct = [
-    item.TrackedUnitIntegrationCode, item.TrackerIntegrationCode,
-    item.IntegrationCode, item.TrackerCode,
-  ];
-  for (const c of direct) {
-    if (c && typeof c === "string" && c.trim()) return c.trim();
-  }
-  // Array field
-  const listField = item.TrackerIntegrationCodeList || item.trackerIntegrationCodeList;
-  if (Array.isArray(listField) && listField.length > 0 && typeof listField[0] === "string") {
-    return listField[0].trim();
-  }
-  // Nested tracker object
-  const tracker = item.Tracker || item.tracker;
-  if (tracker && typeof tracker === "object") {
-    const nested = tracker.IntegrationCode || tracker.integrationCode || tracker.Code || tracker.code;
-    if (nested && typeof nested === "string") return nested.trim();
-  }
-  return null;
-}
-
-// ==================== 429 handler ====================
+// ==================== 429 Handler ====================
 
 async function handle429(
   supabase: any, account: any, settings: Record<string, any>,
-  integration_account_id: string, result: AdminFetchResult, duration: number,
-) {
+  integration_account_id: string, result: EndpointAttemptResult, durationMs: number,
+): Promise<Response> {
   const count = settings.sync_units_backoff_count || 0;
   const tier = Math.min(count, BACKOFF_TIERS_MS.length - 1);
   const backoffMs = BACKOFF_TIERS_MS[tier];
@@ -686,28 +588,37 @@ async function handle429(
 
   await supabase.from("integration_accounts").update({
     settings: { ...settings, sync_units_backoff_until: newBackoffUntil, sync_units_backoff_count: count + 1 },
-    status: "degraded", last_error: `Rate limit (429). Retry after ${newBackoffUntil}`, updated_at: new Date().toISOString(),
+    status: "degraded",
+    last_error: `Rate limit (429). Retry after ${newBackoffUntil}`,
+    updated_at: new Date().toISOString(),
   }).eq("id", integration_account_id);
 
   await logIntegration(supabase, {
     tenant_id: account.tenant_id, integration_account_id,
-    action: "ssx_sync_units", endpoint: result.endpoint, status_code: 429, success: false,
-    error_message: `Rate limit. Backoff until ${newBackoffUntil} (tier ${tier})`, duration_ms: duration,
-    metadata: { attempted_endpoints: result.attempted_endpoints, attempted_formats: result.attempted_formats, backoff_until: newBackoffUntil, backoff_tier: tier },
+    action: "ssx_sync_units", endpoint: result.endpoint,
+    status_code: 429, success: false,
+    error_message: `Rate limit. Backoff until ${newBackoffUntil} (tier ${tier})`,
+    duration_ms: durationMs,
+    metadata: {
+      backoff_until: newBackoffUntil,
+      backoff_tier: tier,
+      attempts: result.attempts.map(a => `${a.format}→${a.statusCode}`),
+    },
   });
 
-  return new Response(JSON.stringify({
+  return jsonResponse({
     error: "Limite de consultas SSX excedido. Aguarde alguns minutos e tente novamente.",
-    retry_after_seconds: Math.ceil(backoffMs / 1000), retry_at: newBackoffUntil, cooldown_active: true,
-  }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    retry_after_seconds: Math.ceil(backoffMs / 1000),
+    retry_at: newBackoffUntil,
+    cooldown_active: true,
+  }, 429);
 }
 
-// ==================== Logging ====================
+// ==================== Response Helper ====================
 
-async function logIntegration(supabase: any, log: {
-  tenant_id: string; integration_account_id: string; action: string;
-  endpoint?: string; status_code?: number; success: boolean;
-  error_message?: string; duration_ms?: number; metadata?: Record<string, any>;
-}) {
-  try { await supabase.from("integration_logs").insert(log); } catch (e) { console.error("Failed to log:", e); }
+function jsonResponse(body: any, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
 }
