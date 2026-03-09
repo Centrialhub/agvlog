@@ -335,15 +335,18 @@ Deno.serve(async (req) => {
         );
       }
 
-      // Update cursor
-      await upsertCursor(supabase, {
+      // Update cursor - only mark success when rows were actually inserted
+      const cursorUpdate: any = {
         tenant_id: mapping.tenant_id,
         provider_unit_id: unit.id,
         last_polled_at: now.toISOString(),
-        last_success_at: now.toISOString(),
         last_error: null,
         backoff_until: null,
-      });
+      };
+      if (inserted > 0) {
+        cursorUpdate.last_success_at = now.toISOString();
+      }
+      await upsertCursor(supabase, cursorUpdate);
 
       await logIntegration(supabase, {
         tenant_id: mapping.tenant_id,
