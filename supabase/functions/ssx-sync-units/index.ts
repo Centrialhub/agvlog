@@ -3,9 +3,11 @@
  *
  * STRATEGY:
  * 1. Administration API is the PRIMARY source (Tracker/List, Vehicle/List, Vehicle/v2/List).
+ *    - Administration endpoints do NOT use version prefix (per SSX swagger).
+ *    - Administration requires a token WITHOUT HashAuth (HashAuth scopes to Tracking only).
  * 2. If Administration fails, fallback to TrackedUnit/List then PositionHistory.
  * 3. Fallback results are marked source_mode="tracking_fallback".
- * 4. Admin skip window is SHORT (5-15 min), not 24h. Reset on credential changes.
+ * 4. Admin skip window is SHORT (10 min), not 24h. Reset on credential changes.
  * 5. Upserts are idempotent — no duplicates, no destructive deletes on partial failure.
  * 6. Detailed logs in integration_logs with error classification.
  */
@@ -13,6 +15,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
   corsHeaders,
+  buildAdminUrl,
   buildSsxUrlCandidates,
   readAccountConfig,
   extractResponseItems,
@@ -20,6 +23,7 @@ import {
   pickTrackerCodeFromVehicle,
   pickPlate,
   tryEndpointWithFallback,
+  getAdminToken,
   ADMIN_BODY_CANDIDATES,
   ssxPost,
   logIntegration,
@@ -122,7 +126,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ===== Token check =====
+    // ===== Token check (Tracking token) =====
     if (!config.token || !account.token_expires_at || new Date(account.token_expires_at).getTime() - Date.now() < 60000) {
       return jsonResponse({ error: "Token expired or missing. Run ssx-login first." }, 400);
     }
@@ -132,9 +136,10 @@ Deno.serve(async (req) => {
     // ================================================================
     // PHASE 1: Administration API — PRIMARY source for tracker catalog
     // ================================================================
-    // The Administration API provides the authoritative list of trackers
-    // and vehicles. PositionHistory is ONLY a fallback for when Admin
-    // endpoints are genuinely unavailable.
+    // IMPORTANT: Administration endpoints do NOT use version prefix.
+    // IMPORTANT: If account has HashAuth, we need a separate token
+    //   obtained WITHOUT HashAuth for Administration access.
+    //   HashAuth scopes the token to Tracking integration only.
     // ================================================================
 
     const skipAdminUntil = settings.skip_admin_until;
@@ -152,66 +157,88 @@ Deno.serve(async (req) => {
         successfulFormat: null, attempts: [],
       };
     } else {
-      // --- Tracker List ---
-      console.log("[SSX:sync-units] Attempting Administration/Tracker/List...");
-      const trackerUrls = buildSsxUrlCandidates(config.baseUrl, config.apiVersion, "/Administration/Tracker/List");
-      trackerResult = await tryEndpointWithFallback({
-        urlCandidates: trackerUrls,
-        token: config.token,
-        bodyCandidates: ADMIN_BODY_CANDIDATES,
-        timeoutMs: config.requestTimeoutMs,
-        memoEndpoint: settings.admin_units_last_successful_endpoint,
-        memoFormat: settings.admin_units_last_successful_format,
-      });
-
-      for (const attempt of trackerResult.attempts) {
-        logSsxCall({
-          routine: "sync-units", endpoint: attempt.endpoint, method: "POST",
-          apiVersion: config.apiVersion, attemptType: `tracker:${attempt.format}`,
-          statusCode: attempt.statusCode, durationMs: attempt.durationMs,
-          responsePreview: attempt.responsePreview,
-          result: attempt.itemCount > 0 ? "success" : (attempt.errorClass === "empty_response" ? "empty" : "error"),
-          errorClass: attempt.errorClass,
+      // --- Get admin token (without HashAuth) ---
+      const adminTokenResult = await getAdminToken(config, supabase, integration_account_id);
+      
+      if (!adminTokenResult.token) {
+        console.log(`[SSX:sync-units] Failed to get admin token: ${adminTokenResult.error}`);
+        trackerResult = {
+          success: false, items: [], endpoint: "", statusCode: 403,
+          errorClass: "auth_error", errorMessage: adminTokenResult.error || "Admin token unavailable",
+          successfulFormat: null, attempts: [],
+        };
+      } else {
+        const adminToken = adminTokenResult.token;
+        
+        // --- Tracker List ---
+        // Administration URLs: NO version prefix (per SSX swagger)
+        console.log("[SSX:sync-units] Attempting Administration/Tracker/List (no version prefix, admin token)...");
+        const trackerUrl = buildAdminUrl(config.baseUrl, "/Administration/Tracker/List");
+        
+        trackerResult = await tryEndpointWithFallback({
+          urlCandidates: [trackerUrl],
+          token: adminToken,
+          bodyCandidates: ADMIN_BODY_CANDIDATES,
+          timeoutMs: config.requestTimeoutMs,
+          memoEndpoint: settings.admin_units_last_successful_endpoint,
+          memoFormat: settings.admin_units_last_successful_format,
         });
-      }
 
-      // Handle 429 immediately
-      if (trackerResult.errorClass === "rate_limited") {
-        return await handle429(supabase, account, settings, integration_account_id, trackerResult, Date.now() - startTime);
+        for (const attempt of trackerResult.attempts) {
+          logSsxCall({
+            routine: "sync-units", endpoint: attempt.endpoint, method: "POST",
+            apiVersion: "admin(no-prefix)", attemptType: `tracker:${attempt.format}`,
+            statusCode: attempt.statusCode, durationMs: attempt.durationMs,
+            responsePreview: attempt.responsePreview,
+            result: attempt.itemCount > 0 ? "success" : (attempt.errorClass === "empty_response" ? "empty" : "error"),
+            errorClass: attempt.errorClass,
+          });
+        }
+
+        // Handle 429 immediately
+        if (trackerResult.errorClass === "rate_limited") {
+          return await handle429(supabase, account, settings, integration_account_id, trackerResult, Date.now() - startTime);
+        }
       }
     }
 
     // --- Vehicle List (only if trackers succeeded or we want enrichment) ---
     if (trackerResult.success && trackerResult.items.length > 0) {
       console.log("[SSX:sync-units] Attempting Administration/Vehicle list for enrichment...");
-      // Try multiple vehicle endpoint variants
-      const vehicleUrlsV2 = buildSsxUrlCandidates(config.baseUrl, config.apiVersion, "/Administration/Vehicle/v2/List");
-      const vehicleUrlsV1 = buildSsxUrlCandidates(config.baseUrl, config.apiVersion, "/Administration/Vehicle/List");
-      const allVehicleUrls = [...vehicleUrlsV2, ...vehicleUrlsV1];
+      
+      // Get admin token for vehicle calls too
+      const adminTokenResult = await getAdminToken(config, supabase, integration_account_id);
+      if (adminTokenResult.token) {
+        // Administration Vehicle endpoints: NO version prefix
+        const vehicleUrls = [
+          buildAdminUrl(config.baseUrl, "/Administration/Vehicle/v2/List"),
+          buildAdminUrl(config.baseUrl, "/Administration/Vehicle/List"),
+        ];
 
-      vehicleResult = await tryEndpointWithFallback({
-        urlCandidates: allVehicleUrls,
-        token: config.token,
-        bodyCandidates: ADMIN_BODY_CANDIDATES,
-        timeoutMs: config.requestTimeoutMs,
-        memoEndpoint: settings.admin_vehicle_last_successful_endpoint,
-        memoFormat: settings.admin_vehicle_last_successful_format,
-      });
-
-      for (const attempt of vehicleResult.attempts) {
-        logSsxCall({
-          routine: "sync-units", endpoint: attempt.endpoint, method: "POST",
-          apiVersion: config.apiVersion, attemptType: `vehicle:${attempt.format}`,
-          statusCode: attempt.statusCode, durationMs: attempt.durationMs,
-          responsePreview: attempt.responsePreview,
-          result: attempt.itemCount > 0 ? "success" : (attempt.errorClass === "empty_response" ? "empty" : "error"),
-          errorClass: attempt.errorClass,
+        vehicleResult = await tryEndpointWithFallback({
+          urlCandidates: vehicleUrls,
+          token: adminTokenResult.token,
+          bodyCandidates: ADMIN_BODY_CANDIDATES,
+          timeoutMs: config.requestTimeoutMs,
+          memoEndpoint: settings.admin_vehicle_last_successful_endpoint,
+          memoFormat: settings.admin_vehicle_last_successful_format,
         });
-      }
 
-      // Vehicle enrichment failure is NOT fatal — we still have trackers
-      if (!vehicleResult.success) {
-        console.log(`[SSX:sync-units] Vehicle enrichment failed (${vehicleResult.errorClass}), continuing with trackers only`);
+        for (const attempt of vehicleResult.attempts) {
+          logSsxCall({
+            routine: "sync-units", endpoint: attempt.endpoint, method: "POST",
+            apiVersion: "admin(no-prefix)", attemptType: `vehicle:${attempt.format}`,
+            statusCode: attempt.statusCode, durationMs: attempt.durationMs,
+            responsePreview: attempt.responsePreview,
+            result: attempt.itemCount > 0 ? "success" : (attempt.errorClass === "empty_response" ? "empty" : "error"),
+            errorClass: attempt.errorClass,
+          });
+        }
+
+        // Vehicle enrichment failure is NOT fatal — we still have trackers
+        if (!vehicleResult.success) {
+          console.log(`[SSX:sync-units] Vehicle enrichment failed (${vehicleResult.errorClass}), continuing with trackers only`);
+        }
       }
     }
 
@@ -502,7 +529,7 @@ Deno.serve(async (req) => {
 async function fetchUnitsLegacyFallback(config: ReturnType<typeof readAccountConfig>): Promise<EndpointAttemptResult> {
   const allAttempts: any[] = [];
 
-  // 1) TrackedUnit/List
+  // 1) TrackedUnit/List (Tracking API — uses version prefix)
   const trackedUrls = buildSsxUrlCandidates(config.baseUrl, config.apiVersion, "/Tracking/TrackedUnit/List");
   const trackedResult = await tryEndpointWithFallback({
     urlCandidates: trackedUrls,
@@ -553,7 +580,6 @@ async function fetchUnitsLegacyFallback(config: ReturnType<typeof readAccountCon
     if (resp.ok) {
       const positions = extractResponseItems(resp.parsed);
       if (positions.length > 0) {
-        // Update attempt log
         allAttempts[allAttempts.length - 1].itemCount = positions.length;
         return {
           success: true, items: positions,

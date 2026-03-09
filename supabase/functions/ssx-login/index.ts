@@ -192,12 +192,15 @@ Deno.serve(async (req) => {
     const expiresAt = new Date(nowMs + ttlMs).toISOString();
     const nowIso = new Date(nowMs).toISOString();
 
-    // On login success: clear admin skip and backoff so sync retries immediately
+    // On login success: clear admin skip, backoff, and admin token cache
+    // so sync retries immediately with fresh tokens
     const settings = (account.settings || {}) as Record<string, any>;
     const updatedSettings = { ...settings };
     delete updatedSettings.skip_admin_until;
     delete updatedSettings.last_admin_error;
     delete updatedSettings.sync_units_backoff_until;
+    delete updatedSettings.admin_token_cache;
+    delete updatedSettings.admin_token_expires_at;
     updatedSettings.sync_units_backoff_count = 0;
 
     // Ensure api_version is set (backfill for old accounts)
