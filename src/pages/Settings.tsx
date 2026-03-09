@@ -545,6 +545,151 @@ function TelemetryCatalogSection() {
   );
 }
 
+/* ===== Telemetry Mapping Section (NEW) ===== */
+const CANONICAL_OPTIONS = [
+  'ignition', 'odometer_km', 'fuel_level_percent', 'fuel_liters',
+  'temperature_c', 'door_open', 'panic', 'engine_hours',
+];
+
+function autoSuggestCanonical(name: string | null, description: string | null): string | null {
+  const text = `${name || ''} ${description || ''}`.toLowerCase();
+  if (text.includes('combust') || text.includes('fuel') || text.includes('nível')) return 'fuel_level_percent';
+  if (text.includes('igni') || text.includes('acc') || text.includes('ignição')) return 'ignition';
+  if (text.includes('hod') || text.includes('odom') || text.includes('km') || text.includes('quilômetro')) return 'odometer_km';
+  if (text.includes('temp') || text.includes('°c')) return 'temperature_c';
+  if (text.includes('porta') || text.includes('door')) return 'door_open';
+  if (text.includes('pânico') || text.includes('panic') || text.includes('sos')) return 'panic';
+  if (text.includes('horímetro') || text.includes('engine hour')) return 'engine_hours';
+  return null;
+}
+
+function TelemetryMappingSection() {
+  const { currentTenant } = useTenant();
+  const queryClient = useQueryClient();
+
+  const { data: catalog = [] } = useQuery({
+    queryKey: ['telemetry_catalog'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('telemetry_catalog').select('*').order('telemetry_id');
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: mappings = [], isLoading } = useQuery({
+    queryKey: ['telemetry_mapping', currentTenant?.id],
+    queryFn: async () => {
+      if (!currentTenant) return [];
+      const { data, error } = await supabase.from('telemetry_mapping').select('*')
+        .eq('tenant_id', currentTenant.id);
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!currentTenant,
+  });
+
+  const mappingByTelId = new Map<string, any>();
+  for (const m of mappings as any[]) {
+    mappingByTelId.set(m.telemetry_id, m);
+  }
+
+  const upsertMapping = useMutation({
+    mutationFn: async ({ telemetryId, canonicalKey }: { telemetryId: string; canonicalKey: string }) => {
+      if (!currentTenant) throw new Error('No tenant');
+      const existing = mappingByTelId.get(telemetryId);
+      if (existing) {
+        if (!canonicalKey) {
+          const { error } = await supabase.from('telemetry_mapping').delete().eq('id', existing.id);
+          if (error) throw error;
+        } else {
+          const { error } = await supabase.from('telemetry_mapping').update({ canonical_key: canonicalKey }).eq('id', existing.id);
+          if (error) throw error;
+        }
+      } else if (canonicalKey) {
+        const { error } = await supabase.from('telemetry_mapping').insert({
+          tenant_id: currentTenant.id, telemetry_id: telemetryId, canonical_key: canonicalKey,
+        });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['telemetry_mapping'] }),
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const handleAutoSuggest = () => {
+    let count = 0;
+    for (const item of catalog as any[]) {
+      if (mappingByTelId.has(item.telemetry_id)) continue;
+      const suggestion = autoSuggestCanonical(item.name, item.description);
+      if (suggestion) {
+        upsertMapping.mutate({ telemetryId: item.telemetry_id, canonicalKey: suggestion });
+        count++;
+      }
+    }
+    toast.success(`Auto-sugestão aplicada a ${count} telemetrias`);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-foreground">Mapeamento de Telemetria</h2>
+          <p className="text-sm text-muted-foreground">Vincule sinais do rastreador a chaves canônicas do sistema</p>
+        </div>
+        <Button size="sm" variant="outline" onClick={handleAutoSuggest}>
+          <RefreshCw className="mr-2 h-3 w-3" />Auto-sugerir
+        </Button>
+      </div>
+      <Card>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Telemetry ID</TableHead>
+                <TableHead>Nome</TableHead>
+                <TableHead>Descrição</TableHead>
+                <TableHead>Chave Canônica</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+              ) : catalog.length === 0 ? (
+                <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Sincronize telemetria primeiro</TableCell></TableRow>
+              ) : (catalog as any[]).map((item: any) => {
+                const current = mappingByTelId.get(item.telemetry_id)?.canonical_key || '';
+                return (
+                  <TableRow key={item.id}>
+                    <TableCell className="font-mono text-xs">{item.telemetry_id}</TableCell>
+                    <TableCell className="text-sm">{item.name || '—'}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">{item.description || '—'}</TableCell>
+                    <TableCell>
+                      <Select
+                        value={current}
+                        onValueChange={(v) => upsertMapping.mutate({ telemetryId: item.telemetry_id, canonicalKey: v })}
+                      >
+                        <SelectTrigger className="w-48 h-8 text-xs">
+                          <SelectValue placeholder="Não mapeado" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">Não mapeado</SelectItem>
+                          {CANONICAL_OPTIONS.map(opt => (
+                            <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 /* ===== Integration Logs (existing) ===== */
 function IntegrationLogsSection() {
   const { currentTenant } = useTenant();
