@@ -11,6 +11,8 @@
  * - Tracking API uses version prefix (e.g., /v3/Tracking/...).
  * - HashAuth in Login scopes the token to Tracking integration only.
  *   Administration endpoints require a token obtained WITHOUT HashAuth.
+ *   HOWEVER: some accounts work with the regular token on Admin endpoints.
+ *   We try admin token first, then regular token as fallback.
  * - Secrets (token, password, hash) are NEVER logged in plaintext.
  */
 
@@ -45,7 +47,6 @@ export function buildSsxUrlCandidates(baseUrl: string, apiVersion: string, path:
   const cleanPath = path.startsWith("/") ? path : `/${path}`;
   const ver = (apiVersion || "v3").replace(/^\//, "").replace(/\/$/, "");
   const urls: string[] = [`${base}/${ver}${cleanPath}`];
-  // Add unversioned only if different
   const unversioned = `${base}${cleanPath}`;
   if (!urls.includes(unversioned)) urls.push(unversioned);
   return urls;
@@ -54,8 +55,6 @@ export function buildSsxUrlCandidates(baseUrl: string, apiVersion: string, path:
 /**
  * Builds Administration API URL — NO version prefix.
  * Per SSX swagger, Administration endpoints are at /Administration/... directly.
- * Example: buildAdminUrl("https://integration.systemsatx.com.br", "/Administration/Tracker/List")
- *   => "https://integration.systemsatx.com.br/Administration/Tracker/List"
  */
 export function buildAdminUrl(baseUrl: string, path: string): string {
   const base = baseUrl.replace(/\/$/, "");
@@ -69,7 +68,7 @@ export interface SsxAccountConfig {
   baseUrl: string;
   apiVersion: string;
   token: string;
-  adminToken: string | null; // Token without HashAuth for Administration
+  adminToken: string | null;
   pollWindowMinutes: number;
   requestTimeoutMs: number;
   settings: Record<string, any>;
@@ -100,10 +99,7 @@ export function readAccountConfig(account: any): SsxAccountConfig {
 
 /**
  * Obtains a token WITHOUT HashAuth for Administration API access.
- * The SSX Login with HashAuth scopes the token to Tracking integration only.
- * Administration endpoints require a token without HashAuth.
- * 
- * If the account has no HashAuth, the regular token works for both.
+ * If no HashAuth is configured, the regular token works for both.
  */
 export async function getAdminToken(
   config: SsxAccountConfig,
@@ -145,7 +141,6 @@ export async function getAdminToken(
   const params = new URLSearchParams();
   params.append("Username", config.username);
   params.append("Password", password);
-  // Intentionally NOT including HashAuth — this gives admin scope
   if (config.hashcode) params.append("Hashcentral", config.hashcode);
 
   const loginUrlWithParams = `${loginUrl}?${params.toString()}`;
@@ -179,7 +174,6 @@ export async function getAdminToken(
       return { token: null, error: "Login succeeded but no valid admin token in response" };
     }
 
-    // Calculate TTL
     const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000;
     const MAX_TTL_MS = 7 * 24 * 60 * 60 * 1000;
     const MIN_TTL_MS = 5 * 60 * 1000;
@@ -204,7 +198,6 @@ export async function getAdminToken(
 
     const expiresAt = new Date(Date.now() + ttlMs).toISOString();
 
-    // Cache admin token in settings
     const { data: currentAccount } = await supabase
       .from("integration_accounts").select("settings").eq("id", integrationAccountId).single();
     const currentSettings = currentAccount?.settings || {};
@@ -252,12 +245,10 @@ export function classifyError(statusCode: number, networkError?: string, parseEr
   return "unknown";
 }
 
-/** Returns true if this error class should trigger a retry */
 export function isRetryable(errorClass: SsxErrorClass): boolean {
   return ["rate_limited", "timeout", "network_error", "server_error"].includes(errorClass);
 }
 
-/** Returns true if this error class means we should NOT retry with same credentials */
 export function isAuthFailure(errorClass: SsxErrorClass): boolean {
   return errorClass === "auth_error";
 }
@@ -266,14 +257,12 @@ export function isAuthFailure(errorClass: SsxErrorClass): boolean {
 
 /**
  * Extracts the array of items from any SSX API response format.
- * Handles: raw array, { Data: [] }, { Items: [] }, { Trackers: [] }, paginated wrappers, etc.
  */
 export function extractResponseItems(parsed: any): any[] {
   if (parsed == null) return [];
   if (Array.isArray(parsed)) return parsed;
   if (typeof parsed !== "object") return [];
 
-  // Direct array fields (most common SSX formats)
   const directKeys = [
     "Data", "data", "Items", "items", "Result", "result",
     "Results", "results", "Records", "records",
@@ -286,7 +275,6 @@ export function extractResponseItems(parsed: any): any[] {
     if (Array.isArray(parsed[key])) return parsed[key];
   }
 
-  // Nested: paginated wrappers like { Data: { Items: [] } }
   const outerKeys = ["Data", "data", "Result", "result", "Content", "content"];
   for (const outerKey of outerKeys) {
     const outer = parsed[outerKey];
@@ -321,10 +309,6 @@ export interface NormalizedUnit {
   source_mode: "admin_catalog" | "tracking_fallback";
 }
 
-/**
- * Normalizes a raw SSX tracker/unit item into a standard internal structure.
- * Handles different field naming conventions from various SSX API versions.
- */
 export function normalizeTrackerItem(raw: any, sourceEndpoint: string, sourceMode: "admin_catalog" | "tracking_fallback"): NormalizedUnit | null {
   const externalCode = pickFirst(raw, [
     "TrackedUnitIntegrationCode", "TrackerIntegrationCode",
@@ -354,7 +338,6 @@ export function normalizeTrackerItem(raw: any, sourceEndpoint: string, sourceMod
   };
 }
 
-/** Picks tracker code from a vehicle record (for cross-referencing) */
 export function pickTrackerCodeFromVehicle(item: any): string | null {
   const direct = pickFirst(item, [
     "TrackedUnitIntegrationCode", "TrackerIntegrationCode",
@@ -393,8 +376,7 @@ export interface SsxHttpResult {
 }
 
 /**
- * Safe POST with JSON body and timeout.
- * Never throws — returns structured result.
+ * Safe POST with JSON body and timeout. Never throws.
  */
 export async function ssxPost(
   endpoint: string,
@@ -440,8 +422,12 @@ export async function ssxPost(
 }
 
 /**
- * Try an endpoint with multiple URL candidates (versioned → unversioned fallback on 404).
- * Tries each URL with each body candidate until success.
+ * Try an endpoint with multiple URL candidates and body candidates.
+ * 
+ * IMPORTANT: `abortOnAuthError` controls behavior on 403/401:
+ *   - true (default): stops immediately on auth_error (good for Tracking endpoints)
+ *   - false: continues trying other body formats on 403 (good for Admin endpoints,
+ *     where SSX sometimes returns 403 for body format issues, not just auth)
  */
 export interface EndpointAttemptResult {
   success: boolean;
@@ -466,13 +452,18 @@ export interface AttemptLog {
 
 /**
  * Body candidates for Administration API endpoints.
- * Per SSX swagger, Administration List endpoints accept:
- * - array of QueryCondition (nullable) — [] for "list all"
- * - null (no body)
+ * SSX Administration List endpoints accept various formats.
+ * We try multiple because different SSX versions/configs accept different bodies.
+ * 
+ * NOTE: 403 from SSX admin can mean "wrong body format" not just "no permission",
+ * so we try ALL formats before concluding it's truly an auth error.
  */
 export const ADMIN_BODY_CANDIDATES: { label: string; body: any }[] = [
   { label: "empty_array", body: [] },
   { label: "null_body", body: null },
+  { label: "empty_object", body: {} },
+  { label: "paginated", body: { Page: 1, PageSize: 500 } },
+  { label: "filters_empty", body: { Filters: [] } },
 ];
 
 export async function tryEndpointWithFallback(params: {
@@ -480,11 +471,12 @@ export async function tryEndpointWithFallback(params: {
   token: string;
   bodyCandidates: { label: string; body: any }[];
   timeoutMs?: number;
-  /** If set, try this (endpoint, format) first */
   memoEndpoint?: string;
   memoFormat?: string;
+  /** If false, don't abort on 403 — try all body formats first (for admin endpoints) */
+  abortOnAuthError?: boolean;
 }): Promise<EndpointAttemptResult> {
-  const { urlCandidates, token, bodyCandidates, timeoutMs = 30_000, memoEndpoint, memoFormat } = params;
+  const { urlCandidates, token, bodyCandidates, timeoutMs = 30_000, memoEndpoint, memoFormat, abortOnAuthError = true } = params;
   const attempts: AttemptLog[] = [];
   let lastStatus = 0;
   let lastErrorClass: SsxErrorClass = "unknown";
@@ -498,14 +490,15 @@ export async function tryEndpointWithFallback(params: {
       const items = result.ok ? extractResponseItems(result.parsed) : [];
       attempts.push(buildAttemptLog(memoEndpoint, `memo:${memoFormat}`, result, items.length));
       if (result.errorClass === "rate_limited") return buildResult(false, [], memoEndpoint, 429, "rate_limited", "Rate limit", null, attempts);
-      if (result.errorClass === "auth_error") return buildResult(false, [], memoEndpoint, result.status, "auth_error", "Auth failed", null, attempts);
       if (result.ok && items.length > 0) return buildResult(true, items, memoEndpoint, result.status, "unknown", null, memoFormat, attempts);
+      // For memo miss: continue to full scan (don't abort on auth for memo)
     }
   }
 
   for (const url of urlCandidates) {
+    let allAuthErrors = true; // Track if ALL attempts for this URL were 403
+
     for (const candidate of bodyCandidates) {
-      // Skip if already tried as memo
       if (url === memoEndpoint && candidate.label === memoFormat) continue;
 
       const result = await ssxPost(url, token, candidate.body, timeoutMs);
@@ -517,24 +510,35 @@ export async function tryEndpointWithFallback(params: {
       lastError = result.networkError || result.text.substring(0, 200);
 
       if (result.errorClass === "rate_limited") return buildResult(false, [], url, 429, "rate_limited", "Rate limit", null, attempts);
-      if (result.errorClass === "auth_error") return buildResult(false, [], url, result.status, "auth_error", "Auth failed", null, attempts);
+
+      // On 403: if abortOnAuthError=true, abort. Otherwise, try next body format.
+      if (result.errorClass === "auth_error") {
+        if (abortOnAuthError) {
+          return buildResult(false, [], url, result.status, "auth_error", "Auth failed", null, attempts);
+        }
+        // Continue trying other body formats — SSX sometimes returns 403 for wrong body
+        continue;
+      }
+
+      allAuthErrors = false; // At least one non-auth response
 
       if (result.ok && items.length > 0) return buildResult(true, items, url, result.status, "unknown", null, candidate.label, attempts);
 
-      // 200 with empty list = endpoint works but no data (not a body format issue)
       if (result.ok && items.length === 0) {
         lastErrorClass = "empty_response";
         lastError = "Endpoint returned success but empty list";
-        continue; // try next body just in case
+        continue;
       }
 
-      // 404 means this URL doesn't exist, skip to next URL
-      if (result.errorClass === "route_not_found") break;
+      if (result.errorClass === "route_not_found") break; // URL doesn't exist, try next URL
 
-      // 400/415 means body format wrong, try next body
-      if (result.errorClass === "body_incompatible") continue;
+      if (result.errorClass === "body_incompatible") continue; // try next body
+    }
 
-      // Other errors: try next body
+    // If ALL attempts for this URL were auth errors, record that
+    if (allAuthErrors && !abortOnAuthError) {
+      lastErrorClass = "auth_error";
+      lastError = "All body formats returned 403";
     }
   }
 
@@ -563,10 +567,6 @@ export async function logIntegration(supabase: any, log: IntegrationLogEntry): P
   }
 }
 
-/**
- * Creates a detailed console log entry for an SSX API call.
- * Sanitizes sensitive data (tokens, passwords, secrets).
- */
 export function logSsxCall(params: {
   routine: string;
   endpoint: string;
@@ -587,7 +587,6 @@ export function logSsxCall(params: {
 
 // ======================== Sanitizer ========================
 
-/** Mask sensitive fields in objects before logging */
 export function sanitize(obj: any): any {
   if (obj == null) return obj;
   if (typeof obj === "string") return obj;

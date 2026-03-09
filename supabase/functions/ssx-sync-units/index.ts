@@ -2,14 +2,15 @@
  * ssx-sync-units — Discovers trackers and vehicles from the SSX API.
  *
  * STRATEGY:
- * 1. Administration API is the PRIMARY source (Tracker/List, Vehicle/List, Vehicle/v2/List).
+ * 1. Administration API is the PRIMARY source (Tracker/List, Vehicle/List).
  *    - Administration endpoints do NOT use version prefix (per SSX swagger).
- *    - Administration requires a token WITHOUT HashAuth (HashAuth scopes to Tracking only).
- * 2. If Administration fails, fallback to TrackedUnit/List then PositionHistory.
+ *    - We try admin token first, then regular token (some accounts work with either).
+ *    - We try ALL body formats before giving up (SSX returns 403 for wrong body too).
+ * 2. If Administration fails completely, MINIMAL fallback to TrackedUnit/List.
+ *    - Only 1 call, not dozens. PositionHistory fallback is last resort with 1 window only.
  * 3. Fallback results are marked source_mode="tracking_fallback".
- * 4. Admin skip window is SHORT (10 min), not 24h. Reset on credential changes.
+ * 4. Admin skip window is SHORT (10 min). Reset on credential changes.
  * 5. Upserts are idempotent — no duplicates, no destructive deletes on partial failure.
- * 6. Detailed logs in integration_logs with error classification.
  */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -37,10 +38,8 @@ import {
   type NormalizedUnit,
 } from "../_shared/ssx-utils.ts";
 
-// Backoff tiers for 429 (short: 2, 5, 10, 15 min)
 const BACKOFF_TIERS_MS = [2 * 60_000, 5 * 60_000, 10 * 60_000, 15 * 60_000];
-const CACHE_TTL_MS = 60 * 60_000; // 1 hour
-// Admin skip window: 10 minutes (NOT 24h)
+const CACHE_TTL_MS = 60 * 60_000;
 const ADMIN_SKIP_MS = 10 * 60_000;
 
 Deno.serve(async (req) => {
@@ -81,14 +80,12 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "integration_account_id required" }, 400);
     }
 
-    // ===== Fetch account =====
     const { data: account, error: accErr } = await supabase
       .from("integration_accounts").select("*").eq("id", integration_account_id).single();
     if (accErr || !account) {
       return jsonResponse({ error: "Integration account not found" }, 404);
     }
 
-    // ===== Authorization =====
     if (!isCron && callerId) {
       const role = await getTenantRole(supabase, account.tenant_id, callerId);
       if (!role || !["owner", "admin"].includes(role)) {
@@ -97,11 +94,11 @@ Deno.serve(async (req) => {
     }
 
     const config = readAccountConfig(account);
-    const settings = { ...config.settings }; // mutable copy
+    const settings = { ...config.settings };
 
     // ===== Backoff check (429 protection) =====
     const backoffUntil = settings.sync_units_backoff_until;
-    if (backoffUntil) {
+    if (backoffUntil && !force) {
       const remainingMs = new Date(backoffUntil).getTime() - Date.now();
       if (remainingMs > 0) {
         return jsonResponse({
@@ -126,7 +123,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ===== Token check (Tracking token) =====
+    // ===== Token check =====
     if (!config.token || !account.token_expires_at || new Date(account.token_expires_at).getTime() - Date.now() < 60000) {
       return jsonResponse({ error: "Token expired or missing. Run ssx-login first." }, 400);
     }
@@ -136,10 +133,8 @@ Deno.serve(async (req) => {
     // ================================================================
     // PHASE 1: Administration API — PRIMARY source for tracker catalog
     // ================================================================
-    // IMPORTANT: Administration endpoints do NOT use version prefix.
-    // IMPORTANT: If account has HashAuth, we need a separate token
-    //   obtained WITHOUT HashAuth for Administration access.
-    //   HashAuth scopes the token to Tracking integration only.
+    // Try admin token first, then regular token as fallback.
+    // Don't abort on 403 — try ALL body formats (SSX returns 403 for wrong body).
     // ================================================================
 
     const skipAdminUntil = settings.skip_admin_until;
@@ -157,96 +152,26 @@ Deno.serve(async (req) => {
         successfulFormat: null, attempts: [],
       };
     } else {
-      // --- Get admin token (without HashAuth) ---
-      const adminTokenResult = await getAdminToken(config, supabase, integration_account_id);
-      
-      if (!adminTokenResult.token) {
-        console.log(`[SSX:sync-units] Failed to get admin token: ${adminTokenResult.error}`);
-        trackerResult = {
-          success: false, items: [], endpoint: "", statusCode: 403,
-          errorClass: "auth_error", errorMessage: adminTokenResult.error || "Admin token unavailable",
-          successfulFormat: null, attempts: [],
-        };
-      } else {
-        const adminToken = adminTokenResult.token;
-        
-        // --- Tracker List ---
-        // Administration URLs: NO version prefix (per SSX swagger)
-        console.log("[SSX:sync-units] Attempting Administration/Tracker/List (no version prefix, admin token)...");
-        const trackerUrl = buildAdminUrl(config.baseUrl, "/Administration/Tracker/List");
-        
-        trackerResult = await tryEndpointWithFallback({
-          urlCandidates: [trackerUrl],
-          token: adminToken,
-          bodyCandidates: ADMIN_BODY_CANDIDATES,
-          timeoutMs: config.requestTimeoutMs,
-          memoEndpoint: settings.admin_units_last_successful_endpoint,
-          memoFormat: settings.admin_units_last_successful_format,
-        });
+      trackerResult = await tryAdminTrackerDiscovery(config, supabase, integration_account_id);
 
-        for (const attempt of trackerResult.attempts) {
-          logSsxCall({
-            routine: "sync-units", endpoint: attempt.endpoint, method: "POST",
-            apiVersion: "admin(no-prefix)", attemptType: `tracker:${attempt.format}`,
-            statusCode: attempt.statusCode, durationMs: attempt.durationMs,
-            responsePreview: attempt.responsePreview,
-            result: attempt.itemCount > 0 ? "success" : (attempt.errorClass === "empty_response" ? "empty" : "error"),
-            errorClass: attempt.errorClass,
-          });
-        }
-
-        // Handle 429 immediately
-        if (trackerResult.errorClass === "rate_limited") {
-          return await handle429(supabase, account, settings, integration_account_id, trackerResult, Date.now() - startTime);
-        }
+      // Handle 429 immediately
+      if (trackerResult.errorClass === "rate_limited") {
+        return await handle429(supabase, account, settings, integration_account_id, trackerResult, Date.now() - startTime);
       }
     }
 
-    // --- Vehicle List (only if trackers succeeded or we want enrichment) ---
+    // --- Vehicle List (only if trackers succeeded) ---
     if (trackerResult.success && trackerResult.items.length > 0) {
-      console.log("[SSX:sync-units] Attempting Administration/Vehicle list for enrichment...");
-      
-      // Get admin token for vehicle calls too
-      const adminTokenResult = await getAdminToken(config, supabase, integration_account_id);
-      if (adminTokenResult.token) {
-        // Administration Vehicle endpoints: NO version prefix
-        const vehicleUrls = [
-          buildAdminUrl(config.baseUrl, "/Administration/Vehicle/v2/List"),
-          buildAdminUrl(config.baseUrl, "/Administration/Vehicle/List"),
-        ];
-
-        vehicleResult = await tryEndpointWithFallback({
-          urlCandidates: vehicleUrls,
-          token: adminTokenResult.token,
-          bodyCandidates: ADMIN_BODY_CANDIDATES,
-          timeoutMs: config.requestTimeoutMs,
-          memoEndpoint: settings.admin_vehicle_last_successful_endpoint,
-          memoFormat: settings.admin_vehicle_last_successful_format,
-        });
-
-        for (const attempt of vehicleResult.attempts) {
-          logSsxCall({
-            routine: "sync-units", endpoint: attempt.endpoint, method: "POST",
-            apiVersion: "admin(no-prefix)", attemptType: `vehicle:${attempt.format}`,
-            statusCode: attempt.statusCode, durationMs: attempt.durationMs,
-            responsePreview: attempt.responsePreview,
-            result: attempt.itemCount > 0 ? "success" : (attempt.errorClass === "empty_response" ? "empty" : "error"),
-            errorClass: attempt.errorClass,
-          });
-        }
-
-        // Vehicle enrichment failure is NOT fatal — we still have trackers
-        if (!vehicleResult.success) {
-          console.log(`[SSX:sync-units] Vehicle enrichment failed (${vehicleResult.errorClass}), continuing with trackers only`);
-        }
+      vehicleResult = await tryAdminVehicleDiscovery(config, supabase, integration_account_id);
+      if (!vehicleResult.success) {
+        console.log(`[SSX:sync-units] Vehicle enrichment failed (${vehicleResult.errorClass}), continuing with trackers only`);
       }
     }
 
     // ================================================================
-    // PHASE 1b: If Administration failed, set SHORT skip and try fallback
+    // PHASE 1b: If Administration failed, set SHORT skip and try MINIMAL fallback
     // ================================================================
     if (!trackerResult.success || trackerResult.items.length === 0) {
-      // Set a SHORT admin skip (10 min, not 24h) so we retry soon
       if (!adminSkipped && trackerResult.errorClass !== "rate_limited") {
         const skipUntil = new Date(Date.now() + ADMIN_SKIP_MS).toISOString();
         const lastAdminError = `${trackerResult.errorClass}: ${trackerResult.errorMessage || "unknown"}`;
@@ -260,13 +185,13 @@ Deno.serve(async (req) => {
       }
 
       // ================================================================
-      // FALLBACK: TrackedUnit/List then PositionHistory
-      // These are CONTINGENCY sources only. Results are clearly marked.
+      // MINIMAL FALLBACK: Only TrackedUnit/List (1 call) then 1 PositionHistory window
+      // We deliberately minimize calls to avoid burning the rate limit.
       // ================================================================
-      console.log("[SSX:sync-units] Falling back to legacy discovery...");
+      console.log("[SSX:sync-units] Falling back to minimal legacy discovery...");
       usedMethod = "legacy_fallback";
 
-      const legacyResult = await fetchUnitsLegacyFallback(config);
+      const legacyResult = await fetchUnitsMinimalFallback(config);
 
       for (const attempt of legacyResult.attempts) {
         logSsxCall({
@@ -285,7 +210,6 @@ Deno.serve(async (req) => {
       }
 
       if (!legacyResult.success) {
-        // All methods failed
         await logIntegration(supabase, {
           tenant_id: account.tenant_id, integration_account_id,
           action: "ssx_sync_units", endpoint: legacyResult.endpoint,
@@ -296,8 +220,8 @@ Deno.serve(async (req) => {
             method: "all_failed",
             admin_error_class: trackerResult.errorClass,
             legacy_error_class: legacyResult.errorClass,
-            admin_attempts: trackerResult.attempts.length,
-            legacy_attempts: legacyResult.attempts.length,
+            admin_attempts: trackerResult.attempts.map(a => `${a.endpoint}:${a.format}→${a.statusCode}`),
+            legacy_attempts: legacyResult.attempts.map(a => `${a.endpoint}:${a.format}→${a.statusCode}`),
           },
         });
         // Status = sync_inconclusive, NOT destructive
@@ -335,25 +259,22 @@ Deno.serve(async (req) => {
       normalized.push(unit);
     }
 
-    // Build vehicle enrichment map from Administration Vehicle data
+    // Build vehicle enrichment map
     const vehiclePlateByTrackerCode = new Map<string, string>();
     if (vehicleResult?.success && vehicleResult.items.length > 0) {
       for (const v of vehicleResult.items) {
         const plate = pickPlate(v);
         const tCode = pickTrackerCodeFromVehicle(v);
-        if (plate && tCode) {
-          vehiclePlateByTrackerCode.set(tCode, plate);
-        }
+        if (plate && tCode) vehiclePlateByTrackerCode.set(tCode, plate);
       }
     }
 
     // ================================================================
-    // PHASE 3: Idempotent upsert — no duplicates, no destructive deletes
+    // PHASE 3: Idempotent upsert
     // ================================================================
     let upsertedCount = 0, skippedCount = 0, vehiclesCreated = 0, linksCreated = 0;
 
     for (const unit of normalized) {
-      // Enrich plate from vehicle data if available
       const plate = vehiclePlateByTrackerCode.get(unit.external_code) || unit.plate;
 
       const { data: upsertedUnit, error: upsertErr } = await supabase
@@ -376,7 +297,6 @@ Deno.serve(async (req) => {
       }
       upsertedCount++;
 
-      // Auto-create vehicle and link if plate available
       if (plate && upsertedUnit) {
         const { data: existingVehicle } = await supabase
           .from("vehicles").select("id")
@@ -400,7 +320,6 @@ Deno.serve(async (req) => {
           vehiclesCreated++;
         }
 
-        // Only create link if none exists for this provider_unit
         const { data: existingLink } = await supabase
           .from("vehicle_tracker_links").select("id")
           .eq("tenant_id", account.tenant_id)
@@ -426,27 +345,7 @@ Deno.serve(async (req) => {
     }
 
     // ================================================================
-    // PHASE 4: Quick validation (up to 3 units via PositionHistory)
-    // ================================================================
-    const validationResults: { code: string; valid: boolean }[] = [];
-    if (upsertedCount > 0 && usedMethod === "administration") {
-      const codesToValidate = normalized.slice(0, 3).map(u => u.external_code);
-      const posHistUrls = buildSsxUrlCandidates(config.baseUrl, config.apiVersion, "/Tracking/PositionHistory/List");
-
-      for (const code of codesToValidate) {
-        const filters = [{ PropertyName: "TrackedUnit", Condition: "Equal", Value: code }];
-        let resp = await ssxPost(posHistUrls[0], config.token, filters, config.requestTimeoutMs);
-        if (!resp.ok && (resp.status === 400 || resp.status === 415)) {
-          resp = await ssxPost(posHistUrls[0], config.token, { Filters: filters }, config.requestTimeoutMs);
-        }
-        if (resp.errorClass === "rate_limited") break;
-        const items = resp.ok ? extractResponseItems(resp.parsed) : [];
-        validationResults.push({ code, valid: items.length > 0 });
-      }
-    }
-
-    // ================================================================
-    // PHASE 5: Save settings & log
+    // PHASE 4: Save settings & log
     // ================================================================
     const updatedSettings = { ...settings };
     delete updatedSettings.sync_units_backoff_until;
@@ -457,7 +356,6 @@ Deno.serve(async (req) => {
       updatedSettings.admin_units_last_successful_endpoint = trackerResult.endpoint;
       updatedSettings.admin_units_last_successful_format = trackerResult.successfulFormat;
       updatedSettings.admin_units_last_sync_at = new Date().toISOString();
-      // Clear admin skip on success
       delete updatedSettings.skip_admin_until;
       delete updatedSettings.last_admin_error;
     }
@@ -465,7 +363,6 @@ Deno.serve(async (req) => {
       updatedSettings.admin_vehicle_last_successful_endpoint = vehicleResult.endpoint;
       updatedSettings.admin_vehicle_last_successful_format = vehicleResult.successfulFormat;
     }
-    // Compat
     if (trackerResult.endpoint) {
       updatedSettings.last_successful_endpoint = trackerResult.endpoint;
       updatedSettings.last_successful_format = trackerResult.successfulFormat || null;
@@ -494,7 +391,6 @@ Deno.serve(async (req) => {
         vehicles_created: vehiclesCreated,
         links_created: linksCreated,
         vehicle_plate_mappings: vehiclePlateByTrackerCode.size,
-        validation: validationResults,
         admin_attempts: trackerResult.attempts.map(a => `${a.format}→${a.statusCode}(${a.itemCount})`),
         vehicle_attempts: vehicleResult?.attempts.map(a => `${a.format}→${a.statusCode}(${a.itemCount})`) || [],
       },
@@ -512,7 +408,6 @@ Deno.serve(async (req) => {
       skipped: skippedCount,
       vehicles_created: vehiclesCreated,
       links_created: linksCreated,
-      validation: validationResults,
     });
 
   } catch (err: any) {
@@ -521,82 +416,197 @@ Deno.serve(async (req) => {
   }
 });
 
-// ==================== Legacy Fallback ====================
-// TrackedUnit/List and PositionHistory are contingency sources only.
-// Results discovered here are marked source_mode="tracking_fallback"
-// and should NOT be treated as the authoritative tracker catalog.
+// ==================== Admin Tracker Discovery ====================
+// Tries admin token first, then regular token, with all body formats.
+// Does NOT abort on 403 — SSX sometimes returns 403 for wrong body format.
 
-async function fetchUnitsLegacyFallback(config: ReturnType<typeof readAccountConfig>): Promise<EndpointAttemptResult> {
+async function tryAdminTrackerDiscovery(
+  config: ReturnType<typeof readAccountConfig>,
+  supabase: any,
+  integrationAccountId: string,
+): Promise<EndpointAttemptResult> {
   const allAttempts: any[] = [];
 
-  // 1) TrackedUnit/List (Tracking API — uses version prefix)
-  const trackedUrls = buildSsxUrlCandidates(config.baseUrl, config.apiVersion, "/Tracking/TrackedUnit/List");
-  const trackedResult = await tryEndpointWithFallback({
-    urlCandidates: trackedUrls,
-    token: config.token,
-    bodyCandidates: [{ label: "empty_object", body: {} }],
-    timeoutMs: config.requestTimeoutMs,
-  });
-  allAttempts.push(...trackedResult.attempts);
+  // Tracker List URL (no version prefix for Administration)
+  const trackerUrl = buildAdminUrl(config.baseUrl, "/Administration/Tracker/List");
 
-  if (trackedResult.errorClass === "rate_limited") {
-    return { ...trackedResult, attempts: allAttempts };
-  }
-  if (trackedResult.success && trackedResult.items.length > 0) {
-    return { ...trackedResult, attempts: allAttempts };
-  }
+  // --- Attempt 1: Admin token (without HashAuth) ---
+  const adminTokenResult = await getAdminToken(config, supabase, integrationAccountId);
 
-  // 2) PositionHistory fallback — extract unique TrackedUnit codes
-  const posHistUrls = buildSsxUrlCandidates(config.baseUrl, config.apiVersion, "/Tracking/PositionHistory/List");
-  const windowsMinutes = [15, 60, 360, 1440];
-
-  for (const windowMin of windowsMinutes) {
-    const since = new Date(Date.now() - windowMin * 60_000).toISOString();
-    const filters = [{ PropertyName: "DateTimeGPS", Condition: ">=", Value: since }];
-
-    // Try array format then wrapped
-    let resp = await ssxPost(posHistUrls[0], config.token, filters, config.requestTimeoutMs);
-    allAttempts.push({
-      endpoint: posHistUrls[0], format: `position_history:${windowMin}m:array`,
-      statusCode: resp.status, errorClass: resp.ok ? "unknown" : resp.errorClass,
-      durationMs: resp.durationMs, itemCount: 0,
-      responsePreview: (resp.text || resp.networkError || "").substring(0, 150),
+  if (adminTokenResult.token) {
+    console.log("[SSX:sync-units] Trying Administration/Tracker/List with ADMIN token (all body formats)...");
+    const result = await tryEndpointWithFallback({
+      urlCandidates: [trackerUrl],
+      token: adminTokenResult.token,
+      bodyCandidates: ADMIN_BODY_CANDIDATES,
+      timeoutMs: config.requestTimeoutMs,
+      memoEndpoint: config.settings.admin_units_last_successful_endpoint,
+      memoFormat: config.settings.admin_units_last_successful_format,
+      abortOnAuthError: false, // Don't abort on 403 — try ALL body formats
     });
 
-    if (resp.errorClass === "rate_limited") {
-      return { success: false, items: [], endpoint: posHistUrls[0], statusCode: 429, errorClass: "rate_limited", errorMessage: "Rate limit", successfulFormat: null, attempts: allAttempts };
-    }
-
-    if (!resp.ok && (resp.status === 400 || resp.status === 415)) {
-      resp = await ssxPost(posHistUrls[0], config.token, { Filters: filters }, config.requestTimeoutMs);
-      allAttempts.push({
-        endpoint: posHistUrls[0], format: `position_history:${windowMin}m:wrapped`,
-        statusCode: resp.status, errorClass: resp.ok ? "unknown" : resp.errorClass,
-        durationMs: resp.durationMs, itemCount: 0,
-        responsePreview: (resp.text || resp.networkError || "").substring(0, 150),
+    for (const attempt of result.attempts) {
+      logSsxCall({
+        routine: "sync-units", endpoint: attempt.endpoint, method: "POST",
+        apiVersion: "admin(no-prefix)", attemptType: `tracker:admin_token:${attempt.format}`,
+        statusCode: attempt.statusCode, durationMs: attempt.durationMs,
+        responsePreview: attempt.responsePreview,
+        result: attempt.itemCount > 0 ? "success" : (attempt.errorClass === "empty_response" ? "empty" : "error"),
+        errorClass: attempt.errorClass,
       });
     }
+    allAttempts.push(...result.attempts);
 
-    if (resp.ok) {
-      const positions = extractResponseItems(resp.parsed);
-      if (positions.length > 0) {
-        allAttempts[allAttempts.length - 1].itemCount = positions.length;
-        return {
-          success: true, items: positions,
-          endpoint: `${posHistUrls[0]} (fallback ${windowMin}m)`,
-          statusCode: resp.status, errorClass: "unknown",
-          errorMessage: null,
-          successfulFormat: `position_history:${windowMin}m`,
-          attempts: allAttempts,
-        };
-      }
+    if (result.errorClass === "rate_limited") return result;
+    if (result.success && result.items.length > 0) return result;
+
+    console.log(`[SSX:sync-units] Admin token failed on Tracker/List (${result.errorClass}). Trying regular token...`);
+  } else {
+    console.log(`[SSX:sync-units] No admin token available: ${adminTokenResult.error}`);
+  }
+
+  // --- Attempt 2: Regular token (with HashAuth scope) ---
+  // Some SSX accounts allow admin endpoints with the regular token too.
+  if (config.token) {
+    console.log("[SSX:sync-units] Trying Administration/Tracker/List with REGULAR token...");
+    const result = await tryEndpointWithFallback({
+      urlCandidates: [trackerUrl],
+      token: config.token,
+      bodyCandidates: ADMIN_BODY_CANDIDATES,
+      timeoutMs: config.requestTimeoutMs,
+      abortOnAuthError: false,
+    });
+
+    for (const attempt of result.attempts) {
+      logSsxCall({
+        routine: "sync-units", endpoint: attempt.endpoint, method: "POST",
+        apiVersion: "admin(no-prefix)", attemptType: `tracker:regular_token:${attempt.format}`,
+        statusCode: attempt.statusCode, durationMs: attempt.durationMs,
+        responsePreview: attempt.responsePreview,
+        result: attempt.itemCount > 0 ? "success" : (attempt.errorClass === "empty_response" ? "empty" : "error"),
+        errorClass: attempt.errorClass,
+      });
     }
+    allAttempts.push(...result.attempts);
+
+    if (result.errorClass === "rate_limited") return { ...result, attempts: allAttempts };
+    if (result.success && result.items.length > 0) return { ...result, attempts: allAttempts };
+  }
+
+  // Both tokens failed
+  return {
+    success: false, items: [], endpoint: trackerUrl, statusCode: 403,
+    errorClass: "auth_error",
+    errorMessage: "Administration/Tracker/List failed with both admin and regular tokens",
+    successfulFormat: null, attempts: allAttempts,
+  };
+}
+
+// ==================== Admin Vehicle Discovery ====================
+
+async function tryAdminVehicleDiscovery(
+  config: ReturnType<typeof readAccountConfig>,
+  supabase: any,
+  integrationAccountId: string,
+): Promise<EndpointAttemptResult> {
+  const adminTokenResult = await getAdminToken(config, supabase, integrationAccountId);
+  const tokens: { label: string; token: string }[] = [];
+  if (adminTokenResult.token) tokens.push({ label: "admin_token", token: adminTokenResult.token });
+  if (config.token && config.token !== adminTokenResult.token) tokens.push({ label: "regular_token", token: config.token });
+
+  const vehicleUrls = [
+    buildAdminUrl(config.baseUrl, "/Administration/Vehicle/v2/List"),
+    buildAdminUrl(config.baseUrl, "/Administration/Vehicle/List"),
+  ];
+
+  const allAttempts: any[] = [];
+
+  for (const { label, token } of tokens) {
+    console.log(`[SSX:sync-units] Trying Administration/Vehicle list with ${label}...`);
+    const result = await tryEndpointWithFallback({
+      urlCandidates: vehicleUrls,
+      token,
+      bodyCandidates: ADMIN_BODY_CANDIDATES,
+      timeoutMs: config.requestTimeoutMs,
+      memoEndpoint: config.settings.admin_vehicle_last_successful_endpoint,
+      memoFormat: config.settings.admin_vehicle_last_successful_format,
+      abortOnAuthError: false,
+    });
+
+    for (const attempt of result.attempts) {
+      logSsxCall({
+        routine: "sync-units", endpoint: attempt.endpoint, method: "POST",
+        apiVersion: "admin(no-prefix)", attemptType: `vehicle:${label}:${attempt.format}`,
+        statusCode: attempt.statusCode, durationMs: attempt.durationMs,
+        responsePreview: attempt.responsePreview,
+        result: attempt.itemCount > 0 ? "success" : (attempt.errorClass === "empty_response" ? "empty" : "error"),
+        errorClass: attempt.errorClass,
+      });
+    }
+    allAttempts.push(...result.attempts);
+
+    if (result.errorClass === "rate_limited") return { ...result, attempts: allAttempts };
+    if (result.success && result.items.length > 0) return { ...result, attempts: allAttempts };
   }
 
   return {
-    success: false, items: [], endpoint: posHistUrls[0] || "",
-    statusCode: 404, errorClass: "empty_response",
-    errorMessage: "No units found in any legacy method",
+    success: false, items: [], endpoint: vehicleUrls[0], statusCode: 0,
+    errorClass: "auth_error", errorMessage: "Vehicle list failed with all tokens",
+    successfulFormat: null, attempts: allAttempts,
+  };
+}
+
+// ==================== Minimal Legacy Fallback ====================
+// Only 2 calls max: TrackedUnit/List (1 body) + PositionHistory (1 window).
+// This prevents burning the rate limit on dozens of futile attempts.
+
+async function fetchUnitsMinimalFallback(config: ReturnType<typeof readAccountConfig>): Promise<EndpointAttemptResult> {
+  const allAttempts: any[] = [];
+
+  // 1) TrackedUnit/List — single attempt with versioned URL, empty object body
+  const trackedUrl = buildSsxUrlCandidates(config.baseUrl, config.apiVersion, "/Tracking/TrackedUnit/List")[0];
+  const trackedResp = await ssxPost(trackedUrl, config.token, {}, config.requestTimeoutMs);
+  const trackedItems = trackedResp.ok ? extractResponseItems(trackedResp.parsed) : [];
+  allAttempts.push({
+    endpoint: trackedUrl, format: "tracked_unit_list",
+    statusCode: trackedResp.status,
+    errorClass: trackedResp.ok ? (trackedItems.length > 0 ? "unknown" : "empty_response") : trackedResp.errorClass,
+    durationMs: trackedResp.durationMs, itemCount: trackedItems.length,
+    responsePreview: (trackedResp.text || trackedResp.networkError || "").substring(0, 150),
+  });
+
+  if (trackedResp.errorClass === "rate_limited") {
+    return { success: false, items: [], endpoint: trackedUrl, statusCode: 429, errorClass: "rate_limited", errorMessage: "Rate limit", successfulFormat: null, attempts: allAttempts };
+  }
+  if (trackedResp.ok && trackedItems.length > 0) {
+    return { success: true, items: trackedItems, endpoint: trackedUrl, statusCode: trackedResp.status, errorClass: "unknown", errorMessage: null, successfulFormat: "tracked_unit_list", attempts: allAttempts };
+  }
+
+  // 2) PositionHistory — single window (60 min), single body format
+  const posHistUrl = buildSsxUrlCandidates(config.baseUrl, config.apiVersion, "/Tracking/PositionHistory/List")[0];
+  const since = new Date(Date.now() - 60 * 60_000).toISOString();
+  const filters = [{ PropertyName: "DateTimeGPS", Condition: ">=", Value: since }];
+  const posResp = await ssxPost(posHistUrl, config.token, { Filters: filters }, config.requestTimeoutMs);
+  const posItems = posResp.ok ? extractResponseItems(posResp.parsed) : [];
+  allAttempts.push({
+    endpoint: posHistUrl, format: "position_history:60m",
+    statusCode: posResp.status,
+    errorClass: posResp.ok ? (posItems.length > 0 ? "unknown" : "empty_response") : posResp.errorClass,
+    durationMs: posResp.durationMs, itemCount: posItems.length,
+    responsePreview: (posResp.text || posResp.networkError || "").substring(0, 150),
+  });
+
+  if (posResp.errorClass === "rate_limited") {
+    return { success: false, items: [], endpoint: posHistUrl, statusCode: 429, errorClass: "rate_limited", errorMessage: "Rate limit", successfulFormat: null, attempts: allAttempts };
+  }
+  if (posResp.ok && posItems.length > 0) {
+    return { success: true, items: posItems, endpoint: `${posHistUrl} (fallback 60m)`, statusCode: posResp.status, errorClass: "unknown", errorMessage: null, successfulFormat: "position_history:60m", attempts: allAttempts };
+  }
+
+  return {
+    success: false, items: [], endpoint: posHistUrl,
+    statusCode: posResp.status || 0, errorClass: posResp.errorClass || "empty_response",
+    errorMessage: "No units found in minimal fallback",
     successfulFormat: null, attempts: allAttempts,
   };
 }
