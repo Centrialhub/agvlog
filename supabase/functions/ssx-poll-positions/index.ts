@@ -133,7 +133,7 @@ Deno.serve(async (req) => {
     }
 
     const settings = account.settings as any || {};
-    const pollWindowMinutes = settings.poll_window_minutes || 15;
+    const defaultPollWindow = settings.poll_window_minutes || 15;
     const baseUrl = account.base_url.replace(/\/$/, "");
     const apiVersion = settings.api_version || "";
     const versionPrefix = apiVersion && apiVersion !== "v1" ? `/${apiVersion}` : "";
