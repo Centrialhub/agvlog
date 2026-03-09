@@ -16,6 +16,7 @@ import VehicleDetails from "@/pages/VehicleDetails";
 import Alerts from "@/pages/Alerts";
 import Geofences from "@/pages/Geofences";
 import Reports from "@/pages/Reports";
+import Routes from "@/pages/Routes";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
