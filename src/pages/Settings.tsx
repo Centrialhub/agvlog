@@ -100,25 +100,18 @@ function IntegrationSection() {
   const syncUnitsMutation = useMutation({
     mutationFn: async ({ accountId, force }: { accountId: string; force?: boolean }) => {
       const { data, error } = await supabase.functions.invoke('ssx-sync-units', { body: { integration_account_id: accountId, force: !!force } });
+      // Parse error from any source (SDK puts body in error.message, error.context, or even data for some versions)
+      const tryParse = (v: any): any => { try { return typeof v === 'string' ? JSON.parse(v) : v; } catch { return null; } };
+      const parsed = tryParse(error?.message) || tryParse(error?.context) || (error ? null : undefined);
       if (error) {
-        // supabase.functions.invoke puts response body as error.message for non-2xx
-        let parsed: any = null;
-        try {
-          parsed = JSON.parse(error.message);
-        } catch {
-          // Also try error.context?.body
-          try {
-            const text = typeof error.context === 'string' ? error.context : '';
-            if (text) parsed = JSON.parse(text);
-          } catch { /* ignore */ }
-        }
-        if (parsed?.cooldown_active || parsed?.retry_at) {
-          const err = new Error(parsed.error || 'Rate limit') as any;
-          err.retryAt = parsed.retry_at;
-          err.cooldownActive = parsed.cooldown_active;
+        const info = parsed || data || {};
+        if (info?.cooldown_active || info?.retry_at) {
+          const err = new Error(info.error || 'Rate limit') as any;
+          err.retryAt = info.retry_at;
+          err.cooldownActive = info.cooldown_active;
           throw err;
         }
-        throw new Error(parsed?.error || error.message);
+        throw new Error(info?.error || error.message || 'Erro desconhecido');
       }
       if (data?.error) {
         const err = new Error(data.error) as any;
