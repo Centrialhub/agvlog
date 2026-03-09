@@ -145,7 +145,8 @@ function IntegrationSection() {
         const retryTime = e.retryAt ? new Date(e.retryAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
         toast.error(`Limite SSX excedido. Tente novamente${retryTime ? ` às ${retryTime}` : ' em alguns minutos'}.`, { duration: 8000 });
       } else {
-        toast.error(`Falha sync rastreadores: ${e.message}`);
+        const detail = e.message?.includes('attempted_endpoints') ? ' Veja aba Logs para detalhes.' : '';
+        toast.error(`Falha sync rastreadores: ${e.message}${detail}`);
       }
       queryClient.invalidateQueries({ queryKey: ['integration_accounts'] });
     },
