@@ -135,7 +135,9 @@ function IntegrationSection() {
         const nextAt = data.next_sync_available_at ? new Date(data.next_sync_available_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
         toast.info(`Rastreadores já sincronizados recentemente.${nextAt ? ` Próximo sync disponível às ${nextAt}.` : ''} Use "Forçar Sync" para atualizar agora.`);
       } else {
-        toast.success(`Sincronizado: ${data.upserted} rastreadores, ${data.vehicles_created || 0} veículos criados, ${data.links_created || 0} vínculos`);
+        const method = data.method === 'administration' ? 'Administration' : 'Fallback';
+        const endpoint = data.tracker_endpoint_used ? ` via ${data.tracker_endpoint_used.split('/').slice(-2).join('/')}` : '';
+        toast.success(`Sincronizado (${method}${endpoint}): ${data.upserted} rastreadores, ${data.vehicles_created || 0} veículos, ${data.links_created || 0} vínculos`);
       }
     },
     onError: (e: any) => {
@@ -143,7 +145,8 @@ function IntegrationSection() {
         const retryTime = e.retryAt ? new Date(e.retryAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
         toast.error(`Limite SSX excedido. Tente novamente${retryTime ? ` às ${retryTime}` : ' em alguns minutos'}.`, { duration: 8000 });
       } else {
-        toast.error(`Falha sync rastreadores: ${e.message}`);
+        const detail = e.message?.includes('attempted_endpoints') ? ' Veja aba Logs para detalhes.' : '';
+        toast.error(`Falha sync rastreadores: ${e.message}${detail}`);
       }
       queryClient.invalidateQueries({ queryKey: ['integration_accounts'] });
     },
