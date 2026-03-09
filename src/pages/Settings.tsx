@@ -28,15 +28,17 @@ export default function Settings() {
         <p className="text-sm text-muted-foreground">Gerencie integrações e parâmetros do sistema</p>
       </div>
       <Tabs defaultValue="integration">
-        <TabsList>
+        <TabsList className="flex-wrap">
           <TabsTrigger value="integration">Integração SSX</TabsTrigger>
           <TabsTrigger value="units">Rastreadores</TabsTrigger>
           <TabsTrigger value="telemetry">Catálogo Telemetria</TabsTrigger>
+          <TabsTrigger value="mapping">Mapeamento</TabsTrigger>
           <TabsTrigger value="logs">Logs</TabsTrigger>
         </TabsList>
         <TabsContent value="integration" className="mt-4"><IntegrationSection /></TabsContent>
         <TabsContent value="units" className="mt-4"><UnitsSection /></TabsContent>
         <TabsContent value="telemetry" className="mt-4"><TelemetryCatalogSection /></TabsContent>
+        <TabsContent value="mapping" className="mt-4"><TelemetryMappingSection /></TabsContent>
         <TabsContent value="logs" className="mt-4"><IntegrationLogsSection /></TabsContent>
       </Tabs>
     </div>
