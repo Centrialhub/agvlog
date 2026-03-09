@@ -337,6 +337,8 @@ type AdminFetchResult = {
 // ==================== Administration Tracker Fetch ====================
 
 const ADMIN_CANDIDATE_BODIES: { label: string; body: any | null }[] = [
+  { label: "empty_array", body: [] },
+  { label: "array_empty_obj", body: [{}] },
   { label: "no_body", body: null },
   { label: "empty_obj", body: {} },
   { label: "Filters_empty", body: { Filters: [] } },
