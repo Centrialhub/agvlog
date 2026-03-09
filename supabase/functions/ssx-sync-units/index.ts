@@ -354,6 +354,7 @@ async function fetchAdministrationTrackers(params: {
   const { baseUrl, token, settings } = params;
   const attemptedEndpoints: string[] = [];
   const attemptedFormats: string[] = [];
+  const apiVersion = settings.api_version || "v3";
 
   // Try memoized first
   const memoEndpoint = settings.admin_units_last_successful_endpoint;
@@ -364,6 +365,7 @@ async function fetchAdministrationTrackers(params: {
   }
 
   const endpoints = [
+    `${baseUrl}/${apiVersion}/Administration/Tracker/List`,
     `${baseUrl}/Administration/Tracker/List`,
     `${baseUrl}/v1/Administration/Tracker/List`,
   ];
@@ -404,6 +406,7 @@ async function fetchAdministrationVehicles(params: {
   const { baseUrl, token, settings } = params;
   const attemptedEndpoints: string[] = [];
   const attemptedFormats: string[] = [];
+  const apiVersion = settings.api_version || "v3";
 
   // Try memoized first
   const memoEndpoint = settings.admin_vehicle_last_successful_endpoint;
@@ -414,6 +417,7 @@ async function fetchAdministrationVehicles(params: {
   }
 
   const endpoints = [
+    `${baseUrl}/${apiVersion}/Administration/Vehicle/v2/List`,
     `${baseUrl}/Administration/Vehicle/v2/List`,
     `${baseUrl}/v1/Administration/Vehicle/v2/List`,
   ];
