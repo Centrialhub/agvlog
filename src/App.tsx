@@ -16,6 +16,7 @@ import VehicleDetails from "@/pages/VehicleDetails";
 import Alerts from "@/pages/Alerts";
 import Geofences from "@/pages/Geofences";
 import Reports from "@/pages/Reports";
+import RoutesPage from "@/pages/Routes";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -51,6 +52,7 @@ const App = () => (
             <Route path="/alerts" element={<ProtectedRoute><Alerts /></ProtectedRoute>} />
             <Route path="/geofences" element={<ProtectedRoute><Geofences /></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+            <Route path="/routes" element={<ProtectedRoute><RoutesPage /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>

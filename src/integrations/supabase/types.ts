@@ -227,6 +227,105 @@ export type Database = {
           },
         ]
       }
+      fuel_events: {
+        Row: {
+          created_at: string
+          delta: number | null
+          end_value: number | null
+          event_at: string
+          event_type: string
+          id: string
+          payload: Json | null
+          start_value: number | null
+          tenant_id: string
+          vehicle_id: string
+        }
+        Insert: {
+          created_at?: string
+          delta?: number | null
+          end_value?: number | null
+          event_at?: string
+          event_type: string
+          id?: string
+          payload?: Json | null
+          start_value?: number | null
+          tenant_id: string
+          vehicle_id: string
+        }
+        Update: {
+          created_at?: string
+          delta?: number | null
+          end_value?: number | null
+          event_at?: string
+          event_type?: string
+          id?: string
+          payload?: Json | null
+          start_value?: number | null
+          tenant_id?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fuel_events_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fuel_events_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fuel_readings: {
+        Row: {
+          captured_at: string
+          fuel_unit: string
+          fuel_value: number
+          raw: Json | null
+          source_key: string | null
+          tenant_id: string
+          vehicle_id: string
+        }
+        Insert: {
+          captured_at: string
+          fuel_unit?: string
+          fuel_value: number
+          raw?: Json | null
+          source_key?: string | null
+          tenant_id: string
+          vehicle_id: string
+        }
+        Update: {
+          captured_at?: string
+          fuel_unit?: string
+          fuel_value?: number
+          raw?: Json | null
+          source_key?: string | null
+          tenant_id?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fuel_readings_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fuel_readings_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       geofence_events: {
         Row: {
           direction: string
@@ -538,11 +637,21 @@ export type Database = {
       }
       metrics_daily: {
         Row: {
+          avg_speed_kmh: number | null
           day: string
+          fuel_consumed: number | null
+          fuel_drain_events: number | null
+          fuel_end: number | null
+          fuel_refuel_events: number | null
+          fuel_start: number | null
           km_estimated: number | null
+          max_speed_kmh: number | null
           moving_time_seconds: number | null
           offline_minutes: number | null
+          overnight_stops_count: number | null
           overspeed_events: number | null
+          overspeed_minutes: number | null
+          route_deviation_events: number | null
           stopped_time_seconds: number | null
           stops_count: number | null
           tenant_id: string
@@ -550,11 +659,21 @@ export type Database = {
           vehicle_id: string
         }
         Insert: {
+          avg_speed_kmh?: number | null
           day: string
+          fuel_consumed?: number | null
+          fuel_drain_events?: number | null
+          fuel_end?: number | null
+          fuel_refuel_events?: number | null
+          fuel_start?: number | null
           km_estimated?: number | null
+          max_speed_kmh?: number | null
           moving_time_seconds?: number | null
           offline_minutes?: number | null
+          overnight_stops_count?: number | null
           overspeed_events?: number | null
+          overspeed_minutes?: number | null
+          route_deviation_events?: number | null
           stopped_time_seconds?: number | null
           stops_count?: number | null
           tenant_id: string
@@ -562,11 +681,21 @@ export type Database = {
           vehicle_id: string
         }
         Update: {
+          avg_speed_kmh?: number | null
           day?: string
+          fuel_consumed?: number | null
+          fuel_drain_events?: number | null
+          fuel_end?: number | null
+          fuel_refuel_events?: number | null
+          fuel_start?: number | null
           km_estimated?: number | null
+          max_speed_kmh?: number | null
           moving_time_seconds?: number | null
           offline_minutes?: number | null
+          overnight_stops_count?: number | null
           overspeed_events?: number | null
+          overspeed_minutes?: number | null
+          route_deviation_events?: number | null
           stopped_time_seconds?: number | null
           stops_count?: number | null
           tenant_id?: string
@@ -822,6 +951,142 @@ export type Database = {
           },
           {
             foreignKeyName: "provider_units_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      route_runs: {
+        Row: {
+          created_at: string
+          id: string
+          inside_ratio: number | null
+          outside_minutes: number | null
+          route_id: string
+          status: string
+          tenant_id: string
+          trip_id: string
+          vehicle_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          inside_ratio?: number | null
+          outside_minutes?: number | null
+          route_id: string
+          status?: string
+          tenant_id: string
+          trip_id: string
+          vehicle_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          inside_ratio?: number | null
+          outside_minutes?: number | null
+          route_id?: string
+          status?: string
+          tenant_id?: string
+          trip_id?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "route_runs_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "route_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_runs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_runs_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_runs_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      route_templates: {
+        Row: {
+          allowed_outside_minutes: number | null
+          corridor_geofence_id: string | null
+          corridor_inside_ratio_threshold: number | null
+          created_at: string
+          enabled: boolean
+          end_poi_id: string | null
+          id: string
+          name: string
+          route_speed_limit_kmh: number | null
+          start_poi_id: string | null
+          tenant_id: string
+        }
+        Insert: {
+          allowed_outside_minutes?: number | null
+          corridor_geofence_id?: string | null
+          corridor_inside_ratio_threshold?: number | null
+          created_at?: string
+          enabled?: boolean
+          end_poi_id?: string | null
+          id?: string
+          name: string
+          route_speed_limit_kmh?: number | null
+          start_poi_id?: string | null
+          tenant_id: string
+        }
+        Update: {
+          allowed_outside_minutes?: number | null
+          corridor_geofence_id?: string | null
+          corridor_inside_ratio_threshold?: number | null
+          created_at?: string
+          enabled?: boolean
+          end_poi_id?: string | null
+          id?: string
+          name?: string
+          route_speed_limit_kmh?: number | null
+          start_poi_id?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "route_templates_corridor_geofence_id_fkey"
+            columns: ["corridor_geofence_id"]
+            isOneToOne: false
+            referencedRelation: "geofences"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_templates_end_poi_id_fkey"
+            columns: ["end_poi_id"]
+            isOneToOne: false
+            referencedRelation: "pois"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_templates_start_poi_id_fkey"
+            columns: ["start_poi_id"]
+            isOneToOne: false
+            referencedRelation: "pois"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_templates_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -1380,10 +1645,13 @@ export type Database = {
           active: boolean
           created_at: string
           created_by: string | null
+          fuel_canonical_key: string | null
           id: string
           nickname: string | null
           plate: string
+          speed_limit_kmh: number | null
           tags: Json | null
+          tank_capacity_liters: number | null
           tenant_id: string
           type: string | null
           updated_at: string
@@ -1393,10 +1661,13 @@ export type Database = {
           active?: boolean
           created_at?: string
           created_by?: string | null
+          fuel_canonical_key?: string | null
           id?: string
           nickname?: string | null
           plate: string
+          speed_limit_kmh?: number | null
           tags?: Json | null
+          tank_capacity_liters?: number | null
           tenant_id: string
           type?: string | null
           updated_at?: string
@@ -1406,10 +1677,13 @@ export type Database = {
           active?: boolean
           created_at?: string
           created_by?: string | null
+          fuel_canonical_key?: string | null
           id?: string
           nickname?: string | null
           plate?: string
+          speed_limit_kmh?: number | null
           tags?: Json | null
+          tank_capacity_liters?: number | null
           tenant_id?: string
           type?: string | null
           updated_at?: string
@@ -1430,6 +1704,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      count_points_in_geofence: {
+        Args: { _geofence_id: string; _points: Json }
+        Returns: Json
+      }
       create_tenant_with_owner: {
         Args: { _tenant_name: string }
         Returns: string
