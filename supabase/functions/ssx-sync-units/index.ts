@@ -338,14 +338,8 @@ type AdminFetchResult = {
 
 const ADMIN_CANDIDATE_BODIES: { label: string; body: any | null }[] = [
   { label: "empty_array", body: [] },
-  { label: "array_empty_obj", body: [{}] },
-  { label: "no_body", body: null },
   { label: "empty_obj", body: {} },
-  { label: "Filters_empty", body: { Filters: [] } },
-  { label: "filters_empty", body: { filters: [] } },
   { label: "ListRequest_PascalCase", body: { Page: 1, PageSize: 5000, Filters: [] } },
-  { label: "listRequest_camelCase", body: { page: 1, pageSize: 5000, filters: [] } },
-  { label: "PageNumber_variant", body: { PageNumber: 1, PageSize: 5000, Filters: [] } },
 ];
 
 async function fetchAdministrationTrackers(params: {
