@@ -133,7 +133,7 @@ Deno.serve(async (req) => {
     }
 
     const settings = account.settings as any || {};
-    const pollWindowMinutes = settings.poll_window_minutes || 15;
+    const defaultPollWindow = settings.poll_window_minutes || 15;
     const baseUrl = account.base_url.replace(/\/$/, "");
     const apiVersion = settings.api_version || "";
     const versionPrefix = apiVersion && apiVersion !== "v1" ? `/${apiVersion}` : "";
@@ -272,11 +272,15 @@ Deno.serve(async (req) => {
       let duplicates = 0;
       let latestPoint: any = null;
 
+      // Use larger window on first poll (no previous success), otherwise use default
+      const isFirstPoll = !cursor?.last_success_at;
+      const pollWindowMinutes = isFirstPoll ? 1440 : defaultPollWindow; // 24h for first poll
+
       for (const point of positions) {
         const normalized = normalizePosition(point);
         if (!normalized) continue;
 
-        // Discard points older than poll_window_minutes
+        // Discard points older than poll window
         const pointAge = (Date.now() - new Date(normalized.captured_at).getTime()) / 60000;
         if (pointAge > pollWindowMinutes) continue;
 
