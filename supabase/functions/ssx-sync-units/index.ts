@@ -110,11 +110,20 @@ Deno.serve(async (req) => {
     const apiVersion = settings.api_version || "v3";
     const startTime = Date.now();
 
-    // ===== PHASE 1: Administration-first fetch =====
+    // ===== PHASE 1: Administration-first fetch (skip if recently failed) =====
+    const skipAdminUntil = settings.skip_admin_until;
+    const adminSkipped = skipAdminUntil && new Date(skipAdminUntil).getTime() > Date.now();
 
-    let trackerResult = await fetchAdministrationTrackers({ baseUrl, token, settings });
+    let trackerResult: AdminFetchResult;
     let vehicleResult: AdminFetchResult | null = null;
     let usedMethod = "administration";
+
+    if (adminSkipped) {
+      console.log("Skipping Administration endpoints (skip_admin_until active)");
+      trackerResult = { success: false, endpoint: "", status_code: 0, items: [], error_message: "Admin skipped", attempted_endpoints: [], attempted_formats: [] };
+    } else {
+      trackerResult = await fetchAdministrationTrackers({ baseUrl, token, settings });
+    }
 
     // If Administration trackers worked, also try vehicles
     if (trackerResult.success && trackerResult.items.length > 0) {
@@ -125,6 +134,16 @@ Deno.serve(async (req) => {
     if (!trackerResult.success || trackerResult.items.length === 0) {
       if (trackerResult.status_code === 429) {
         return handle429(supabase, account, settings, integration_account_id, trackerResult, Date.now() - startTime);
+      }
+
+      // Remember admin failure for 24h if it was 404/not available
+      if (!adminSkipped && trackerResult.status_code !== 429) {
+        const skipUntil = new Date(Date.now() + 24 * 60 * 60_000).toISOString();
+        await supabase.from("integration_accounts").update({
+          settings: { ...settings, skip_admin_until: skipUntil },
+          updated_at: new Date().toISOString(),
+        }).eq("id", integration_account_id);
+        settings.skip_admin_until = skipUntil;
       }
 
       console.log("Administration fetch failed/empty, falling back to legacy TrackedUnit/PositionHistory...");
