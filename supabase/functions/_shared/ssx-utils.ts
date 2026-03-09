@@ -7,8 +7,10 @@
  * DESIGN DECISIONS:
  * - Administration API is the PRIMARY source for tracker/vehicle catalogs.
  * - PositionHistory is a FALLBACK only, never the authoritative source.
- * - api_version defaults to "v3" if absent.
- * - Fallback: versioned URL first, then unversioned, never blind permutation.
+ * - Administration API does NOT use version prefix (endpoints are /Administration/...).
+ * - Tracking API uses version prefix (e.g., /v3/Tracking/...).
+ * - HashAuth in Login scopes the token to Tracking integration only.
+ *   Administration endpoints require a token obtained WITHOUT HashAuth.
  * - Secrets (token, password, hash) are NEVER logged in plaintext.
  */
 
@@ -23,7 +25,7 @@ export const corsHeaders = {
 // ======================== URL Builder ========================
 
 /**
- * Builds a versioned SSX endpoint URL.
+ * Builds a versioned SSX endpoint URL (for Tracking endpoints).
  * Example: buildSsxUrl("https://integration.systemsatx.com.br", "v3", "/Tracking/PositionHistory/List")
  *   => "https://integration.systemsatx.com.br/v3/Tracking/PositionHistory/List"
  */
@@ -35,7 +37,7 @@ export function buildSsxUrl(baseUrl: string, apiVersion: string, path: string): 
 }
 
 /**
- * Returns ordered endpoint candidates: versioned first, then unversioned.
+ * Returns ordered endpoint candidates for Tracking: versioned first, then unversioned.
  * Used for fallback on 404.
  */
 export function buildSsxUrlCandidates(baseUrl: string, apiVersion: string, path: string): string[] {
@@ -49,15 +51,32 @@ export function buildSsxUrlCandidates(baseUrl: string, apiVersion: string, path:
   return urls;
 }
 
+/**
+ * Builds Administration API URL — NO version prefix.
+ * Per SSX swagger, Administration endpoints are at /Administration/... directly.
+ * Example: buildAdminUrl("https://integration.systemsatx.com.br", "/Administration/Tracker/List")
+ *   => "https://integration.systemsatx.com.br/Administration/Tracker/List"
+ */
+export function buildAdminUrl(baseUrl: string, path: string): string {
+  const base = baseUrl.replace(/\/$/, "");
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  return `${base}${cleanPath}`;
+}
+
 // ======================== Account Config Reader ========================
 
 export interface SsxAccountConfig {
   baseUrl: string;
   apiVersion: string;
   token: string;
+  adminToken: string | null; // Token without HashAuth for Administration
   pollWindowMinutes: number;
   requestTimeoutMs: number;
   settings: Record<string, any>;
+  hashauth: string | null;
+  hashcode: string | null;
+  username: string;
+  passwordEncrypted: string;
 }
 
 export function readAccountConfig(account: any): SsxAccountConfig {
@@ -66,10 +85,143 @@ export function readAccountConfig(account: any): SsxAccountConfig {
     baseUrl: (account.base_url || "").replace(/\/$/, ""),
     apiVersion: settings.api_version || "v3",
     token: account.token_cache || "",
+    adminToken: settings.admin_token_cache || null,
     pollWindowMinutes: settings.poll_window_minutes || 15,
     requestTimeoutMs: settings.request_timeout_ms || 30_000,
     settings,
+    hashauth: account.hashauth || null,
+    hashcode: account.hashcode || null,
+    username: account.username || "",
+    passwordEncrypted: account.password_encrypted || "",
   };
+}
+
+// ======================== Admin Token Login ========================
+
+/**
+ * Obtains a token WITHOUT HashAuth for Administration API access.
+ * The SSX Login with HashAuth scopes the token to Tracking integration only.
+ * Administration endpoints require a token without HashAuth.
+ * 
+ * If the account has no HashAuth, the regular token works for both.
+ */
+export async function getAdminToken(
+  config: SsxAccountConfig,
+  supabase: any,
+  integrationAccountId: string,
+): Promise<{ token: string | null; error: string | null }> {
+  // If no HashAuth is configured, the regular token already has admin scope
+  if (!config.hashauth) {
+    console.log("[SSX:admin-token] No HashAuth configured, using regular token for admin");
+    return { token: config.token, error: null };
+  }
+
+  // Check cached admin token
+  if (config.adminToken && config.settings.admin_token_expires_at) {
+    const expiresAt = new Date(config.settings.admin_token_expires_at).getTime();
+    if (expiresAt - Date.now() > 60_000) {
+      console.log("[SSX:admin-token] Using cached admin token");
+      return { token: config.adminToken, error: null };
+    }
+  }
+
+  // Do a fresh login WITHOUT HashAuth
+  console.log("[SSX:admin-token] Logging in without HashAuth for Administration access...");
+  const loginUrl = `${config.baseUrl}/Login`;
+
+  let password = config.passwordEncrypted;
+  if (password.startsWith("enc:v1:")) {
+    const encryptionKey = Deno.env.get("AGVLOG_ENCRYPTION_KEY");
+    if (encryptionKey) {
+      try {
+        password = await decryptAesGcm(password, encryptionKey);
+      } catch (e: any) {
+        console.error("[SSX:admin-token] Decryption failed:", e.message);
+        return { token: null, error: `Decryption failed: ${e.message}` };
+      }
+    }
+  }
+
+  const params = new URLSearchParams();
+  params.append("Username", config.username);
+  params.append("Password", password);
+  // Intentionally NOT including HashAuth — this gives admin scope
+  if (config.hashcode) params.append("Hashcentral", config.hashcode);
+
+  const loginUrlWithParams = `${loginUrl}?${params.toString()}`;
+  const startTime = Date.now();
+
+  try {
+    const resp = await fetch(loginUrlWithParams, {
+      method: "POST",
+      headers: { Accept: "application/json" },
+    });
+    const text = await resp.text();
+    const duration = Date.now() - startTime;
+    console.log(`[SSX:admin-token] POST ${loginUrl} (no HashAuth) | status=${resp.status} | ${duration}ms | response=${text.substring(0, 150)}`);
+
+    if (!resp.ok) {
+      return { token: null, error: `Login without HashAuth failed: HTTP ${resp.status}: ${text.substring(0, 200)}` };
+    }
+
+    let token: string;
+    let expiresInSeconds: number | null = null;
+    try {
+      const parsed = JSON.parse(text);
+      token = parsed.AccessToken || parsed.access_token || parsed.Token || parsed.token || text;
+      expiresInSeconds = parsed.ExpiresIn || parsed.expires_in || null;
+      if (typeof token === "object") token = JSON.stringify(token);
+    } catch {
+      token = text.trim().replace(/^"/, "").replace(/"$/, "");
+    }
+
+    if (!token || token.length < 10) {
+      return { token: null, error: "Login succeeded but no valid admin token in response" };
+    }
+
+    // Calculate TTL
+    const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000;
+    const MAX_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+    const MIN_TTL_MS = 5 * 60 * 1000;
+    let ttlMs = DEFAULT_TTL_MS;
+    try {
+      let parsedExpires = Number(expiresInSeconds);
+      if (Number.isFinite(parsedExpires) && parsedExpires > 0) {
+        if (parsedExpires > 1e12) {
+          if (parsedExpires > 1e15) {
+            const ticksEpoch = 621355968000000000;
+            const expiresDateMs = (parsedExpires - ticksEpoch) / 10000;
+            parsedExpires = Math.max(0, (expiresDateMs - Date.now()) / 1000);
+          } else {
+            parsedExpires = parsedExpires / 1000;
+          }
+        }
+        ttlMs = parsedExpires * 1000;
+        if (ttlMs > MAX_TTL_MS) ttlMs = MAX_TTL_MS;
+        if (ttlMs < MIN_TTL_MS) ttlMs = DEFAULT_TTL_MS;
+      }
+    } catch { /* keep default */ }
+
+    const expiresAt = new Date(Date.now() + ttlMs).toISOString();
+
+    // Cache admin token in settings
+    const { data: currentAccount } = await supabase
+      .from("integration_accounts").select("settings").eq("id", integrationAccountId).single();
+    const currentSettings = currentAccount?.settings || {};
+    await supabase.from("integration_accounts").update({
+      settings: {
+        ...currentSettings,
+        admin_token_cache: token,
+        admin_token_expires_at: expiresAt,
+      },
+      updated_at: new Date().toISOString(),
+    }).eq("id", integrationAccountId);
+
+    console.log(`[SSX:admin-token] Admin token obtained, expires at ${expiresAt}`);
+    return { token, error: null };
+  } catch (e: any) {
+    return { token: null, error: `Admin login failed: ${e.message}` };
+  }
 }
 
 // ======================== Error Classification ========================
@@ -312,10 +464,15 @@ export interface AttemptLog {
   responsePreview: string;
 }
 
+/**
+ * Body candidates for Administration API endpoints.
+ * Per SSX swagger, Administration List endpoints accept:
+ * - array of QueryCondition (nullable) — [] for "list all"
+ * - null (no body)
+ */
 export const ADMIN_BODY_CANDIDATES: { label: string; body: any }[] = [
   { label: "empty_array", body: [] },
-  { label: "empty_object", body: {} },
-  { label: "paginated", body: { Page: 1, PageSize: 5000, Filters: [] } },
+  { label: "null_body", body: null },
 ];
 
 export async function tryEndpointWithFallback(params: {
@@ -347,7 +504,6 @@ export async function tryEndpointWithFallback(params: {
   }
 
   for (const url of urlCandidates) {
-    let got404 = false;
     for (const candidate of bodyCandidates) {
       // Skip if already tried as memo
       if (url === memoEndpoint && candidate.label === memoFormat) continue;
@@ -373,14 +529,13 @@ export async function tryEndpointWithFallback(params: {
       }
 
       // 404 means this URL doesn't exist, skip to next URL
-      if (result.errorClass === "route_not_found") { got404 = true; break; }
+      if (result.errorClass === "route_not_found") break;
 
       // 400/415 means body format wrong, try next body
       if (result.errorClass === "body_incompatible") continue;
 
       // Other errors: try next body
     }
-    // If we got 404, the URL doesn't exist — try next URL
   }
 
   return buildResult(false, [], urlCandidates[0] || "", lastStatus, lastErrorClass, lastError, null, attempts);
@@ -443,6 +598,7 @@ export function sanitize(obj: any): any {
     "token", "Token", "token_cache", "password", "Password", "password_encrypted",
     "secret", "Secret", "hash", "Hash", "hashauth", "hashcode",
     "Authorization", "authorization", "AccessToken", "access_token",
+    "admin_token_cache",
   ]);
   const result: Record<string, any> = {};
   for (const [key, val] of Object.entries(obj)) {
@@ -507,6 +663,31 @@ export async function authenticateCaller(req: Request, supabaseUrl: string, supa
   }
 
   return { callerId: userData.user.id, isCron: false };
+}
+
+// ======================== Encryption Helper ========================
+
+export async function decryptAesGcm(encrypted: string, keyHex: string): Promise<string> {
+  const parts = encrypted.split(":");
+  if (parts.length !== 4) throw new Error("Invalid encrypted format");
+  const ivHex = parts[2];
+  const ctHex = parts[3];
+
+  const keyBytes = hexToBytes(keyHex.padEnd(64, "0").slice(0, 64));
+  const key = await crypto.subtle.importKey("raw", keyBytes, { name: "AES-GCM" }, false, ["decrypt"]);
+  const iv = hexToBytes(ivHex);
+  const ct = hexToBytes(ctHex);
+
+  const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ct);
+  return new TextDecoder().decode(decrypted);
+}
+
+function hexToBytes(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  }
+  return bytes;
 }
 
 // ======================== Internal Helpers ========================
