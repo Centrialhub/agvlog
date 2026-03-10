@@ -19,6 +19,7 @@ import {
   corsHeaders,
   buildSsxUrlCandidates,
   buildAdminUrlCandidates,
+  buildPositionHistoryUrlCandidates,
   readAccountConfig,
   extractResponseItems,
   tryEndpointWithFallback,
