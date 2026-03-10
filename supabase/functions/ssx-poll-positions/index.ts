@@ -268,8 +268,8 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Update positions_last from best provider point (even if all inserts are dupes)
-      if (unitResult.latestNormalized) {
+    // Update positions_last only if persistence succeeded (not on persistence failure)
+    if (unitResult.latestNormalized && !unitResult.persistenceFailed) {
         const ln = unitResult.latestNormalized;
         // Check if this is newer than current positions_last
         const { data: currentLast } = await supabase
