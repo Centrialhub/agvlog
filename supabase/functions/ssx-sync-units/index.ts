@@ -422,6 +422,8 @@ Deno.serve(async (req) => {
         skipped: skippedCount,
         vehicles_created: vehiclesCreated,
         links_created: linksCreated,
+        mapping_conflicts: mappingConflicts,
+        conflict_details: conflictDetails.length > 0 ? conflictDetails : undefined,
       },
     });
 
@@ -437,6 +439,8 @@ Deno.serve(async (req) => {
       skipped: skippedCount,
       vehicles_created: vehiclesCreated,
       links_created: linksCreated,
+      mapping_conflicts: mappingConflicts,
+      conflict_details: conflictDetails.length > 0 ? conflictDetails : undefined,
     });
 
   } catch (err: any) {
