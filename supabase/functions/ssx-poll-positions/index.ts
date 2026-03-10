@@ -1,13 +1,15 @@
 /**
  * ssx-poll-positions — Polls position history from SSX for active provider units.
  *
- * KEY FIXES (patch 5 — scout approach):
- * - URL order: unversioned FIRST (production-proven), then v3, then v2
- * - Property order: IntegrationCode FIRST (production-proven)
- * - Scout approach: first unit discovers combo, rest reuse it
- * - 200 OK with zero items is NOT memoized
- * - Spacing increased to 500ms default to reduce 429 risk
- * - POLL_MEMO_VERSION bumped to 6 to force rediscovery
+ * KEY DESIGN (patch 7 — per-unit discovery):
+ * - Scout approach is now a HINT only, not a hard truth for all units
+ * - If scout combo returns empty for a unit, per-unit rediscovery runs
+ * - Uses provider_units.metadata for richer identifier candidates
+ * - Per-unit memo stored in ingestion_cursors.poll_memo
+ * - Both EventDate and UpdateDate are actually tested
+ * - positions_last updated from best provider point even if all inserts are dupes
+ * - Manual run supports force_rediscovery + wider lookback
+ * - POLL_MEMO_VERSION = 7
  */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -27,12 +29,16 @@ import {
 interface PollingAttemptLog {
   url: string;
   property: string;
+  value: string;
   timeProp: string;
   format: string;
   statusCode: number;
   errorClass: string;
   itemCount: number;
 }
+
+const POLL_MEMO_VERSION = 7;
+const STALE_AFTER_MINUTES = 30;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -45,7 +51,6 @@ Deno.serve(async (req) => {
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
     let callerId: string | null = null;
-
     const cronSecret = req.headers.get("x-agvlog-cron-secret");
     const expectedCronSecret = Deno.env.get("AGVLOG_CRON_SECRET");
     const isCron = !!(cronSecret && expectedCronSecret && cronSecret === expectedCronSecret);
@@ -66,7 +71,14 @@ Deno.serve(async (req) => {
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    const { integration_account_id, provider_unit_ids } = await req.json();
+    const body = await req.json();
+    const {
+      integration_account_id,
+      provider_unit_ids,
+      manual_run = false,
+      force_rediscovery = false,
+      lookback_minutes,
+    } = body;
 
     if (!integration_account_id) {
       return jsonResp({ error: "integration_account_id required" }, 400);
@@ -94,14 +106,13 @@ Deno.serve(async (req) => {
       return jsonResp({ error: "Token expired. Run ssx-login first." }, 400);
     }
 
-    // Check account-level cooldown (set by previous 429)
+    // Check account-level cooldown
     const cooldownUntil = config.settings.poll_cooldown_until;
-    if (cooldownUntil && new Date(cooldownUntil) > new Date()) {
+    if (cooldownUntil && new Date(cooldownUntil) > new Date() && !manual_run) {
       const retryAfterSec = Math.ceil((new Date(cooldownUntil).getTime() - Date.now()) / 1000);
       return jsonResp({
         error: "Account in cooldown from previous rate limit",
         retry_after_seconds: retryAfterSec,
-        cooldown_until: cooldownUntil,
       }, 429);
     }
 
@@ -115,13 +126,10 @@ Deno.serve(async (req) => {
     }
     const { data: units, error: unitsErr } = await unitsQuery;
     if (unitsErr || !units?.length) {
-      return jsonResp({ error: "No active provider units found", details: unitsErr?.message }, 404);
+      return jsonResp({ error: "No active provider units found" }, 404);
     }
 
-    // Single-unit debug mode
     const isDebugMode = provider_unit_ids?.length === 1;
-
-    // Apply max_units_per_poll_run
     const maxUnits = config.settings.max_units_per_poll_run || units.length;
     const unitsToProcess = units.slice(0, maxUnits);
 
@@ -136,63 +144,20 @@ Deno.serve(async (req) => {
       unitToVehicle[link.provider_unit_id] = { vehicle_id: link.vehicle_id, tenant_id: link.tenant_id };
     }
 
-    // Build PositionHistory URL candidates: unversioned, v3, v2
+    // Build PositionHistory URL candidates
     const positionUrls = buildPositionHistoryUrlCandidates(config.baseUrl, config.apiVersion);
     const defaultPollWindow = config.pollWindowMinutes;
+    const initialPollWindowMinutes = lookback_minutes || config.settings.initial_poll_window_minutes || 10080;
 
-    // Load persisted working combination from account settings
-    let workingProperty: string | null = config.settings.poll_working_property || null;
-    let workingUrl: string | null = config.settings.poll_working_url || null;
-    let workingFormat: "array" | "wrapped" | null = config.settings.poll_working_format || null;
-    let workingTimeProp: string | null = config.settings.poll_working_time_prop || null;
+    // Time props to try
+    const timeProps = ["EventDate", "UpdateDate"];
 
-    // Track consecutive empty runs for stale memo invalidation
-    let memoEmptyCount: number = config.settings.poll_memo_empty_count ?? 0;
-    const STALE_MEMO_THRESHOLD = config.settings.poll_stale_memo_threshold ?? 2;
+    // Throttle settings
+    const requestSpacingMs = config.settings.request_spacing_ms ?? 400;
+    const discoverySpacingMs = config.settings.discovery_request_spacing_ms ?? 500;
 
-    // ===== Auto-reset memo from older code versions =====
-    const POLL_MEMO_VERSION = 6;
-    const needsMemoReset = config.settings.poll_memo_version !== POLL_MEMO_VERSION;
-    if (needsMemoReset) {
-      console.log(`[SSX:poll-positions] Resetting poll memo (version ${config.settings.poll_memo_version || "none"} → ${POLL_MEMO_VERSION})`);
-      workingProperty = null; workingUrl = null; workingFormat = null; workingTimeProp = null;
-      memoEmptyCount = 0;
-      const { data: resetAcc } = await supabase.from("integration_accounts").select("settings").eq("id", integration_account_id).single();
-      const resetSettings = resetAcc?.settings || {};
-      await supabase.from("integration_accounts").update({
-        settings: {
-          ...resetSettings,
-          poll_working_property: null, poll_working_url: null,
-          poll_working_format: null, poll_working_time_prop: null,
-          poll_memo_empty_count: 0, poll_memo_version: POLL_MEMO_VERSION,
-        },
-        updated_at: new Date().toISOString(),
-      }).eq("id", integration_account_id);
-    }
-
-    // ===== Filter property candidates — IntegrationCode FIRST =====
-    const filterPropertyCandidates = [
-      config.settings.filter_property,
-      "IntegrationCode",               // proven to work in production
-      "TrackedUnitIntegrationCode",
-      "TrackedUnit",
-      "TrackerIntegrationCode",
-    ].filter(Boolean) as string[];
-    const uniqueFilterProps = [...new Set(filterPropertyCandidates)];
-
-    // Time filter property candidates
-    const timeFilterCandidates = [
-      config.settings.time_filter_property,
-      "EventDate",
-      "UpdateDate",
-    ].filter(Boolean) as string[];
-    const uniqueTimeProps = [...new Set(timeFilterCandidates)];
-
-    // ===== Throttle settings — increased spacing =====
-    const requestSpacingMs = config.settings.request_spacing_ms ?? 300;
-    const discoverySpacingMs = config.settings.discovery_request_spacing_ms ?? 400;
-    const discoveryMaxAttempts = config.settings.discovery_max_attempts_per_unit ?? 6;
-    const initialPollWindowMinutes = config.settings.initial_poll_window_minutes ?? 10080; // 7 days
+    // Account-level scout hint (not a hard truth)
+    let scoutHint: { property: string; value_source: string; url: string; format: string; timeProp: string } | null = null;
 
     const results: any[] = [];
     let totalInserted = 0;
@@ -200,17 +165,11 @@ Deno.serve(async (req) => {
     const touchedVehicles: { tenant_id: string; vehicle_id: string; captured_at: string }[] = [];
     let batchAborted = false;
     let abortReason = "";
-    let memoProducedItems = false;
-
-    // ===== SCOUT APPROACH =====
-    // The first unit that needs discovery acts as the "scout".
-    // Once the scout finds a working combo, all remaining units reuse it.
-    let scoutCompleted = false;
 
     for (let unitIdx = 0; unitIdx < unitsToProcess.length; unitIdx++) {
+      if (batchAborted) break;
       const unit = unitsToProcess[unitIdx];
 
-      // Throttle between units (skip first)
       if (unitIdx > 0 && requestSpacingMs > 0) {
         await sleep(requestSpacingMs);
       }
@@ -226,441 +185,135 @@ Deno.serve(async (req) => {
         .from("ingestion_cursors").select("*")
         .eq("provider_unit_id", unit.id).eq("tenant_id", mapping.tenant_id).single();
 
-      // Check backoff
-      if (cursor?.backoff_until && new Date(cursor.backoff_until) > new Date()) {
+      // Check backoff (skip for manual runs)
+      if (!manual_run && cursor?.backoff_until && new Date(cursor.backoff_until) > new Date()) {
         results.push({ unit_code: unit.external_code, status: "skipped", reason: "In backoff period" });
         continue;
       }
 
       const now = new Date();
       const isFirstPoll = !cursor?.last_success_at;
-      const pollWindowMinutes = isFirstPoll ? initialPollWindowMinutes : defaultPollWindow;
+      const pollWindowMinutes = isFirstPoll ? initialPollWindowMinutes : (manual_run ? Math.max(defaultPollWindow, 1440) : defaultPollWindow);
 
-      // Derive time window
-      const timeStart = cursor?.last_success_at
+      const timeStart = cursor?.last_success_at && !force_rediscovery
         ? new Date(new Date(cursor.last_success_at).getTime() - 2 * 60_000).toISOString()
         : new Date(Date.now() - pollWindowMinutes * 60_000).toISOString();
 
-      const unitAttempts: PollingAttemptLog[] = [];
-      let resp: any = null;
-      let usedProperty = workingProperty;
-      let usedUrl = workingUrl;
-      let usedFormat = workingFormat;
-      let usedTimeProp = workingTimeProp || uniqueTimeProps[0];
-      let discoveryAttemptCount = 0;
-      let foundWithItems = false;
+      // ===== Build identifier candidates from unit metadata =====
+      const meta = (unit as any).metadata || {};
+      const identifierCandidates = buildIdentifierCandidates(unit.external_code, meta);
 
-      // === Try memoized combination first (only if not stale) ===
-      const memoIsStale = memoEmptyCount >= STALE_MEMO_THRESHOLD;
+      // ===== Load per-unit memo from cursor =====
+      const cursorMemo = (cursor?.poll_memo || {}) as Record<string, any>;
+      const memoValid = cursorMemo.memo_version === POLL_MEMO_VERSION && !force_rediscovery;
 
-      if (workingProperty && workingUrl && workingFormat && workingTimeProp && !memoIsStale) {
-        const filters = [
-          { PropertyName: workingProperty, Condition: "=", Value: unit.external_code },
-          { PropertyName: workingTimeProp, Condition: ">=", Value: timeStart },
-        ];
-        const body = workingFormat === "array" ? filters : { Filters: filters };
-        resp = await ssxPost(workingUrl, config.token, body, config.requestTimeoutMs);
-        discoveryAttemptCount++;
-
-        const memoItems = resp.ok ? extractResponseItems(resp.parsed) : [];
-
-        logSsxCall({
-          routine: "poll-positions", endpoint: workingUrl, method: "POST",
-          apiVersion: config.apiVersion,
-          attemptType: `memo:${workingProperty}:${workingFormat}:${workingTimeProp}`,
-          statusCode: resp.status, durationMs: resp.durationMs,
-          responsePreview: (resp.text || "").substring(0, 150),
-          result: memoItems.length > 0 ? "success" : (resp.ok ? "empty" : "error"),
-          errorClass: resp.ok ? (memoItems.length > 0 ? undefined : "empty_response" as SsxErrorClass) : resp.errorClass,
-        });
-
-        unitAttempts.push({
-          url: workingUrl, property: workingProperty, timeProp: workingTimeProp,
-          format: workingFormat, statusCode: resp.status,
-          errorClass: resp.ok ? (memoItems.length > 0 ? "success" : "empty_response") : resp.errorClass,
-          itemCount: memoItems.length,
-        });
-
-        // 429 early-stop
-        if (resp.errorClass === "rate_limited") {
-          batchAborted = true;
-          abortReason = "rate_limited";
-          await setAccountCooldown(supabase, integration_account_id, config, 120);
-          results.push({
-            unit_code: unit.external_code, status: "error", error_class: "rate_limited",
-            attempt_matrix: isDebugMode ? summarizePollingAttempts(unitAttempts) : undefined,
-          });
-          break;
-        }
-
-        if (resp.ok && memoItems.length > 0) {
-          foundWithItems = true;
-          memoProducedItems = true;
-        } else {
-          // Memo returned empty or failed — fall through to discovery
-          resp = null;
-        }
-      } else if (memoIsStale && workingProperty) {
-        console.log(`[SSX:poll-positions] Memo is stale (${memoEmptyCount} consecutive empty runs), forcing rediscovery`);
-        workingProperty = null; workingUrl = null; workingFormat = null; workingTimeProp = null;
-        // Clear stale memo from DB immediately
-        const { data: staleAcc } = await supabase.from("integration_accounts").select("settings").eq("id", integration_account_id).single();
-        const staleSettings = staleAcc?.settings || {};
-        await supabase.from("integration_accounts").update({
-          settings: {
-            ...staleSettings,
-            poll_working_property: null, poll_working_url: null,
-            poll_working_format: null, poll_working_time_prop: null,
-            poll_memo_empty_count: 0,
-          },
-          updated_at: new Date().toISOString(),
-        }).eq("id", integration_account_id);
-      }
-
-      // === Staged Discovery (only if no memo or memo failed) ===
-      // Scout: only the first unit does full discovery; rest skip if scout already found combo
-      if (!foundWithItems && !batchAborted) {
-        if (scoutCompleted && workingProperty && workingUrl && workingFormat && workingTimeProp) {
-          // Reuse scout combo directly — single request
-          const filters = [
-            { PropertyName: workingProperty, Condition: "=", Value: unit.external_code },
-            { PropertyName: workingTimeProp, Condition: ">=", Value: timeStart },
-          ];
-          const body = workingFormat === "array" ? filters : { Filters: filters };
-          resp = await ssxPost(workingUrl, config.token, body, config.requestTimeoutMs);
-          discoveryAttemptCount++;
-
-          const items = resp.ok ? extractResponseItems(resp.parsed) : [];
-          unitAttempts.push({
-            url: workingUrl, property: workingProperty, timeProp: workingTimeProp,
-            format: workingFormat, statusCode: resp.status,
-            errorClass: resp.ok ? (items.length > 0 ? "success" : "empty_response") : resp.errorClass,
-            itemCount: items.length,
-          });
-
-          if (resp.errorClass === "rate_limited") {
-            batchAborted = true; abortReason = "rate_limited";
-            await setAccountCooldown(supabase, integration_account_id, config, 120);
-          } else if (resp.ok && items.length > 0) {
-            foundWithItems = true;
-            memoProducedItems = true;
-          }
-          // If empty for this unit, that's ok — the combo still works, this unit just has no data
-          // Don't fall through to discovery for non-scout units
-          if (!foundWithItems && resp.ok) {
-            // Mark as "no data" — not an error, just no positions for this unit in window
-            usedProperty = workingProperty;
-            usedUrl = workingUrl;
-            usedFormat = workingFormat;
-            usedTimeProp = workingTimeProp;
-          }
-        } else {
-          // === SCOUT DISCOVERY — full staged discovery ===
-          const discoveryTimeProp = uniqueTimeProps[0] || "EventDate";
-
-          console.log(`[SSX:poll-positions] Scout discovery for unit ${unit.external_code} | URLs: ${positionUrls.join(", ")} | Props: ${uniqueFilterProps.join(", ")}`);
-
-          for (const prop of uniqueFilterProps) {
-            if (foundWithItems || batchAborted || discoveryAttemptCount >= discoveryMaxAttempts) break;
-
-            for (const url of positionUrls) {
-              if (foundWithItems || batchAborted || discoveryAttemptCount >= discoveryMaxAttempts) break;
-
-              if (discoveryAttemptCount > 0) await sleep(discoverySpacingMs);
-
-              const filters = [
-                { PropertyName: prop, Condition: "=", Value: unit.external_code },
-                { PropertyName: discoveryTimeProp, Condition: ">=", Value: timeStart },
-              ];
-
-              // Try array format first
-              resp = await ssxPost(url, config.token, filters, config.requestTimeoutMs);
-              discoveryAttemptCount++;
-              const items = resp.ok ? extractResponseItems(resp.parsed) : [];
-
-              logSsxCall({
-                routine: "poll-positions", endpoint: url, method: "POST",
-                apiVersion: config.apiVersion,
-                attemptType: `scout:${prop}:array:${discoveryTimeProp}`,
-                statusCode: resp.status, durationMs: resp.durationMs,
-                responsePreview: (resp.text || "").substring(0, 150),
-                result: items.length > 0 ? "success" : (resp.ok ? "empty" : "error"),
-                errorClass: resp.ok ? (items.length > 0 ? undefined : "empty_response" as SsxErrorClass) : resp.errorClass,
-              });
-
-              unitAttempts.push({
-                url, property: prop, timeProp: discoveryTimeProp, format: "array",
-                statusCode: resp.status,
-                errorClass: resp.ok ? (items.length > 0 ? "success" : "empty_response") : resp.errorClass,
-                itemCount: items.length,
-              });
-
-              if (resp.errorClass === "rate_limited") {
-                batchAborted = true; abortReason = "rate_limited";
-                await setAccountCooldown(supabase, integration_account_id, config, 120);
-                break;
-              }
-              if (resp.errorClass === "auth_error") {
-                batchAborted = true; abortReason = "auth_error"; break;
-              }
-
-              if (resp.ok && items.length > 0) {
-                usedProperty = prop; usedUrl = url; usedFormat = "array"; usedTimeProp = discoveryTimeProp;
-                foundWithItems = true;
-                // Scout found the combo — set it for all remaining units
-                workingProperty = prop; workingUrl = url; workingFormat = "array"; workingTimeProp = discoveryTimeProp;
-                scoutCompleted = true;
-                memoProducedItems = true;
-                console.log(`[SSX:poll-positions] Scout found working combo: ${prop} + ${url} + array + ${discoveryTimeProp} (${items.length} items)`);
-                break;
-              }
-
-              // If 400/415, try wrapped format
-              if (resp.errorClass === "body_incompatible" && discoveryAttemptCount < discoveryMaxAttempts) {
-                await sleep(discoverySpacingMs);
-                resp = await ssxPost(url, config.token, { Filters: filters }, config.requestTimeoutMs);
-                discoveryAttemptCount++;
-                const wrappedItems = resp.ok ? extractResponseItems(resp.parsed) : [];
-
-                unitAttempts.push({
-                  url, property: prop, timeProp: discoveryTimeProp, format: "wrapped",
-                  statusCode: resp.status,
-                  errorClass: resp.ok ? (wrappedItems.length > 0 ? "success" : "empty_response") : resp.errorClass,
-                  itemCount: wrappedItems.length,
-                });
-
-                if (resp.errorClass === "rate_limited") {
-                  batchAborted = true; abortReason = "rate_limited";
-                  await setAccountCooldown(supabase, integration_account_id, config, 120);
-                  break;
-                }
-
-                if (resp.ok && wrappedItems.length > 0) {
-                  usedProperty = prop; usedUrl = url; usedFormat = "wrapped"; usedTimeProp = discoveryTimeProp;
-                  foundWithItems = true;
-                  workingProperty = prop; workingUrl = url; workingFormat = "wrapped"; workingTimeProp = discoveryTimeProp;
-                  scoutCompleted = true;
-                  memoProducedItems = true;
-                  console.log(`[SSX:poll-positions] Scout found working combo: ${prop} + ${url} + wrapped + ${discoveryTimeProp} (${wrappedItems.length} items)`);
-                  break;
-                }
-              }
-
-              // 404 → skip to next URL
-              if (resp.errorClass === "route_not_found") continue;
-            }
-          }
-        }
-      }
-
-      if (batchAborted) {
-        results.push({
-          unit_code: unit.external_code, status: "error", error_class: abortReason,
-          attempts_made: discoveryAttemptCount,
-          attempt_matrix: isDebugMode ? summarizePollingAttempts(unitAttempts) : undefined,
-        });
-        break;
-      }
-
-      // No working combination found (all empty or errors)
-      if (!foundWithItems) {
-        // For non-scout units reusing a known combo, empty is expected (unit has no data)
-        if (scoutCompleted && resp?.ok) {
-          await upsertCursor(supabase, {
-            tenant_id: mapping.tenant_id, provider_unit_id: unit.id,
-            last_polled_at: now.toISOString(), last_error: null, backoff_until: null,
-          });
-          results.push({
-            unit_code: unit.external_code, status: "ok",
-            points_received: 0, inserted: 0, duplicates: 0,
-            note: "No positions in time window (combo valid from scout)",
-            attempts_made: discoveryAttemptCount,
-            attempt_matrix: isDebugMode ? summarizePollingAttempts(unitAttempts) : undefined,
-          });
-          continue;
-        }
-
-        const errMsg = resp?.networkError || "No combination returned positions";
-        const errClass: SsxErrorClass = resp?.errorClass || "empty_response";
-        await upsertCursor(supabase, {
-          tenant_id: mapping.tenant_id, provider_unit_id: unit.id,
-          last_polled_at: now.toISOString(), last_error_at: now.toISOString(),
-          last_error: errMsg, backoff_until: new Date(Date.now() + 60000).toISOString(),
-        });
-        await logIntegration(supabase, {
-          tenant_id: mapping.tenant_id, integration_account_id,
-          action: "ssx_poll_positions", endpoint: usedUrl || positionUrls[0],
-          status_code: resp?.status || 0, success: false,
-          error_message: errMsg,
-          duration_ms: resp?.durationMs,
-          metadata: {
-            unit_code: unit.external_code, error_class: errClass,
-            attempts_made: discoveryAttemptCount,
-            endpoint_candidates: positionUrls,
-            property_candidates: uniqueFilterProps,
-            time_property_candidates: uniqueTimeProps,
-            attempt_matrix: summarizePollingAttempts(unitAttempts),
-          },
-        });
-        results.push({
-          unit_code: unit.external_code, status: "error",
-          error: errMsg, error_class: errClass,
-          attempts_made: discoveryAttemptCount,
-          attempt_matrix: isDebugMode ? summarizePollingAttempts(unitAttempts) : undefined,
-        });
-        continue;
-      }
-
-      // === Process positions (foundWithItems === true, resp is valid) ===
-      const positions = extractResponseItems(resp.parsed);
-      let inserted = 0;
-      let duplicates = 0;
-      let normalized_count = 0;
-      let latestPoint: any = null;
-
-      for (const point of positions) {
-        const normalized = normalizePosition(point);
-        if (!normalized) continue;
-        normalized_count++;
-
-        const hashInput = `${unit.external_code}|${normalized.lat}|${normalized.lng}|${normalized.captured_at}`;
-        const hash = await computeHash(hashInput);
-
-        const { error: insertErr } = await supabase.from("positions_raw").insert({
-          tenant_id: mapping.tenant_id, vehicle_id: mapping.vehicle_id,
-          captured_at: normalized.captured_at, lat: normalized.lat, lng: normalized.lng,
-          speed: normalized.speed, heading: normalized.heading,
-          telemetry: normalized.telemetry, provider_payload_hash: hash,
-        });
-
-        if (insertErr) {
-          if (insertErr.code === "23505") duplicates++;
-          else console.error("[SSX:poll-positions] Insert error:", insertErr);
-        } else {
-          inserted++;
-          if (!latestPoint || new Date(normalized.captured_at) > new Date(latestPoint.captured_at)) {
-            latestPoint = normalized;
-          }
-        }
-      }
-
-      // Update positions_last
-      if (latestPoint) {
-        await supabase.from("positions_last").upsert({
-          tenant_id: mapping.tenant_id, vehicle_id: mapping.vehicle_id,
-          lat: latestPoint.lat, lng: latestPoint.lng,
-          speed: latestPoint.speed, heading: latestPoint.heading,
-          captured_at: latestPoint.captured_at, received_at: new Date().toISOString(),
-          telemetry_snapshot: latestPoint.telemetry || {},
-          source: { provider: "SSX", unit_code: unit.external_code },
-        }, { onConflict: "tenant_id,vehicle_id" });
-      }
-
-      // Update cursor — use provider timestamp for last_success_at
-      const cursorUpdate: any = {
-        tenant_id: mapping.tenant_id, provider_unit_id: unit.id,
-        last_polled_at: now.toISOString(), last_error: null, backoff_until: null,
-      };
-      if (inserted > 0) {
-        cursorUpdate.last_success_at = latestPoint?.captured_at || now.toISOString();
-      }
-      await upsertCursor(supabase, cursorUpdate);
-
-      // Memoize ONLY if we got items
-      workingProperty = usedProperty;
-      workingUrl = usedUrl;
-      workingFormat = usedFormat;
-      workingTimeProp = usedTimeProp;
-      memoProducedItems = true;
-      if (!scoutCompleted) scoutCompleted = true;
-
-      await logIntegration(supabase, {
-        tenant_id: mapping.tenant_id, integration_account_id,
-        action: "ssx_poll_positions", endpoint: usedUrl || positionUrls[0],
-        status_code: 200, success: true, duration_ms: resp.durationMs,
-        metadata: {
-          unit_code: unit.external_code,
-          points_received: positions.length,
-          points_normalized: normalized_count,
-          inserted, duplicates,
-          filter_property: usedProperty,
-          time_filter_property: usedTimeProp,
-          body_format: usedFormat,
-          time_window_start: timeStart,
-          endpoint_used: usedUrl,
-          attempts_made: discoveryAttemptCount,
-          is_scout: unitIdx === 0 || !scoutCompleted,
-          memoized: true,
-          attempt_matrix: summarizePollingAttempts(unitAttempts),
-        },
+      let unitResult = await pollSingleUnit({
+        unit, mapping, identifierCandidates, timeProps, positionUrls,
+        config, supabase, timeStart, now,
+        cursorMemo: memoValid ? cursorMemo : null,
+        scoutHint: force_rediscovery ? null : scoutHint,
+        isDebugMode, discoverySpacingMs, manual_run,
+        integration_account_id,
       });
 
-      totalInserted += inserted;
-      totalDuplicates += duplicates;
+      // Handle 429 abort
+      if (unitResult.abortBatch) {
+        batchAborted = true;
+        abortReason = unitResult.abortReason || "rate_limited";
+        await setAccountCooldown(supabase, integration_account_id, config, 120);
+      }
 
-      if (inserted > 0 && mapping) {
+      // Update scout hint from first successful unit
+      if (unitResult.workingCombo && !scoutHint) {
+        scoutHint = unitResult.workingCombo;
+      }
+
+      // Save per-unit memo to cursor
+      if (unitResult.workingCombo) {
+        const newMemo = {
+          memo_version: POLL_MEMO_VERSION,
+          poll_working_property: unitResult.workingCombo.property,
+          poll_working_value_source: unitResult.workingCombo.value_source,
+          poll_working_url: unitResult.workingCombo.url,
+          poll_working_format: unitResult.workingCombo.format,
+          poll_working_time_prop: unitResult.workingCombo.timeProp,
+          last_success_run: now.toISOString(),
+        };
+        await upsertCursor(supabase, {
+          tenant_id: mapping.tenant_id, provider_unit_id: unit.id,
+          last_polled_at: now.toISOString(),
+          last_error: null, backoff_until: null,
+          last_success_at: unitResult.latestCapturedAt || cursor?.last_success_at || null,
+          poll_memo: newMemo,
+        });
+      } else {
+        // No working combo — save error state
+        await upsertCursor(supabase, {
+          tenant_id: mapping.tenant_id, provider_unit_id: unit.id,
+          last_polled_at: now.toISOString(),
+          last_error_at: unitResult.positions_found ? null : now.toISOString(),
+          last_error: unitResult.positions_found ? null : (unitResult.error || "No combination returned positions"),
+          backoff_until: unitResult.positions_found ? null : new Date(Date.now() + 60000).toISOString(),
+        });
+      }
+
+      // Update positions_last from best provider point (even if all inserts are dupes)
+      if (unitResult.latestNormalized) {
+        const ln = unitResult.latestNormalized;
+        // Check if this is newer than current positions_last
+        const { data: currentLast } = await supabase
+          .from("positions_last").select("captured_at")
+          .eq("tenant_id", mapping.tenant_id).eq("vehicle_id", mapping.vehicle_id).single();
+
+        const shouldUpdate = !currentLast || new Date(ln.captured_at) > new Date(currentLast.captured_at);
+        if (shouldUpdate) {
+          const staleMinutes = (Date.now() - new Date(ln.captured_at).getTime()) / 60000;
+          await supabase.from("positions_last").upsert({
+            tenant_id: mapping.tenant_id, vehicle_id: mapping.vehicle_id,
+            lat: ln.lat, lng: ln.lng,
+            speed: ln.speed, heading: ln.heading,
+            captured_at: ln.captured_at, received_at: new Date().toISOString(),
+            telemetry_snapshot: ln.telemetry || {},
+            source: {
+              provider: "SSX", unit_code: unit.external_code,
+              stale: staleMinutes > STALE_AFTER_MINUTES,
+              combo_source: unitResult.comboSource,
+            },
+          }, { onConflict: "tenant_id,vehicle_id" });
+        }
+      }
+
+      totalInserted += unitResult.inserted;
+      totalDuplicates += unitResult.duplicates;
+
+      if (unitResult.inserted > 0) {
         touchedVehicles.push({
           tenant_id: mapping.tenant_id, vehicle_id: mapping.vehicle_id,
-          captured_at: latestPoint?.captured_at || new Date().toISOString(),
+          captured_at: unitResult.latestCapturedAt || now.toISOString(),
         });
       }
 
       results.push({
-        unit_code: unit.external_code, status: "ok",
-        points_received: positions.length, points_normalized: normalized_count,
-        inserted, duplicates,
-        filter_property: usedProperty, time_filter_property: usedTimeProp,
-        body_format: usedFormat,
-        attempts_made: discoveryAttemptCount,
-        is_scout: !scoutCompleted,
-        attempt_matrix: isDebugMode ? summarizePollingAttempts(unitAttempts) : undefined,
+        unit_code: unit.external_code,
+        status: unitResult.positions_found ? "ok" : (unitResult.abortBatch ? "error" : "no_data"),
+        positions_found: unitResult.positions_found,
+        inserted: unitResult.inserted,
+        duplicates: unitResult.duplicates,
+        latest_position_at: unitResult.latestCapturedAt,
+        stale_position: unitResult.latestCapturedAt
+          ? (Date.now() - new Date(unitResult.latestCapturedAt).getTime()) > STALE_AFTER_MINUTES * 60000
+          : null,
+        offline_by_age: unitResult.latestCapturedAt
+          ? (Date.now() - new Date(unitResult.latestCapturedAt).getTime()) > 10 * 60000
+          : null,
+        combo_source: unitResult.comboSource,
+        identifier_property_used: unitResult.workingCombo?.property,
+        identifier_value_used: unitResult.workingCombo?.value_source,
+        time_property_used: unitResult.workingCombo?.timeProp,
+        endpoint_used: unitResult.workingCombo?.url,
+        attempts_made: unitResult.attemptCount,
+        attempt_matrix: isDebugMode ? unitResult.attemptMatrix : undefined,
       });
-    }
-
-    // Persist working combination ONLY if it produced items this run
-    if (memoProducedItems && workingProperty && workingUrl && workingFormat && workingTimeProp) {
-      const { data: currentAccount } = await supabase
-        .from("integration_accounts").select("settings").eq("id", integration_account_id).single();
-      const currentSettings = currentAccount?.settings || {};
-      const needsUpdate =
-        currentSettings.poll_working_property !== workingProperty ||
-        currentSettings.poll_working_url !== workingUrl ||
-        currentSettings.poll_working_format !== workingFormat ||
-        currentSettings.poll_working_time_prop !== workingTimeProp ||
-        (currentSettings.poll_memo_empty_count || 0) !== 0;
-      if (needsUpdate) {
-        await supabase.from("integration_accounts").update({
-          settings: {
-            ...currentSettings,
-            poll_working_property: workingProperty,
-            poll_working_url: workingUrl,
-            poll_working_format: workingFormat,
-            poll_working_time_prop: workingTimeProp,
-            poll_memo_empty_count: 0,
-            poll_memo_version: POLL_MEMO_VERSION,
-          },
-          updated_at: new Date().toISOString(),
-        }).eq("id", integration_account_id);
-        console.log(`[SSX:poll-positions] Persisted working combo: ${workingProperty} + ${workingUrl} + ${workingFormat} + ${workingTimeProp}`);
-      }
-    } else if (!memoProducedItems && !batchAborted && workingProperty) {
-      // Memo existed but produced no items this run — increment stale counter
-      const { data: currentAccount } = await supabase
-        .from("integration_accounts").select("settings").eq("id", integration_account_id).single();
-      const currentSettings = currentAccount?.settings || {};
-      const newCount = (currentSettings.poll_memo_empty_count || 0) + 1;
-      const updates: Record<string, any> = {
-        settings: { ...currentSettings, poll_memo_empty_count: newCount },
-        updated_at: new Date().toISOString(),
-      };
-      if (newCount >= STALE_MEMO_THRESHOLD) {
-        updates.settings.poll_working_property = null;
-        updates.settings.poll_working_url = null;
-        updates.settings.poll_working_format = null;
-        updates.settings.poll_working_time_prop = null;
-        console.log(`[SSX:poll-positions] Cleared stale memo after ${newCount} consecutive empty runs`);
-      }
-      await supabase.from("integration_accounts").update(updates).eq("id", integration_account_id);
     }
 
     // Enqueue touched vehicles
@@ -674,18 +327,12 @@ Deno.serve(async (req) => {
 
     return jsonResp({
       success: !batchAborted, total_units: unitsToProcess.length,
-      total_units_available: units.length,
       total_inserted: totalInserted, total_duplicates: totalDuplicates,
       touched_vehicles: touchedVehicles.length,
-      working_filter_property: workingProperty,
-      working_time_property: workingTimeProp,
-      working_endpoint: workingUrl,
-      working_format: workingFormat,
-      scout_completed: scoutCompleted,
+      scout_hint: scoutHint ? `${scoutHint.property}:${scoutHint.value_source}@${scoutHint.url}` : null,
       batch_aborted: batchAborted,
       abort_reason: abortReason || null,
-      endpoint_candidates: positionUrls,
-      initial_poll_window_minutes: initialPollWindowMinutes,
+      manual_run, force_rediscovery,
       results,
     });
   } catch (err: any) {
@@ -693,6 +340,296 @@ Deno.serve(async (req) => {
     return jsonResp({ error: "Internal error", details: err.message }, 500);
   }
 });
+
+// ==================== Identifier Candidates Builder ====================
+
+interface IdentifierCandidate {
+  property: string;
+  value: string;
+  value_source: string;
+}
+
+function buildIdentifierCandidates(externalCode: string, meta: Record<string, any>): IdentifierCandidate[] {
+  const candidates: IdentifierCandidate[] = [];
+  const seen = new Set<string>();
+  const add = (property: string, value: string | null | undefined, source: string) => {
+    if (!value || typeof value !== "string" || !value.trim()) return;
+    const key = `${property}:${value.trim()}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    candidates.push({ property, value: value.trim(), value_source: source });
+  };
+
+  // Priority order based on production evidence
+  add("IntegrationCode", meta.integration_code, "metadata.integration_code");
+  add("IntegrationCode", externalCode, "external_code");
+  add("TrackedUnitIntegrationCode", meta.tracked_unit_integration_code, "metadata.tracked_unit_integration_code");
+  add("TrackedUnitIntegrationCode", externalCode, "external_code");
+  add("TrackedUnit", meta.tracked_unit, "metadata.tracked_unit");
+  add("TrackerIntegrationCode", meta.tracker_integration_code, "metadata.tracker_integration_code");
+
+  return candidates;
+}
+
+// ==================== Per-Unit Polling ====================
+
+interface PollUnitResult {
+  positions_found: boolean;
+  inserted: number;
+  duplicates: number;
+  latestCapturedAt: string | null;
+  latestNormalized: any | null;
+  workingCombo: { property: string; value_source: string; url: string; format: string; timeProp: string } | null;
+  comboSource: string;
+  abortBatch: boolean;
+  abortReason?: string;
+  error?: string;
+  attemptCount: number;
+  attemptMatrix: string[];
+}
+
+async function pollSingleUnit(params: {
+  unit: any;
+  mapping: { vehicle_id: string; tenant_id: string };
+  identifierCandidates: IdentifierCandidate[];
+  timeProps: string[];
+  positionUrls: string[];
+  config: any;
+  supabase: any;
+  timeStart: string;
+  now: Date;
+  cursorMemo: Record<string, any> | null;
+  scoutHint: { property: string; value_source: string; url: string; format: string; timeProp: string } | null;
+  isDebugMode: boolean;
+  discoverySpacingMs: number;
+  manual_run: boolean;
+  integration_account_id: string;
+}): Promise<PollUnitResult> {
+  const { unit, mapping, identifierCandidates, timeProps, positionUrls, config, supabase,
+    timeStart, now, cursorMemo, scoutHint, isDebugMode, discoverySpacingMs, manual_run, integration_account_id } = params;
+
+  const attempts: PollingAttemptLog[] = [];
+  let attemptCount = 0;
+  const MAX_ATTEMPTS = isDebugMode ? 24 : 8;
+
+  // Helper to try a specific combo
+  async function tryCombo(
+    property: string, value: string, valueSource: string,
+    url: string, format: "array" | "wrapped", timeProp: string,
+    type: string,
+  ): Promise<{ items: any[]; resp: any; abort: boolean; abortReason?: string } | null> {
+    if (attemptCount >= MAX_ATTEMPTS) return null;
+    if (attemptCount > 0) await sleep(discoverySpacingMs);
+
+    const filters = [
+      { PropertyName: property, Condition: "=", Value: value },
+      { PropertyName: timeProp, Condition: ">=", Value: timeStart },
+    ];
+    const body = format === "array" ? filters : { Filters: filters };
+    const resp = await ssxPost(url, config.token, body, config.requestTimeoutMs);
+    attemptCount++;
+
+    const items = resp.ok ? extractResponseItems(resp.parsed) : [];
+
+    logSsxCall({
+      routine: "poll-positions", endpoint: url, method: "POST",
+      apiVersion: config.apiVersion,
+      attemptType: `${type}:${property}:${format}:${timeProp}`,
+      statusCode: resp.status, durationMs: resp.durationMs,
+      responsePreview: (resp.text || "").substring(0, 150),
+      result: items.length > 0 ? "success" : (resp.ok ? "empty" : "error"),
+      errorClass: resp.ok ? (items.length > 0 ? undefined : "empty_response" as SsxErrorClass) : resp.errorClass,
+    });
+
+    attempts.push({
+      url, property, value, timeProp, format,
+      statusCode: resp.status,
+      errorClass: resp.ok ? (items.length > 0 ? "success" : "empty_response") : resp.errorClass,
+      itemCount: items.length,
+    });
+
+    if (resp.errorClass === "rate_limited") {
+      return { items: [], resp, abort: true, abortReason: "rate_limited" };
+    }
+    if (resp.errorClass === "auth_error") {
+      return { items: [], resp, abort: true, abortReason: "auth_error" };
+    }
+
+    return { items, resp, abort: false };
+  }
+
+  // ===== STAGE 1: Try per-unit memo =====
+  if (cursorMemo) {
+    const memoProp = cursorMemo.poll_working_property;
+    const memoValueSource = cursorMemo.poll_working_value_source;
+    const memoUrl = cursorMemo.poll_working_url;
+    const memoFormat = cursorMemo.poll_working_format;
+    const memoTimeProp = cursorMemo.poll_working_time_prop;
+
+    if (memoProp && memoUrl && memoFormat && memoTimeProp) {
+      // Find the value for the memoized property/source
+      const memoCandidate = identifierCandidates.find(
+        c => c.property === memoProp && c.value_source === memoValueSource
+      ) || identifierCandidates.find(c => c.property === memoProp);
+
+      if (memoCandidate) {
+        const r = await tryCombo(memoProp, memoCandidate.value, memoCandidate.value_source, memoUrl, memoFormat, memoTimeProp, "unit_memo");
+        if (r?.abort) return buildAbortResult(r.abortReason!, attempts, attemptCount);
+        if (r && r.items.length > 0) {
+          return await processPositions(r.items, r.resp, unit, mapping, supabase, config,
+            { property: memoProp, value_source: memoCandidate.value_source, url: memoUrl, format: memoFormat, timeProp: memoTimeProp },
+            "unit_memo", attempts, attemptCount, integration_account_id);
+        }
+      }
+    }
+  }
+
+  // ===== STAGE 2: Try scout hint (from another unit's success this batch) =====
+  if (scoutHint) {
+    const hintCandidate = identifierCandidates.find(c => c.property === scoutHint.property)
+      || identifierCandidates[0];
+    if (hintCandidate) {
+      const r = await tryCombo(scoutHint.property, hintCandidate.value, hintCandidate.value_source,
+        scoutHint.url, scoutHint.format as any, scoutHint.timeProp, "scout_hint");
+      if (r?.abort) return buildAbortResult(r.abortReason!, attempts, attemptCount);
+      if (r && r.items.length > 0) {
+        return await processPositions(r.items, r.resp, unit, mapping, supabase, config,
+          { property: scoutHint.property, value_source: hintCandidate.value_source, url: scoutHint.url, format: scoutHint.format, timeProp: scoutHint.timeProp },
+          "scout_hint", attempts, attemptCount, integration_account_id);
+      }
+      // Scout hint returned empty for this unit — fall through to per-unit discovery
+    }
+  }
+
+  // ===== STAGE 3: Per-unit staged discovery =====
+  // Try each identifier candidate × URL × time property
+  for (const candidate of identifierCandidates) {
+    if (attemptCount >= MAX_ATTEMPTS) break;
+
+    for (const url of positionUrls) {
+      if (attemptCount >= MAX_ATTEMPTS) break;
+
+      for (const timeProp of timeProps) {
+        if (attemptCount >= MAX_ATTEMPTS) break;
+
+        // Try array format first
+        const r = await tryCombo(candidate.property, candidate.value, candidate.value_source, url, "array", timeProp, "discovery");
+        if (r?.abort) return buildAbortResult(r.abortReason!, attempts, attemptCount);
+        if (r && r.items.length > 0) {
+          return await processPositions(r.items, r.resp, unit, mapping, supabase, config,
+            { property: candidate.property, value_source: candidate.value_source, url, format: "array", timeProp },
+            "unit_rediscovery", attempts, attemptCount, integration_account_id);
+        }
+
+        // If 400/415, try wrapped
+        if (r?.resp?.errorClass === "body_incompatible") {
+          const rw = await tryCombo(candidate.property, candidate.value, candidate.value_source, url, "wrapped", timeProp, "discovery_wrapped");
+          if (rw?.abort) return buildAbortResult(rw.abortReason!, attempts, attemptCount);
+          if (rw && rw.items.length > 0) {
+            return await processPositions(rw.items, rw.resp, unit, mapping, supabase, config,
+              { property: candidate.property, value_source: candidate.value_source, url, format: "wrapped", timeProp },
+              "unit_rediscovery", attempts, attemptCount, integration_account_id);
+          }
+        }
+
+        // 404 → skip to next URL
+        if (r?.resp?.errorClass === "route_not_found") break;
+      }
+    }
+  }
+
+  // All combos exhausted — no data for this unit
+  return {
+    positions_found: false, inserted: 0, duplicates: 0,
+    latestCapturedAt: null, latestNormalized: null,
+    workingCombo: null, comboSource: "none",
+    abortBatch: false, error: "No combination returned positions",
+    attemptCount,
+    attemptMatrix: summarizePollingAttemptsV2(attempts),
+  };
+}
+
+// ==================== Process Positions ====================
+
+async function processPositions(
+  positions: any[], resp: any, unit: any,
+  mapping: { vehicle_id: string; tenant_id: string },
+  supabase: any, config: any,
+  combo: { property: string; value_source: string; url: string; format: string; timeProp: string },
+  comboSource: string,
+  attempts: PollingAttemptLog[], attemptCount: number,
+  integration_account_id: string,
+): Promise<PollUnitResult> {
+  let inserted = 0;
+  let duplicates = 0;
+  let latestNormalized: any = null;
+
+  for (const point of positions) {
+    const normalized = normalizePosition(point);
+    if (!normalized) continue;
+
+    // Track latest from provider response (not just new inserts)
+    if (!latestNormalized || new Date(normalized.captured_at) > new Date(latestNormalized.captured_at)) {
+      latestNormalized = normalized;
+    }
+
+    const hashInput = `${unit.external_code}|${normalized.lat}|${normalized.lng}|${normalized.captured_at}`;
+    const hash = await computeHash(hashInput);
+
+    const { error: insertErr } = await supabase.from("positions_raw").insert({
+      tenant_id: mapping.tenant_id, vehicle_id: mapping.vehicle_id,
+      captured_at: normalized.captured_at, lat: normalized.lat, lng: normalized.lng,
+      speed: normalized.speed, heading: normalized.heading,
+      telemetry: normalized.telemetry, provider_payload_hash: hash,
+    });
+
+    if (insertErr) {
+      if (insertErr.code === "23505") duplicates++;
+      else console.error("[SSX:poll-positions] Insert error:", insertErr);
+    } else {
+      inserted++;
+    }
+  }
+
+  await logIntegration(supabase, {
+    tenant_id: mapping.tenant_id, integration_account_id,
+    action: "ssx_poll_positions", endpoint: combo.url,
+    status_code: 200, success: true, duration_ms: resp.durationMs,
+    metadata: {
+      unit_code: unit.external_code,
+      points_received: positions.length,
+      inserted, duplicates,
+      filter_property: combo.property,
+      value_source: combo.value_source,
+      time_filter_property: combo.timeProp,
+      body_format: combo.format,
+      combo_source: comboSource,
+    },
+  });
+
+  return {
+    positions_found: true,
+    inserted, duplicates,
+    latestCapturedAt: latestNormalized?.captured_at || null,
+    latestNormalized,
+    workingCombo: combo,
+    comboSource,
+    abortBatch: false,
+    attemptCount,
+    attemptMatrix: summarizePollingAttemptsV2(attempts),
+  };
+}
+
+function buildAbortResult(reason: string, attempts: PollingAttemptLog[], attemptCount: number): PollUnitResult {
+  return {
+    positions_found: false, inserted: 0, duplicates: 0,
+    latestCapturedAt: null, latestNormalized: null,
+    workingCombo: null, comboSource: "none",
+    abortBatch: true, abortReason: reason,
+    attemptCount,
+    attemptMatrix: summarizePollingAttemptsV2(attempts),
+  };
+}
 
 // ==================== Position Normalizer ====================
 
@@ -748,6 +685,12 @@ function normalizePosition(point: any): {
 
 // ==================== Helpers ====================
 
+function summarizePollingAttemptsV2(attempts: PollingAttemptLog[]): string[] {
+  return attempts.map(a =>
+    `POST ${a.url} [${a.property}=${a.value}|${a.timeProp}|${a.format}] => ${a.statusCode} ${a.errorClass}${a.itemCount > 0 ? ` items=${a.itemCount}` : ""}`
+  );
+}
+
 async function computeHash(input: string): Promise<string> {
   const data = new TextEncoder().encode(input);
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
@@ -768,7 +711,6 @@ async function setAccountCooldown(supabase: any, accountId: string, config: any,
     last_error: "Rate limited by SSX (429)",
     updated_at: new Date().toISOString(),
   }).eq("id", accountId);
-  console.log(`[SSX:poll-positions] Set account cooldown until ${cooldownUntil}`);
 }
 
 function sleep(ms: number): Promise<void> {

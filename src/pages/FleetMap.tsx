@@ -6,14 +6,13 @@ import 'leaflet/dist/leaflet.css';
 import { useFleetPositions, PositionLast } from '@/hooks/usePositions';
 import { useVehicles, Vehicle } from '@/hooks/useVehicles';
 import { useTenant } from '@/hooks/useTenant';
-import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Truck, Search, MapPin, Clock, Gauge, RefreshCw, Eye, Radio } from 'lucide-react';
+import { Search, MapPin, Clock, Gauge, RefreshCw, Eye, Radio } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useIsAdmin } from '@/hooks/useTenant';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ptBR } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
 
@@ -25,8 +24,62 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
 });
 
-function createVehicleIcon(isOnline: boolean, isMoving: boolean) {
-  const color = !isOnline ? '#94a3b8' : isMoving ? '#22c55e' : '#f59e0b';
+const ONLINE_THRESHOLD_MS = 10 * 60 * 1000;   // 10 min
+const STALE_THRESHOLD_MS = 30 * 60 * 1000;    // 30 min
+
+type VehicleStatus = 'moving' | 'stopped' | 'offline' | 'stale' | 'no_position';
+
+function getVehicleStatus(capturedAt: string | null, speed: number | null): VehicleStatus {
+  if (!capturedAt) return 'no_position';
+  const age = Date.now() - new Date(capturedAt).getTime();
+  if (age > STALE_THRESHOLD_MS) return 'stale';
+  if (age > ONLINE_THRESHOLD_MS) return 'offline';
+  return speed != null && speed > 2 ? 'moving' : 'stopped';
+}
+
+function statusColor(status: VehicleStatus): string {
+  switch (status) {
+    case 'moving': return '#22c55e';
+    case 'stopped': return '#f59e0b';
+    case 'offline': return '#94a3b8';
+    case 'stale': return '#64748b';
+    case 'no_position': return '#cbd5e1';
+  }
+}
+
+function statusLabel(status: VehicleStatus): string {
+  switch (status) {
+    case 'moving': return 'Movendo';
+    case 'stopped': return 'Parado';
+    case 'offline': return 'Offline';
+    case 'stale': return 'Posição antiga';
+    case 'no_position': return 'Sem posição';
+  }
+}
+
+function statusBadgeClasses(status: VehicleStatus): string {
+  switch (status) {
+    case 'moving': return 'bg-success/10 text-success border-success/30';
+    case 'stopped': return 'bg-warning/10 text-warning border-warning/30';
+    case 'offline': return 'bg-muted text-muted-foreground';
+    case 'stale': return 'bg-destructive/10 text-destructive border-destructive/30';
+    case 'no_position': return 'bg-muted/50 text-muted-foreground/50';
+  }
+}
+
+function statusDotClass(status: VehicleStatus): string {
+  switch (status) {
+    case 'moving': return 'bg-success';
+    case 'stopped': return 'bg-warning';
+    case 'offline': return 'bg-muted-foreground';
+    case 'stale': return 'bg-destructive/60';
+    case 'no_position': return 'bg-muted-foreground/30';
+  }
+}
+
+function createVehicleIcon(status: VehicleStatus) {
+  const color = statusColor(status);
+  const opacity = status === 'stale' || status === 'no_position' ? '0.6' : '1';
   return L.divIcon({
     className: 'custom-vehicle-marker',
     html: `<div style="
@@ -34,18 +87,11 @@ function createVehicleIcon(isOnline: boolean, isMoving: boolean) {
       background: ${color}; border: 3px solid white;
       box-shadow: 0 2px 8px rgba(0,0,0,0.3);
       display: flex; align-items: center; justify-content: center;
+      opacity: ${opacity};
     "><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg></div>`,
     iconSize: [32, 32],
     iconAnchor: [16, 16],
   });
-}
-
-function isVehicleOnline(capturedAt: string): boolean {
-  return Date.now() - new Date(capturedAt).getTime() < 10 * 60 * 1000; // 10min
-}
-
-function isVehicleMoving(speed: number | null): boolean {
-  return speed != null && speed > 2;
 }
 
 function FitBounds({ positions }: { positions: PositionLast[] }) {
@@ -58,16 +104,23 @@ function FitBounds({ positions }: { positions: PositionLast[] }) {
   return null;
 }
 
+function ageDescription(capturedAt: string): string {
+  const age = Date.now() - new Date(capturedAt).getTime();
+  if (age > 24 * 60 * 60 * 1000) return 'Última posição antiga';
+  if (age > STALE_THRESHOLD_MS) return 'Sem atualização recente';
+  return formatDistanceToNow(new Date(capturedAt), { addSuffix: true, locale: ptBR });
+}
+
 export default function FleetMap() {
   const { currentTenant } = useTenant();
   const { data: positions = [], isLoading: posLoading, refetch } = useFleetPositions();
   const { data: vehicles = [] } = useVehicles();
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'online' | 'offline' | 'moving' | 'stopped'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'online' | 'offline' | 'stale' | 'no_position'>('all');
   const navigate = useNavigate();
   const isAdmin = useIsAdmin();
+  const queryClient = useQueryClient();
 
-  // Get integration accounts for SSX polling
   const { data: accounts = [] } = useQuery({
     queryKey: ['integration_accounts_brief', currentTenant?.id],
     queryFn: async () => {
@@ -82,11 +135,23 @@ export default function FleetMap() {
     mutationFn: async () => {
       for (const acc of accounts) {
         await supabase.functions.invoke('agvlog-pipeline-run', {
-          body: { tenant_id: currentTenant?.id, integration_account_id: acc.id },
+          body: {
+            tenant_id: currentTenant?.id,
+            integration_account_id: acc.id,
+            manual_run: true,
+            force_rediscovery: true,
+            lookback_minutes: 43200, // 30 days
+          },
         });
       }
     },
-    onSuccess: () => { refetch(); },
+    onSuccess: () => {
+      // Invalidate all relevant queries for fresh data
+      queryClient.invalidateQueries({ queryKey: ['positions_last'] });
+      queryClient.invalidateQueries({ queryKey: ['vehicles'] });
+      queryClient.invalidateQueries({ queryKey: ['provider_units'] });
+      refetch();
+    },
   });
 
   const vehicleMap = useMemo(() => {
@@ -99,8 +164,7 @@ export default function FleetMap() {
     return positions.map(p => ({
       ...p,
       vehicle: vehicleMap[p.vehicle_id],
-      online: isVehicleOnline(p.captured_at),
-      moving: isVehicleMoving(p.speed),
+      status: getVehicleStatus(p.captured_at, p.speed),
     }));
   }, [positions, vehicleMap]);
 
@@ -110,26 +174,39 @@ export default function FleetMap() {
       if (!v) return false;
       const q = search.toLowerCase();
       if (q && !v.plate.toLowerCase().includes(q) && !(v.nickname || '').toLowerCase().includes(q)) return false;
-      if (statusFilter === 'online' && !p.online) return false;
-      if (statusFilter === 'offline' && p.online) return false;
-      if (statusFilter === 'moving' && !p.moving) return false;
-      if (statusFilter === 'stopped' && p.moving) return false;
+      if (statusFilter === 'online' && p.status !== 'moving' && p.status !== 'stopped') return false;
+      if (statusFilter === 'offline' && p.status !== 'offline' && p.status !== 'stale') return false;
+      if (statusFilter === 'stale' && p.status !== 'stale') return false;
       return true;
     });
   }, [enriched, search, statusFilter]);
 
-  // Vehicles without positions
   const vehiclesWithoutPosition = useMemo(() => {
     const withPos = new Set(positions.map(p => p.vehicle_id));
     return vehicles.filter(v => !withPos.has(v.id));
   }, [vehicles, positions]);
 
-  const stats = useMemo(() => ({
-    total: vehicles.length,
-    online: enriched.filter(p => p.online).length,
-    moving: enriched.filter(p => p.moving).length,
-    offline: vehicles.length - enriched.filter(p => p.online).length,
-  }), [vehicles, enriched]);
+  const filteredNoPos = useMemo(() => {
+    if (statusFilter !== 'all' && statusFilter !== 'no_position') return [];
+    const q = search.toLowerCase();
+    return vehiclesWithoutPosition.filter(v => {
+      if (!q) return true;
+      return v.plate.toLowerCase().includes(q) || (v.nickname || '').toLowerCase().includes(q);
+    });
+  }, [vehiclesWithoutPosition, search, statusFilter]);
+
+  const stats = useMemo(() => {
+    const online = enriched.filter(p => p.status === 'moving' || p.status === 'stopped').length;
+    const stale = enriched.filter(p => p.status === 'stale').length;
+    const offline = enriched.filter(p => p.status === 'offline').length + stale;
+    return {
+      total: vehicles.length,
+      online,
+      offline,
+      stale,
+      noPos: vehiclesWithoutPosition.length,
+    };
+  }, [vehicles, enriched, vehiclesWithoutPosition]);
 
   return (
     <div className="animate-fade-in flex h-[calc(100vh-3rem)] -m-6">
@@ -151,13 +228,13 @@ export default function FleetMap() {
               <div className="font-bold text-sm text-success">{stats.online}</div>
               <div>Online</div>
             </button>
-            <button onClick={() => setStatusFilter('moving')} className={`rounded-md p-1.5 text-xs transition-colors ${statusFilter === 'moving' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
-              <div className="font-bold text-sm text-success">{stats.moving}</div>
-              <div>Mov.</div>
-            </button>
             <button onClick={() => setStatusFilter('offline')} className={`rounded-md p-1.5 text-xs transition-colors ${statusFilter === 'offline' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
               <div className="font-bold text-sm text-destructive">{stats.offline}</div>
               <div>Offline</div>
+            </button>
+            <button onClick={() => setStatusFilter('no_position')} className={`rounded-md p-1.5 text-xs transition-colors ${statusFilter === 'no_position' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
+              <div className="font-bold text-sm text-muted-foreground">{stats.noPos}</div>
+              <div>S/ pos.</div>
             </button>
           </div>
 
@@ -185,9 +262,9 @@ export default function FleetMap() {
         <div className="flex-1 overflow-y-auto">
           {posLoading ? (
             <div className="p-4 text-sm text-muted-foreground">Carregando posições...</div>
-          ) : filtered.length === 0 && vehiclesWithoutPosition.length === 0 ? (
+          ) : filtered.length === 0 && filteredNoPos.length === 0 ? (
             <div className="p-4 text-sm text-muted-foreground">
-              Nenhum veículo com posição registrada.
+              Nenhum veículo encontrado.
               {vehicles.length === 0 && ' Cadastre veículos e vincule rastreadores.'}
             </div>
           ) : (
@@ -196,43 +273,45 @@ export default function FleetMap() {
                 <button
                   key={p.vehicle_id}
                   onClick={() => navigate(`/vehicles/${p.vehicle_id}`)}
-                  className="w-full text-left px-4 py-3 border-b border-border hover:bg-accent/50 transition-colors"
+                  className={`w-full text-left px-4 py-3 border-b border-border hover:bg-accent/50 transition-colors ${p.status === 'stale' ? 'opacity-70' : ''}`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <div className={`w-2.5 h-2.5 rounded-full ${p.online ? (p.moving ? 'bg-success' : 'bg-warning') : 'bg-muted-foreground'}`} />
+                      <div className={`w-2.5 h-2.5 rounded-full ${statusDotClass(p.status)}`} />
                       <span className="font-medium text-sm text-foreground">{p.vehicle?.plate}</span>
                     </div>
-                    <Badge variant="outline" className="text-[10px]">
-                      {p.online ? (p.moving ? 'Movendo' : 'Parado') : 'Offline'}
+                    <Badge variant="outline" className={`text-[10px] ${statusBadgeClasses(p.status)}`}>
+                      {statusLabel(p.status)}
                     </Badge>
                   </div>
                   {p.vehicle?.nickname && (
                     <p className="text-xs text-muted-foreground mt-0.5 ml-5">{p.vehicle.nickname}</p>
                   )}
                   <div className="flex items-center gap-3 mt-1 ml-5 text-xs text-muted-foreground">
-                    {p.speed != null && (
+                    {p.speed != null && p.status === 'moving' && (
                       <span className="flex items-center gap-1">
                         <Gauge className="h-3 w-3" /> {Math.round(p.speed)} km/h
                       </span>
                     )}
                     <span className="flex items-center gap-1">
                       <Clock className="h-3 w-3" />
-                      {formatDistanceToNow(new Date(p.captured_at), { addSuffix: true, locale: ptBR })}
+                      {ageDescription(p.captured_at)}
                     </span>
                   </div>
                 </button>
               ))}
-              {vehiclesWithoutPosition.map(v => (
+              {filteredNoPos.map(v => (
                 <button
                   key={v.id}
                   onClick={() => navigate(`/vehicles/${v.id}`)}
-                  className="w-full text-left px-4 py-3 border-b border-border hover:bg-accent/50 transition-colors opacity-60"
+                  className="w-full text-left px-4 py-3 border-b border-border hover:bg-accent/50 transition-colors opacity-50"
                 >
                   <div className="flex items-center gap-2">
-                    <div className="w-2.5 h-2.5 rounded-full bg-muted-foreground/30" />
+                    <div className={`w-2.5 h-2.5 rounded-full ${statusDotClass('no_position')}`} />
                     <span className="font-medium text-sm text-foreground">{v.plate}</span>
-                    <Badge variant="outline" className="text-[10px] ml-auto">Sem posição</Badge>
+                    <Badge variant="outline" className={`text-[10px] ml-auto ${statusBadgeClasses('no_position')}`}>
+                      Sem posição
+                    </Badge>
                   </div>
                 </button>
               ))}
@@ -258,17 +337,20 @@ export default function FleetMap() {
             <Marker
               key={p.vehicle_id}
               position={[p.lat, p.lng]}
-              icon={createVehicleIcon(p.online, p.moving)}
+              icon={createVehicleIcon(p.status)}
             >
               <Popup>
                 <div className="min-w-[180px]">
                   <p className="font-bold text-sm">{p.vehicle?.plate}</p>
                   {p.vehicle?.nickname && <p className="text-xs text-gray-500">{p.vehicle.nickname}</p>}
                   <div className="mt-2 space-y-1 text-xs">
-                    <p>Status: <strong>{p.online ? (p.moving ? 'Em movimento' : 'Parado') : 'Offline'}</strong></p>
+                    <p>Status: <strong>{statusLabel(p.status)}</strong></p>
                     {p.speed != null && <p>Velocidade: <strong>{Math.round(p.speed)} km/h</strong></p>}
                     {p.heading != null && <p>Direção: {Math.round(p.heading)}°</p>}
-                    <p>Atualizado: {formatDistanceToNow(new Date(p.captured_at), { addSuffix: true, locale: ptBR })}</p>
+                    <p>{ageDescription(p.captured_at)}</p>
+                    {p.status === 'stale' && (
+                      <p className="text-red-500 font-medium">⚠ Posição muito antiga</p>
+                    )}
                   </div>
                   <button
                     onClick={() => navigate(`/vehicles/${p.vehicle_id}`)}
