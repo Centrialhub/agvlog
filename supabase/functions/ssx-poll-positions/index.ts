@@ -662,9 +662,10 @@ async function processPositions(
 function buildAbortResult(reason: string, attempts: PollingAttemptLog[], attemptCount: number): PollUnitResult {
   return {
     positions_found: false, inserted: 0, duplicates: 0,
+    rows_attempted: 0, rows_failed: 0,
     latestCapturedAt: null, latestNormalized: null,
     workingCombo: null, comboSource: "none",
-    abortBatch: true, abortReason: reason,
+    abortBatch: true, abortReason: reason, persistenceFailed: reason === "persistence_failure",
     attemptCount,
     attemptMatrix: summarizePollingAttemptsV2(attempts),
   };
