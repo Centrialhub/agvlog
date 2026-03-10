@@ -614,15 +614,31 @@ async function processPositions(
 
   // Batch insert in chunks of 100
   const CHUNK = 100;
+  let persistenceFailed = false;
+  let insertErrorClass: string | undefined;
+  let insertErrorMessage: string | undefined;
+  let rowsFailed = 0;
+
   for (let i = 0; i < rows.length; i += CHUNK) {
     const chunk = rows.slice(i, i + CHUNK);
     const { data: insertedRows, error: insertErr } = await supabase
-      .from("positions_raw").upsert(chunk, { onConflict: "provider_payload_hash", ignoreDuplicates: true })
+      .from("positions_raw").upsert(chunk, {
+        onConflict: "tenant_id,vehicle_id,provider_payload_hash",
+        ignoreDuplicates: true,
+      })
       .select("id");
+
     if (insertErr) {
-      // Fallback: count all as duplicates if batch fails
-      console.error("[SSX:poll-positions] Batch insert error:", insertErr.message);
-      duplicates += chunk.length;
+      // CRITICAL: Do NOT mask as duplicates. This is a real persistence failure.
+      persistenceFailed = true;
+      rowsFailed += chunk.length;
+      insertErrorClass = insertErr.message?.includes("ON CONFLICT")
+        ? "persistence_conflict_target_invalid"
+        : "persistence_insert_failed";
+      insertErrorMessage = insertErr.message;
+      console.error(`[SSX:poll-positions] PERSISTENCE_FAILURE | on_conflict_target=tenant_id,vehicle_id,provider_payload_hash | rows_attempted=${chunk.length} | provider_unit=${unit.external_code} | vehicle=${mapping.vehicle_id} | error_class=${insertErrorClass} | error=${insertErr.message}`);
+      // ABORT: stop inserting remaining chunks — DB path is broken
+      break;
     } else {
       const ins = insertedRows?.length || 0;
       inserted += ins;
@@ -630,14 +646,23 @@ async function processPositions(
     }
   }
 
+  const success = !persistenceFailed;
+
   await logIntegration(supabase, {
     tenant_id: mapping.tenant_id, integration_account_id,
     action: "ssx_poll_positions", endpoint: combo.url,
-    status_code: 200, success: true, duration_ms: resp.durationMs,
+    status_code: 200, success,
+    error_message: insertErrorMessage || undefined,
+    duration_ms: resp.durationMs,
     metadata: {
       unit_code: unit.external_code,
       points_received: positions.length,
+      rows_attempted: rows.length,
       inserted, duplicates,
+      rows_failed: rowsFailed,
+      insert_error_class: insertErrorClass || null,
+      insert_error_message: insertErrorMessage || null,
+      on_conflict_target_used: "tenant_id,vehicle_id,provider_payload_hash",
       filter_property: combo.property,
       value_source: combo.value_source,
       time_filter_property: combo.timeProp,
@@ -649,11 +674,17 @@ async function processPositions(
   return {
     positions_found: true,
     inserted, duplicates,
+    rows_attempted: rows.length,
+    rows_failed: rowsFailed,
     latestCapturedAt: latestNormalized?.captured_at || null,
     latestNormalized,
     workingCombo: combo,
     comboSource,
-    abortBatch: false,
+    abortBatch: persistenceFailed,
+    abortReason: persistenceFailed ? "persistence_failure" : undefined,
+    persistenceFailed,
+    insert_error_class: insertErrorClass,
+    insert_error_message: insertErrorMessage,
     attemptCount,
     attemptMatrix: summarizePollingAttemptsV2(attempts),
   };
