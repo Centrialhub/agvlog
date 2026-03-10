@@ -565,9 +565,11 @@ async function pollSingleUnit(params: {
   // All combos exhausted — no data for this unit
   return {
     positions_found: false, inserted: 0, duplicates: 0,
+    rows_attempted: 0, rows_failed: 0,
     latestCapturedAt: null, latestNormalized: null,
     workingCombo: null, comboSource: "none",
-    abortBatch: false, error: "No combination returned positions",
+    abortBatch: false, persistenceFailed: false,
+    error: "No combination returned positions",
     attemptCount,
     attemptMatrix: summarizePollingAttemptsV2(attempts),
   };
