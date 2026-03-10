@@ -53,6 +53,32 @@ export function buildSsxUrlCandidates(baseUrl: string, apiVersion: string, path:
 }
 
 /**
+ * Returns ordered endpoint candidates specifically for PositionHistory/List.
+ * Includes v2 as an explicit candidate between current apiVersion and unversioned.
+ * Order: current apiVersion → v2 → unversioned (no duplicates).
+ */
+export function buildPositionHistoryUrlCandidates(baseUrl: string, apiVersion: string): string[] {
+  const base = baseUrl.replace(/\/$/, "");
+  const path = "/Tracking/PositionHistory/List";
+  const ver = (apiVersion || "v3").replace(/^\//, "").replace(/\/$/, "");
+  const candidates: string[] = [];
+  const add = (url: string) => { if (!candidates.includes(url)) candidates.push(url); };
+  add(`${base}/${ver}${path}`);
+  add(`${base}/v2${path}`);
+  add(`${base}${path}`);
+  return candidates;
+}
+
+/**
+ * Summarizes polling attempts with item counts for PositionHistory logging.
+ */
+export function summarizePollingAttempts(attempts: { url: string; property: string; timeProp: string; format: string; statusCode: number; errorClass: string; itemCount: number }[]): string[] {
+  return attempts.map(a =>
+    `POST ${a.url} [${a.property}|${a.timeProp}|${a.format}] => ${a.statusCode} ${a.errorClass}${a.itemCount > 0 ? ` items=${a.itemCount}` : ""}`
+  );
+}
+
+/**
  * Builds Administration API URL — NO version prefix.
  * Per SSX swagger, Administration endpoints are at /Administration/... directly.
  */

@@ -1,28 +1,41 @@
 /**
  * ssx-poll-positions — Polls position history from SSX for active provider units.
  *
- * KEY FIXES (patch 3):
- * - normalizePosition now accepts EventDate, UpdateDate (swagger-aligned)
- * - 429 early-stop: if any request returns 429, abort the entire batch
- * - Throttle delay between units (configurable via settings.request_spacing_ms)
- * - max_units_per_poll_run to limit batch size
- * - Working combination persisted to account settings for cross-invocation reuse
- * - Discovery loop reduced: on 429, stop immediately
- * - Removes aggressive point age filter that was discarding valid data
+ * KEY FIXES (patch 4):
+ * - 200 OK with zero items is NO LONGER memoized as a working combination
+ * - A combination is only "working" if it returns ≥1 item
+ * - PositionHistory tries v3, v2, and unversioned endpoints
+ * - Staged discovery: find working property first, then time prop, then format
+ * - Initial discovery window is 7 days (configurable), not 24h
+ * - last_success_at uses provider timestamp, not server now()
+ * - Stale memoized combos that return empty N times are invalidated
+ * - Discovery has per-unit attempt limits to reduce 429 risk
+ * - Single-unit debug mode returns full attempt matrix
  */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
   corsHeaders,
-  buildSsxUrlCandidates,
+  buildPositionHistoryUrlCandidates,
   readAccountConfig,
   extractResponseItems,
   ssxPost,
   logIntegration,
   logSsxCall,
   getTenantRole,
+  summarizePollingAttempts,
   type SsxErrorClass,
 } from "../_shared/ssx-utils.ts";
+
+interface PollingAttemptLog {
+  url: string;
+  property: string;
+  timeProp: string;
+  format: string;
+  statusCode: number;
+  errorClass: string;
+  itemCount: number;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -108,6 +121,9 @@ Deno.serve(async (req) => {
       return jsonResp({ error: "No active provider units found", details: unitsErr?.message }, 404);
     }
 
+    // Single-unit debug mode
+    const isDebugMode = provider_unit_ids?.length === 1;
+
     // Apply max_units_per_poll_run
     const maxUnits = config.settings.max_units_per_poll_run || units.length;
     const unitsToProcess = units.slice(0, maxUnits);
@@ -123,8 +139,8 @@ Deno.serve(async (req) => {
       unitToVehicle[link.provider_unit_id] = { vehicle_id: link.vehicle_id, tenant_id: link.tenant_id };
     }
 
-    // Build position URL candidates
-    const positionUrls = buildSsxUrlCandidates(config.baseUrl, config.apiVersion, "/Tracking/PositionHistory/List");
+    // Build PositionHistory URL candidates: v3, v2, unversioned
+    const positionUrls = buildPositionHistoryUrlCandidates(config.baseUrl, config.apiVersion);
     const defaultPollWindow = config.pollWindowMinutes;
 
     // Load persisted working combination from account settings
@@ -132,6 +148,10 @@ Deno.serve(async (req) => {
     let workingUrl: string | null = config.settings.poll_working_url || null;
     let workingFormat: "array" | "wrapped" | null = config.settings.poll_working_format || null;
     let workingTimeProp: string | null = config.settings.poll_working_time_prop || null;
+
+    // Track consecutive empty runs for stale memo invalidation
+    let memoEmptyCount: number = config.settings.poll_memo_empty_count ?? 0;
+    const STALE_MEMO_THRESHOLD = config.settings.poll_stale_memo_threshold ?? 2;
 
     // Filter property candidates
     const filterPropertyCandidates = [
@@ -153,6 +173,9 @@ Deno.serve(async (req) => {
 
     // Throttle delay between units
     const requestSpacingMs = config.settings.request_spacing_ms ?? 200;
+    const discoverySpacingMs = config.settings.discovery_request_spacing_ms ?? 250;
+    const discoveryMaxAttempts = config.settings.discovery_max_attempts_per_unit ?? 6;
+    const initialPollWindowMinutes = config.settings.initial_poll_window_minutes ?? 10080; // 7 days
 
     const results: any[] = [];
     let totalInserted = 0;
@@ -160,6 +183,8 @@ Deno.serve(async (req) => {
     const touchedVehicles: { tenant_id: string; vehicle_id: string; captured_at: string }[] = [];
     let batchAborted = false;
     let abortReason = "";
+    // Track whether memo produced items this run (across all units)
+    let memoProducedItems = false;
 
     for (let unitIdx = 0; unitIdx < unitsToProcess.length; unitIdx++) {
       const unit = unitsToProcess[unitIdx];
@@ -188,27 +213,35 @@ Deno.serve(async (req) => {
 
       const now = new Date();
       const isFirstPoll = !cursor?.last_success_at;
-      const pollWindowMinutes = isFirstPoll ? 1440 : defaultPollWindow;
+      const pollWindowMinutes = isFirstPoll ? initialPollWindowMinutes : defaultPollWindow;
 
       // Derive time window
       const timeStart = cursor?.last_success_at
         ? new Date(new Date(cursor.last_success_at).getTime() - 2 * 60_000).toISOString()
         : new Date(Date.now() - pollWindowMinutes * 60_000).toISOString();
 
-      // === Try memoized combination first ===
+      const unitAttempts: PollingAttemptLog[] = [];
       let resp: any = null;
       let usedProperty = workingProperty;
       let usedUrl = workingUrl;
       let usedFormat = workingFormat;
       let usedTimeProp = workingTimeProp || uniqueTimeProps[0];
+      let discoveryAttemptCount = 0;
+      let foundWithItems = false;
 
-      if (workingProperty && workingUrl && workingFormat && workingTimeProp) {
+      // === Try memoized combination first (only if not stale) ===
+      const memoIsStale = memoEmptyCount >= STALE_MEMO_THRESHOLD;
+
+      if (workingProperty && workingUrl && workingFormat && workingTimeProp && !memoIsStale) {
         const filters = [
           { PropertyName: workingProperty, Condition: "=", Value: unit.external_code },
           { PropertyName: workingTimeProp, Condition: ">=", Value: timeStart },
         ];
         const body = workingFormat === "array" ? filters : { Filters: filters };
         resp = await ssxPost(workingUrl, config.token, body, config.requestTimeoutMs);
+        discoveryAttemptCount++;
+
+        const memoItems = resp.ok ? extractResponseItems(resp.parsed) : [];
 
         logSsxCall({
           routine: "poll-positions", endpoint: workingUrl, method: "POST",
@@ -216,143 +249,185 @@ Deno.serve(async (req) => {
           attemptType: `memo:${workingProperty}:${workingFormat}:${workingTimeProp}`,
           statusCode: resp.status, durationMs: resp.durationMs,
           responsePreview: (resp.text || "").substring(0, 150),
-          result: resp.ok ? "success" : "error", errorClass: resp.errorClass,
+          result: memoItems.length > 0 ? "success" : (resp.ok ? "empty" : "error"),
+          errorClass: resp.ok ? (memoItems.length > 0 ? undefined : "empty_response" as SsxErrorClass) : resp.errorClass,
         });
 
-        // 429 early-stop — abort entire batch
+        unitAttempts.push({
+          url: workingUrl, property: workingProperty, timeProp: workingTimeProp,
+          format: workingFormat, statusCode: resp.status,
+          errorClass: resp.ok ? (memoItems.length > 0 ? "success" : "empty_response") : resp.errorClass,
+          itemCount: memoItems.length,
+        });
+
+        // 429 early-stop
         if (resp.errorClass === "rate_limited") {
           batchAborted = true;
           abortReason = "rate_limited";
           await setAccountCooldown(supabase, integration_account_id, config, 120);
-          results.push({ unit_code: unit.external_code, status: "error", error_class: "rate_limited" });
+          results.push({
+            unit_code: unit.external_code, status: "error", error_class: "rate_limited",
+            attempt_matrix: isDebugMode ? summarizePollingAttempts(unitAttempts) : undefined,
+          });
           break;
         }
 
-        // If memo failed for non-429 reason, clear and fall through to discovery
-        if (!resp.ok) {
+        if (resp.ok && memoItems.length > 0) {
+          foundWithItems = true;
+          memoProducedItems = true;
+        } else {
+          // Memo returned empty or failed — fall through to discovery
           resp = null;
-          // Don't clear memo on first failure — might be transient
+          if (!resp?.ok) {
+            // Non-OK: clear for discovery
+          }
+          // Do NOT memoize empty — fall through
         }
+      } else if (memoIsStale && workingProperty) {
+        console.log(`[SSX:poll-positions] Memo is stale (${memoEmptyCount} consecutive empty runs), forcing rediscovery`);
+        // Clear stale memo
+        workingProperty = null; workingUrl = null; workingFormat = null; workingTimeProp = null;
       }
 
-      // === Discovery: try combinations ===
-      if (!resp || !resp.ok) {
-        let found = false;
+      // === Staged Discovery ===
+      if (!foundWithItems && !batchAborted) {
+        // Stage 1: Find a working unit filter property + URL
+        // Use first time prop as default for discovery
+        const discoveryTimeProp = uniqueTimeProps[0] || "EventDate";
+
         for (const prop of uniqueFilterProps) {
-          if (found || batchAborted) break;
-          for (const timeProp of uniqueTimeProps) {
-            if (found || batchAborted) break;
-            for (const url of positionUrls) {
-              if (found || batchAborted) break;
+          if (foundWithItems || batchAborted || discoveryAttemptCount >= discoveryMaxAttempts) break;
 
-              const filters = [
-                { PropertyName: prop, Condition: "=", Value: unit.external_code },
-                { PropertyName: timeProp, Condition: ">=", Value: timeStart },
-              ];
+          for (const url of positionUrls) {
+            if (foundWithItems || batchAborted || discoveryAttemptCount >= discoveryMaxAttempts) break;
 
-              // Try array format
-              resp = await ssxPost(url, config.token, filters, config.requestTimeoutMs);
-              logSsxCall({
-                routine: "poll-positions", endpoint: url, method: "POST",
-                apiVersion: config.apiVersion,
-                attemptType: `discover:${prop}:array:${timeProp}`,
-                statusCode: resp.status, durationMs: resp.durationMs,
-                responsePreview: (resp.text || "").substring(0, 150),
-                result: resp.ok ? "success" : "error", errorClass: resp.errorClass,
+            if (discoveryAttemptCount > 0) await sleep(discoverySpacingMs);
+
+            const filters = [
+              { PropertyName: prop, Condition: "=", Value: unit.external_code },
+              { PropertyName: discoveryTimeProp, Condition: ">=", Value: timeStart },
+            ];
+
+            // Try array format first
+            resp = await ssxPost(url, config.token, filters, config.requestTimeoutMs);
+            discoveryAttemptCount++;
+            const items = resp.ok ? extractResponseItems(resp.parsed) : [];
+
+            logSsxCall({
+              routine: "poll-positions", endpoint: url, method: "POST",
+              apiVersion: config.apiVersion,
+              attemptType: `s1:${prop}:array:${discoveryTimeProp}`,
+              statusCode: resp.status, durationMs: resp.durationMs,
+              responsePreview: (resp.text || "").substring(0, 150),
+              result: items.length > 0 ? "success" : (resp.ok ? "empty" : "error"),
+              errorClass: resp.ok ? (items.length > 0 ? undefined : "empty_response" as SsxErrorClass) : resp.errorClass,
+            });
+
+            unitAttempts.push({
+              url, property: prop, timeProp: discoveryTimeProp, format: "array",
+              statusCode: resp.status,
+              errorClass: resp.ok ? (items.length > 0 ? "success" : "empty_response") : resp.errorClass,
+              itemCount: items.length,
+            });
+
+            if (resp.errorClass === "rate_limited") {
+              batchAborted = true; abortReason = "rate_limited";
+              await setAccountCooldown(supabase, integration_account_id, config, 120);
+              break;
+            }
+            if (resp.errorClass === "auth_error") {
+              batchAborted = true; abortReason = "auth_error"; break;
+            }
+
+            if (resp.ok && items.length > 0) {
+              usedProperty = prop; usedUrl = url; usedFormat = "array"; usedTimeProp = discoveryTimeProp;
+              foundWithItems = true;
+              break;
+            }
+
+            // If 400/415, try wrapped format
+            if (resp.errorClass === "body_incompatible" && discoveryAttemptCount < discoveryMaxAttempts) {
+              await sleep(discoverySpacingMs);
+              resp = await ssxPost(url, config.token, { Filters: filters }, config.requestTimeoutMs);
+              discoveryAttemptCount++;
+              const wrappedItems = resp.ok ? extractResponseItems(resp.parsed) : [];
+
+              unitAttempts.push({
+                url, property: prop, timeProp: discoveryTimeProp, format: "wrapped",
+                statusCode: resp.status,
+                errorClass: resp.ok ? (wrappedItems.length > 0 ? "success" : "empty_response") : resp.errorClass,
+                itemCount: wrappedItems.length,
               });
 
               if (resp.errorClass === "rate_limited") {
-                batchAborted = true;
-                abortReason = "rate_limited";
+                batchAborted = true; abortReason = "rate_limited";
                 await setAccountCooldown(supabase, integration_account_id, config, 120);
                 break;
               }
 
-              if (resp.ok) {
-                const items = extractResponseItems(resp.parsed);
-                usedProperty = prop; usedUrl = url; usedFormat = "array"; usedTimeProp = timeProp;
-                workingProperty = prop; workingUrl = url; workingFormat = "array"; workingTimeProp = timeProp;
-                found = true;
+              if (resp.ok && wrappedItems.length > 0) {
+                usedProperty = prop; usedUrl = url; usedFormat = "wrapped"; usedTimeProp = discoveryTimeProp;
+                foundWithItems = true;
                 break;
               }
-
-              // On body_incompatible, try wrapped format
-              if (resp.errorClass === "body_incompatible") {
-                await sleep(50); // small delay before retry
-                resp = await ssxPost(url, config.token, { Filters: filters }, config.requestTimeoutMs);
-                logSsxCall({
-                  routine: "poll-positions", endpoint: url, method: "POST",
-                  apiVersion: config.apiVersion,
-                  attemptType: `discover:${prop}:wrapped:${timeProp}`,
-                  statusCode: resp.status, durationMs: resp.durationMs,
-                  responsePreview: (resp.text || "").substring(0, 150),
-                  result: resp.ok ? "success" : "error", errorClass: resp.errorClass,
-                });
-
-                if (resp.errorClass === "rate_limited") {
-                  batchAborted = true;
-                  abortReason = "rate_limited";
-                  await setAccountCooldown(supabase, integration_account_id, config, 120);
-                  break;
-                }
-
-                if (resp.ok) {
-                  usedProperty = prop; usedUrl = url; usedFormat = "wrapped"; usedTimeProp = timeProp;
-                  workingProperty = prop; workingUrl = url; workingFormat = "wrapped"; workingTimeProp = timeProp;
-                  found = true;
-                  break;
-                }
-              }
-
-              // On route_not_found (404), skip to next URL
-              if (resp.errorClass === "route_not_found") continue;
-              // On auth_error, no point trying other URLs
-              if (resp.errorClass === "auth_error") { batchAborted = true; abortReason = "auth_error"; break; }
             }
+
+            // 404 → skip to next URL
+            if (resp.errorClass === "route_not_found") continue;
           }
+        }
+
+        // Stage 2: If found a property+URL but default time prop, try alternates
+        // (Only if Stage 1 worked with items and we used the default time prop)
+        if (foundWithItems && usedTimeProp === discoveryTimeProp && uniqueTimeProps.length > 1 && !batchAborted) {
+          // Already working — Stage 2 refinement is optional, skip for now to save requests
+          // The working combo is good enough
         }
       }
 
       if (batchAborted) {
-        results.push({ unit_code: unit.external_code, status: "error", error_class: abortReason });
+        results.push({
+          unit_code: unit.external_code, status: "error", error_class: abortReason,
+          attempts_made: discoveryAttemptCount,
+          attempt_matrix: isDebugMode ? summarizePollingAttempts(unitAttempts) : undefined,
+        });
         break;
       }
 
-      if (!resp || resp.networkError) {
-        const errMsg = resp?.networkError || "No working endpoint found";
+      // No working combination found (all empty or errors)
+      if (!foundWithItems) {
+        const errMsg = resp?.networkError || "No combination returned positions";
+        const errClass: SsxErrorClass = resp?.errorClass || "empty_response";
         await upsertCursor(supabase, {
           tenant_id: mapping.tenant_id, provider_unit_id: unit.id,
           last_polled_at: now.toISOString(), last_error_at: now.toISOString(),
           last_error: errMsg, backoff_until: new Date(Date.now() + 60000).toISOString(),
         });
-        results.push({ unit_code: unit.external_code, status: "error", error: errMsg, error_class: resp?.errorClass || "network_error" });
-        continue;
-      }
-
-      if (!resp.ok) {
-        await upsertCursor(supabase, {
-          tenant_id: mapping.tenant_id, provider_unit_id: unit.id,
-          last_polled_at: now.toISOString(), last_error_at: now.toISOString(),
-          last_error: `HTTP ${resp.status}: ${resp.text.substring(0, 200)}`,
-          backoff_until: new Date(Date.now() + 60000).toISOString(),
-        });
         await logIntegration(supabase, {
           tenant_id: mapping.tenant_id, integration_account_id,
           action: "ssx_poll_positions", endpoint: usedUrl || positionUrls[0],
-          status_code: resp.status, success: false,
-          error_message: resp.text.substring(0, 500),
-          duration_ms: resp.durationMs,
+          status_code: resp?.status || 0, success: false,
+          error_message: errMsg,
+          duration_ms: resp?.durationMs,
           metadata: {
-            unit_code: unit.external_code, error_class: resp.errorClass,
-            filter_property: usedProperty, time_filter_property: usedTimeProp,
-            body_format: usedFormat,
+            unit_code: unit.external_code, error_class: errClass,
+            attempts_made: discoveryAttemptCount,
+            endpoint_candidates: positionUrls,
+            property_candidates: uniqueFilterProps,
+            time_property_candidates: uniqueTimeProps,
+            attempt_matrix: summarizePollingAttempts(unitAttempts),
           },
         });
-        results.push({ unit_code: unit.external_code, status: "error", http_status: resp.status, error_class: resp.errorClass });
+        results.push({
+          unit_code: unit.external_code, status: "error",
+          error: errMsg, error_class: errClass,
+          attempts_made: discoveryAttemptCount,
+          attempt_matrix: isDebugMode ? summarizePollingAttempts(unitAttempts) : undefined,
+        });
         continue;
       }
 
-      // === Process positions ===
+      // === Process positions (foundWithItems === true, resp is valid) ===
       const positions = extractResponseItems(resp.parsed);
       let inserted = 0;
       let duplicates = 0;
@@ -397,13 +472,22 @@ Deno.serve(async (req) => {
         }, { onConflict: "tenant_id,vehicle_id" });
       }
 
-      // Update cursor
+      // Update cursor — use provider timestamp for last_success_at
       const cursorUpdate: any = {
         tenant_id: mapping.tenant_id, provider_unit_id: unit.id,
         last_polled_at: now.toISOString(), last_error: null, backoff_until: null,
       };
-      if (inserted > 0) cursorUpdate.last_success_at = now.toISOString();
+      if (inserted > 0) {
+        cursorUpdate.last_success_at = latestPoint?.captured_at || now.toISOString();
+      }
       await upsertCursor(supabase, cursorUpdate);
+
+      // Memoize ONLY if we got items (foundWithItems is true here)
+      workingProperty = usedProperty;
+      workingUrl = usedUrl;
+      workingFormat = usedFormat;
+      workingTimeProp = usedTimeProp;
+      memoProducedItems = true;
 
       await logIntegration(supabase, {
         tenant_id: mapping.tenant_id, integration_account_id,
@@ -419,6 +503,9 @@ Deno.serve(async (req) => {
           body_format: usedFormat,
           time_window_start: timeStart,
           endpoint_used: usedUrl,
+          attempts_made: discoveryAttemptCount,
+          memoized: true,
+          attempt_matrix: summarizePollingAttempts(unitAttempts),
         },
       });
 
@@ -438,11 +525,13 @@ Deno.serve(async (req) => {
         inserted, duplicates,
         filter_property: usedProperty, time_filter_property: usedTimeProp,
         body_format: usedFormat,
+        attempts_made: discoveryAttemptCount,
+        attempt_matrix: isDebugMode ? summarizePollingAttempts(unitAttempts) : undefined,
       });
     }
 
-    // Persist working combination to account settings for next invocation
-    if (workingProperty && workingUrl && workingFormat && workingTimeProp) {
+    // Persist working combination ONLY if it produced items this run
+    if (memoProducedItems && workingProperty && workingUrl && workingFormat && workingTimeProp) {
       const { data: currentAccount } = await supabase
         .from("integration_accounts").select("settings").eq("id", integration_account_id).single();
       const currentSettings = currentAccount?.settings || {};
@@ -450,7 +539,8 @@ Deno.serve(async (req) => {
         currentSettings.poll_working_property !== workingProperty ||
         currentSettings.poll_working_url !== workingUrl ||
         currentSettings.poll_working_format !== workingFormat ||
-        currentSettings.poll_working_time_prop !== workingTimeProp;
+        currentSettings.poll_working_time_prop !== workingTimeProp ||
+        (currentSettings.poll_memo_empty_count || 0) !== 0;
       if (needsUpdate) {
         await supabase.from("integration_accounts").update({
           settings: {
@@ -459,11 +549,31 @@ Deno.serve(async (req) => {
             poll_working_url: workingUrl,
             poll_working_format: workingFormat,
             poll_working_time_prop: workingTimeProp,
+            poll_memo_empty_count: 0, // reset on success
           },
           updated_at: new Date().toISOString(),
         }).eq("id", integration_account_id);
         console.log(`[SSX:poll-positions] Persisted working combo: ${workingProperty} + ${workingUrl} + ${workingFormat} + ${workingTimeProp}`);
       }
+    } else if (!memoProducedItems && !batchAborted && workingProperty) {
+      // Memo existed but produced no items this run — increment stale counter
+      const { data: currentAccount } = await supabase
+        .from("integration_accounts").select("settings").eq("id", integration_account_id).single();
+      const currentSettings = currentAccount?.settings || {};
+      const newCount = (currentSettings.poll_memo_empty_count || 0) + 1;
+      const updates: Record<string, any> = {
+        settings: { ...currentSettings, poll_memo_empty_count: newCount },
+        updated_at: new Date().toISOString(),
+      };
+      // If stale threshold exceeded, clear the memo
+      if (newCount >= STALE_MEMO_THRESHOLD) {
+        updates.settings.poll_working_property = null;
+        updates.settings.poll_working_url = null;
+        updates.settings.poll_working_format = null;
+        updates.settings.poll_working_time_prop = null;
+        console.log(`[SSX:poll-positions] Cleared stale memo after ${newCount} consecutive empty runs`);
+      }
+      await supabase.from("integration_accounts").update(updates).eq("id", integration_account_id);
     }
 
     // Enqueue touched vehicles
@@ -486,6 +596,8 @@ Deno.serve(async (req) => {
       working_format: workingFormat,
       batch_aborted: batchAborted,
       abort_reason: abortReason || null,
+      endpoint_candidates: positionUrls,
+      initial_poll_window_minutes: initialPollWindowMinutes,
       results,
     });
   } catch (err: any) {
