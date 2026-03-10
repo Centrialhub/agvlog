@@ -114,15 +114,21 @@ Deno.serve(async (req) => {
 
     const telemetries = result.items;
     let upsertCount = 0;
+    let skippedNoId = 0;
     for (const t of telemetries) {
-      const telemetryId = String(t.Id || t.id || t.TelemetryId || t.telemetryId || t.Code || t.code || "");
-      if (!telemetryId) continue;
+      const telemetryId = String(
+        t.IdTelemetry || t.idTelemetry ||
+        t.TelemetryId || t.telemetryId ||
+        t.Id || t.id ||
+        t.Code || t.code || ""
+      );
+      if (!telemetryId) { skippedNoId++; continue; }
 
       const { error: upsertErr } = await supabase.from("telemetry_catalog").upsert({
         provider: "SSX",
         telemetry_id: telemetryId,
         name: t.Name || t.name || t.Description || null,
-        description: t.Description || t.description || null,
+        description: t.Description || t.description || t.Name || t.name || null,
         unit: t.Unit || t.unit || t.MeasureUnit || null,
         data_type: t.DataType || t.dataType || t.Type || null,
         raw: t,
@@ -130,6 +136,7 @@ Deno.serve(async (req) => {
       }, { onConflict: "provider,telemetry_id" });
 
       if (!upsertErr) upsertCount++;
+      else console.warn("[SSX:sync-telemetry] upsert error for", telemetryId, upsertErr.message);
     }
 
     await logIntegration(supabase, {
@@ -138,7 +145,7 @@ Deno.serve(async (req) => {
       status_code: result.statusCode, success: true,
       duration_ms: result.attempts.reduce((s, a) => s + a.durationMs, 0),
       metadata: {
-        total_received: telemetries.length, upserted: upsertCount,
+        total_received: telemetries.length, upserted: upsertCount, skipped_no_id: skippedNoId,
         final_successful_endpoint: result.endpoint,
         final_successful_format: result.successfulFormat,
         endpoint_candidates: telemetryUrls,
@@ -146,7 +153,10 @@ Deno.serve(async (req) => {
       },
     });
 
-    return jsonResp({ success: true, total_received: telemetries.length, upserted: upsertCount });
+    return jsonResp({
+      success: true, total_received: telemetries.length,
+      upserted: upsertCount, skipped_no_id: skippedNoId,
+    });
   } catch (err: any) {
     console.error("[SSX:sync-telemetry] error:", err);
     return jsonResp({ error: "Internal error", details: err.message }, 500);
