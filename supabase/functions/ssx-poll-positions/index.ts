@@ -704,10 +704,18 @@ function summarizePollingAttemptsV2(attempts: PollingAttemptLog[]): string[] {
   );
 }
 
-async function computeHash(input: string): Promise<string> {
-  const data = new TextEncoder().encode(input);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, "0")).join("");
+function simpleHash(input: string): string {
+  let h = 0;
+  for (let i = 0; i < input.length; i++) {
+    h = ((h << 5) - h + input.charCodeAt(i)) | 0;
+  }
+  // Convert to hex and pad to make it look like a hash
+  const hex = (h >>> 0).toString(16).padStart(8, "0");
+  // Add more entropy from length and char sum
+  let sum = 0;
+  for (let i = 0; i < input.length; i++) sum += input.charCodeAt(i);
+  const extra = ((sum * 31) >>> 0).toString(16).padStart(8, "0");
+  return `sh_${hex}${extra}_${input.length}`;
 }
 
 async function upsertCursor(supabase: any, data: Record<string, any>) {
