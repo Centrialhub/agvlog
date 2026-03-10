@@ -665,7 +665,7 @@ function TelemetryMappingSection() {
                           <SelectValue placeholder="Não mapeado" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">Não mapeado</SelectItem>
+                          <SelectItem value="__unmapped__">Não mapeado</SelectItem>
                           {CANONICAL_OPTIONS.map(opt => (
                             <SelectItem key={opt} value={opt}>{opt}</SelectItem>
                           ))}
