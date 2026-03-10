@@ -305,8 +305,19 @@ Deno.serve(async (req) => {
         }
       } else if (memoIsStale && workingProperty) {
         console.log(`[SSX:poll-positions] Memo is stale (${memoEmptyCount} consecutive empty runs), forcing rediscovery`);
-        // Clear stale memo
         workingProperty = null; workingUrl = null; workingFormat = null; workingTimeProp = null;
+        // Clear stale memo from DB immediately (not just locally)
+        const { data: staleAcc } = await supabase.from("integration_accounts").select("settings").eq("id", integration_account_id).single();
+        const staleSettings = staleAcc?.settings || {};
+        await supabase.from("integration_accounts").update({
+          settings: {
+            ...staleSettings,
+            poll_working_property: null, poll_working_url: null,
+            poll_working_format: null, poll_working_time_prop: null,
+            poll_memo_empty_count: 0,
+          },
+          updated_at: new Date().toISOString(),
+        }).eq("id", integration_account_id);
       }
 
       // === Staged Discovery ===
