@@ -17,6 +17,7 @@ import Alerts from "@/pages/Alerts";
 import Geofences from "@/pages/Geofences";
 import Reports from "@/pages/Reports";
 import RoutesPage from "@/pages/Routes";
+import IntegrationHealth from "@/pages/IntegrationHealth";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
