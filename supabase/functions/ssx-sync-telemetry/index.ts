@@ -69,10 +69,14 @@ Deno.serve(async (req) => {
     // Use URL candidates for versioned + unversioned fallback
     const telemetryUrls = buildSsxUrlCandidates(config.baseUrl, config.apiVersion, "/Tracking/Telemetry/List");
 
+    // Try both null and empty array body — swagger shows array input
     const result = await tryEndpointWithFallback({
       urlCandidates: telemetryUrls,
       token: config.token,
-      bodyCandidates: [{ label: "null_body", body: null }],
+      bodyCandidates: [
+        { label: "null_body", body: null },
+        { label: "empty_array", body: [] },
+      ],
       timeoutMs: config.requestTimeoutMs,
       abortOnAuthError: true,
     });
