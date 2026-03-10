@@ -658,14 +658,14 @@ function TelemetryMappingSection() {
                     <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">{item.description || '—'}</TableCell>
                     <TableCell>
                       <Select
-                        value={current}
-                        onValueChange={(v) => upsertMapping.mutate({ telemetryId: item.telemetry_id, canonicalKey: v })}
+                        value={current || '__unmapped__'}
+                        onValueChange={(v) => upsertMapping.mutate({ telemetryId: item.telemetry_id, canonicalKey: v === '__unmapped__' ? '' : v })}
                       >
                         <SelectTrigger className="w-48 h-8 text-xs">
                           <SelectValue placeholder="Não mapeado" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">Não mapeado</SelectItem>
+                          <SelectItem value="__unmapped__">Não mapeado</SelectItem>
                           {CANONICAL_OPTIONS.map(opt => (
                             <SelectItem key={opt} value={opt}>{opt}</SelectItem>
                           ))}
