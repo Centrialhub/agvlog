@@ -3,20 +3,21 @@
  *
  * STRATEGY:
  * 1. Administration API is the PRIMARY source (Tracker/List, Vehicle/List).
- *    - Administration endpoints do NOT use version prefix (per SSX swagger).
+ *    - We try BOTH unversioned and versioned admin URL candidates.
  *    - We try admin token first, then regular token (some accounts work with either).
  *    - We try ALL body formats before giving up (SSX returns 403 for wrong body too).
- * 2. If Administration fails completely, MINIMAL fallback to TrackedUnit/List.
- *    - Only 1 call, not dozens. PositionHistory fallback is last resort with 1 window only.
+ * 2. If Administration fails completely, MINIMAL fallback to TrackedUnit/List + PositionHistory.
+ *    - Fallback tries ALL tracking URL candidates and body candidates.
  * 3. Fallback results are marked source_mode="tracking_fallback".
  * 4. Admin skip window is SHORT (10 min). Reset on credential changes.
  * 5. Upserts are idempotent — no duplicates, no destructive deletes on partial failure.
+ * 6. Error classification is derived from actual attempts, never hardcoded.
  */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
   corsHeaders,
-  buildAdminUrl,
+  buildAdminUrlCandidates,
   buildSsxUrlCandidates,
   readAccountConfig,
   extractResponseItems,
@@ -26,9 +27,11 @@ import {
   tryEndpointWithFallback,
   getAdminToken,
   ADMIN_BODY_CANDIDATES,
+  TRACKING_BODY_CANDIDATES,
   ssxPost,
   logIntegration,
   logSsxCall,
+  summarizeAttemptMatrix,
   sanitize,
   getTenantRole,
   classifyError,
@@ -36,6 +39,7 @@ import {
   type SsxErrorClass,
   type EndpointAttemptResult,
   type NormalizedUnit,
+  type AttemptLog,
 } from "../_shared/ssx-utils.ts";
 
 const BACKOFF_TIERS_MS = [2 * 60_000, 5 * 60_000, 10 * 60_000, 15 * 60_000];
@@ -132,9 +136,9 @@ Deno.serve(async (req) => {
 
     // ================================================================
     // PHASE 1: Administration API — PRIMARY source for tracker catalog
-    // ================================================================
-    // Try admin token first, then regular token as fallback.
-    // Don't abort on 403 — try ALL body formats (SSX returns 403 for wrong body).
+    // Uses buildAdminUrlCandidates for BOTH unversioned and versioned URLs.
+    // Tries admin token first, then regular token.
+    // Does NOT abort on 403.
     // ================================================================
 
     const skipAdminUntil = settings.skip_admin_until;
@@ -169,14 +173,16 @@ Deno.serve(async (req) => {
     }
 
     // ================================================================
-    // PHASE 1b: If Administration failed, set SHORT skip and try MINIMAL fallback
+    // PHASE 1b: If Administration failed, set SHORT skip and try fallback
     // ================================================================
     if (!trackerResult.success || trackerResult.items.length === 0) {
       if (!adminSkipped && trackerResult.errorClass !== "rate_limited") {
         const skipUntil = new Date(Date.now() + ADMIN_SKIP_MS).toISOString();
+        // Save the REAL error classification, not hardcoded auth_error
         const lastAdminError = `${trackerResult.errorClass}: ${trackerResult.errorMessage || "unknown"}`;
         settings.skip_admin_until = skipUntil;
         settings.last_admin_error = lastAdminError;
+        settings.last_admin_attempt_matrix = summarizeAttemptMatrix(trackerResult.attempts);
         await supabase.from("integration_accounts").update({
           settings: { ...settings },
           updated_at: new Date().toISOString(),
@@ -185,13 +191,12 @@ Deno.serve(async (req) => {
       }
 
       // ================================================================
-      // MINIMAL FALLBACK: Only TrackedUnit/List (1 call) then 1 PositionHistory window
-      // We deliberately minimize calls to avoid burning the rate limit.
+      // FALLBACK: Try ALL tracking URL candidates and body candidates.
       // ================================================================
-      console.log("[SSX:sync-units] Falling back to minimal legacy discovery...");
+      console.log("[SSX:sync-units] Falling back to tracking-based discovery...");
       usedMethod = "legacy_fallback";
 
-      const legacyResult = await fetchUnitsMinimalFallback(config);
+      const legacyResult = await fetchUnitsTrackingFallback(config);
 
       for (const attempt of legacyResult.attempts) {
         logSsxCall({
@@ -220,11 +225,10 @@ Deno.serve(async (req) => {
             method: "all_failed",
             admin_error_class: trackerResult.errorClass,
             legacy_error_class: legacyResult.errorClass,
-            admin_attempts: trackerResult.attempts.map(a => `${a.endpoint}:${a.format}→${a.statusCode}`),
-            legacy_attempts: legacyResult.attempts.map(a => `${a.endpoint}:${a.format}→${a.statusCode}`),
+            admin_attempt_matrix: summarizeAttemptMatrix(trackerResult.attempts),
+            legacy_attempt_matrix: summarizeAttemptMatrix(legacyResult.attempts),
           },
         });
-        // Status = sync_inconclusive, NOT destructive
         await supabase.from("integration_accounts").update({
           status: "sync_inconclusive",
           last_error: `Sync failed: admin=${trackerResult.errorClass}, legacy=${legacyResult.errorClass}`,
@@ -235,8 +239,8 @@ Deno.serve(async (req) => {
           error: "SSX unit sync failed",
           admin_error: trackerResult.errorClass,
           legacy_error: legacyResult.errorClass,
-          admin_attempts: trackerResult.attempts.map(a => `${a.endpoint}:${a.format}→${a.statusCode}`),
-          legacy_attempts: legacyResult.attempts.map(a => `${a.endpoint}:${a.format}→${a.statusCode}`),
+          admin_attempt_matrix: summarizeAttemptMatrix(trackerResult.attempts),
+          legacy_attempt_matrix: summarizeAttemptMatrix(legacyResult.attempts),
         }, 502);
       }
 
@@ -358,6 +362,7 @@ Deno.serve(async (req) => {
       updatedSettings.admin_units_last_sync_at = new Date().toISOString();
       delete updatedSettings.skip_admin_until;
       delete updatedSettings.last_admin_error;
+      delete updatedSettings.last_admin_attempt_matrix;
     }
     if (vehicleResult?.success && vehicleResult.successfulFormat) {
       updatedSettings.admin_vehicle_last_successful_endpoint = vehicleResult.endpoint;
@@ -391,8 +396,10 @@ Deno.serve(async (req) => {
         vehicles_created: vehiclesCreated,
         links_created: linksCreated,
         vehicle_plate_mappings: vehiclePlateByTrackerCode.size,
-        admin_attempts: trackerResult.attempts.map(a => `${a.format}→${a.statusCode}(${a.itemCount})`),
-        vehicle_attempts: vehicleResult?.attempts.map(a => `${a.format}→${a.statusCode}(${a.itemCount})`) || [],
+        final_successful_endpoint: trackerResult.endpoint,
+        final_successful_format: trackerResult.successfulFormat,
+        attempt_matrix: summarizeAttemptMatrix(trackerResult.attempts),
+        vehicle_attempt_matrix: vehicleResult ? summarizeAttemptMatrix(vehicleResult.attempts) : [],
       },
     });
 
@@ -417,70 +424,54 @@ Deno.serve(async (req) => {
 });
 
 // ==================== Admin Tracker Discovery ====================
+// Uses buildAdminUrlCandidates for BOTH unversioned and versioned URLs.
 // Tries admin token first, then regular token, with all body formats.
 // Does NOT abort on 403 — SSX sometimes returns 403 for wrong body format.
+// Error classification is derived from actual attempts, never hardcoded.
 
 async function tryAdminTrackerDiscovery(
   config: ReturnType<typeof readAccountConfig>,
   supabase: any,
   integrationAccountId: string,
 ): Promise<EndpointAttemptResult> {
-  const allAttempts: any[] = [];
+  const allAttempts: AttemptLog[] = [];
 
-  // Tracker List URL (no version prefix for Administration)
-  const trackerUrl = buildAdminUrl(config.baseUrl, "/Administration/Tracker/List");
+  // Build ALL admin URL candidates: unversioned first, then versioned
+  const trackerUrls = buildAdminUrlCandidates(config.baseUrl, config.apiVersion, "/Administration/Tracker/List");
 
-  // --- Attempt 1: Admin token (without HashAuth) ---
+  // Collect tokens to try
+  const tokens: { label: string; token: string }[] = [];
+
+  // --- Admin token (without HashAuth) ---
   const adminTokenResult = await getAdminToken(config, supabase, integrationAccountId);
-
   if (adminTokenResult.token) {
-    console.log("[SSX:sync-units] Trying Administration/Tracker/List with ADMIN token (all body formats)...");
-    const result = await tryEndpointWithFallback({
-      urlCandidates: [trackerUrl],
-      token: adminTokenResult.token,
-      bodyCandidates: ADMIN_BODY_CANDIDATES,
-      timeoutMs: config.requestTimeoutMs,
-      memoEndpoint: config.settings.admin_units_last_successful_endpoint,
-      memoFormat: config.settings.admin_units_last_successful_format,
-      abortOnAuthError: false, // Don't abort on 403 — try ALL body formats
-    });
-
-    for (const attempt of result.attempts) {
-      logSsxCall({
-        routine: "sync-units", endpoint: attempt.endpoint, method: "POST",
-        apiVersion: "admin(no-prefix)", attemptType: `tracker:admin_token:${attempt.format}`,
-        statusCode: attempt.statusCode, durationMs: attempt.durationMs,
-        responsePreview: attempt.responsePreview,
-        result: attempt.itemCount > 0 ? "success" : (attempt.errorClass === "empty_response" ? "empty" : "error"),
-        errorClass: attempt.errorClass,
-      });
-    }
-    allAttempts.push(...result.attempts);
-
-    if (result.errorClass === "rate_limited") return result;
-    if (result.success && result.items.length > 0) return result;
-
-    console.log(`[SSX:sync-units] Admin token failed on Tracker/List (${result.errorClass}). Trying regular token...`);
+    tokens.push({ label: "admin_token", token: adminTokenResult.token });
   } else {
     console.log(`[SSX:sync-units] No admin token available: ${adminTokenResult.error}`);
   }
 
-  // --- Attempt 2: Regular token (with HashAuth scope) ---
-  // Some SSX accounts allow admin endpoints with the regular token too.
-  if (config.token) {
-    console.log("[SSX:sync-units] Trying Administration/Tracker/List with REGULAR token...");
+  // --- Regular token (with HashAuth scope) ---
+  if (config.token && config.token !== adminTokenResult.token) {
+    tokens.push({ label: "regular_token", token: config.token });
+  }
+
+  for (const { label, token } of tokens) {
+    console.log(`[SSX:sync-units] Trying Administration/Tracker/List with ${label} (${trackerUrls.length} URLs × ${ADMIN_BODY_CANDIDATES.length} bodies)...`);
+
     const result = await tryEndpointWithFallback({
-      urlCandidates: [trackerUrl],
-      token: config.token,
+      urlCandidates: trackerUrls,
+      token,
       bodyCandidates: ADMIN_BODY_CANDIDATES,
       timeoutMs: config.requestTimeoutMs,
+      memoEndpoint: config.settings.admin_units_last_successful_endpoint,
+      memoFormat: config.settings.admin_units_last_successful_format,
       abortOnAuthError: false,
     });
 
     for (const attempt of result.attempts) {
       logSsxCall({
         routine: "sync-units", endpoint: attempt.endpoint, method: "POST",
-        apiVersion: "admin(no-prefix)", attemptType: `tracker:regular_token:${attempt.format}`,
+        apiVersion: config.apiVersion, attemptType: `tracker:${label}:${attempt.format}`,
         statusCode: attempt.statusCode, durationMs: attempt.durationMs,
         responsePreview: attempt.responsePreview,
         result: attempt.itemCount > 0 ? "success" : (attempt.errorClass === "empty_response" ? "empty" : "error"),
@@ -491,14 +482,20 @@ async function tryAdminTrackerDiscovery(
 
     if (result.errorClass === "rate_limited") return { ...result, attempts: allAttempts };
     if (result.success && result.items.length > 0) return { ...result, attempts: allAttempts };
+
+    console.log(`[SSX:sync-units] ${label} failed on Tracker/List (${result.errorClass}: ${result.errorMessage})`);
   }
 
-  // Both tokens failed
+  // All tokens/URLs/bodies exhausted — derive REAL error from attempts
+  const finalErrorClass = deriveDominantError(allAttempts);
   return {
-    success: false, items: [], endpoint: trackerUrl, statusCode: 403,
-    errorClass: "auth_error",
-    errorMessage: "Administration/Tracker/List failed with both admin and regular tokens",
-    successfulFormat: null, attempts: allAttempts,
+    success: false, items: [],
+    endpoint: trackerUrls[0] || "",
+    statusCode: allAttempts.length > 0 ? allAttempts[allAttempts.length - 1].statusCode : 0,
+    errorClass: finalErrorClass.errorClass,
+    errorMessage: finalErrorClass.message,
+    successfulFormat: null,
+    attempts: allAttempts,
   };
 }
 
@@ -514,17 +511,17 @@ async function tryAdminVehicleDiscovery(
   if (adminTokenResult.token) tokens.push({ label: "admin_token", token: adminTokenResult.token });
   if (config.token && config.token !== adminTokenResult.token) tokens.push({ label: "regular_token", token: config.token });
 
-  const vehicleUrls = [
-    buildAdminUrl(config.baseUrl, "/Administration/Vehicle/v2/List"),
-    buildAdminUrl(config.baseUrl, "/Administration/Vehicle/List"),
-  ];
+  // Build candidates for BOTH v2 and v1 vehicle endpoints, each with unversioned+versioned
+  const vehicleV2Urls = buildAdminUrlCandidates(config.baseUrl, config.apiVersion, "/Administration/Vehicle/v2/List");
+  const vehicleV1Urls = buildAdminUrlCandidates(config.baseUrl, config.apiVersion, "/Administration/Vehicle/List");
+  const allVehicleUrls = [...vehicleV2Urls, ...vehicleV1Urls];
 
-  const allAttempts: any[] = [];
+  const allAttempts: AttemptLog[] = [];
 
   for (const { label, token } of tokens) {
-    console.log(`[SSX:sync-units] Trying Administration/Vehicle list with ${label}...`);
+    console.log(`[SSX:sync-units] Trying Administration/Vehicle list with ${label} (${allVehicleUrls.length} URLs)...`);
     const result = await tryEndpointWithFallback({
-      urlCandidates: vehicleUrls,
+      urlCandidates: allVehicleUrls,
       token,
       bodyCandidates: ADMIN_BODY_CANDIDATES,
       timeoutMs: config.requestTimeoutMs,
@@ -536,7 +533,7 @@ async function tryAdminVehicleDiscovery(
     for (const attempt of result.attempts) {
       logSsxCall({
         routine: "sync-units", endpoint: attempt.endpoint, method: "POST",
-        apiVersion: "admin(no-prefix)", attemptType: `vehicle:${label}:${attempt.format}`,
+        apiVersion: config.apiVersion, attemptType: `vehicle:${label}:${attempt.format}`,
         statusCode: attempt.statusCode, durationMs: attempt.durationMs,
         responsePreview: attempt.responsePreview,
         result: attempt.itemCount > 0 ? "success" : (attempt.errorClass === "empty_response" ? "empty" : "error"),
@@ -549,66 +546,106 @@ async function tryAdminVehicleDiscovery(
     if (result.success && result.items.length > 0) return { ...result, attempts: allAttempts };
   }
 
+  const finalErrorClass = deriveDominantError(allAttempts);
   return {
-    success: false, items: [], endpoint: vehicleUrls[0], statusCode: 0,
-    errorClass: "auth_error", errorMessage: "Vehicle list failed with all tokens",
-    successfulFormat: null, attempts: allAttempts,
+    success: false, items: [],
+    endpoint: allVehicleUrls[0] || "",
+    statusCode: allAttempts.length > 0 ? allAttempts[allAttempts.length - 1].statusCode : 0,
+    errorClass: finalErrorClass.errorClass,
+    errorMessage: finalErrorClass.message,
+    successfulFormat: null,
+    attempts: allAttempts,
   };
 }
 
-// ==================== Minimal Legacy Fallback ====================
-// Only 2 calls max: TrackedUnit/List (1 body) + PositionHistory (1 window).
-// This prevents burning the rate limit on dozens of futile attempts.
+// ==================== Tracking-Based Fallback ====================
+// Tries ALL tracking URL candidates and body candidates for TrackedUnit/List,
+// then falls back to PositionHistory/List with time window.
+// Stops on first success with items.
 
-async function fetchUnitsMinimalFallback(config: ReturnType<typeof readAccountConfig>): Promise<EndpointAttemptResult> {
-  const allAttempts: any[] = [];
+async function fetchUnitsTrackingFallback(config: ReturnType<typeof readAccountConfig>): Promise<EndpointAttemptResult> {
+  const allAttempts: AttemptLog[] = [];
 
-  // 1) TrackedUnit/List — single attempt with versioned URL, empty object body
-  const trackedUrl = buildSsxUrlCandidates(config.baseUrl, config.apiVersion, "/Tracking/TrackedUnit/List")[0];
-  const trackedResp = await ssxPost(trackedUrl, config.token, {}, config.requestTimeoutMs);
-  const trackedItems = trackedResp.ok ? extractResponseItems(trackedResp.parsed) : [];
-  allAttempts.push({
-    endpoint: trackedUrl, format: "tracked_unit_list",
-    statusCode: trackedResp.status,
-    errorClass: trackedResp.ok ? (trackedItems.length > 0 ? "unknown" : "empty_response") : trackedResp.errorClass,
-    durationMs: trackedResp.durationMs, itemCount: trackedItems.length,
-    responsePreview: (trackedResp.text || trackedResp.networkError || "").substring(0, 150),
+  // 1) TrackedUnit/List — try all tracking URL candidates × body candidates
+  const trackedUrls = buildSsxUrlCandidates(config.baseUrl, config.apiVersion, "/Tracking/TrackedUnit/List");
+
+  const trackedResult = await tryEndpointWithFallback({
+    urlCandidates: trackedUrls,
+    token: config.token,
+    bodyCandidates: TRACKING_BODY_CANDIDATES,
+    timeoutMs: config.requestTimeoutMs,
+    abortOnAuthError: true,
   });
+  allAttempts.push(...trackedResult.attempts);
 
-  if (trackedResp.errorClass === "rate_limited") {
-    return { success: false, items: [], endpoint: trackedUrl, statusCode: 429, errorClass: "rate_limited", errorMessage: "Rate limit", successfulFormat: null, attempts: allAttempts };
+  if (trackedResult.errorClass === "rate_limited") {
+    return { ...trackedResult, attempts: allAttempts };
   }
-  if (trackedResp.ok && trackedItems.length > 0) {
-    return { success: true, items: trackedItems, endpoint: trackedUrl, statusCode: trackedResp.status, errorClass: "unknown", errorMessage: null, successfulFormat: "tracked_unit_list", attempts: allAttempts };
+  if (trackedResult.success && trackedResult.items.length > 0) {
+    return { ...trackedResult, attempts: allAttempts };
   }
 
-  // 2) PositionHistory — single window (60 min), single body format
-  const posHistUrl = buildSsxUrlCandidates(config.baseUrl, config.apiVersion, "/Tracking/PositionHistory/List")[0];
+  // 2) PositionHistory/List — try all tracking URL candidates with time window
+  const posHistUrls = buildSsxUrlCandidates(config.baseUrl, config.apiVersion, "/Tracking/PositionHistory/List");
   const since = new Date(Date.now() - 60 * 60_000).toISOString();
   const filters = [{ PropertyName: "DateTimeGPS", Condition: ">=", Value: since }];
-  const posResp = await ssxPost(posHistUrl, config.token, { Filters: filters }, config.requestTimeoutMs);
-  const posItems = posResp.ok ? extractResponseItems(posResp.parsed) : [];
-  allAttempts.push({
-    endpoint: posHistUrl, format: "position_history:60m",
-    statusCode: posResp.status,
-    errorClass: posResp.ok ? (posItems.length > 0 ? "unknown" : "empty_response") : posResp.errorClass,
-    durationMs: posResp.durationMs, itemCount: posItems.length,
-    responsePreview: (posResp.text || posResp.networkError || "").substring(0, 150),
+
+  // Try array filters first, then wrapped
+  const posBodyCandidates: { label: string; body: any }[] = [
+    { label: "position_array_filters", body: filters },
+    { label: "position_wrapped_filters", body: { Filters: filters } },
+  ];
+
+  const posResult = await tryEndpointWithFallback({
+    urlCandidates: posHistUrls,
+    token: config.token,
+    bodyCandidates: posBodyCandidates,
+    timeoutMs: config.requestTimeoutMs,
+    abortOnAuthError: true,
   });
+  allAttempts.push(...posResult.attempts);
 
-  if (posResp.errorClass === "rate_limited") {
-    return { success: false, items: [], endpoint: posHistUrl, statusCode: 429, errorClass: "rate_limited", errorMessage: "Rate limit", successfulFormat: null, attempts: allAttempts };
+  if (posResult.errorClass === "rate_limited") {
+    return { ...posResult, attempts: allAttempts };
   }
-  if (posResp.ok && posItems.length > 0) {
-    return { success: true, items: posItems, endpoint: `${posHistUrl} (fallback 60m)`, statusCode: posResp.status, errorClass: "unknown", errorMessage: null, successfulFormat: "position_history:60m", attempts: allAttempts };
+  if (posResult.success && posResult.items.length > 0) {
+    return {
+      ...posResult,
+      endpoint: `${posResult.endpoint} (fallback 60m)`,
+      attempts: allAttempts,
+    };
   }
 
+  // All failed
+  const finalError = deriveDominantError(allAttempts);
   return {
-    success: false, items: [], endpoint: posHistUrl,
-    statusCode: posResp.status || 0, errorClass: posResp.errorClass || "empty_response",
-    errorMessage: "No units found in minimal fallback",
-    successfulFormat: null, attempts: allAttempts,
+    success: false, items: [],
+    endpoint: trackedUrls[0] || "",
+    statusCode: allAttempts.length > 0 ? allAttempts[allAttempts.length - 1].statusCode : 0,
+    errorClass: finalError.errorClass,
+    errorMessage: "No units found in tracking fallback",
+    successfulFormat: null,
+    attempts: allAttempts,
   };
+}
+
+// ==================== Error Classification from Attempts ====================
+
+function deriveDominantError(attempts: AttemptLog[]): { errorClass: SsxErrorClass; message: string } {
+  if (attempts.length === 0) return { errorClass: "unknown", message: "No attempts made" };
+
+  const classes = new Set(attempts.map(a => a.errorClass));
+
+  if (classes.has("empty_response") && attempts.every(a => a.errorClass === "empty_response")) {
+    return { errorClass: "empty_response", message: "All endpoints returned empty list" };
+  }
+  if (classes.has("route_not_found")) return { errorClass: "route_not_found", message: "Endpoint(s) returned 404" };
+  if (classes.has("body_incompatible")) return { errorClass: "body_incompatible", message: "All body formats rejected (400/415)" };
+  if (classes.has("auth_error")) return { errorClass: "auth_error", message: "Authentication failed (401/403)" };
+  if (classes.has("timeout") || classes.has("network_error")) return { errorClass: classes.has("timeout") ? "timeout" : "network_error", message: "Network/timeout error" };
+  if (classes.has("server_error")) return { errorClass: "server_error", message: "Server error (5xx)" };
+
+  return { errorClass: "unknown", message: "All attempts failed" };
 }
 
 // ==================== 429 Handler ====================
@@ -638,7 +675,7 @@ async function handle429(
     metadata: {
       backoff_until: newBackoffUntil,
       backoff_tier: tier,
-      attempts: result.attempts.map(a => `${a.format}→${a.statusCode}`),
+      attempt_matrix: summarizeAttemptMatrix(result.attempts),
     },
   });
 

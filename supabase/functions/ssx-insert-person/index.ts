@@ -1,12 +1,13 @@
 /**
  * ssx-insert-person — Inserts a driver/person into SSX via Tracking API.
- * Uses centralized URL builder and logging from shared utils.
+ * Uses buildSsxUrlCandidates for versioned + unversioned fallback.
+ * Preserves real error classification in logs.
  */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
   corsHeaders,
-  buildSsxUrl,
+  buildSsxUrlCandidates,
   readAccountConfig,
   ssxPost,
   logIntegration,
@@ -68,42 +69,54 @@ Deno.serve(async (req) => {
 
     const config = readAccountConfig(account);
 
-    // Use centralized URL builder
-    const insertUrl = buildSsxUrl(config.baseUrl, config.apiVersion, "/Tracking/Person/InsertPerson");
-
     const personPayload = {
       Name: driver.name,
       Document: driver.doc || "",
       Phone: driver.phone || "",
     };
 
-    const resp = await ssxPost(insertUrl, config.token, personPayload, config.requestTimeoutMs);
+    // Try versioned first, then unversioned on 404
+    const insertUrls = buildSsxUrlCandidates(config.baseUrl, config.apiVersion, "/Tracking/Person/InsertPerson");
 
-    logSsxCall({
-      routine: "insert-person", endpoint: insertUrl, method: "POST",
-      apiVersion: config.apiVersion, attemptType: "insert_person",
-      statusCode: resp.status, durationMs: resp.durationMs,
-      responsePreview: (resp.text || "").substring(0, 150),
-      result: resp.ok ? "success" : "error",
-      errorClass: resp.errorClass,
-    });
+    let resp: any = null;
+    let usedUrl = insertUrls[0];
 
-    if (!resp.ok) {
+    for (const url of insertUrls) {
+      resp = await ssxPost(url, config.token, personPayload, config.requestTimeoutMs);
+      usedUrl = url;
+
+      logSsxCall({
+        routine: "insert-person", endpoint: url, method: "POST",
+        apiVersion: config.apiVersion, attemptType: "insert_person",
+        statusCode: resp.status, durationMs: resp.durationMs,
+        responsePreview: (resp.text || "").substring(0, 150),
+        result: resp.ok ? "success" : "error",
+        errorClass: resp.errorClass,
+      });
+
+      if (resp.ok) break;
+      // If 404, try next URL candidate
+      if (resp.errorClass === "route_not_found") continue;
+      // For other errors, stop
+      break;
+    }
+
+    if (!resp || !resp.ok) {
       await supabase.from("drivers").update({ provider_person_sync_status: "error" }).eq("id", driver_id);
 
       await logIntegration(supabase, {
         tenant_id, integration_account_id,
-        action: "ssx_insert_person", endpoint: insertUrl,
-        status_code: resp.status, success: false,
-        error_message: resp.text.substring(0, 500),
-        duration_ms: resp.durationMs,
-        metadata: { error_class: resp.errorClass },
+        action: "ssx_insert_person", endpoint: usedUrl,
+        status_code: resp?.status || 0, success: false,
+        error_message: resp?.text?.substring(0, 500) || "No response",
+        duration_ms: resp?.durationMs || 0,
+        metadata: { error_class: resp?.errorClass || "unknown" },
       });
 
       return jsonResp({
-        error: "SSX insert person failed", status_code: resp.status,
-        error_class: resp.errorClass,
-        details: resp.text.substring(0, 200),
+        error: "SSX insert person failed", status_code: resp?.status || 0,
+        error_class: resp?.errorClass || "unknown",
+        details: resp?.text?.substring(0, 200) || "No response",
       }, 502);
     }
 
@@ -122,10 +135,10 @@ Deno.serve(async (req) => {
 
     await logIntegration(supabase, {
       tenant_id, integration_account_id,
-      action: "ssx_insert_person", endpoint: insertUrl,
+      action: "ssx_insert_person", endpoint: usedUrl,
       status_code: resp.status, success: true,
       duration_ms: resp.durationMs,
-      metadata: { driver_id, person_id: personId },
+      metadata: { driver_id, person_id: personId, endpoint_used: usedUrl },
     });
 
     return jsonResp({ success: true, person_id: personId });

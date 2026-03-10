@@ -1,14 +1,17 @@
 /**
  * ssx-diagnostic — Tests SSX integration connectivity end-to-end.
  * 
+ * IMPORTANT: Uses the SAME discovery helpers as ssx-sync-units to ensure
+ * identical endpoint strategy in diagnostic and production.
+ * 
  * Tests performed:
- * 1. Authentication (token validity)
- * 2. Administration/Tracker/List
- * 3. Administration/Vehicle/v2/List + Administration/Vehicle/List
+ * 1. Token validity
+ * 2. Administration/Tracker/List (all URL candidates × all body candidates × both tokens)
+ * 3. Administration/Vehicle/List (v2 and v1 variants × both tokens)
  * 4. Tracking/PositionHistory/List
  * 5. Tracking/Telemetry/List
  * 
- * Returns structured results per test, with error classification.
+ * Returns structured results per test, with error classification and attempt matrix.
  */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -16,25 +19,33 @@ import {
   corsHeaders,
   buildSsxUrl,
   buildSsxUrlCandidates,
+  buildAdminUrlCandidates,
   readAccountConfig,
   extractResponseItems,
   ssxPost,
-  ADMIN_BODY_CANDIDATES,
   tryEndpointWithFallback,
+  getAdminToken,
+  ADMIN_BODY_CANDIDATES,
   logIntegration,
+  summarizeAttemptMatrix,
   getTenantRole,
   type SsxErrorClass,
+  type AttemptLog,
 } from "../_shared/ssx-utils.ts";
 
 interface DiagnosticTest {
   name: string;
   status: "pass" | "fail" | "warn";
   endpoint: string;
+  endpoint_candidates: string[];
+  body_candidates_tried: string[];
+  token_mode: string;
   status_code: number;
   error_class: SsxErrorClass | null;
   items_found: number;
   duration_ms: number;
   details: string;
+  attempt_matrix: string[];
 }
 
 Deno.serve(async (req) => {
@@ -87,6 +98,9 @@ Deno.serve(async (req) => {
       name: "token_validity",
       status: tokenValid ? "pass" : "fail",
       endpoint: "-",
+      endpoint_candidates: [],
+      body_candidates_tried: [],
+      token_mode: "regular",
       status_code: 0,
       error_class: null,
       items_found: 0,
@@ -94,6 +108,7 @@ Deno.serve(async (req) => {
       details: tokenValid
         ? `Token valid until ${account.token_expires_at}`
         : "Token missing or expired. Run ssx-login first.",
+      attempt_matrix: [],
     });
 
     if (!tokenValid) {
@@ -101,86 +116,186 @@ Deno.serve(async (req) => {
       return jsonResp({ success: true, tests, summary: "Token invalid — cannot proceed with API tests" });
     }
 
+    // --- Prepare tokens ---
+    const adminTokenResult = await getAdminToken(config, supabase, integration_account_id);
+    const tokens: { label: string; token: string }[] = [];
+    if (adminTokenResult.token) tokens.push({ label: "admin_token", token: adminTokenResult.token });
+    if (config.token && config.token !== adminTokenResult.token) tokens.push({ label: "regular_token", token: config.token });
+    if (tokens.length === 0 && config.token) tokens.push({ label: "regular_token", token: config.token });
+
     // TEST 2: Administration/Tracker/List
-    const trackerUrls = buildSsxUrlCandidates(config.baseUrl, config.apiVersion, "/Administration/Tracker/List");
-    const trackerResult = await tryEndpointWithFallback({
-      urlCandidates: trackerUrls,
-      token: config.token,
-      bodyCandidates: ADMIN_BODY_CANDIDATES,
-      timeoutMs: 15_000,
-    });
+    // Uses SAME strategy as ssx-sync-units: buildAdminUrlCandidates × all body candidates × both tokens
+    const trackerUrls = buildAdminUrlCandidates(config.baseUrl, config.apiVersion, "/Administration/Tracker/List");
+    const trackerAllAttempts: AttemptLog[] = [];
+    let trackerSuccess = false;
+    let trackerItems: any[] = [];
+    let trackerWinningEndpoint = trackerUrls[0];
+    let trackerWinningFormat = "";
+    let trackerWinningToken = "";
+    let trackerErrorClass: SsxErrorClass | null = null;
+    const trackerStart = Date.now();
+
+    for (const { label, token } of tokens) {
+      const result = await tryEndpointWithFallback({
+        urlCandidates: trackerUrls,
+        token,
+        bodyCandidates: ADMIN_BODY_CANDIDATES,
+        timeoutMs: 15_000,
+        abortOnAuthError: false,
+      });
+      trackerAllAttempts.push(...result.attempts);
+
+      if (result.success && result.items.length > 0) {
+        trackerSuccess = true;
+        trackerItems = result.items;
+        trackerWinningEndpoint = result.endpoint;
+        trackerWinningFormat = result.successfulFormat || "";
+        trackerWinningToken = label;
+        break;
+      }
+      trackerErrorClass = result.errorClass;
+    }
+
     tests.push({
       name: "admin_tracker_list",
-      status: trackerResult.success ? "pass" : (trackerResult.errorClass === "empty_response" ? "warn" : "fail"),
-      endpoint: trackerResult.endpoint,
-      status_code: trackerResult.statusCode,
-      error_class: trackerResult.success ? null : trackerResult.errorClass,
-      items_found: trackerResult.items.length,
-      duration_ms: trackerResult.attempts.reduce((s, a) => s + a.durationMs, 0),
-      details: trackerResult.success
-        ? `Found ${trackerResult.items.length} trackers via ${trackerResult.successfulFormat}`
-        : `Failed: ${trackerResult.errorClass} — ${trackerResult.errorMessage}. Attempted: ${trackerResult.attempts.map(a => `${a.format}→${a.statusCode}`).join(", ")}`,
+      status: trackerSuccess ? "pass" : (trackerErrorClass === "empty_response" ? "warn" : "fail"),
+      endpoint: trackerWinningEndpoint,
+      endpoint_candidates: trackerUrls,
+      body_candidates_tried: ADMIN_BODY_CANDIDATES.map(b => b.label),
+      token_mode: trackerWinningToken || tokens.map(t => t.label).join(","),
+      status_code: trackerAllAttempts.length > 0 ? trackerAllAttempts[trackerAllAttempts.length - 1].statusCode : 0,
+      error_class: trackerSuccess ? null : trackerErrorClass,
+      items_found: trackerItems.length,
+      duration_ms: Date.now() - trackerStart,
+      details: trackerSuccess
+        ? `Found ${trackerItems.length} trackers via ${trackerWinningToken}:${trackerWinningFormat} at ${trackerWinningEndpoint}`
+        : `Failed: ${trackerErrorClass}`,
+      attempt_matrix: summarizeAttemptMatrix(trackerAllAttempts),
     });
 
     // TEST 3: Administration/Vehicle list (v2 and v1 variants)
-    const vehicleUrlsV2 = buildSsxUrlCandidates(config.baseUrl, config.apiVersion, "/Administration/Vehicle/v2/List");
-    const vehicleUrlsV1 = buildSsxUrlCandidates(config.baseUrl, config.apiVersion, "/Administration/Vehicle/List");
-    const vehicleResult = await tryEndpointWithFallback({
-      urlCandidates: [...vehicleUrlsV2, ...vehicleUrlsV1],
-      token: config.token,
-      bodyCandidates: ADMIN_BODY_CANDIDATES,
-      timeoutMs: 15_000,
-    });
+    const vehicleV2Urls = buildAdminUrlCandidates(config.baseUrl, config.apiVersion, "/Administration/Vehicle/v2/List");
+    const vehicleV1Urls = buildAdminUrlCandidates(config.baseUrl, config.apiVersion, "/Administration/Vehicle/List");
+    const allVehicleUrls = [...vehicleV2Urls, ...vehicleV1Urls];
+    const vehicleAllAttempts: AttemptLog[] = [];
+    let vehicleSuccess = false;
+    let vehicleItems: any[] = [];
+    let vehicleWinningEndpoint = allVehicleUrls[0];
+    let vehicleWinningFormat = "";
+    let vehicleWinningToken = "";
+    let vehicleErrorClass: SsxErrorClass | null = null;
+    const vehicleStart = Date.now();
+
+    for (const { label, token } of tokens) {
+      const result = await tryEndpointWithFallback({
+        urlCandidates: allVehicleUrls,
+        token,
+        bodyCandidates: ADMIN_BODY_CANDIDATES,
+        timeoutMs: 15_000,
+        abortOnAuthError: false,
+      });
+      vehicleAllAttempts.push(...result.attempts);
+
+      if (result.success && result.items.length > 0) {
+        vehicleSuccess = true;
+        vehicleItems = result.items;
+        vehicleWinningEndpoint = result.endpoint;
+        vehicleWinningFormat = result.successfulFormat || "";
+        vehicleWinningToken = label;
+        break;
+      }
+      vehicleErrorClass = result.errorClass;
+    }
+
     tests.push({
       name: "admin_vehicle_list",
-      status: vehicleResult.success ? "pass" : (vehicleResult.errorClass === "empty_response" ? "warn" : "fail"),
-      endpoint: vehicleResult.endpoint,
-      status_code: vehicleResult.statusCode,
-      error_class: vehicleResult.success ? null : vehicleResult.errorClass,
-      items_found: vehicleResult.items.length,
-      duration_ms: vehicleResult.attempts.reduce((s, a) => s + a.durationMs, 0),
-      details: vehicleResult.success
-        ? `Found ${vehicleResult.items.length} vehicles via ${vehicleResult.successfulFormat}`
-        : `Failed: ${vehicleResult.errorClass}. Attempted: ${vehicleResult.attempts.map(a => `${a.format}→${a.statusCode}`).join(", ")}`,
+      status: vehicleSuccess ? "pass" : (vehicleErrorClass === "empty_response" ? "warn" : "fail"),
+      endpoint: vehicleWinningEndpoint,
+      endpoint_candidates: allVehicleUrls,
+      body_candidates_tried: ADMIN_BODY_CANDIDATES.map(b => b.label),
+      token_mode: vehicleWinningToken || tokens.map(t => t.label).join(","),
+      status_code: vehicleAllAttempts.length > 0 ? vehicleAllAttempts[vehicleAllAttempts.length - 1].statusCode : 0,
+      error_class: vehicleSuccess ? null : vehicleErrorClass,
+      items_found: vehicleItems.length,
+      duration_ms: Date.now() - vehicleStart,
+      details: vehicleSuccess
+        ? `Found ${vehicleItems.length} vehicles via ${vehicleWinningToken}:${vehicleWinningFormat} at ${vehicleWinningEndpoint}`
+        : `Failed: ${vehicleErrorClass}`,
+      attempt_matrix: summarizeAttemptMatrix(vehicleAllAttempts),
     });
 
-    // TEST 4: Tracking/PositionHistory/List (quick test with short window)
-    const posHistUrl = buildSsxUrl(config.baseUrl, config.apiVersion, "/Tracking/PositionHistory/List");
+    // TEST 4: Tracking/PositionHistory/List
+    const posHistUrls = buildSsxUrlCandidates(config.baseUrl, config.apiVersion, "/Tracking/PositionHistory/List");
     const since5m = new Date(Date.now() - 5 * 60_000).toISOString();
     const posFilters = [{ PropertyName: "DateTimeGPS", Condition: ">=", Value: since5m }];
-    let posResp = await ssxPost(posHistUrl, config.token, posFilters, 15_000);
-    if (!posResp.ok && (posResp.status === 400 || posResp.status === 415)) {
-      posResp = await ssxPost(posHistUrl, config.token, { Filters: posFilters }, 15_000);
-    }
-    const posItems = posResp.ok ? extractResponseItems(posResp.parsed) : [];
+    const posStart = Date.now();
+    const posAllAttempts: AttemptLog[] = [];
+    let posSuccess = false;
+    let posItemCount = 0;
+    let posWinningEndpoint = posHistUrls[0];
+    let posErrorClass: SsxErrorClass | null = null;
+
+    // Try array body then wrapped, on each URL candidate
+    const posBodies: { label: string; body: any }[] = [
+      { label: "array_filters", body: posFilters },
+      { label: "wrapped_filters", body: { Filters: posFilters } },
+    ];
+    const posResult = await tryEndpointWithFallback({
+      urlCandidates: posHistUrls,
+      token: config.token,
+      bodyCandidates: posBodies,
+      timeoutMs: 15_000,
+      abortOnAuthError: true,
+    });
+    posAllAttempts.push(...posResult.attempts);
+    posSuccess = posResult.success;
+    posItemCount = posResult.items.length;
+    posWinningEndpoint = posResult.endpoint;
+    posErrorClass = posResult.errorClass === "unknown" ? null : posResult.errorClass;
+
     tests.push({
       name: "tracking_position_history",
-      status: posResp.ok ? (posItems.length > 0 ? "pass" : "warn") : "fail",
-      endpoint: posHistUrl,
-      status_code: posResp.status,
-      error_class: posResp.ok ? null : posResp.errorClass,
-      items_found: posItems.length,
-      duration_ms: posResp.durationMs,
-      details: posResp.ok
-        ? `${posItems.length} positions in last 5min`
-        : `Failed: ${posResp.errorClass} — ${posResp.text.substring(0, 150)}`,
+      status: posSuccess ? (posItemCount > 0 ? "pass" : "warn") : "fail",
+      endpoint: posWinningEndpoint,
+      endpoint_candidates: posHistUrls,
+      body_candidates_tried: posBodies.map(b => b.label),
+      token_mode: "regular_token",
+      status_code: posAllAttempts.length > 0 ? posAllAttempts[posAllAttempts.length - 1].statusCode : 0,
+      error_class: posSuccess ? null : posErrorClass,
+      items_found: posItemCount,
+      duration_ms: Date.now() - posStart,
+      details: posSuccess
+        ? `${posItemCount} positions in last 5min`
+        : `Failed: ${posErrorClass}`,
+      attempt_matrix: summarizeAttemptMatrix(posAllAttempts),
     });
 
     // TEST 5: Tracking/Telemetry/List
-    const telUrl = buildSsxUrl(config.baseUrl, config.apiVersion, "/Tracking/Telemetry/List");
-    const telResp = await ssxPost(telUrl, config.token, null, 15_000);
-    const telItems = telResp.ok ? extractResponseItems(telResp.parsed) : [];
+    const telUrls = buildSsxUrlCandidates(config.baseUrl, config.apiVersion, "/Tracking/Telemetry/List");
+    const telStart = Date.now();
+    const telResult = await tryEndpointWithFallback({
+      urlCandidates: telUrls,
+      token: config.token,
+      bodyCandidates: [{ label: "null_body", body: null }],
+      timeoutMs: 15_000,
+      abortOnAuthError: true,
+    });
+
     tests.push({
       name: "tracking_telemetry_list",
-      status: telResp.ok ? (telItems.length > 0 ? "pass" : "warn") : "fail",
-      endpoint: telUrl,
-      status_code: telResp.status,
-      error_class: telResp.ok ? null : telResp.errorClass,
-      items_found: telItems.length,
-      duration_ms: telResp.durationMs,
-      details: telResp.ok
-        ? `${telItems.length} telemetry types available`
-        : `Failed: ${telResp.errorClass}`,
+      status: telResult.success ? (telResult.items.length > 0 ? "pass" : "warn") : "fail",
+      endpoint: telResult.endpoint,
+      endpoint_candidates: telUrls,
+      body_candidates_tried: ["null_body"],
+      token_mode: "regular_token",
+      status_code: telResult.attempts.length > 0 ? telResult.attempts[telResult.attempts.length - 1].statusCode : 0,
+      error_class: telResult.success ? null : telResult.errorClass,
+      items_found: telResult.items.length,
+      duration_ms: Date.now() - telStart,
+      details: telResult.success
+        ? `${telResult.items.length} telemetry types available`
+        : `Failed: ${telResult.errorClass}`,
+      attempt_matrix: summarizeAttemptMatrix(telResult.attempts),
     });
 
     // Summary
@@ -195,6 +310,8 @@ Deno.serve(async (req) => {
       summary: `${passed} passed, ${warned} warnings, ${failed} failed out of ${tests.length} tests`,
       api_version: config.apiVersion,
       base_url: config.baseUrl,
+      admin_token_available: !!adminTokenResult.token,
+      admin_token_error: adminTokenResult.error,
       tests,
     });
   } catch (err: any) {
@@ -210,7 +327,12 @@ async function logDiagnostic(supabase: any, account: any, integrationAccountId: 
     action: "ssx_diagnostic",
     success: tests.every(t => t.status !== "fail"),
     metadata: {
-      tests: tests.map(t => ({ name: t.name, status: t.status, items: t.items_found, error_class: t.error_class })),
+      tests: tests.map(t => ({
+        name: t.name, status: t.status, items: t.items_found,
+        error_class: t.error_class, token_mode: t.token_mode,
+        winning_endpoint: t.endpoint,
+        attempt_matrix: t.attempt_matrix,
+      })),
     },
   });
 }

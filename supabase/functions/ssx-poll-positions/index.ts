@@ -1,14 +1,18 @@
 /**
  * ssx-poll-positions — Polls position history from SSX for active provider units.
  *
- * Uses centralized URL builder and response normalizer from shared utils.
- * Logs each SSX API call with full diagnostic detail.
+ * IMPROVEMENTS:
+ * - Uses buildSsxUrlCandidates for versioned + unversioned tracking URLs.
+ * - Sends BOTH unit filter AND time window filter to SSX to reduce data + rate limits.
+ * - Tries multiple filter property names in order.
+ * - Tries both array and wrapped body formats.
+ * - Logs the exact property name and endpoint that worked.
  */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
   corsHeaders,
-  buildSsxUrl,
+  buildSsxUrlCandidates,
   readAccountConfig,
   extractResponseItems,
   ssxPost,
@@ -106,15 +110,30 @@ Deno.serve(async (req) => {
       unitToVehicle[link.provider_unit_id] = { vehicle_id: link.vehicle_id, tenant_id: link.tenant_id };
     }
 
-    // Build position URL using centralized builder
-    const filterPropertyName = config.settings.filter_property || "TrackedUnit";
-    const positionUrl = buildSsxUrl(config.baseUrl, config.apiVersion, "/Tracking/PositionHistory/List");
+    // Build position URL candidates using centralized builder
+    const positionUrls = buildSsxUrlCandidates(config.baseUrl, config.apiVersion, "/Tracking/PositionHistory/List");
     const defaultPollWindow = config.pollWindowMinutes;
+
+    // Filter property candidates — try in order, stop on first success
+    const filterPropertyCandidates = [
+      config.settings.filter_property, // configured first
+      "TrackedUnit",
+      "TrackedUnitIntegrationCode",
+      "TrackerIntegrationCode",
+      "IntegrationCode",
+    ].filter(Boolean) as string[];
+    // Deduplicate
+    const uniqueFilterProps = [...new Set(filterPropertyCandidates)];
 
     const results: any[] = [];
     let totalInserted = 0;
     let totalDuplicates = 0;
     const touchedVehicles: { tenant_id: string; vehicle_id: string; captured_at: string }[] = [];
+
+    // Track which property + URL + format worked (memoize for subsequent units)
+    let workingProperty: string | null = null;
+    let workingUrl: string | null = null;
+    let workingFormat: "array" | "wrapped" | null = null;
 
     for (const unit of units) {
       const mapping = unitToVehicle[unit.id];
@@ -135,43 +154,119 @@ Deno.serve(async (req) => {
       }
 
       const now = new Date();
-      const filters = [{ PropertyName: filterPropertyName, Condition: "Equal", Value: unit.external_code }];
+      const isFirstPoll = !cursor?.last_success_at;
+      const pollWindowMinutes = isFirstPoll ? 1440 : defaultPollWindow;
 
-      // Try array format first, then wrapped
-      let resp = await ssxPost(positionUrl, config.token, filters, config.requestTimeoutMs);
+      // Derive time window start from cursor or poll window
+      const timeStart = cursor?.last_success_at
+        ? new Date(new Date(cursor.last_success_at).getTime() - 2 * 60_000).toISOString() // 2min overlap
+        : new Date(Date.now() - pollWindowMinutes * 60_000).toISOString();
 
-      logSsxCall({
-        routine: "poll-positions", endpoint: positionUrl, method: "POST",
-        apiVersion: config.apiVersion, attemptType: "position_array",
-        payloadPreview: filters, statusCode: resp.status,
-        durationMs: resp.durationMs, responsePreview: (resp.text || "").substring(0, 150),
-        result: resp.ok ? "success" : "error", errorClass: resp.errorClass,
-      });
+      // Try to find working combination
+      let resp: any = null;
+      let usedProperty = workingProperty;
+      let usedUrl = workingUrl;
+      let usedFormat = workingFormat;
 
-      let requestFormat = "array";
-      if (!resp.ok && (resp.status === 400 || resp.status === 415)) {
-        requestFormat = "wrapped";
-        resp = await ssxPost(positionUrl, config.token, { Filters: filters }, config.requestTimeoutMs);
+      if (workingProperty && workingUrl && workingFormat) {
+        // Use memoized combination
+        const filters = [
+          { PropertyName: workingProperty, Condition: "Equal", Value: unit.external_code },
+          { PropertyName: "DateTimeGPS", Condition: ">=", Value: timeStart },
+        ];
+        const body = workingFormat === "array" ? filters : { Filters: filters };
+        resp = await ssxPost(workingUrl, config.token, body, config.requestTimeoutMs);
 
         logSsxCall({
-          routine: "poll-positions", endpoint: positionUrl, method: "POST",
-          apiVersion: config.apiVersion, attemptType: "position_wrapped",
+          routine: "poll-positions", endpoint: workingUrl, method: "POST",
+          apiVersion: config.apiVersion, attemptType: `memo:${workingProperty}:${workingFormat}`,
           statusCode: resp.status, durationMs: resp.durationMs,
           responsePreview: (resp.text || "").substring(0, 150),
-          result: resp.ok ? "success" : "error",
-          errorClass: resp.errorClass,
-          fallbackReason: "Array format returned 400/415",
+          result: resp.ok ? "success" : "error", errorClass: resp.errorClass,
         });
+
+        // If memo failed, clear and fall through to discovery
+        if (!resp.ok) {
+          resp = null;
+          workingProperty = null;
+          workingUrl = null;
+          workingFormat = null;
+        }
       }
 
-      if (resp.networkError) {
+      // Discovery: try all property × URL × format combinations
+      if (!resp || !resp.ok) {
+        let found = false;
+        for (const prop of uniqueFilterProps) {
+          if (found) break;
+          for (const url of positionUrls) {
+            if (found) break;
+            const filters = [
+              { PropertyName: prop, Condition: "Equal", Value: unit.external_code },
+              { PropertyName: "DateTimeGPS", Condition: ">=", Value: timeStart },
+            ];
+
+            // Try array format
+            resp = await ssxPost(url, config.token, filters, config.requestTimeoutMs);
+            logSsxCall({
+              routine: "poll-positions", endpoint: url, method: "POST",
+              apiVersion: config.apiVersion, attemptType: `discover:${prop}:array`,
+              statusCode: resp.status, durationMs: resp.durationMs,
+              responsePreview: (resp.text || "").substring(0, 150),
+              result: resp.ok ? "success" : "error", errorClass: resp.errorClass,
+            });
+
+            if (resp.ok) {
+              usedProperty = prop;
+              usedUrl = url;
+              usedFormat = "array";
+              workingProperty = prop;
+              workingUrl = url;
+              workingFormat = "array";
+              found = true;
+              break;
+            }
+
+            if (resp.status === 400 || resp.status === 415) {
+              // Try wrapped format
+              resp = await ssxPost(url, config.token, { Filters: filters }, config.requestTimeoutMs);
+              logSsxCall({
+                routine: "poll-positions", endpoint: url, method: "POST",
+                apiVersion: config.apiVersion, attemptType: `discover:${prop}:wrapped`,
+                statusCode: resp.status, durationMs: resp.durationMs,
+                responsePreview: (resp.text || "").substring(0, 150),
+                result: resp.ok ? "success" : "error", errorClass: resp.errorClass,
+              });
+
+              if (resp.ok) {
+                usedProperty = prop;
+                usedUrl = url;
+                usedFormat = "wrapped";
+                workingProperty = prop;
+                workingUrl = url;
+                workingFormat = "wrapped";
+                found = true;
+                break;
+              }
+            }
+
+            // If 404, try next URL
+            if (resp.errorClass === "route_not_found") continue;
+            // If auth error, stop trying this property
+            if (resp.errorClass === "auth_error") break;
+          }
+        }
+      }
+
+      if (!resp || resp.networkError) {
+        const errMsg = resp?.networkError || "No working endpoint found";
         const backoffUntil = new Date(Date.now() + 60000).toISOString();
         await upsertCursor(supabase, {
           tenant_id: mapping.tenant_id, provider_unit_id: unit.id,
           last_polled_at: now.toISOString(), last_error_at: now.toISOString(),
-          last_error: resp.networkError, backoff_until: backoffUntil,
+          last_error: errMsg, backoff_until: backoffUntil,
         });
-        results.push({ unit_code: unit.external_code, status: "error", error: resp.networkError, error_class: resp.errorClass });
+        results.push({ unit_code: unit.external_code, status: "error", error: errMsg, error_class: resp?.errorClass || "network_error" });
         continue;
       }
 
@@ -185,11 +280,14 @@ Deno.serve(async (req) => {
 
         await logIntegration(supabase, {
           tenant_id: mapping.tenant_id, integration_account_id,
-          action: "ssx_poll_positions", endpoint: positionUrl,
+          action: "ssx_poll_positions", endpoint: usedUrl || positionUrls[0],
           status_code: resp.status, success: false,
           error_message: resp.text.substring(0, 500),
           duration_ms: resp.durationMs,
-          metadata: { unit_code: unit.external_code, error_class: resp.errorClass },
+          metadata: {
+            unit_code: unit.external_code, error_class: resp.errorClass,
+            filter_property: usedProperty, body_format: usedFormat,
+          },
         });
 
         results.push({ unit_code: unit.external_code, status: "error", http_status: resp.status, error_class: resp.errorClass });
@@ -200,9 +298,6 @@ Deno.serve(async (req) => {
       let inserted = 0;
       let duplicates = 0;
       let latestPoint: any = null;
-
-      const isFirstPoll = !cursor?.last_success_at;
-      const pollWindowMinutes = isFirstPoll ? 1440 : defaultPollWindow;
 
       for (const point of positions) {
         const normalized = normalizePosition(point);
@@ -254,11 +349,14 @@ Deno.serve(async (req) => {
 
       await logIntegration(supabase, {
         tenant_id: mapping.tenant_id, integration_account_id,
-        action: "ssx_poll_positions", endpoint: positionUrl,
+        action: "ssx_poll_positions", endpoint: usedUrl || positionUrls[0],
         status_code: 200, success: true, duration_ms: resp.durationMs,
         metadata: {
           unit_code: unit.external_code, points_received: positions.length,
-          inserted, duplicates, request_format: requestFormat,
+          inserted, duplicates,
+          filter_property: usedProperty, body_format: usedFormat,
+          time_window_start: timeStart,
+          endpoint_used: usedUrl,
         },
       });
 
@@ -275,6 +373,7 @@ Deno.serve(async (req) => {
       results.push({
         unit_code: unit.external_code, status: "ok",
         points_received: positions.length, inserted, duplicates,
+        filter_property: usedProperty, body_format: usedFormat,
       });
     }
 
@@ -290,7 +389,11 @@ Deno.serve(async (req) => {
     return jsonResp({
       success: true, total_units: units.length,
       total_inserted: totalInserted, total_duplicates: totalDuplicates,
-      touched_vehicles: touchedVehicles.length, results,
+      touched_vehicles: touchedVehicles.length,
+      working_filter_property: workingProperty,
+      working_endpoint: workingUrl,
+      working_format: workingFormat,
+      results,
     });
   } catch (err: any) {
     console.error("[SSX:poll-positions] error:", err);

@@ -7,7 +7,7 @@
  * DESIGN DECISIONS:
  * - Administration API is the PRIMARY source for tracker/vehicle catalogs.
  * - PositionHistory is a FALLBACK only, never the authoritative source.
- * - Administration API does NOT use version prefix (endpoints are /Administration/...).
+ * - Administration API may or may not use version prefix — we try BOTH.
  * - Tracking API uses version prefix (e.g., /v3/Tracking/...).
  * - HashAuth in Login scopes the token to Tracking integration only.
  *   Administration endpoints require a token obtained WITHOUT HashAuth.
@@ -60,6 +60,23 @@ export function buildAdminUrl(baseUrl: string, path: string): string {
   const base = baseUrl.replace(/\/$/, "");
   const cleanPath = path.startsWith("/") ? path : `/${path}`;
   return `${base}${cleanPath}`;
+}
+
+/**
+ * Returns ordered endpoint candidates for Administration:
+ * 1. Unversioned: /Administration/Tracker/List
+ * 2. Versioned:   /v3/Administration/Tracker/List
+ * No duplicates.
+ */
+export function buildAdminUrlCandidates(baseUrl: string, apiVersion: string, path: string): string[] {
+  const base = baseUrl.replace(/\/$/, "");
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  const ver = (apiVersion || "v3").replace(/^\//, "").replace(/\/$/, "");
+  const unversioned = `${base}${cleanPath}`;
+  const versioned = `${base}/${ver}${cleanPath}`;
+  const urls = [unversioned];
+  if (versioned !== unversioned) urls.push(versioned);
+  return urls;
 }
 
 // ======================== Account Config Reader ========================
@@ -257,6 +274,7 @@ export function isAuthFailure(errorClass: SsxErrorClass): boolean {
 
 /**
  * Extracts the array of items from any SSX API response format.
+ * Supports many container key variants and one-level nested scans.
  */
 export function extractResponseItems(parsed: any): any[] {
   if (parsed == null) return [];
@@ -270,16 +288,20 @@ export function extractResponseItems(parsed: any): any[] {
     "Units", "units", "Positions", "positions",
     "Content", "content", "List", "list",
     "TrackedUnits", "trackedUnits",
+    "Rows", "rows", "Values", "values",
+    "Collection", "collection", "Entities", "entities",
+    "Response", "response",
   ];
   for (const key of directKeys) {
     if (Array.isArray(parsed[key])) return parsed[key];
   }
 
-  const outerKeys = ["Data", "data", "Result", "result", "Content", "content"];
+  // One-level nested scan
+  const outerKeys = ["Data", "data", "Result", "result", "Content", "content", "Response", "response"];
   for (const outerKey of outerKeys) {
     const outer = parsed[outerKey];
     if (outer && typeof outer === "object" && !Array.isArray(outer)) {
-      for (const innerKey of ["Items", "items", "Data", "data", "Records", "records", "List", "list"]) {
+      for (const innerKey of directKeys) {
         if (Array.isArray(outer[innerKey])) return outer[innerKey];
       }
     }
@@ -421,14 +443,37 @@ export async function ssxPost(
   }
 }
 
+// ======================== Body Candidates ========================
+
 /**
- * Try an endpoint with multiple URL candidates and body candidates.
+ * Body candidates for Administration API endpoints.
+ * SSX Administration List endpoints accept various formats.
+ * We try multiple because different SSX versions/configs accept different bodies.
  * 
- * IMPORTANT: `abortOnAuthError` controls behavior on 403/401:
- *   - true (default): stops immediately on auth_error (good for Tracking endpoints)
- *   - false: continues trying other body formats on 403 (good for Admin endpoints,
- *     where SSX sometimes returns 403 for body format issues, not just auth)
+ * NOTE: 403 from SSX admin can mean "wrong body format" not just "no permission",
+ * so we try ALL formats before concluding it's truly an auth error.
  */
+export const ADMIN_BODY_CANDIDATES: { label: string; body: any }[] = [
+  { label: "null_body", body: null },
+  { label: "empty_object", body: {} },
+  { label: "empty_array", body: [] },
+  { label: "wrapped_empty_filters", body: { Filters: [] } },
+  { label: "paginated", body: { Page: 1, PageSize: 500 } },
+];
+
+/**
+ * Body candidates for Tracking API endpoints (TrackedUnit/List, etc.)
+ */
+export const TRACKING_BODY_CANDIDATES: { label: string; body: any }[] = [
+  { label: "null_body", body: null },
+  { label: "empty_object", body: {} },
+  { label: "empty_array", body: [] },
+  { label: "wrapped_empty_filters", body: { Filters: [] } },
+  { label: "paginated", body: { Page: 1, PageSize: 500 } },
+];
+
+// ======================== Endpoint Discovery ========================
+
 export interface EndpointAttemptResult {
   success: boolean;
   items: any[];
@@ -451,21 +496,19 @@ export interface AttemptLog {
 }
 
 /**
- * Body candidates for Administration API endpoints.
- * SSX Administration List endpoints accept various formats.
- * We try multiple because different SSX versions/configs accept different bodies.
+ * Try an endpoint with multiple URL candidates and body candidates.
  * 
- * NOTE: 403 from SSX admin can mean "wrong body format" not just "no permission",
- * so we try ALL formats before concluding it's truly an auth error.
+ * Error classification priority (derived from actual attempts):
+ * 1. rate_limited — abort immediately
+ * 2. If any attempt succeeded with items — return success
+ * 3. If all failed: classify based on DOMINANT failure pattern
+ *    - If any was 404 → route_not_found
+ *    - If any was 400/415 → body_incompatible
+ *    - If any was 401/403 → auth_error
+ *    - If any was timeout/network → timeout/network_error
+ *    - If all returned empty 200 → empty_response
+ *    - Otherwise → unknown
  */
-export const ADMIN_BODY_CANDIDATES: { label: string; body: any }[] = [
-  { label: "empty_array", body: [] },
-  { label: "null_body", body: null },
-  { label: "empty_object", body: {} },
-  { label: "paginated", body: { Page: 1, PageSize: 500 } },
-  { label: "filters_empty", body: { Filters: [] } },
-];
-
 export async function tryEndpointWithFallback(params: {
   urlCandidates: string[];
   token: string;
@@ -478,9 +521,6 @@ export async function tryEndpointWithFallback(params: {
 }): Promise<EndpointAttemptResult> {
   const { urlCandidates, token, bodyCandidates, timeoutMs = 30_000, memoEndpoint, memoFormat, abortOnAuthError = true } = params;
   const attempts: AttemptLog[] = [];
-  let lastStatus = 0;
-  let lastErrorClass: SsxErrorClass = "unknown";
-  let lastError: string | null = null;
 
   // Try memoized combination first
   if (memoEndpoint && memoFormat) {
@@ -491,23 +531,16 @@ export async function tryEndpointWithFallback(params: {
       attempts.push(buildAttemptLog(memoEndpoint, `memo:${memoFormat}`, result, items.length));
       if (result.errorClass === "rate_limited") return buildResult(false, [], memoEndpoint, 429, "rate_limited", "Rate limit", null, attempts);
       if (result.ok && items.length > 0) return buildResult(true, items, memoEndpoint, result.status, "unknown", null, memoFormat, attempts);
-      // For memo miss: continue to full scan (don't abort on auth for memo)
     }
   }
 
   for (const url of urlCandidates) {
-    let allAuthErrors = true; // Track if ALL attempts for this URL were 403
-
     for (const candidate of bodyCandidates) {
       if (url === memoEndpoint && candidate.label === memoFormat) continue;
 
       const result = await ssxPost(url, token, candidate.body, timeoutMs);
       const items = result.ok ? extractResponseItems(result.parsed) : [];
       attempts.push(buildAttemptLog(url, candidate.label, result, items.length));
-
-      lastStatus = result.status;
-      lastErrorClass = result.errorClass;
-      lastError = result.networkError || result.text.substring(0, 200);
 
       if (result.errorClass === "rate_limited") return buildResult(false, [], url, 429, "rate_limited", "Rate limit", null, attempts);
 
@@ -516,33 +549,87 @@ export async function tryEndpointWithFallback(params: {
         if (abortOnAuthError) {
           return buildResult(false, [], url, result.status, "auth_error", "Auth failed", null, attempts);
         }
-        // Continue trying other body formats — SSX sometimes returns 403 for wrong body
         continue;
       }
-
-      allAuthErrors = false; // At least one non-auth response
 
       if (result.ok && items.length > 0) return buildResult(true, items, url, result.status, "unknown", null, candidate.label, attempts);
 
-      if (result.ok && items.length === 0) {
-        lastErrorClass = "empty_response";
-        lastError = "Endpoint returned success but empty list";
-        continue;
-      }
+      if (result.ok && items.length === 0) continue; // empty response, try next
 
       if (result.errorClass === "route_not_found") break; // URL doesn't exist, try next URL
 
       if (result.errorClass === "body_incompatible") continue; // try next body
     }
-
-    // If ALL attempts for this URL were auth errors, record that
-    if (allAuthErrors && !abortOnAuthError) {
-      lastErrorClass = "auth_error";
-      lastError = "All body formats returned 403";
-    }
   }
 
-  return buildResult(false, [], urlCandidates[0] || "", lastStatus, lastErrorClass, lastError, null, attempts);
+  // All attempts exhausted — derive the BEST real error classification
+  const finalResult = deriveErrorFromAttempts(attempts, urlCandidates[0] || "");
+  return finalResult;
+}
+
+/**
+ * Derives the real error classification from the full attempt matrix.
+ * Priority: route_not_found > body_incompatible > auth_error > timeout > empty_response > unknown
+ */
+function deriveErrorFromAttempts(attempts: AttemptLog[], fallbackEndpoint: string): EndpointAttemptResult {
+  if (attempts.length === 0) {
+    return buildResult(false, [], fallbackEndpoint, 0, "unknown", "No attempts made", null, attempts);
+  }
+
+  const classes = new Set(attempts.map(a => a.errorClass));
+  const statuses = attempts.map(a => a.statusCode);
+  const lastAttempt = attempts[attempts.length - 1];
+
+  // Check if ALL were empty_response (200 but no items)
+  const allEmpty = attempts.every(a => a.errorClass === "empty_response");
+  if (allEmpty) {
+    return buildResult(false, [], lastAttempt.endpoint, 200, "empty_response",
+      "All endpoints returned success but empty list", null, attempts);
+  }
+
+  // Priority-based classification from actual failures
+  let bestClass: SsxErrorClass = "unknown";
+  let bestMessage = "All attempts failed";
+  let bestEndpoint = lastAttempt.endpoint;
+  let bestStatus = lastAttempt.statusCode;
+
+  if (classes.has("route_not_found")) {
+    bestClass = "route_not_found";
+    bestMessage = "Endpoint(s) returned 404";
+    const match = attempts.find(a => a.errorClass === "route_not_found");
+    if (match) { bestEndpoint = match.endpoint; bestStatus = match.statusCode; }
+  } else if (classes.has("body_incompatible")) {
+    bestClass = "body_incompatible";
+    bestMessage = "All body formats rejected (400/415)";
+    const match = attempts.find(a => a.errorClass === "body_incompatible");
+    if (match) { bestEndpoint = match.endpoint; bestStatus = match.statusCode; }
+  } else if (classes.has("auth_error")) {
+    bestClass = "auth_error";
+    bestMessage = "Authentication failed on all attempts (401/403)";
+    const match = attempts.find(a => a.errorClass === "auth_error");
+    if (match) { bestEndpoint = match.endpoint; bestStatus = match.statusCode; }
+  } else if (classes.has("timeout") || classes.has("network_error")) {
+    bestClass = classes.has("timeout") ? "timeout" : "network_error";
+    bestMessage = "Network/timeout error";
+    const match = attempts.find(a => a.errorClass === "timeout" || a.errorClass === "network_error");
+    if (match) { bestEndpoint = match.endpoint; bestStatus = match.statusCode; }
+  } else if (classes.has("server_error")) {
+    bestClass = "server_error";
+    bestMessage = "Server error (5xx)";
+    const match = attempts.find(a => a.errorClass === "server_error");
+    if (match) { bestEndpoint = match.endpoint; bestStatus = match.statusCode; }
+  }
+
+  return buildResult(false, [], bestEndpoint, bestStatus, bestClass, bestMessage, null, attempts);
+}
+
+/**
+ * Summarizes the attempt matrix into human-readable strings for logs/diagnostic.
+ */
+export function summarizeAttemptMatrix(attempts: AttemptLog[]): string[] {
+  return attempts.map(a =>
+    `POST ${a.endpoint} [${a.format}] => ${a.statusCode} ${a.errorClass}${a.itemCount > 0 ? ` (${a.itemCount} items)` : ""}`
+  );
 }
 
 // ======================== Logging ========================
