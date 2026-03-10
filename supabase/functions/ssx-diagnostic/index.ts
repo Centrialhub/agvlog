@@ -238,8 +238,8 @@ Deno.serve(async (req) => {
     });
 
     // TEST 4: Tracking/PositionHistory/List
-    // Uses buildSsxUrlCandidates (versioned first, then unversioned) — for Tracking endpoints
-    const posHistUrls = buildSsxUrlCandidates(config.baseUrl, config.apiVersion, "/Tracking/PositionHistory/List");
+    // Uses buildPositionHistoryUrlCandidates: v3, v2, unversioned
+    const posHistUrls = buildPositionHistoryUrlCandidates(config.baseUrl, config.apiVersion);
     const since5m = new Date(Date.now() - 5 * 60_000).toISOString();
 
     // Swagger-aligned: use EventDate + "=" condition style, array body first
