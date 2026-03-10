@@ -205,16 +205,17 @@ Deno.serve(async (req) => {
           if (found) break;
           for (const url of positionUrls) {
             if (found) break;
+            // Build filters with primary time field
             const filters = [
               { PropertyName: prop, Condition: "=", Value: unit.external_code },
               { PropertyName: timeFilterProp, Condition: ">=", Value: timeStart },
             ];
 
-            // Try array format
+            // Try array format with primary time field
             resp = await ssxPost(url, config.token, filters, config.requestTimeoutMs);
             logSsxCall({
               routine: "poll-positions", endpoint: url, method: "POST",
-              apiVersion: config.apiVersion, attemptType: `discover:${prop}:array`,
+              apiVersion: config.apiVersion, attemptType: `discover:${prop}:array:${timeFilterProp}`,
               statusCode: resp.status, durationMs: resp.durationMs,
               responsePreview: (resp.text || "").substring(0, 150),
               result: resp.ok ? "success" : "error", errorClass: resp.errorClass,
@@ -231,12 +232,12 @@ Deno.serve(async (req) => {
               break;
             }
 
+            // If body incompatible, try wrapped format
             if (resp.status === 400 || resp.status === 415) {
-              // Try wrapped format
               resp = await ssxPost(url, config.token, { Filters: filters }, config.requestTimeoutMs);
               logSsxCall({
                 routine: "poll-positions", endpoint: url, method: "POST",
-                apiVersion: config.apiVersion, attemptType: `discover:${prop}:wrapped`,
+                apiVersion: config.apiVersion, attemptType: `discover:${prop}:wrapped:${timeFilterProp}`,
                 statusCode: resp.status, durationMs: resp.durationMs,
                 responsePreview: (resp.text || "").substring(0, 150),
                 result: resp.ok ? "success" : "error", errorClass: resp.errorClass,
@@ -249,6 +250,33 @@ Deno.serve(async (req) => {
                 workingProperty = prop;
                 workingUrl = url;
                 workingFormat = "wrapped";
+                found = true;
+                break;
+              }
+            }
+
+            // Try alt time field (DateTimeGPS) if primary failed
+            if (timeFilterProp !== timeFilterPropAlt) {
+              const filtersAlt = [
+                { PropertyName: prop, Condition: "=", Value: unit.external_code },
+                { PropertyName: timeFilterPropAlt, Condition: ">=", Value: timeStart },
+              ];
+              resp = await ssxPost(url, config.token, filtersAlt, config.requestTimeoutMs);
+              logSsxCall({
+                routine: "poll-positions", endpoint: url, method: "POST",
+                apiVersion: config.apiVersion, attemptType: `discover:${prop}:array:${timeFilterPropAlt}`,
+                statusCode: resp.status, durationMs: resp.durationMs,
+                responsePreview: (resp.text || "").substring(0, 150),
+                result: resp.ok ? "success" : "error", errorClass: resp.errorClass,
+              });
+
+              if (resp.ok) {
+                usedProperty = prop;
+                usedUrl = url;
+                usedFormat = "array";
+                workingProperty = prop;
+                workingUrl = url;
+                workingFormat = "array";
                 found = true;
                 break;
               }
