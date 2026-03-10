@@ -145,7 +145,7 @@ Deno.serve(async (req) => {
       status_code: result.statusCode, success: true,
       duration_ms: result.attempts.reduce((s, a) => s + a.durationMs, 0),
       metadata: {
-        total_received: telemetries.length, upserted: upsertCount,
+        total_received: telemetries.length, upserted: upsertCount, skipped_no_id: skippedNoId,
         final_successful_endpoint: result.endpoint,
         final_successful_format: result.successfulFormat,
         endpoint_candidates: telemetryUrls,
@@ -153,7 +153,10 @@ Deno.serve(async (req) => {
       },
     });
 
-    return jsonResp({ success: true, total_received: telemetries.length, upserted: upsertCount });
+    return jsonResp({
+      success: true, total_received: telemetries.length,
+      upserted: upsertCount, skipped_no_id: skippedNoId,
+    });
   } catch (err: any) {
     console.error("[SSX:sync-telemetry] error:", err);
     return jsonResp({ error: "Internal error", details: err.message }, 500);
