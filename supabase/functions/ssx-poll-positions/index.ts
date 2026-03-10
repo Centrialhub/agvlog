@@ -235,24 +235,28 @@ Deno.serve(async (req) => {
         scoutHint = unitResult.workingCombo;
       }
 
-      // Save per-unit memo to cursor
-      if (unitResult.workingCombo) {
-        const newMemo = {
-          memo_version: POLL_MEMO_VERSION,
-          poll_working_property: unitResult.workingCombo.property,
-          poll_working_value_source: unitResult.workingCombo.value_source,
-          poll_working_url: unitResult.workingCombo.url,
-          poll_working_format: unitResult.workingCombo.format,
-          poll_working_time_prop: unitResult.workingCombo.timeProp,
-          last_success_run: now.toISOString(),
-        };
-        await upsertCursor(supabase, {
-          tenant_id: mapping.tenant_id, provider_unit_id: unit.id,
-          last_polled_at: now.toISOString(),
-          last_error: null, backoff_until: null,
-          last_success_at: unitResult.latestCapturedAt || cursor?.last_success_at || null,
-          poll_memo: newMemo,
-        });
+    // Save per-unit memo to cursor — only advance last_success_at if persistence succeeded
+    if (unitResult.workingCombo && !unitResult.persistenceFailed) {
+      const newMemo = {
+        memo_version: POLL_MEMO_VERSION,
+        poll_working_property: unitResult.workingCombo.property,
+        poll_working_value_source: unitResult.workingCombo.value_source,
+        poll_working_url: unitResult.workingCombo.url,
+        poll_working_format: unitResult.workingCombo.format,
+        poll_working_time_prop: unitResult.workingCombo.timeProp,
+        last_success_run: now.toISOString(),
+      };
+      // Only advance cursor if inserts actually succeeded
+      const advanceCursorTo = unitResult.inserted > 0
+        ? (unitResult.latestCapturedAt || cursor?.last_success_at || null)
+        : (cursor?.last_success_at || null);
+      await upsertCursor(supabase, {
+        tenant_id: mapping.tenant_id, provider_unit_id: unit.id,
+        last_polled_at: now.toISOString(),
+        last_error: null, backoff_until: null,
+        last_success_at: advanceCursorTo,
+        poll_memo: newMemo,
+      });
       } else {
         // No working combo — save error state
         await upsertCursor(supabase, {
