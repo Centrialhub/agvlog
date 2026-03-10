@@ -1,3 +1,19 @@
+/**
+ * agvlog-pipeline-run — Orchestrates the SSX ingestion pipeline.
+ *
+ * Supports TWO modes via `pipeline_mode`:
+ *   - "poll" (default for cron): token refresh + position polling + queue processing
+ *   - "full": token refresh + unit sync + position polling + queue + daily aggregation
+ *   - "manual": same as "full" but with force_rediscovery + wider lookback
+ *   - "sync_units_only": only token refresh + unit sync
+ *   - "aggregate_only": only daily aggregation
+ *
+ * Cadence design:
+ *   - poll: every 3 minutes (cron)
+ *   - full: every 6 hours or manual trigger
+ *   - aggregate: once per day
+ */
+
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -5,6 +21,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version, x-agvlog-cron-secret",
 };
+
+type PipelineMode = "poll" | "full" | "manual" | "sync_units_only" | "aggregate_only";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -25,18 +43,14 @@ Deno.serve(async (req) => {
 
     if (!isCron) {
       if (!authHeader?.startsWith("Bearer ")) {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), {
-          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return jsonResp({ error: "Unauthorized" }, 401);
       }
       const anonClient = createClient(supabaseUrl, anonKey, {
         global: { headers: { Authorization: authHeader } },
       });
       const { data: userData, error: userError } = await anonClient.auth.getUser();
       if (userError || !userData?.user) {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), {
-          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return jsonResp({ error: "Unauthorized" }, 401);
       }
       callerId = userData.user.id;
     }
@@ -46,16 +60,19 @@ Deno.serve(async (req) => {
     const {
       tenant_id,
       integration_account_id,
+      pipeline_mode,
       manual_run = false,
       force_rediscovery = false,
       lookback_minutes,
       provider_unit_ids,
     } = body;
 
+    // Determine effective mode
+    let mode: PipelineMode = pipeline_mode || "poll";
+    if (manual_run && !pipeline_mode) mode = "manual";
+
     if (!tenant_id) {
-      return new Response(JSON.stringify({ error: "tenant_id required" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResp({ error: "tenant_id required" }, 400);
     }
 
     // Verify admin (skip for cron)
@@ -65,13 +82,12 @@ Deno.serve(async (req) => {
         .eq("tenant_id", tenant_id).eq("user_id", callerId).eq("active", true)
         .limit(1).single();
       if (!membership || !["owner", "admin"].includes(membership.role)) {
-        return new Response(JSON.stringify({ error: "Forbidden" }), {
-          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return jsonResp({ error: "Forbidden" }, 403);
       }
     }
 
     const stats = {
+      pipeline_mode: mode,
       login: null as any,
       synced_units: 0,
       polled_units: 0,
@@ -79,9 +95,10 @@ Deno.serve(async (req) => {
       processed_vehicles: 0,
       aggregated: 0,
       errors: [] as string[],
+      steps_executed: [] as string[],
     };
 
-    // Step 1: Get accounts to process
+    // Get accounts to process
     let accountsQuery = supabase
       .from("integration_accounts")
       .select("id, status, token_expires_at, settings")
@@ -93,42 +110,34 @@ Deno.serve(async (req) => {
 
     const { data: accounts } = await accountsQuery;
     if (!accounts || accounts.length === 0) {
-      return new Response(
-        JSON.stringify({ success: true, message: "No integration accounts", stats }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return jsonResp({ success: true, message: "No integration accounts", stats });
     }
 
     for (const account of accounts) {
       try {
-        // Step A: Login if token < 60min
-        const minutesLeft = account.token_expires_at
-          ? (new Date(account.token_expires_at).getTime() - Date.now()) / 60000
-          : -1;
+        // ===== STEP A: Token refresh (always, when near expiry) =====
+        if (mode !== "aggregate_only") {
+          const minutesLeft = account.token_expires_at
+            ? (new Date(account.token_expires_at).getTime() - Date.now()) / 60000
+            : -1;
 
-        if (minutesLeft < 60) {
-          const loginResp = await callEdgeFunction(supabaseUrl, anonKey, authHeader, isCron, cronSecret, "ssx-login", {
-            integration_account_id: account.id,
-          });
-          stats.login = loginResp;
+          if (minutesLeft < 60) {
+            stats.steps_executed.push("token_refresh");
+            const loginResp = await callEdgeFunction(supabaseUrl, anonKey, authHeader, isCron, cronSecret, "ssx-login", {
+              integration_account_id: account.id,
+            });
+            stats.login = loginResp;
+          }
         }
 
-        // Step B: Sync units — skip if backoff active or recently synced
-        const acctSettings = (account as any).settings || {};
-        const backoffUntil = acctSettings.sync_units_backoff_until;
-        const hasBackoff = backoffUntil && new Date(backoffUntil).getTime() > Date.now();
-
-        const { count: unitCount } = await supabase
-          .from("provider_units")
-          .select("id", { count: "exact", head: true })
-          .eq("integration_account_id", account.id);
-
-        const shouldSync = !hasBackoff && (!unitCount || unitCount === 0);
-
-        if (shouldSync) {
+        // ===== STEP B: Unit sync (only on full/manual/sync_units_only) =====
+        const shouldSyncUnits = mode === "full" || mode === "manual" || mode === "sync_units_only";
+        if (shouldSyncUnits) {
+          stats.steps_executed.push("sync_units");
           try {
             const syncResp = await callEdgeFunction(supabaseUrl, anonKey, authHeader, isCron, cronSecret, "ssx-sync-units", {
               integration_account_id: account.id,
+              force: mode === "manual",
             });
             stats.synced_units += syncResp?.upserted || 0;
           } catch (e: any) {
@@ -136,7 +145,11 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Step C: Poll positions in batches of 3 units to avoid CPU exhaustion
+        if (mode === "sync_units_only") continue;
+        if (mode === "aggregate_only") continue;
+
+        // ===== STEP C: Position polling (poll/full/manual) =====
+        stats.steps_executed.push("position_polling");
         let unitIds: string[];
         if (provider_unit_ids?.length) {
           unitIds = provider_unit_ids;
@@ -146,14 +159,17 @@ Deno.serve(async (req) => {
             .eq("integration_account_id", account.id).eq("active", true);
           unitIds = (allUnits || []).map((u: any) => u.id);
         }
+
         const BATCH_SIZE = 3;
+        let pollAborted = false;
 
         for (let i = 0; i < unitIds.length; i += BATCH_SIZE) {
+          if (pollAborted) break;
           const batch = unitIds.slice(i, i + BATCH_SIZE);
           const pollBody: Record<string, any> = {
             integration_account_id: account.id,
-            manual_run,
-            force_rediscovery,
+            manual_run: mode === "manual",
+            force_rediscovery: mode === "manual" || force_rediscovery,
             provider_unit_ids: batch,
           };
           if (lookback_minutes) pollBody.lookback_minutes = lookback_minutes;
@@ -163,15 +179,35 @@ Deno.serve(async (req) => {
             stats.polled_units += pollResp?.total_units || 0;
             stats.total_inserted += pollResp?.total_inserted || 0;
 
-            // If batch was aborted (rate limited), stop polling more batches
             if (pollResp?.batch_aborted) {
-              stats.errors.push(`Polling stopped: ${pollResp.abort_reason || "rate_limited"}`);
-              break;
+              pollAborted = true;
+              const reason = pollResp.abort_reason || "unknown";
+              stats.errors.push(`Polling stopped: ${reason}`);
+              // On persistence failure, do NOT continue to queue processing either
+              if (reason === "persistence_failure") {
+                stats.errors.push("CRITICAL: persistence_failure — skipping queue processing");
+              }
             }
           } catch (e: any) {
             stats.errors.push(`Poll batch ${i / BATCH_SIZE}: ${e.message}`);
-            // If timeout, stop further batches
-            if (e.message?.includes("timed out")) break;
+            if (e.message?.includes("timed out")) {
+              pollAborted = true;
+              break;
+            }
+          }
+        }
+
+        // ===== STEP D: Queue processing (only if polling didn't hit persistence failure) =====
+        const hasPersistenceFailure = stats.errors.some(e => e.includes("persistence_failure"));
+        if (!hasPersistenceFailure && stats.total_inserted > 0) {
+          stats.steps_executed.push("queue_processing");
+          try {
+            const queueResp = await callEdgeFunction(supabaseUrl, anonKey, authHeader, isCron, cronSecret, "agvlog-run-queue", {
+              tenant_id, limit: 50,
+            });
+            stats.processed_vehicles = queueResp?.processed || 0;
+          } catch (e: any) {
+            stats.errors.push(`Queue: ${e.message}`);
           }
         }
       } catch (e: any) {
@@ -179,44 +215,67 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Step D: Run processing queue
-    try {
-      const queueResp = await callEdgeFunction(supabaseUrl, anonKey, authHeader, isCron, cronSecret, "agvlog-run-queue", {
-        tenant_id, limit: 50,
-      });
-      stats.processed_vehicles = queueResp?.processed || 0;
-    } catch (e: any) {
-      stats.errors.push(`Queue: ${e.message}`);
+    // ===== STEP E: Daily aggregation (only on full/manual/aggregate_only) =====
+    if (mode === "full" || mode === "manual" || mode === "aggregate_only") {
+      stats.steps_executed.push("daily_aggregation");
+      try {
+        const aggResp = await callEdgeFunction(supabaseUrl, anonKey, authHeader, isCron, cronSecret, "agvlog-aggregate-daily", {
+          tenant_id,
+        });
+        stats.aggregated = aggResp?.aggregated || 0;
+      } catch (e: any) {
+        stats.errors.push(`Aggregate: ${e.message}`);
+      }
     }
 
-    // Step E: Aggregate daily
+    // ===== Update pipeline health on tenant settings =====
     try {
-      const aggResp = await callEdgeFunction(supabaseUrl, anonKey, authHeader, isCron, cronSecret, "agvlog-aggregate-daily", {
-        tenant_id,
-      });
-      stats.aggregated = aggResp?.aggregated || 0;
-    } catch (e: any) {
-      stats.errors.push(`Aggregate: ${e.message}`);
-    }
+      const { data: tenantData } = await supabase
+        .from("tenants").select("settings").eq("id", tenant_id).single();
+      const tenantSettings = (tenantData?.settings as Record<string, any>) || {};
+      const pipelineHealth = {
+        ...(tenantSettings.pipeline_health || {}),
+        last_run_at: new Date().toISOString(),
+        last_run_mode: mode,
+        last_run_inserted: stats.total_inserted,
+        last_run_polled: stats.polled_units,
+        last_run_errors: stats.errors.length,
+        last_run_steps: stats.steps_executed,
+      };
+      if (stats.total_inserted > 0) {
+        pipelineHealth.last_successful_poll_at = new Date().toISOString();
+      }
+      if (stats.errors.some(e => e.includes("persistence_failure"))) {
+        pipelineHealth.last_persistence_failure_at = new Date().toISOString();
+      }
+      if (stats.errors.some(e => e.includes("rate_limited") || e.includes("429"))) {
+        pipelineHealth.last_rate_limit_at = new Date().toISOString();
+      }
+      await supabase.from("tenants").update({
+        settings: { ...tenantSettings, pipeline_health: pipelineHealth },
+      }).eq("id", tenant_id);
+    } catch (_) { /* non-critical */ }
 
-    return new Response(
-      JSON.stringify({ success: true, ...stats }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return jsonResp({ success: true, ...stats });
   } catch (err: any) {
     console.error("agvlog-pipeline-run error:", err);
-    return new Response(
-      JSON.stringify({ error: "Internal error", details: err.message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return jsonResp({ error: "Internal error", details: err.message }, 500);
   }
 });
+
+// ==================== Helpers ====================
+
+function jsonResp(body: any, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
 
 async function callEdgeFunction(
   supabaseUrl: string,
   anonKey: string,
   authHeader: string,
-  isCron: boolean,
+  isCron: boolean | "" | null | undefined,
   cronSecret: string | null,
   functionName: string,
   body: any,

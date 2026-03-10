@@ -9,7 +9,7 @@ import { useTenant } from '@/hooks/useTenant';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Search, MapPin, Clock, Gauge, RefreshCw, Eye, Radio } from 'lucide-react';
+import { Search, MapPin, Clock, Gauge, RefreshCw, Eye, Radio, Activity, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useIsAdmin } from '@/hooks/useTenant';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -25,15 +25,15 @@ L.Icon.Default.mergeOptions({
 });
 
 const ONLINE_THRESHOLD_MS = 10 * 60 * 1000;   // 10 min
-const STALE_THRESHOLD_MS = 30 * 60 * 1000;    // 30 min
+const OFFLINE_RECENT_THRESHOLD_MS = 30 * 60 * 1000; // 30 min
 
-type VehicleStatus = 'moving' | 'stopped' | 'offline' | 'stale' | 'no_position';
+type VehicleStatus = 'moving' | 'stopped' | 'offline_recent' | 'stale' | 'no_position';
 
 function getVehicleStatus(capturedAt: string | null, speed: number | null): VehicleStatus {
   if (!capturedAt) return 'no_position';
   const age = Date.now() - new Date(capturedAt).getTime();
-  if (age > STALE_THRESHOLD_MS) return 'stale';
-  if (age > ONLINE_THRESHOLD_MS) return 'offline';
+  if (age > OFFLINE_RECENT_THRESHOLD_MS) return 'stale';
+  if (age > ONLINE_THRESHOLD_MS) return 'offline_recent';
   return speed != null && speed > 2 ? 'moving' : 'stopped';
 }
 
@@ -41,7 +41,7 @@ function statusColor(status: VehicleStatus): string {
   switch (status) {
     case 'moving': return '#22c55e';
     case 'stopped': return '#f59e0b';
-    case 'offline': return '#94a3b8';
+    case 'offline_recent': return '#94a3b8';
     case 'stale': return '#64748b';
     case 'no_position': return '#cbd5e1';
   }
@@ -51,7 +51,7 @@ function statusLabel(status: VehicleStatus): string {
   switch (status) {
     case 'moving': return 'Movendo';
     case 'stopped': return 'Parado';
-    case 'offline': return 'Offline';
+    case 'offline_recent': return 'Offline';
     case 'stale': return 'Posição antiga';
     case 'no_position': return 'Sem posição';
   }
@@ -61,7 +61,7 @@ function statusBadgeClasses(status: VehicleStatus): string {
   switch (status) {
     case 'moving': return 'bg-success/10 text-success border-success/30';
     case 'stopped': return 'bg-warning/10 text-warning border-warning/30';
-    case 'offline': return 'bg-muted text-muted-foreground';
+    case 'offline_recent': return 'bg-muted text-muted-foreground';
     case 'stale': return 'bg-destructive/10 text-destructive border-destructive/30';
     case 'no_position': return 'bg-muted/50 text-muted-foreground/50';
   }
@@ -71,7 +71,7 @@ function statusDotClass(status: VehicleStatus): string {
   switch (status) {
     case 'moving': return 'bg-success';
     case 'stopped': return 'bg-warning';
-    case 'offline': return 'bg-muted-foreground';
+    case 'offline_recent': return 'bg-muted-foreground';
     case 'stale': return 'bg-destructive/60';
     case 'no_position': return 'bg-muted-foreground/30';
   }
@@ -104,11 +104,70 @@ function FitBounds({ positions }: { positions: PositionLast[] }) {
   return null;
 }
 
+/** Returns human-readable age description with explicit freshness context */
 function ageDescription(capturedAt: string): string {
-  const age = Date.now() - new Date(capturedAt).getTime();
-  if (age > 24 * 60 * 60 * 1000) return 'Última posição antiga';
-  if (age > STALE_THRESHOLD_MS) return 'Sem atualização recente';
-  return formatDistanceToNow(new Date(capturedAt), { addSuffix: true, locale: ptBR });
+  const ageMs = Date.now() - new Date(capturedAt).getTime();
+  const ageMin = Math.floor(ageMs / 60000);
+  const ageHours = Math.floor(ageMin / 60);
+  const ageDays = Math.floor(ageHours / 24);
+
+  if (ageMin < 1) return 'Última posição agora';
+  if (ageMin < 10) return `Última posição há ${ageMin} min`;
+  if (ageMin < 60) return `Offline há ${ageMin} min`;
+  if (ageHours < 24) return `Posição antiga há ${ageHours} h`;
+  return `Posição antiga há ${ageDays} dia${ageDays > 1 ? 's' : ''}`;
+}
+
+/** Pipeline health summary component */
+function PipelineHealthBanner({ tenantId }: { tenantId: string }) {
+  const { data: tenant } = useQuery({
+    queryKey: ['tenant_health', tenantId],
+    queryFn: async () => {
+      const { data } = await supabase.from('tenants').select('settings').eq('id', tenantId).single();
+      return (data?.settings as any)?.pipeline_health || null;
+    },
+    enabled: !!tenantId,
+    refetchInterval: 60000,
+  });
+
+  if (!tenant) return null;
+
+  const lastRun = tenant.last_run_at ? new Date(tenant.last_run_at) : null;
+  const lastSuccess = tenant.last_successful_poll_at ? new Date(tenant.last_successful_poll_at) : null;
+  const lastRateLimit = tenant.last_rate_limit_at ? new Date(tenant.last_rate_limit_at) : null;
+  const lastPersistenceErr = tenant.last_persistence_failure_at ? new Date(tenant.last_persistence_failure_at) : null;
+
+  const isHealthy = lastSuccess && (Date.now() - lastSuccess.getTime()) < 15 * 60 * 1000;
+  const isStale = lastSuccess && (Date.now() - lastSuccess.getTime()) > 30 * 60 * 1000;
+  const hasRecentRateLimit = lastRateLimit && (Date.now() - lastRateLimit.getTime()) < 30 * 60 * 1000;
+  const hasRecentPersistErr = lastPersistenceErr && (Date.now() - lastPersistenceErr.getTime()) < 60 * 60 * 1000;
+
+  return (
+    <div className={`px-3 py-1.5 text-xs flex items-center gap-3 border-b border-border ${
+      hasRecentPersistErr ? 'bg-destructive/10 text-destructive' :
+      hasRecentRateLimit ? 'bg-warning/10 text-warning' :
+      isHealthy ? 'bg-success/5 text-muted-foreground' :
+      isStale ? 'bg-warning/5 text-warning' :
+      'bg-muted/50 text-muted-foreground'
+    }`}>
+      {hasRecentPersistErr ? (
+        <><XCircle className="h-3.5 w-3.5" /> Erro de persistência recente</>
+      ) : hasRecentRateLimit ? (
+        <><AlertTriangle className="h-3.5 w-3.5" /> Rate limit SSX recente</>
+      ) : isHealthy ? (
+        <><CheckCircle className="h-3.5 w-3.5" /> Pipeline ativo</>
+      ) : isStale ? (
+        <><AlertTriangle className="h-3.5 w-3.5" /> Pipeline sem dados recentes</>
+      ) : (
+        <><Activity className="h-3.5 w-3.5" /> Aguardando dados</>
+      )}
+      {lastRun && (
+        <span className="ml-auto opacity-70">
+          Último poll: {formatDistanceToNow(lastRun, { addSuffix: true, locale: ptBR })}
+        </span>
+      )}
+    </div>
+  );
 }
 
 export default function FleetMap() {
@@ -125,12 +184,13 @@ export default function FleetMap() {
     queryKey: ['integration_accounts_brief', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data } = await supabase.from('integration_accounts').select('id, status').eq('tenant_id', currentTenant.id).eq('status', 'ok');
+      const { data } = await supabase.from('integration_accounts').select('id, status').eq('tenant_id', currentTenant.id);
       return data || [];
     },
     enabled: !!currentTenant && isAdmin,
   });
 
+  // Manual collection = diagnostic tool only (force_rediscovery, wider lookback)
   const pollMutation = useMutation({
     mutationFn: async () => {
       for (const acc of accounts) {
@@ -138,18 +198,19 @@ export default function FleetMap() {
           body: {
             tenant_id: currentTenant?.id,
             integration_account_id: acc.id,
+            pipeline_mode: 'manual',
             manual_run: true,
             force_rediscovery: true,
-            lookback_minutes: 43200, // 30 days
+            lookback_minutes: 43200,
           },
         });
       }
     },
     onSuccess: () => {
-      // Invalidate all relevant queries for fresh data
       queryClient.invalidateQueries({ queryKey: ['positions_last'] });
       queryClient.invalidateQueries({ queryKey: ['vehicles'] });
       queryClient.invalidateQueries({ queryKey: ['provider_units'] });
+      queryClient.invalidateQueries({ queryKey: ['tenant_health'] });
       refetch();
     },
   });
@@ -175,7 +236,7 @@ export default function FleetMap() {
       const q = search.toLowerCase();
       if (q && !v.plate.toLowerCase().includes(q) && !(v.nickname || '').toLowerCase().includes(q)) return false;
       if (statusFilter === 'online' && p.status !== 'moving' && p.status !== 'stopped') return false;
-      if (statusFilter === 'offline' && p.status !== 'offline' && p.status !== 'stale') return false;
+      if (statusFilter === 'offline' && p.status !== 'offline_recent' && p.status !== 'stale') return false;
       if (statusFilter === 'stale' && p.status !== 'stale') return false;
       return true;
     });
@@ -197,12 +258,12 @@ export default function FleetMap() {
 
   const stats = useMemo(() => {
     const online = enriched.filter(p => p.status === 'moving' || p.status === 'stopped').length;
+    const offlineRecent = enriched.filter(p => p.status === 'offline_recent').length;
     const stale = enriched.filter(p => p.status === 'stale').length;
-    const offline = enriched.filter(p => p.status === 'offline').length + stale;
     return {
       total: vehicles.length,
       online,
-      offline,
+      offline: offlineRecent + stale,
       stale,
       noPos: vehiclesWithoutPosition.length,
     };
@@ -252,11 +313,17 @@ export default function FleetMap() {
             <RefreshCw className="h-4 w-4 mr-2" /> Recarregar do banco
           </Button>
           {isAdmin && accounts.length > 0 && (
-            <Button variant="default" size="sm" className="w-full" onClick={() => pollMutation.mutate()} disabled={pollMutation.isPending}>
-              <Radio className={`h-4 w-4 mr-2 ${pollMutation.isPending ? 'animate-spin' : ''}`} /> Coletar da SSX agora
+            <Button variant="secondary" size="sm" className="w-full" onClick={() => pollMutation.mutate()} disabled={pollMutation.isPending}>
+              <Radio className={`h-4 w-4 mr-2 ${pollMutation.isPending ? 'animate-spin' : ''}`} />
+              {pollMutation.isPending ? 'Coletando...' : 'Diagnóstico SSX (manual)'}
             </Button>
           )}
         </div>
+
+        {/* Pipeline health banner */}
+        {currentTenant && isAdmin && (
+          <PipelineHealthBanner tenantId={currentTenant.id} />
+        )}
 
         {/* Vehicle list */}
         <div className="flex-1 overflow-y-auto">
@@ -349,7 +416,10 @@ export default function FleetMap() {
                     {p.heading != null && <p>Direção: {Math.round(p.heading)}°</p>}
                     <p>{ageDescription(p.captured_at)}</p>
                     {p.status === 'stale' && (
-                      <p className="text-red-500 font-medium">⚠ Posição muito antiga</p>
+                      <p className="text-red-500 font-medium">⚠ Posição muito antiga — dados podem estar desatualizados</p>
+                    )}
+                    {p.status === 'offline_recent' && (
+                      <p className="text-amber-500 font-medium">Veículo offline recente</p>
                     )}
                   </div>
                   <button
