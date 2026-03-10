@@ -1,12 +1,14 @@
 /**
  * ssx-poll-positions — Polls position history from SSX for active provider units.
  *
- * IMPROVEMENTS:
- * - Uses buildSsxUrlCandidates for versioned + unversioned tracking URLs.
- * - Sends BOTH unit filter AND time window filter to SSX to reduce data + rate limits.
- * - Tries multiple filter property names in order.
- * - Tries both array and wrapped body formats.
- * - Logs the exact property name and endpoint that worked.
+ * KEY FIXES (patch 3):
+ * - normalizePosition now accepts EventDate, UpdateDate (swagger-aligned)
+ * - 429 early-stop: if any request returns 429, abort the entire batch
+ * - Throttle delay between units (configurable via settings.request_spacing_ms)
+ * - max_units_per_poll_run to limit batch size
+ * - Working combination persisted to account settings for cross-invocation reuse
+ * - Discovery loop reduced: on 429, stop immediately
+ * - Removes aggressive point age filter that was discarding valid data
  */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -19,7 +21,6 @@ import {
   logIntegration,
   logSsxCall,
   getTenantRole,
-  classifyError,
   type SsxErrorClass,
 } from "../_shared/ssx-utils.ts";
 
@@ -61,14 +62,12 @@ Deno.serve(async (req) => {
       return jsonResp({ error: "integration_account_id required" }, 400);
     }
 
-    // Fetch integration account
     const { data: account, error: accErr } = await supabase
       .from("integration_accounts").select("*").eq("id", integration_account_id).single();
     if (accErr || !account) {
       return jsonResp({ error: "Integration account not found" }, 404);
     }
 
-    // Auth check
     if (!isCron && callerId) {
       const memberRole = await getTenantRole(supabase, account.tenant_id, callerId);
       if (!memberRole || !["owner", "admin"].includes(memberRole)) {
@@ -78,12 +77,22 @@ Deno.serve(async (req) => {
 
     const config = readAccountConfig(account);
 
-    // Token check
     if (!config.token || !account.token_expires_at) {
       return jsonResp({ error: "No token cached. Run ssx-login first." }, 400);
     }
     if (new Date(account.token_expires_at).getTime() < Date.now()) {
       return jsonResp({ error: "Token expired. Run ssx-login first." }, 400);
+    }
+
+    // Check account-level cooldown (set by previous 429)
+    const cooldownUntil = config.settings.poll_cooldown_until;
+    if (cooldownUntil && new Date(cooldownUntil) > new Date()) {
+      const retryAfterSec = Math.ceil((new Date(cooldownUntil).getTime() - Date.now()) / 1000);
+      return jsonResp({
+        error: "Account in cooldown from previous rate limit",
+        retry_after_seconds: retryAfterSec,
+        cooldown_until: cooldownUntil,
+      }, 429);
     }
 
     // Get provider units to poll
@@ -99,8 +108,12 @@ Deno.serve(async (req) => {
       return jsonResp({ error: "No active provider units found", details: unitsErr?.message }, 404);
     }
 
+    // Apply max_units_per_poll_run
+    const maxUnits = config.settings.max_units_per_poll_run || units.length;
+    const unitsToProcess = units.slice(0, maxUnits);
+
     // Get vehicle_tracker_links
-    const unitIds = units.map((u: any) => u.id);
+    const unitIds = unitsToProcess.map((u: any) => u.id);
     const { data: links } = await supabase
       .from("vehicle_tracker_links").select("*")
       .in("provider_unit_id", unitIds).eq("active", true);
@@ -110,36 +123,52 @@ Deno.serve(async (req) => {
       unitToVehicle[link.provider_unit_id] = { vehicle_id: link.vehicle_id, tenant_id: link.tenant_id };
     }
 
-    // Build position URL candidates using centralized builder
+    // Build position URL candidates
     const positionUrls = buildSsxUrlCandidates(config.baseUrl, config.apiVersion, "/Tracking/PositionHistory/List");
     const defaultPollWindow = config.pollWindowMinutes;
 
-    // Filter property candidates — swagger-aligned order (TrackedUnitIntegrationCode first)
+    // Load persisted working combination from account settings
+    let workingProperty: string | null = config.settings.poll_working_property || null;
+    let workingUrl: string | null = config.settings.poll_working_url || null;
+    let workingFormat: "array" | "wrapped" | null = config.settings.poll_working_format || null;
+    let workingTimeProp: string | null = config.settings.poll_working_time_prop || null;
+
+    // Filter property candidates
     const filterPropertyCandidates = [
-      config.settings.filter_property, // explicitly configured first
-      "TrackedUnitIntegrationCode",    // swagger-documented property
+      config.settings.filter_property,
+      "TrackedUnitIntegrationCode",
       "TrackedUnit",
       "TrackerIntegrationCode",
       "IntegrationCode",
     ].filter(Boolean) as string[];
-    // Deduplicate
     const uniqueFilterProps = [...new Set(filterPropertyCandidates)];
 
-    // Time filter property — swagger shows EventDate, not DateTimeGPS
-    const timeFilterProp = config.settings.time_filter_property || "EventDate";
-    const timeFilterPropAlt = "DateTimeGPS"; // legacy fallback
+    // Time filter property candidates
+    const timeFilterCandidates = [
+      config.settings.time_filter_property,
+      "EventDate",
+      "UpdateDate",
+    ].filter(Boolean) as string[];
+    const uniqueTimeProps = [...new Set(timeFilterCandidates)];
+
+    // Throttle delay between units
+    const requestSpacingMs = config.settings.request_spacing_ms ?? 200;
 
     const results: any[] = [];
     let totalInserted = 0;
     let totalDuplicates = 0;
     const touchedVehicles: { tenant_id: string; vehicle_id: string; captured_at: string }[] = [];
+    let batchAborted = false;
+    let abortReason = "";
 
-    // Track which property + URL + format worked (memoize for subsequent units)
-    let workingProperty: string | null = null;
-    let workingUrl: string | null = null;
-    let workingFormat: "array" | "wrapped" | null = null;
+    for (let unitIdx = 0; unitIdx < unitsToProcess.length; unitIdx++) {
+      const unit = unitsToProcess[unitIdx];
 
-    for (const unit of units) {
+      // Throttle between units (skip first)
+      if (unitIdx > 0 && requestSpacingMs > 0) {
+        await sleep(requestSpacingMs);
+      }
+
       const mapping = unitToVehicle[unit.id];
       if (!mapping) {
         results.push({ unit_code: unit.external_code, status: "skipped", reason: "No active vehicle link" });
@@ -161,142 +190,140 @@ Deno.serve(async (req) => {
       const isFirstPoll = !cursor?.last_success_at;
       const pollWindowMinutes = isFirstPoll ? 1440 : defaultPollWindow;
 
-      // Derive time window start from cursor or poll window
+      // Derive time window
       const timeStart = cursor?.last_success_at
-        ? new Date(new Date(cursor.last_success_at).getTime() - 2 * 60_000).toISOString() // 2min overlap
+        ? new Date(new Date(cursor.last_success_at).getTime() - 2 * 60_000).toISOString()
         : new Date(Date.now() - pollWindowMinutes * 60_000).toISOString();
 
-      // Try to find working combination
+      // === Try memoized combination first ===
       let resp: any = null;
       let usedProperty = workingProperty;
       let usedUrl = workingUrl;
       let usedFormat = workingFormat;
+      let usedTimeProp = workingTimeProp || uniqueTimeProps[0];
 
-      if (workingProperty && workingUrl && workingFormat) {
-        // Use memoized combination — swagger-aligned "=" condition
+      if (workingProperty && workingUrl && workingFormat && workingTimeProp) {
         const filters = [
           { PropertyName: workingProperty, Condition: "=", Value: unit.external_code },
-          { PropertyName: timeFilterProp, Condition: ">=", Value: timeStart },
+          { PropertyName: workingTimeProp, Condition: ">=", Value: timeStart },
         ];
         const body = workingFormat === "array" ? filters : { Filters: filters };
         resp = await ssxPost(workingUrl, config.token, body, config.requestTimeoutMs);
 
         logSsxCall({
           routine: "poll-positions", endpoint: workingUrl, method: "POST",
-          apiVersion: config.apiVersion, attemptType: `memo:${workingProperty}:${workingFormat}`,
+          apiVersion: config.apiVersion,
+          attemptType: `memo:${workingProperty}:${workingFormat}:${workingTimeProp}`,
           statusCode: resp.status, durationMs: resp.durationMs,
           responsePreview: (resp.text || "").substring(0, 150),
           result: resp.ok ? "success" : "error", errorClass: resp.errorClass,
         });
 
-        // If memo failed, clear and fall through to discovery
+        // 429 early-stop — abort entire batch
+        if (resp.errorClass === "rate_limited") {
+          batchAborted = true;
+          abortReason = "rate_limited";
+          await setAccountCooldown(supabase, integration_account_id, config, 120);
+          results.push({ unit_code: unit.external_code, status: "error", error_class: "rate_limited" });
+          break;
+        }
+
+        // If memo failed for non-429 reason, clear and fall through to discovery
         if (!resp.ok) {
           resp = null;
-          workingProperty = null;
-          workingUrl = null;
-          workingFormat = null;
+          // Don't clear memo on first failure — might be transient
         }
       }
 
-      // Discovery: try all property × URL × format combinations
+      // === Discovery: try combinations ===
       if (!resp || !resp.ok) {
         let found = false;
         for (const prop of uniqueFilterProps) {
-          if (found) break;
-          for (const url of positionUrls) {
-            if (found) break;
-            // Build filters with primary time field
-            const filters = [
-              { PropertyName: prop, Condition: "=", Value: unit.external_code },
-              { PropertyName: timeFilterProp, Condition: ">=", Value: timeStart },
-            ];
+          if (found || batchAborted) break;
+          for (const timeProp of uniqueTimeProps) {
+            if (found || batchAborted) break;
+            for (const url of positionUrls) {
+              if (found || batchAborted) break;
 
-            // Try array format with primary time field
-            resp = await ssxPost(url, config.token, filters, config.requestTimeoutMs);
-            logSsxCall({
-              routine: "poll-positions", endpoint: url, method: "POST",
-              apiVersion: config.apiVersion, attemptType: `discover:${prop}:array:${timeFilterProp}`,
-              statusCode: resp.status, durationMs: resp.durationMs,
-              responsePreview: (resp.text || "").substring(0, 150),
-              result: resp.ok ? "success" : "error", errorClass: resp.errorClass,
-            });
-
-            if (resp.ok) {
-              usedProperty = prop;
-              usedUrl = url;
-              usedFormat = "array";
-              workingProperty = prop;
-              workingUrl = url;
-              workingFormat = "array";
-              found = true;
-              break;
-            }
-
-            // If body incompatible, try wrapped format
-            if (resp.status === 400 || resp.status === 415) {
-              resp = await ssxPost(url, config.token, { Filters: filters }, config.requestTimeoutMs);
-              logSsxCall({
-                routine: "poll-positions", endpoint: url, method: "POST",
-                apiVersion: config.apiVersion, attemptType: `discover:${prop}:wrapped:${timeFilterProp}`,
-                statusCode: resp.status, durationMs: resp.durationMs,
-                responsePreview: (resp.text || "").substring(0, 150),
-                result: resp.ok ? "success" : "error", errorClass: resp.errorClass,
-              });
-
-              if (resp.ok) {
-                usedProperty = prop;
-                usedUrl = url;
-                usedFormat = "wrapped";
-                workingProperty = prop;
-                workingUrl = url;
-                workingFormat = "wrapped";
-                found = true;
-                break;
-              }
-            }
-
-            // Try alt time field (DateTimeGPS) if primary failed
-            if (timeFilterProp !== timeFilterPropAlt) {
-              const filtersAlt = [
+              const filters = [
                 { PropertyName: prop, Condition: "=", Value: unit.external_code },
-                { PropertyName: timeFilterPropAlt, Condition: ">=", Value: timeStart },
+                { PropertyName: timeProp, Condition: ">=", Value: timeStart },
               ];
-              resp = await ssxPost(url, config.token, filtersAlt, config.requestTimeoutMs);
+
+              // Try array format
+              resp = await ssxPost(url, config.token, filters, config.requestTimeoutMs);
               logSsxCall({
                 routine: "poll-positions", endpoint: url, method: "POST",
-                apiVersion: config.apiVersion, attemptType: `discover:${prop}:array:${timeFilterPropAlt}`,
+                apiVersion: config.apiVersion,
+                attemptType: `discover:${prop}:array:${timeProp}`,
                 statusCode: resp.status, durationMs: resp.durationMs,
                 responsePreview: (resp.text || "").substring(0, 150),
                 result: resp.ok ? "success" : "error", errorClass: resp.errorClass,
               });
 
+              if (resp.errorClass === "rate_limited") {
+                batchAborted = true;
+                abortReason = "rate_limited";
+                await setAccountCooldown(supabase, integration_account_id, config, 120);
+                break;
+              }
+
               if (resp.ok) {
-                usedProperty = prop;
-                usedUrl = url;
-                usedFormat = "array";
-                workingProperty = prop;
-                workingUrl = url;
-                workingFormat = "array";
+                const items = extractResponseItems(resp.parsed);
+                usedProperty = prop; usedUrl = url; usedFormat = "array"; usedTimeProp = timeProp;
+                workingProperty = prop; workingUrl = url; workingFormat = "array"; workingTimeProp = timeProp;
                 found = true;
                 break;
               }
-            }
 
-            // If 404, try next URL
-            if (resp.errorClass === "route_not_found") continue;
-            // If auth error, stop trying this property
-            if (resp.errorClass === "auth_error") break;
+              // On body_incompatible, try wrapped format
+              if (resp.errorClass === "body_incompatible") {
+                await sleep(50); // small delay before retry
+                resp = await ssxPost(url, config.token, { Filters: filters }, config.requestTimeoutMs);
+                logSsxCall({
+                  routine: "poll-positions", endpoint: url, method: "POST",
+                  apiVersion: config.apiVersion,
+                  attemptType: `discover:${prop}:wrapped:${timeProp}`,
+                  statusCode: resp.status, durationMs: resp.durationMs,
+                  responsePreview: (resp.text || "").substring(0, 150),
+                  result: resp.ok ? "success" : "error", errorClass: resp.errorClass,
+                });
+
+                if (resp.errorClass === "rate_limited") {
+                  batchAborted = true;
+                  abortReason = "rate_limited";
+                  await setAccountCooldown(supabase, integration_account_id, config, 120);
+                  break;
+                }
+
+                if (resp.ok) {
+                  usedProperty = prop; usedUrl = url; usedFormat = "wrapped"; usedTimeProp = timeProp;
+                  workingProperty = prop; workingUrl = url; workingFormat = "wrapped"; workingTimeProp = timeProp;
+                  found = true;
+                  break;
+                }
+              }
+
+              // On route_not_found (404), skip to next URL
+              if (resp.errorClass === "route_not_found") continue;
+              // On auth_error, no point trying other URLs
+              if (resp.errorClass === "auth_error") { batchAborted = true; abortReason = "auth_error"; break; }
+            }
           }
         }
       }
 
+      if (batchAborted) {
+        results.push({ unit_code: unit.external_code, status: "error", error_class: abortReason });
+        break;
+      }
+
       if (!resp || resp.networkError) {
         const errMsg = resp?.networkError || "No working endpoint found";
-        const backoffUntil = new Date(Date.now() + 60000).toISOString();
         await upsertCursor(supabase, {
           tenant_id: mapping.tenant_id, provider_unit_id: unit.id,
           last_polled_at: now.toISOString(), last_error_at: now.toISOString(),
-          last_error: errMsg, backoff_until: backoffUntil,
+          last_error: errMsg, backoff_until: new Date(Date.now() + 60000).toISOString(),
         });
         results.push({ unit_code: unit.external_code, status: "error", error: errMsg, error_class: resp?.errorClass || "network_error" });
         continue;
@@ -309,7 +336,6 @@ Deno.serve(async (req) => {
           last_error: `HTTP ${resp.status}: ${resp.text.substring(0, 200)}`,
           backoff_until: new Date(Date.now() + 60000).toISOString(),
         });
-
         await logIntegration(supabase, {
           tenant_id: mapping.tenant_id, integration_account_id,
           action: "ssx_poll_positions", endpoint: usedUrl || positionUrls[0],
@@ -318,25 +344,25 @@ Deno.serve(async (req) => {
           duration_ms: resp.durationMs,
           metadata: {
             unit_code: unit.external_code, error_class: resp.errorClass,
-            filter_property: usedProperty, body_format: usedFormat,
+            filter_property: usedProperty, time_filter_property: usedTimeProp,
+            body_format: usedFormat,
           },
         });
-
         results.push({ unit_code: unit.external_code, status: "error", http_status: resp.status, error_class: resp.errorClass });
         continue;
       }
 
+      // === Process positions ===
       const positions = extractResponseItems(resp.parsed);
       let inserted = 0;
       let duplicates = 0;
+      let normalized_count = 0;
       let latestPoint: any = null;
 
       for (const point of positions) {
         const normalized = normalizePosition(point);
         if (!normalized) continue;
-
-        const pointAge = (Date.now() - new Date(normalized.captured_at).getTime()) / 60000;
-        if (pointAge > pollWindowMinutes) continue;
+        normalized_count++;
 
         const hashInput = `${unit.external_code}|${normalized.lat}|${normalized.lng}|${normalized.captured_at}`;
         const hash = await computeHash(hashInput);
@@ -384,9 +410,13 @@ Deno.serve(async (req) => {
         action: "ssx_poll_positions", endpoint: usedUrl || positionUrls[0],
         status_code: 200, success: true, duration_ms: resp.durationMs,
         metadata: {
-          unit_code: unit.external_code, points_received: positions.length,
+          unit_code: unit.external_code,
+          points_received: positions.length,
+          points_normalized: normalized_count,
           inserted, duplicates,
-          filter_property: usedProperty, body_format: usedFormat,
+          filter_property: usedProperty,
+          time_filter_property: usedTimeProp,
+          body_format: usedFormat,
           time_window_start: timeStart,
           endpoint_used: usedUrl,
         },
@@ -404,9 +434,36 @@ Deno.serve(async (req) => {
 
       results.push({
         unit_code: unit.external_code, status: "ok",
-        points_received: positions.length, inserted, duplicates,
-        filter_property: usedProperty, body_format: usedFormat,
+        points_received: positions.length, points_normalized: normalized_count,
+        inserted, duplicates,
+        filter_property: usedProperty, time_filter_property: usedTimeProp,
+        body_format: usedFormat,
       });
+    }
+
+    // Persist working combination to account settings for next invocation
+    if (workingProperty && workingUrl && workingFormat && workingTimeProp) {
+      const { data: currentAccount } = await supabase
+        .from("integration_accounts").select("settings").eq("id", integration_account_id).single();
+      const currentSettings = currentAccount?.settings || {};
+      const needsUpdate =
+        currentSettings.poll_working_property !== workingProperty ||
+        currentSettings.poll_working_url !== workingUrl ||
+        currentSettings.poll_working_format !== workingFormat ||
+        currentSettings.poll_working_time_prop !== workingTimeProp;
+      if (needsUpdate) {
+        await supabase.from("integration_accounts").update({
+          settings: {
+            ...currentSettings,
+            poll_working_property: workingProperty,
+            poll_working_url: workingUrl,
+            poll_working_format: workingFormat,
+            poll_working_time_prop: workingTimeProp,
+          },
+          updated_at: new Date().toISOString(),
+        }).eq("id", integration_account_id);
+        console.log(`[SSX:poll-positions] Persisted working combo: ${workingProperty} + ${workingUrl} + ${workingFormat} + ${workingTimeProp}`);
+      }
     }
 
     // Enqueue touched vehicles
@@ -419,12 +476,16 @@ Deno.serve(async (req) => {
     }
 
     return jsonResp({
-      success: true, total_units: units.length,
+      success: !batchAborted, total_units: unitsToProcess.length,
+      total_units_available: units.length,
       total_inserted: totalInserted, total_duplicates: totalDuplicates,
       touched_vehicles: touchedVehicles.length,
       working_filter_property: workingProperty,
+      working_time_property: workingTimeProp,
       working_endpoint: workingUrl,
       working_format: workingFormat,
+      batch_aborted: batchAborted,
+      abort_reason: abortReason || null,
       results,
     });
   } catch (err: any) {
@@ -443,9 +504,16 @@ function normalizePosition(point: any): {
   const lng = point.Longitude ?? point.longitude ?? point.Lng ?? point.lng ?? point.X ?? point.x;
   const speed = point.Speed ?? point.speed ?? point.Velocidade ?? null;
   const heading = point.Direction ?? point.direction ?? point.Heading ?? point.heading ?? point.Course ?? null;
-  const dateStr = point.DateTimeGPS ?? point.DateTimeServer ?? point.DateTime ??
-    point.dateTimeGPS ?? point.dateTimeServer ?? point.dateTime ??
-    point.Date ?? point.date ?? point.Timestamp ?? point.timestamp;
+
+  // CRITICAL: EventDate and UpdateDate are the swagger-documented fields
+  const dateStr =
+    point.EventDate ?? point.eventDate ??
+    point.UpdateDate ?? point.updateDate ??
+    point.DateTimeGPS ?? point.dateTimeGPS ??
+    point.DateTimeServer ?? point.dateTimeServer ??
+    point.DateTime ?? point.dateTime ??
+    point.Date ?? point.date ??
+    point.Timestamp ?? point.timestamp;
 
   if (lat == null || lng == null || !dateStr) return null;
   const parsedLat = typeof lat === "string" ? parseFloat(lat) : lat;
@@ -461,9 +529,9 @@ function normalizePosition(point: any): {
     "Longitude", "longitude", "Lng", "lng", "X", "x",
     "Speed", "speed", "Velocidade",
     "Direction", "direction", "Heading", "heading", "Course",
-    "DateTimeGPS", "DateTimeServer", "DateTime",
-    "dateTimeGPS", "dateTimeServer", "dateTime",
-    "Date", "date", "Timestamp", "timestamp",
+    "EventDate", "eventDate", "UpdateDate", "updateDate",
+    "DateTimeGPS", "dateTimeGPS", "DateTimeServer", "dateTimeServer",
+    "DateTime", "dateTime", "Date", "date", "Timestamp", "timestamp",
   ]);
 
   const telemetry: Record<string, any> = {};
@@ -489,6 +557,23 @@ async function computeHash(input: string): Promise<string> {
 
 async function upsertCursor(supabase: any, data: Record<string, any>) {
   await supabase.from("ingestion_cursors").upsert(data, { onConflict: "provider_unit_id,tenant_id" });
+}
+
+async function setAccountCooldown(supabase: any, accountId: string, config: any, cooldownSeconds: number) {
+  const cooldownUntil = new Date(Date.now() + cooldownSeconds * 1000).toISOString();
+  const { data: currentAccount } = await supabase
+    .from("integration_accounts").select("settings").eq("id", accountId).single();
+  const currentSettings = currentAccount?.settings || {};
+  await supabase.from("integration_accounts").update({
+    settings: { ...currentSettings, poll_cooldown_until: cooldownUntil },
+    last_error: "Rate limited by SSX (429)",
+    updated_at: new Date().toISOString(),
+  }).eq("id", accountId);
+  console.log(`[SSX:poll-positions] Set account cooldown until ${cooldownUntil}`);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function jsonResp(body: any, status = 200): Response {
