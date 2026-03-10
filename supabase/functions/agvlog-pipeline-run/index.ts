@@ -137,12 +137,15 @@ Deno.serve(async (req) => {
         }
 
         // Step C: Poll positions in batches of 3 units to avoid CPU exhaustion
-        // Get all active provider_units for this account
-        const { data: allUnits } = await supabase
-          .from("provider_units").select("id")
-          .eq("integration_account_id", account.id).eq("active", true);
-
-        const unitIds = (allUnits || []).map((u: any) => u.id);
+        let unitIds: string[];
+        if (provider_unit_ids?.length) {
+          unitIds = provider_unit_ids;
+        } else {
+          const { data: allUnits } = await supabase
+            .from("provider_units").select("id")
+            .eq("integration_account_id", account.id).eq("active", true);
+          unitIds = (allUnits || []).map((u: any) => u.id);
+        }
         const BATCH_SIZE = 3;
 
         for (let i = 0; i < unitIds.length; i += BATCH_SIZE) {
