@@ -220,12 +220,15 @@ Deno.serve(async (req) => {
         integration_account_id,
       });
 
-      // Handle 429 abort
-      if (unitResult.abortBatch) {
-        batchAborted = true;
-        abortReason = unitResult.abortReason || "rate_limited";
+    // Handle abort (429 or persistence failure)
+    if (unitResult.abortBatch) {
+      batchAborted = true;
+      abortReason = unitResult.abortReason || "rate_limited";
+      if (unitResult.abortReason === "rate_limited") {
         await setAccountCooldown(supabase, integration_account_id, config, 120);
       }
+      // On persistence_failure: do NOT advance cursor, do NOT continue polling
+    }
 
       // Update scout hint from first successful unit
       if (unitResult.workingCombo && !scoutHint) {
