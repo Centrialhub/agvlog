@@ -153,6 +153,26 @@ Deno.serve(async (req) => {
     let memoEmptyCount: number = config.settings.poll_memo_empty_count ?? 0;
     const STALE_MEMO_THRESHOLD = config.settings.poll_stale_memo_threshold ?? 2;
 
+    // Auto-reset memo from older code versions that may have poisoned combos
+    const POLL_MEMO_VERSION = 5;
+    const needsMemoReset = config.settings.poll_memo_version !== POLL_MEMO_VERSION;
+    if (needsMemoReset && (workingProperty || workingUrl || workingFormat || workingTimeProp)) {
+      console.log(`[SSX:poll-positions] Resetting poll memo (version ${config.settings.poll_memo_version || "none"} → ${POLL_MEMO_VERSION})`);
+      workingProperty = null; workingUrl = null; workingFormat = null; workingTimeProp = null;
+      memoEmptyCount = 0;
+      const { data: resetAcc } = await supabase.from("integration_accounts").select("settings").eq("id", integration_account_id).single();
+      const resetSettings = resetAcc?.settings || {};
+      await supabase.from("integration_accounts").update({
+        settings: {
+          ...resetSettings,
+          poll_working_property: null, poll_working_url: null,
+          poll_working_format: null, poll_working_time_prop: null,
+          poll_memo_empty_count: 0, poll_memo_version: POLL_MEMO_VERSION,
+        },
+        updated_at: new Date().toISOString(),
+      }).eq("id", integration_account_id);
+    }
+
     // Filter property candidates
     const filterPropertyCandidates = [
       config.settings.filter_property,
@@ -285,8 +305,19 @@ Deno.serve(async (req) => {
         }
       } else if (memoIsStale && workingProperty) {
         console.log(`[SSX:poll-positions] Memo is stale (${memoEmptyCount} consecutive empty runs), forcing rediscovery`);
-        // Clear stale memo
         workingProperty = null; workingUrl = null; workingFormat = null; workingTimeProp = null;
+        // Clear stale memo from DB immediately (not just locally)
+        const { data: staleAcc } = await supabase.from("integration_accounts").select("settings").eq("id", integration_account_id).single();
+        const staleSettings = staleAcc?.settings || {};
+        await supabase.from("integration_accounts").update({
+          settings: {
+            ...staleSettings,
+            poll_working_property: null, poll_working_url: null,
+            poll_working_format: null, poll_working_time_prop: null,
+            poll_memo_empty_count: 0,
+          },
+          updated_at: new Date().toISOString(),
+        }).eq("id", integration_account_id);
       }
 
       // === Staged Discovery ===
@@ -549,7 +580,8 @@ Deno.serve(async (req) => {
             poll_working_url: workingUrl,
             poll_working_format: workingFormat,
             poll_working_time_prop: workingTimeProp,
-            poll_memo_empty_count: 0, // reset on success
+            poll_memo_empty_count: 0,
+            poll_memo_version: POLL_MEMO_VERSION,
           },
           updated_at: new Date().toISOString(),
         }).eq("id", integration_account_id);
