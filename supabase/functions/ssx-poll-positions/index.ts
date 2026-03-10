@@ -396,12 +396,17 @@ interface PollUnitResult {
   positions_found: boolean;
   inserted: number;
   duplicates: number;
+  rows_attempted: number;
+  rows_failed: number;
   latestCapturedAt: string | null;
   latestNormalized: any | null;
   workingCombo: { property: string; value_source: string; url: string; format: string; timeProp: string } | null;
   comboSource: string;
   abortBatch: boolean;
   abortReason?: string;
+  persistenceFailed: boolean;
+  insert_error_class?: string;
+  insert_error_message?: string;
   error?: string;
   attemptCount: number;
   attemptMatrix: string[];
