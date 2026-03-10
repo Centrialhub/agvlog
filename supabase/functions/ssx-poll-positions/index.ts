@@ -307,10 +307,15 @@ Deno.serve(async (req) => {
 
       results.push({
         unit_code: unit.external_code,
-        status: unitResult.positions_found ? "ok" : (unitResult.abortBatch ? "error" : "no_data"),
+        status: unitResult.persistenceFailed ? "persistence_failure" : (unitResult.positions_found ? "ok" : (unitResult.abortBatch ? "error" : "no_data")),
         positions_found: unitResult.positions_found,
         inserted: unitResult.inserted,
         duplicates: unitResult.duplicates,
+        rows_attempted: unitResult.rows_attempted || 0,
+        rows_failed: unitResult.rows_failed || 0,
+        insert_error_class: unitResult.insert_error_class || null,
+        insert_error_message: unitResult.insert_error_message || null,
+        on_conflict_target_used: ON_CONFLICT_TARGET,
         latest_position_at: unitResult.latestCapturedAt,
         stale_position: unitResult.latestCapturedAt
           ? (Date.now() - new Date(unitResult.latestCapturedAt).getTime()) > STALE_AFTER_MINUTES * 60000
