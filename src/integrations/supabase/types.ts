@@ -473,6 +473,7 @@ export type Database = {
           last_error_at: string | null
           last_polled_at: string | null
           last_success_at: string | null
+          poll_memo: Json
           provider_unit_id: string
           tenant_id: string
         }
@@ -483,6 +484,7 @@ export type Database = {
           last_error_at?: string | null
           last_polled_at?: string | null
           last_success_at?: string | null
+          poll_memo?: Json
           provider_unit_id: string
           tenant_id: string
         }
@@ -493,6 +495,7 @@ export type Database = {
           last_error_at?: string | null
           last_polled_at?: string | null
           last_success_at?: string | null
+          poll_memo?: Json
           provider_unit_id?: string
           tenant_id?: string
         }
@@ -916,6 +919,7 @@ export type Database = {
           id: string
           integration_account_id: string
           label: string | null
+          metadata: Json
           tenant_id: string
           updated_at: string
         }
@@ -927,6 +931,7 @@ export type Database = {
           id?: string
           integration_account_id: string
           label?: string | null
+          metadata?: Json
           tenant_id: string
           updated_at?: string
         }
@@ -938,6 +943,7 @@ export type Database = {
           id?: string
           integration_account_id?: string
           label?: string | null
+          metadata?: Json
           tenant_id?: string
           updated_at?: string
         }
