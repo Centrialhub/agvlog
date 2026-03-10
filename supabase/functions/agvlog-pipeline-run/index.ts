@@ -19,7 +19,6 @@ Deno.serve(async (req) => {
     let callerId: string | null = null;
     let authHeader = req.headers.get("Authorization") || "";
 
-    // Auth: JWT or cron secret
     const cronSecret = req.headers.get("x-agvlog-cron-secret");
     const expectedCronSecret = Deno.env.get("AGVLOG_CRON_SECRET");
     const isCron = cronSecret && expectedCronSecret && cronSecret === expectedCronSecret;
@@ -33,20 +32,25 @@ Deno.serve(async (req) => {
       const anonClient = createClient(supabaseUrl, anonKey, {
         global: { headers: { Authorization: authHeader } },
       });
-      const { data: claimsData, error: claimsError } = await anonClient.auth.getClaims(
-        authHeader.replace("Bearer ", "")
-      );
-      if (claimsError || !claimsData?.claims) {
+      const { data: userData, error: userError } = await anonClient.auth.getUser();
+      if (userError || !userData?.user) {
         return new Response(JSON.stringify({ error: "Unauthorized" }), {
           status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      callerId = claimsData.claims.sub as string;
+      callerId = userData.user.id;
     }
 
     const supabase = createClient(supabaseUrl, serviceKey);
     const body = await req.json();
-    const { tenant_id, integration_account_id } = body;
+    const {
+      tenant_id,
+      integration_account_id,
+      manual_run = false,
+      force_rediscovery = false,
+      lookback_minutes,
+      provider_unit_ids,
+    } = body;
 
     if (!tenant_id) {
       return new Response(JSON.stringify({ error: "tenant_id required" }), {
@@ -95,7 +99,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    // For each account: login if needed, then poll
     for (const account of accounts) {
       try {
         // Step A: Login if token < 60min
@@ -115,7 +118,6 @@ Deno.serve(async (req) => {
         const backoffUntil = acctSettings.sync_units_backoff_until;
         const hasBackoff = backoffUntil && new Date(backoffUntil).getTime() > Date.now();
 
-        // Check if we have provider_units for this account already
         const { count: unitCount } = await supabase
           .from("provider_units")
           .select("id", { count: "exact", head: true })
@@ -134,10 +136,16 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Step C: Poll positions
-        const pollResp = await callEdgeFunction(supabaseUrl, anonKey, authHeader, isCron, cronSecret, "ssx-poll-positions", {
+        // Step C: Poll positions — pass through manual flags
+        const pollBody: Record<string, any> = {
           integration_account_id: account.id,
-        });
+          manual_run,
+          force_rediscovery,
+        };
+        if (lookback_minutes) pollBody.lookback_minutes = lookback_minutes;
+        if (provider_unit_ids?.length) pollBody.provider_unit_ids = provider_unit_ids;
+
+        const pollResp = await callEdgeFunction(supabaseUrl, anonKey, authHeader, isCron, cronSecret, "ssx-poll-positions", pollBody);
 
         stats.polled_units += pollResp?.total_units || 0;
         stats.total_inserted += pollResp?.total_inserted || 0;
@@ -146,7 +154,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Step C: Run processing queue
+    // Step D: Run processing queue
     try {
       const queueResp = await callEdgeFunction(supabaseUrl, anonKey, authHeader, isCron, cronSecret, "agvlog-run-queue", {
         tenant_id, limit: 50,
@@ -156,7 +164,7 @@ Deno.serve(async (req) => {
       stats.errors.push(`Queue: ${e.message}`);
     }
 
-    // Step D: Aggregate daily
+    // Step E: Aggregate daily
     try {
       const aggResp = await callEdgeFunction(supabaseUrl, anonKey, authHeader, isCron, cronSecret, "agvlog-aggregate-daily", {
         tenant_id,

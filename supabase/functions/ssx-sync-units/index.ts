@@ -3,15 +3,10 @@
  *
  * STRATEGY:
  * 1. Administration API is the PRIMARY source (Tracker/List, Vehicle/List).
- *    - We try BOTH unversioned and versioned admin URL candidates.
- *    - We try admin token first, then regular token (some accounts work with either).
- *    - We try ALL body formats before giving up (SSX returns 403 for wrong body too).
  * 2. If Administration fails completely, MINIMAL fallback to TrackedUnit/List + PositionHistory.
- *    - Fallback tries ALL tracking URL candidates and body candidates.
  * 3. Fallback results are marked source_mode="tracking_fallback".
- * 4. Admin skip window is SHORT (10 min). Reset on credential changes.
- * 5. Upserts are idempotent — no duplicates, no destructive deletes on partial failure.
- * 6. Error classification is derived from actual attempts, never hardcoded.
+ * 4. Upserts are idempotent — no duplicates, no destructive deletes on partial failure.
+ * 5. Now stores rich metadata on provider_units for per-unit polling.
  */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -136,9 +131,6 @@ Deno.serve(async (req) => {
 
     // ================================================================
     // PHASE 1: Administration API — PRIMARY source for tracker catalog
-    // Uses buildAdminUrlCandidates for BOTH unversioned and versioned URLs.
-    // Tries admin token first, then regular token.
-    // Does NOT abort on 403.
     // ================================================================
 
     const skipAdminUntil = settings.skip_admin_until;
@@ -149,7 +141,7 @@ Deno.serve(async (req) => {
     let vehicleResult: EndpointAttemptResult | null = null;
 
     if (adminSkipped) {
-      console.log(`[SSX:sync-units] Admin skipped until ${skipAdminUntil} (last_admin_error: ${settings.last_admin_error || "none"})`);
+      console.log(`[SSX:sync-units] Admin skipped until ${skipAdminUntil}`);
       trackerResult = {
         success: false, items: [], endpoint: "", statusCode: 0,
         errorClass: "unknown", errorMessage: "Admin temporarily skipped",
@@ -157,8 +149,6 @@ Deno.serve(async (req) => {
       };
     } else {
       trackerResult = await tryAdminTrackerDiscovery(config, supabase, integration_account_id);
-
-      // Handle 429 immediately
       if (trackerResult.errorClass === "rate_limited") {
         return await handle429(supabase, account, settings, integration_account_id, trackerResult, Date.now() - startTime);
       }
@@ -173,12 +163,11 @@ Deno.serve(async (req) => {
     }
 
     // ================================================================
-    // PHASE 1b: If Administration failed, set SHORT skip and try fallback
+    // PHASE 1b: If Administration failed, try fallback
     // ================================================================
     if (!trackerResult.success || trackerResult.items.length === 0) {
       if (!adminSkipped && trackerResult.errorClass !== "rate_limited") {
         const skipUntil = new Date(Date.now() + ADMIN_SKIP_MS).toISOString();
-        // Save the REAL error classification, not hardcoded auth_error
         const lastAdminError = `${trackerResult.errorClass}: ${trackerResult.errorMessage || "unknown"}`;
         settings.skip_admin_until = skipUntil;
         settings.last_admin_error = lastAdminError;
@@ -187,12 +176,8 @@ Deno.serve(async (req) => {
           settings: { ...settings },
           updated_at: new Date().toISOString(),
         }).eq("id", integration_account_id);
-        console.log(`[SSX:sync-units] Admin failed (${trackerResult.errorClass}), skip for ${ADMIN_SKIP_MS / 60_000}min. Reason: ${lastAdminError}`);
       }
 
-      // ================================================================
-      // FALLBACK: Try ALL tracking URL candidates and body candidates.
-      // ================================================================
       console.log("[SSX:sync-units] Falling back to tracking-based discovery...");
       usedMethod = "legacy_fallback";
 
@@ -225,8 +210,6 @@ Deno.serve(async (req) => {
             method: "all_failed",
             admin_error_class: trackerResult.errorClass,
             legacy_error_class: legacyResult.errorClass,
-            admin_attempt_matrix: summarizeAttemptMatrix(trackerResult.attempts),
-            legacy_attempt_matrix: summarizeAttemptMatrix(legacyResult.attempts),
           },
         });
         await supabase.from("integration_accounts").update({
@@ -239,8 +222,6 @@ Deno.serve(async (req) => {
           error: "SSX unit sync failed",
           admin_error: trackerResult.errorClass,
           legacy_error: legacyResult.errorClass,
-          admin_attempt_matrix: summarizeAttemptMatrix(trackerResult.attempts),
-          legacy_attempt_matrix: summarizeAttemptMatrix(legacyResult.attempts),
         }, 502);
       }
 
@@ -250,17 +231,17 @@ Deno.serve(async (req) => {
     const duration = Date.now() - startTime;
 
     // ================================================================
-    // PHASE 2: Normalize and deduplicate
+    // PHASE 2: Normalize, deduplicate, and extract rich metadata
     // ================================================================
     const sourceMode = usedMethod === "administration" ? "admin_catalog" : "tracking_fallback";
-    const normalized: NormalizedUnit[] = [];
+    const normalized: (NormalizedUnit & { raw_item: any })[] = [];
     const seenCodes = new Set<string>();
 
     for (const raw of trackerResult.items) {
       const unit = normalizeTrackerItem(raw, trackerResult.endpoint, sourceMode as any);
       if (!unit || seenCodes.has(unit.external_code)) continue;
       seenCodes.add(unit.external_code);
-      normalized.push(unit);
+      normalized.push({ ...unit, raw_item: raw });
     }
 
     // Build vehicle enrichment map
@@ -274,12 +255,16 @@ Deno.serve(async (req) => {
     }
 
     // ================================================================
-    // PHASE 3: Idempotent upsert
+    // PHASE 3: Idempotent upsert with rich metadata
     // ================================================================
     let upsertedCount = 0, skippedCount = 0, vehiclesCreated = 0, linksCreated = 0;
 
     for (const unit of normalized) {
       const plate = vehiclePlateByTrackerCode.get(unit.external_code) || unit.plate;
+      const raw = unit.raw_item;
+
+      // Build rich metadata from the raw SSX item
+      const metadata = buildUnitMetadata(raw, unit, sourceMode, trackerResult.endpoint);
 
       const { data: upsertedUnit, error: upsertErr } = await supabase
         .from("provider_units")
@@ -290,6 +275,7 @@ Deno.serve(async (req) => {
           external_id: unit.external_id,
           label: unit.name,
           active: true,
+          metadata,
           updated_at: new Date().toISOString(),
         }, { onConflict: "tenant_id,integration_account_id,external_code", ignoreDuplicates: false })
         .select("id").single();
@@ -395,11 +381,6 @@ Deno.serve(async (req) => {
         skipped: skippedCount,
         vehicles_created: vehiclesCreated,
         links_created: linksCreated,
-        vehicle_plate_mappings: vehiclePlateByTrackerCode.size,
-        final_successful_endpoint: trackerResult.endpoint,
-        final_successful_format: trackerResult.successfulFormat,
-        attempt_matrix: summarizeAttemptMatrix(trackerResult.attempts),
-        vehicle_attempt_matrix: vehicleResult ? summarizeAttemptMatrix(vehicleResult.attempts) : [],
       },
     });
 
@@ -423,11 +404,36 @@ Deno.serve(async (req) => {
   }
 });
 
+// ==================== Rich Metadata Builder ====================
+
+function buildUnitMetadata(
+  raw: any, unit: NormalizedUnit, sourceMode: string, endpoint: string,
+): Record<string, any> {
+  const pick = (keys: string[]): string | null => {
+    for (const k of keys) {
+      const v = raw[k];
+      if (v != null && v !== "" && typeof v !== "object") return String(v).trim();
+    }
+    return null;
+  };
+
+  return {
+    tracked_unit_integration_code: pick(["TrackedUnitIntegrationCode", "trackedUnitIntegrationCode"]),
+    tracked_unit: pick(["TrackedUnit", "trackedUnit", "Description", "Name"]),
+    tracker_integration_code: pick(["TrackerIntegrationCode", "trackerIntegrationCode"]),
+    integration_code: pick(["IntegrationCode", "integrationCode"]),
+    id_tracker: pick(["IdTracker", "idTracker", "TrackerId", "trackerId"]),
+    id_tracked_unit: pick(["IdTrackedUnit", "idTrackedUnit"]),
+    imei: pick(["IMEI", "Imei", "imei"]),
+    plate: unit.plate || pick(["Plate", "plate", "LicensePlate", "VehiclePlate"]),
+    serial: pick(["SerialNumber", "serialNumber", "Serial"]),
+    source_mode: sourceMode,
+    tracker_endpoint_used: endpoint,
+    synced_at: new Date().toISOString(),
+  };
+}
+
 // ==================== Admin Tracker Discovery ====================
-// Uses buildAdminUrlCandidates for BOTH unversioned and versioned URLs.
-// Tries admin token first, then regular token, with all body formats.
-// Does NOT abort on 403 — SSX sometimes returns 403 for wrong body format.
-// Error classification is derived from actual attempts, never hardcoded.
 
 async function tryAdminTrackerDiscovery(
   config: ReturnType<typeof readAccountConfig>,
@@ -435,29 +441,18 @@ async function tryAdminTrackerDiscovery(
   integrationAccountId: string,
 ): Promise<EndpointAttemptResult> {
   const allAttempts: AttemptLog[] = [];
-
-  // Build ALL admin URL candidates: unversioned first, then versioned
   const trackerUrls = buildAdminUrlCandidates(config.baseUrl, config.apiVersion, "/Administration/Tracker/List");
-
-  // Collect tokens to try
   const tokens: { label: string; token: string }[] = [];
 
-  // --- Admin token (without HashAuth) ---
   const adminTokenResult = await getAdminToken(config, supabase, integrationAccountId);
   if (adminTokenResult.token) {
     tokens.push({ label: "admin_token", token: adminTokenResult.token });
-  } else {
-    console.log(`[SSX:sync-units] No admin token available: ${adminTokenResult.error}`);
   }
-
-  // --- Regular token (with HashAuth scope) ---
   if (config.token && config.token !== adminTokenResult.token) {
     tokens.push({ label: "regular_token", token: config.token });
   }
 
   for (const { label, token } of tokens) {
-    console.log(`[SSX:sync-units] Trying Administration/Tracker/List with ${label} (${trackerUrls.length} URLs × ${ADMIN_BODY_CANDIDATES.length} bodies)...`);
-
     const result = await tryEndpointWithFallback({
       urlCandidates: trackerUrls,
       token,
@@ -474,7 +469,7 @@ async function tryAdminTrackerDiscovery(
         apiVersion: config.apiVersion, attemptType: `tracker:${label}:${attempt.format}`,
         statusCode: attempt.statusCode, durationMs: attempt.durationMs,
         responsePreview: attempt.responsePreview,
-        result: attempt.itemCount > 0 ? "success" : (attempt.errorClass === "empty_response" ? "empty" : "error"),
+        result: attempt.itemCount > 0 ? "success" : "error",
         errorClass: attempt.errorClass,
       });
     }
@@ -482,11 +477,8 @@ async function tryAdminTrackerDiscovery(
 
     if (result.errorClass === "rate_limited") return { ...result, attempts: allAttempts };
     if (result.success && result.items.length > 0) return { ...result, attempts: allAttempts };
-
-    console.log(`[SSX:sync-units] ${label} failed on Tracker/List (${result.errorClass}: ${result.errorMessage})`);
   }
 
-  // All tokens/URLs/bodies exhausted — derive REAL error from attempts
   const finalErrorClass = deriveDominantError(allAttempts);
   return {
     success: false, items: [],
@@ -511,7 +503,6 @@ async function tryAdminVehicleDiscovery(
   if (adminTokenResult.token) tokens.push({ label: "admin_token", token: adminTokenResult.token });
   if (config.token && config.token !== adminTokenResult.token) tokens.push({ label: "regular_token", token: config.token });
 
-  // Build candidates for BOTH v2 and v1 vehicle endpoints, each with unversioned+versioned
   const vehicleV2Urls = buildAdminUrlCandidates(config.baseUrl, config.apiVersion, "/Administration/Vehicle/v2/List");
   const vehicleV1Urls = buildAdminUrlCandidates(config.baseUrl, config.apiVersion, "/Administration/Vehicle/List");
   const allVehicleUrls = [...vehicleV2Urls, ...vehicleV1Urls];
@@ -519,7 +510,6 @@ async function tryAdminVehicleDiscovery(
   const allAttempts: AttemptLog[] = [];
 
   for (const { label, token } of tokens) {
-    console.log(`[SSX:sync-units] Trying Administration/Vehicle list with ${label} (${allVehicleUrls.length} URLs)...`);
     const result = await tryEndpointWithFallback({
       urlCandidates: allVehicleUrls,
       token,
@@ -536,7 +526,7 @@ async function tryAdminVehicleDiscovery(
         apiVersion: config.apiVersion, attemptType: `vehicle:${label}:${attempt.format}`,
         statusCode: attempt.statusCode, durationMs: attempt.durationMs,
         responsePreview: attempt.responsePreview,
-        result: attempt.itemCount > 0 ? "success" : (attempt.errorClass === "empty_response" ? "empty" : "error"),
+        result: attempt.itemCount > 0 ? "success" : "error",
         errorClass: attempt.errorClass,
       });
     }
@@ -559,16 +549,11 @@ async function tryAdminVehicleDiscovery(
 }
 
 // ==================== Tracking-Based Fallback ====================
-// Tries ALL tracking URL candidates and body candidates for TrackedUnit/List,
-// then falls back to PositionHistory/List with time window.
-// Stops on first success with items.
 
 async function fetchUnitsTrackingFallback(config: ReturnType<typeof readAccountConfig>): Promise<EndpointAttemptResult> {
   const allAttempts: AttemptLog[] = [];
 
-  // 1) TrackedUnit/List — try all tracking URL candidates × body candidates
   const trackedUrls = buildSsxUrlCandidates(config.baseUrl, config.apiVersion, "/Tracking/TrackedUnit/List");
-
   const trackedResult = await tryEndpointWithFallback({
     urlCandidates: trackedUrls,
     token: config.token,
@@ -578,24 +563,15 @@ async function fetchUnitsTrackingFallback(config: ReturnType<typeof readAccountC
   });
   allAttempts.push(...trackedResult.attempts);
 
-  if (trackedResult.errorClass === "rate_limited") {
-    return { ...trackedResult, attempts: allAttempts };
-  }
-  if (trackedResult.success && trackedResult.items.length > 0) {
-    return { ...trackedResult, attempts: allAttempts };
-  }
+  if (trackedResult.errorClass === "rate_limited") return { ...trackedResult, attempts: allAttempts };
+  if (trackedResult.success && trackedResult.items.length > 0) return { ...trackedResult, attempts: allAttempts };
 
-  // 2) PositionHistory/List — try all tracking URL candidates with time window
   const posHistUrls = buildSsxUrlCandidates(config.baseUrl, config.apiVersion, "/Tracking/PositionHistory/List");
   const since = new Date(Date.now() - 60 * 60_000).toISOString();
-
-  // Use swagger-aligned filter: EventDate with "=" condition style for time,
-  // and TrackedUnitIntegrationCode if available
   const timeFilterProp = config.settings.time_filter_property || "EventDate";
   const filters = [{ PropertyName: timeFilterProp, Condition: ">=", Value: since }];
   const filtersAlt = [{ PropertyName: "DateTimeGPS", Condition: ">=", Value: since }];
 
-  // Try array filters first (swagger-aligned), then wrapped, then alt time field
   const posBodyCandidates: { label: string; body: any }[] = [
     { label: "position_array_filters", body: filters },
     { label: "position_wrapped_filters", body: { Filters: filters } },
@@ -612,18 +588,11 @@ async function fetchUnitsTrackingFallback(config: ReturnType<typeof readAccountC
   });
   allAttempts.push(...posResult.attempts);
 
-  if (posResult.errorClass === "rate_limited") {
-    return { ...posResult, attempts: allAttempts };
-  }
+  if (posResult.errorClass === "rate_limited") return { ...posResult, attempts: allAttempts };
   if (posResult.success && posResult.items.length > 0) {
-    return {
-      ...posResult,
-      endpoint: `${posResult.endpoint} (fallback 60m)`,
-      attempts: allAttempts,
-    };
+    return { ...posResult, endpoint: `${posResult.endpoint} (fallback 60m)`, attempts: allAttempts };
   }
 
-  // All failed
   const finalError = deriveDominantError(allAttempts);
   return {
     success: false, items: [],
@@ -636,13 +605,11 @@ async function fetchUnitsTrackingFallback(config: ReturnType<typeof readAccountC
   };
 }
 
-// ==================== Error Classification from Attempts ====================
+// ==================== Error Classification ====================
 
 function deriveDominantError(attempts: AttemptLog[]): { errorClass: SsxErrorClass; message: string } {
   if (attempts.length === 0) return { errorClass: "unknown", message: "No attempts made" };
-
   const classes = new Set(attempts.map(a => a.errorClass));
-
   if (classes.has("empty_response") && attempts.every(a => a.errorClass === "empty_response")) {
     return { errorClass: "empty_response", message: "All endpoints returned empty list" };
   }
@@ -651,7 +618,6 @@ function deriveDominantError(attempts: AttemptLog[]): { errorClass: SsxErrorClas
   if (classes.has("auth_error")) return { errorClass: "auth_error", message: "Authentication failed (401/403)" };
   if (classes.has("timeout") || classes.has("network_error")) return { errorClass: classes.has("timeout") ? "timeout" : "network_error", message: "Network/timeout error" };
   if (classes.has("server_error")) return { errorClass: "server_error", message: "Server error (5xx)" };
-
   return { errorClass: "unknown", message: "All attempts failed" };
 }
 
@@ -679,11 +645,7 @@ async function handle429(
     status_code: 429, success: false,
     error_message: `Rate limit. Backoff until ${newBackoffUntil} (tier ${tier})`,
     duration_ms: durationMs,
-    metadata: {
-      backoff_until: newBackoffUntil,
-      backoff_tier: tier,
-      attempt_matrix: summarizeAttemptMatrix(result.attempts),
-    },
+    metadata: { backoff_until: newBackoffUntil, backoff_tier: tier },
   });
 
   return jsonResponse({
