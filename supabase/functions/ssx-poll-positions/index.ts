@@ -294,10 +294,11 @@ Deno.serve(async (req) => {
         }
       }
 
-      totalInserted += unitResult.inserted;
-      totalDuplicates += unitResult.duplicates;
+    totalInserted += unitResult.inserted;
+    totalDuplicates += unitResult.duplicates;
+    totalFailed += unitResult.rows_failed || 0;
 
-      if (unitResult.inserted > 0) {
+    if (unitResult.inserted > 0) {
         touchedVehicles.push({
           tenant_id: mapping.tenant_id, vehicle_id: mapping.vehicle_id,
           captured_at: unitResult.latestCapturedAt || now.toISOString(),
