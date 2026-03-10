@@ -160,11 +160,15 @@ Deno.serve(async (req) => {
     let scoutHint: { property: string; value_source: string; url: string; format: string; timeProp: string } | null = null;
 
     const results: any[] = [];
-    let totalInserted = 0;
-    let totalDuplicates = 0;
-    const touchedVehicles: { tenant_id: string; vehicle_id: string; captured_at: string }[] = [];
-    let batchAborted = false;
-    let abortReason = "";
+  const ON_CONFLICT_TARGET = "tenant_id,vehicle_id,provider_payload_hash";
+  console.log(`[SSX:poll-positions] on_conflict_target=${ON_CONFLICT_TARGET}`);
+
+  let totalInserted = 0;
+  let totalDuplicates = 0;
+  let totalFailed = 0;
+  const touchedVehicles: { tenant_id: string; vehicle_id: string; captured_at: string }[] = [];
+  let batchAborted = false;
+  let abortReason = "";
 
     for (let unitIdx = 0; unitIdx < unitsToProcess.length; unitIdx++) {
       if (batchAborted) break;
