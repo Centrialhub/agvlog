@@ -114,16 +114,20 @@ Deno.serve(async (req) => {
     const positionUrls = buildSsxUrlCandidates(config.baseUrl, config.apiVersion, "/Tracking/PositionHistory/List");
     const defaultPollWindow = config.pollWindowMinutes;
 
-    // Filter property candidates — try in order, stop on first success
+    // Filter property candidates — swagger-aligned order (TrackedUnitIntegrationCode first)
     const filterPropertyCandidates = [
-      config.settings.filter_property, // configured first
+      config.settings.filter_property, // explicitly configured first
+      "TrackedUnitIntegrationCode",    // swagger-documented property
       "TrackedUnit",
-      "TrackedUnitIntegrationCode",
       "TrackerIntegrationCode",
       "IntegrationCode",
     ].filter(Boolean) as string[];
     // Deduplicate
     const uniqueFilterProps = [...new Set(filterPropertyCandidates)];
+
+    // Time filter property — swagger shows EventDate, not DateTimeGPS
+    const timeFilterProp = config.settings.time_filter_property || "EventDate";
+    const timeFilterPropAlt = "DateTimeGPS"; // legacy fallback
 
     const results: any[] = [];
     let totalInserted = 0;
