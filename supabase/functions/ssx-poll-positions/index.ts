@@ -130,7 +130,7 @@ Deno.serve(async (req) => {
     }
 
     const isDebugMode = provider_unit_ids?.length === 1;
-    const maxUnits = config.settings.max_units_per_poll_run || units.length;
+    const maxUnits = config.settings.max_units_per_poll_run || 3;
     const unitsToProcess = units.slice(0, maxUnits);
 
     // Get vehicle_tracker_links
