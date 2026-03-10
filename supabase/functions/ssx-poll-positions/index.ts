@@ -580,7 +580,8 @@ Deno.serve(async (req) => {
             poll_working_url: workingUrl,
             poll_working_format: workingFormat,
             poll_working_time_prop: workingTimeProp,
-            poll_memo_empty_count: 0, // reset on success
+            poll_memo_empty_count: 0,
+            poll_memo_version: POLL_MEMO_VERSION,
           },
           updated_at: new Date().toISOString(),
         }).eq("id", integration_account_id);
