@@ -186,7 +186,8 @@ async function callEdgeFunction(
   isCron: boolean,
   cronSecret: string | null,
   functionName: string,
-  body: any
+  body: any,
+  timeoutMs = 55_000,
 ): Promise<any> {
   const url = `${supabaseUrl}/functions/v1/${functionName}`;
   const headers: Record<string, string> = {
@@ -196,29 +197,41 @@ async function callEdgeFunction(
 
   if (isCron && cronSecret) {
     headers["x-agvlog-cron-secret"] = cronSecret;
-    // Also need auth header for functions that validate JWT
     headers["Authorization"] = `Bearer ${anonKey}`;
   } else {
     headers["Authorization"] = authHeader;
   }
 
-  const resp = await fetch(url, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-  const text = await resp.text();
-  let data: any;
   try {
-    data = JSON.parse(text);
-  } catch {
-    data = { raw: text };
-  }
+    const resp = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
 
-  if (!resp.ok && data?.error) {
-    throw new Error(data.error);
-  }
+    const text = await resp.text();
+    let data: any;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { raw: text };
+    }
 
-  return data;
+    if (!resp.ok && data?.error) {
+      throw new Error(data.error);
+    }
+
+    return data;
+  } catch (e: any) {
+    clearTimeout(timer);
+    if (e.name === "AbortError") {
+      throw new Error(`${functionName} timed out after ${timeoutMs}ms`);
+    }
+    throw e;
+  }
 }
