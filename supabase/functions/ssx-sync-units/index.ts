@@ -257,82 +257,123 @@ Deno.serve(async (req) => {
     // ================================================================
     // PHASE 3: Idempotent upsert with rich metadata
     // ================================================================
-    let upsertedCount = 0, skippedCount = 0, vehiclesCreated = 0, linksCreated = 0;
+  let upsertedCount = 0, skippedCount = 0, vehiclesCreated = 0, linksCreated = 0;
+  let mappingConflicts = 0;
+  const conflictDetails: { unit_code: string; reason: string; linked_vehicle_plate?: string; ssx_plate?: string }[] = [];
 
-    for (const unit of normalized) {
-      const plate = vehiclePlateByTrackerCode.get(unit.external_code) || unit.plate;
-      const raw = unit.raw_item;
+  for (const unit of normalized) {
+    const plate = vehiclePlateByTrackerCode.get(unit.external_code) || unit.plate;
+    const raw = unit.raw_item;
 
-      // Build rich metadata from the raw SSX item
-      const metadata = buildUnitMetadata(raw, unit, sourceMode, trackerResult.endpoint);
+    // Build rich metadata from the raw SSX item
+    const metadata = buildUnitMetadata(raw, unit, sourceMode, trackerResult.endpoint);
 
-      const { data: upsertedUnit, error: upsertErr } = await supabase
-        .from("provider_units")
-        .upsert({
-          tenant_id: account.tenant_id,
-          integration_account_id,
-          external_code: unit.external_code,
-          external_id: unit.external_id,
-          label: unit.name,
-          active: true,
-          metadata,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: "tenant_id,integration_account_id,external_code", ignoreDuplicates: false })
-        .select("id").single();
+    const { data: upsertedUnit, error: upsertErr } = await supabase
+      .from("provider_units")
+      .upsert({
+        tenant_id: account.tenant_id,
+        integration_account_id,
+        external_code: unit.external_code,
+        external_id: unit.external_id,
+        label: unit.name,
+        active: true,
+        metadata,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "tenant_id,integration_account_id,external_code", ignoreDuplicates: false })
+      .select("id").single();
 
-      if (upsertErr) {
-        console.error(`[SSX:sync-units] Upsert failed for ${unit.external_code}: ${upsertErr.message}`);
-        skippedCount++;
+    if (upsertErr) {
+      console.error(`[SSX:sync-units] Upsert failed for ${unit.external_code}: ${upsertErr.message}`);
+      skippedCount++;
+      continue;
+    }
+    upsertedCount++;
+
+    if (plate && upsertedUnit) {
+      // === DETERMINISTIC MATCHING: Find vehicle by exact normalized plate ===
+      const normalizedPlate = plate.replace(/[\s\-\.]/g, "").toUpperCase();
+      const { data: vehicleCandidates } = await supabase
+        .from("vehicles").select("id, plate")
+        .eq("tenant_id", account.tenant_id)
+        .eq("active", true);
+
+      // Find exact plate match (normalized)
+      const matchingVehicles = (vehicleCandidates || []).filter((v: any) =>
+        v.plate.replace(/[\s\-\.]/g, "").toUpperCase() === normalizedPlate
+      );
+
+      if (matchingVehicles.length > 1) {
+        // AMBIGUOUS: multiple vehicles match the same plate — do NOT auto-link
+        mappingConflicts++;
+        conflictDetails.push({
+          unit_code: unit.external_code,
+          reason: "ambiguous_plate_match",
+          ssx_plate: plate,
+        });
+        console.warn(`[SSX:sync-units] MAPPING_CONFLICT: provider_unit ${unit.external_code} plate "${plate}" matches ${matchingVehicles.length} vehicles — skipping auto-link`);
         continue;
       }
-      upsertedCount++;
 
-      if (plate && upsertedUnit) {
-        const { data: existingVehicle } = await supabase
-          .from("vehicles").select("id")
-          .eq("tenant_id", account.tenant_id).eq("plate", plate)
-          .limit(1).maybeSingle();
-
-        let vehicleId: string;
-        if (existingVehicle) {
-          vehicleId = existingVehicle.id;
-        } else {
-          const { data: newVehicle, error: vErr } = await supabase
-            .from("vehicles").insert({
-              tenant_id: account.tenant_id, plate,
-              nickname: unit.name || null, type: "truck",
-            }).select("id").single();
-          if (vErr || !newVehicle) {
-            console.error(`[SSX:sync-units] Vehicle create failed for plate ${plate}: ${vErr?.message}`);
-            continue;
-          }
-          vehicleId = newVehicle.id;
-          vehiclesCreated++;
+      let vehicleId: string;
+      if (matchingVehicles.length === 1) {
+        vehicleId = matchingVehicles[0].id;
+      } else {
+        // No existing vehicle — create one
+        const { data: newVehicle, error: vErr } = await supabase
+          .from("vehicles").insert({
+            tenant_id: account.tenant_id, plate,
+            nickname: unit.name || null, type: "truck",
+          }).select("id").single();
+        if (vErr || !newVehicle) {
+          console.error(`[SSX:sync-units] Vehicle create failed for plate ${plate}: ${vErr?.message}`);
+          continue;
         }
+        vehicleId = newVehicle.id;
+        vehiclesCreated++;
+      }
 
-        const { data: existingLink } = await supabase
-          .from("vehicle_tracker_links").select("id")
-          .eq("tenant_id", account.tenant_id)
-          .eq("provider_unit_id", upsertedUnit.id)
-          .eq("active", true)
-          .limit(1).maybeSingle();
+      // === CHECK FOR EXISTING LINKS — detect mapping conflicts ===
+      const { data: existingLink } = await supabase
+        .from("vehicle_tracker_links").select("id, vehicle_id")
+        .eq("tenant_id", account.tenant_id)
+        .eq("provider_unit_id", upsertedUnit.id)
+        .eq("active", true)
+        .limit(1).maybeSingle();
 
-        if (!existingLink) {
-          const { error: linkErr } = await supabase
-            .from("vehicle_tracker_links").insert({
-              tenant_id: account.tenant_id,
-              vehicle_id: vehicleId,
-              provider_unit_id: upsertedUnit.id,
-              active: true,
-            });
-          if (linkErr) {
-            console.error(`[SSX:sync-units] Link failed ${unit.external_code}→${plate}: ${linkErr.message}`);
-          } else {
-            linksCreated++;
-          }
+      if (existingLink) {
+        if (existingLink.vehicle_id !== vehicleId) {
+          // CONFLICT: provider_unit is linked to a different vehicle than what SSX says
+          // Do NOT silently overwrite — log and skip
+          mappingConflicts++;
+          const { data: linkedVehicle } = await supabase
+            .from("vehicles").select("plate").eq("id", existingLink.vehicle_id).single();
+          conflictDetails.push({
+            unit_code: unit.external_code,
+            reason: "mapping_conflict",
+            linked_vehicle_plate: linkedVehicle?.plate || existingLink.vehicle_id,
+            ssx_plate: plate,
+          });
+          console.warn(`[SSX:sync-units] MAPPING_CONFLICT: provider_unit ${unit.external_code} linked to vehicle ${linkedVehicle?.plate || existingLink.vehicle_id} but SSX plate is "${plate}" (vehicle ${vehicleId}) — NOT overwriting`);
+        }
+        // Either matches or conflict — don't create a new link
+      } else {
+        // No active link exists — safe to create
+        const { error: linkErr } = await supabase
+          .from("vehicle_tracker_links").insert({
+            tenant_id: account.tenant_id,
+            vehicle_id: vehicleId,
+            provider_unit_id: upsertedUnit.id,
+            active: true,
+          });
+        if (linkErr) {
+          console.error(`[SSX:sync-units] Link failed ${unit.external_code}→${plate}: ${linkErr.message}`);
+        } else {
+          linksCreated++;
+          console.log(`[SSX:sync-units] Linked provider_unit ${unit.external_code} → vehicle ${plate} (${vehicleId})`);
         }
       }
     }
+  }
 
     // ================================================================
     // PHASE 4: Save settings & log
@@ -381,6 +422,8 @@ Deno.serve(async (req) => {
         skipped: skippedCount,
         vehicles_created: vehiclesCreated,
         links_created: linksCreated,
+        mapping_conflicts: mappingConflicts,
+        conflict_details: conflictDetails.length > 0 ? conflictDetails : undefined,
       },
     });
 
@@ -396,6 +439,8 @@ Deno.serve(async (req) => {
       skipped: skippedCount,
       vehicles_created: vehiclesCreated,
       links_created: linksCreated,
+      mapping_conflicts: mappingConflicts,
+      conflict_details: conflictDetails.length > 0 ? conflictDetails : undefined,
     });
 
   } catch (err: any) {

@@ -160,11 +160,15 @@ Deno.serve(async (req) => {
     let scoutHint: { property: string; value_source: string; url: string; format: string; timeProp: string } | null = null;
 
     const results: any[] = [];
-    let totalInserted = 0;
-    let totalDuplicates = 0;
-    const touchedVehicles: { tenant_id: string; vehicle_id: string; captured_at: string }[] = [];
-    let batchAborted = false;
-    let abortReason = "";
+  const ON_CONFLICT_TARGET = "tenant_id,vehicle_id,provider_payload_hash";
+  console.log(`[SSX:poll-positions] on_conflict_target=${ON_CONFLICT_TARGET}`);
+
+  let totalInserted = 0;
+  let totalDuplicates = 0;
+  let totalFailed = 0;
+  const touchedVehicles: { tenant_id: string; vehicle_id: string; captured_at: string }[] = [];
+  let batchAborted = false;
+  let abortReason = "";
 
     for (let unitIdx = 0; unitIdx < unitsToProcess.length; unitIdx++) {
       if (batchAborted) break;
@@ -216,36 +220,43 @@ Deno.serve(async (req) => {
         integration_account_id,
       });
 
-      // Handle 429 abort
-      if (unitResult.abortBatch) {
-        batchAborted = true;
-        abortReason = unitResult.abortReason || "rate_limited";
+    // Handle abort (429 or persistence failure)
+    if (unitResult.abortBatch) {
+      batchAborted = true;
+      abortReason = unitResult.abortReason || "rate_limited";
+      if (unitResult.abortReason === "rate_limited") {
         await setAccountCooldown(supabase, integration_account_id, config, 120);
       }
+      // On persistence_failure: do NOT advance cursor, do NOT continue polling
+    }
 
       // Update scout hint from first successful unit
       if (unitResult.workingCombo && !scoutHint) {
         scoutHint = unitResult.workingCombo;
       }
 
-      // Save per-unit memo to cursor
-      if (unitResult.workingCombo) {
-        const newMemo = {
-          memo_version: POLL_MEMO_VERSION,
-          poll_working_property: unitResult.workingCombo.property,
-          poll_working_value_source: unitResult.workingCombo.value_source,
-          poll_working_url: unitResult.workingCombo.url,
-          poll_working_format: unitResult.workingCombo.format,
-          poll_working_time_prop: unitResult.workingCombo.timeProp,
-          last_success_run: now.toISOString(),
-        };
-        await upsertCursor(supabase, {
-          tenant_id: mapping.tenant_id, provider_unit_id: unit.id,
-          last_polled_at: now.toISOString(),
-          last_error: null, backoff_until: null,
-          last_success_at: unitResult.latestCapturedAt || cursor?.last_success_at || null,
-          poll_memo: newMemo,
-        });
+    // Save per-unit memo to cursor — only advance last_success_at if persistence succeeded
+    if (unitResult.workingCombo && !unitResult.persistenceFailed) {
+      const newMemo = {
+        memo_version: POLL_MEMO_VERSION,
+        poll_working_property: unitResult.workingCombo.property,
+        poll_working_value_source: unitResult.workingCombo.value_source,
+        poll_working_url: unitResult.workingCombo.url,
+        poll_working_format: unitResult.workingCombo.format,
+        poll_working_time_prop: unitResult.workingCombo.timeProp,
+        last_success_run: now.toISOString(),
+      };
+      // Only advance cursor if inserts actually succeeded
+      const advanceCursorTo = unitResult.inserted > 0
+        ? (unitResult.latestCapturedAt || cursor?.last_success_at || null)
+        : (cursor?.last_success_at || null);
+      await upsertCursor(supabase, {
+        tenant_id: mapping.tenant_id, provider_unit_id: unit.id,
+        last_polled_at: now.toISOString(),
+        last_error: null, backoff_until: null,
+        last_success_at: advanceCursorTo,
+        poll_memo: newMemo,
+      });
       } else {
         // No working combo — save error state
         await upsertCursor(supabase, {
@@ -257,8 +268,8 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Update positions_last from best provider point (even if all inserts are dupes)
-      if (unitResult.latestNormalized) {
+    // Update positions_last only if persistence succeeded (not on persistence failure)
+    if (unitResult.latestNormalized && !unitResult.persistenceFailed) {
         const ln = unitResult.latestNormalized;
         // Check if this is newer than current positions_last
         const { data: currentLast } = await supabase
@@ -283,10 +294,11 @@ Deno.serve(async (req) => {
         }
       }
 
-      totalInserted += unitResult.inserted;
-      totalDuplicates += unitResult.duplicates;
+    totalInserted += unitResult.inserted;
+    totalDuplicates += unitResult.duplicates;
+    totalFailed += unitResult.rows_failed || 0;
 
-      if (unitResult.inserted > 0) {
+    if (unitResult.inserted > 0) {
         touchedVehicles.push({
           tenant_id: mapping.tenant_id, vehicle_id: mapping.vehicle_id,
           captured_at: unitResult.latestCapturedAt || now.toISOString(),
@@ -295,10 +307,15 @@ Deno.serve(async (req) => {
 
       results.push({
         unit_code: unit.external_code,
-        status: unitResult.positions_found ? "ok" : (unitResult.abortBatch ? "error" : "no_data"),
+        status: unitResult.persistenceFailed ? "persistence_failure" : (unitResult.positions_found ? "ok" : (unitResult.abortBatch ? "error" : "no_data")),
         positions_found: unitResult.positions_found,
         inserted: unitResult.inserted,
         duplicates: unitResult.duplicates,
+        rows_attempted: unitResult.rows_attempted || 0,
+        rows_failed: unitResult.rows_failed || 0,
+        insert_error_class: unitResult.insert_error_class || null,
+        insert_error_message: unitResult.insert_error_message || null,
+        on_conflict_target_used: ON_CONFLICT_TARGET,
         latest_position_at: unitResult.latestCapturedAt,
         stale_position: unitResult.latestCapturedAt
           ? (Date.now() - new Date(unitResult.latestCapturedAt).getTime()) > STALE_AFTER_MINUTES * 60000
@@ -328,6 +345,8 @@ Deno.serve(async (req) => {
     return jsonResp({
       success: !batchAborted, total_units: unitsToProcess.length,
       total_inserted: totalInserted, total_duplicates: totalDuplicates,
+      total_failed: totalFailed,
+      on_conflict_target: ON_CONFLICT_TARGET,
       touched_vehicles: touchedVehicles.length,
       scout_hint: scoutHint ? `${scoutHint.property}:${scoutHint.value_source}@${scoutHint.url}` : null,
       batch_aborted: batchAborted,
@@ -377,12 +396,17 @@ interface PollUnitResult {
   positions_found: boolean;
   inserted: number;
   duplicates: number;
+  rows_attempted: number;
+  rows_failed: number;
   latestCapturedAt: string | null;
   latestNormalized: any | null;
   workingCombo: { property: string; value_source: string; url: string; format: string; timeProp: string } | null;
   comboSource: string;
   abortBatch: boolean;
   abortReason?: string;
+  persistenceFailed: boolean;
+  insert_error_class?: string;
+  insert_error_message?: string;
   error?: string;
   attemptCount: number;
   attemptMatrix: string[];
@@ -541,9 +565,11 @@ async function pollSingleUnit(params: {
   // All combos exhausted — no data for this unit
   return {
     positions_found: false, inserted: 0, duplicates: 0,
+    rows_attempted: 0, rows_failed: 0,
     latestCapturedAt: null, latestNormalized: null,
     workingCombo: null, comboSource: "none",
-    abortBatch: false, error: "No combination returned positions",
+    abortBatch: false, persistenceFailed: false,
+    error: "No combination returned positions",
     attemptCount,
     attemptMatrix: summarizePollingAttemptsV2(attempts),
   };
@@ -588,15 +614,31 @@ async function processPositions(
 
   // Batch insert in chunks of 100
   const CHUNK = 100;
+  let persistenceFailed = false;
+  let insertErrorClass: string | undefined;
+  let insertErrorMessage: string | undefined;
+  let rowsFailed = 0;
+
   for (let i = 0; i < rows.length; i += CHUNK) {
     const chunk = rows.slice(i, i + CHUNK);
     const { data: insertedRows, error: insertErr } = await supabase
-      .from("positions_raw").upsert(chunk, { onConflict: "provider_payload_hash", ignoreDuplicates: true })
+      .from("positions_raw").upsert(chunk, {
+        onConflict: "tenant_id,vehicle_id,provider_payload_hash",
+        ignoreDuplicates: true,
+      })
       .select("id");
+
     if (insertErr) {
-      // Fallback: count all as duplicates if batch fails
-      console.error("[SSX:poll-positions] Batch insert error:", insertErr.message);
-      duplicates += chunk.length;
+      // CRITICAL: Do NOT mask as duplicates. This is a real persistence failure.
+      persistenceFailed = true;
+      rowsFailed += chunk.length;
+      insertErrorClass = insertErr.message?.includes("ON CONFLICT")
+        ? "persistence_conflict_target_invalid"
+        : "persistence_insert_failed";
+      insertErrorMessage = insertErr.message;
+      console.error(`[SSX:poll-positions] PERSISTENCE_FAILURE | on_conflict_target=tenant_id,vehicle_id,provider_payload_hash | rows_attempted=${chunk.length} | provider_unit=${unit.external_code} | vehicle=${mapping.vehicle_id} | error_class=${insertErrorClass} | error=${insertErr.message}`);
+      // ABORT: stop inserting remaining chunks — DB path is broken
+      break;
     } else {
       const ins = insertedRows?.length || 0;
       inserted += ins;
@@ -604,14 +646,23 @@ async function processPositions(
     }
   }
 
+  const success = !persistenceFailed;
+
   await logIntegration(supabase, {
     tenant_id: mapping.tenant_id, integration_account_id,
     action: "ssx_poll_positions", endpoint: combo.url,
-    status_code: 200, success: true, duration_ms: resp.durationMs,
+    status_code: 200, success,
+    error_message: insertErrorMessage || undefined,
+    duration_ms: resp.durationMs,
     metadata: {
       unit_code: unit.external_code,
       points_received: positions.length,
+      rows_attempted: rows.length,
       inserted, duplicates,
+      rows_failed: rowsFailed,
+      insert_error_class: insertErrorClass || null,
+      insert_error_message: insertErrorMessage || null,
+      on_conflict_target_used: "tenant_id,vehicle_id,provider_payload_hash",
       filter_property: combo.property,
       value_source: combo.value_source,
       time_filter_property: combo.timeProp,
@@ -623,11 +674,17 @@ async function processPositions(
   return {
     positions_found: true,
     inserted, duplicates,
+    rows_attempted: rows.length,
+    rows_failed: rowsFailed,
     latestCapturedAt: latestNormalized?.captured_at || null,
     latestNormalized,
     workingCombo: combo,
     comboSource,
-    abortBatch: false,
+    abortBatch: persistenceFailed,
+    abortReason: persistenceFailed ? "persistence_failure" : undefined,
+    persistenceFailed,
+    insert_error_class: insertErrorClass,
+    insert_error_message: insertErrorMessage,
     attemptCount,
     attemptMatrix: summarizePollingAttemptsV2(attempts),
   };
@@ -636,9 +693,10 @@ async function processPositions(
 function buildAbortResult(reason: string, attempts: PollingAttemptLog[], attemptCount: number): PollUnitResult {
   return {
     positions_found: false, inserted: 0, duplicates: 0,
+    rows_attempted: 0, rows_failed: 0,
     latestCapturedAt: null, latestNormalized: null,
     workingCombo: null, comboSource: "none",
-    abortBatch: true, abortReason: reason,
+    abortBatch: true, abortReason: reason, persistenceFailed: reason === "persistence_failure",
     attemptCount,
     attemptMatrix: summarizePollingAttemptsV2(attempts),
   };
