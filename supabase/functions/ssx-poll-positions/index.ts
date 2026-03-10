@@ -130,7 +130,7 @@ Deno.serve(async (req) => {
     }
 
     const isDebugMode = provider_unit_ids?.length === 1;
-    const maxUnits = config.settings.max_units_per_poll_run || units.length;
+    const maxUnits = config.settings.max_units_per_poll_run || 3;
     const unitsToProcess = units.slice(0, maxUnits);
 
     // Get vehicle_tracker_links
@@ -564,30 +564,43 @@ async function processPositions(
   let duplicates = 0;
   let latestNormalized: any = null;
 
+  // Normalize all positions first, compute hashes, then batch insert
+  const rows: any[] = [];
   for (const point of positions) {
     const normalized = normalizePosition(point);
     if (!normalized) continue;
 
-    // Track latest from provider response (not just new inserts)
     if (!latestNormalized || new Date(normalized.captured_at) > new Date(latestNormalized.captured_at)) {
       latestNormalized = normalized;
     }
 
     const hashInput = `${unit.external_code}|${normalized.lat}|${normalized.lng}|${normalized.captured_at}`;
-    const hash = await computeHash(hashInput);
+    // Use simple string hash to avoid expensive crypto
+    const hash = simpleHash(hashInput);
 
-    const { error: insertErr } = await supabase.from("positions_raw").insert({
+    rows.push({
       tenant_id: mapping.tenant_id, vehicle_id: mapping.vehicle_id,
       captured_at: normalized.captured_at, lat: normalized.lat, lng: normalized.lng,
       speed: normalized.speed, heading: normalized.heading,
       telemetry: normalized.telemetry, provider_payload_hash: hash,
     });
+  }
 
+  // Batch insert in chunks of 100
+  const CHUNK = 100;
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const chunk = rows.slice(i, i + CHUNK);
+    const { data: insertedRows, error: insertErr } = await supabase
+      .from("positions_raw").upsert(chunk, { onConflict: "provider_payload_hash", ignoreDuplicates: true })
+      .select("id");
     if (insertErr) {
-      if (insertErr.code === "23505") duplicates++;
-      else console.error("[SSX:poll-positions] Insert error:", insertErr);
+      // Fallback: count all as duplicates if batch fails
+      console.error("[SSX:poll-positions] Batch insert error:", insertErr.message);
+      duplicates += chunk.length;
     } else {
-      inserted++;
+      const ins = insertedRows?.length || 0;
+      inserted += ins;
+      duplicates += chunk.length - ins;
     }
   }
 
@@ -691,10 +704,18 @@ function summarizePollingAttemptsV2(attempts: PollingAttemptLog[]): string[] {
   );
 }
 
-async function computeHash(input: string): Promise<string> {
-  const data = new TextEncoder().encode(input);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, "0")).join("");
+function simpleHash(input: string): string {
+  let h = 0;
+  for (let i = 0; i < input.length; i++) {
+    h = ((h << 5) - h + input.charCodeAt(i)) | 0;
+  }
+  // Convert to hex and pad to make it look like a hash
+  const hex = (h >>> 0).toString(16).padStart(8, "0");
+  // Add more entropy from length and char sum
+  let sum = 0;
+  for (let i = 0; i < input.length; i++) sum += input.charCodeAt(i);
+  const extra = ((sum * 31) >>> 0).toString(16).padStart(8, "0");
+  return `sh_${hex}${extra}_${input.length}`;
 }
 
 async function upsertCursor(supabase: any, data: Record<string, any>) {

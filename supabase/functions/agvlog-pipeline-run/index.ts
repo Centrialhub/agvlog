@@ -136,19 +136,44 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Step C: Poll positions — pass through manual flags
-        const pollBody: Record<string, any> = {
-          integration_account_id: account.id,
-          manual_run,
-          force_rediscovery,
-        };
-        if (lookback_minutes) pollBody.lookback_minutes = lookback_minutes;
-        if (provider_unit_ids?.length) pollBody.provider_unit_ids = provider_unit_ids;
+        // Step C: Poll positions in batches of 3 units to avoid CPU exhaustion
+        let unitIds: string[];
+        if (provider_unit_ids?.length) {
+          unitIds = provider_unit_ids;
+        } else {
+          const { data: allUnits } = await supabase
+            .from("provider_units").select("id")
+            .eq("integration_account_id", account.id).eq("active", true);
+          unitIds = (allUnits || []).map((u: any) => u.id);
+        }
+        const BATCH_SIZE = 3;
 
-        const pollResp = await callEdgeFunction(supabaseUrl, anonKey, authHeader, isCron, cronSecret, "ssx-poll-positions", pollBody);
+        for (let i = 0; i < unitIds.length; i += BATCH_SIZE) {
+          const batch = unitIds.slice(i, i + BATCH_SIZE);
+          const pollBody: Record<string, any> = {
+            integration_account_id: account.id,
+            manual_run,
+            force_rediscovery,
+            provider_unit_ids: batch,
+          };
+          if (lookback_minutes) pollBody.lookback_minutes = lookback_minutes;
 
-        stats.polled_units += pollResp?.total_units || 0;
-        stats.total_inserted += pollResp?.total_inserted || 0;
+          try {
+            const pollResp = await callEdgeFunction(supabaseUrl, anonKey, authHeader, isCron, cronSecret, "ssx-poll-positions", pollBody);
+            stats.polled_units += pollResp?.total_units || 0;
+            stats.total_inserted += pollResp?.total_inserted || 0;
+
+            // If batch was aborted (rate limited), stop polling more batches
+            if (pollResp?.batch_aborted) {
+              stats.errors.push(`Polling stopped: ${pollResp.abort_reason || "rate_limited"}`);
+              break;
+            }
+          } catch (e: any) {
+            stats.errors.push(`Poll batch ${i / BATCH_SIZE}: ${e.message}`);
+            // If timeout, stop further batches
+            if (e.message?.includes("timed out")) break;
+          }
+        }
       } catch (e: any) {
         stats.errors.push(`Account ${account.id}: ${e.message}`);
       }
