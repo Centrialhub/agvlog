@@ -189,9 +189,9 @@ Deno.serve(async (req) => {
     const uniqueTimeProps = [...new Set(timeFilterCandidates)];
 
     // ===== Throttle settings — increased spacing =====
-    const requestSpacingMs = config.settings.request_spacing_ms ?? 500;
-    const discoverySpacingMs = config.settings.discovery_request_spacing_ms ?? 500;
-    const discoveryMaxAttempts = config.settings.discovery_max_attempts_per_unit ?? 8;
+    const requestSpacingMs = config.settings.request_spacing_ms ?? 300;
+    const discoverySpacingMs = config.settings.discovery_request_spacing_ms ?? 400;
+    const discoveryMaxAttempts = config.settings.discovery_max_attempts_per_unit ?? 6;
     const initialPollWindowMinutes = config.settings.initial_poll_window_minutes ?? 10080; // 7 days
 
     const results: any[] = [];
