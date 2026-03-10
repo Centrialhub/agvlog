@@ -1,16 +1,13 @@
 /**
  * ssx-poll-positions — Polls position history from SSX for active provider units.
  *
- * KEY FIXES (patch 4):
- * - 200 OK with zero items is NO LONGER memoized as a working combination
- * - A combination is only "working" if it returns ≥1 item
- * - PositionHistory tries v3, v2, and unversioned endpoints
- * - Staged discovery: find working property first, then time prop, then format
- * - Initial discovery window is 7 days (configurable), not 24h
- * - last_success_at uses provider timestamp, not server now()
- * - Stale memoized combos that return empty N times are invalidated
- * - Discovery has per-unit attempt limits to reduce 429 risk
- * - Single-unit debug mode returns full attempt matrix
+ * KEY FIXES (patch 5 — scout approach):
+ * - URL order: unversioned FIRST (production-proven), then v3, then v2
+ * - Property order: IntegrationCode FIRST (production-proven)
+ * - Scout approach: first unit discovers combo, rest reuse it
+ * - 200 OK with zero items is NOT memoized
+ * - Spacing increased to 500ms default to reduce 429 risk
+ * - POLL_MEMO_VERSION bumped to 6 to force rediscovery
  */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -139,7 +136,7 @@ Deno.serve(async (req) => {
       unitToVehicle[link.provider_unit_id] = { vehicle_id: link.vehicle_id, tenant_id: link.tenant_id };
     }
 
-    // Build PositionHistory URL candidates: v3, v2, unversioned
+    // Build PositionHistory URL candidates: unversioned, v3, v2
     const positionUrls = buildPositionHistoryUrlCandidates(config.baseUrl, config.apiVersion);
     const defaultPollWindow = config.pollWindowMinutes;
 
@@ -153,10 +150,10 @@ Deno.serve(async (req) => {
     let memoEmptyCount: number = config.settings.poll_memo_empty_count ?? 0;
     const STALE_MEMO_THRESHOLD = config.settings.poll_stale_memo_threshold ?? 2;
 
-    // Auto-reset memo from older code versions that may have poisoned combos
-    const POLL_MEMO_VERSION = 5;
+    // ===== Auto-reset memo from older code versions =====
+    const POLL_MEMO_VERSION = 6;
     const needsMemoReset = config.settings.poll_memo_version !== POLL_MEMO_VERSION;
-    if (needsMemoReset && (workingProperty || workingUrl || workingFormat || workingTimeProp)) {
+    if (needsMemoReset) {
       console.log(`[SSX:poll-positions] Resetting poll memo (version ${config.settings.poll_memo_version || "none"} → ${POLL_MEMO_VERSION})`);
       workingProperty = null; workingUrl = null; workingFormat = null; workingTimeProp = null;
       memoEmptyCount = 0;
@@ -173,13 +170,13 @@ Deno.serve(async (req) => {
       }).eq("id", integration_account_id);
     }
 
-    // Filter property candidates
+    // ===== Filter property candidates — IntegrationCode FIRST =====
     const filterPropertyCandidates = [
       config.settings.filter_property,
+      "IntegrationCode",               // proven to work in production
       "TrackedUnitIntegrationCode",
       "TrackedUnit",
       "TrackerIntegrationCode",
-      "IntegrationCode",
     ].filter(Boolean) as string[];
     const uniqueFilterProps = [...new Set(filterPropertyCandidates)];
 
@@ -191,10 +188,10 @@ Deno.serve(async (req) => {
     ].filter(Boolean) as string[];
     const uniqueTimeProps = [...new Set(timeFilterCandidates)];
 
-    // Throttle delay between units
-    const requestSpacingMs = config.settings.request_spacing_ms ?? 200;
-    const discoverySpacingMs = config.settings.discovery_request_spacing_ms ?? 250;
-    const discoveryMaxAttempts = config.settings.discovery_max_attempts_per_unit ?? 6;
+    // ===== Throttle settings — increased spacing =====
+    const requestSpacingMs = config.settings.request_spacing_ms ?? 500;
+    const discoverySpacingMs = config.settings.discovery_request_spacing_ms ?? 500;
+    const discoveryMaxAttempts = config.settings.discovery_max_attempts_per_unit ?? 8;
     const initialPollWindowMinutes = config.settings.initial_poll_window_minutes ?? 10080; // 7 days
 
     const results: any[] = [];
@@ -203,8 +200,12 @@ Deno.serve(async (req) => {
     const touchedVehicles: { tenant_id: string; vehicle_id: string; captured_at: string }[] = [];
     let batchAborted = false;
     let abortReason = "";
-    // Track whether memo produced items this run (across all units)
     let memoProducedItems = false;
+
+    // ===== SCOUT APPROACH =====
+    // The first unit that needs discovery acts as the "scout".
+    // Once the scout finds a working combo, all remaining units reuse it.
+    let scoutCompleted = false;
 
     for (let unitIdx = 0; unitIdx < unitsToProcess.length; unitIdx++) {
       const unit = unitsToProcess[unitIdx];
@@ -298,15 +299,11 @@ Deno.serve(async (req) => {
         } else {
           // Memo returned empty or failed — fall through to discovery
           resp = null;
-          if (!resp?.ok) {
-            // Non-OK: clear for discovery
-          }
-          // Do NOT memoize empty — fall through
         }
       } else if (memoIsStale && workingProperty) {
         console.log(`[SSX:poll-positions] Memo is stale (${memoEmptyCount} consecutive empty runs), forcing rediscovery`);
         workingProperty = null; workingUrl = null; workingFormat = null; workingTimeProp = null;
-        // Clear stale memo from DB immediately (not just locally)
+        // Clear stale memo from DB immediately
         const { data: staleAcc } = await supabase.from("integration_accounts").select("settings").eq("id", integration_account_id).single();
         const staleSettings = staleAcc?.settings || {};
         await supabase.from("integration_accounts").update({
@@ -320,74 +317,82 @@ Deno.serve(async (req) => {
         }).eq("id", integration_account_id);
       }
 
-      // === Staged Discovery ===
+      // === Staged Discovery (only if no memo or memo failed) ===
+      // Scout: only the first unit does full discovery; rest skip if scout already found combo
       if (!foundWithItems && !batchAborted) {
-        // Stage 1: Find a working unit filter property + URL
-        // Use first time prop as default for discovery
-        const discoveryTimeProp = uniqueTimeProps[0] || "EventDate";
+        if (scoutCompleted && workingProperty && workingUrl && workingFormat && workingTimeProp) {
+          // Reuse scout combo directly — single request
+          const filters = [
+            { PropertyName: workingProperty, Condition: "=", Value: unit.external_code },
+            { PropertyName: workingTimeProp, Condition: ">=", Value: timeStart },
+          ];
+          const body = workingFormat === "array" ? filters : { Filters: filters };
+          resp = await ssxPost(workingUrl, config.token, body, config.requestTimeoutMs);
+          discoveryAttemptCount++;
 
-        for (const prop of uniqueFilterProps) {
-          if (foundWithItems || batchAborted || discoveryAttemptCount >= discoveryMaxAttempts) break;
+          const items = resp.ok ? extractResponseItems(resp.parsed) : [];
+          unitAttempts.push({
+            url: workingUrl, property: workingProperty, timeProp: workingTimeProp,
+            format: workingFormat, statusCode: resp.status,
+            errorClass: resp.ok ? (items.length > 0 ? "success" : "empty_response") : resp.errorClass,
+            itemCount: items.length,
+          });
 
-          for (const url of positionUrls) {
+          if (resp.errorClass === "rate_limited") {
+            batchAborted = true; abortReason = "rate_limited";
+            await setAccountCooldown(supabase, integration_account_id, config, 120);
+          } else if (resp.ok && items.length > 0) {
+            foundWithItems = true;
+            memoProducedItems = true;
+          }
+          // If empty for this unit, that's ok — the combo still works, this unit just has no data
+          // Don't fall through to discovery for non-scout units
+          if (!foundWithItems && resp.ok) {
+            // Mark as "no data" — not an error, just no positions for this unit in window
+            usedProperty = workingProperty;
+            usedUrl = workingUrl;
+            usedFormat = workingFormat;
+            usedTimeProp = workingTimeProp;
+          }
+        } else {
+          // === SCOUT DISCOVERY — full staged discovery ===
+          const discoveryTimeProp = uniqueTimeProps[0] || "EventDate";
+
+          console.log(`[SSX:poll-positions] Scout discovery for unit ${unit.external_code} | URLs: ${positionUrls.join(", ")} | Props: ${uniqueFilterProps.join(", ")}`);
+
+          for (const prop of uniqueFilterProps) {
             if (foundWithItems || batchAborted || discoveryAttemptCount >= discoveryMaxAttempts) break;
 
-            if (discoveryAttemptCount > 0) await sleep(discoverySpacingMs);
+            for (const url of positionUrls) {
+              if (foundWithItems || batchAborted || discoveryAttemptCount >= discoveryMaxAttempts) break;
 
-            const filters = [
-              { PropertyName: prop, Condition: "=", Value: unit.external_code },
-              { PropertyName: discoveryTimeProp, Condition: ">=", Value: timeStart },
-            ];
+              if (discoveryAttemptCount > 0) await sleep(discoverySpacingMs);
 
-            // Try array format first
-            resp = await ssxPost(url, config.token, filters, config.requestTimeoutMs);
-            discoveryAttemptCount++;
-            const items = resp.ok ? extractResponseItems(resp.parsed) : [];
+              const filters = [
+                { PropertyName: prop, Condition: "=", Value: unit.external_code },
+                { PropertyName: discoveryTimeProp, Condition: ">=", Value: timeStart },
+              ];
 
-            logSsxCall({
-              routine: "poll-positions", endpoint: url, method: "POST",
-              apiVersion: config.apiVersion,
-              attemptType: `s1:${prop}:array:${discoveryTimeProp}`,
-              statusCode: resp.status, durationMs: resp.durationMs,
-              responsePreview: (resp.text || "").substring(0, 150),
-              result: items.length > 0 ? "success" : (resp.ok ? "empty" : "error"),
-              errorClass: resp.ok ? (items.length > 0 ? undefined : "empty_response" as SsxErrorClass) : resp.errorClass,
-            });
-
-            unitAttempts.push({
-              url, property: prop, timeProp: discoveryTimeProp, format: "array",
-              statusCode: resp.status,
-              errorClass: resp.ok ? (items.length > 0 ? "success" : "empty_response") : resp.errorClass,
-              itemCount: items.length,
-            });
-
-            if (resp.errorClass === "rate_limited") {
-              batchAborted = true; abortReason = "rate_limited";
-              await setAccountCooldown(supabase, integration_account_id, config, 120);
-              break;
-            }
-            if (resp.errorClass === "auth_error") {
-              batchAborted = true; abortReason = "auth_error"; break;
-            }
-
-            if (resp.ok && items.length > 0) {
-              usedProperty = prop; usedUrl = url; usedFormat = "array"; usedTimeProp = discoveryTimeProp;
-              foundWithItems = true;
-              break;
-            }
-
-            // If 400/415, try wrapped format
-            if (resp.errorClass === "body_incompatible" && discoveryAttemptCount < discoveryMaxAttempts) {
-              await sleep(discoverySpacingMs);
-              resp = await ssxPost(url, config.token, { Filters: filters }, config.requestTimeoutMs);
+              // Try array format first
+              resp = await ssxPost(url, config.token, filters, config.requestTimeoutMs);
               discoveryAttemptCount++;
-              const wrappedItems = resp.ok ? extractResponseItems(resp.parsed) : [];
+              const items = resp.ok ? extractResponseItems(resp.parsed) : [];
+
+              logSsxCall({
+                routine: "poll-positions", endpoint: url, method: "POST",
+                apiVersion: config.apiVersion,
+                attemptType: `scout:${prop}:array:${discoveryTimeProp}`,
+                statusCode: resp.status, durationMs: resp.durationMs,
+                responsePreview: (resp.text || "").substring(0, 150),
+                result: items.length > 0 ? "success" : (resp.ok ? "empty" : "error"),
+                errorClass: resp.ok ? (items.length > 0 ? undefined : "empty_response" as SsxErrorClass) : resp.errorClass,
+              });
 
               unitAttempts.push({
-                url, property: prop, timeProp: discoveryTimeProp, format: "wrapped",
+                url, property: prop, timeProp: discoveryTimeProp, format: "array",
                 statusCode: resp.status,
-                errorClass: resp.ok ? (wrappedItems.length > 0 ? "success" : "empty_response") : resp.errorClass,
-                itemCount: wrappedItems.length,
+                errorClass: resp.ok ? (items.length > 0 ? "success" : "empty_response") : resp.errorClass,
+                itemCount: items.length,
               });
 
               if (resp.errorClass === "rate_limited") {
@@ -395,24 +400,56 @@ Deno.serve(async (req) => {
                 await setAccountCooldown(supabase, integration_account_id, config, 120);
                 break;
               }
+              if (resp.errorClass === "auth_error") {
+                batchAborted = true; abortReason = "auth_error"; break;
+              }
 
-              if (resp.ok && wrappedItems.length > 0) {
-                usedProperty = prop; usedUrl = url; usedFormat = "wrapped"; usedTimeProp = discoveryTimeProp;
+              if (resp.ok && items.length > 0) {
+                usedProperty = prop; usedUrl = url; usedFormat = "array"; usedTimeProp = discoveryTimeProp;
                 foundWithItems = true;
+                // Scout found the combo — set it for all remaining units
+                workingProperty = prop; workingUrl = url; workingFormat = "array"; workingTimeProp = discoveryTimeProp;
+                scoutCompleted = true;
+                memoProducedItems = true;
+                console.log(`[SSX:poll-positions] Scout found working combo: ${prop} + ${url} + array + ${discoveryTimeProp} (${items.length} items)`);
                 break;
               }
+
+              // If 400/415, try wrapped format
+              if (resp.errorClass === "body_incompatible" && discoveryAttemptCount < discoveryMaxAttempts) {
+                await sleep(discoverySpacingMs);
+                resp = await ssxPost(url, config.token, { Filters: filters }, config.requestTimeoutMs);
+                discoveryAttemptCount++;
+                const wrappedItems = resp.ok ? extractResponseItems(resp.parsed) : [];
+
+                unitAttempts.push({
+                  url, property: prop, timeProp: discoveryTimeProp, format: "wrapped",
+                  statusCode: resp.status,
+                  errorClass: resp.ok ? (wrappedItems.length > 0 ? "success" : "empty_response") : resp.errorClass,
+                  itemCount: wrappedItems.length,
+                });
+
+                if (resp.errorClass === "rate_limited") {
+                  batchAborted = true; abortReason = "rate_limited";
+                  await setAccountCooldown(supabase, integration_account_id, config, 120);
+                  break;
+                }
+
+                if (resp.ok && wrappedItems.length > 0) {
+                  usedProperty = prop; usedUrl = url; usedFormat = "wrapped"; usedTimeProp = discoveryTimeProp;
+                  foundWithItems = true;
+                  workingProperty = prop; workingUrl = url; workingFormat = "wrapped"; workingTimeProp = discoveryTimeProp;
+                  scoutCompleted = true;
+                  memoProducedItems = true;
+                  console.log(`[SSX:poll-positions] Scout found working combo: ${prop} + ${url} + wrapped + ${discoveryTimeProp} (${wrappedItems.length} items)`);
+                  break;
+                }
+              }
+
+              // 404 → skip to next URL
+              if (resp.errorClass === "route_not_found") continue;
             }
-
-            // 404 → skip to next URL
-            if (resp.errorClass === "route_not_found") continue;
           }
-        }
-
-        // Stage 2: If found a property+URL but default time prop, try alternates
-        // (Only if Stage 1 worked with items and we used the default time prop)
-        if (foundWithItems && usedTimeProp === discoveryTimeProp && uniqueTimeProps.length > 1 && !batchAborted) {
-          // Already working — Stage 2 refinement is optional, skip for now to save requests
-          // The working combo is good enough
         }
       }
 
@@ -427,6 +464,22 @@ Deno.serve(async (req) => {
 
       // No working combination found (all empty or errors)
       if (!foundWithItems) {
+        // For non-scout units reusing a known combo, empty is expected (unit has no data)
+        if (scoutCompleted && resp?.ok) {
+          await upsertCursor(supabase, {
+            tenant_id: mapping.tenant_id, provider_unit_id: unit.id,
+            last_polled_at: now.toISOString(), last_error: null, backoff_until: null,
+          });
+          results.push({
+            unit_code: unit.external_code, status: "ok",
+            points_received: 0, inserted: 0, duplicates: 0,
+            note: "No positions in time window (combo valid from scout)",
+            attempts_made: discoveryAttemptCount,
+            attempt_matrix: isDebugMode ? summarizePollingAttempts(unitAttempts) : undefined,
+          });
+          continue;
+        }
+
         const errMsg = resp?.networkError || "No combination returned positions";
         const errClass: SsxErrorClass = resp?.errorClass || "empty_response";
         await upsertCursor(supabase, {
@@ -513,12 +566,13 @@ Deno.serve(async (req) => {
       }
       await upsertCursor(supabase, cursorUpdate);
 
-      // Memoize ONLY if we got items (foundWithItems is true here)
+      // Memoize ONLY if we got items
       workingProperty = usedProperty;
       workingUrl = usedUrl;
       workingFormat = usedFormat;
       workingTimeProp = usedTimeProp;
       memoProducedItems = true;
+      if (!scoutCompleted) scoutCompleted = true;
 
       await logIntegration(supabase, {
         tenant_id: mapping.tenant_id, integration_account_id,
@@ -535,6 +589,7 @@ Deno.serve(async (req) => {
           time_window_start: timeStart,
           endpoint_used: usedUrl,
           attempts_made: discoveryAttemptCount,
+          is_scout: unitIdx === 0 || !scoutCompleted,
           memoized: true,
           attempt_matrix: summarizePollingAttempts(unitAttempts),
         },
@@ -557,6 +612,7 @@ Deno.serve(async (req) => {
         filter_property: usedProperty, time_filter_property: usedTimeProp,
         body_format: usedFormat,
         attempts_made: discoveryAttemptCount,
+        is_scout: !scoutCompleted,
         attempt_matrix: isDebugMode ? summarizePollingAttempts(unitAttempts) : undefined,
       });
     }
@@ -597,7 +653,6 @@ Deno.serve(async (req) => {
         settings: { ...currentSettings, poll_memo_empty_count: newCount },
         updated_at: new Date().toISOString(),
       };
-      // If stale threshold exceeded, clear the memo
       if (newCount >= STALE_MEMO_THRESHOLD) {
         updates.settings.poll_working_property = null;
         updates.settings.poll_working_url = null;
@@ -626,6 +681,7 @@ Deno.serve(async (req) => {
       working_time_property: workingTimeProp,
       working_endpoint: workingUrl,
       working_format: workingFormat,
+      scout_completed: scoutCompleted,
       batch_aborted: batchAborted,
       abort_reason: abortReason || null,
       endpoint_candidates: positionUrls,
@@ -649,7 +705,6 @@ function normalizePosition(point: any): {
   const speed = point.Speed ?? point.speed ?? point.Velocidade ?? null;
   const heading = point.Direction ?? point.direction ?? point.Heading ?? point.heading ?? point.Course ?? null;
 
-  // CRITICAL: EventDate and UpdateDate are the swagger-documented fields
   const dateStr =
     point.EventDate ?? point.eventDate ??
     point.UpdateDate ?? point.updateDate ??

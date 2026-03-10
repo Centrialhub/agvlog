@@ -54,8 +54,8 @@ export function buildSsxUrlCandidates(baseUrl: string, apiVersion: string, path:
 
 /**
  * Returns ordered endpoint candidates specifically for PositionHistory/List.
- * Includes v2 as an explicit candidate between current apiVersion and unversioned.
- * Order: current apiVersion → v2 → unversioned (no duplicates).
+ * Order: unversioned FIRST (production-proven), then current apiVersion, then v2.
+ * Rationale: production data shows unversioned works; versioned often returns 204 empty.
  */
 export function buildPositionHistoryUrlCandidates(baseUrl: string, apiVersion: string): string[] {
   const base = baseUrl.replace(/\/$/, "");
@@ -63,9 +63,9 @@ export function buildPositionHistoryUrlCandidates(baseUrl: string, apiVersion: s
   const ver = (apiVersion || "v3").replace(/^\//, "").replace(/\/$/, "");
   const candidates: string[] = [];
   const add = (url: string) => { if (!candidates.includes(url)) candidates.push(url); };
-  add(`${base}/${ver}${path}`);
-  add(`${base}/v2${path}`);
-  add(`${base}${path}`);
+  add(`${base}${path}`);          // unversioned — proven to work
+  add(`${base}/${ver}${path}`);   // current version (e.g. v3)
+  add(`${base}/v2${path}`);       // v2 fallback
   return candidates;
 }
 
