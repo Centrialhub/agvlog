@@ -345,6 +345,8 @@ Deno.serve(async (req) => {
     return jsonResp({
       success: !batchAborted, total_units: unitsToProcess.length,
       total_inserted: totalInserted, total_duplicates: totalDuplicates,
+      total_failed: totalFailed,
+      on_conflict_target: ON_CONFLICT_TARGET,
       touched_vehicles: touchedVehicles.length,
       scout_hint: scoutHint ? `${scoutHint.property}:${scoutHint.value_source}@${scoutHint.url}` : null,
       batch_aborted: batchAborted,
