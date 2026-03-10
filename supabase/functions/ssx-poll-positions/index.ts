@@ -173,10 +173,10 @@ Deno.serve(async (req) => {
       let usedFormat = workingFormat;
 
       if (workingProperty && workingUrl && workingFormat) {
-        // Use memoized combination
+        // Use memoized combination — swagger-aligned "=" condition
         const filters = [
-          { PropertyName: workingProperty, Condition: "Equal", Value: unit.external_code },
-          { PropertyName: "DateTimeGPS", Condition: ">=", Value: timeStart },
+          { PropertyName: workingProperty, Condition: "=", Value: unit.external_code },
+          { PropertyName: timeFilterProp, Condition: ">=", Value: timeStart },
         ];
         const body = workingFormat === "array" ? filters : { Filters: filters };
         resp = await ssxPost(workingUrl, config.token, body, config.requestTimeoutMs);
