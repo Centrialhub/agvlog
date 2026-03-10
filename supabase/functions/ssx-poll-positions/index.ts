@@ -564,30 +564,43 @@ async function processPositions(
   let duplicates = 0;
   let latestNormalized: any = null;
 
+  // Normalize all positions first, compute hashes, then batch insert
+  const rows: any[] = [];
   for (const point of positions) {
     const normalized = normalizePosition(point);
     if (!normalized) continue;
 
-    // Track latest from provider response (not just new inserts)
     if (!latestNormalized || new Date(normalized.captured_at) > new Date(latestNormalized.captured_at)) {
       latestNormalized = normalized;
     }
 
     const hashInput = `${unit.external_code}|${normalized.lat}|${normalized.lng}|${normalized.captured_at}`;
-    const hash = await computeHash(hashInput);
+    // Use simple string hash to avoid expensive crypto
+    const hash = simpleHash(hashInput);
 
-    const { error: insertErr } = await supabase.from("positions_raw").insert({
+    rows.push({
       tenant_id: mapping.tenant_id, vehicle_id: mapping.vehicle_id,
       captured_at: normalized.captured_at, lat: normalized.lat, lng: normalized.lng,
       speed: normalized.speed, heading: normalized.heading,
       telemetry: normalized.telemetry, provider_payload_hash: hash,
     });
+  }
 
+  // Batch insert in chunks of 100
+  const CHUNK = 100;
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const chunk = rows.slice(i, i + CHUNK);
+    const { data: insertedRows, error: insertErr } = await supabase
+      .from("positions_raw").upsert(chunk, { onConflict: "provider_payload_hash", ignoreDuplicates: true })
+      .select("id");
     if (insertErr) {
-      if (insertErr.code === "23505") duplicates++;
-      else console.error("[SSX:poll-positions] Insert error:", insertErr);
+      // Fallback: count all as duplicates if batch fails
+      console.error("[SSX:poll-positions] Batch insert error:", insertErr.message);
+      duplicates += chunk.length;
     } else {
-      inserted++;
+      const ins = insertedRows?.length || 0;
+      inserted += ins;
+      duplicates += chunk.length - ins;
     }
   }
 
