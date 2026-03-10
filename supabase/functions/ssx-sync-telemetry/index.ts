@@ -139,8 +139,10 @@ Deno.serve(async (req) => {
       duration_ms: result.attempts.reduce((s, a) => s + a.durationMs, 0),
       metadata: {
         total_received: telemetries.length, upserted: upsertCount,
-        endpoint_used: result.endpoint,
-        format_used: result.successfulFormat,
+        final_successful_endpoint: result.endpoint,
+        final_successful_format: result.successfulFormat,
+        endpoint_candidates: telemetryUrls,
+        attempt_matrix: summarizeAttemptMatrix(result.attempts),
       },
     });
 

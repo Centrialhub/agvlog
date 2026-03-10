@@ -206,8 +206,8 @@ Deno.serve(async (req) => {
           for (const url of positionUrls) {
             if (found) break;
             const filters = [
-              { PropertyName: prop, Condition: "Equal", Value: unit.external_code },
-              { PropertyName: "DateTimeGPS", Condition: ">=", Value: timeStart },
+              { PropertyName: prop, Condition: "=", Value: unit.external_code },
+              { PropertyName: timeFilterProp, Condition: ">=", Value: timeStart },
             ];
 
             // Try array format
