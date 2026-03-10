@@ -453,10 +453,15 @@ export async function ssxPost(
  * NOTE: 403 from SSX admin can mean "wrong body format" not just "no permission",
  * so we try ALL formats before concluding it's truly an auth error.
  */
+/**
+ * Body candidates for Administration API endpoints.
+ * Swagger shows Admin List endpoints accept QueryCondition[] (array).
+ * We try [] first (swagger-aligned), then defensive fallbacks.
+ */
 export const ADMIN_BODY_CANDIDATES: { label: string; body: any }[] = [
+  { label: "empty_array", body: [] },
   { label: "null_body", body: null },
   { label: "empty_object", body: {} },
-  { label: "empty_array", body: [] },
   { label: "wrapped_empty_filters", body: { Filters: [] } },
   { label: "paginated", body: { Page: 1, PageSize: 500 } },
 ];
@@ -465,11 +470,42 @@ export const ADMIN_BODY_CANDIDATES: { label: string; body: any }[] = [
  * Body candidates for Tracking API endpoints (TrackedUnit/List, etc.)
  */
 export const TRACKING_BODY_CANDIDATES: { label: string; body: any }[] = [
+  { label: "empty_array", body: [] },
   { label: "null_body", body: null },
   { label: "empty_object", body: {} },
-  { label: "empty_array", body: [] },
   { label: "wrapped_empty_filters", body: { Filters: [] } },
   { label: "paginated", body: { Page: 1, PageSize: 500 } },
+];
+
+/**
+ * Body candidates specifically for Tracking list endpoints that accept filters
+ * (e.g., PositionHistory/List). Uses __UNIT_CODE__ as placeholder for substitution.
+ */
+export const TRACKING_LIST_BODY_CANDIDATES: { label: string; body: any }[] = [
+  { label: "array_empty", body: [] },
+  { label: "array_tracked_unit_code_placeholder", body: [{ PropertyName: "TrackedUnitIntegrationCode", Condition: "=", Value: "__UNIT_CODE__" }] },
+  { label: "wrapped_filters", body: { Filters: [{ PropertyName: "TrackedUnitIntegrationCode", Condition: "=", Value: "__UNIT_CODE__" }] } },
+];
+
+/**
+ * Default filter property candidates for PositionHistory — order matters.
+ * TrackedUnitIntegrationCode is the swagger-documented property name.
+ */
+export const POSITION_FILTER_PROPERTY_CANDIDATES = [
+  "TrackedUnitIntegrationCode",
+  "TrackedUnit",
+  "TrackerIntegrationCode",
+  "IntegrationCode",
+];
+
+/**
+ * Default time filter property candidates for PositionHistory.
+ * EventDate is the swagger-documented field; DateTimeGPS is a legacy alias.
+ */
+export const TIME_FILTER_PROPERTY_CANDIDATES = [
+  "EventDate",
+  "UpdateDate",
+  "DateTimeGPS",
 ];
 
 // ======================== Endpoint Discovery ========================

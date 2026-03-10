@@ -1,6 +1,7 @@
 /**
  * ssx-insert-person — Inserts a driver/person into SSX via Tracking API.
  * Uses buildSsxUrlCandidates for versioned + unversioned fallback.
+ * Payload aligned with SSX swagger PersonInsert schema.
  * Preserves real error classification in logs.
  */
 
@@ -12,7 +13,9 @@ import {
   ssxPost,
   logIntegration,
   logSsxCall,
+  summarizeAttemptMatrix,
   getTenantRole,
+  type AttemptLog,
 } from "../_shared/ssx-utils.ts";
 
 Deno.serve(async (req) => {
@@ -68,15 +71,64 @@ Deno.serve(async (req) => {
     }
 
     const config = readAccountConfig(account);
+    const settings = config.settings;
 
-    const personPayload = {
-      Name: driver.name,
-      Document: driver.doc || "",
-      Phone: driver.phone || "",
+    // Validate required fields
+    if (!driver.name || !driver.name.trim()) {
+      return jsonResp({ error: "Driver name is required for SSX InsertPerson" }, 400);
+    }
+
+    // Build swagger-aligned PersonInsert payload
+    const personPayload: Record<string, any> = {
+      Name: driver.name.trim(),
     };
+
+    // Map available driver fields to SSX schema
+    if (driver.doc) personPayload.CPF = driver.doc;
+    if (driver.phone) {
+      personPayload.CellPhoneNumber = driver.phone;
+      personPayload.PhoneNumber = driver.phone;
+    }
+
+    // PersonIntegrationCode — use driver ID or doc as unique code
+    personPayload.PersonIntegrationCode = driver.doc || driver.id;
+
+    // IDCard — use doc if available
+    if (driver.doc) personPayload.IDCard = driver.doc;
+
+    // Account-level defaults from settings
+    if (settings.organization_unit_integration_code) {
+      personPayload.OrganizationUnitIntegrationCode = settings.organization_unit_integration_code;
+    }
+    if (settings.person_role_integration_code) {
+      personPayload.PersonRoleIntegrationCode = settings.person_role_integration_code;
+    }
+    if (settings.work_schedule_integration_code) {
+      personPayload.WorkScheduleIntegrationCode = settings.work_schedule_integration_code;
+    }
+    if (settings.user_profile_template_integration_code) {
+      personPayload.UserProfileTemplateIntegrationCode = settings.user_profile_template_integration_code;
+    }
+    if (settings.default_country) personPayload.Country = settings.default_country;
+    if (settings.default_language) personPayload.Language = settings.default_language;
+    if (settings.default_timezone) personPayload.TimeZone = settings.default_timezone;
+
+    // Optional fields from driver metadata if present
+    const meta = (driver as any).metadata || {};
+    if (meta.email) personPayload.Email = meta.email;
+    if (meta.date_of_birth) personPayload.DateOfBirth = meta.date_of_birth;
+    if (meta.gender) personPayload.Gender = meta.gender;
+    if (meta.registration) personPayload.Registration = meta.registration;
+    if (meta.license_driver) personPayload.LicenseDriver = meta.license_driver;
+    if (meta.expiration_date_license) personPayload.ExpirationDateLicenseDriver = meta.expiration_date_license;
+    if (meta.emission_date_license) personPayload.EmissionDateLicenseDriver = meta.emission_date_license;
+    if (meta.first_date_license) personPayload.FirstDateLicenseDriver = meta.first_date_license;
+    if (meta.login) personPayload.Login = meta.login;
+    if (meta.password) personPayload.Password = meta.password;
 
     // Try versioned first, then unversioned on 404
     const insertUrls = buildSsxUrlCandidates(config.baseUrl, config.apiVersion, "/Tracking/Person/InsertPerson");
+    const allAttempts: AttemptLog[] = [];
 
     let resp: any = null;
     let usedUrl = insertUrls[0];
@@ -84,6 +136,13 @@ Deno.serve(async (req) => {
     for (const url of insertUrls) {
       resp = await ssxPost(url, config.token, personPayload, config.requestTimeoutMs);
       usedUrl = url;
+
+      allAttempts.push({
+        endpoint: url, format: "person_payload",
+        statusCode: resp.status, errorClass: resp.ok ? "unknown" as any : resp.errorClass,
+        durationMs: resp.durationMs, itemCount: resp.ok ? 1 : 0,
+        responsePreview: (resp.text || "").substring(0, 150),
+      });
 
       logSsxCall({
         routine: "insert-person", endpoint: url, method: "POST",
@@ -110,7 +169,11 @@ Deno.serve(async (req) => {
         status_code: resp?.status || 0, success: false,
         error_message: resp?.text?.substring(0, 500) || "No response",
         duration_ms: resp?.durationMs || 0,
-        metadata: { error_class: resp?.errorClass || "unknown" },
+        metadata: {
+          error_class: resp?.errorClass || "unknown",
+          endpoint_candidates: insertUrls,
+          attempt_matrix: summarizeAttemptMatrix(allAttempts),
+        },
       });
 
       return jsonResp({
@@ -138,7 +201,12 @@ Deno.serve(async (req) => {
       action: "ssx_insert_person", endpoint: usedUrl,
       status_code: resp.status, success: true,
       duration_ms: resp.durationMs,
-      metadata: { driver_id, person_id: personId, endpoint_used: usedUrl },
+      metadata: {
+        driver_id, person_id: personId,
+        final_successful_endpoint: usedUrl,
+        endpoint_candidates: insertUrls,
+        attempt_matrix: summarizeAttemptMatrix(allAttempts),
+      },
     });
 
     return jsonResp({ success: true, person_id: personId });

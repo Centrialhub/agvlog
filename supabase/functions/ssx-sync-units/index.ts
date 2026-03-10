@@ -588,12 +588,19 @@ async function fetchUnitsTrackingFallback(config: ReturnType<typeof readAccountC
   // 2) PositionHistory/List — try all tracking URL candidates with time window
   const posHistUrls = buildSsxUrlCandidates(config.baseUrl, config.apiVersion, "/Tracking/PositionHistory/List");
   const since = new Date(Date.now() - 60 * 60_000).toISOString();
-  const filters = [{ PropertyName: "DateTimeGPS", Condition: ">=", Value: since }];
 
-  // Try array filters first, then wrapped
+  // Use swagger-aligned filter: EventDate with "=" condition style for time,
+  // and TrackedUnitIntegrationCode if available
+  const timeFilterProp = config.settings.time_filter_property || "EventDate";
+  const filters = [{ PropertyName: timeFilterProp, Condition: ">=", Value: since }];
+  const filtersAlt = [{ PropertyName: "DateTimeGPS", Condition: ">=", Value: since }];
+
+  // Try array filters first (swagger-aligned), then wrapped, then alt time field
   const posBodyCandidates: { label: string; body: any }[] = [
     { label: "position_array_filters", body: filters },
     { label: "position_wrapped_filters", body: { Filters: filters } },
+    { label: "position_array_alt_time", body: filtersAlt },
+    { label: "position_wrapped_alt_time", body: { Filters: filtersAlt } },
   ];
 
   const posResult = await tryEndpointWithFallback({
