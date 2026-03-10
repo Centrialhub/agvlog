@@ -1,17 +1,20 @@
 /**
  * ssx-sync-telemetry — Syncs telemetry catalog from SSX Tracking API.
- * Uses centralized URL builder and logging from shared utils.
+ * Uses buildSsxUrlCandidates for versioned + unversioned fallback.
+ * Preserves real error classification in logs.
  */
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
   corsHeaders,
-  buildSsxUrl,
+  buildSsxUrlCandidates,
   readAccountConfig,
   extractResponseItems,
   ssxPost,
+  tryEndpointWithFallback,
   logIntegration,
   logSsxCall,
+  summarizeAttemptMatrix,
   getTenantRole,
 } from "../_shared/ssx-utils.ts";
 
@@ -63,34 +66,49 @@ Deno.serve(async (req) => {
       return jsonResp({ error: "Token expired or missing. Run ssx-login first." }, 400);
     }
 
-    // Use centralized URL builder
-    const telemetryUrl = buildSsxUrl(config.baseUrl, config.apiVersion, "/Tracking/Telemetry/List");
+    // Use URL candidates for versioned + unversioned fallback
+    const telemetryUrls = buildSsxUrlCandidates(config.baseUrl, config.apiVersion, "/Tracking/Telemetry/List");
 
-    const resp = await ssxPost(telemetryUrl, config.token, null, config.requestTimeoutMs);
-
-    logSsxCall({
-      routine: "sync-telemetry", endpoint: telemetryUrl, method: "POST",
-      apiVersion: config.apiVersion, attemptType: "telemetry_list",
-      statusCode: resp.status, durationMs: resp.durationMs,
-      responsePreview: (resp.text || "").substring(0, 150),
-      result: resp.ok ? "success" : "error",
-      errorClass: resp.errorClass,
+    const result = await tryEndpointWithFallback({
+      urlCandidates: telemetryUrls,
+      token: config.token,
+      bodyCandidates: [{ label: "null_body", body: null }],
+      timeoutMs: config.requestTimeoutMs,
+      abortOnAuthError: true,
     });
 
-    if (!resp.ok) {
-      await logIntegration(supabase, {
-        tenant_id: account.tenant_id, integration_account_id,
-        action: "ssx_sync_telemetry", endpoint: telemetryUrl,
-        status_code: resp.status, success: false,
-        error_message: resp.text.substring(0, 500),
-        duration_ms: resp.durationMs,
-        metadata: { error_class: resp.errorClass },
+    for (const attempt of result.attempts) {
+      logSsxCall({
+        routine: "sync-telemetry", endpoint: attempt.endpoint, method: "POST",
+        apiVersion: config.apiVersion, attemptType: `telemetry_list:${attempt.format}`,
+        statusCode: attempt.statusCode, durationMs: attempt.durationMs,
+        responsePreview: attempt.responsePreview,
+        result: attempt.itemCount > 0 ? "success" : (attempt.errorClass === "empty_response" ? "empty" : "error"),
+        errorClass: attempt.errorClass,
       });
-      return jsonResp({ error: "SSX telemetry fetch failed", status_code: resp.status, error_class: resp.errorClass }, 502);
     }
 
-    const telemetries = extractResponseItems(resp.parsed);
+    if (!result.success) {
+      await logIntegration(supabase, {
+        tenant_id: account.tenant_id, integration_account_id,
+        action: "ssx_sync_telemetry", endpoint: result.endpoint,
+        status_code: result.statusCode, success: false,
+        error_message: result.errorMessage || "Telemetry fetch failed",
+        duration_ms: result.attempts.reduce((s, a) => s + a.durationMs, 0),
+        metadata: {
+          error_class: result.errorClass,
+          attempt_matrix: summarizeAttemptMatrix(result.attempts),
+        },
+      });
+      return jsonResp({
+        error: "SSX telemetry fetch failed",
+        status_code: result.statusCode,
+        error_class: result.errorClass,
+        attempt_matrix: summarizeAttemptMatrix(result.attempts),
+      }, 502);
+    }
 
+    const telemetries = result.items;
     let upsertCount = 0;
     for (const t of telemetries) {
       const telemetryId = String(t.Id || t.id || t.TelemetryId || t.telemetryId || t.Code || t.code || "");
@@ -112,9 +130,14 @@ Deno.serve(async (req) => {
 
     await logIntegration(supabase, {
       tenant_id: account.tenant_id, integration_account_id,
-      action: "ssx_sync_telemetry", endpoint: telemetryUrl,
-      status_code: resp.status, success: true, duration_ms: resp.durationMs,
-      metadata: { total_received: telemetries.length, upserted: upsertCount },
+      action: "ssx_sync_telemetry", endpoint: result.endpoint,
+      status_code: result.statusCode, success: true,
+      duration_ms: result.attempts.reduce((s, a) => s + a.durationMs, 0),
+      metadata: {
+        total_received: telemetries.length, upserted: upsertCount,
+        endpoint_used: result.endpoint,
+        format_used: result.successfulFormat,
+      },
     });
 
     return jsonResp({ success: true, total_received: telemetries.length, upserted: upsertCount });
