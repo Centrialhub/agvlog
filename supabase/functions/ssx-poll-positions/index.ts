@@ -755,6 +755,9 @@ async function processPositions(
     insert_error_message: insertErrorMessage,
     attemptCount,
     attemptMatrix: summarizePollingAttemptsV2(attempts),
+    crossUnitFiltered,
+    totalReceived: positions.length,
+    rejectedByCrossUnitFilter: false,
   };
 }
 
