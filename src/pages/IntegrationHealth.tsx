@@ -260,6 +260,10 @@ function ReadinessGates({ tenant, positionStats, mappingConflicts, accounts }: {
   const hasHashAuth = accounts?.some((a: any) => a.settings && (a.settings as any)?.hashauth);
   const gates = [
     {
+      label: 'HashAuth configurado para tracking',
+      met: !accounts || accounts.length === 0 || accounts.some((a: any) => !!(a as any).hashauth),
+    },
+    {
       label: 'Pipeline automático rodando há 24h+',
       met: tenant?.last_successful_poll_at &&
         (Date.now() - new Date(tenant.last_successful_poll_at).getTime()) < 30 * 60 * 1000,
