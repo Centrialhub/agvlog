@@ -551,13 +551,13 @@ async function pollSingleUnit(params: {
       for (const timeProp of timeProps) {
         if (attemptCount >= MAX_ATTEMPTS) break;
 
-        // Try array format first
         const r = await tryCombo(candidate.property, candidate.value, candidate.value_source, url, "array", timeProp, "discovery");
         if (r?.abort) return buildAbortResult(r.abortReason!, attempts, attemptCount);
         if (r && r.items.length > 0) {
-          return await processPositions(r.items, r.resp, unit, mapping, supabase, config,
+          const processed = await processPositions(r.items, r.resp, unit, mapping, supabase, config,
             { property: candidate.property, value_source: candidate.value_source, url, format: "array", timeProp },
             "unit_rediscovery", attempts, attemptCount, integration_account_id);
+          if (!processed.rejectedByCrossUnitFilter) return processed;
         }
 
         // If 400/415, try wrapped
@@ -565,9 +565,10 @@ async function pollSingleUnit(params: {
           const rw = await tryCombo(candidate.property, candidate.value, candidate.value_source, url, "wrapped", timeProp, "discovery_wrapped");
           if (rw?.abort) return buildAbortResult(rw.abortReason!, attempts, attemptCount);
           if (rw && rw.items.length > 0) {
-            return await processPositions(rw.items, rw.resp, unit, mapping, supabase, config,
+            const processedWrapped = await processPositions(rw.items, rw.resp, unit, mapping, supabase, config,
               { property: candidate.property, value_source: candidate.value_source, url, format: "wrapped", timeProp },
               "unit_rediscovery", attempts, attemptCount, integration_account_id);
+            if (!processedWrapped.rejectedByCrossUnitFilter) return processedWrapped;
           }
         }
 
