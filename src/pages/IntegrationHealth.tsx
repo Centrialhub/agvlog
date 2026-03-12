@@ -32,7 +32,7 @@ export default function IntegrationHealth() {
     queryFn: async () => {
       if (!currentTenant) return [];
       const { data } = await supabase.from('integration_accounts')
-        .select('id, username, status, last_login_at, last_error, settings, token_expires_at')
+        .select('id, username, status, last_login_at, last_error, settings, token_expires_at, hashauth')
         .eq('tenant_id', currentTenant.id);
       return data || [];
     },
@@ -244,19 +244,25 @@ export default function IntegrationHealth() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <ReadinessGates tenant={tenant} positionStats={positionStats} mappingConflicts={mappingConflicts} />
+          <ReadinessGates tenant={tenant} positionStats={positionStats} mappingConflicts={mappingConflicts} accounts={accounts} />
         </CardContent>
       </Card>
     </div>
   );
 }
 
-function ReadinessGates({ tenant, positionStats, mappingConflicts }: {
+function ReadinessGates({ tenant, positionStats, mappingConflicts, accounts }: {
   tenant: any;
   positionStats: any;
   mappingConflicts: any[];
+  accounts?: any[];
 }) {
+  const hasHashAuth = accounts?.some((a: any) => a.settings && (a.settings as any)?.hashauth);
   const gates = [
+    {
+      label: 'HashAuth configurado para tracking',
+      met: !accounts || accounts.length === 0 || accounts.some((a: any) => !!(a as any).hashauth),
+    },
     {
       label: 'Pipeline automático rodando há 24h+',
       met: tenant?.last_successful_poll_at &&

@@ -379,12 +379,17 @@ function buildIdentifierCandidates(externalCode: string, meta: Record<string, an
     candidates.push({ property, value: value.trim(), value_source: source });
   };
 
-  // Priority order based on production evidence
-  add("IntegrationCode", meta.integration_code, "metadata.integration_code");
-  add("IntegrationCode", externalCode, "external_code");
+  // VEHICLE-FIRST priority: vehicle/tracked unit codes before tracker codes
+  // 1. VehicleIntegrationCode (from Vehicle/List — most reliable for PositionHistory)
+  add("IntegrationCode", meta.vehicle_integration_code, "metadata.vehicle_integration_code");
+  // 2. TrackedUnitIntegrationCode (the SSX PositionHistory filter property)
   add("TrackedUnitIntegrationCode", meta.tracked_unit_integration_code, "metadata.tracked_unit_integration_code");
+  // 3. external_code (should now be vehicle/tracked unit code after sync refactor)
+  add("IntegrationCode", externalCode, "external_code");
   add("TrackedUnitIntegrationCode", externalCode, "external_code");
+  // 4. TrackedUnit (description/name — sometimes works as filter)
   add("TrackedUnit", meta.tracked_unit, "metadata.tracked_unit");
+  // 5. TrackerIntegrationCode (LAST resort — device code, not vehicle)
   add("TrackerIntegrationCode", meta.tracker_integration_code, "metadata.tracker_integration_code");
 
   return candidates;

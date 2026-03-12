@@ -341,6 +341,7 @@ export function extractResponseItems(parsed: any): any[] {
 export interface NormalizedUnit {
   external_id: string | null;
   external_code: string;
+  unit_key_type: "vehicle_integration_code" | "tracked_unit_integration_code" | "tracker_integration_code" | "fallback_position_history";
   tracker_id: string | null;
   vehicle_id_external: string | null;
   name: string | null;
@@ -357,21 +358,47 @@ export interface NormalizedUnit {
   source_mode: "admin_catalog" | "tracking_fallback";
 }
 
+/**
+ * Normalizes a raw SSX item into a NormalizedUnit.
+ * 
+ * external_code priority (VEHICLE-FIRST):
+ * 1. VehicleIntegrationCode (from Vehicle/List endpoints)
+ * 2. TrackedUnitIntegrationCode
+ * 3. TrackerIntegrationCode / IntegrationCode (only if no vehicle/unit code)
+ * 4. Code / TrackedUnit / SerialNumber / IMEI (last resort)
+ */
 export function normalizeTrackerItem(raw: any, sourceEndpoint: string, sourceMode: "admin_catalog" | "tracking_fallback"): NormalizedUnit | null {
-  const externalCode = pickFirst(raw, [
-    "TrackedUnitIntegrationCode", "TrackerIntegrationCode",
-    "IntegrationCode", "Code", "TrackedUnit",
-    "TrackerCode", "SerialNumber", "IMEI", "Imei",
-    "integrationCode", "code", "trackedUnit",
-  ]);
+  const vehicleCode = pickFirst(raw, ["VehicleIntegrationCode", "vehicleIntegrationCode"]);
+  const trackedUnitCode = pickFirst(raw, ["TrackedUnitIntegrationCode", "trackedUnitIntegrationCode"]);
+  const trackerCode = pickFirst(raw, ["TrackerIntegrationCode", "trackerIntegrationCode", "IntegrationCode", "integrationCode"]);
+  const fallbackCode = pickFirst(raw, ["Code", "code", "TrackedUnit", "trackedUnit", "TrackerCode", "SerialNumber", "IMEI", "Imei"]);
+
+  let externalCode: string | null = null;
+  let unitKeyType: NormalizedUnit["unit_key_type"] = "fallback_position_history";
+
+  if (vehicleCode) {
+    externalCode = String(vehicleCode).trim();
+    unitKeyType = "vehicle_integration_code";
+  } else if (trackedUnitCode) {
+    externalCode = String(trackedUnitCode).trim();
+    unitKeyType = "tracked_unit_integration_code";
+  } else if (trackerCode) {
+    externalCode = String(trackerCode).trim();
+    unitKeyType = "tracker_integration_code";
+  } else if (fallbackCode) {
+    externalCode = String(fallbackCode).trim();
+    unitKeyType = "fallback_position_history";
+  }
+
   if (!externalCode) return null;
 
   return {
-    external_id: pickFirst(raw, ["Id", "id", "TrackerId", "trackerId"]) || null,
-    external_code: String(externalCode).trim(),
-    tracker_id: pickFirst(raw, ["TrackerId", "trackerId", "TrackerUnitId"]) || null,
-    vehicle_id_external: pickFirst(raw, ["VehicleId", "vehicleId"]) || null,
-    name: pickFirst(raw, ["Description", "Name", "Model", "TrackerModel", "name", "description"]) || null,
+    external_id: pickFirst(raw, ["Id", "id", "TrackerId", "trackerId", "VehicleId", "vehicleId"]) || null,
+    external_code: externalCode,
+    unit_key_type: unitKeyType,
+    tracker_id: pickFirst(raw, ["TrackerId", "trackerId", "TrackerUnitId", "IdTracker", "idTracker"]) || null,
+    vehicle_id_external: pickFirst(raw, ["VehicleId", "vehicleId", "IdTrackedUnit", "idTrackedUnit"]) || null,
+    name: pickFirst(raw, ["Description", "Name", "Model", "TrackerModel", "name", "description", "TrackedUnit", "trackedUnit"]) || null,
     plate: pickFirst(raw, ["Plate", "plate", "LicensePlate", "licensePlate", "VehiclePlate", "vehiclePlate"]) || null,
     imei: pickFirst(raw, ["IMEI", "Imei", "imei"]) || null,
     serial: pickFirst(raw, ["SerialNumber", "serialNumber", "Serial", "serial"]) || null,
@@ -386,10 +413,20 @@ export function normalizeTrackerItem(raw: any, sourceEndpoint: string, sourceMod
   };
 }
 
+export function pickVehicleIntegrationCode(item: any): string | null {
+  const direct = pickFirst(item, [
+    "VehicleIntegrationCode", "vehicleIntegrationCode",
+    "TrackedUnitIntegrationCode", "trackedUnitIntegrationCode",
+    "IntegrationCode", "integrationCode",
+  ]);
+  if (direct) return String(direct).trim();
+  return null;
+}
+
 export function pickTrackerCodeFromVehicle(item: any): string | null {
   const direct = pickFirst(item, [
-    "TrackedUnitIntegrationCode", "TrackerIntegrationCode",
-    "IntegrationCode", "TrackerCode",
+    "TrackerIntegrationCode", "trackerIntegrationCode",
+    "TrackerCode",
   ]);
   if (direct) return String(direct).trim();
 
