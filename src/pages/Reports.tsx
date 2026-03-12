@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
@@ -6,7 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { FileText, Route, Clock, AlertTriangle, Gauge, TrendingUp, MapPin } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { FileText, Route, Clock, AlertTriangle, Gauge, TrendingUp, MapPin, Download } from 'lucide-react';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 export default function Reports() {
   const { currentTenant } = useTenant();
@@ -53,7 +55,45 @@ export default function Reports() {
     trips: acc.trips + v.trips, stops: acc.stops + v.stops, overspeed: acc.overspeed + v.overspeed,
   }), { km: 0, moving: 0, stopped: 0, trips: 0, stops: 0, overspeed: 0 }), [byVehicle]);
 
+  // Daily evolution chart
+  const dailyEvolution = useMemo(() => {
+    const byDay: Record<string, { day: string; km: number; trips: number; stops: number }> = {};
+    for (const m of metrics as any[]) {
+      if (!byDay[m.day]) byDay[m.day] = { day: m.day, km: 0, trips: 0, stops: 0 };
+      byDay[m.day].km += m.km_estimated || 0;
+      byDay[m.day].trips += m.trips_count || 0;
+      byDay[m.day].stops += m.stops_count || 0;
+    }
+    return Object.values(byDay).sort((a, b) => a.day.localeCompare(b.day)).map(d => ({
+      ...d, km: Math.round(d.km), label: d.day.slice(5),
+    }));
+  }, [metrics]);
+
+  // Vehicle km chart data
+  const vehicleChartData = useMemo(() => {
+    return byVehicle.slice(0, 10).map(v => ({ plate: v.plate, km: Math.round(v.km) }));
+  }, [byVehicle]);
+
   const fmtHours = (s: number) => `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
+
+  // CSV export
+  const exportCSV = useCallback(() => {
+    const headers = ['Veículo', 'Km', 'Mov. (h)', 'Parado (h)', 'Viagens', 'Paradas', 'Excesso Vel.'];
+    const rows = byVehicle.map(v => [
+      v.plate, Math.round(v.km),
+      `${Math.floor(v.moving / 3600)}h${Math.floor((v.moving % 3600) / 60)}m`,
+      `${Math.floor(v.stopped / 3600)}h${Math.floor((v.stopped % 3600) / 60)}m`,
+      v.trips, v.stops, v.overspeed,
+    ]);
+    const csv = [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `relatorio_frota_${from}_${to}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [byVehicle, from, to]);
 
   return (
     <div className="animate-fade-in space-y-6">
@@ -64,11 +104,16 @@ export default function Reports() {
         <p className="text-sm text-muted-foreground">KPIs e ranking da frota por período</p>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
         <Input type="date" value={from} onChange={e => setFrom(e.target.value)} className="w-40" />
         <span className="text-muted-foreground">até</span>
         <Input type="date" value={to} onChange={e => setTo(e.target.value)} className="w-40" />
         <Badge variant="outline" className="text-xs">{metrics.length} registros</Badge>
+        {byVehicle.length > 0 && (
+          <Button variant="outline" size="sm" onClick={exportCSV}>
+            <Download className="h-4 w-4 mr-2" />Exportar CSV
+          </Button>
+        )}
       </div>
 
       {/* KPI cards */}
@@ -79,6 +124,50 @@ export default function Reports() {
         <KPICard icon={<MapPin className="h-4 w-4" />} label="Viagens" value={String(totals.trips)} />
         <KPICard icon={<MapPin className="h-4 w-4" />} label="Paradas" value={String(totals.stops)} />
         <KPICard icon={<Gauge className="h-4 w-4" />} label="Excesso vel." value={String(totals.overspeed)} variant="destructive" />
+      </div>
+
+      {/* Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Evolução Diária</CardTitle></CardHeader>
+          <CardContent>
+            {dailyEvolution.length > 0 ? (
+              <ResponsiveContainer width="100%" height={250}>
+                <LineChart data={dailyEvolution}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                  <XAxis dataKey="label" tick={{ fontSize: 10 }} className="fill-muted-foreground" />
+                  <YAxis tick={{ fontSize: 10 }} className="fill-muted-foreground" />
+                  <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Line type="monotone" dataKey="km" stroke="hsl(var(--primary))" strokeWidth={2} name="Km" dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="trips" stroke="hsl(var(--success))" strokeWidth={2} name="Viagens" dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="stops" stroke="hsl(var(--warning))" strokeWidth={2} name="Paradas" dot={{ r: 3 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[250px] flex items-center justify-center text-sm text-muted-foreground">Sem dados no período</div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Km por Veículo</CardTitle></CardHeader>
+          <CardContent>
+            {vehicleChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={vehicleChartData} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                  <XAxis type="number" tick={{ fontSize: 10 }} className="fill-muted-foreground" />
+                  <YAxis dataKey="plate" type="category" width={90} tick={{ fontSize: 10 }} className="fill-muted-foreground" />
+                  <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }} />
+                  <Bar dataKey="km" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} name="Km" />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[250px] flex items-center justify-center text-sm text-muted-foreground">Sem dados</div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* Vehicle ranking */}
