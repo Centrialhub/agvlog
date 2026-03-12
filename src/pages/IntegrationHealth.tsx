@@ -32,7 +32,7 @@ export default function IntegrationHealth() {
     queryFn: async () => {
       if (!currentTenant) return [];
       const { data } = await supabase.from('integration_accounts')
-        .select('id, username, status, last_login_at, last_error, settings, token_expires_at')
+        .select('id, username, status, last_login_at, last_error, settings, token_expires_at, hashauth')
         .eq('tenant_id', currentTenant.id);
       return data || [];
     },
