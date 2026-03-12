@@ -157,7 +157,29 @@ Deno.serve(async (req) => {
           const { data: allUnits } = await supabase
             .from("provider_units").select("id")
             .eq("integration_account_id", account.id).eq("active", true);
-          unitIds = (allUnits || []).map((u: any) => u.id);
+
+          const unitIdsUnsorted = (allUnits || []).map((u: any) => u.id);
+          if (unitIdsUnsorted.length > 0) {
+            const { data: cursors } = await supabase
+              .from("ingestion_cursors")
+              .select("provider_unit_id,last_polled_at")
+              .eq("tenant_id", tenant_id)
+              .in("provider_unit_id", unitIdsUnsorted);
+
+            const cursorMap = new Map<string, string | null>();
+            for (const c of cursors || []) cursorMap.set(c.provider_unit_id, c.last_polled_at || null);
+
+            unitIds = [...unitIdsUnsorted].sort((a, b) => {
+              const aTs = cursorMap.get(a);
+              const bTs = cursorMap.get(b);
+              if (!aTs && !bTs) return 0;
+              if (!aTs) return -1;
+              if (!bTs) return 1;
+              return new Date(aTs).getTime() - new Date(bTs).getTime();
+            });
+          } else {
+            unitIds = [];
+          }
         }
 
         const BATCH_SIZE = 3;

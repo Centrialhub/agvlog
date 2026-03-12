@@ -246,10 +246,9 @@ Deno.serve(async (req) => {
         poll_working_time_prop: unitResult.workingCombo.timeProp,
         last_success_run: now.toISOString(),
       };
-      // Only advance cursor if inserts actually succeeded
-      const advanceCursorTo = unitResult.inserted > 0
-        ? (unitResult.latestCapturedAt || cursor?.last_success_at || null)
-        : (cursor?.last_success_at || null);
+      // Advance cursor using latest provider timestamp even when all rows are duplicates.
+      // This prevents stale "last seen" state when provider keeps returning already persisted points.
+      const advanceCursorTo = unitResult.latestCapturedAt || cursor?.last_success_at || null;
       await upsertCursor(supabase, {
         tenant_id: mapping.tenant_id, provider_unit_id: unit.id,
         last_polled_at: now.toISOString(),
@@ -267,6 +266,27 @@ Deno.serve(async (req) => {
           backoff_until: unitResult.positions_found ? null : new Date(Date.now() + 60000).toISOString(),
         });
       }
+
+    // If this run produced only cross-unit data, invalidate stale mismatched positions_last for this vehicle.
+    if (unitResult.rejectedByCrossUnitFilter && !unitResult.persistenceFailed) {
+      const { data: currentLast } = await supabase
+        .from("positions_last").select("telemetry_snapshot")
+        .eq("tenant_id", mapping.tenant_id).eq("vehicle_id", mapping.vehicle_id).single();
+
+      if (currentLast?.telemetry_snapshot) {
+        const meta = (unit as any).metadata || {};
+        const unitIdentifiers = buildUnitIdentifierSet(unit, meta);
+        const isCurrentSnapshotValid = isPointFromCurrentUnit(currentLast.telemetry_snapshot || {}, unitIdentifiers);
+        if (!isCurrentSnapshotValid) {
+          await supabase
+            .from("positions_last")
+            .delete()
+            .eq("tenant_id", mapping.tenant_id)
+            .eq("vehicle_id", mapping.vehicle_id);
+          console.log(`[SSX:poll-positions] INVALIDATED_STALE_POSITION_LAST | unit=${unit.external_code} | vehicle=${mapping.vehicle_id}`);
+        }
+      }
+    }
 
     // Update positions_last only if persistence succeeded (not on persistence failure)
     if (unitResult.latestNormalized && !unitResult.persistenceFailed) {
@@ -313,6 +333,9 @@ Deno.serve(async (req) => {
         duplicates: unitResult.duplicates,
         rows_attempted: unitResult.rows_attempted || 0,
         rows_failed: unitResult.rows_failed || 0,
+        cross_unit_filtered: unitResult.crossUnitFiltered || 0,
+        points_received: unitResult.totalReceived || 0,
+        rejected_by_cross_unit_filter: !!unitResult.rejectedByCrossUnitFilter,
         insert_error_class: unitResult.insert_error_class || null,
         insert_error_message: unitResult.insert_error_message || null,
         on_conflict_target_used: ON_CONFLICT_TARGET,
@@ -372,11 +395,13 @@ function buildIdentifierCandidates(externalCode: string, meta: Record<string, an
   const candidates: IdentifierCandidate[] = [];
   const seen = new Set<string>();
   const add = (property: string, value: string | null | undefined, source: string) => {
-    if (!value || typeof value !== "string" || !value.trim()) return;
-    const key = `${property}:${value.trim()}`;
+    if (value == null) return;
+    const stringValue = String(value).trim();
+    if (!stringValue) return;
+    const key = `${property}:${stringValue}`;
     if (seen.has(key)) return;
     seen.add(key);
-    candidates.push({ property, value: value.trim(), value_source: source });
+    candidates.push({ property, value: stringValue, value_source: source });
   };
 
   // VEHICLE-FIRST priority: vehicle/tracked unit codes before tracker codes
@@ -384,12 +409,15 @@ function buildIdentifierCandidates(externalCode: string, meta: Record<string, an
   add("IntegrationCode", meta.vehicle_integration_code, "metadata.vehicle_integration_code");
   // 2. TrackedUnitIntegrationCode (the SSX PositionHistory filter property)
   add("TrackedUnitIntegrationCode", meta.tracked_unit_integration_code, "metadata.tracked_unit_integration_code");
-  // 3. external_code (should now be vehicle/tracked unit code after sync refactor)
+  // 3. IdTrackedUnit (numeric identifier from tracking fallback, useful when integration codes are null)
+  add("IdTrackedUnit", meta.id_tracked_unit, "metadata.id_tracked_unit");
+  add("TrackedUnitId", meta.id_tracked_unit, "metadata.id_tracked_unit");
+  // 4. external_code (should now be vehicle/tracked unit code after sync refactor)
   add("IntegrationCode", externalCode, "external_code");
   add("TrackedUnitIntegrationCode", externalCode, "external_code");
-  // 4. TrackedUnit (description/name — sometimes works as filter)
+  // 5. TrackedUnit (description/name — sometimes works as filter)
   add("TrackedUnit", meta.tracked_unit, "metadata.tracked_unit");
-  // 5. TrackerIntegrationCode (LAST resort — device code, not vehicle)
+  // 6. TrackerIntegrationCode (LAST resort — device code, not vehicle)
   add("TrackerIntegrationCode", meta.tracker_integration_code, "metadata.tracker_integration_code");
 
   return candidates;
@@ -415,6 +443,9 @@ interface PollUnitResult {
   error?: string;
   attemptCount: number;
   attemptMatrix: string[];
+  crossUnitFiltered?: number;
+  totalReceived?: number;
+  rejectedByCrossUnitFilter?: boolean;
 }
 
 async function pollSingleUnit(params: {
@@ -505,9 +536,10 @@ async function pollSingleUnit(params: {
         const r = await tryCombo(memoProp, memoCandidate.value, memoCandidate.value_source, memoUrl, memoFormat, memoTimeProp, "unit_memo");
         if (r?.abort) return buildAbortResult(r.abortReason!, attempts, attemptCount);
         if (r && r.items.length > 0) {
-          return await processPositions(r.items, r.resp, unit, mapping, supabase, config,
+          const processed = await processPositions(r.items, r.resp, unit, mapping, supabase, config,
             { property: memoProp, value_source: memoCandidate.value_source, url: memoUrl, format: memoFormat, timeProp: memoTimeProp },
             "unit_memo", attempts, attemptCount, integration_account_id);
+          if (!processed.rejectedByCrossUnitFilter) return processed;
         }
       }
     }
@@ -522,9 +554,10 @@ async function pollSingleUnit(params: {
         scoutHint.url, scoutHint.format as any, scoutHint.timeProp, "scout_hint");
       if (r?.abort) return buildAbortResult(r.abortReason!, attempts, attemptCount);
       if (r && r.items.length > 0) {
-        return await processPositions(r.items, r.resp, unit, mapping, supabase, config,
+        const processed = await processPositions(r.items, r.resp, unit, mapping, supabase, config,
           { property: scoutHint.property, value_source: hintCandidate.value_source, url: scoutHint.url, format: scoutHint.format, timeProp: scoutHint.timeProp },
           "scout_hint", attempts, attemptCount, integration_account_id);
+        if (!processed.rejectedByCrossUnitFilter) return processed;
       }
       // Scout hint returned empty for this unit — fall through to per-unit discovery
     }
@@ -541,13 +574,13 @@ async function pollSingleUnit(params: {
       for (const timeProp of timeProps) {
         if (attemptCount >= MAX_ATTEMPTS) break;
 
-        // Try array format first
         const r = await tryCombo(candidate.property, candidate.value, candidate.value_source, url, "array", timeProp, "discovery");
         if (r?.abort) return buildAbortResult(r.abortReason!, attempts, attemptCount);
         if (r && r.items.length > 0) {
-          return await processPositions(r.items, r.resp, unit, mapping, supabase, config,
+          const processed = await processPositions(r.items, r.resp, unit, mapping, supabase, config,
             { property: candidate.property, value_source: candidate.value_source, url, format: "array", timeProp },
             "unit_rediscovery", attempts, attemptCount, integration_account_id);
+          if (!processed.rejectedByCrossUnitFilter) return processed;
         }
 
         // If 400/415, try wrapped
@@ -555,9 +588,10 @@ async function pollSingleUnit(params: {
           const rw = await tryCombo(candidate.property, candidate.value, candidate.value_source, url, "wrapped", timeProp, "discovery_wrapped");
           if (rw?.abort) return buildAbortResult(rw.abortReason!, attempts, attemptCount);
           if (rw && rw.items.length > 0) {
-            return await processPositions(rw.items, rw.resp, unit, mapping, supabase, config,
+            const processedWrapped = await processPositions(rw.items, rw.resp, unit, mapping, supabase, config,
               { property: candidate.property, value_source: candidate.value_source, url, format: "wrapped", timeProp },
               "unit_rediscovery", attempts, attemptCount, integration_account_id);
+            if (!processedWrapped.rejectedByCrossUnitFilter) return processedWrapped;
           }
         }
 
@@ -597,17 +631,7 @@ async function processPositions(
 
   // ===== CROSS-UNIT FILTER: Only keep positions belonging to THIS unit =====
   const meta = (unit as any).metadata || {};
-  const unitIdentifiers = new Set<string>();
-  // Build set of known identifiers for this unit (case-insensitive)
-  const addId = (v: string | null | undefined) => { if (v && typeof v === 'string' && v.trim()) unitIdentifiers.add(v.trim().toLowerCase()); };
-  addId(unit.external_code);
-  addId(meta.vehicle_integration_code);
-  addId(meta.tracked_unit_integration_code);
-  addId(meta.tracker_integration_code);
-  addId(meta.tracked_unit);
-  addId(meta.plate);
-  // Also add the label (often contains plate)
-  addId(unit.label);
+  const unitIdentifiers = buildUnitIdentifierSet(unit, meta);
 
   let crossUnitFiltered = 0;
 
@@ -617,43 +641,23 @@ async function processPositions(
     const normalized = normalizePosition(point);
     if (!normalized) continue;
 
-    // ===== Cross-unit validation =====
-    // Extract the TrackedUnit identifier from the position to verify it belongs to this unit
-    const pointTrackedUnit = normalized.telemetry?.TrackedUnit || normalized.telemetry?.trackedUnit || null;
-    const pointIdTrackedUnit = normalized.telemetry?.IdTrackedUnit || normalized.telemetry?.idTrackedUnit || null;
-    const pointPlate = normalized.telemetry?.Plate || normalized.telemetry?.plate || null;
-    const pointTrackerCode = normalized.telemetry?.TrackerIntegrationCode || normalized.telemetry?.trackerIntegrationCode || null;
-    const pointVehicleCode = normalized.telemetry?.VehicleIntegrationCode || normalized.telemetry?.vehicleIntegrationCode || null;
-    const pointTrackedUnitCode = normalized.telemetry?.TrackedUnitIntegrationCode || normalized.telemetry?.trackedUnitIntegrationCode || null;
-
-    // If position has identifying info, verify it matches this unit
-    const positionIdentifiers: string[] = [];
-    if (pointTrackedUnit) positionIdentifiers.push(String(pointTrackedUnit).trim().toLowerCase());
-    if (pointPlate) positionIdentifiers.push(String(pointPlate).trim().toLowerCase().replace(/[\s-]/g, ''));
-    if (pointVehicleCode) positionIdentifiers.push(String(pointVehicleCode).trim().toLowerCase());
-    if (pointTrackedUnitCode) positionIdentifiers.push(String(pointTrackedUnitCode).trim().toLowerCase());
-    if (pointTrackerCode) positionIdentifiers.push(String(pointTrackerCode).trim().toLowerCase());
-
-    if (positionIdentifiers.length > 0) {
-      // Check if ANY position identifier matches ANY known unit identifier
-      // Also check partial match for TrackedUnit (which often includes "PLATE - TYPE")
-      const matches = positionIdentifiers.some(pid =>
-        unitIdentifiers.has(pid) ||
-        Array.from(unitIdentifiers).some(uid => pid.includes(uid) || uid.includes(pid))
-      );
-
-      if (!matches) {
-        crossUnitFiltered++;
-        continue; // Skip this position — belongs to a different unit
-      }
+    if (!isPointFromCurrentUnit(normalized.telemetry || {}, unitIdentifiers)) {
+      crossUnitFiltered++;
+      continue;
     }
 
     if (!latestNormalized || new Date(normalized.captured_at) > new Date(latestNormalized.captured_at)) {
       latestNormalized = normalized;
     }
 
-    // Include TrackedUnit in hash to prevent cross-unit hash collisions
-    const trackedUnitForHash = pointTrackedUnit || pointIdTrackedUnit || '';
+    const telemetry = normalized.telemetry || {};
+    const trackedUnitForHash = String(
+      telemetry.TrackedUnit
+      ?? telemetry.trackedUnit
+      ?? telemetry.IdTrackedUnit
+      ?? telemetry.idTrackedUnit
+      ?? ""
+    );
     const hashInput = `${unit.external_code}|${trackedUnitForHash}|${normalized.lat}|${normalized.lng}|${normalized.captured_at}`;
     const hash = simpleHash(hashInput);
 
@@ -665,8 +669,38 @@ async function processPositions(
     });
   }
 
+  const filteredRatio = positions.length > 0 ? crossUnitFiltered / positions.length : 0;
+  const rejectedByCrossUnitFilter = rows.length === 0 && crossUnitFiltered > 0;
+  const suspiciousLowPrecision = rows.length > 0 && positions.length >= 100 && filteredRatio >= 0.98 && rows.length <= 2;
+
   if (crossUnitFiltered > 0) {
     console.log(`[SSX:poll-positions] CROSS_UNIT_FILTERED | unit=${unit.external_code} | filtered=${crossUnitFiltered} | kept=${rows.length} | total_received=${positions.length}`);
+  }
+
+  if (suspiciousLowPrecision) {
+    console.log(`[SSX:poll-positions] CROSS_UNIT_LOW_PRECISION_REJECTED | unit=${unit.external_code} | filtered=${crossUnitFiltered} | kept=${rows.length} | total_received=${positions.length} | ratio=${filteredRatio.toFixed(3)}`);
+  }
+
+  if (rejectedByCrossUnitFilter || suspiciousLowPrecision) {
+    return {
+      positions_found: false,
+      inserted: 0,
+      duplicates: 0,
+      rows_attempted: rows.length,
+      rows_failed: 0,
+      latestCapturedAt: null,
+      latestNormalized: null,
+      workingCombo: null,
+      comboSource,
+      abortBatch: false,
+      persistenceFailed: false,
+      error: "cross_unit_filtered_all",
+      attemptCount,
+      attemptMatrix: summarizePollingAttemptsV2(attempts),
+      crossUnitFiltered,
+      totalReceived: positions.length,
+      rejectedByCrossUnitFilter: true,
+    };
   }
 
   // Batch insert in chunks of 100
@@ -744,6 +778,9 @@ async function processPositions(
     insert_error_message: insertErrorMessage,
     attemptCount,
     attemptMatrix: summarizePollingAttemptsV2(attempts),
+    crossUnitFiltered,
+    totalReceived: positions.length,
+    rejectedByCrossUnitFilter: false,
   };
 }
 
@@ -757,6 +794,108 @@ function buildAbortResult(reason: string, attempts: PollingAttemptLog[], attempt
     attemptCount,
     attemptMatrix: summarizePollingAttemptsV2(attempts),
   };
+}
+
+interface UnitIdentifierSet {
+  normalizedStrict: Set<string>;
+  normalizedContains: Set<string>;
+  numericIds: Set<string>;
+}
+
+function normalizeIdentifier(value: unknown): string {
+  if (value == null) return "";
+  return String(value).trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function normalizeNumericIdentifier(value: unknown): string {
+  if (value == null) return "";
+  return String(value).trim().replace(/[^0-9]+/g, "");
+}
+
+function buildUnitIdentifierSet(unit: any, meta: Record<string, any>): UnitIdentifierSet {
+  const normalizedStrict = new Set<string>();
+  const normalizedContains = new Set<string>();
+  const numericIds = new Set<string>();
+
+  const addText = (value: unknown, allowContains = true) => {
+    const normalized = normalizeIdentifier(value);
+    if (!normalized) return;
+    normalizedStrict.add(normalized);
+    if (allowContains && normalized.length >= 6) normalizedContains.add(normalized);
+  };
+
+  const addNumeric = (value: unknown) => {
+    const numeric = normalizeNumericIdentifier(value);
+    if (!numeric) return;
+    numericIds.add(numeric);
+  };
+
+  addText(unit.external_code);
+  addText(unit.label);
+  addText(meta.vehicle_integration_code);
+  addText(meta.tracked_unit_integration_code);
+  addText(meta.tracker_integration_code);
+  addText(meta.tracked_unit);
+  addText(meta.plate);
+  addNumeric(meta.id_tracked_unit);
+  addNumeric(meta.id_tracker);
+
+  return { normalizedStrict, normalizedContains, numericIds };
+}
+
+function isPointFromCurrentUnit(telemetry: Record<string, any>, unitIds: UnitIdentifierSet): boolean {
+  const telemetryCandidateFields = [
+    telemetry.TrackedUnit,
+    telemetry.trackedUnit,
+    telemetry.Plate,
+    telemetry.plate,
+    telemetry.VehicleIntegrationCode,
+    telemetry.vehicleIntegrationCode,
+    telemetry.TrackedUnitIntegrationCode,
+    telemetry.trackedUnitIntegrationCode,
+    telemetry.TrackerIntegrationCode,
+    telemetry.trackerIntegrationCode,
+  ];
+
+  const telemetryIdFields = [telemetry.IdTrackedUnit, telemetry.idTrackedUnit, telemetry.IdTracker, telemetry.idTracker];
+
+  const telemetryNumericIds = telemetryIdFields
+    .map((v) => normalizeNumericIdentifier(v))
+    .filter(Boolean);
+
+  if (unitIds.numericIds.size > 0 && telemetryNumericIds.length > 0) {
+    const hasNumericMatch = telemetryNumericIds.some((id) => unitIds.numericIds.has(id));
+    if (!hasNumericMatch) return false;
+  }
+
+  const telemetryNormalized = telemetryCandidateFields
+    .map((v) => normalizeIdentifier(v))
+    .filter(Boolean);
+
+  if (telemetryNormalized.length === 0 && telemetryNumericIds.length === 0) {
+    // If provider returned no identifier, keep point (cannot validate ownership).
+    return true;
+  }
+
+  if (telemetryNormalized.some((value) => unitIds.normalizedStrict.has(value))) {
+    return true;
+  }
+
+  const hasContainsMatch = telemetryNormalized.some((pid) => {
+    if (pid.length < 6) return false;
+    for (const uid of unitIds.normalizedContains) {
+      if (pid.includes(uid) || uid.includes(pid)) return true;
+    }
+    return false;
+  });
+
+  if (hasContainsMatch) return true;
+
+  if (unitIds.numericIds.size > 0 && telemetryNumericIds.length > 0) {
+    return telemetryNumericIds.some((id) => unitIds.numericIds.has(id));
+  }
+
+  return false;
 }
 
 // ==================== Position Normalizer ====================
