@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant, useIsAdmin } from '@/hooks/useTenant';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +12,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { Hexagon, Plus, Trash2, MapPin } from 'lucide-react';
+import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+
+const CATEGORY_COLORS: Record<string, string> = {
+  general: '#3b82f6',
+  base: '#22c55e',
+  client: '#a855f7',
+  restricted: '#ef4444',
+};
 
 export default function Geofences() {
   const { currentTenant } = useTenant();
@@ -25,6 +34,21 @@ export default function Geofences() {
       if (!currentTenant) return [];
       const { data, error } = await supabase.from('geofences').select('id, tenant_id, name, category, enabled, created_at')
         .eq('tenant_id', currentTenant.id).order('created_at', { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!currentTenant,
+  });
+
+  // Geofence states (current vehicle positions inside geofences)
+  const { data: states = [] } = useQuery({
+    queryKey: ['geofence_states', currentTenant?.id],
+    queryFn: async () => {
+      if (!currentTenant) return [];
+      const { data, error } = await supabase.from('geofence_states')
+        .select('*, vehicles(plate), geofences(name)')
+        .eq('tenant_id', currentTenant.id)
+        .eq('is_inside', true);
       if (error) throw error;
       return data;
     },
@@ -53,6 +77,19 @@ export default function Geofences() {
     onError: (e: any) => toast.error(e.message),
   });
 
+  // Get fleet positions to show on geofence map
+  const { data: positions = [] } = useQuery({
+    queryKey: ['positions_last_geo', currentTenant?.id],
+    queryFn: async () => {
+      if (!currentTenant) return [];
+      const { data } = await supabase.from('positions_last')
+        .select('vehicle_id, lat, lng, vehicles(plate)')
+        .eq('tenant_id', currentTenant.id);
+      return data || [];
+    },
+    enabled: !!currentTenant,
+  });
+
   return (
     <div className="animate-fade-in space-y-6">
       <div className="flex items-center justify-between">
@@ -64,6 +101,40 @@ export default function Geofences() {
         </div>
         {isAdmin && <Button onClick={() => setDialogOpen(true)}><Plus className="mr-2 h-4 w-4" />Nova Geofence</Button>}
       </div>
+
+      {/* Map showing vehicle positions */}
+      <Card className="overflow-hidden">
+        <CardHeader className="pb-2"><CardTitle className="text-base">Mapa de Geofences e Veículos</CardTitle></CardHeader>
+        <CardContent className="p-0">
+          <div className="h-[400px]">
+            <MapContainer center={positions.length > 0 ? [(positions[0] as any).lat, (positions[0] as any).lng] : [-14.235, -51.925]} zoom={positions.length > 0 ? 10 : 4} className="h-full w-full z-0">
+              <TileLayer attribution='&copy; OpenStreetMap' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+              {/* Vehicle positions */}
+              {(positions as any[]).map((p: any) => (
+                <CircleMarker key={p.vehicle_id} center={[p.lat, p.lng]} radius={6} pathOptions={{ color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 0.8 }}>
+                  <Popup><strong>{p.vehicles?.plate || 'Veículo'}</strong></Popup>
+                </CircleMarker>
+              ))}
+            </MapContainer>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Vehicles inside geofences */}
+      {states.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Veículos Dentro de Geofences</CardTitle></CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {(states as any[]).map((s: any, i: number) => (
+                <Badge key={i} variant="outline" className="text-xs">
+                  {s.vehicles?.plate || '—'} → {s.geofences?.name || '—'}
+                </Badge>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Geofences list */}
@@ -82,7 +153,12 @@ export default function Geofences() {
                   </TableCell></TableRow>
                 ) : geofences.map((g: any) => (
                   <TableRow key={g.id}>
-                    <TableCell className="font-medium">{g.name}</TableCell>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: CATEGORY_COLORS[g.category] || '#6b7280' }} />
+                        {g.name}
+                      </div>
+                    </TableCell>
                     <TableCell><Badge variant="outline" className="text-xs">{g.category}</Badge></TableCell>
                     <TableCell><Badge variant={g.enabled ? 'default' : 'secondary'} className="text-xs">{g.enabled ? 'Ativa' : 'Inativa'}</Badge></TableCell>
                     <TableCell>{isAdmin && <Button size="sm" variant="ghost" onClick={() => { if (confirm('Remover?')) deleteMutation.mutate(g.id); }}><Trash2 className="h-3 w-3 text-destructive" /></Button>}</TableCell>
@@ -130,7 +206,6 @@ function NewGeofenceDialog({ open, onOpenChange, tenantId }: { open: boolean; on
   const [radius, setRadius] = useState('200');
   const [loading, setLoading] = useState(false);
 
-  // MVP: create circular geofence approximated as polygon
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!tenantId) return;
@@ -139,7 +214,6 @@ function NewGeofenceDialog({ open, onOpenChange, tenantId }: { open: boolean; on
     const cLat = parseFloat(lat);
     const cLng = parseFloat(lng);
     const r = parseFloat(radius);
-    // Approximate circle as 32-point polygon
     const coords: [number, number][] = [];
     for (let i = 0; i <= 32; i++) {
       const angle = (i / 32) * 2 * Math.PI;

@@ -595,18 +595,66 @@ async function processPositions(
   let duplicates = 0;
   let latestNormalized: any = null;
 
+  // ===== CROSS-UNIT FILTER: Only keep positions belonging to THIS unit =====
+  const meta = (unit as any).metadata || {};
+  const unitIdentifiers = new Set<string>();
+  // Build set of known identifiers for this unit (case-insensitive)
+  const addId = (v: string | null | undefined) => { if (v && typeof v === 'string' && v.trim()) unitIdentifiers.add(v.trim().toLowerCase()); };
+  addId(unit.external_code);
+  addId(meta.vehicle_integration_code);
+  addId(meta.tracked_unit_integration_code);
+  addId(meta.tracker_integration_code);
+  addId(meta.tracked_unit);
+  addId(meta.plate);
+  // Also add the label (often contains plate)
+  addId(unit.label);
+
+  let crossUnitFiltered = 0;
+
   // Normalize all positions first, compute hashes, then batch insert
   const rows: any[] = [];
   for (const point of positions) {
     const normalized = normalizePosition(point);
     if (!normalized) continue;
 
+    // ===== Cross-unit validation =====
+    // Extract the TrackedUnit identifier from the position to verify it belongs to this unit
+    const pointTrackedUnit = normalized.telemetry?.TrackedUnit || normalized.telemetry?.trackedUnit || null;
+    const pointIdTrackedUnit = normalized.telemetry?.IdTrackedUnit || normalized.telemetry?.idTrackedUnit || null;
+    const pointPlate = normalized.telemetry?.Plate || normalized.telemetry?.plate || null;
+    const pointTrackerCode = normalized.telemetry?.TrackerIntegrationCode || normalized.telemetry?.trackerIntegrationCode || null;
+    const pointVehicleCode = normalized.telemetry?.VehicleIntegrationCode || normalized.telemetry?.vehicleIntegrationCode || null;
+    const pointTrackedUnitCode = normalized.telemetry?.TrackedUnitIntegrationCode || normalized.telemetry?.trackedUnitIntegrationCode || null;
+
+    // If position has identifying info, verify it matches this unit
+    const positionIdentifiers: string[] = [];
+    if (pointTrackedUnit) positionIdentifiers.push(String(pointTrackedUnit).trim().toLowerCase());
+    if (pointPlate) positionIdentifiers.push(String(pointPlate).trim().toLowerCase().replace(/[\s-]/g, ''));
+    if (pointVehicleCode) positionIdentifiers.push(String(pointVehicleCode).trim().toLowerCase());
+    if (pointTrackedUnitCode) positionIdentifiers.push(String(pointTrackedUnitCode).trim().toLowerCase());
+    if (pointTrackerCode) positionIdentifiers.push(String(pointTrackerCode).trim().toLowerCase());
+
+    if (positionIdentifiers.length > 0) {
+      // Check if ANY position identifier matches ANY known unit identifier
+      // Also check partial match for TrackedUnit (which often includes "PLATE - TYPE")
+      const matches = positionIdentifiers.some(pid =>
+        unitIdentifiers.has(pid) ||
+        Array.from(unitIdentifiers).some(uid => pid.includes(uid) || uid.includes(pid))
+      );
+
+      if (!matches) {
+        crossUnitFiltered++;
+        continue; // Skip this position — belongs to a different unit
+      }
+    }
+
     if (!latestNormalized || new Date(normalized.captured_at) > new Date(latestNormalized.captured_at)) {
       latestNormalized = normalized;
     }
 
-    const hashInput = `${unit.external_code}|${normalized.lat}|${normalized.lng}|${normalized.captured_at}`;
-    // Use simple string hash to avoid expensive crypto
+    // Include TrackedUnit in hash to prevent cross-unit hash collisions
+    const trackedUnitForHash = pointTrackedUnit || pointIdTrackedUnit || '';
+    const hashInput = `${unit.external_code}|${trackedUnitForHash}|${normalized.lat}|${normalized.lng}|${normalized.captured_at}`;
     const hash = simpleHash(hashInput);
 
     rows.push({
@@ -615,6 +663,10 @@ async function processPositions(
       speed: normalized.speed, heading: normalized.heading,
       telemetry: normalized.telemetry, provider_payload_hash: hash,
     });
+  }
+
+  if (crossUnitFiltered > 0) {
+    console.log(`[SSX:poll-positions] CROSS_UNIT_FILTERED | unit=${unit.external_code} | filtered=${crossUnitFiltered} | kept=${rows.length} | total_received=${positions.length}`);
   }
 
   // Batch insert in chunks of 100

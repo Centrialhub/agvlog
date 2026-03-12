@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useVehicleHistory, PositionRaw } from '@/hooks/usePositions';
-import { MapContainer, TileLayer, Marker, Polyline, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Polyline, Popup, CircleMarker } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -68,6 +69,19 @@ export default function VehicleDetails() {
     },
     enabled: !!currentTenant && !!vehicleId,
     refetchInterval: 30000,
+  });
+
+  // Today metrics for overview KPIs
+  const { data: todayMetrics } = useQuery({
+    queryKey: ['vehicle_today_metrics', currentTenant?.id, vehicleId],
+    queryFn: async () => {
+      if (!currentTenant || !vehicleId) return null;
+      const today = new Date().toISOString().slice(0, 10);
+      const { data } = await supabase.from('metrics_daily').select('*')
+        .eq('tenant_id', currentTenant.id).eq('vehicle_id', vehicleId).eq('day', today).maybeSingle();
+      return data;
+    },
+    enabled: !!currentTenant && !!vehicleId,
   });
 
   const today = new Date().toISOString().split('T')[0];
@@ -128,7 +142,6 @@ export default function VehicleDetails() {
     enabled: !!currentTenant && !!vehicleId,
   });
 
-  // Overspeed events for speed tab
   const { data: overspeedEvents = [] } = useQuery({
     queryKey: ['vehicle_overspeed', currentTenant?.id, vehicleId, historyDate],
     queryFn: async () => {
@@ -144,7 +157,6 @@ export default function VehicleDetails() {
     enabled: !!currentTenant && !!vehicleId,
   });
 
-  // Fuel readings for fuel tab
   const { data: fuelReadings = [] } = useQuery({
     queryKey: ['vehicle_fuel', currentTenant?.id, vehicleId, historyDate],
     queryFn: async () => {
@@ -159,7 +171,6 @@ export default function VehicleDetails() {
     enabled: !!currentTenant && !!vehicleId,
   });
 
-  // POIs for linking
   const { data: pois = [] } = useQuery({
     queryKey: ['pois', currentTenant?.id],
     queryFn: async () => {
@@ -181,6 +192,25 @@ export default function VehicleDetails() {
 
   const fmtHours = (s: number | null) => { if (!s) return '—'; return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`; };
 
+  // Speed chart data
+  const speedChartData = useMemo(() => {
+    if (!hasSpeed) return [];
+    return history
+      .filter(p => p.speed != null)
+      .map(p => ({
+        time: format(new Date(p.captured_at), 'HH:mm'),
+        speed: Math.round(p.speed!),
+      }));
+  }, [history, hasSpeed]);
+
+  // Fuel chart data
+  const fuelChartData = useMemo(() => {
+    return (fuelReadings as any[]).map((r: any) => ({
+      time: format(new Date(r.captured_at), 'HH:mm'),
+      value: r.fuel_value,
+    }));
+  }, [fuelReadings]);
+
   // Save stop as POI
   const savePOIMutation = useMutation({
     mutationFn: async ({ lat, lng, name }: { lat: number; lng: number; name: string }) => {
@@ -195,7 +225,6 @@ export default function VehicleDetails() {
     onError: (e: any) => toast.error(e.message),
   });
 
-  // Link stop to POI
   const linkPOIMutation = useMutation({
     mutationFn: async ({ stopId, poiId }: { stopId: string; poiId: string }) => {
       const { error } = await supabase.from('trip_stops').update({ poi_id: poiId }).eq('id', stopId);
@@ -243,8 +272,19 @@ export default function VehicleDetails() {
           <TabsTrigger value="telemetry">Telemetria</TabsTrigger>
         </TabsList>
 
-        {/* Overview */}
+        {/* Overview with KPIs */}
         <TabsContent value="overview" className="space-y-4">
+          {/* Today KPIs */}
+          {todayMetrics && (
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              <MiniKPI icon={<Route className="h-4 w-4" />} label="Km hoje" value={`${Math.round(todayMetrics.km_estimated || 0)} km`} />
+              <MiniKPI icon={<MapPin className="h-4 w-4" />} label="Viagens" value={String(todayMetrics.trips_count || 0)} />
+              <MiniKPI icon={<StopCircle className="h-4 w-4" />} label="Paradas" value={String(todayMetrics.stops_count || 0)} />
+              <MiniKPI icon={<Activity className="h-4 w-4" />} label="Em mov." value={fmtHours(todayMetrics.moving_time_seconds)} />
+              <MiniKPI icon={<Gauge className="h-4 w-4" />} label="Excesso vel." value={String(todayMetrics.overspeed_events || 0)} variant={todayMetrics.overspeed_events > 0 ? 'destructive' : undefined} />
+            </div>
+          )}
+
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="space-y-4">
               <Card><CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><MapPin className="h-4 w-4 text-primary" />Localização</CardTitle></CardHeader>
@@ -270,7 +310,7 @@ export default function VehicleDetails() {
           </div>
         </TabsContent>
 
-        {/* Timeline */}
+        {/* Timeline with stop markers */}
         <TabsContent value="timeline" className="space-y-4">
           <div className="flex items-center gap-4">
             <Input type="date" value={historyDate} onChange={e => setHistoryDate(e.target.value)} className="w-48" />
@@ -279,8 +319,14 @@ export default function VehicleDetails() {
           <Card className="h-[500px] overflow-hidden">
             <MapContainer center={history.length > 0 ? [history[0].lat, history[0].lng] : positionLast ? [positionLast.lat, positionLast.lng] : [-14.235, -51.925]} zoom={history.length > 0 ? 13 : 4} className="h-full w-full z-0">
               <TileLayer attribution='&copy; OpenStreetMap' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-              {historyPath.length > 1 && <Polyline positions={historyPath} color="#3b82f6" weight={3} opacity={0.8} />}
+              {historyPath.length > 1 && <Polyline positions={historyPath} color="hsl(215, 80%, 48%)" weight={3} opacity={0.8} />}
               {history.length > 0 && (<><Marker position={[history[0].lat, history[0].lng]}><Popup><strong>Início</strong><br />{format(new Date(history[0].captured_at), "HH:mm:ss")}</Popup></Marker><Marker position={[history[history.length - 1].lat, history[history.length - 1].lng]}><Popup><strong>Fim</strong><br />{format(new Date(history[history.length - 1].captured_at), "HH:mm:ss")}</Popup></Marker></>)}
+              {/* Stop markers */}
+              {(stops as any[]).map((s: any) => (
+                <CircleMarker key={s.id} center={[s.lat, s.lng]} radius={8} pathOptions={{ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.7 }}>
+                  <Popup><strong>Parada</strong><br />{format(new Date(s.start_at), 'HH:mm')} — {s.duration_seconds ? fmtHours(s.duration_seconds) : '?'}<br />{s.pois?.name || s.stop_class}</Popup>
+                </CircleMarker>
+              ))}
             </MapContainer>
           </Card>
           {hasSpeed && (
@@ -291,7 +337,7 @@ export default function VehicleDetails() {
             </CardContent></Card>
           )}
           {history.length > 0 && !hasSpeed && (
-            <p className="text-xs text-muted-foreground flex items-center gap-1"><Info className="h-3 w-3" />Velocidade indisponível — estimada via GPS</p>
+            <p className="text-xs text-muted-foreground flex items-center gap-1"><Info className="h-3 w-3" />Velocidade estimada via GPS no processamento</p>
           )}
         </TabsContent>
 
@@ -335,10 +381,7 @@ export default function VehicleDetails() {
                     <TableCell className="text-xs">{format(new Date(s.start_at), 'HH:mm')}</TableCell>
                     <TableCell className="text-xs">{s.duration_seconds ? fmtHours(s.duration_seconds) : '—'}</TableCell>
                     <TableCell>
-                      <Badge
-                        variant={s.stop_class === 'overnight' ? 'destructive' : s.stop_class === 'long' ? 'destructive' : s.stop_class === 'operational' ? 'secondary' : 'outline'}
-                        className="text-[10px]"
-                      >
+                      <Badge variant={s.stop_class === 'overnight' ? 'destructive' : s.stop_class === 'long' ? 'destructive' : s.stop_class === 'operational' ? 'secondary' : 'outline'} className="text-[10px]">
                         {s.stop_class === 'overnight' && <Moon className="h-3 w-3 mr-1" />}
                         {s.stop_class}
                       </Badge>
@@ -356,7 +399,6 @@ export default function VehicleDetails() {
             </Table>
           </CardContent></Card>
 
-          {/* POI Dialog */}
           <Dialog open={!!poiDialogStop} onOpenChange={(v) => !v && setPoiDialogStop(null)}>
             <DialogContent className="max-w-sm">
               <DialogHeader><DialogTitle>Gerenciar POI</DialogTitle></DialogHeader>
@@ -393,8 +435,11 @@ export default function VehicleDetails() {
           </Dialog>
         </TabsContent>
 
-        {/* Speed */}
+        {/* Speed with chart */}
         <TabsContent value="speed" className="space-y-4">
+          <div className="flex items-center gap-4">
+            <Input type="date" value={historyDate} onChange={e => setHistoryDate(e.target.value)} className="w-48" />
+          </div>
           {!hasSpeed && history.length > 0 ? (
             <Card><CardContent className="py-8 text-center">
               <AlertTriangle className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
@@ -402,15 +447,9 @@ export default function VehicleDetails() {
               <p className="text-xs text-muted-foreground mt-1">Este rastreador não reporta velocidade</p>
             </CardContent></Card>
           ) : history.length === 0 ? (
-            <Card><CardContent className="py-8 text-center text-muted-foreground">
-              <Input type="date" value={historyDate} onChange={e => setHistoryDate(e.target.value)} className="w-48 mx-auto mb-4" />
-              Nenhum dado para este dia
-            </CardContent></Card>
+            <Card><CardContent className="py-8 text-center text-muted-foreground">Nenhum dado para este dia</CardContent></Card>
           ) : (
             <>
-              <div className="flex items-center gap-4">
-                <Input type="date" value={historyDate} onChange={e => setHistoryDate(e.target.value)} className="w-48" />
-              </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Máxima</CardTitle></CardHeader>
                   <CardContent><div className="text-2xl font-bold text-foreground">{Math.round(Math.max(...history.filter(p => p.speed != null).map(p => p.speed!)))} <span className="text-sm font-normal text-muted-foreground">km/h</span></div></CardContent>
@@ -422,6 +461,27 @@ export default function VehicleDetails() {
                   <CardContent><div className="text-2xl font-bold text-foreground">{overspeedEvents.length}</div></CardContent>
                 </Card>
               </div>
+
+              {/* Speed Chart */}
+              {speedChartData.length > 0 && (
+                <Card>
+                  <CardHeader className="pb-2"><CardTitle className="text-sm">Velocidade ao longo do dia</CardTitle></CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={280}>
+                      <LineChart data={speedChartData}>
+                        <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                        <XAxis dataKey="time" tick={{ fontSize: 10 }} interval="preserveStartEnd" className="fill-muted-foreground" />
+                        <YAxis tick={{ fontSize: 10 }} className="fill-muted-foreground" unit=" km/h" />
+                        <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }} />
+                        {vehicle?.speed_limit_kmh && (
+                          <Line type="monotone" dataKey={() => vehicle.speed_limit_kmh} stroke="hsl(var(--destructive))" strokeDasharray="5 5" strokeWidth={1} dot={false} name="Limite" />
+                        )}
+                        <Line type="monotone" dataKey="speed" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} name="Velocidade" />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              )}
 
               {overspeedEvents.length > 0 && (
                 <Card><CardContent className="p-0">
@@ -448,7 +508,7 @@ export default function VehicleDetails() {
           )}
         </TabsContent>
 
-        {/* Fuel */}
+        {/* Fuel with chart */}
         <TabsContent value="fuel" className="space-y-4">
           {!hasFuel ? (
             <Card><CardContent className="py-8 text-center">
@@ -476,26 +536,29 @@ export default function VehicleDetails() {
                       <CardContent>
                         {(() => {
                           const delta = (fuelReadings[0] as any).fuel_value - (fuelReadings[fuelReadings.length - 1] as any).fuel_value;
-                          return <div className={`text-2xl font-bold ${delta > 0 ? 'text-destructive' : 'text-green-600'}`}>{delta > 0 ? '-' : '+'}{Math.abs(delta).toFixed(1)}</div>;
+                          return <div className={`text-2xl font-bold ${delta > 0 ? 'text-destructive' : 'text-success'}`}>{delta > 0 ? '-' : '+'}{Math.abs(delta).toFixed(1)}</div>;
                         })()}
                       </CardContent>
                     </Card>
                   </div>
 
-                  <Card><CardContent className="p-0">
-                    <Table>
-                      <TableHeader><TableRow><TableHead>Hora</TableHead><TableHead>Valor</TableHead><TableHead>Unidade</TableHead></TableRow></TableHeader>
-                      <TableBody>
-                        {(fuelReadings as any[]).slice(0, 50).map((r: any, i: number) => (
-                          <TableRow key={i}>
-                            <TableCell className="text-xs">{format(new Date(r.captured_at), 'HH:mm:ss')}</TableCell>
-                            <TableCell className="font-medium">{r.fuel_value?.toFixed(1)}</TableCell>
-                            <TableCell className="text-xs text-muted-foreground">{r.fuel_unit === 'liters' ? 'Litros' : '%'}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </CardContent></Card>
+                  {/* Fuel Chart */}
+                  {fuelChartData.length > 0 && (
+                    <Card>
+                      <CardHeader className="pb-2"><CardTitle className="text-sm">Nível de combustível ao longo do dia</CardTitle></CardHeader>
+                      <CardContent>
+                        <ResponsiveContainer width="100%" height={250}>
+                          <AreaChart data={fuelChartData}>
+                            <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                            <XAxis dataKey="time" tick={{ fontSize: 10 }} interval="preserveStartEnd" className="fill-muted-foreground" />
+                            <YAxis tick={{ fontSize: 10 }} className="fill-muted-foreground" />
+                            <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }} />
+                            <Area type="monotone" dataKey="value" stroke="hsl(var(--success))" fill="hsl(var(--success))" fillOpacity={0.15} strokeWidth={2} name="Combustível" />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </CardContent>
+                    </Card>
+                  )}
                 </>
               ) : (
                 <Card><CardContent className="py-8 text-center text-muted-foreground">Nenhuma leitura de combustível neste dia</CardContent></Card>
@@ -566,5 +629,16 @@ export default function VehicleDetails() {
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+function MiniKPI({ icon, label, value, variant }: { icon: React.ReactNode; label: string; value: string; variant?: string }) {
+  return (
+    <Card>
+      <CardContent className="p-3">
+        <div className="flex items-center gap-2 text-muted-foreground mb-0.5">{icon}<span className="text-[10px]">{label}</span></div>
+        <p className={`text-lg font-bold ${variant === 'destructive' ? 'text-destructive' : 'text-foreground'}`}>{value}</p>
+      </CardContent>
+    </Card>
   );
 }
