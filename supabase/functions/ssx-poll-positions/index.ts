@@ -372,11 +372,13 @@ function buildIdentifierCandidates(externalCode: string, meta: Record<string, an
   const candidates: IdentifierCandidate[] = [];
   const seen = new Set<string>();
   const add = (property: string, value: string | null | undefined, source: string) => {
-    if (!value || typeof value !== "string" || !value.trim()) return;
-    const key = `${property}:${value.trim()}`;
+    if (value == null) return;
+    const stringValue = String(value).trim();
+    if (!stringValue) return;
+    const key = `${property}:${stringValue}`;
     if (seen.has(key)) return;
     seen.add(key);
-    candidates.push({ property, value: value.trim(), value_source: source });
+    candidates.push({ property, value: stringValue, value_source: source });
   };
 
   // VEHICLE-FIRST priority: vehicle/tracked unit codes before tracker codes
@@ -384,12 +386,15 @@ function buildIdentifierCandidates(externalCode: string, meta: Record<string, an
   add("IntegrationCode", meta.vehicle_integration_code, "metadata.vehicle_integration_code");
   // 2. TrackedUnitIntegrationCode (the SSX PositionHistory filter property)
   add("TrackedUnitIntegrationCode", meta.tracked_unit_integration_code, "metadata.tracked_unit_integration_code");
-  // 3. external_code (should now be vehicle/tracked unit code after sync refactor)
+  // 3. IdTrackedUnit (numeric identifier from tracking fallback, useful when integration codes are null)
+  add("IdTrackedUnit", meta.id_tracked_unit, "metadata.id_tracked_unit");
+  add("TrackedUnitId", meta.id_tracked_unit, "metadata.id_tracked_unit");
+  // 4. external_code (should now be vehicle/tracked unit code after sync refactor)
   add("IntegrationCode", externalCode, "external_code");
   add("TrackedUnitIntegrationCode", externalCode, "external_code");
-  // 4. TrackedUnit (description/name — sometimes works as filter)
+  // 5. TrackedUnit (description/name — sometimes works as filter)
   add("TrackedUnit", meta.tracked_unit, "metadata.tracked_unit");
-  // 5. TrackerIntegrationCode (LAST resort — device code, not vehicle)
+  // 6. TrackerIntegrationCode (LAST resort — device code, not vehicle)
   add("TrackerIntegrationCode", meta.tracker_integration_code, "metadata.tracker_integration_code");
 
   return candidates;
