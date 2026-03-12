@@ -513,9 +513,10 @@ async function pollSingleUnit(params: {
         const r = await tryCombo(memoProp, memoCandidate.value, memoCandidate.value_source, memoUrl, memoFormat, memoTimeProp, "unit_memo");
         if (r?.abort) return buildAbortResult(r.abortReason!, attempts, attemptCount);
         if (r && r.items.length > 0) {
-          return await processPositions(r.items, r.resp, unit, mapping, supabase, config,
+          const processed = await processPositions(r.items, r.resp, unit, mapping, supabase, config,
             { property: memoProp, value_source: memoCandidate.value_source, url: memoUrl, format: memoFormat, timeProp: memoTimeProp },
             "unit_memo", attempts, attemptCount, integration_account_id);
+          if (!processed.rejectedByCrossUnitFilter) return processed;
         }
       }
     }
