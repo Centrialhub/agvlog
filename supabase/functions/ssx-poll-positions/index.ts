@@ -420,6 +420,9 @@ interface PollUnitResult {
   error?: string;
   attemptCount: number;
   attemptMatrix: string[];
+  crossUnitFiltered?: number;
+  totalReceived?: number;
+  rejectedByCrossUnitFilter?: boolean;
 }
 
 async function pollSingleUnit(params: {
