@@ -244,7 +244,7 @@ export default function IntegrationHealth() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <ReadinessGates tenant={tenant} positionStats={positionStats} mappingConflicts={mappingConflicts} />
+          <ReadinessGates tenant={tenant} positionStats={positionStats} mappingConflicts={mappingConflicts} accounts={accounts} />
         </CardContent>
       </Card>
     </div>

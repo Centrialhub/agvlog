@@ -299,7 +299,15 @@ function IntegrationDialog({ open, onOpenChange, tenantId }: { open: boolean; on
           <div className="space-y-2"><Label>URL Base</Label><Input value={baseUrl} onChange={e => setBaseUrl(e.target.value)} required /></div>
           <div className="space-y-2"><Label>Usuário</Label><Input value={username} onChange={e => setUsername(e.target.value)} required /></div>
           <div className="space-y-2"><Label>Senha</Label><Input type="password" value={password} onChange={e => setPassword(e.target.value)} required /></div>
-          <div className="space-y-2"><Label>HashAuth</Label><Input value={hashauth} onChange={e => setHashauth(e.target.value)} placeholder="Opcional" /></div>
+          <div className="space-y-2">
+            <Label>HashAuth</Label>
+            <Input value={hashauth} onChange={e => setHashauth(e.target.value)} placeholder="Recomendado para polling" />
+            {!hashauth && (
+              <p className="text-xs text-warning">
+                ⚠ Sem HashAuth, o polling de posições (PositionHistory) e violações de regras podem não funcionar. Configure se disponível.
+              </p>
+            )}
+          </div>
           <div className="space-y-2"><Label>Hashcode</Label><Input value={hashcode} onChange={e => setHashcode(e.target.value)} placeholder="Opcional" /></div>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
