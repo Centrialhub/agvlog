@@ -251,11 +251,13 @@ export default function IntegrationHealth() {
   );
 }
 
-function ReadinessGates({ tenant, positionStats, mappingConflicts }: {
+function ReadinessGates({ tenant, positionStats, mappingConflicts, accounts }: {
   tenant: any;
   positionStats: any;
   mappingConflicts: any[];
+  accounts?: any[];
 }) {
+  const hasHashAuth = accounts?.some((a: any) => a.settings && (a.settings as any)?.hashauth);
   const gates = [
     {
       label: 'Pipeline automático rodando há 24h+',
