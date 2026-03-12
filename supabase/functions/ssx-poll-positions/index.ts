@@ -246,10 +246,9 @@ Deno.serve(async (req) => {
         poll_working_time_prop: unitResult.workingCombo.timeProp,
         last_success_run: now.toISOString(),
       };
-      // Only advance cursor if inserts actually succeeded
-      const advanceCursorTo = unitResult.inserted > 0
-        ? (unitResult.latestCapturedAt || cursor?.last_success_at || null)
-        : (cursor?.last_success_at || null);
+      // Advance cursor using latest provider timestamp even when all rows are duplicates.
+      // This prevents stale "last seen" state when provider keeps returning already persisted points.
+      const advanceCursorTo = unitResult.latestCapturedAt || cursor?.last_success_at || null;
       await upsertCursor(supabase, {
         tenant_id: mapping.tenant_id, provider_unit_id: unit.id,
         last_polled_at: now.toISOString(),
