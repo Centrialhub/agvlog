@@ -531,9 +531,10 @@ async function pollSingleUnit(params: {
         scoutHint.url, scoutHint.format as any, scoutHint.timeProp, "scout_hint");
       if (r?.abort) return buildAbortResult(r.abortReason!, attempts, attemptCount);
       if (r && r.items.length > 0) {
-        return await processPositions(r.items, r.resp, unit, mapping, supabase, config,
+        const processed = await processPositions(r.items, r.resp, unit, mapping, supabase, config,
           { property: scoutHint.property, value_source: hintCandidate.value_source, url: scoutHint.url, format: scoutHint.format, timeProp: scoutHint.timeProp },
           "scout_hint", attempts, attemptCount, integration_account_id);
+        if (!processed.rejectedByCrossUnitFilter) return processed;
       }
       // Scout hint returned empty for this unit — fall through to per-unit discovery
     }
