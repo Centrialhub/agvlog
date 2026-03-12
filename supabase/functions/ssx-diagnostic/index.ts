@@ -4,12 +4,13 @@
  * IMPORTANT: Uses the SAME discovery helpers as ssx-sync-units to ensure
  * identical endpoint strategy in diagnostic and production.
  * 
- * Tests performed:
+ * Tests performed (in production priority order):
  * 1. Token validity
- * 2. Administration/Tracker/List (admin URL candidates × all body candidates × both tokens)
- * 3. Administration/Vehicle/List (v2 and v1 variants × both tokens)
+ * 2. Administration/Vehicle/v2/List + Vehicle/List (PRIMARY catalog source)
+ * 3. Administration/Tracker/List (enrichment only)
  * 4. Tracking/PositionHistory/List
  * 5. Tracking/Telemetry/List
+ * 6. HashAuth configuration check
  * 
  * Returns structured results per test, with error classification and attempt matrix.
  */
@@ -122,65 +123,7 @@ Deno.serve(async (req) => {
     if (config.token && config.token !== adminTokenResult.token) tokens.push({ label: "regular_token", token: config.token });
     if (tokens.length === 0 && config.token) tokens.push({ label: "regular_token", token: config.token });
 
-    // TEST 2: Administration/Tracker/List
-    // Uses buildAdminUrlCandidates (unversioned first, then versioned) — same as production sync
-    const trackerUrls = buildAdminUrlCandidates(config.baseUrl, config.apiVersion, "/Administration/Tracker/List");
-    const trackerAllAttempts: AttemptLog[] = [];
-    let trackerSuccess = false;
-    let trackerItems: any[] = [];
-    let trackerWinningEndpoint = trackerUrls[0];
-    let trackerWinningFormat = "";
-    let trackerWinningToken = "";
-    let trackerErrorClass: SsxErrorClass | null = null;
-    const trackerStart = Date.now();
-
-    for (const { label, token } of tokens) {
-      const result = await tryEndpointWithFallback({
-        urlCandidates: trackerUrls,
-        token,
-        bodyCandidates: ADMIN_BODY_CANDIDATES,
-        timeoutMs: 15_000,
-        abortOnAuthError: false, // Don't abort on 403 — try all body formats
-      });
-      trackerAllAttempts.push(...result.attempts);
-
-      if (result.success && result.items.length > 0) {
-        trackerSuccess = true;
-        trackerItems = result.items;
-        trackerWinningEndpoint = result.endpoint;
-        trackerWinningFormat = result.successfulFormat || "";
-        trackerWinningToken = label;
-        break;
-      }
-      trackerErrorClass = result.errorClass;
-    }
-
-    // Derive real error if no success
-    if (!trackerSuccess && !trackerErrorClass) {
-      trackerErrorClass = trackerAllAttempts.length > 0
-        ? trackerAllAttempts[trackerAllAttempts.length - 1].errorClass
-        : "unknown";
-    }
-
-    tests.push({
-      name: "admin_tracker_list",
-      status: trackerSuccess ? "pass" : (trackerErrorClass === "empty_response" ? "warn" : "fail"),
-      endpoint: trackerWinningEndpoint,
-      endpoint_candidates: trackerUrls,
-      body_candidates_tried: ADMIN_BODY_CANDIDATES.map(b => b.label),
-      token_mode: trackerWinningToken || tokens.map(t => t.label).join(","),
-      status_code: trackerAllAttempts.length > 0 ? trackerAllAttempts[trackerAllAttempts.length - 1].statusCode : 0,
-      error_class: trackerSuccess ? null : trackerErrorClass,
-      items_found: trackerItems.length,
-      duration_ms: Date.now() - trackerStart,
-      details: trackerSuccess
-        ? `Found ${trackerItems.length} trackers via ${trackerWinningToken}:${trackerWinningFormat} at ${trackerWinningEndpoint}`
-        : `Failed: ${trackerErrorClass}`,
-      attempt_matrix: summarizeAttemptMatrix(trackerAllAttempts),
-    });
-
-    // TEST 3: Administration/Vehicle list (v2 and v1 variants)
-    // Uses buildAdminUrlCandidates — same as production sync
+    // TEST 2: Administration/Vehicle list (v2 and v1 variants) — PRIMARY
     const vehicleV2Urls = buildAdminUrlCandidates(config.baseUrl, config.apiVersion, "/Administration/Vehicle/v2/List");
     const vehicleV1Urls = buildAdminUrlCandidates(config.baseUrl, config.apiVersion, "/Administration/Vehicle/List");
     const allVehicleUrls = [...vehicleV2Urls, ...vehicleV1Urls];
@@ -237,12 +180,64 @@ Deno.serve(async (req) => {
       attempt_matrix: summarizeAttemptMatrix(vehicleAllAttempts),
     });
 
+    // TEST 3: Administration/Tracker/List (enrichment)
+    const trackerUrls = buildAdminUrlCandidates(config.baseUrl, config.apiVersion, "/Administration/Tracker/List");
+    const trackerAllAttempts: AttemptLog[] = [];
+    let trackerSuccess = false;
+    let trackerItems: any[] = [];
+    let trackerWinningEndpoint = trackerUrls[0];
+    let trackerWinningFormat = "";
+    let trackerWinningToken = "";
+    let trackerErrorClass: SsxErrorClass | null = null;
+    const trackerStart = Date.now();
+
+    for (const { label, token } of tokens) {
+      const result = await tryEndpointWithFallback({
+        urlCandidates: trackerUrls,
+        token,
+        bodyCandidates: ADMIN_BODY_CANDIDATES,
+        timeoutMs: 15_000,
+        abortOnAuthError: false,
+      });
+      trackerAllAttempts.push(...result.attempts);
+
+      if (result.success && result.items.length > 0) {
+        trackerSuccess = true;
+        trackerItems = result.items;
+        trackerWinningEndpoint = result.endpoint;
+        trackerWinningFormat = result.successfulFormat || "";
+        trackerWinningToken = label;
+        break;
+      }
+      trackerErrorClass = result.errorClass;
+    }
+
+    if (!trackerSuccess && !trackerErrorClass) {
+      trackerErrorClass = trackerAllAttempts.length > 0
+        ? trackerAllAttempts[trackerAllAttempts.length - 1].errorClass
+        : "unknown";
+    }
+
+    tests.push({
+      name: "admin_tracker_list",
+      status: trackerSuccess ? "pass" : (trackerErrorClass === "empty_response" ? "warn" : "fail"),
+      endpoint: trackerWinningEndpoint,
+      endpoint_candidates: trackerUrls,
+      body_candidates_tried: ADMIN_BODY_CANDIDATES.map(b => b.label),
+      token_mode: trackerWinningToken || tokens.map(t => t.label).join(","),
+      status_code: trackerAllAttempts.length > 0 ? trackerAllAttempts[trackerAllAttempts.length - 1].statusCode : 0,
+      error_class: trackerSuccess ? null : trackerErrorClass,
+      items_found: trackerItems.length,
+      duration_ms: Date.now() - trackerStart,
+      details: trackerSuccess
+        ? `Found ${trackerItems.length} trackers via ${trackerWinningToken}:${trackerWinningFormat} at ${trackerWinningEndpoint} (enrichment only)`
+        : `Failed: ${trackerErrorClass} (enrichment not critical)`,
+      attempt_matrix: summarizeAttemptMatrix(trackerAllAttempts),
+    });
+
     // TEST 4: Tracking/PositionHistory/List
-    // Uses buildPositionHistoryUrlCandidates: v3, v2, unversioned
     const posHistUrls = buildPositionHistoryUrlCandidates(config.baseUrl, config.apiVersion);
     const since5m = new Date(Date.now() - 5 * 60_000).toISOString();
-
-    // Swagger-aligned: use EventDate + "=" condition style, array body first
     const timeFilterProp = config.settings.time_filter_property || "EventDate";
     const posFilters = [{ PropertyName: timeFilterProp, Condition: ">=", Value: since5m }];
     const posFiltersAlt = [{ PropertyName: "DateTimeGPS", Condition: ">=", Value: since5m }];
@@ -280,7 +275,6 @@ Deno.serve(async (req) => {
     });
 
     // TEST 5: Tracking/Telemetry/List
-    // Uses buildSsxUrlCandidates — tries versioned AND unversioned
     const telUrls = buildSsxUrlCandidates(config.baseUrl, config.apiVersion, "/Tracking/Telemetry/List");
     const telStart = Date.now();
     const telResult = await tryEndpointWithFallback({
@@ -308,20 +302,70 @@ Deno.serve(async (req) => {
       attempt_matrix: summarizeAttemptMatrix(telResult.attempts),
     });
 
+    // TEST 6: HashAuth configuration check
+    const hasHashAuth = !!config.hashauth;
+    const posHistFailed = !posResult.success;
+    let hashAuthStatus: "pass" | "fail" | "warn" = "pass";
+    let hashAuthDetails = "";
+
+    if (!hasHashAuth && posHistFailed) {
+      hashAuthStatus = "fail";
+      hashAuthDetails = "HashAuth não configurado e PositionHistory falhou. O polling de posições provavelmente não funcionará sem HashAuth. Configure HashAuth nas credenciais da integração.";
+    } else if (!hasHashAuth) {
+      hashAuthStatus = "warn";
+      hashAuthDetails = "HashAuth não configurado. O polling de posições pode parar de funcionar. Recomenda-se configurar HashAuth para garantir acesso ao Tracking/PositionHistory.";
+    } else {
+      hashAuthDetails = "HashAuth configurado corretamente.";
+    }
+
+    tests.push({
+      name: "hashauth_config",
+      status: hashAuthStatus,
+      endpoint: "-",
+      endpoint_candidates: [],
+      body_candidates_tried: [],
+      token_mode: "-",
+      status_code: 0,
+      error_class: null,
+      items_found: 0,
+      duration_ms: 0,
+      details: hashAuthDetails,
+      attempt_matrix: [],
+    });
+
     // Summary
     const passed = tests.filter(t => t.status === "pass").length;
     const failed = tests.filter(t => t.status === "fail").length;
     const warned = tests.filter(t => t.status === "warn").length;
 
+    // Build actionable summary
+    const summaryParts: string[] = [`${passed} passed, ${warned} warnings, ${failed} failed out of ${tests.length} tests`];
+    if (vehicleSuccess) {
+      summaryParts.push(`✓ Catálogo admin funcional (${vehicleItems.length} veículos)`);
+    } else {
+      summaryParts.push("✗ Catálogo admin indisponível — sync usará fallback");
+    }
+    if (posResult.success && posResult.items.length > 0) {
+      summaryParts.push(`✓ Polling de posições funcional`);
+    } else if (posResult.success) {
+      summaryParts.push("⚠ PositionHistory respondeu vazio (sem dados recentes)");
+    } else {
+      summaryParts.push(`✗ Polling de posições falhou (${posResult.errorClass})`);
+    }
+    if (!hasHashAuth) {
+      summaryParts.push("⚠ HashAuth ausente — configuração incompleta para tracking");
+    }
+
     await logDiagnostic(supabase, account, integration_account_id, tests);
 
     return jsonResp({
       success: true,
-      summary: `${passed} passed, ${warned} warnings, ${failed} failed out of ${tests.length} tests`,
+      summary: summaryParts.join(" | "),
       api_version: config.apiVersion,
       base_url: config.baseUrl,
       admin_token_available: !!adminTokenResult.token,
       admin_token_error: adminTokenResult.error,
+      hashauth_configured: hasHashAuth,
       tests,
     });
   } catch (err: any) {
