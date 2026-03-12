@@ -773,6 +773,108 @@ function buildAbortResult(reason: string, attempts: PollingAttemptLog[], attempt
   };
 }
 
+interface UnitIdentifierSet {
+  normalizedStrict: Set<string>;
+  normalizedContains: Set<string>;
+  numericIds: Set<string>;
+}
+
+function normalizeIdentifier(value: unknown): string {
+  if (value == null) return "";
+  return String(value).trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function normalizeNumericIdentifier(value: unknown): string {
+  if (value == null) return "";
+  return String(value).trim().replace(/[^0-9]+/g, "");
+}
+
+function buildUnitIdentifierSet(unit: any, meta: Record<string, any>): UnitIdentifierSet {
+  const normalizedStrict = new Set<string>();
+  const normalizedContains = new Set<string>();
+  const numericIds = new Set<string>();
+
+  const addText = (value: unknown, allowContains = true) => {
+    const normalized = normalizeIdentifier(value);
+    if (!normalized) return;
+    normalizedStrict.add(normalized);
+    if (allowContains && normalized.length >= 6) normalizedContains.add(normalized);
+  };
+
+  const addNumeric = (value: unknown) => {
+    const numeric = normalizeNumericIdentifier(value);
+    if (!numeric) return;
+    numericIds.add(numeric);
+  };
+
+  addText(unit.external_code);
+  addText(unit.label);
+  addText(meta.vehicle_integration_code);
+  addText(meta.tracked_unit_integration_code);
+  addText(meta.tracker_integration_code);
+  addText(meta.tracked_unit);
+  addText(meta.plate);
+  addNumeric(meta.id_tracked_unit);
+  addNumeric(meta.id_tracker);
+
+  return { normalizedStrict, normalizedContains, numericIds };
+}
+
+function isPointFromCurrentUnit(telemetry: Record<string, any>, unitIds: UnitIdentifierSet): boolean {
+  const telemetryCandidateFields = [
+    telemetry.TrackedUnit,
+    telemetry.trackedUnit,
+    telemetry.Plate,
+    telemetry.plate,
+    telemetry.VehicleIntegrationCode,
+    telemetry.vehicleIntegrationCode,
+    telemetry.TrackedUnitIntegrationCode,
+    telemetry.trackedUnitIntegrationCode,
+    telemetry.TrackerIntegrationCode,
+    telemetry.trackerIntegrationCode,
+  ];
+
+  const telemetryIdFields = [telemetry.IdTrackedUnit, telemetry.idTrackedUnit, telemetry.IdTracker, telemetry.idTracker];
+
+  const telemetryNumericIds = telemetryIdFields
+    .map((v) => normalizeNumericIdentifier(v))
+    .filter(Boolean);
+
+  if (unitIds.numericIds.size > 0 && telemetryNumericIds.length > 0) {
+    const hasNumericMatch = telemetryNumericIds.some((id) => unitIds.numericIds.has(id));
+    if (!hasNumericMatch) return false;
+  }
+
+  const telemetryNormalized = telemetryCandidateFields
+    .map((v) => normalizeIdentifier(v))
+    .filter(Boolean);
+
+  if (telemetryNormalized.length === 0 && telemetryNumericIds.length === 0) {
+    // If provider returned no identifier, keep point (cannot validate ownership).
+    return true;
+  }
+
+  if (telemetryNormalized.some((value) => unitIds.normalizedStrict.has(value))) {
+    return true;
+  }
+
+  const hasContainsMatch = telemetryNormalized.some((pid) => {
+    if (pid.length < 6) return false;
+    for (const uid of unitIds.normalizedContains) {
+      if (pid.includes(uid) || uid.includes(pid)) return true;
+    }
+    return false;
+  });
+
+  if (hasContainsMatch) return true;
+
+  if (unitIds.numericIds.size > 0 && telemetryNumericIds.length > 0) {
+    return telemetryNumericIds.some((id) => unitIds.numericIds.has(id));
+  }
+
+  return false;
+}
+
 // ==================== Position Normalizer ====================
 
 function normalizePosition(point: any): {
