@@ -773,6 +773,37 @@ async function processPositions(
   };
 }
 
+async function invalidateMismatchedPositionLast(
+  supabase: any,
+  mapping: { vehicle_id: string; tenant_id: string },
+  unit: any,
+) {
+  const { data: currentLast } = await supabase
+    .from("positions_last")
+    .select("telemetry_snapshot")
+    .eq("tenant_id", mapping.tenant_id)
+    .eq("vehicle_id", mapping.vehicle_id)
+    .maybeSingle();
+
+  if (!currentLast?.telemetry_snapshot) return;
+
+  const meta = (unit as any).metadata || {};
+  const unitIdentifiers = buildUnitIdentifierSet(unit, meta);
+  const isCurrentSnapshotValid = isPointFromCurrentUnit(currentLast.telemetry_snapshot || {}, unitIdentifiers);
+
+  if (!isCurrentSnapshotValid) {
+    await supabase
+      .from("positions_last")
+      .delete()
+      .eq("tenant_id", mapping.tenant_id)
+      .eq("vehicle_id", mapping.vehicle_id);
+
+    console.log(
+      `[SSX:poll-positions] INVALIDATED_STALE_POSITION_LAST | unit=${unit.external_code} | vehicle=${mapping.vehicle_id}`,
+    );
+  }
+}
+
 function buildAbortResult(reason: string, attempts: PollingAttemptLog[], attemptCount: number): PollUnitResult {
   return {
     positions_found: false, inserted: 0, duplicates: 0,
