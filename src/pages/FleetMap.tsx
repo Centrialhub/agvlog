@@ -390,7 +390,7 @@ export default function FleetMap() {
                     )}
                     <span className="flex items-center gap-1">
                       <Clock className="h-3 w-3" />
-                      {ageDescription(p.captured_at)}
+                      {ageDescription(p.captured_at, p.received_at)}
                     </span>
                   </div>
                 </button>
