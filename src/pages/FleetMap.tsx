@@ -442,7 +442,7 @@ export default function FleetMap() {
                     <p>Status: <strong>{statusLabel(p.status)}</strong></p>
                     {p.speed != null && <p>Velocidade: <strong>{Math.round(p.speed)} km/h</strong></p>}
                     {p.heading != null && <p>Direção: {Math.round(p.heading)}°</p>}
-                    <p>{ageDescription(p.captured_at)}</p>
+                    <p>{ageDescription(p.captured_at, p.received_at)}</p>
                     {p.status === 'stale' && (
                       <p className="text-red-500 font-medium">⚠ Posição muito antiga — dados podem estar desatualizados</p>
                     )}
