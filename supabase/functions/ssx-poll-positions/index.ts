@@ -660,7 +660,7 @@ async function processPositions(
 
   const filteredRatio = positions.length > 0 ? crossUnitFiltered / positions.length : 0;
   const rejectedByCrossUnitFilter = rows.length === 0 && crossUnitFiltered > 0;
-  const suspiciousLowPrecision = rows.length > 0 && positions.length >= 100 && filteredRatio >= 0.98 && rows.length <= 2;
+  const suspiciousLowPrecision = rows.length > 0 && positions.length >= 100 && filteredRatio >= 0.98 && rows.length <= 10;
 
   if (crossUnitFiltered > 0) {
     console.log(`[SSX:poll-positions] CROSS_UNIT_FILTERED | unit=${unit.external_code} | filtered=${crossUnitFiltered} | kept=${rows.length} | total_received=${positions.length}`);
