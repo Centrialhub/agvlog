@@ -272,25 +272,9 @@ Deno.serve(async (req) => {
         });
       }
 
-    // If this run produced only cross-unit data, invalidate stale mismatched positions_last for this vehicle.
-    if (unitResult.rejectedByCrossUnitFilter && !unitResult.persistenceFailed) {
-      const { data: currentLast } = await supabase
-        .from("positions_last").select("telemetry_snapshot")
-        .eq("tenant_id", mapping.tenant_id).eq("vehicle_id", mapping.vehicle_id).single();
-
-      if (currentLast?.telemetry_snapshot) {
-        const meta = (unit as any).metadata || {};
-        const unitIdentifiers = buildUnitIdentifierSet(unit, meta);
-        const isCurrentSnapshotValid = isPointFromCurrentUnit(currentLast.telemetry_snapshot || {}, unitIdentifiers);
-        if (!isCurrentSnapshotValid) {
-          await supabase
-            .from("positions_last")
-            .delete()
-            .eq("tenant_id", mapping.tenant_id)
-            .eq("vehicle_id", mapping.vehicle_id);
-          console.log(`[SSX:poll-positions] INVALIDATED_STALE_POSITION_LAST | unit=${unit.external_code} | vehicle=${mapping.vehicle_id}`);
-        }
-      }
+    // Keep positions_last clean even when the provider returns empty/noisy batches.
+    if (!unitResult.persistenceFailed) {
+      await invalidateMismatchedPositionLast(supabase, mapping, unit);
     }
 
     // Update positions_last only if persistence succeeded (not on persistence failure)
