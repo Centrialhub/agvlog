@@ -120,18 +120,30 @@ function FitBounds({ positions }: { positions: PositionLast[] }) {
   return null;
 }
 
-/** Returns human-readable age description with explicit freshness context */
-function ageDescription(capturedAt: string): string {
-  const ageMs = Date.now() - new Date(capturedAt).getTime();
-  const ageMin = Math.floor(ageMs / 60000);
-  const ageHours = Math.floor(ageMin / 60);
-  const ageDays = Math.floor(ageHours / 24);
+/** Returns human-readable age description with freshness context */
+function ageDescription(capturedAt: string, receivedAt?: string | null): string {
+  const capturedMs = Date.now() - new Date(capturedAt).getTime();
+  const freshnessTs = getFreshnessTimestamp(capturedAt, receivedAt ?? null);
+  const freshMs = freshnessTs == null ? capturedMs : Date.now() - freshnessTs;
 
-  if (ageMin < 1) return 'Última posição agora';
-  if (ageMin < 10) return `Última posição há ${ageMin} min`;
-  if (ageMin < 60) return `Offline há ${ageMin} min`;
-  if (ageHours < 24) return `Posição antiga há ${ageHours} h`;
-  return `Posição antiga há ${ageDays} dia${ageDays > 1 ? 's' : ''}`;
+  const toLabel = (ageMs: number) => {
+    const min = Math.floor(ageMs / 60000);
+    const hours = Math.floor(min / 60);
+    const days = Math.floor(hours / 24);
+    if (min < 1) return 'agora';
+    if (min < 60) return `${min} min`;
+    if (hours < 24) return `${hours} h`;
+    return `${days} dia${days > 1 ? 's' : ''}`;
+  };
+
+  const freshLabel = freshMs < 1 ? 'Último sinal agora' : `Último sinal há ${toLabel(freshMs)}`;
+
+  // If provider keeps returning old GPS with fresh polling, show both contexts.
+  if (capturedMs - freshMs > 30 * 60000) {
+    return `${freshLabel} · GPS há ${toLabel(capturedMs)}`;
+  }
+
+  return freshLabel;
 }
 
 /** Pipeline health summary component */
