@@ -220,6 +220,8 @@ Deno.serve(async (req) => {
               break;
             }
           }
+
+          processedBatches++;
         }
 
         // ===== STEP D: Queue processing (only if polling didn't hit persistence failure) =====
