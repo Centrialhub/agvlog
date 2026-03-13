@@ -199,9 +199,14 @@ Deno.serve(async (req) => {
       const isFirstPoll = !cursor?.last_success_at;
       const pollWindowMinutes = isFirstPoll ? initialPollWindowMinutes : (manual_run ? Math.max(defaultPollWindow, 1440) : defaultPollWindow);
 
-      const timeStart = cursor?.last_success_at && !force_rediscovery
-        ? new Date(new Date(cursor.last_success_at).getTime() - 2 * 60_000).toISOString()
-        : new Date(Date.now() - pollWindowMinutes * 60_000).toISOString();
+      const maxLookbackStart = new Date(Date.now() - pollWindowMinutes * 60_000);
+      const incrementalStart = cursor?.last_success_at
+        ? new Date(new Date(cursor.last_success_at).getTime() - 2 * 60_000)
+        : null;
+
+      const timeStart = incrementalStart && !force_rediscovery
+        ? new Date(Math.max(incrementalStart.getTime(), maxLookbackStart.getTime())).toISOString()
+        : maxLookbackStart.toISOString();
 
       // ===== Build identifier candidates from unit metadata =====
       const meta = (unit as any).metadata || {};
