@@ -199,9 +199,14 @@ Deno.serve(async (req) => {
       const isFirstPoll = !cursor?.last_success_at;
       const pollWindowMinutes = isFirstPoll ? initialPollWindowMinutes : (manual_run ? Math.max(defaultPollWindow, 1440) : defaultPollWindow);
 
-      const timeStart = cursor?.last_success_at && !force_rediscovery
-        ? new Date(new Date(cursor.last_success_at).getTime() - 2 * 60_000).toISOString()
-        : new Date(Date.now() - pollWindowMinutes * 60_000).toISOString();
+      const maxLookbackStart = new Date(Date.now() - pollWindowMinutes * 60_000);
+      const incrementalStart = cursor?.last_success_at
+        ? new Date(new Date(cursor.last_success_at).getTime() - 2 * 60_000)
+        : null;
+
+      const timeStart = incrementalStart && !force_rediscovery
+        ? new Date(Math.max(incrementalStart.getTime(), maxLookbackStart.getTime())).toISOString()
+        : maxLookbackStart.toISOString();
 
       // ===== Build identifier candidates from unit metadata =====
       const meta = (unit as any).metadata || {};
@@ -267,25 +272,9 @@ Deno.serve(async (req) => {
         });
       }
 
-    // If this run produced only cross-unit data, invalidate stale mismatched positions_last for this vehicle.
-    if (unitResult.rejectedByCrossUnitFilter && !unitResult.persistenceFailed) {
-      const { data: currentLast } = await supabase
-        .from("positions_last").select("telemetry_snapshot")
-        .eq("tenant_id", mapping.tenant_id).eq("vehicle_id", mapping.vehicle_id).single();
-
-      if (currentLast?.telemetry_snapshot) {
-        const meta = (unit as any).metadata || {};
-        const unitIdentifiers = buildUnitIdentifierSet(unit, meta);
-        const isCurrentSnapshotValid = isPointFromCurrentUnit(currentLast.telemetry_snapshot || {}, unitIdentifiers);
-        if (!isCurrentSnapshotValid) {
-          await supabase
-            .from("positions_last")
-            .delete()
-            .eq("tenant_id", mapping.tenant_id)
-            .eq("vehicle_id", mapping.vehicle_id);
-          console.log(`[SSX:poll-positions] INVALIDATED_STALE_POSITION_LAST | unit=${unit.external_code} | vehicle=${mapping.vehicle_id}`);
-        }
-      }
+    // Keep positions_last clean even when the provider returns empty/noisy batches.
+    if (!unitResult.persistenceFailed) {
+      await invalidateMismatchedPositionLast(supabase, mapping, unit);
     }
 
     // Update positions_last only if persistence succeeded (not on persistence failure)
@@ -671,7 +660,7 @@ async function processPositions(
 
   const filteredRatio = positions.length > 0 ? crossUnitFiltered / positions.length : 0;
   const rejectedByCrossUnitFilter = rows.length === 0 && crossUnitFiltered > 0;
-  const suspiciousLowPrecision = rows.length > 0 && positions.length >= 100 && filteredRatio >= 0.98 && rows.length <= 2;
+  const suspiciousLowPrecision = rows.length > 0 && positions.length >= 100 && filteredRatio >= 0.98 && rows.length <= 10;
 
   if (crossUnitFiltered > 0) {
     console.log(`[SSX:poll-positions] CROSS_UNIT_FILTERED | unit=${unit.external_code} | filtered=${crossUnitFiltered} | kept=${rows.length} | total_received=${positions.length}`);
@@ -782,6 +771,37 @@ async function processPositions(
     totalReceived: positions.length,
     rejectedByCrossUnitFilter: false,
   };
+}
+
+async function invalidateMismatchedPositionLast(
+  supabase: any,
+  mapping: { vehicle_id: string; tenant_id: string },
+  unit: any,
+) {
+  const { data: currentLast } = await supabase
+    .from("positions_last")
+    .select("telemetry_snapshot")
+    .eq("tenant_id", mapping.tenant_id)
+    .eq("vehicle_id", mapping.vehicle_id)
+    .maybeSingle();
+
+  if (!currentLast?.telemetry_snapshot) return;
+
+  const meta = (unit as any).metadata || {};
+  const unitIdentifiers = buildUnitIdentifierSet(unit, meta);
+  const isCurrentSnapshotValid = isPointFromCurrentUnit(currentLast.telemetry_snapshot || {}, unitIdentifiers);
+
+  if (!isCurrentSnapshotValid) {
+    await supabase
+      .from("positions_last")
+      .delete()
+      .eq("tenant_id", mapping.tenant_id)
+      .eq("vehicle_id", mapping.vehicle_id);
+
+    console.log(
+      `[SSX:poll-positions] INVALIDATED_STALE_POSITION_LAST | unit=${unit.external_code} | vehicle=${mapping.vehicle_id}`,
+    );
+  }
 }
 
 function buildAbortResult(reason: string, attempts: PollingAttemptLog[], attemptCount: number): PollUnitResult {

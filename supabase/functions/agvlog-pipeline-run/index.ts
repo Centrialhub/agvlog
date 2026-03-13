@@ -183,10 +183,13 @@ Deno.serve(async (req) => {
         }
 
         const BATCH_SIZE = 3;
+        // In poll mode, process only one batch per run to avoid SSX 429 and keep steady round-robin freshness.
+        const maxBatchesPerRun = mode === "poll" ? 1 : Number.POSITIVE_INFINITY;
+        let processedBatches = 0;
         let pollAborted = false;
 
         for (let i = 0; i < unitIds.length; i += BATCH_SIZE) {
-          if (pollAborted) break;
+          if (pollAborted || processedBatches >= maxBatchesPerRun) break;
           const batch = unitIds.slice(i, i + BATCH_SIZE);
           const pollBody: Record<string, any> = {
             integration_account_id: account.id,
@@ -217,6 +220,8 @@ Deno.serve(async (req) => {
               break;
             }
           }
+
+          processedBatches++;
         }
 
         // ===== STEP D: Queue processing (only if polling didn't hit persistence failure) =====

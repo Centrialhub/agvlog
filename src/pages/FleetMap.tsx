@@ -24,14 +24,30 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
 });
 
-const ONLINE_THRESHOLD_MS = 10 * 60 * 1000;   // 10 min
-const OFFLINE_RECENT_THRESHOLD_MS = 30 * 60 * 1000; // 30 min
+const ONLINE_THRESHOLD_MS = 15 * 60 * 1000;   // 15 min
+const OFFLINE_RECENT_THRESHOLD_MS = 3 * 60 * 60 * 1000; // 3 h
 
 type VehicleStatus = 'moving' | 'stopped' | 'offline_recent' | 'stale' | 'no_position';
 
-function getVehicleStatus(capturedAt: string | null, speed: number | null): VehicleStatus {
-  if (!capturedAt) return 'no_position';
-  const age = Date.now() - new Date(capturedAt).getTime();
+function parseTimestamp(ts: string | null | undefined): number | null {
+  if (!ts) return null;
+  const ms = new Date(ts).getTime();
+  return Number.isNaN(ms) ? null : ms;
+}
+
+function getFreshnessTimestamp(capturedAt: string | null, receivedAt: string | null): number | null {
+  const capturedMs = parseTimestamp(capturedAt);
+  const receivedMs = parseTimestamp(receivedAt);
+  if (capturedMs == null && receivedMs == null) return null;
+  if (capturedMs == null) return receivedMs;
+  if (receivedMs == null) return capturedMs;
+  return Math.max(capturedMs, receivedMs);
+}
+
+function getVehicleStatus(capturedAt: string | null, receivedAt: string | null, speed: number | null): VehicleStatus {
+  const freshTs = getFreshnessTimestamp(capturedAt, receivedAt);
+  if (freshTs == null) return 'no_position';
+  const age = Date.now() - freshTs;
   if (age > OFFLINE_RECENT_THRESHOLD_MS) return 'stale';
   if (age > ONLINE_THRESHOLD_MS) return 'offline_recent';
   return speed != null && speed > 2 ? 'moving' : 'stopped';
@@ -104,18 +120,30 @@ function FitBounds({ positions }: { positions: PositionLast[] }) {
   return null;
 }
 
-/** Returns human-readable age description with explicit freshness context */
-function ageDescription(capturedAt: string): string {
-  const ageMs = Date.now() - new Date(capturedAt).getTime();
-  const ageMin = Math.floor(ageMs / 60000);
-  const ageHours = Math.floor(ageMin / 60);
-  const ageDays = Math.floor(ageHours / 24);
+/** Returns human-readable age description with freshness context */
+function ageDescription(capturedAt: string, receivedAt?: string | null): string {
+  const capturedMs = Date.now() - new Date(capturedAt).getTime();
+  const freshnessTs = getFreshnessTimestamp(capturedAt, receivedAt ?? null);
+  const freshMs = freshnessTs == null ? capturedMs : Date.now() - freshnessTs;
 
-  if (ageMin < 1) return 'Última posição agora';
-  if (ageMin < 10) return `Última posição há ${ageMin} min`;
-  if (ageMin < 60) return `Offline há ${ageMin} min`;
-  if (ageHours < 24) return `Posição antiga há ${ageHours} h`;
-  return `Posição antiga há ${ageDays} dia${ageDays > 1 ? 's' : ''}`;
+  const toLabel = (ageMs: number) => {
+    const min = Math.floor(ageMs / 60000);
+    const hours = Math.floor(min / 60);
+    const days = Math.floor(hours / 24);
+    if (min < 1) return 'agora';
+    if (min < 60) return `${min} min`;
+    if (hours < 24) return `${hours} h`;
+    return `${days} dia${days > 1 ? 's' : ''}`;
+  };
+
+  const freshLabel = freshMs < 1 ? 'Último sinal agora' : `Último sinal há ${toLabel(freshMs)}`;
+
+  // If provider keeps returning old GPS with fresh polling, show both contexts.
+  if (capturedMs - freshMs > 30 * 60000) {
+    return `${freshLabel} · GPS há ${toLabel(capturedMs)}`;
+  }
+
+  return freshLabel;
 }
 
 /** Pipeline health summary component */
@@ -225,7 +253,7 @@ export default function FleetMap() {
     return positions.map(p => ({
       ...p,
       vehicle: vehicleMap[p.vehicle_id],
-      status: getVehicleStatus(p.captured_at, p.speed),
+      status: getVehicleStatus(p.captured_at, p.received_at, p.speed),
     }));
   }, [positions, vehicleMap]);
 
@@ -362,7 +390,7 @@ export default function FleetMap() {
                     )}
                     <span className="flex items-center gap-1">
                       <Clock className="h-3 w-3" />
-                      {ageDescription(p.captured_at)}
+                      {ageDescription(p.captured_at, p.received_at)}
                     </span>
                   </div>
                 </button>
@@ -414,7 +442,7 @@ export default function FleetMap() {
                     <p>Status: <strong>{statusLabel(p.status)}</strong></p>
                     {p.speed != null && <p>Velocidade: <strong>{Math.round(p.speed)} km/h</strong></p>}
                     {p.heading != null && <p>Direção: {Math.round(p.heading)}°</p>}
-                    <p>{ageDescription(p.captured_at)}</p>
+                    <p>{ageDescription(p.captured_at, p.received_at)}</p>
                     {p.status === 'stale' && (
                       <p className="text-red-500 font-medium">⚠ Posição muito antiga — dados podem estar desatualizados</p>
                     )}
