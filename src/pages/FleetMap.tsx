@@ -24,14 +24,30 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
 });
 
-const ONLINE_THRESHOLD_MS = 10 * 60 * 1000;   // 10 min
-const OFFLINE_RECENT_THRESHOLD_MS = 30 * 60 * 1000; // 30 min
+const ONLINE_THRESHOLD_MS = 15 * 60 * 1000;   // 15 min
+const OFFLINE_RECENT_THRESHOLD_MS = 3 * 60 * 60 * 1000; // 3 h
 
 type VehicleStatus = 'moving' | 'stopped' | 'offline_recent' | 'stale' | 'no_position';
 
-function getVehicleStatus(capturedAt: string | null, speed: number | null): VehicleStatus {
-  if (!capturedAt) return 'no_position';
-  const age = Date.now() - new Date(capturedAt).getTime();
+function parseTimestamp(ts: string | null | undefined): number | null {
+  if (!ts) return null;
+  const ms = new Date(ts).getTime();
+  return Number.isNaN(ms) ? null : ms;
+}
+
+function getFreshnessTimestamp(capturedAt: string | null, receivedAt: string | null): number | null {
+  const capturedMs = parseTimestamp(capturedAt);
+  const receivedMs = parseTimestamp(receivedAt);
+  if (capturedMs == null && receivedMs == null) return null;
+  if (capturedMs == null) return receivedMs;
+  if (receivedMs == null) return capturedMs;
+  return Math.max(capturedMs, receivedMs);
+}
+
+function getVehicleStatus(capturedAt: string | null, receivedAt: string | null, speed: number | null): VehicleStatus {
+  const freshTs = getFreshnessTimestamp(capturedAt, receivedAt);
+  if (freshTs == null) return 'no_position';
+  const age = Date.now() - freshTs;
   if (age > OFFLINE_RECENT_THRESHOLD_MS) return 'stale';
   if (age > ONLINE_THRESHOLD_MS) return 'offline_recent';
   return speed != null && speed > 2 ? 'moving' : 'stopped';
