@@ -526,11 +526,27 @@ async function pollSingleUnit(params: {
       if (memoCandidate) {
         const r = await tryCombo(memoProp, memoCandidate.value, memoCandidate.value_source, memoUrl, memoFormat, memoTimeProp, "unit_memo");
         if (r?.abort) return buildAbortResult(r.abortReason!, attempts, attemptCount);
-        if (r && r.items.length > 0) {
-          const processed = await processPositions(r.items, r.resp, unit, mapping, supabase, config,
-            { property: memoProp, value_source: memoCandidate.value_source, url: memoUrl, format: memoFormat, timeProp: memoTimeProp },
-            "unit_memo", attempts, attemptCount, integration_account_id);
-          if (!processed.rejectedByCrossUnitFilter) return processed;
+        if (r && r.resp?.ok) {
+          if (r.items.length > 0) {
+            const processed = await processPositions(r.items, r.resp, unit, mapping, supabase, config,
+              { property: memoProp, value_source: memoCandidate.value_source, url: memoUrl, format: memoFormat, timeProp: memoTimeProp },
+              "unit_memo", attempts, attemptCount, integration_account_id);
+            if (!processed.rejectedByCrossUnitFilter) return processed;
+          } else {
+            // SSX returned 200 OK with 0 items — vehicle is likely stopped, no new GPS data.
+            // Trust the memo combo and return "no_new_data" instead of falling through to discovery.
+            console.log(`[SSX:poll-positions] unit=${unit.external_code} memo combo returned 200 OK with 0 items — treating as no_new_data (vehicle likely stopped)`);
+            return {
+              positions_found: false, inserted: 0, duplicates: 0,
+              rows_attempted: 0, rows_failed: 0,
+              latestCapturedAt: null, latestNormalized: null,
+              workingCombo: { property: memoProp, value_source: memoCandidate.value_source, url: memoUrl, format: memoFormat, timeProp: memoTimeProp },
+              comboSource: "unit_memo_no_new_data",
+              abortBatch: false, persistenceFailed: false,
+              attemptCount,
+              attemptMatrix: summarizePollingAttemptsV2(attempts),
+            };
+          }
         }
       }
     }
