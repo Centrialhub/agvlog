@@ -303,6 +303,13 @@ Deno.serve(async (req) => {
             },
           }, { onConflict: "tenant_id,vehicle_id" });
         }
+      } else if (!unitResult.latestNormalized && unitResult.workingCombo && !unitResult.persistenceFailed) {
+        // Heartbeat: workingCombo exists but no new GPS points (vehicle likely stopped).
+        // Update only received_at so frontend sees the polling is active → "Parado" instead of "Offline".
+        await supabase.from("positions_last")
+          .update({ received_at: new Date().toISOString() })
+          .eq("tenant_id", mapping.tenant_id)
+          .eq("vehicle_id", mapping.vehicle_id);
       }
 
     totalInserted += unitResult.inserted;
