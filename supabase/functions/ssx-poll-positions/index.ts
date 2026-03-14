@@ -285,7 +285,9 @@ Deno.serve(async (req) => {
           .from("positions_last").select("captured_at")
           .eq("tenant_id", mapping.tenant_id).eq("vehicle_id", mapping.vehicle_id).single();
 
-        const shouldUpdate = !currentLast || new Date(ln.captured_at) > new Date(currentLast.captured_at);
+        // Refresh positions_last heartbeat even when provider keeps returning the same captured_at
+        // (duplicate point with fresh polling), so frontend online/offline reflects real signal freshness.
+        const shouldUpdate = !currentLast || new Date(ln.captured_at) >= new Date(currentLast.captured_at);
         if (shouldUpdate) {
           const staleMinutes = (Date.now() - new Date(ln.captured_at).getTime()) / 60000;
           await supabase.from("positions_last").upsert({

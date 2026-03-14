@@ -24,7 +24,7 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
 });
 
-const ONLINE_THRESHOLD_MS = 15 * 60 * 1000;   // 15 min
+const ONLINE_THRESHOLD_MS = 25 * 60 * 1000;   // 25 min (align with round-robin polling cadence)
 const OFFLINE_RECENT_THRESHOLD_MS = 3 * 60 * 60 * 1000; // 3 h
 
 type VehicleStatus = 'moving' | 'stopped' | 'offline_recent' | 'stale' | 'no_position';
