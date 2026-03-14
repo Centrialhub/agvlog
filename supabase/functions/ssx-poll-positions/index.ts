@@ -37,7 +37,7 @@ interface PollingAttemptLog {
   itemCount: number;
 }
 
-const POLL_MEMO_VERSION = 7;
+const POLL_MEMO_VERSION = 8;
 const STALE_AFTER_MINUTES = 30;
 
 Deno.serve(async (req) => {
@@ -402,18 +402,19 @@ function buildIdentifierCandidates(externalCode: string, meta: Record<string, an
     candidates.push({ property, value: stringValue, value_source: source });
   };
 
-  // VEHICLE-FIRST priority: vehicle/tracked unit codes before tracker codes
-  // 1. VehicleIntegrationCode (from Vehicle/List — most reliable for PositionHistory)
-  add("IntegrationCode", meta.vehicle_integration_code, "metadata.vehicle_integration_code");
-  // 2. TrackedUnitIntegrationCode (the SSX PositionHistory filter property)
-  add("TrackedUnitIntegrationCode", meta.tracked_unit_integration_code, "metadata.tracked_unit_integration_code");
-  // 3. IdTrackedUnit (numeric identifier from tracking fallback, useful when integration codes are null)
+  // PRIORITY REORDERED (v8): IdTrackedUnit first — IntegrationCode does NOT filter
+  // per-unit on many SSX instances, returning data for ALL units regardless of filter value.
+  // 1. IdTrackedUnit (numeric, actually filters per-unit on SSX PositionHistory)
   add("IdTrackedUnit", meta.id_tracked_unit, "metadata.id_tracked_unit");
   add("TrackedUnitId", meta.id_tracked_unit, "metadata.id_tracked_unit");
-  // 4. external_code (should now be vehicle/tracked unit code after sync refactor)
+  // 2. TrackedUnitIntegrationCode (the SSX PositionHistory filter property)
+  add("TrackedUnitIntegrationCode", meta.tracked_unit_integration_code, "metadata.tracked_unit_integration_code");
+  // 3. VehicleIntegrationCode (often same as TrackedUnit code, may not filter per-unit)
+  add("IntegrationCode", meta.vehicle_integration_code, "metadata.vehicle_integration_code");
+  // 4. external_code
   add("IntegrationCode", externalCode, "external_code");
   add("TrackedUnitIntegrationCode", externalCode, "external_code");
-  // 5. TrackedUnit (description/name — sometimes works as filter)
+  // 5. TrackedUnit (description/name)
   add("TrackedUnit", meta.tracked_unit, "metadata.tracked_unit");
   // 6. TrackerIntegrationCode (LAST resort — device code, not vehicle)
   add("TrackerIntegrationCode", meta.tracker_integration_code, "metadata.tracker_integration_code");
@@ -539,6 +540,24 @@ async function pollSingleUnit(params: {
               { property: memoProp, value_source: memoCandidate.value_source, url: memoUrl, format: memoFormat, timeProp: memoTimeProp },
               "unit_memo", attempts, attemptCount, integration_account_id);
             if (!processed.rejectedByCrossUnitFilter) return processed;
+            // Memo returned data but ALL belonged to other units — memo is bad.
+            // Don't fall through to discovery (waste rate limit). Return without workingCombo
+            // so the memo gets cleared and next cycle will rediscover with IdTrackedUnit.
+            console.log(`[SSX:poll-positions] unit=${unit.external_code} memo combo returned data but 100% cross-unit filtered — invalidating memo`);
+            return {
+              positions_found: false, inserted: 0, duplicates: 0,
+              rows_attempted: 0, rows_failed: 0,
+              latestCapturedAt: null, latestNormalized: null,
+              workingCombo: null,
+              comboSource: "memo_invalidated_cross_unit",
+              abortBatch: false, persistenceFailed: false,
+              error: `Memo combo ${memoProp} returns cross-unit data — needs rediscovery with IdTrackedUnit`,
+              attemptCount,
+              attemptMatrix: summarizePollingAttemptsV2(attempts),
+              crossUnitFiltered: processed.crossUnitFiltered,
+              totalReceived: processed.totalReceived,
+              rejectedByCrossUnitFilter: true,
+            };
           } else {
             // SSX returned 200 OK with 0 items — vehicle is likely stopped, no new GPS data.
             // Trust the memo combo and return "no_new_data" instead of falling through to discovery.
