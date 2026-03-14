@@ -402,18 +402,19 @@ function buildIdentifierCandidates(externalCode: string, meta: Record<string, an
     candidates.push({ property, value: stringValue, value_source: source });
   };
 
-  // VEHICLE-FIRST priority: vehicle/tracked unit codes before tracker codes
-  // 1. VehicleIntegrationCode (from Vehicle/List — most reliable for PositionHistory)
-  add("IntegrationCode", meta.vehicle_integration_code, "metadata.vehicle_integration_code");
-  // 2. TrackedUnitIntegrationCode (the SSX PositionHistory filter property)
-  add("TrackedUnitIntegrationCode", meta.tracked_unit_integration_code, "metadata.tracked_unit_integration_code");
-  // 3. IdTrackedUnit (numeric identifier from tracking fallback, useful when integration codes are null)
+  // PRIORITY REORDERED (v8): IdTrackedUnit first — IntegrationCode does NOT filter
+  // per-unit on many SSX instances, returning data for ALL units regardless of filter value.
+  // 1. IdTrackedUnit (numeric, actually filters per-unit on SSX PositionHistory)
   add("IdTrackedUnit", meta.id_tracked_unit, "metadata.id_tracked_unit");
   add("TrackedUnitId", meta.id_tracked_unit, "metadata.id_tracked_unit");
-  // 4. external_code (should now be vehicle/tracked unit code after sync refactor)
+  // 2. TrackedUnitIntegrationCode (the SSX PositionHistory filter property)
+  add("TrackedUnitIntegrationCode", meta.tracked_unit_integration_code, "metadata.tracked_unit_integration_code");
+  // 3. VehicleIntegrationCode (often same as TrackedUnit code, may not filter per-unit)
+  add("IntegrationCode", meta.vehicle_integration_code, "metadata.vehicle_integration_code");
+  // 4. external_code
   add("IntegrationCode", externalCode, "external_code");
   add("TrackedUnitIntegrationCode", externalCode, "external_code");
-  // 5. TrackedUnit (description/name — sometimes works as filter)
+  // 5. TrackedUnit (description/name)
   add("TrackedUnit", meta.tracked_unit, "metadata.tracked_unit");
   // 6. TrackerIntegrationCode (LAST resort — device code, not vehicle)
   add("TrackerIntegrationCode", meta.tracker_integration_code, "metadata.tracker_integration_code");
