@@ -37,7 +37,7 @@ interface PollingAttemptLog {
   itemCount: number;
 }
 
-const POLL_MEMO_VERSION = 8;
+const POLL_MEMO_VERSION = 9;
 const STALE_AFTER_MINUTES = 30;
 
 Deno.serve(async (req) => {
@@ -262,13 +262,14 @@ Deno.serve(async (req) => {
         poll_memo: newMemo,
       });
       } else {
-        // No working combo — save error state
+        // No working combo — save error state AND clear stale memo to prevent loops
         await upsertCursor(supabase, {
           tenant_id: mapping.tenant_id, provider_unit_id: unit.id,
           last_polled_at: now.toISOString(),
           last_error_at: unitResult.positions_found ? null : now.toISOString(),
           last_error: unitResult.positions_found ? null : (unitResult.error || "No combination returned positions"),
           backoff_until: unitResult.positions_found ? null : new Date(Date.now() + 60000).toISOString(),
+          poll_memo: { memo_version: POLL_MEMO_VERSION, cleared: true, cleared_reason: unitResult.comboSource || "no_working_combo", cleared_at: now.toISOString() },
         });
       }
 
@@ -634,14 +635,108 @@ async function pollSingleUnit(params: {
     }
   }
 
-  // All combos exhausted — no data for this unit
+  // ===== STAGE 4: Broadband fallback — unfiltered PositionHistory =====
+  // Last resort: call PositionHistory WITHOUT unit filter, find positions matching this unit
+  if (attemptCount < MAX_ATTEMPTS) {
+    console.log(`[SSX:poll-positions] unit=${unit.external_code} entering BROADBAND FALLBACK — all filtered discovery failed`);
+    const broadbandUrl = positionUrls[0]; // Use primary URL
+    const broadbandTimeStart = new Date(Date.now() - 30 * 60_000).toISOString(); // Last 30 min only
+    const broadbandFilters = [
+      { PropertyName: "EventDate", Condition: ">=", Value: broadbandTimeStart },
+    ];
+    
+    if (attemptCount > 0) await sleep(discoverySpacingMs);
+    const bbResp = await ssxPost(broadbandUrl, config.token, broadbandFilters, config.requestTimeoutMs);
+    attemptCount++;
+    
+    logSsxCall({
+      routine: "poll-positions", endpoint: broadbandUrl, method: "POST",
+      apiVersion: config.apiVersion, attemptType: "broadband_fallback",
+      statusCode: bbResp.status, durationMs: bbResp.durationMs,
+      responsePreview: (bbResp.text || "").substring(0, 150),
+      result: bbResp.ok ? "success" : "error",
+      errorClass: bbResp.ok ? undefined : bbResp.errorClass,
+    });
+    
+    attempts.push({
+      url: broadbandUrl, property: "NONE(broadband)", value: "all_units",
+      timeProp: "EventDate", format: "array",
+      statusCode: bbResp.status,
+      errorClass: bbResp.ok ? "broadband_ok" : bbResp.errorClass,
+      itemCount: 0,
+    });
+    
+    if (bbResp.errorClass === "rate_limited") {
+      return buildAbortResult("rate_limited", attempts, attemptCount);
+    }
+    
+    if (bbResp.ok) {
+      const allItems = extractResponseItems(bbResp.parsed);
+      console.log(`[SSX:poll-positions] BROADBAND got ${allItems.length} total positions from fleet`);
+      
+      if (allItems.length > 0) {
+        const meta = (unit as any).metadata || {};
+        const unitIds = buildUnitIdentifierSet(unit, meta);
+        
+        // Find positions that belong to THIS unit
+        const matchingItems: any[] = [];
+        let discoveredIdTrackedUnit: string | null = null;
+        
+        for (const item of allItems) {
+          const normalized = normalizePosition(item);
+          if (!normalized) continue;
+          
+          const telemetry = { ...item };
+          // Remove known geo fields to isolate identifiers
+          if (isPointFromCurrentUnit(telemetry, unitIds)) {
+            matchingItems.push(item);
+            // Extract IdTrackedUnit from the matching point
+            const pointIdTU = item.IdTrackedUnit ?? item.idTrackedUnit;
+            if (pointIdTU && !discoveredIdTrackedUnit) {
+              discoveredIdTrackedUnit = String(pointIdTU);
+            }
+          }
+        }
+        
+        console.log(`[SSX:poll-positions] BROADBAND unit=${unit.external_code} matched=${matchingItems.length}/${allItems.length} discoveredIdTU=${discoveredIdTrackedUnit}`);
+        
+        if (matchingItems.length > 0) {
+          // Process the matching positions
+          const broadbandCombo = {
+            property: discoveredIdTrackedUnit ? "IdTrackedUnit" : "TrackedUnit",
+            value_source: "broadband_discovery",
+            url: broadbandUrl,
+            format: "array",
+            timeProp: "EventDate",
+          };
+          
+          const processed = await processPositions(matchingItems, bbResp, unit, mapping, supabase, config,
+            broadbandCombo, "broadband_fallback", attempts, attemptCount, integration_account_id);
+          
+          if (!processed.rejectedByCrossUnitFilter) {
+            // If we discovered a new IdTrackedUnit, update provider_units metadata
+            if (discoveredIdTrackedUnit && discoveredIdTrackedUnit !== String(meta.id_tracked_unit)) {
+              console.log(`[SSX:poll-positions] BROADBAND DISCOVERED new IdTrackedUnit=${discoveredIdTrackedUnit} for unit=${unit.external_code} (was ${meta.id_tracked_unit})`);
+              await supabase.from("provider_units").update({
+                metadata: { ...meta, id_tracked_unit: discoveredIdTrackedUnit, id_tracked_unit_source: "broadband_discovery" },
+                updated_at: new Date().toISOString(),
+              }).eq("id", unit.id);
+            }
+            return processed;
+          }
+        }
+      }
+    }
+  }
+
+  // All combos + broadband exhausted — no data for this unit
   return {
     positions_found: false, inserted: 0, duplicates: 0,
     rows_attempted: 0, rows_failed: 0,
     latestCapturedAt: null, latestNormalized: null,
     workingCombo: null, comboSource: "none",
     abortBatch: false, persistenceFailed: false,
-    error: "No combination returned positions",
+    error: "No combination returned positions (including broadband fallback)",
     attemptCount,
     attemptMatrix: summarizePollingAttemptsV2(attempts),
   };
