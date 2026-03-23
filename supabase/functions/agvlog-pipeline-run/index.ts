@@ -150,78 +150,40 @@ Deno.serve(async (req) => {
 
         // ===== STEP C: Position polling (poll/full/manual) =====
         stats.steps_executed.push("position_polling");
-        let unitIds: string[];
+
+        // BROADBAND: Single call to ssx-poll-positions with ALL units (no batching).
+        // The edge function does 1 SSX request and distributes positions locally.
+        // Only manual mode uses per-unit batching for targeted discovery.
+        const pollBody: Record<string, any> = {
+          integration_account_id: account.id,
+          manual_run: mode === "manual",
+          force_rediscovery: mode === "manual" || force_rediscovery,
+        };
         if (provider_unit_ids?.length) {
-          unitIds = provider_unit_ids;
-        } else {
-          const { data: allUnits } = await supabase
-            .from("provider_units").select("id")
-            .eq("integration_account_id", account.id).eq("active", true);
-
-          const unitIdsUnsorted = (allUnits || []).map((u: any) => u.id);
-          if (unitIdsUnsorted.length > 0) {
-            const { data: cursors } = await supabase
-              .from("ingestion_cursors")
-              .select("provider_unit_id,last_polled_at")
-              .eq("tenant_id", tenant_id)
-              .in("provider_unit_id", unitIdsUnsorted);
-
-            const cursorMap = new Map<string, string | null>();
-            for (const c of cursors || []) cursorMap.set(c.provider_unit_id, c.last_polled_at || null);
-
-            unitIds = [...unitIdsUnsorted].sort((a, b) => {
-              const aTs = cursorMap.get(a);
-              const bTs = cursorMap.get(b);
-              if (!aTs && !bTs) return 0;
-              if (!aTs) return -1;
-              if (!bTs) return 1;
-              return new Date(aTs).getTime() - new Date(bTs).getTime();
-            });
-          } else {
-            unitIds = [];
-          }
+          pollBody.provider_unit_ids = provider_unit_ids;
         }
+        if (lookback_minutes) pollBody.lookback_minutes = lookback_minutes;
 
-        const BATCH_SIZE = 3;
-        // Process all units every cycle; rely on 429/timeout/persistence_failure abort for safety.
-        const maxBatchesPerRun = Number.POSITIVE_INFINITY;
-        let processedBatches = 0;
         let pollAborted = false;
 
-        for (let i = 0; i < unitIds.length; i += BATCH_SIZE) {
-          if (pollAborted || processedBatches >= maxBatchesPerRun) break;
-          const batch = unitIds.slice(i, i + BATCH_SIZE);
-          const pollBody: Record<string, any> = {
-            integration_account_id: account.id,
-            manual_run: mode === "manual",
-            force_rediscovery: mode === "manual" || force_rediscovery,
-            provider_unit_ids: batch,
-          };
-          if (lookback_minutes) pollBody.lookback_minutes = lookback_minutes;
+        try {
+          const pollResp = await callEdgeFunction(supabaseUrl, anonKey, authHeader, isCron, cronSecret, "ssx-poll-positions", pollBody);
+          stats.polled_units += pollResp?.total_units || 0;
+          stats.total_inserted += pollResp?.total_inserted || 0;
 
-          try {
-            const pollResp = await callEdgeFunction(supabaseUrl, anonKey, authHeader, isCron, cronSecret, "ssx-poll-positions", pollBody);
-            stats.polled_units += pollResp?.total_units || 0;
-            stats.total_inserted += pollResp?.total_inserted || 0;
-
-            if (pollResp?.batch_aborted) {
-              pollAborted = true;
-              const reason = pollResp.abort_reason || "unknown";
-              stats.errors.push(`Polling stopped: ${reason}`);
-              // On persistence failure, do NOT continue to queue processing either
-              if (reason === "persistence_failure") {
-                stats.errors.push("CRITICAL: persistence_failure — skipping queue processing");
-              }
-            }
-          } catch (e: any) {
-            stats.errors.push(`Poll batch ${i / BATCH_SIZE}: ${e.message}`);
-            if (e.message?.includes("timed out")) {
-              pollAborted = true;
-              break;
+          if (pollResp?.batch_aborted) {
+            pollAborted = true;
+            const reason = pollResp.abort_reason || "unknown";
+            stats.errors.push(`Polling stopped: ${reason}`);
+            if (reason === "persistence_failure") {
+              stats.errors.push("CRITICAL: persistence_failure — skipping queue processing");
             }
           }
-
-          processedBatches++;
+        } catch (e: any) {
+          stats.errors.push(`Poll: ${e.message}`);
+          if (e.message?.includes("timed out")) {
+            pollAborted = true;
+          }
         }
 
         // ===== STEP D: Queue processing (only if polling didn't hit persistence failure) =====
