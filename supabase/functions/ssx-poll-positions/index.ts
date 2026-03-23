@@ -37,7 +37,7 @@ interface PollingAttemptLog {
   itemCount: number;
 }
 
-const POLL_MEMO_VERSION = 8;
+const POLL_MEMO_VERSION = 9;
 const STALE_AFTER_MINUTES = 30;
 
 Deno.serve(async (req) => {
