@@ -283,24 +283,51 @@ Deno.serve(async (req) => {
         const ln = unitResult.latestNormalized;
         // Check if this is newer than current positions_last
         const { data: currentLast } = await supabase
-          .from("positions_last").select("captured_at")
+          .from("positions_last").select("captured_at,lat,lng,speed")
           .eq("tenant_id", mapping.tenant_id).eq("vehicle_id", mapping.vehicle_id).single();
 
         // Refresh positions_last heartbeat even when provider keeps returning the same captured_at
-        // (duplicate point with fresh polling), so frontend online/offline reflects real signal freshness.
         const shouldUpdate = !currentLast || new Date(ln.captured_at) >= new Date(currentLast.captured_at);
         if (shouldUpdate) {
+          // ===== Compute speed from position delta (haversine) =====
+          let computedSpeed: number | null = ln.speed; // use provider speed if available
+          let speedSource: "provider" | "computed" = ln.speed != null ? "provider" : "computed";
+          let distanceFromPreviousM: number | null = null;
+          let timeSincePreviousS: number | null = null;
+          let movementState: "moving" | "stopped" = "stopped";
+
+          if (currentLast) {
+            distanceFromPreviousM = haversineMeters(currentLast.lat, currentLast.lng, ln.lat, ln.lng);
+            timeSincePreviousS = (new Date(ln.captured_at).getTime() - new Date(currentLast.captured_at).getTime()) / 1000;
+
+            if (ln.speed == null && timeSincePreviousS > 0) {
+              // No provider speed — compute from delta
+              if (distanceFromPreviousM < 50) {
+                computedSpeed = 0;
+              } else {
+                computedSpeed = Math.round((distanceFromPreviousM / timeSincePreviousS) * 3.6 * 10) / 10; // km/h with 1 decimal
+              }
+            }
+            movementState = (computedSpeed != null && computedSpeed > 3) ? "moving" : "stopped";
+          } else if (ln.speed != null) {
+            movementState = ln.speed > 3 ? "moving" : "stopped";
+          }
+
           const staleMinutes = (Date.now() - new Date(ln.captured_at).getTime()) / 60000;
           await supabase.from("positions_last").upsert({
             tenant_id: mapping.tenant_id, vehicle_id: mapping.vehicle_id,
             lat: ln.lat, lng: ln.lng,
-            speed: ln.speed, heading: ln.heading,
+            speed: computedSpeed, heading: ln.heading,
             captured_at: ln.captured_at, received_at: new Date().toISOString(),
             telemetry_snapshot: ln.telemetry || {},
             source: {
               provider: "SSX", unit_code: unit.external_code,
               stale: staleMinutes > STALE_AFTER_MINUTES,
               combo_source: unitResult.comboSource,
+              speed_source: speedSource,
+              movement_state: movementState,
+              distance_from_previous_m: distanceFromPreviousM != null ? Math.round(distanceFromPreviousM) : null,
+              time_since_previous_s: timeSincePreviousS != null ? Math.round(timeSincePreviousS) : null,
             },
           }, { onConflict: "tenant_id,vehicle_id" });
         }
@@ -1149,6 +1176,16 @@ async function setAccountCooldown(supabase: any, accountId: string, config: any,
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/** Haversine distance in meters between two lat/lng points */
+function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000; // Earth radius in meters
+  const toRad = (d: number) => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 function jsonResp(body: any, status = 200): Response {
