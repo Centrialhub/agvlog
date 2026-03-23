@@ -1,56 +1,59 @@
 
 
-# Plano: Status e velocidade baseados em delta entre pollings
+# Diagnóstico: Por que o status dos veículos está errado
 
-## Problema atual
+## Dados reais agora
 
-- SSX raramente retorna `speed` (campo geralmente null)
-- `getVehicleStatus()` no FleetMap usa `speed > 2` para classificar "movendo" vs "parado", mas como speed é null, quase tudo aparece como "parado"
-- Não há cálculo de velocidade estimada a partir da distância entre posições consecutivas
+| Veículo | received_at (min) | speed | speed_source | movement_state |
+|---------|------------------|-------|-------------|----------------|
+| OPW7913 | 0.7 | 0 | computed | stopped |
+| GVJ3719 | 6.7 | null | null | null |
+| GVJ3744 | 6.7 | null | null | null |
+| PVM3834 | 9.7 | null | null | null |
+| HDO5276 | 12.6 | null | null | null |
+| GVJ2074 | 156 | null | null | null |
+| GVJ3909 | 303 | null | null | null |
 
-## Solução
+**Apenas 1 de 16 veículos recebeu o cálculo de velocidade** (OPW7913). Os outros 15 têm `speed=null` e `movement_state=null`.
 
-Calcular velocidade e status no backend (`ssx-poll-positions`) comparando a posição nova com a posição anterior em `positions_last`, e armazenar o resultado.
+## Causa raiz
 
-### 1. Backend: Calcular velocidade estimada no polling
+O código de cálculo de velocidade (haversine) no `ssx-poll-positions` só roda quando uma **nova posição com coordenadas diferentes** é inserida. Mas na maioria dos pollings:
+- O veículo está parado → SSX retorna a mesma posição ou nenhuma posição nova
+- O código faz apenas heartbeat (atualiza `received_at`) sem recalcular speed
+- Resultado: `speed` e `movement_state` ficam `null` para sempre
 
-No `ssx-poll-positions`, antes de fazer upsert em `positions_last`:
-- Buscar a posição atual do veículo em `positions_last` (lat, lng, captured_at) — já é feito parcialmente
-- Calcular distância (haversine) entre posição antiga e nova
-- Calcular tempo decorrido entre `captured_at` antigo e novo
-- Se distância < 50m → veículo parado, speed = 0
-- Se distância >= 50m → speed = (distância / tempo) em km/h
-- Armazenar `speed` calculado no upsert de `positions_last` (sobrescrevendo o null da SSX)
-- Adicionar `source.speed_source = "computed"` ou `"provider"` para rastreabilidade
+## Solução proposta
 
-### 2. Backend: Enriquecer telemetry_snapshot com estado derivado
+Mover a lógica de status para ser **sempre calculada** no upsert de `positions_last`, não apenas quando há nova posição:
 
-No upsert de `positions_last`, adicionar ao `source`:
-- `movement_state`: `"moving"` | `"stopped"` | `"idle"` (parado < 50m mas com ignição, se disponível)
-- `distance_from_previous_m`: distância em metros desde última posição
-- `time_since_previous_s`: segundos desde última posição
+### 1. Backend: Sempre computar speed no upsert de positions_last
 
-### 3. Frontend: Simplificar getVehicleStatus
+No `ssx-poll-positions`, em TODOS os caminhos que fazem upsert/update de `positions_last` (incluindo heartbeat):
+- Se há nova posição com coordenadas diferentes → calcular speed via haversine (já existe)
+- Se há nova posição com coordenadas iguais (< 50m) → `speed = 0, movement_state = "stopped"`
+- Se é heartbeat (sem nova posição) → manter speed anterior mas atualizar `movement_state` para `"stopped"` (se speed era 0 ou null) e garantir que `speed` não fique null (defaultar para 0)
 
-A lógica no FleetMap já funciona (`speed > 2` → moving). Com speed sempre preenchido pelo backend, o status passa a funcionar corretamente sem mudanças estruturais. Ajustes mínimos:
-- Usar threshold de 3 km/h (50m em ~60s) como limiar de movimento
-- Mostrar velocidade estimada na sidebar mesmo quando a fonte é "computed"
+### 2. Backend: Patch de inicialização
 
-### 4. Heartbeat: Veículo parado com polling ativo
+Para os 15 veículos que já têm `speed=null`, executar um UPDATE em `positions_last` setando `speed=0` e `source.movement_state="stopped"` e `source.speed_source="inferred"` para todos que têm `speed IS NULL`. Isso corrige o estado atual imediatamente.
 
-Quando o polling retorna "no new data" (heartbeat), manter o speed anterior e atualizar apenas `received_at`. O status permanece como "Parado" (speed = 0 ou baixa) com sinal recente.
+### 3. Frontend: Tratar speed null como 0 (parado)
+
+No `getVehicleStatus`, tratar `speed == null` como `speed = 0` (parado). Isso é semanticamente correto: se não temos evidência de movimento, o veículo está parado.
 
 ## Arquivos a alterar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `supabase/functions/ssx-poll-positions/index.ts` | Buscar posição anterior, calcular speed via haversine, incluir no upsert |
-| `src/pages/FleetMap.tsx` | Ajustar threshold de speed para 3 km/h, mostrar "Velocidade estimada" quando source é computed |
+| `supabase/functions/ssx-poll-positions/index.ts` | Garantir que speed e movement_state são sempre preenchidos em todos os caminhos de upsert (nova posição, mesma posição, heartbeat) |
+| `src/pages/FleetMap.tsx` | `speed == null` → tratar como 0 (parado), usar `source.movement_state` como indicador primário |
+| Migration SQL | UPDATE positions_last SET speed=0, source=jsonb_set(...) WHERE speed IS NULL — patch retroativo |
 
 ## Resultado esperado
 
-- Veículos em movimento mostram velocidade estimada real (ex: 45 km/h)
-- Veículos parados mostram 0 km/h e status "Parado" (amarelo)
-- Veículos sem polling recente mostram "Offline" (cinza)
-- Velocidade sempre preenchida, nunca null
+- Veículos com polling ativo (received_at < 15 min) e parados → "Parado" (amarelo) com speed=0
+- Veículos com polling ativo e em movimento → "Movendo" (verde) com speed calculada
+- Veículos sem polling recente → "Offline" (cinza)
+- Nenhum veículo com speed=null — sempre preenchido
 
