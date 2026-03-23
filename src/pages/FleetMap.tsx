@@ -316,8 +316,8 @@ export default function FleetMap() {
   }, [vehiclesWithoutPosition, search, statusFilter]);
 
   const stats = useMemo(() => {
-    const online = enriched.filter(p => p.status === 'moving' || p.status === 'stopped').length;
-    const offlineRecent = enriched.filter(p => p.status === 'offline_recent').length;
+    const online = enriched.filter(p => p.status === 'moving' || p.status === 'stopped' || p.status === 'last_position').length;
+    const offlineCount = enriched.filter(p => p.status === 'offline' || p.status === 'stale').length;
     const stale = enriched.filter(p => p.status === 'stale').length;
     return {
       total: vehicles.length,
