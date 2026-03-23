@@ -262,13 +262,14 @@ Deno.serve(async (req) => {
         poll_memo: newMemo,
       });
       } else {
-        // No working combo — save error state
+        // No working combo — save error state AND clear stale memo to prevent loops
         await upsertCursor(supabase, {
           tenant_id: mapping.tenant_id, provider_unit_id: unit.id,
           last_polled_at: now.toISOString(),
           last_error_at: unitResult.positions_found ? null : now.toISOString(),
           last_error: unitResult.positions_found ? null : (unitResult.error || "No combination returned positions"),
           backoff_until: unitResult.positions_found ? null : new Date(Date.now() + 60000).toISOString(),
+          poll_memo: { memo_version: POLL_MEMO_VERSION, cleared: true, cleared_reason: unitResult.comboSource || "no_working_combo", cleared_at: now.toISOString() },
         });
       }
 
