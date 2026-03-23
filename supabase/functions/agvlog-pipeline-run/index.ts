@@ -183,8 +183,8 @@ Deno.serve(async (req) => {
         }
 
         const BATCH_SIZE = 3;
-        // In poll mode, process two batches per run to improve fleet freshness while still capping SSX load.
-        const maxBatchesPerRun = mode === "poll" ? 2 : Number.POSITIVE_INFINITY;
+        // Process all units every cycle; rely on 429/timeout/persistence_failure abort for safety.
+        const maxBatchesPerRun = Number.POSITIVE_INFINITY;
         let processedBatches = 0;
         let pollAborted = false;
 
