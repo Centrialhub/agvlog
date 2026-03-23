@@ -1,40 +1,32 @@
 
 
-# Corrigir: 8 unidades falhando no discovery + status incorreto no frontend
+# Plano: Polling de toda a frota a cada ciclo
 
-## Problema 1: 8 unidades com "No combination returned positions"
+## Situação atual
 
-A invalidação do memo (v8) forçou rediscovery, mas para metade das unidades o discovery falha — provavelmente porque o `IdTrackedUnit` salvo no metadata está errado ou ausente para essas unidades.
+- `BATCH_SIZE = 3`, `maxBatchesPerRun = 2` (modo poll) → 6 unidades por ciclo de 3 min
+- 16 unidades → ciclo completo = ~24 min
+- Unidades paradas fazem 1 request SSX e retornam em <1s
+- Unidades em discovery fazem até 8+ requests (lento)
 
-**Diagnóstico necessário**: Verificar o metadata dessas 8 unidades para ver se têm `id_tracked_unit` válido.
+## Mudança proposta
 
-**Correção no `ssx-poll-positions`**:
-- Se o Stage 1 (memo) e Stage 2 (discovery) falharem, adicionar um **Stage 3: Broadband fallback** — fazer uma chamada PositionHistory SEM filtro de unidade (janela curta de 30 min), e no resultado, procurar posições que correspondam à unidade pelo campo `TrackedUnit`/`Plate`. Se encontrar, extrair o `IdTrackedUnit` correto do payload e salvar no memo.
-- Isso resolve o bootstrap: uma vez que o `IdTrackedUnit` correto é descoberto via broadband, o memo passa a funcionar.
-
-## Problema 2: Frontend classifica "parado com polling ativo" como "stale"
-
-O `getVehicleStatus` no FleetMap usa `max(captured_at, received_at)` via `getFreshnessTimestamp`. Mas olhando os dados:
-- HDO5276: `captured_at` = 11:01, `received_at` = 12:36 (3 min atrás) → deveria ser "Parado"
-- HFB4G43: `captured_at` = 19:13 (3 dias!), `received_at` = 12:21 (19 min) → deveria ser "Parado" ou "Offline recente"
-
-O threshold de 25 min para ONLINE deveria funcionar para HDO5276 (received_at 3 min ago). O problema pode ser que o frontend não está recebendo `received_at` na query.
-
-**Correção no `usePositions.tsx`**: Verificar que `received_at` está sendo selecionado na query (`select('*')` — deveria estar OK). Verificar se o tipo `PositionLast` inclui `received_at`.
-
-**Correção no `FleetMap.tsx`**: Já usa `getFreshnessTimestamp(captured_at, received_at)` — preciso verificar se `received_at` realmente chega ao componente.
-
-## Arquivos a alterar
+No `agvlog-pipeline-run`, remover o limite de batches no modo poll. Em vez disso, confiar no mecanismo de abort existente (429 / timeout / persistence_failure) para interromper naturalmente quando necessário.
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `supabase/functions/ssx-poll-positions/index.ts` | Adicionar Stage 3 broadband fallback para descobrir IdTrackedUnit correto quando discovery falha |
-| `src/pages/FleetMap.tsx` | Verificar e corrigir uso de received_at no status (pode não estar chegando) |
-| `src/hooks/usePositions.tsx` | Verificar que received_at está no select e no tipo |
+| `supabase/functions/agvlog-pipeline-run/index.ts` | `maxBatchesPerRun` = `Infinity` para modo poll (igual full/manual). Manter `BATCH_SIZE = 3` para manter sub-lotes pequenos por chamada de edge function. |
+
+## Por que é seguro
+
+- Unidades com memo válido + paradas = 1 request SSX, ~200ms. Não contribuem para rate limit de forma relevante.
+- O sistema já aborta o batch inteiro ao receber 429, persistence_failure ou timeout.
+- O `BATCH_SIZE = 3` por chamada de edge function garante que cada invocação individual não estoura o CPU time limit.
+- O fairness sort continua: unidades menos recentes são processadas primeiro.
 
 ## Resultado esperado
 
-- As 8 unidades que falham passam a descobrir seu IdTrackedUnit via broadband e começam a funcionar
-- Veículos parados com polling ativo aparecem como "Parado" (amarelo) ao invés de "Posição antiga" (cinza)
-- Ciclo completo de atualização da frota: ~24 min (todos os 16 veículos)
+- Toda a frota atualizada a cada ciclo de 3 min (em vez de 24 min)
+- Se a SSX retornar 429 no meio, o sistema para naturalmente e retoma no próximo ciclo
+- Heartbeat (`received_at`) atualizado para todos os veículos a cada 3 min → todos aparecem como "Parado" ou "Online" no frontend
 
