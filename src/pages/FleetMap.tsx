@@ -294,8 +294,8 @@ export default function FleetMap() {
       if (!v) return false;
       const q = search.toLowerCase();
       if (q && !v.plate.toLowerCase().includes(q) && !(v.nickname || '').toLowerCase().includes(q)) return false;
-      if (statusFilter === 'online' && p.status !== 'moving' && p.status !== 'stopped') return false;
-      if (statusFilter === 'offline' && p.status !== 'offline_recent' && p.status !== 'stale') return false;
+      if (statusFilter === 'online' && p.status !== 'moving' && p.status !== 'stopped' && p.status !== 'last_position') return false;
+      if (statusFilter === 'offline' && p.status !== 'offline' && p.status !== 'stale') return false;
       if (statusFilter === 'stale' && p.status !== 'stale') return false;
       return true;
     });
