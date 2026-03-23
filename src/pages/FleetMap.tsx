@@ -477,8 +477,11 @@ export default function FleetMap() {
                     {p.status === 'stale' && (
                       <p className="text-red-500 font-medium">⚠ Posição muito antiga — dados podem estar desatualizados</p>
                     )}
-                    {p.status === 'offline_recent' && (
-                      <p className="text-amber-500 font-medium">Veículo offline recente</p>
+                    {p.status === 'offline' && (
+                      <p className="text-muted-foreground font-medium">Veículo offline</p>
+                    )}
+                    {p.status === 'last_position' && (
+                      <p className="text-blue-500 font-medium">Sem confirmação de movimento</p>
                     )}
                   </div>
                   <button
