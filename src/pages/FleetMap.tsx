@@ -27,7 +27,14 @@ L.Icon.Default.mergeOptions({
 const ONLINE_THRESHOLD_MS = 25 * 60 * 1000;   // 25 min (align with round-robin polling cadence)
 const OFFLINE_RECENT_THRESHOLD_MS = 3 * 60 * 60 * 1000; // 3 h
 
-type VehicleStatus = 'moving' | 'stopped' | 'offline_recent' | 'stale' | 'no_position';
+// Status hierarchy:
+// moving        → computed speed > 3 km/h, fresh signal
+// stopped       → computed speed ≤ 3 km/h, confirmed by haversine or heartbeat
+// last_position → signal is recent but no computed evidence (speed_source = "inferred")
+// offline       → no signal within threshold
+// stale         → very old data AND polling failing
+// no_position   → no data at all
+type VehicleStatus = 'moving' | 'stopped' | 'last_position' | 'offline' | 'stale' | 'no_position';
 
 function parseTimestamp(ts: string | null | undefined): number | null {
   if (!ts) return null;
@@ -44,13 +51,31 @@ function getFreshnessTimestamp(capturedAt: string | null, receivedAt: string | n
   return Math.max(capturedMs, receivedMs);
 }
 
-function getVehicleStatus(capturedAt: string | null, receivedAt: string | null, speed: number | null): VehicleStatus {
+function getVehicleStatus(
+  capturedAt: string | null,
+  receivedAt: string | null,
+  speed: number | null,
+  source: Record<string, any> | null,
+): VehicleStatus {
   const freshTs = getFreshnessTimestamp(capturedAt, receivedAt);
   if (freshTs == null) return 'no_position';
   const age = Date.now() - freshTs;
+
+  // Very old data = stale
   if (age > OFFLINE_RECENT_THRESHOLD_MS) return 'stale';
-  if (age > ONLINE_THRESHOLD_MS) return 'offline_recent';
-  // Treat null speed as 0 (stopped) — if no evidence of movement, vehicle is stopped
+
+  // No recent signal = offline
+  if (age > ONLINE_THRESHOLD_MS) return 'offline';
+
+  // Signal is recent — determine movement
+  const speedSource = source?.speed_source;
+  const hasComputedEvidence = speedSource === 'computed' || speedSource === 'provider' || speedSource === 'heartbeat';
+
+  if (!hasComputedEvidence) {
+    // We have signal but no computed evidence — be honest
+    return 'last_position';
+  }
+
   const effectiveSpeed = speed ?? 0;
   return effectiveSpeed > 3 ? 'moving' : 'stopped';
 }
@@ -59,7 +84,8 @@ function statusColor(status: VehicleStatus): string {
   switch (status) {
     case 'moving': return '#22c55e';
     case 'stopped': return '#f59e0b';
-    case 'offline_recent': return '#94a3b8';
+    case 'last_position': return '#3b82f6';
+    case 'offline': return '#94a3b8';
     case 'stale': return '#64748b';
     case 'no_position': return '#cbd5e1';
   }
@@ -69,8 +95,9 @@ function statusLabel(status: VehicleStatus): string {
   switch (status) {
     case 'moving': return 'Movendo';
     case 'stopped': return 'Parado';
-    case 'offline_recent': return 'Offline';
-    case 'stale': return 'Posição antiga';
+    case 'last_position': return 'Última posição';
+    case 'offline': return 'Offline';
+    case 'stale': return 'Sem sinal';
     case 'no_position': return 'Sem posição';
   }
 }
@@ -79,7 +106,8 @@ function statusBadgeClasses(status: VehicleStatus): string {
   switch (status) {
     case 'moving': return 'bg-success/10 text-success border-success/30';
     case 'stopped': return 'bg-warning/10 text-warning border-warning/30';
-    case 'offline_recent': return 'bg-muted text-muted-foreground';
+    case 'last_position': return 'bg-blue-500/10 text-blue-500 border-blue-500/30';
+    case 'offline': return 'bg-muted text-muted-foreground';
     case 'stale': return 'bg-destructive/10 text-destructive border-destructive/30';
     case 'no_position': return 'bg-muted/50 text-muted-foreground/50';
   }
@@ -89,7 +117,8 @@ function statusDotClass(status: VehicleStatus): string {
   switch (status) {
     case 'moving': return 'bg-success';
     case 'stopped': return 'bg-warning';
-    case 'offline_recent': return 'bg-muted-foreground';
+    case 'last_position': return 'bg-blue-500';
+    case 'offline': return 'bg-muted-foreground';
     case 'stale': return 'bg-destructive/60';
     case 'no_position': return 'bg-muted-foreground/30';
   }
@@ -255,7 +284,7 @@ export default function FleetMap() {
     return positions.map(p => ({
       ...p,
       vehicle: vehicleMap[p.vehicle_id],
-      status: getVehicleStatus(p.captured_at, p.received_at, p.speed),
+      status: getVehicleStatus(p.captured_at, p.received_at, p.speed, p.source as Record<string, any> | null),
     }));
   }, [positions, vehicleMap]);
 
@@ -265,8 +294,8 @@ export default function FleetMap() {
       if (!v) return false;
       const q = search.toLowerCase();
       if (q && !v.plate.toLowerCase().includes(q) && !(v.nickname || '').toLowerCase().includes(q)) return false;
-      if (statusFilter === 'online' && p.status !== 'moving' && p.status !== 'stopped') return false;
-      if (statusFilter === 'offline' && p.status !== 'offline_recent' && p.status !== 'stale') return false;
+      if (statusFilter === 'online' && p.status !== 'moving' && p.status !== 'stopped' && p.status !== 'last_position') return false;
+      if (statusFilter === 'offline' && p.status !== 'offline' && p.status !== 'stale') return false;
       if (statusFilter === 'stale' && p.status !== 'stale') return false;
       return true;
     });
@@ -287,13 +316,13 @@ export default function FleetMap() {
   }, [vehiclesWithoutPosition, search, statusFilter]);
 
   const stats = useMemo(() => {
-    const online = enriched.filter(p => p.status === 'moving' || p.status === 'stopped').length;
-    const offlineRecent = enriched.filter(p => p.status === 'offline_recent').length;
+    const online = enriched.filter(p => p.status === 'moving' || p.status === 'stopped' || p.status === 'last_position').length;
+    const offlineCount = enriched.filter(p => p.status === 'offline' || p.status === 'stale').length;
     const stale = enriched.filter(p => p.status === 'stale').length;
     return {
       total: vehicles.length,
       online,
-      offline: offlineRecent + stale,
+      offline: offlineCount,
       stale,
       noPos: vehiclesWithoutPosition.length,
     };
@@ -448,8 +477,11 @@ export default function FleetMap() {
                     {p.status === 'stale' && (
                       <p className="text-red-500 font-medium">⚠ Posição muito antiga — dados podem estar desatualizados</p>
                     )}
-                    {p.status === 'offline_recent' && (
-                      <p className="text-amber-500 font-medium">Veículo offline recente</p>
+                    {p.status === 'offline' && (
+                      <p className="text-muted-foreground font-medium">Veículo offline</p>
+                    )}
+                    {p.status === 'last_position' && (
+                      <p className="text-blue-500 font-medium">Sem confirmação de movimento</p>
                     )}
                   </div>
                   <button

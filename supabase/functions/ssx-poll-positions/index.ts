@@ -346,7 +346,7 @@ Deno.serve(async (req) => {
             speed: existingPos?.speed ?? 0,
             source: {
               ...existingSource,
-              speed_source: existingSource.speed_source || "inferred",
+              speed_source: "heartbeat",
               movement_state: "stopped",
             },
           })
