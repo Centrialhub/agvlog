@@ -67,15 +67,12 @@ function getVehicleStatus(
   // No recent signal = offline
   if (age > ONLINE_THRESHOLD_MS) return 'offline';
 
-  // Signal is recent — determine movement
-  const speedSource = source?.speed_source;
-  const hasComputedEvidence = speedSource === 'computed' || speedSource === 'provider' || speedSource === 'heartbeat';
+  // Signal is recent — use movement_state from backend if available
+  const movementState = source?.movement_state;
+  if (movementState === 'moving') return 'moving';
+  if (movementState === 'stopped') return 'stopped';
 
-  if (!hasComputedEvidence) {
-    // We have signal but no computed evidence — be honest
-    return 'last_position';
-  }
-
+  // Fallback: use speed
   const effectiveSpeed = speed ?? 0;
   return effectiveSpeed > 3 ? 'moving' : 'stopped';
 }
