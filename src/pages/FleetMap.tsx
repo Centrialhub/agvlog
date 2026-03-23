@@ -50,7 +50,9 @@ function getVehicleStatus(capturedAt: string | null, receivedAt: string | null, 
   const age = Date.now() - freshTs;
   if (age > OFFLINE_RECENT_THRESHOLD_MS) return 'stale';
   if (age > ONLINE_THRESHOLD_MS) return 'offline_recent';
-  return speed != null && speed > 3 ? 'moving' : 'stopped';
+  // Treat null speed as 0 (stopped) — if no evidence of movement, vehicle is stopped
+  const effectiveSpeed = speed ?? 0;
+  return effectiveSpeed > 3 ? 'moving' : 'stopped';
 }
 
 function statusColor(status: VehicleStatus): string {
