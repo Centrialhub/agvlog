@@ -322,7 +322,7 @@ export default function FleetMap() {
     return {
       total: vehicles.length,
       online,
-      offline: offlineRecent + stale,
+      offline: offlineCount,
       stale,
       noPos: vehiclesWithoutPosition.length,
     };
