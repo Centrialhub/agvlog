@@ -476,14 +476,16 @@ async function updatePositionsLast(
     distanceFromPreviousM = haversineMeters(currentLast.lat, currentLast.lng, ln.lat, ln.lng);
     timeSincePreviousS = (new Date(ln.captured_at).getTime() - new Date(currentLast.captured_at).getTime()) / 1000;
 
-    if (ln.speed == null && timeSincePreviousS > 0) {
-      if (distanceFromPreviousM < 50) {
+    if (ln.speed == null) {
+      if (timeSincePreviousS <= 0 || distanceFromPreviousM < 50) {
+        // Same position or same timestamp → stationary
         computedSpeed = 0;
       } else {
         computedSpeed = Math.round((distanceFromPreviousM / timeSincePreviousS) * 3.6 * 10) / 10;
       }
     }
-    movementState = (computedSpeed != null && computedSpeed > 3) ? "moving" : "stopped";
+    const effectiveSpeed = computedSpeed ?? ln.speed ?? 0;
+    movementState = effectiveSpeed > 3 ? "moving" : "stopped";
   } else if (ln.speed != null) {
     movementState = ln.speed > 3 ? "moving" : "stopped";
   } else {
