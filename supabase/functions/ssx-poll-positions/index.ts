@@ -333,9 +333,23 @@ Deno.serve(async (req) => {
         }
       } else if (!unitResult.latestNormalized && unitResult.workingCombo && !unitResult.persistenceFailed) {
         // Heartbeat: workingCombo exists but no new GPS points (vehicle likely stopped).
-        // Update only received_at so frontend sees the polling is active → "Parado" instead of "Offline".
+        // Update received_at AND ensure speed/movement_state are never null.
+        const heartbeatNow = new Date().toISOString();
+        const { data: existingPos } = await supabase.from("positions_last")
+          .select("speed, source")
+          .eq("tenant_id", mapping.tenant_id).eq("vehicle_id", mapping.vehicle_id).single();
+
+        const existingSource = (existingPos?.source as Record<string, any>) || {};
         await supabase.from("positions_last")
-          .update({ received_at: new Date().toISOString() })
+          .update({
+            received_at: heartbeatNow,
+            speed: existingPos?.speed ?? 0,
+            source: {
+              ...existingSource,
+              speed_source: existingSource.speed_source || "inferred",
+              movement_state: "stopped",
+            },
+          })
           .eq("tenant_id", mapping.tenant_id)
           .eq("vehicle_id", mapping.vehicle_id);
       }
