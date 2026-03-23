@@ -284,7 +284,7 @@ export default function FleetMap() {
     return positions.map(p => ({
       ...p,
       vehicle: vehicleMap[p.vehicle_id],
-      status: getVehicleStatus(p.captured_at, p.received_at, p.speed),
+      status: getVehicleStatus(p.captured_at, p.received_at, p.speed, p.source as Record<string, any> | null),
     }));
   }, [positions, vehicleMap]);
 
