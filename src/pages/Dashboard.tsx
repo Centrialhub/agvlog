@@ -137,8 +137,7 @@ export default function Dashboard() {
     enabled: !!currentTenant,
   });
 
-  const now = Date.now();
-  const onlineCount = positions.filter(p => now - new Date(p.captured_at).getTime() < 10 * 60 * 1000).length;
+  const onlineCount = fleetState.filter(s => s.movement_state === 'moving' || s.movement_state === 'stopped' || s.movement_state === 'idle').length;
   const offlineCount = vehicleCount - onlineCount;
 
   // Aggregate weekly data by day
