@@ -1546,6 +1546,57 @@ export type Database = {
           },
         ]
       }
+      vehicle_events: {
+        Row: {
+          created_at: string
+          event_at: string
+          event_type: string
+          id: string
+          lat: number | null
+          lng: number | null
+          metadata: Json | null
+          tenant_id: string
+          vehicle_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_at?: string
+          event_type: string
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          metadata?: Json | null
+          tenant_id: string
+          vehicle_id: string
+        }
+        Update: {
+          created_at?: string
+          event_at?: string
+          event_type?: string
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          metadata?: Json | null
+          tenant_id?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_events_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_events_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vehicle_processing_queue: {
         Row: {
           attempts: number
@@ -1701,6 +1752,76 @@ export type Database = {
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vehicles_state: {
+        Row: {
+          heading: number | null
+          last_movement_at: string | null
+          last_position_at: string | null
+          last_position_id: string | null
+          lat: number | null
+          lng: number | null
+          movement_state: string
+          speed: number
+          stopped_duration_seconds: number | null
+          stopped_since: string | null
+          tenant_id: string
+          updated_at: string
+          vehicle_id: string
+        }
+        Insert: {
+          heading?: number | null
+          last_movement_at?: string | null
+          last_position_at?: string | null
+          last_position_id?: string | null
+          lat?: number | null
+          lng?: number | null
+          movement_state?: string
+          speed?: number
+          stopped_duration_seconds?: number | null
+          stopped_since?: string | null
+          tenant_id: string
+          updated_at?: string
+          vehicle_id: string
+        }
+        Update: {
+          heading?: number | null
+          last_movement_at?: string | null
+          last_position_at?: string | null
+          last_position_id?: string | null
+          lat?: number | null
+          lng?: number | null
+          movement_state?: string
+          speed?: number
+          stopped_duration_seconds?: number | null
+          stopped_since?: string | null
+          tenant_id?: string
+          updated_at?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicles_state_last_position_id_fkey"
+            columns: ["last_position_id"]
+            isOneToOne: false
+            referencedRelation: "positions_raw"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicles_state_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicles_state_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: true
+            referencedRelation: "vehicles"
             referencedColumns: ["id"]
           },
         ]
