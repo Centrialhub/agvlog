@@ -84,6 +84,7 @@ export default function Loads() {
   const { data: vehicles = [] } = useVehicles();
   const createLoad = useCreateLoad();
   const updateLoad = useUpdateLoad();
+  const generateCTe = useGenerateCTe();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [dialogOpen, setDialogOpen] = useState(false);
