@@ -30,6 +30,7 @@ import {
   PackageCheck,
   Activity,
   AlertOctagon,
+  Upload,
 } from 'lucide-react';
 
 interface NavItem {
