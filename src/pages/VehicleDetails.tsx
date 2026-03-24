@@ -307,7 +307,7 @@ export default function VehicleDetails() {
                 </CardContent>
               </Card>
               <Card><CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Gauge className="h-4 w-4 text-primary" />Velocidade</CardTitle></CardHeader>
-                <CardContent>{positionLast?.speed != null ? <div className="text-3xl font-bold text-foreground">{Math.round(positionLast.speed)} <span className="text-sm font-normal text-muted-foreground">km/h</span></div> : <p className="text-muted-foreground text-xs"><Info className="h-3 w-3 inline mr-1" />Indisponível</p>}</CardContent>
+                <CardContent><div className="text-3xl font-bold text-foreground">{Math.round(vehicleState?.speed ?? positionLast?.speed ?? 0)} <span className="text-sm font-normal text-muted-foreground">km/h</span></div></CardContent>
               </Card>
               <Card><CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Clock className="h-4 w-4 text-primary" />Última Atualização</CardTitle></CardHeader>
                 <CardContent className="text-sm">{positionLast ? <><p className="font-medium">{format(new Date(positionLast.captured_at), "dd/MM/yyyy HH:mm:ss", { locale: ptBR })}</p><p className="text-xs text-muted-foreground mt-1">{formatDistanceToNow(new Date(positionLast.captured_at), { addSuffix: true, locale: ptBR })}</p></> : <p className="text-muted-foreground text-xs">Sem dados</p>}</CardContent>
