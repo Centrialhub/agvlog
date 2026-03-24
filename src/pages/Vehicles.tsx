@@ -96,6 +96,9 @@ export default function Vehicles() {
                 <TableHead>Placa</TableHead>
                 <TableHead>Apelido</TableHead>
                 <TableHead>Tipo</TableHead>
+                <TableHead>Carroceria</TableHead>
+                <TableHead>Paletes</TableHead>
+                <TableHead>Peso Máx</TableHead>
                 <TableHead>Status</TableHead>
                 {isAdmin && <TableHead className="w-24">Ações</TableHead>}
               </TableRow>
