@@ -256,10 +256,10 @@ function RouteDialog({ open, onOpenChange, tenantId, geofences, pois, editRoute 
 
           <div className="space-y-2">
             <Label>Corredor (Geofence)</Label>
-            <Select value={corridorId} onValueChange={setCorridorId}>
-              <SelectTrigger><SelectValue placeholder="Selecione um geofence" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">Nenhum</SelectItem>
+    <Select value={corridorId || '__none__'} onValueChange={v => setCorridorId(v === '__none__' ? '' : v)}>
+               <SelectTrigger><SelectValue placeholder="Selecione um geofence" /></SelectTrigger>
+               <SelectContent>
+                 <SelectItem value="__none__">Nenhum</SelectItem>
                 {geofences.map((g: any) => (
                   <SelectItem key={g.id} value={g.id}>{g.name} ({g.category})</SelectItem>
                 ))}
