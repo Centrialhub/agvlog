@@ -23,6 +23,7 @@ import Orders from "@/pages/Orders";
 import FiscalDocuments from "@/pages/FiscalDocuments";
 import Inventory from "@/pages/Inventory";
 import Loads from "@/pages/Loads";
+import OperationsDashboard from "@/pages/OperationsDashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
