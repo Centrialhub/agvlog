@@ -1,4 +1,5 @@
 // NF-e XML parser — extracts structured data from Brazilian electronic invoice XML
+import * as XLSX from 'xlsx';
 
 export interface ParsedNFeItem {
   description: string;
@@ -30,56 +31,30 @@ export interface ParsedNFe {
 }
 
 function getTagText(parent: Element, tagName: string): string {
-  // NF-e uses namespaced XML, try both with and without namespace
   const el = parent.getElementsByTagName(tagName)[0]
     || parent.getElementsByTagName(`nfe:${tagName}`)[0];
   return el?.textContent?.trim() || '';
 }
 
-function getNestedText(parent: Element, ...tags: string[]): string {
-  let current: Element | null = parent;
-  for (const tag of tags) {
-    if (!current) return '';
-    current = current.getElementsByTagName(tag)[0]
-      || current.getElementsByTagName(`nfe:${tag}`)[0]
-      || null;
-  }
-  return current?.textContent?.trim() || '';
-}
-
 export function parseNFeXml(xmlString: string): ParsedNFe {
   const parser = new DOMParser();
   const doc = parser.parseFromString(xmlString, 'text/xml');
-
-  // Check for parse errors
   const parseError = doc.querySelector('parsererror');
-  if (parseError) {
-    throw new Error('XML inválido: ' + parseError.textContent);
-  }
+  if (parseError) throw new Error('XML inválido: ' + parseError.textContent);
 
-  // Find the infNFe element (main NF-e data container)
-  const infNFe = doc.getElementsByTagName('infNFe')[0]
-    || doc.getElementsByTagName('nfe:infNFe')[0];
+  const infNFe = doc.getElementsByTagName('infNFe')[0] || doc.getElementsByTagName('nfe:infNFe')[0];
+  if (!infNFe) throw new Error('Estrutura de NF-e não encontrada no XML');
 
-  if (!infNFe) {
-    throw new Error('Estrutura de NF-e não encontrada no XML');
-  }
-
-  // Access key from Id attribute
   const accessKey = (infNFe.getAttribute('Id') || '').replace(/^NFe/, '');
-
-  // ide - identification
   const ide = infNFe.getElementsByTagName('ide')[0];
   const invoiceNumber = getTagText(ide || infNFe, 'nNF');
   const series = getTagText(ide || infNFe, 'serie');
   const issueDate = getTagText(ide || infNFe, 'dhEmi').substring(0, 10);
 
-  // emit - emitter
   const emit = infNFe.getElementsByTagName('emit')[0];
   const emitterName = getTagText(emit || infNFe, 'xNome');
   const emitterCnpj = getTagText(emit || infNFe, 'CNPJ');
 
-  // dest - recipient
   const dest = infNFe.getElementsByTagName('dest')[0];
   const recipientName = getTagText(dest || infNFe, 'xNome');
   const recipientCnpj = getTagText(dest || infNFe, 'CNPJ') || getTagText(dest || infNFe, 'CPF');
@@ -93,15 +68,11 @@ export function parseNFeXml(xmlString: string): ParsedNFe {
     getTagText(enderDest || infNFe, 'xBairro'),
   ].filter(Boolean).join(', ');
 
-  // det - items
   const detElements = infNFe.getElementsByTagName('det');
   const items: ParsedNFeItem[] = [];
-  
   for (let i = 0; i < detElements.length; i++) {
-    const det = detElements[i];
-    const prod = det.getElementsByTagName('prod')[0];
+    const prod = detElements[i].getElementsByTagName('prod')[0];
     if (!prod) continue;
-
     items.push({
       description: getTagText(prod, 'xProd'),
       quantity: parseFloat(getTagText(prod, 'qCom')) || 0,
@@ -113,37 +84,19 @@ export function parseNFeXml(xmlString: string): ParsedNFe {
     });
   }
 
-  // totals
   const total = infNFe.getElementsByTagName('ICMSTot')[0];
   const totalValue = parseFloat(getTagText(total || infNFe, 'vNF')) || 0;
-
-  // transport volumes
   const transp = infNFe.getElementsByTagName('transp')[0];
   const vol = transp?.getElementsByTagName('vol')[0];
   const totalWeight = parseFloat(getTagText(vol || infNFe, 'pesoB')) || 
                       parseFloat(getTagText(vol || infNFe, 'pesoL')) || 0;
-  const totalVolume = 0; // Not standard in NF-e
-
-  // Estimate pallets: ~800kg per pallet or ~1 pallet per 20 items as rough estimate
   const estimatedPallets = Math.max(1, Math.ceil(totalWeight / 800));
 
   return {
-    invoiceNumber,
-    series,
-    accessKey,
-    issueDate,
-    emitterName,
-    emitterCnpj,
-    recipientName,
-    recipientCnpj,
-    recipientCity,
-    recipientState,
-    recipientAddress,
-    items,
-    totalValue,
-    totalWeight,
-    totalVolume,
-    estimatedPallets,
+    invoiceNumber, series, accessKey, issueDate,
+    emitterName, emitterCnpj, recipientName, recipientCnpj,
+    recipientCity, recipientState, recipientAddress,
+    items, totalValue, totalWeight, totalVolume: 0, estimatedPallets,
   };
 }
 
@@ -160,14 +113,7 @@ export interface ParsedOrderRow {
   promisedDate: string;
 }
 
-export function parseCsvOrders(csvText: string): ParsedOrderRow[] {
-  const lines = csvText.trim().split('\n');
-  if (lines.length < 2) return [];
-
-  const headers = lines[0].split(/[,;\t]/).map(h => h.trim().toLowerCase().replace(/["\s]/g, ''));
-  const rows: ParsedOrderRow[] = [];
-
-  // Map common header names
+function parseRowsToOrders(headers: string[], dataRows: string[][]): ParsedOrderRow[] {
   const findCol = (candidates: string[]) => {
     for (const c of candidates) {
       const idx = headers.findIndex(h => h.includes(c));
@@ -186,12 +132,10 @@ export function parseCsvOrders(csvText: string): ParsedOrderRow[] {
   const colWeight = findCol(['peso', 'weight', 'kg']);
   const colDate = findCol(['data', 'date', 'prazo', 'entrega', 'promised']);
 
-  for (let i = 1; i < lines.length; i++) {
-    const cols = lines[i].split(/[,;\t]/).map(c => c.trim().replace(/^"|"$/g, ''));
-    if (cols.length < 2 || cols.every(c => !c)) continue;
-
-    rows.push({
-      orderNumber: colOrder >= 0 ? cols[colOrder] || '' : `IMP-${i}`,
+  return dataRows
+    .filter(cols => cols.length >= 2 && cols.some(c => !!c))
+    .map((cols, i) => ({
+      orderNumber: colOrder >= 0 ? cols[colOrder] || '' : `IMP-${i + 1}`,
       clientName: colClient >= 0 ? cols[colClient] || '' : '',
       clientCnpj: colCnpj >= 0 ? cols[colCnpj] || '' : '',
       destination: colDest >= 0 ? cols[colDest] || '' : '',
@@ -200,8 +144,23 @@ export function parseCsvOrders(csvText: string): ParsedOrderRow[] {
       palletCount: colPallets >= 0 ? parseInt(cols[colPallets]) || 0 : 0,
       weightKg: colWeight >= 0 ? parseFloat(cols[colWeight]) || 0 : 0,
       promisedDate: colDate >= 0 ? cols[colDate] || '' : '',
-    });
-  }
+    }));
+}
 
-  return rows;
+export function parseCsvOrders(csvText: string): ParsedOrderRow[] {
+  const lines = csvText.trim().split('\n');
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(/[,;\t]/).map(h => h.trim().toLowerCase().replace(/["\s]/g, ''));
+  const dataRows = lines.slice(1).map(l => l.split(/[,;\t]/).map(c => c.trim().replace(/^"|"$/g, '')));
+  return parseRowsToOrders(headers, dataRows);
+}
+
+export function parseExcelOrders(buffer: ArrayBuffer): ParsedOrderRow[] {
+  const workbook = XLSX.read(buffer, { type: 'array' });
+  const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+  const jsonData = XLSX.utils.sheet_to_json<string[]>(firstSheet, { header: 1, defval: '' });
+  if (jsonData.length < 2) return [];
+  const headers = (jsonData[0] as string[]).map(h => String(h).trim().toLowerCase().replace(/["\s]/g, ''));
+  const dataRows = jsonData.slice(1).map(row => (row as string[]).map(c => String(c).trim()));
+  return parseRowsToOrders(headers, dataRows);
 }
