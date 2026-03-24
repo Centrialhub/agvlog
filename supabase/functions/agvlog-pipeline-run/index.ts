@@ -94,6 +94,9 @@ Deno.serve(async (req) => {
       total_inserted: 0,
       processed_vehicles: 0,
       aggregated: 0,
+      state_computed: 0,
+      state_events: 0,
+      state_reprocessed: 0,
       errors: [] as string[],
       steps_executed: [] as string[],
     };
