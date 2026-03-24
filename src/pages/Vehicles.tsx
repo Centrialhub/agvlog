@@ -122,6 +122,9 @@ export default function Vehicles() {
                     <TableCell className="font-mono font-medium">{v.plate}</TableCell>
                     <TableCell>{v.nickname || '—'}</TableCell>
                     <TableCell className="capitalize">{v.type}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{v.body_type || '—'}</TableCell>
+                    <TableCell className="text-sm">{v.max_pallets || '—'}</TableCell>
+                    <TableCell className="text-sm">{v.max_weight_kg ? `${v.max_weight_kg} kg` : '—'}</TableCell>
                     <TableCell>
                       <Badge variant={v.active ? 'default' : 'secondary'}>
                         {v.active ? 'Ativo' : 'Inativo'}
