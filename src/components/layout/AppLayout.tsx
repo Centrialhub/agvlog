@@ -24,6 +24,10 @@ import {
   Hexagon,
   FileText,
   Menu,
+  Building2,
+  ShoppingCart,
+  Warehouse,
+  PackageCheck,
 } from 'lucide-react';
 
 interface NavItem {
