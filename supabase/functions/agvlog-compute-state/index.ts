@@ -62,9 +62,9 @@ Deno.serve(async (req) => {
       }
       // Accept service role key directly
       const token = authHeader.replace("Bearer ", "");
-      if (token === serviceKey) {
-        // Service role — authorized
-      } else {
+      const isServiceRole = token === serviceKey;
+      console.log(`[compute-state] Token auth: isServiceRole=${isServiceRole}, tokenLen=${token.length}, serviceKeyLen=${serviceKey.length}`);
+      if (!isServiceRole) {
         const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
         const anonClient = createClient(supabaseUrl, anonKey, {
           global: { headers: { Authorization: authHeader } },
