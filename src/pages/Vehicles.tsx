@@ -205,11 +205,16 @@ function VehicleDialog({ open, onOpenChange, vehicle, tenantId, userId }: {
     if (!tenantId) return;
     setLoading(true);
 
-    const payload = {
+    const payload: any = {
       tenant_id: tenantId,
       plate: plate.toUpperCase(),
       nickname: nickname || null,
       type,
+      body_type: bodyType || null,
+      max_pallets: maxPallets ? parseInt(maxPallets) : null,
+      max_weight_kg: maxWeightKg ? parseFloat(maxWeightKg) : null,
+      max_volume_m3: maxVolumeM3 ? parseFloat(maxVolumeM3) : null,
+      tank_capacity_liters: tankCapacity ? parseFloat(tankCapacity) : null,
       updated_by: userId,
     };
 
