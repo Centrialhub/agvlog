@@ -191,6 +191,11 @@ function VehicleDialog({ open, onOpenChange, vehicle, tenantId, userId }: {
       setPlate(vehicle?.plate || '');
       setNickname(vehicle?.nickname || '');
       setType(vehicle?.type || 'truck');
+      setBodyType(vehicle?.body_type || '');
+      setMaxPallets(vehicle?.max_pallets?.toString() || '');
+      setMaxWeightKg(vehicle?.max_weight_kg?.toString() || '');
+      setMaxVolumeM3(vehicle?.max_volume_m3?.toString() || '');
+      setTankCapacity(vehicle?.tank_capacity_liters?.toString() || '');
     }
     onOpenChange(v);
   };
