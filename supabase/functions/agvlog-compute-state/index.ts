@@ -53,6 +53,7 @@ Deno.serve(async (req) => {
     const cronSecret = req.headers.get("x-agvlog-cron-secret");
     const expectedCronSecret = Deno.env.get("AGVLOG_CRON_SECRET");
     const isCron = !!(cronSecret && expectedCronSecret && cronSecret === expectedCronSecret);
+    console.log(`[compute-state] Auth check: isCron=${isCron}, hasCronHeader=${!!cronSecret}, hasExpectedSecret=${!!expectedCronSecret}`);
 
     if (!isCron) {
       const authHeader = req.headers.get("Authorization");
