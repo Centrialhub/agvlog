@@ -251,13 +251,23 @@ export default function VehicleDetails() {
             {vehicle?.plate || '...'} {vehicle?.nickname && <span className="text-sm font-normal text-muted-foreground">({vehicle.nickname})</span>}
           </h1>
           <div className="flex items-center gap-2 mt-0.5">
-            {positionLast ? (
+            {vehicleState ? (
               <>
-                <Badge variant={isOnline ? (isMoving ? 'default' : 'secondary') : 'destructive'}>
-                  {isOnline ? (isMoving ? 'Em movimento' : 'Parado') : 'Offline'}
+                <Badge variant="outline" className={stateBadgeClasses(movementState as any)}>
+                  {stateLabel(movementState as any)}
                 </Badge>
-                <span className="text-xs text-muted-foreground">Atualizado {formatDistanceToNow(new Date(positionLast.captured_at), { addSuffix: true, locale: ptBR })}</span>
+                {vehicleState.speed > 0 && (
+                  <span className="text-xs text-muted-foreground">{Math.round(vehicleState.speed)} km/h</span>
+                )}
+                {(movementState === 'stopped' || movementState === 'idle') && vehicleState.stopped_duration_seconds > 0 && (
+                  <span className="text-xs text-muted-foreground">Parado há {formatStoppedDuration(vehicleState.stopped_duration_seconds)}</span>
+                )}
+                {vehicleState.last_position_at && (
+                  <span className="text-xs text-muted-foreground">Atualizado {formatDistanceToNow(new Date(vehicleState.last_position_at), { addSuffix: true, locale: ptBR })}</span>
+                )}
               </>
+            ) : positionLast ? (
+              <span className="text-xs text-muted-foreground">Atualizado {formatDistanceToNow(new Date(positionLast.captured_at), { addSuffix: true, locale: ptBR })}</span>
             ) : <Badge variant="outline">Sem posição registrada</Badge>}
           </div>
         </div>
