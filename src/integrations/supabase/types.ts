@@ -182,6 +182,290 @@ export type Database = {
           },
         ]
       }
+      dispatch_events: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          dispatch_stop_id: string | null
+          dispatch_trip_id: string
+          event_at: string
+          event_type: string
+          id: string
+          notes: string | null
+          payload: Json | null
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          dispatch_stop_id?: string | null
+          dispatch_trip_id: string
+          event_at?: string
+          event_type: string
+          id?: string
+          notes?: string | null
+          payload?: Json | null
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          dispatch_stop_id?: string | null
+          dispatch_trip_id?: string
+          event_at?: string
+          event_type?: string
+          id?: string
+          notes?: string | null
+          payload?: Json | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dispatch_events_dispatch_stop_id_fkey"
+            columns: ["dispatch_stop_id"]
+            isOneToOne: false
+            referencedRelation: "dispatch_stops"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dispatch_events_dispatch_trip_id_fkey"
+            columns: ["dispatch_trip_id"]
+            isOneToOne: false
+            referencedRelation: "dispatch_trips"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dispatch_events_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dispatch_stops: {
+        Row: {
+          actual_arrival_at: string | null
+          actual_departure_at: string | null
+          client_id: string | null
+          created_at: string
+          destination: string | null
+          dispatch_trip_id: string
+          id: string
+          notes: string | null
+          planned_arrival_at: string | null
+          status: string
+          stop_order: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          actual_arrival_at?: string | null
+          actual_departure_at?: string | null
+          client_id?: string | null
+          created_at?: string
+          destination?: string | null
+          dispatch_trip_id: string
+          id?: string
+          notes?: string | null
+          planned_arrival_at?: string | null
+          status?: string
+          stop_order?: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          actual_arrival_at?: string | null
+          actual_departure_at?: string | null
+          client_id?: string | null
+          created_at?: string
+          destination?: string | null
+          dispatch_trip_id?: string
+          id?: string
+          notes?: string | null
+          planned_arrival_at?: string | null
+          status?: string
+          stop_order?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dispatch_stops_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dispatch_stops_dispatch_trip_id_fkey"
+            columns: ["dispatch_trip_id"]
+            isOneToOne: false
+            referencedRelation: "dispatch_trips"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dispatch_stops_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dispatch_trips: {
+        Row: {
+          actual_end_at: string | null
+          actual_start_at: string | null
+          created_at: string
+          created_by: string | null
+          driver_id: string | null
+          id: string
+          load_id: string | null
+          notes: string | null
+          planned_end_at: string | null
+          planned_start_at: string | null
+          status: string
+          tenant_id: string
+          updated_at: string
+          vehicle_id: string | null
+        }
+        Insert: {
+          actual_end_at?: string | null
+          actual_start_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          driver_id?: string | null
+          id?: string
+          load_id?: string | null
+          notes?: string | null
+          planned_end_at?: string | null
+          planned_start_at?: string | null
+          status?: string
+          tenant_id: string
+          updated_at?: string
+          vehicle_id?: string | null
+        }
+        Update: {
+          actual_end_at?: string | null
+          actual_start_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          driver_id?: string | null
+          id?: string
+          load_id?: string | null
+          notes?: string | null
+          planned_end_at?: string | null
+          planned_start_at?: string | null
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+          vehicle_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dispatch_trips_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dispatch_trips_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dispatch_trips_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dispatch_trips_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      driver_expenses: {
+        Row: {
+          amount: number
+          approval_status: string
+          approved_at: string | null
+          approved_by: string | null
+          category: string
+          created_at: string
+          dispatch_trip_id: string | null
+          driver_id: string | null
+          expense_at: string
+          id: string
+          notes: string | null
+          receipt_url: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          approval_status?: string
+          approved_at?: string | null
+          approved_by?: string | null
+          category?: string
+          created_at?: string
+          dispatch_trip_id?: string | null
+          driver_id?: string | null
+          expense_at?: string
+          id?: string
+          notes?: string | null
+          receipt_url?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          approval_status?: string
+          approved_at?: string | null
+          approved_by?: string | null
+          category?: string
+          created_at?: string
+          dispatch_trip_id?: string | null
+          driver_id?: string | null
+          expense_at?: string
+          id?: string
+          notes?: string | null
+          receipt_url?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "driver_expenses_dispatch_trip_id_fkey"
+            columns: ["dispatch_trip_id"]
+            isOneToOne: false
+            referencedRelation: "dispatch_trips"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_expenses_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_expenses_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       drivers: {
         Row: {
           active: boolean
@@ -2665,7 +2949,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "owner" | "admin" | "operator" | "client"
+      app_role: "owner" | "admin" | "operator" | "client" | "driver"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2793,7 +3077,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["owner", "admin", "operator", "client"],
+      app_role: ["owner", "admin", "operator", "client", "driver"],
     },
   },
 } as const
