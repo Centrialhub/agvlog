@@ -5,10 +5,13 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
-import { TenantProvider } from "@/hooks/useTenant";
+import { TenantProvider, useTenant } from "@/hooks/useTenant";
 import AppLayout from "@/components/layout/AppLayout";
+import DriverLayout from "@/components/layout/DriverLayout";
 import Auth from "@/pages/Auth";
 
+// Admin / Operations pages
+const OperationsCenter = lazy(() => import("@/pages/OperationsCenter"));
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Vehicles = lazy(() => import("@/pages/Vehicles"));
 const Drivers = lazy(() => import("@/pages/Drivers"));
@@ -32,6 +35,15 @@ const ProductivityReports = lazy(() => import("@/pages/ProductivityReports"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
+// Driver pages
+const DriverHome = lazy(() => import("@/pages/driver/DriverHome"));
+const DriverStops = lazy(() => import("@/pages/driver/DriverStops"));
+const DriverDeliveries = lazy(() => import("@/pages/driver/DriverDeliveries"));
+const DriverIssues = lazy(() => import("@/pages/driver/DriverIssues"));
+const DriverJourney = lazy(() => import("@/pages/driver/DriverJourney"));
+const DriverExpenses = lazy(() => import("@/pages/driver/DriverExpenses"));
+const DriverChecklist = lazy(() => import("@/pages/driver/DriverChecklist"));
+
 const queryClient = new QueryClient();
 
 function PageLoader() {
@@ -51,6 +63,27 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   );
 }
 
+function DriverRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="flex h-screen items-center justify-center text-muted-foreground">Carregando...</div>;
+  if (!user) return <Navigate to="/auth" replace />;
+  return (
+    <TenantProvider>
+      <DriverLayout>
+        <Suspense fallback={<PageLoader />}>{children}</Suspense>
+      </DriverLayout>
+    </TenantProvider>
+  );
+}
+
+function RoleRouter() {
+  const { currentRole, loading } = useTenant();
+  if (loading) return <div className="flex h-screen items-center justify-center text-muted-foreground">Carregando...</div>;
+  if (currentRole === 'driver') return <Navigate to="/driver" replace />;
+  if (currentRole === 'client') return <Navigate to="/portal" replace />;
+  return <OperationsCenter />;
+}
+
 function AuthRoute() {
   const { user, loading } = useAuth();
   if (loading) return <div className="flex h-screen items-center justify-center text-muted-foreground">Carregando...</div>;
@@ -67,7 +100,12 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/auth" element={<AuthRoute />} />
-            <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+
+            {/* Role-based home */}
+            <Route path="/" element={<ProtectedRoute><RoleRouter /></ProtectedRoute>} />
+
+            {/* Admin / Operations routes */}
+            <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/vehicles" element={<ProtectedRoute><Vehicles /></ProtectedRoute>} />
             <Route path="/drivers" element={<ProtectedRoute><Drivers /></ProtectedRoute>} />
             <Route path="/fleet-map" element={<ProtectedRoute><FleetMap /></ProtectedRoute>} />
@@ -75,7 +113,7 @@ const App = () => (
             <Route path="/alerts" element={<ProtectedRoute><Alerts /></ProtectedRoute>} />
             <Route path="/geofences" element={<ProtectedRoute><Geofences /></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
-            <Route path="/routes" element={<ProtectedRoute><RoutesPage /></ProtectedRoute>} />
+            <Route path="/corridors" element={<ProtectedRoute><RoutesPage /></ProtectedRoute>} />
             <Route path="/clients" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
             <Route path="/orders" element={<ProtectedRoute><Orders /></ProtectedRoute>} />
             <Route path="/fiscal-documents" element={<ProtectedRoute><FiscalDocuments /></ProtectedRoute>} />
@@ -88,6 +126,19 @@ const App = () => (
             <Route path="/productivity" element={<ProtectedRoute><ProductivityReports /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="/integration-health" element={<ProtectedRoute><IntegrationHealth /></ProtectedRoute>} />
+
+            {/* Driver routes */}
+            <Route path="/driver" element={<DriverRoute><DriverHome /></DriverRoute>} />
+            <Route path="/driver/stops" element={<DriverRoute><DriverStops /></DriverRoute>} />
+            <Route path="/driver/deliveries" element={<DriverRoute><DriverDeliveries /></DriverRoute>} />
+            <Route path="/driver/issues" element={<DriverRoute><DriverIssues /></DriverRoute>} />
+            <Route path="/driver/journey" element={<DriverRoute><DriverJourney /></DriverRoute>} />
+            <Route path="/driver/expenses" element={<DriverRoute><DriverExpenses /></DriverRoute>} />
+            <Route path="/driver/checklist" element={<DriverRoute><DriverChecklist /></DriverRoute>} />
+
+            {/* Legacy redirect */}
+            <Route path="/routes" element={<Navigate to="/corridors" replace />} />
+
             <Route path="*" element={<Suspense fallback={<PageLoader />}><NotFound /></Suspense>} />
           </Routes>
         </BrowserRouter>

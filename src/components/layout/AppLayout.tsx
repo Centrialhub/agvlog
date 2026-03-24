@@ -31,6 +31,8 @@ import {
   TrendingUp,
   ChevronDown,
   Plug,
+  Radio,
+  ShieldCheck,
 } from 'lucide-react';
 
 interface NavSection {
@@ -42,7 +44,7 @@ const navSections: NavSection[] = [
   {
     label: 'Operações',
     items: [
-      { label: 'Painel', href: '/', icon: <LayoutDashboard className="h-4 w-4" /> },
+      { label: 'Centro de Operações', href: '/', icon: <LayoutDashboard className="h-4 w-4" /> },
       { label: 'Importação', href: '/ingestion', icon: <Upload className="h-4 w-4" /> },
       { label: 'Cargas', href: '/loads', icon: <PackageCheck className="h-4 w-4" /> },
       { label: 'Ocorrências', href: '/events', icon: <AlertOctagon className="h-4 w-4" /> },
@@ -64,6 +66,7 @@ const navSections: NavSection[] = [
     items: [
       { label: 'Mapa da Frota', href: '/fleet-map', icon: <Map className="h-4 w-4" /> },
       { label: 'Alertas', href: '/alerts', icon: <Bell className="h-4 w-4" /> },
+      { label: 'Corredores Monitorados', href: '/corridors', icon: <Radio className="h-4 w-4" /> },
       { label: 'Geofences', href: '/geofences', icon: <Hexagon className="h-4 w-4" /> },
       { label: 'Relatórios', href: '/reports', icon: <FileText className="h-4 w-4" /> },
     ],
@@ -79,7 +82,7 @@ const navSections: NavSection[] = [
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const { signOut } = useAuth();
-  const { currentTenant, memberships, setCurrentTenantId } = useTenant();
+  const { currentTenant, currentRole, memberships, setCurrentTenantId } = useTenant();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
@@ -98,6 +101,15 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     return location.pathname.startsWith(href);
   };
 
+  // Role badge
+  const roleLabels: Record<string, string> = {
+    owner: 'Proprietário',
+    admin: 'Administrador',
+    operator: 'Operador',
+    client: 'Cliente',
+    driver: 'Motorista',
+  };
+
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       <aside className={cn(
@@ -112,19 +124,29 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           {!collapsed && <span className="font-bold text-sm text-sidebar-primary-foreground tracking-tight">AGVLog</span>}
         </div>
 
-        {/* Tenant switcher */}
-        {!collapsed && memberships.length > 1 && (
-          <div className="px-2 py-2 border-b border-sidebar-border">
-            <Select value={currentTenant?.id} onValueChange={setCurrentTenantId}>
-              <SelectTrigger className="h-7 bg-sidebar-accent border-sidebar-border text-sidebar-foreground text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {memberships.map(m => (
-                  <SelectItem key={m.tenant_id} value={m.tenant_id}>{m.tenants.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        {/* Tenant switcher + role */}
+        {!collapsed && (
+          <div className="px-2 py-2 border-b border-sidebar-border space-y-1">
+            {memberships.length > 1 ? (
+              <Select value={currentTenant?.id} onValueChange={setCurrentTenantId}>
+                <SelectTrigger className="h-7 bg-sidebar-accent border-sidebar-border text-sidebar-foreground text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {memberships.map(m => (
+                    <SelectItem key={m.tenant_id} value={m.tenant_id}>{m.tenants.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : currentTenant ? (
+              <p className="text-[10px] text-sidebar-foreground/50 truncate px-1">{currentTenant.name}</p>
+            ) : null}
+            {currentRole && (
+              <div className="flex items-center gap-1 px-1">
+                <ShieldCheck className="h-3 w-3 text-sidebar-foreground/40" />
+                <span className="text-[10px] text-sidebar-foreground/40">{roleLabels[currentRole] || currentRole}</span>
+              </div>
+            )}
           </div>
         )}
 
@@ -132,7 +154,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <nav className="flex-1 overflow-y-auto py-2 space-y-1">
           {navSections.map(section => {
             const sectionCollapsed = collapsedSections.has(section.label);
-            const hasActive = section.items.some(item => isActive(item.href));
 
             return (
               <div key={section.label}>
