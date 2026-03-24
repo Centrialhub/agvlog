@@ -172,13 +172,13 @@ export default function Dashboard() {
       .slice(0, 10);
   }, [weeklyMetrics, vehiclesForChart]);
 
-  // Offline vehicles (no position in > 30 min)
+  // Offline vehicles from state engine
   const offlineVehicles = useMemo(() => {
-    return positions
-      .filter(p => now - new Date(p.captured_at).getTime() > 30 * 60 * 1000)
-      .sort((a, b) => new Date(a.captured_at).getTime() - new Date(b.captured_at).getTime())
+    return fleetState
+      .filter(s => s.movement_state === 'offline')
+      .sort((a, b) => (a.last_position_at || '').localeCompare(b.last_position_at || ''))
       .slice(0, 5);
-  }, [positions, now]);
+  }, [fleetState]);
 
   const fmtHours = (s: number) => `${Math.floor(s / 3600)}h${Math.floor((s % 3600) / 60)}m`;
 
