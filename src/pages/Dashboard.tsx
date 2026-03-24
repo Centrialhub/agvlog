@@ -14,6 +14,7 @@ import { ptBR } from 'date-fns/locale';
 export default function Dashboard() {
   const { currentTenant } = useTenant();
   const navigate = useNavigate();
+  const { data: fleetState = [] } = useFleetState();
 
   const { data: vehicleCount = 0 } = useQuery({
     queryKey: ['dashboard_vehicles', currentTenant?.id],
