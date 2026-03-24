@@ -30,6 +30,7 @@ import {
   PackageCheck,
   Activity,
   AlertOctagon,
+  Upload,
 } from 'lucide-react';
 
 interface NavItem {
@@ -47,6 +48,7 @@ const navItems: NavItem[] = [
   { label: 'Clientes', href: '/clients', icon: <Building2 className="h-5 w-5" /> },
   { label: 'Pedidos', href: '/orders', icon: <ShoppingCart className="h-5 w-5" /> },
   { label: 'Documentos Fiscais', href: '/fiscal-documents', icon: <FileText className="h-5 w-5" /> },
+  { label: 'Importação', href: '/ingestion', icon: <Upload className="h-5 w-5" /> },
   { label: 'Estoque', href: '/inventory', icon: <Warehouse className="h-5 w-5" /> },
   { label: 'Cargas', href: '/loads', icon: <PackageCheck className="h-5 w-5" /> },
   { label: 'Operações', href: '/operations', icon: <Activity className="h-5 w-5" /> },
