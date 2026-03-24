@@ -94,6 +94,9 @@ Deno.serve(async (req) => {
       total_inserted: 0,
       processed_vehicles: 0,
       aggregated: 0,
+      state_computed: 0,
+      state_events: 0,
+      state_reprocessed: 0,
       errors: [] as string[],
       steps_executed: [] as string[],
     };
@@ -186,8 +189,32 @@ Deno.serve(async (req) => {
           }
         }
 
-        // ===== STEP D: Queue processing (only if polling didn't hit persistence failure) =====
+        // ===== STEP C2: Compute vehicle state (always after polling) =====
         const hasPersistenceFailure = stats.errors.some(e => e.includes("persistence_failure"));
+        if (!hasPersistenceFailure) {
+          stats.steps_executed.push("compute_state");
+          try {
+            // Get all active vehicle IDs for this tenant that have positions
+            const { data: vehiclesWithPos } = await supabase
+              .from("positions_last").select("vehicle_id")
+              .eq("tenant_id", tenant_id);
+            const vehicleIds = (vehiclesWithPos || []).map((v: any) => v.vehicle_id);
+
+            if (vehicleIds.length > 0) {
+              const stateResp = await callEdgeFunction(supabaseUrl, anonKey, authHeader, isCron, cronSecret, "agvlog-compute-state", {
+                tenant_id,
+                vehicle_ids: vehicleIds,
+                mode: "batch",
+              });
+              stats.state_computed = stateResp?.processed || 0;
+              stats.state_events = stateResp?.events_emitted || 0;
+            }
+          } catch (e: any) {
+            stats.errors.push(`ComputeState: ${e.message}`);
+          }
+        }
+
+        // ===== STEP D: Queue processing (only if polling didn't hit persistence failure) =====
         if (!hasPersistenceFailure && stats.total_inserted > 0) {
           stats.steps_executed.push("queue_processing");
           try {
@@ -214,6 +241,20 @@ Deno.serve(async (req) => {
         stats.aggregated = aggResp?.aggregated || 0;
       } catch (e: any) {
         stats.errors.push(`Aggregate: ${e.message}`);
+      }
+    }
+
+    // ===== STEP F: State reprocessing (only on full/manual) =====
+    if (mode === "full" || mode === "manual") {
+      stats.steps_executed.push("state_reprocess");
+      try {
+        const reprocessResp = await callEdgeFunction(supabaseUrl, anonKey, authHeader, isCron, cronSecret, "agvlog-compute-state", {
+          tenant_id,
+          mode: "reprocess",
+        });
+        stats.state_reprocessed = reprocessResp?.processed || 0;
+      } catch (e: any) {
+        stats.errors.push(`StateReprocess: ${e.message}`);
       }
     }
 
