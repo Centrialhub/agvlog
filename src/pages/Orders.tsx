@@ -54,7 +54,7 @@ function OrderForm({ order, clients, onSave, onCancel }: { order?: Order; client
         </div>
         <div>
           <Label>Status</Label>
-          <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v }))}>
+          <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v as typeof f.status }))}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               {ORDER_STATUSES.map(s => <SelectItem key={s} value={s}>{ORDER_STATUS_LABELS[s]}</SelectItem>)}

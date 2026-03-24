@@ -37,7 +37,7 @@ function LoadForm({ load, vehicles, drivers, onSave, onCancel }: { load?: Load; 
         <div><Label>Nº Carga *</Label><Input value={form.load_number} onChange={e => setForm(f => ({ ...f, load_number: e.target.value }))} /></div>
         <div>
           <Label>Status</Label>
-          <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v }))}>
+          <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v as typeof f.status }))}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               {LOAD_STATUSES.map(s => <SelectItem key={s} value={s}>{LOAD_STATUS_LABELS[s]}</SelectItem>)}
