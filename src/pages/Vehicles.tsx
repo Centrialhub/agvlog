@@ -178,6 +178,11 @@ function VehicleDialog({ open, onOpenChange, vehicle, tenantId, userId }: {
   const [plate, setPlate] = useState('');
   const [nickname, setNickname] = useState('');
   const [type, setType] = useState('truck');
+  const [bodyType, setBodyType] = useState('');
+  const [maxPallets, setMaxPallets] = useState('');
+  const [maxWeightKg, setMaxWeightKg] = useState('');
+  const [maxVolumeM3, setMaxVolumeM3] = useState('');
+  const [tankCapacity, setTankCapacity] = useState('');
   const [loading, setLoading] = useState(false);
 
   // Reset form when dialog opens
