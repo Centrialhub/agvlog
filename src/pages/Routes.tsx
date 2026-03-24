@@ -283,10 +283,10 @@ function RouteDialog({ open, onOpenChange, tenantId, geofences, pois, editRoute 
             </div>
             <div className="space-y-2">
               <Label>POI Fim (opcional)</Label>
-              <Select value={endPoiId} onValueChange={setEndPoiId}>
-                <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">Nenhum</SelectItem>
+              <Select value={endPoiId || '__none__'} onValueChange={v => setEndPoiId(v === '__none__' ? '' : v)}>
+                 <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
+                 <SelectContent>
+                   <SelectItem value="__none__">Nenhum</SelectItem>
                   {pois.map((p: any) => (
                     <SelectItem key={p.id} value={p.id}>{p.name || `${p.category}`}</SelectItem>
                   ))}
