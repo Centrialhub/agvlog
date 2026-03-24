@@ -53,26 +53,19 @@ Deno.serve(async (req) => {
     const cronSecret = req.headers.get("x-agvlog-cron-secret");
     const expectedCronSecret = Deno.env.get("AGVLOG_CRON_SECRET");
     const isCron = !!(cronSecret && expectedCronSecret && cronSecret === expectedCronSecret);
-    console.log(`[compute-state] Auth check: isCron=${isCron}, hasCronHeader=${!!cronSecret}, hasExpectedSecret=${!!expectedCronSecret}`);
 
     if (!isCron) {
       const authHeader = req.headers.get("Authorization");
       if (!authHeader?.startsWith("Bearer ")) {
         return jsonResp({ error: "Unauthorized" }, 401);
       }
-      // Accept service role key directly
-      const token = authHeader.replace("Bearer ", "");
-      const isServiceRole = token === serviceKey;
-      console.log(`[compute-state] Token auth: isServiceRole=${isServiceRole}, tokenLen=${token.length}, serviceKeyLen=${serviceKey.length}`);
-      if (!isServiceRole) {
-        const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-        const anonClient = createClient(supabaseUrl, anonKey, {
-          global: { headers: { Authorization: authHeader } },
-        });
-        const { data: userData, error: userError } = await anonClient.auth.getUser();
-        if (userError || !userData?.user) {
-          return jsonResp({ error: "Unauthorized" }, 401);
-        }
+      const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+      const anonClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data: userData, error: userError } = await anonClient.auth.getUser();
+      if (userError || !userData?.user) {
+        return jsonResp({ error: "Unauthorized" }, 401);
       }
     }
 
