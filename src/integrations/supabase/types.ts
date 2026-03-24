@@ -1026,6 +1026,86 @@ export type Database = {
           },
         ]
       }
+      load_items: {
+        Row: {
+          created_at: string
+          fiscal_document_id: string | null
+          id: string
+          item_description: string
+          load_id: string
+          notes: string | null
+          order_id: string | null
+          pallet_count: number
+          quantity: number
+          status: string
+          tenant_id: string
+          updated_at: string
+          volume_m3: number | null
+          weight_kg: number | null
+        }
+        Insert: {
+          created_at?: string
+          fiscal_document_id?: string | null
+          id?: string
+          item_description?: string
+          load_id: string
+          notes?: string | null
+          order_id?: string | null
+          pallet_count?: number
+          quantity?: number
+          status?: string
+          tenant_id: string
+          updated_at?: string
+          volume_m3?: number | null
+          weight_kg?: number | null
+        }
+        Update: {
+          created_at?: string
+          fiscal_document_id?: string | null
+          id?: string
+          item_description?: string
+          load_id?: string
+          notes?: string | null
+          order_id?: string | null
+          pallet_count?: number
+          quantity?: number
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+          volume_m3?: number | null
+          weight_kg?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "load_items_fiscal_document_id_fkey"
+            columns: ["fiscal_document_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "load_items_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "load_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "load_items_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       load_orders: {
         Row: {
           created_at: string
@@ -1235,6 +1315,106 @@ export type Database = {
           },
           {
             foreignKeyName: "metrics_daily_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      operational_events: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          driver_id: string | null
+          event_type: string
+          financial_impact: number | null
+          id: string
+          load_id: string | null
+          order_id: string | null
+          resolution: string | null
+          resolved_at: string | null
+          severity: string
+          tenant_id: string
+          updated_at: string
+          vehicle_id: string | null
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          driver_id?: string | null
+          event_type: string
+          financial_impact?: number | null
+          id?: string
+          load_id?: string | null
+          order_id?: string | null
+          resolution?: string | null
+          resolved_at?: string | null
+          severity?: string
+          tenant_id: string
+          updated_at?: string
+          vehicle_id?: string | null
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          driver_id?: string | null
+          event_type?: string
+          financial_impact?: number | null
+          id?: string
+          load_id?: string | null
+          order_id?: string | null
+          resolution?: string | null
+          resolved_at?: string | null
+          severity?: string
+          tenant_id?: string
+          updated_at?: string
+          vehicle_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "operational_events_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "operational_events_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "operational_events_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "operational_events_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "operational_events_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "operational_events_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "vehicles"
