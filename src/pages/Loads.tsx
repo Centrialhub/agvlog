@@ -155,7 +155,53 @@ export default function Loads() {
               {selectedLoad.destination && <span className="text-sm text-muted-foreground">→ {selectedLoad.destination}</span>}
             </div>
           </div>
-          <div className="ml-auto">
+          <div className="ml-auto flex gap-2">
+            {/* Status transition buttons */}
+            {getNextStatuses(selectedLoad.status, 'load').map(nextStatus => (
+              <Button
+                key={nextStatus}
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  try {
+                    await updateLoad.mutateAsync({ id: selectedLoad.id, status: nextStatus } as any);
+                    setSelectedLoad({ ...selectedLoad, status: nextStatus as any });
+                    toast({ title: `Status → ${LOAD_STATUS_LABELS[nextStatus as keyof typeof LOAD_STATUS_LABELS] || nextStatus}` });
+                    // Auto-generate CT-e when loaded
+                    if (nextStatus === 'loaded') {
+                      try {
+                        await generateCTe.mutateAsync(selectedLoad);
+                        toast({ title: 'CT-e gerado automaticamente' });
+                      } catch (e: any) {
+                        if (!e.message.includes('já existe')) toast({ title: 'Erro CT-e', description: e.message, variant: 'destructive' });
+                      }
+                    }
+                  } catch (e: any) {
+                    toast({ title: 'Erro', description: e.message, variant: 'destructive' });
+                  }
+                }}
+              >
+                <ArrowRight className="h-3 w-3 mr-1" />
+                {LOAD_STATUS_LABELS[nextStatus as keyof typeof LOAD_STATUS_LABELS] || nextStatus}
+              </Button>
+            ))}
+            {/* Manual CT-e generation */}
+            {['loaded', 'in_transit', 'delivered'].includes(selectedLoad.status) && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  try {
+                    await generateCTe.mutateAsync(selectedLoad);
+                    toast({ title: 'CT-e gerado com sucesso' });
+                  } catch (e: any) {
+                    toast({ title: 'Erro', description: e.message, variant: 'destructive' });
+                  }
+                }}
+              >
+                <FileText className="h-3 w-3 mr-1" /> Gerar CT-e
+              </Button>
+            )}
             <Button variant="outline" onClick={() => { setEditingLoad(selectedLoad); setDialogOpen(true); }}>
               <Edit className="h-4 w-4 mr-2" /> Editar
             </Button>
