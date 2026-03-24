@@ -31,6 +31,7 @@ import {
   Activity,
   AlertOctagon,
   Upload,
+  TrendingUp,
 } from 'lucide-react';
 
 interface NavItem {
