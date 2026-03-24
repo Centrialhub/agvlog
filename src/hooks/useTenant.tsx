@@ -10,7 +10,7 @@ interface Tenant {
 
 interface Membership {
   tenant_id: string;
-  role: 'owner' | 'admin' | 'operator' | 'client';
+  role: 'owner' | 'admin' | 'operator' | 'client' | 'driver';
   tenants: Tenant;
 }
 
