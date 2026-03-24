@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useLoads, useCreateLoad, useUpdateLoad, LOAD_STATUSES, LOAD_STATUS_LABELS, Load } from '@/hooks/useLoads';
 import { useVehicles } from '@/hooks/useVehicles';
-import { useClients } from '@/hooks/useClients';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,11 +10,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Plus, PackageCheck, Edit, Truck, User } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
+import { Search, Plus, PackageCheck, Edit, Eye, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
+import LoadItemsPanel from '@/components/loads/LoadItemsPanel';
 
 function LoadForm({ load, vehicles, drivers, onSave, onCancel }: { load?: Load; vehicles: any[]; drivers: any[]; onSave: (v: any) => void; onCancel: () => void }) {
   const [form, setForm] = useState({
@@ -24,9 +25,6 @@ function LoadForm({ load, vehicles, drivers, onSave, onCancel }: { load?: Load; 
     driver_id: load?.driver_id || '',
     origin: load?.origin || '',
     destination: load?.destination || '',
-    total_pallet_count: load?.total_pallet_count || 0,
-    total_weight_kg: load?.total_weight_kg || 0,
-    total_volume_m3: load?.total_volume_m3 || 0,
     status: load?.status || 'planned',
     notes: load?.notes || '',
   });
@@ -37,7 +35,7 @@ function LoadForm({ load, vehicles, drivers, onSave, onCancel }: { load?: Load; 
         <div><Label>Nº Carga *</Label><Input value={form.load_number} onChange={e => setForm(f => ({ ...f, load_number: e.target.value }))} /></div>
         <div>
           <Label>Status</Label>
-          <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v as typeof f.status }))}>
+          <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v }))}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               {LOAD_STATUSES.map(s => <SelectItem key={s} value={s}>{LOAD_STATUS_LABELS[s]}</SelectItem>)}
@@ -69,11 +67,6 @@ function LoadForm({ load, vehicles, drivers, onSave, onCancel }: { load?: Load; 
         <div><Label>Origem</Label><Input value={form.origin} onChange={e => setForm(f => ({ ...f, origin: e.target.value }))} /></div>
         <div><Label>Destino</Label><Input value={form.destination} onChange={e => setForm(f => ({ ...f, destination: e.target.value }))} /></div>
       </div>
-      <div className="grid grid-cols-3 gap-4">
-        <div><Label>Paletes</Label><Input type="number" value={form.total_pallet_count} onChange={e => setForm(f => ({ ...f, total_pallet_count: parseInt(e.target.value) || 0 }))} /></div>
-        <div><Label>Peso (kg)</Label><Input type="number" value={form.total_weight_kg} onChange={e => setForm(f => ({ ...f, total_weight_kg: parseFloat(e.target.value) || 0 }))} /></div>
-        <div><Label>Volume (m³)</Label><Input type="number" value={form.total_volume_m3} onChange={e => setForm(f => ({ ...f, total_volume_m3: parseFloat(e.target.value) || 0 }))} /></div>
-      </div>
       <div><Label>Observações</Label><Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} /></div>
       <div className="flex gap-2 justify-end">
         <Button variant="outline" onClick={onCancel}>Cancelar</Button>
@@ -93,6 +86,7 @@ export default function Loads() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingLoad, setEditingLoad] = useState<Load | undefined>();
+  const [selectedLoad, setSelectedLoad] = useState<Load | null>(null);
   const { toast } = useToast();
 
   const { data: drivers = [] } = useQuery({
@@ -138,6 +132,80 @@ export default function Loads() {
     return 'bg-warning/10 text-warning';
   };
 
+  // Get vehicle capacity for selected load
+  const selectedVehicle = selectedLoad?.vehicle_id ? vehicles.find((v: any) => v.id === selectedLoad.vehicle_id) : null;
+
+  // If viewing load detail
+  if (selectedLoad) {
+    return (
+      <div className="animate-fade-in space-y-6">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" onClick={() => setSelectedLoad(null)}>← Voltar</Button>
+          <div>
+            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+              <PackageCheck className="h-6 w-6 text-primary" /> Carga {selectedLoad.load_number}
+            </h1>
+            <div className="flex items-center gap-2 mt-1">
+              <Badge variant="outline" className={statusColor(selectedLoad.status)}>{LOAD_STATUS_LABELS[selectedLoad.status] || selectedLoad.status}</Badge>
+              {selectedLoad.vehicles && <span className="text-sm text-muted-foreground">🚛 {selectedLoad.vehicles.plate}</span>}
+              {selectedLoad.drivers && <span className="text-sm text-muted-foreground">👤 {selectedLoad.drivers.name}</span>}
+              {selectedLoad.destination && <span className="text-sm text-muted-foreground">→ {selectedLoad.destination}</span>}
+            </div>
+          </div>
+          <div className="ml-auto">
+            <Button variant="outline" onClick={() => { setEditingLoad(selectedLoad); setDialogOpen(true); }}>
+              <Edit className="h-4 w-4 mr-2" /> Editar
+            </Button>
+          </div>
+        </div>
+
+        {/* Capacity summary */}
+        {selectedVehicle && (selectedVehicle as any).max_pallets && (
+          <Card>
+            <CardContent className="py-3">
+              <div className="grid grid-cols-3 gap-6">
+                <div className="space-y-1">
+                  <span className="text-xs text-muted-foreground">Paletes</span>
+                  <div className="flex items-center gap-2">
+                    <Progress value={Math.min(100, ((selectedLoad.total_pallet_count || 0) / (selectedVehicle as any).max_pallets) * 100)} />
+                    <span className="text-sm font-medium whitespace-nowrap">{selectedLoad.total_pallet_count || 0} / {(selectedVehicle as any).max_pallets}</span>
+                  </div>
+                </div>
+                {(selectedVehicle as any).max_weight_kg && (
+                  <div className="space-y-1">
+                    <span className="text-xs text-muted-foreground">Peso</span>
+                    <div className="flex items-center gap-2">
+                      <Progress value={Math.min(100, ((selectedLoad.total_weight_kg || 0) / (selectedVehicle as any).max_weight_kg) * 100)} />
+                      <span className="text-sm font-medium whitespace-nowrap">{selectedLoad.total_weight_kg || 0} / {(selectedVehicle as any).max_weight_kg} kg</span>
+                    </div>
+                  </div>
+                )}
+                <div className="flex items-center gap-4 text-sm">
+                  <span className="text-muted-foreground">Veículo:</span>
+                  <span className="font-medium">{(selectedVehicle as any).plate}</span>
+                  {(selectedVehicle as any).body_type && <Badge variant="outline">{(selectedVehicle as any).body_type}</Badge>}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        <LoadItemsPanel
+          loadId={selectedLoad.id}
+          vehicleMaxPallets={(selectedVehicle as any)?.max_pallets}
+          vehicleMaxWeight={(selectedVehicle as any)?.max_weight_kg}
+        />
+
+        <Dialog open={dialogOpen} onOpenChange={v => { setDialogOpen(v); if (!v) setEditingLoad(undefined); }}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader><DialogTitle>Editar Carga</DialogTitle></DialogHeader>
+            <LoadForm load={editingLoad} vehicles={vehicles} drivers={drivers} onSave={handleSave} onCancel={() => { setDialogOpen(false); setEditingLoad(undefined); }} />
+          </DialogContent>
+        </Dialog>
+      </div>
+    );
+  }
+
   return (
     <div className="animate-fade-in space-y-6">
       <div className="flex items-center justify-between">
@@ -182,9 +250,9 @@ export default function Loads() {
                 <TableHead>Motorista</TableHead>
                 <TableHead>Destino</TableHead>
                 <TableHead>Paletes</TableHead>
-                <TableHead>Peso (kg)</TableHead>
+                <TableHead>Ocupação</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="w-[80px]">Ações</TableHead>
+                <TableHead className="w-[100px]">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -192,22 +260,43 @@ export default function Loads() {
                 <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Carregando...</TableCell></TableRow>
               ) : filtered.length === 0 ? (
                 <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Nenhuma carga encontrada</TableCell></TableRow>
-              ) : filtered.map(l => (
-                <TableRow key={l.id}>
-                  <TableCell className="font-medium">{l.load_number}</TableCell>
-                  <TableCell className="text-sm">{l.vehicles ? `${l.vehicles.plate}${l.vehicles.nickname ? ` (${l.vehicles.nickname})` : ''}` : '—'}</TableCell>
-                  <TableCell className="text-sm">{l.drivers?.name || '—'}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{l.destination || '—'}</TableCell>
-                  <TableCell>{l.total_pallet_count}</TableCell>
-                  <TableCell>{l.total_weight_kg || '—'}</TableCell>
-                  <TableCell><Badge variant="outline" className={statusColor(l.status)}>{LOAD_STATUS_LABELS[l.status] || l.status}</Badge></TableCell>
-                  <TableCell>
-                    <Button variant="ghost" size="icon" onClick={() => { setEditingLoad(l); setDialogOpen(true); }}>
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
+              ) : filtered.map(l => {
+                const vehicle = vehicles.find((v: any) => v.id === l.vehicle_id) as any;
+                const maxP = vehicle?.max_pallets;
+                const occ = maxP ? Math.round(((l.total_pallet_count || 0) / maxP) * 100) : null;
+                const isOver = occ !== null && occ > 100;
+                return (
+                  <TableRow key={l.id} className="cursor-pointer" onClick={() => setSelectedLoad(l)}>
+                    <TableCell className="font-medium">{l.load_number}</TableCell>
+                    <TableCell className="text-sm">{l.vehicles ? `${l.vehicles.plate}${l.vehicles.nickname ? ` (${l.vehicles.nickname})` : ''}` : '—'}</TableCell>
+                    <TableCell className="text-sm">{l.drivers?.name || '—'}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{l.destination || '—'}</TableCell>
+                    <TableCell>{l.total_pallet_count || 0}{maxP ? ` / ${maxP}` : ''}</TableCell>
+                    <TableCell>
+                      {occ !== null ? (
+                        <div className="flex items-center gap-2">
+                          <div className="w-12 h-2 rounded-full bg-muted overflow-hidden">
+                            <div className={`h-full rounded-full ${isOver ? 'bg-destructive' : occ > 80 ? 'bg-warning' : 'bg-success'}`} style={{ width: `${Math.min(occ, 100)}%` }} />
+                          </div>
+                          <span className={`text-xs font-medium ${isOver ? 'text-destructive' : ''}`}>{occ}%</span>
+                          {isOver && <AlertTriangle className="h-3 w-3 text-destructive" />}
+                        </div>
+                      ) : <span className="text-xs text-muted-foreground">—</span>}
+                    </TableCell>
+                    <TableCell><Badge variant="outline" className={statusColor(l.status)}>{LOAD_STATUS_LABELS[l.status] || l.status}</Badge></TableCell>
+                    <TableCell>
+                      <div className="flex gap-1" onClick={e => e.stopPropagation()}>
+                        <Button variant="ghost" size="icon" onClick={() => setSelectedLoad(l)}>
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => { setEditingLoad(l); setDialogOpen(true); }}>
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </CardContent>
