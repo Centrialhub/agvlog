@@ -24,6 +24,7 @@ import FiscalDocuments from "@/pages/FiscalDocuments";
 import Inventory from "@/pages/Inventory";
 import Loads from "@/pages/Loads";
 import OperationsDashboard from "@/pages/OperationsDashboard";
+import OperationalEvents from "@/pages/OperationalEvents";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -66,6 +67,7 @@ const App = () => (
             <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
             <Route path="/loads" element={<ProtectedRoute><Loads /></ProtectedRoute>} />
             <Route path="/operations" element={<ProtectedRoute><OperationsDashboard /></ProtectedRoute>} />
+            <Route path="/events" element={<ProtectedRoute><OperationalEvents /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="/integration-health" element={<ProtectedRoute><IntegrationHealth /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
