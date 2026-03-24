@@ -1,96 +1,107 @@
 import { useState, useMemo } from 'react';
-import { useLoads, useCreateLoad, useUpdateLoad, LOAD_STATUSES, LOAD_STATUS_LABELS, Load } from '@/hooks/useLoads';
+import { useNavigate } from 'react-router-dom';
+import { useLoads, useCreateLoad, LOAD_STATUSES, LOAD_STATUS_LABELS, Load } from '@/hooks/useLoads';
 import { useVehicles } from '@/hooks/useVehicles';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Progress } from '@/components/ui/progress';
-import { Search, Plus, PackageCheck, Edit, Eye, AlertTriangle, FileText, ArrowRight } from 'lucide-react';
+import { Search, Plus, PackageCheck, AlertTriangle, Truck, MapPin, ArrowRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useGenerateCTe } from '@/hooks/useGenerateCTe';
-import { getNextStatuses, LOAD_TRANSITIONS } from '@/lib/statusPipeline';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
-import LoadItemsPanel from '@/components/loads/LoadItemsPanel';
 
-function LoadForm({ load, vehicles, drivers, onSave, onCancel }: { load?: Load; vehicles: any[]; drivers: any[]; onSave: (v: any) => void; onCancel: () => void }) {
-  const [form, setForm] = useState({
-    load_number: load?.load_number || '',
-    vehicle_id: load?.vehicle_id || '',
-    driver_id: load?.driver_id || '',
-    origin: load?.origin || '',
-    destination: load?.destination || '',
-    status: load?.status || 'planned',
-    notes: load?.notes || '',
-  });
+function NewLoadDialog({ vehicles, drivers, onCreated }: { vehicles: any[]; drivers: any[]; onCreated: () => void }) {
+  const createLoad = useCreateLoad();
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({ load_number: '', vehicle_id: '', driver_id: '', origin: '', destination: '', notes: '' });
+
+  const handleSave = async () => {
+    try {
+      await createLoad.mutateAsync({
+        ...form,
+        vehicle_id: form.vehicle_id || null,
+        driver_id: form.driver_id || null,
+        status: 'planned',
+      } as any);
+      toast({ title: 'Carga criada' });
+      setOpen(false);
+      setForm({ load_number: '', vehicle_id: '', driver_id: '', origin: '', destination: '', notes: '' });
+      onCreated();
+    } catch (e: any) {
+      toast({ title: 'Erro', description: e.message, variant: 'destructive' });
+    }
+  };
 
   return (
-    <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
-      <div className="grid grid-cols-2 gap-4">
-        <div><Label>Nº Carga *</Label><Input value={form.load_number} onChange={e => setForm(f => ({ ...f, load_number: e.target.value }))} /></div>
-        <div>
-          <Label>Status</Label>
-          <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v as typeof f.status }))}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {LOAD_STATUSES.map(s => <SelectItem key={s} value={s}>{LOAD_STATUS_LABELS[s]}</SelectItem>)}
-            </SelectContent>
-          </Select>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm"><Plus className="h-4 w-4 mr-1" /> Nova Carga</Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-lg">
+        <DialogHeader><DialogTitle>Nova Carga</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label className="text-xs">Nº Carga *</Label><Input value={form.load_number} onChange={e => setForm(f => ({ ...f, load_number: e.target.value }))} placeholder="CG-001" /></div>
+            <div>
+              <Label className="text-xs">Veículo</Label>
+              <Select value={form.vehicle_id || '__none__'} onValueChange={v => setForm(f => ({ ...f, vehicle_id: v === '__none__' ? '' : v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Nenhum</SelectItem>
+                  {vehicles.map(v => <SelectItem key={v.id} value={v.id}>{v.plate}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">Motorista</Label>
+              <Select value={form.driver_id || '__none__'} onValueChange={v => setForm(f => ({ ...f, driver_id: v === '__none__' ? '' : v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Nenhum</SelectItem>
+                  {drivers.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div><Label className="text-xs">Destino</Label><Input value={form.destination} onChange={e => setForm(f => ({ ...f, destination: e.target.value }))} /></div>
+          </div>
+          <div><Label className="text-xs">Observações</Label><Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2} /></div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSave} disabled={!form.load_number.trim() || createLoad.isPending}>Criar</Button>
+          </div>
         </div>
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label>Veículo</Label>
-          <Select value={form.vehicle_id} onValueChange={v => setForm(f => ({ ...f, vehicle_id: v }))}>
-            <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
-            <SelectContent>
-              {vehicles.map(v => <SelectItem key={v.id} value={v.id}>{v.plate} {v.nickname ? `(${v.nickname})` : ''}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label>Motorista</Label>
-          <Select value={form.driver_id} onValueChange={v => setForm(f => ({ ...f, driver_id: v }))}>
-            <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
-            <SelectContent>
-              {drivers.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div><Label>Origem</Label><Input value={form.origin} onChange={e => setForm(f => ({ ...f, origin: e.target.value }))} /></div>
-        <div><Label>Destino</Label><Input value={form.destination} onChange={e => setForm(f => ({ ...f, destination: e.target.value }))} /></div>
-      </div>
-      <div><Label>Observações</Label><Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} /></div>
-      <div className="flex gap-2 justify-end">
-        <Button variant="outline" onClick={onCancel}>Cancelar</Button>
-        <Button onClick={() => onSave({ ...form, vehicle_id: form.vehicle_id || null, driver_id: form.driver_id || null })} disabled={!form.load_number.trim()}>Salvar</Button>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
+const STATUS_COLORS: Record<string, string> = {
+  delivered: 'bg-success/10 text-success',
+  in_transit: 'bg-info/10 text-info',
+  loaded: 'bg-info/10 text-info',
+  divergent: 'bg-destructive/10 text-destructive',
+  ready: 'bg-primary/10 text-primary',
+  loading: 'bg-primary/10 text-primary',
+  planned: 'bg-muted text-muted-foreground',
+  assembling: 'bg-warning/10 text-warning',
+};
+
 export default function Loads() {
+  const navigate = useNavigate();
   const { currentTenant } = useTenant();
-  const { data: loads = [], isLoading } = useLoads();
+  const { data: loads = [], isLoading, refetch } = useLoads();
   const { data: vehicles = [] } = useVehicles();
-  const createLoad = useCreateLoad();
-  const updateLoad = useUpdateLoad();
-  const generateCTe = useGenerateCTe();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingLoad, setEditingLoad] = useState<Load | undefined>();
-  const [selectedLoad, setSelectedLoad] = useState<Load | null>(null);
-  const { toast } = useToast();
 
   const { data: drivers = [] } = useQuery({
     queryKey: ['drivers', currentTenant?.id],
@@ -105,251 +116,132 @@ export default function Loads() {
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return loads.filter(l => {
-      if (q && !l.load_number.toLowerCase().includes(q) && !(l.vehicles?.plate || '').toLowerCase().includes(q)) return false;
+      if (q && !l.load_number.toLowerCase().includes(q) && !(l.vehicles?.plate || '').toLowerCase().includes(q) && !(l.destination || '').toLowerCase().includes(q)) return false;
       if (statusFilter !== 'all' && l.status !== statusFilter) return false;
       return true;
     });
   }, [loads, search, statusFilter]);
 
-  const handleSave = async (values: any) => {
-    try {
-      if (editingLoad) {
-        await updateLoad.mutateAsync({ id: editingLoad.id, ...values });
-        toast({ title: 'Carga atualizada' });
-      } else {
-        await createLoad.mutateAsync(values);
-        toast({ title: 'Carga criada' });
-      }
-      setDialogOpen(false);
-      setEditingLoad(undefined);
-    } catch (e: any) {
-      toast({ title: 'Erro', description: e.message, variant: 'destructive' });
-    }
-  };
+  // Status summary cards
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    loads.forEach(l => { counts[l.status] = (counts[l.status] || 0) + 1; });
+    return counts;
+  }, [loads]);
 
-  const statusColor = (s: string) => {
-    if (s === 'delivered') return 'bg-success/10 text-success';
-    if (s === 'in_transit' || s === 'loaded') return 'bg-blue-500/10 text-blue-500';
-    if (s === 'divergent') return 'bg-destructive/10 text-destructive';
-    if (s === 'ready' || s === 'loading') return 'bg-primary/10 text-primary';
-    return 'bg-warning/10 text-warning';
-  };
-
-  // Get vehicle capacity for selected load
-  const selectedVehicle = selectedLoad?.vehicle_id ? vehicles.find((v: any) => v.id === selectedLoad.vehicle_id) : null;
-
-  // If viewing load detail
-  if (selectedLoad) {
-    return (
-      <div className="animate-fade-in space-y-6">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={() => setSelectedLoad(null)}>← Voltar</Button>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-              <PackageCheck className="h-6 w-6 text-primary" /> Carga {selectedLoad.load_number}
-            </h1>
-            <div className="flex items-center gap-2 mt-1">
-              <Badge variant="outline" className={statusColor(selectedLoad.status)}>{LOAD_STATUS_LABELS[selectedLoad.status] || selectedLoad.status}</Badge>
-              {selectedLoad.vehicles && <span className="text-sm text-muted-foreground">🚛 {selectedLoad.vehicles.plate}</span>}
-              {selectedLoad.drivers && <span className="text-sm text-muted-foreground">👤 {selectedLoad.drivers.name}</span>}
-              {selectedLoad.destination && <span className="text-sm text-muted-foreground">→ {selectedLoad.destination}</span>}
-            </div>
-          </div>
-          <div className="ml-auto flex gap-2">
-            {/* Status transition buttons */}
-            {getNextStatuses(selectedLoad.status, 'load').map(nextStatus => (
-              <Button
-                key={nextStatus}
-                variant="outline"
-                size="sm"
-                onClick={async () => {
-                  try {
-                    await updateLoad.mutateAsync({ id: selectedLoad.id, status: nextStatus } as any);
-                    setSelectedLoad({ ...selectedLoad, status: nextStatus as any });
-                    toast({ title: `Status → ${LOAD_STATUS_LABELS[nextStatus as keyof typeof LOAD_STATUS_LABELS] || nextStatus}` });
-                    // Auto-generate CT-e when loaded
-                    if (nextStatus === 'loaded') {
-                      try {
-                        await generateCTe.mutateAsync(selectedLoad);
-                        toast({ title: 'CT-e gerado automaticamente' });
-                      } catch (e: any) {
-                        if (!e.message.includes('já existe')) toast({ title: 'Erro CT-e', description: e.message, variant: 'destructive' });
-                      }
-                    }
-                  } catch (e: any) {
-                    toast({ title: 'Erro', description: e.message, variant: 'destructive' });
-                  }
-                }}
-              >
-                <ArrowRight className="h-3 w-3 mr-1" />
-                {LOAD_STATUS_LABELS[nextStatus as keyof typeof LOAD_STATUS_LABELS] || nextStatus}
-              </Button>
-            ))}
-            {/* Manual CT-e generation */}
-            {['loaded', 'in_transit', 'delivered'].includes(selectedLoad.status) && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={async () => {
-                  try {
-                    await generateCTe.mutateAsync(selectedLoad);
-                    toast({ title: 'CT-e gerado com sucesso' });
-                  } catch (e: any) {
-                    toast({ title: 'Erro', description: e.message, variant: 'destructive' });
-                  }
-                }}
-              >
-                <FileText className="h-3 w-3 mr-1" /> Gerar CT-e
-              </Button>
-            )}
-            <Button variant="outline" onClick={() => { setEditingLoad(selectedLoad); setDialogOpen(true); }}>
-              <Edit className="h-4 w-4 mr-2" /> Editar
-            </Button>
-          </div>
-        </div>
-
-        {/* Capacity summary */}
-        {selectedVehicle && (selectedVehicle as any).max_pallets && (
-          <Card>
-            <CardContent className="py-3">
-              <div className="grid grid-cols-3 gap-6">
-                <div className="space-y-1">
-                  <span className="text-xs text-muted-foreground">Paletes</span>
-                  <div className="flex items-center gap-2">
-                    <Progress value={Math.min(100, ((selectedLoad.total_pallet_count || 0) / (selectedVehicle as any).max_pallets) * 100)} />
-                    <span className="text-sm font-medium whitespace-nowrap">{selectedLoad.total_pallet_count || 0} / {(selectedVehicle as any).max_pallets}</span>
-                  </div>
-                </div>
-                {(selectedVehicle as any).max_weight_kg && (
-                  <div className="space-y-1">
-                    <span className="text-xs text-muted-foreground">Peso</span>
-                    <div className="flex items-center gap-2">
-                      <Progress value={Math.min(100, ((selectedLoad.total_weight_kg || 0) / (selectedVehicle as any).max_weight_kg) * 100)} />
-                      <span className="text-sm font-medium whitespace-nowrap">{selectedLoad.total_weight_kg || 0} / {(selectedVehicle as any).max_weight_kg} kg</span>
-                    </div>
-                  </div>
-                )}
-                <div className="flex items-center gap-4 text-sm">
-                  <span className="text-muted-foreground">Veículo:</span>
-                  <span className="font-medium">{(selectedVehicle as any).plate}</span>
-                  {(selectedVehicle as any).body_type && <Badge variant="outline">{(selectedVehicle as any).body_type}</Badge>}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        <LoadItemsPanel
-          loadId={selectedLoad.id}
-          vehicleMaxPallets={(selectedVehicle as any)?.max_pallets}
-          vehicleMaxWeight={(selectedVehicle as any)?.max_weight_kg}
-        />
-
-        <Dialog open={dialogOpen} onOpenChange={v => { setDialogOpen(v); if (!v) setEditingLoad(undefined); }}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader><DialogTitle>Editar Carga</DialogTitle></DialogHeader>
-            <LoadForm load={editingLoad} vehicles={vehicles} drivers={drivers} onSave={handleSave} onCancel={() => { setDialogOpen(false); setEditingLoad(undefined); }} />
-          </DialogContent>
-        </Dialog>
-      </div>
-    );
-  }
+  const activeStatuses = ['planned', 'assembling', 'ready', 'loading', 'loaded', 'in_transit'] as const;
 
   return (
-    <div className="animate-fade-in space-y-6">
+    <div className="animate-fade-in space-y-5">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-            <PackageCheck className="h-6 w-6 text-primary" /> Cargas
+          <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
+            <PackageCheck className="h-5 w-5 text-primary" /> Cargas
           </h1>
-          <p className="text-sm text-muted-foreground">{loads.length} cargas</p>
+          <p className="text-xs text-muted-foreground mt-0.5">{loads.length} cargas no total</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={v => { setDialogOpen(v); if (!v) setEditingLoad(undefined); }}>
-          <DialogTrigger asChild>
-            <Button><Plus className="h-4 w-4 mr-2" /> Nova Carga</Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader><DialogTitle>{editingLoad ? 'Editar Carga' : 'Nova Carga'}</DialogTitle></DialogHeader>
-            <LoadForm load={editingLoad} vehicles={vehicles} drivers={drivers} onSave={handleSave} onCancel={() => { setDialogOpen(false); setEditingLoad(undefined); }} />
-          </DialogContent>
-        </Dialog>
+        <NewLoadDialog vehicles={vehicles} drivers={drivers} onCreated={refetch} />
       </div>
 
-      <div className="flex gap-3 items-center">
-        <div className="relative max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar carga ou veículo..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
-        </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos os status</SelectItem>
-            {LOAD_STATUSES.map(s => <SelectItem key={s} value={s}>{LOAD_STATUS_LABELS[s]}</SelectItem>)}
-          </SelectContent>
-        </Select>
+      {/* Status summary */}
+      <div className="flex gap-2 flex-wrap">
+        {activeStatuses.map(s => {
+          const count = statusCounts[s] || 0;
+          if (count === 0 && s !== 'planned') return null;
+          return (
+            <button
+              key={s}
+              onClick={() => setStatusFilter(statusFilter === s ? 'all' : s)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
+                statusFilter === s ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-card text-muted-foreground hover:bg-muted'
+              }`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${STATUS_COLORS[s]?.split(' ')[0] || 'bg-muted'}`} />
+              {LOAD_STATUS_LABELS[s]} <span className="font-bold">{count}</span>
+            </button>
+          );
+        })}
+        {(statusCounts['delivered'] || 0) > 0 && (
+          <button
+            onClick={() => setStatusFilter(statusFilter === 'delivered' ? 'all' : 'delivered')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
+              statusFilter === 'delivered' ? 'border-success bg-success/10 text-success' : 'border-border bg-card text-muted-foreground hover:bg-muted'
+            }`}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-success" /> Entregues <span className="font-bold">{statusCounts['delivered']}</span>
+          </button>
+        )}
       </div>
 
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Carga</TableHead>
-                <TableHead>Veículo</TableHead>
-                <TableHead>Motorista</TableHead>
-                <TableHead>Destino</TableHead>
-                <TableHead>Paletes</TableHead>
-                <TableHead>Ocupação</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="w-[100px]">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Carregando...</TableCell></TableRow>
-              ) : filtered.length === 0 ? (
-                <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Nenhuma carga encontrada</TableCell></TableRow>
-              ) : filtered.map(l => {
-                const vehicle = vehicles.find((v: any) => v.id === l.vehicle_id) as any;
-                const maxP = vehicle?.max_pallets;
-                const occ = maxP ? Math.round(((l.total_pallet_count || 0) / maxP) * 100) : null;
-                const isOver = occ !== null && occ > 100;
-                return (
-                  <TableRow key={l.id} className="cursor-pointer" onClick={() => setSelectedLoad(l)}>
-                    <TableCell className="font-medium">{l.load_number}</TableCell>
-                    <TableCell className="text-sm">{l.vehicles ? `${l.vehicles.plate}${l.vehicles.nickname ? ` (${l.vehicles.nickname})` : ''}` : '—'}</TableCell>
-                    <TableCell className="text-sm">{l.drivers?.name || '—'}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{l.destination || '—'}</TableCell>
-                    <TableCell>{l.total_pallet_count || 0}{maxP ? ` / ${maxP}` : ''}</TableCell>
-                    <TableCell>
-                      {occ !== null ? (
-                        <div className="flex items-center gap-2">
-                          <div className="w-12 h-2 rounded-full bg-muted overflow-hidden">
-                            <div className={`h-full rounded-full ${isOver ? 'bg-destructive' : occ > 80 ? 'bg-warning' : 'bg-success'}`} style={{ width: `${Math.min(occ, 100)}%` }} />
-                          </div>
-                          <span className={`text-xs font-medium ${isOver ? 'text-destructive' : ''}`}>{occ}%</span>
-                          {isOver && <AlertTriangle className="h-3 w-3 text-destructive" />}
-                        </div>
-                      ) : <span className="text-xs text-muted-foreground">—</span>}
-                    </TableCell>
-                    <TableCell><Badge variant="outline" className={statusColor(l.status)}>{LOAD_STATUS_LABELS[l.status] || l.status}</Badge></TableCell>
-                    <TableCell>
-                      <div className="flex gap-1" onClick={e => e.stopPropagation()}>
-                        <Button variant="ghost" size="icon" onClick={() => setSelectedLoad(l)}>
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => { setEditingLoad(l); setDialogOpen(true); }}>
-                          <Edit className="h-4 w-4" />
-                        </Button>
+      {/* Search */}
+      <div className="relative max-w-sm">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input placeholder="Buscar carga, placa ou destino..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-9" />
+      </div>
+
+      {/* Load cards */}
+      {isLoading ? (
+        <div className="text-center text-muted-foreground py-12">Carregando...</div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center text-muted-foreground py-12">Nenhuma carga encontrada</div>
+      ) : (
+        <div className="grid gap-3">
+          {filtered.map(l => {
+            const veh = vehicles.find((v: any) => v.id === l.vehicle_id) as any;
+            const maxP = veh?.max_pallets;
+            const occ = maxP ? Math.round(((l.total_pallet_count || 0) / maxP) * 100) : null;
+
+            return (
+              <Card
+                key={l.id}
+                className="cursor-pointer hover:shadow-md transition-shadow border-l-4"
+                style={{ borderLeftColor: l.status === 'divergent' ? 'hsl(var(--destructive))' : l.status === 'delivered' ? 'hsl(var(--success))' : ['in_transit', 'loaded'].includes(l.status) ? 'hsl(var(--info))' : 'hsl(var(--border))' }}
+                onClick={() => navigate(`/loads/${l.id}`)}
+              >
+                <CardContent className="py-3 px-4">
+                  <div className="flex items-center gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-sm">{l.load_number}</span>
+                        <Badge variant="outline" className={`text-[10px] ${STATUS_COLORS[l.status] || ''}`}>
+                          {LOAD_STATUS_LABELS[l.status] || l.status}
+                        </Badge>
                       </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                      <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                        {l.vehicles && <span className="flex items-center gap-1"><Truck className="h-3 w-3" /> {l.vehicles.plate}</span>}
+                        {l.drivers && <span>{l.drivers.name}</span>}
+                        {l.destination && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {l.destination}</span>}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-4 shrink-0">
+                      <div className="text-right">
+                        <div className="text-xs text-muted-foreground">Paletes</div>
+                        <div className="text-sm font-medium">{l.total_pallet_count || 0}{maxP ? <span className="text-muted-foreground font-normal">/{maxP}</span> : ''}</div>
+                      </div>
+                      {occ !== null && (
+                        <div className="w-16">
+                          <div className={`h-2 rounded-full bg-muted overflow-hidden`}>
+                            <div
+                              className={`h-full rounded-full transition-all ${occ > 100 ? 'bg-destructive' : occ > 80 ? 'bg-warning' : 'bg-success'}`}
+                              style={{ width: `${Math.min(occ, 100)}%` }}
+                            />
+                          </div>
+                          <div className={`text-[10px] text-center mt-0.5 ${occ > 100 ? 'text-destructive font-bold' : 'text-muted-foreground'}`}>
+                            {occ}%
+                          </div>
+                        </div>
+                      )}
+                      <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
