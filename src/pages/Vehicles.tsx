@@ -252,6 +252,30 @@ function VehicleDialog({ open, onOpenChange, vehicle, tenantId, userId }: {
             <Label>Tipo</Label>
             <Input value={type} onChange={e => setType(e.target.value)} placeholder="truck, van, car..." />
           </div>
+          <div className="space-y-2">
+            <Label>Tipo de Carroceria</Label>
+            <Input value={bodyType} onChange={e => setBodyType(e.target.value)} placeholder="Baú, Sider, Graneleira..." />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Max Paletes</Label>
+              <Input type="number" value={maxPallets} onChange={e => setMaxPallets(e.target.value)} placeholder="Ex: 24" />
+            </div>
+            <div className="space-y-2">
+              <Label>Peso Máx (kg)</Label>
+              <Input type="number" value={maxWeightKg} onChange={e => setMaxWeightKg(e.target.value)} placeholder="Ex: 14000" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Volume Máx (m³)</Label>
+              <Input type="number" value={maxVolumeM3} onChange={e => setMaxVolumeM3(e.target.value)} placeholder="Ex: 45" />
+            </div>
+            <div className="space-y-2">
+              <Label>Cap. Tanque (L)</Label>
+              <Input type="number" value={tankCapacity} onChange={e => setTankCapacity(e.target.value)} placeholder="Ex: 300" />
+            </div>
+          </div>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar
