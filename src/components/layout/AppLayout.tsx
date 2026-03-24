@@ -29,6 +29,7 @@ import {
   Warehouse,
   PackageCheck,
   Activity,
+  AlertOctagon,
 } from 'lucide-react';
 
 interface NavItem {
