@@ -60,13 +60,19 @@ Deno.serve(async (req) => {
       if (!authHeader?.startsWith("Bearer ")) {
         return jsonResp({ error: "Unauthorized" }, 401);
       }
-      const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-      const anonClient = createClient(supabaseUrl, anonKey, {
-        global: { headers: { Authorization: authHeader } },
-      });
-      const { data: userData, error: userError } = await anonClient.auth.getUser();
-      if (userError || !userData?.user) {
-        return jsonResp({ error: "Unauthorized" }, 401);
+      // Accept service role key directly
+      const token = authHeader.replace("Bearer ", "");
+      if (token === serviceKey) {
+        // Service role — authorized
+      } else {
+        const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+        const anonClient = createClient(supabaseUrl, anonKey, {
+          global: { headers: { Authorization: authHeader } },
+        });
+        const { data: userData, error: userError } = await anonClient.auth.getUser();
+        if (userError || !userData?.user) {
+          return jsonResp({ error: "Unauthorized" }, 401);
+        }
       }
     }
 
