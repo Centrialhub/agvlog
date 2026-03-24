@@ -60,6 +60,8 @@ export default function VehicleDetails() {
     enabled: !!currentTenant && !!vehicleId,
   });
 
+  const { data: vehicleState } = useVehicleState(vehicleId || null);
+
   const { data: positionLast } = useQuery({
     queryKey: ['position_last', currentTenant?.id, vehicleId],
     queryFn: async () => {
