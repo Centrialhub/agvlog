@@ -25,6 +25,7 @@ import Inventory from "@/pages/Inventory";
 import Loads from "@/pages/Loads";
 import OperationsDashboard from "@/pages/OperationsDashboard";
 import OperationalEvents from "@/pages/OperationalEvents";
+import Ingestion from "@/pages/Ingestion";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
