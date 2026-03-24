@@ -18,6 +18,11 @@ import Geofences from "@/pages/Geofences";
 import Reports from "@/pages/Reports";
 import RoutesPage from "@/pages/Routes";
 import IntegrationHealth from "@/pages/IntegrationHealth";
+import Clients from "@/pages/Clients";
+import Orders from "@/pages/Orders";
+import FiscalDocuments from "@/pages/FiscalDocuments";
+import Inventory from "@/pages/Inventory";
+import Loads from "@/pages/Loads";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -54,6 +59,11 @@ const App = () => (
             <Route path="/geofences" element={<ProtectedRoute><Geofences /></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
             <Route path="/routes" element={<ProtectedRoute><RoutesPage /></ProtectedRoute>} />
+            <Route path="/clients" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
+            <Route path="/orders" element={<ProtectedRoute><Orders /></ProtectedRoute>} />
+            <Route path="/fiscal-documents" element={<ProtectedRoute><FiscalDocuments /></ProtectedRoute>} />
+            <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
+            <Route path="/loads" element={<ProtectedRoute><Loads /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="/integration-health" element={<ProtectedRoute><IntegrationHealth /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />

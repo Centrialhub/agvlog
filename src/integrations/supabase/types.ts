@@ -123,6 +123,65 @@ export type Database = {
           },
         ]
       }
+      clients: {
+        Row: {
+          active: boolean
+          addresses: Json | null
+          company_name: string
+          contacts: Json | null
+          created_at: string
+          created_by: string | null
+          id: string
+          legal_name: string | null
+          payment_notes: string | null
+          service_notes: string | null
+          tax_id: string | null
+          tenant_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          active?: boolean
+          addresses?: Json | null
+          company_name: string
+          contacts?: Json | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          legal_name?: string | null
+          payment_notes?: string | null
+          service_notes?: string | null
+          tax_id?: string | null
+          tenant_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          active?: boolean
+          addresses?: Json | null
+          company_name?: string
+          contacts?: Json | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          legal_name?: string | null
+          payment_notes?: string | null
+          service_notes?: string | null
+          tax_id?: string | null
+          tenant_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clients_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       drivers: {
         Row: {
           active: boolean
@@ -223,6 +282,101 @@ export type Database = {
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fiscal_documents: {
+        Row: {
+          access_key: string | null
+          client_id: string | null
+          created_at: string
+          created_by: string | null
+          document_type: string
+          id: string
+          invoice_number: string | null
+          issue_date: string | null
+          load_id: string | null
+          order_id: string | null
+          pallet_count: number | null
+          product_summary: string | null
+          recipient: string | null
+          remitter: string | null
+          status: string
+          tenant_id: string
+          updated_at: string
+          value: number | null
+          weight_kg: number | null
+        }
+        Insert: {
+          access_key?: string | null
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          document_type?: string
+          id?: string
+          invoice_number?: string | null
+          issue_date?: string | null
+          load_id?: string | null
+          order_id?: string | null
+          pallet_count?: number | null
+          product_summary?: string | null
+          recipient?: string | null
+          remitter?: string | null
+          status?: string
+          tenant_id: string
+          updated_at?: string
+          value?: number | null
+          weight_kg?: number | null
+        }
+        Update: {
+          access_key?: string | null
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          document_type?: string
+          id?: string
+          invoice_number?: string | null
+          issue_date?: string | null
+          load_id?: string | null
+          order_id?: string | null
+          pallet_count?: number | null
+          product_summary?: string | null
+          recipient?: string | null
+          remitter?: string | null
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+          value?: number | null
+          weight_kg?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fiscal_documents_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fiscal_documents_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fiscal_documents_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fiscal_documents_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -638,6 +792,372 @@ export type Database = {
           },
         ]
       }
+      inventory_balances: {
+        Row: {
+          client_id: string | null
+          first_inbound_at: string | null
+          id: string
+          item_description: string
+          last_movement_at: string | null
+          location_id: string | null
+          pallet_count: number
+          quantity: number
+          tenant_id: string
+          updated_at: string
+          volume_m3: number | null
+          weight_kg: number | null
+        }
+        Insert: {
+          client_id?: string | null
+          first_inbound_at?: string | null
+          id?: string
+          item_description: string
+          last_movement_at?: string | null
+          location_id?: string | null
+          pallet_count?: number
+          quantity?: number
+          tenant_id: string
+          updated_at?: string
+          volume_m3?: number | null
+          weight_kg?: number | null
+        }
+        Update: {
+          client_id?: string | null
+          first_inbound_at?: string | null
+          id?: string
+          item_description?: string
+          last_movement_at?: string | null
+          location_id?: string | null
+          pallet_count?: number
+          quantity?: number
+          tenant_id?: string
+          updated_at?: string
+          volume_m3?: number | null
+          weight_kg?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_balances_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_balances_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_balances_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_locations: {
+        Row: {
+          active: boolean
+          code: string | null
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          tenant_id: string
+        }
+        Insert: {
+          active?: boolean
+          code?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          tenant_id: string
+        }
+        Update: {
+          active?: boolean
+          code?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_locations_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_movements: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          created_by: string | null
+          fiscal_document_id: string | null
+          id: string
+          item_description: string
+          location_id: string | null
+          moved_at: string
+          movement_type: string
+          notes: string | null
+          pallet_count: number | null
+          quantity: number
+          tenant_id: string
+          volume_m3: number | null
+          weight_kg: number | null
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          fiscal_document_id?: string | null
+          id?: string
+          item_description: string
+          location_id?: string | null
+          moved_at?: string
+          movement_type?: string
+          notes?: string | null
+          pallet_count?: number | null
+          quantity?: number
+          tenant_id: string
+          volume_m3?: number | null
+          weight_kg?: number | null
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          fiscal_document_id?: string | null
+          id?: string
+          item_description?: string
+          location_id?: string | null
+          moved_at?: string
+          movement_type?: string
+          notes?: string | null
+          pallet_count?: number | null
+          quantity?: number
+          tenant_id?: string
+          volume_m3?: number | null
+          weight_kg?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_movements_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_movements_fiscal_document_id_fkey"
+            columns: ["fiscal_document_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_movements_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_movements_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      load_documents: {
+        Row: {
+          created_at: string
+          fiscal_document_id: string
+          id: string
+          load_id: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          fiscal_document_id: string
+          id?: string
+          load_id: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          fiscal_document_id?: string
+          id?: string
+          load_id?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "load_documents_fiscal_document_id_fkey"
+            columns: ["fiscal_document_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "load_documents_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "load_documents_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      load_orders: {
+        Row: {
+          created_at: string
+          id: string
+          load_id: string
+          order_id: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          load_id: string
+          order_id: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          load_id?: string
+          order_id?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "load_orders_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "load_orders_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "load_orders_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      loads: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          destination: string | null
+          driver_id: string | null
+          id: string
+          load_number: string
+          notes: string | null
+          origin: string | null
+          status: string
+          tenant_id: string
+          total_pallet_count: number | null
+          total_volume_m3: number | null
+          total_weight_kg: number | null
+          trip_id: string | null
+          updated_at: string
+          vehicle_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          destination?: string | null
+          driver_id?: string | null
+          id?: string
+          load_number: string
+          notes?: string | null
+          origin?: string | null
+          status?: string
+          tenant_id: string
+          total_pallet_count?: number | null
+          total_volume_m3?: number | null
+          total_weight_kg?: number | null
+          trip_id?: string | null
+          updated_at?: string
+          vehicle_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          destination?: string | null
+          driver_id?: string | null
+          id?: string
+          load_number?: string
+          notes?: string | null
+          origin?: string | null
+          status?: string
+          tenant_id?: string
+          total_pallet_count?: number | null
+          total_volume_m3?: number | null
+          total_weight_kg?: number | null
+          trip_id?: string | null
+          updated_at?: string
+          vehicle_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loads_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loads_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loads_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loads_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       metrics_daily: {
         Row: {
           avg_speed_kmh: number | null
@@ -718,6 +1238,84 @@ export type Database = {
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      orders: {
+        Row: {
+          cargo_type: string | null
+          client_id: string | null
+          created_at: string
+          created_by: string | null
+          destination: string | null
+          id: string
+          notes: string | null
+          order_number: string
+          origin: string | null
+          pallet_count: number | null
+          promised_date: string | null
+          quantity: number | null
+          status: string
+          tenant_id: string
+          updated_at: string
+          updated_by: string | null
+          volume_m3: number | null
+          weight_kg: number | null
+        }
+        Insert: {
+          cargo_type?: string | null
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          destination?: string | null
+          id?: string
+          notes?: string | null
+          order_number: string
+          origin?: string | null
+          pallet_count?: number | null
+          promised_date?: string | null
+          quantity?: number | null
+          status?: string
+          tenant_id: string
+          updated_at?: string
+          updated_by?: string | null
+          volume_m3?: number | null
+          weight_kg?: number | null
+        }
+        Update: {
+          cargo_type?: string | null
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          destination?: string | null
+          id?: string
+          notes?: string | null
+          order_number?: string
+          origin?: string | null
+          pallet_count?: number | null
+          promised_date?: string | null
+          quantity?: number | null
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+          updated_by?: string | null
+          volume_m3?: number | null
+          weight_kg?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orders_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -1700,10 +2298,17 @@ export type Database = {
       vehicles: {
         Row: {
           active: boolean
+          base_consumption_estimate: number | null
+          body_type: string | null
           created_at: string
           created_by: string | null
+          expected_speed_penalty_loaded: number | null
           fuel_canonical_key: string | null
           id: string
+          loaded_consumption_factor: number | null
+          max_pallets: number | null
+          max_volume_m3: number | null
+          max_weight_kg: number | null
           nickname: string | null
           plate: string
           speed_limit_kmh: number | null
@@ -1716,10 +2321,17 @@ export type Database = {
         }
         Insert: {
           active?: boolean
+          base_consumption_estimate?: number | null
+          body_type?: string | null
           created_at?: string
           created_by?: string | null
+          expected_speed_penalty_loaded?: number | null
           fuel_canonical_key?: string | null
           id?: string
+          loaded_consumption_factor?: number | null
+          max_pallets?: number | null
+          max_volume_m3?: number | null
+          max_weight_kg?: number | null
           nickname?: string | null
           plate: string
           speed_limit_kmh?: number | null
@@ -1732,10 +2344,17 @@ export type Database = {
         }
         Update: {
           active?: boolean
+          base_consumption_estimate?: number | null
+          body_type?: string | null
           created_at?: string
           created_by?: string | null
+          expected_speed_penalty_loaded?: number | null
           fuel_canonical_key?: string | null
           id?: string
+          loaded_consumption_factor?: number | null
+          max_pallets?: number | null
+          max_volume_m3?: number | null
+          max_weight_kg?: number | null
           nickname?: string | null
           plate?: string
           speed_limit_kmh?: number | null
