@@ -23,6 +23,7 @@ import Orders from "@/pages/Orders";
 import FiscalDocuments from "@/pages/FiscalDocuments";
 import Inventory from "@/pages/Inventory";
 import Loads from "@/pages/Loads";
+import OperationsDashboard from "@/pages/OperationsDashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -64,6 +65,7 @@ const App = () => (
             <Route path="/fiscal-documents" element={<ProtectedRoute><FiscalDocuments /></ProtectedRoute>} />
             <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
             <Route path="/loads" element={<ProtectedRoute><Loads /></ProtectedRoute>} />
+            <Route path="/operations" element={<ProtectedRoute><OperationsDashboard /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="/integration-health" element={<ProtectedRoute><IntegrationHealth /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
