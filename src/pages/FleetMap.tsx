@@ -1,20 +1,20 @@
 import { useState, useMemo, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useFleetPositions, PositionLast } from '@/hooks/usePositions';
 import { useVehicles, Vehicle } from '@/hooks/useVehicles';
-import { useTenant } from '@/hooks/useTenant';
+import { useFleetState, VehicleState, MovementState, stateLabel, stateColor, stateBadgeClasses, stateDotClass, formatStoppedDuration } from '@/hooks/useVehiclesState';
+import { useTenant, useIsAdmin } from '@/hooks/useTenant';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Search, MapPin, Clock, Gauge, RefreshCw, Eye, Radio, Activity, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import { useIsAdmin } from '@/hooks/useTenant';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ptBR } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
 
 // Fix Leaflet default icon issue
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -24,106 +24,9 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
 });
 
-const ONLINE_THRESHOLD_MS = 25 * 60 * 1000;   // 25 min (align with round-robin polling cadence)
-const OFFLINE_RECENT_THRESHOLD_MS = 3 * 60 * 60 * 1000; // 3 h
-
-// Status hierarchy:
-// moving        → computed speed > 3 km/h, fresh signal
-// stopped       → computed speed ≤ 3 km/h, confirmed by haversine or heartbeat
-// last_position → signal is recent but no computed evidence (speed_source = "inferred")
-// offline       → no signal within threshold
-// stale         → very old data AND polling failing
-// no_position   → no data at all
-type VehicleStatus = 'moving' | 'stopped' | 'last_position' | 'offline' | 'stale' | 'no_position';
-
-function parseTimestamp(ts: string | null | undefined): number | null {
-  if (!ts) return null;
-  const ms = new Date(ts).getTime();
-  return Number.isNaN(ms) ? null : ms;
-}
-
-function getFreshnessTimestamp(capturedAt: string | null, receivedAt: string | null): number | null {
-  const capturedMs = parseTimestamp(capturedAt);
-  const receivedMs = parseTimestamp(receivedAt);
-  if (capturedMs == null && receivedMs == null) return null;
-  if (capturedMs == null) return receivedMs;
-  if (receivedMs == null) return capturedMs;
-  return Math.max(capturedMs, receivedMs);
-}
-
-function getVehicleStatus(
-  capturedAt: string | null,
-  receivedAt: string | null,
-  speed: number | null,
-  source: Record<string, any> | null,
-): VehicleStatus {
-  const freshTs = getFreshnessTimestamp(capturedAt, receivedAt);
-  if (freshTs == null) return 'no_position';
-  const age = Date.now() - freshTs;
-
-  // Very old data = stale
-  if (age > OFFLINE_RECENT_THRESHOLD_MS) return 'stale';
-
-  // No recent signal = offline
-  if (age > ONLINE_THRESHOLD_MS) return 'offline';
-
-  // Signal is recent — use movement_state from backend if available
-  const movementState = source?.movement_state;
-  if (movementState === 'moving') return 'moving';
-  if (movementState === 'stopped') return 'stopped';
-
-  // Fallback: use speed
-  const effectiveSpeed = speed ?? 0;
-  return effectiveSpeed > 3 ? 'moving' : 'stopped';
-}
-
-function statusColor(status: VehicleStatus): string {
-  switch (status) {
-    case 'moving': return '#22c55e';
-    case 'stopped': return '#f59e0b';
-    case 'last_position': return '#3b82f6';
-    case 'offline': return '#94a3b8';
-    case 'stale': return '#64748b';
-    case 'no_position': return '#cbd5e1';
-  }
-}
-
-function statusLabel(status: VehicleStatus): string {
-  switch (status) {
-    case 'moving': return 'Movendo';
-    case 'stopped': return 'Parado';
-    case 'last_position': return 'Última posição';
-    case 'offline': return 'Offline';
-    case 'stale': return 'Sem sinal';
-    case 'no_position': return 'Sem posição';
-  }
-}
-
-function statusBadgeClasses(status: VehicleStatus): string {
-  switch (status) {
-    case 'moving': return 'bg-success/10 text-success border-success/30';
-    case 'stopped': return 'bg-warning/10 text-warning border-warning/30';
-    case 'last_position': return 'bg-blue-500/10 text-blue-500 border-blue-500/30';
-    case 'offline': return 'bg-muted text-muted-foreground';
-    case 'stale': return 'bg-destructive/10 text-destructive border-destructive/30';
-    case 'no_position': return 'bg-muted/50 text-muted-foreground/50';
-  }
-}
-
-function statusDotClass(status: VehicleStatus): string {
-  switch (status) {
-    case 'moving': return 'bg-success';
-    case 'stopped': return 'bg-warning';
-    case 'last_position': return 'bg-blue-500';
-    case 'offline': return 'bg-muted-foreground';
-    case 'stale': return 'bg-destructive/60';
-    case 'no_position': return 'bg-muted-foreground/30';
-  }
-}
-
-function createVehicleIcon(status: VehicleStatus) {
-  const color = statusColor(status);
-  const opacity = status === 'stale' || status === 'no_position' ? '0.6' : '1';
+function createVehicleIcon(state: MovementState) {
+  const color = stateColor(state);
+  const opacity = state === 'offline' || state === 'unknown' ? '0.6' : '1';
   return L.divIcon({
     className: 'custom-vehicle-marker',
     html: `<div style="
@@ -138,7 +41,7 @@ function createVehicleIcon(status: VehicleStatus) {
   });
 }
 
-function FitBounds({ positions }: { positions: PositionLast[] }) {
+function FitBounds({ positions }: { positions: { lat: number; lng: number }[] }) {
   const map = useMap();
   useEffect(() => {
     if (positions.length === 0) return;
@@ -146,32 +49,6 @@ function FitBounds({ positions }: { positions: PositionLast[] }) {
     map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
   }, [positions.length]);
   return null;
-}
-
-/** Returns human-readable age description with freshness context */
-function ageDescription(capturedAt: string, receivedAt?: string | null): string {
-  const capturedMs = Date.now() - new Date(capturedAt).getTime();
-  const freshnessTs = getFreshnessTimestamp(capturedAt, receivedAt ?? null);
-  const freshMs = freshnessTs == null ? capturedMs : Date.now() - freshnessTs;
-
-  const toLabel = (ageMs: number) => {
-    const min = Math.floor(ageMs / 60000);
-    const hours = Math.floor(min / 60);
-    const days = Math.floor(hours / 24);
-    if (min < 1) return 'agora';
-    if (min < 60) return `${min} min`;
-    if (hours < 24) return `${hours} h`;
-    return `${days} dia${days > 1 ? 's' : ''}`;
-  };
-
-  const freshLabel = freshMs < 1 ? 'Último sinal agora' : `Último sinal há ${toLabel(freshMs)}`;
-
-  // If provider keeps returning old GPS with fresh polling, show both contexts.
-  if (capturedMs - freshMs > 30 * 60000) {
-    return `${freshLabel} · GPS há ${toLabel(capturedMs)}`;
-  }
-
-  return freshLabel;
 }
 
 /** Pipeline health summary component */
@@ -230,8 +107,9 @@ export default function FleetMap() {
   const { currentTenant } = useTenant();
   const { data: positions = [], isLoading: posLoading, refetch } = useFleetPositions();
   const { data: vehicles = [] } = useVehicles();
+  const { data: vehicleStates = [] } = useFleetState();
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'online' | 'offline' | 'stale' | 'no_position'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'online' | 'offline' | 'unknown'>('all');
   const navigate = useNavigate();
   const isAdmin = useIsAdmin();
   const queryClient = useQueryClient();
@@ -246,7 +124,6 @@ export default function FleetMap() {
     enabled: !!currentTenant && isAdmin,
   });
 
-  // Manual collection = diagnostic tool only (force_rediscovery, wider lookback)
   const pollMutation = useMutation({
     mutationFn: async () => {
       for (const acc of accounts) {
@@ -265,11 +142,18 @@ export default function FleetMap() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['positions_last'] });
       queryClient.invalidateQueries({ queryKey: ['vehicles'] });
-      queryClient.invalidateQueries({ queryKey: ['provider_units'] });
+      queryClient.invalidateQueries({ queryKey: ['vehicles_state'] });
       queryClient.invalidateQueries({ queryKey: ['tenant_health'] });
       refetch();
     },
   });
+
+  // Build state map from vehicles_state table
+  const stateMap = useMemo(() => {
+    const map: Record<string, VehicleState> = {};
+    for (const s of vehicleStates) map[s.vehicle_id] = s;
+    return map;
+  }, [vehicleStates]);
 
   const vehicleMap = useMemo(() => {
     const map: Record<string, Vehicle> = {};
@@ -277,53 +161,43 @@ export default function FleetMap() {
     return map;
   }, [vehicles]);
 
+  // Enrich vehicles: combine vehicle info + state + position
   const enriched = useMemo(() => {
-    return positions.map(p => ({
-      ...p,
-      vehicle: vehicleMap[p.vehicle_id],
-      status: getVehicleStatus(p.captured_at, p.received_at, p.speed, p.source as Record<string, any> | null),
-    }));
-  }, [positions, vehicleMap]);
+    return vehicles.map(v => {
+      const state = stateMap[v.id];
+      const pos = positions.find(p => p.vehicle_id === v.id);
+      return {
+        vehicle: v,
+        state: state?.movement_state || ('unknown' as MovementState),
+        speed: state?.speed ?? 0,
+        stoppedDuration: state?.stopped_duration_seconds ?? 0,
+        lastPositionAt: state?.last_position_at || pos?.captured_at || null,
+        lat: state?.lat ?? pos?.lat ?? null,
+        lng: state?.lng ?? pos?.lng ?? null,
+        heading: state?.heading ?? pos?.heading ?? null,
+      };
+    });
+  }, [vehicles, stateMap, positions]);
 
   const filtered = useMemo(() => {
-    return enriched.filter(p => {
-      const v = p.vehicle;
-      if (!v) return false;
+    return enriched.filter(e => {
       const q = search.toLowerCase();
-      if (q && !v.plate.toLowerCase().includes(q) && !(v.nickname || '').toLowerCase().includes(q)) return false;
-      if (statusFilter === 'online' && p.status !== 'moving' && p.status !== 'stopped' && p.status !== 'last_position') return false;
-      if (statusFilter === 'offline' && p.status !== 'offline' && p.status !== 'stale') return false;
-      if (statusFilter === 'stale' && p.status !== 'stale') return false;
+      if (q && !e.vehicle.plate.toLowerCase().includes(q) && !(e.vehicle.nickname || '').toLowerCase().includes(q)) return false;
+      if (statusFilter === 'online' && e.state !== 'moving' && e.state !== 'stopped' && e.state !== 'idle') return false;
+      if (statusFilter === 'offline' && e.state !== 'offline') return false;
+      if (statusFilter === 'unknown' && e.state !== 'unknown') return false;
       return true;
     });
   }, [enriched, search, statusFilter]);
 
-  const vehiclesWithoutPosition = useMemo(() => {
-    const withPos = new Set(positions.map(p => p.vehicle_id));
-    return vehicles.filter(v => !withPos.has(v.id));
-  }, [vehicles, positions]);
-
-  const filteredNoPos = useMemo(() => {
-    if (statusFilter !== 'all' && statusFilter !== 'no_position') return [];
-    const q = search.toLowerCase();
-    return vehiclesWithoutPosition.filter(v => {
-      if (!q) return true;
-      return v.plate.toLowerCase().includes(q) || (v.nickname || '').toLowerCase().includes(q);
-    });
-  }, [vehiclesWithoutPosition, search, statusFilter]);
+  const withPosition = useMemo(() => filtered.filter(e => e.lat != null && e.lng != null), [filtered]);
 
   const stats = useMemo(() => {
-    const online = enriched.filter(p => p.status === 'moving' || p.status === 'stopped' || p.status === 'last_position').length;
-    const offlineCount = enriched.filter(p => p.status === 'offline' || p.status === 'stale').length;
-    const stale = enriched.filter(p => p.status === 'stale').length;
-    return {
-      total: vehicles.length,
-      online,
-      offline: offlineCount,
-      stale,
-      noPos: vehiclesWithoutPosition.length,
-    };
-  }, [vehicles, enriched, vehiclesWithoutPosition]);
+    const online = enriched.filter(e => e.state === 'moving' || e.state === 'stopped' || e.state === 'idle').length;
+    const offline = enriched.filter(e => e.state === 'offline').length;
+    const unknown = enriched.filter(e => e.state === 'unknown').length;
+    return { total: vehicles.length, online, offline, unknown };
+  }, [vehicles, enriched]);
 
   return (
     <div className="animate-fade-in flex h-[calc(100vh-3rem)] -m-6">
@@ -349,9 +223,9 @@ export default function FleetMap() {
               <div className="font-bold text-sm text-destructive">{stats.offline}</div>
               <div>Offline</div>
             </button>
-            <button onClick={() => setStatusFilter('no_position')} className={`rounded-md p-1.5 text-xs transition-colors ${statusFilter === 'no_position' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
-              <div className="font-bold text-sm text-muted-foreground">{stats.noPos}</div>
-              <div>S/ pos.</div>
+            <button onClick={() => setStatusFilter('unknown')} className={`rounded-md p-1.5 text-xs transition-colors ${statusFilter === 'unknown' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
+              <div className="font-bold text-sm text-muted-foreground">{stats.unknown}</div>
+              <div>S/ dados</div>
             </button>
           </div>
 
@@ -365,8 +239,8 @@ export default function FleetMap() {
             />
           </div>
 
-          <Button variant="outline" size="sm" className="w-full" onClick={() => refetch()}>
-            <RefreshCw className="h-4 w-4 mr-2" /> Recarregar do banco
+          <Button variant="outline" size="sm" className="w-full" onClick={() => { refetch(); queryClient.invalidateQueries({ queryKey: ['vehicles_state'] }); }}>
+            <RefreshCw className="h-4 w-4 mr-2" /> Recarregar
           </Button>
           {isAdmin && accounts.length > 0 && (
             <Button variant="secondary" size="sm" className="w-full" onClick={() => pollMutation.mutate()} disabled={pollMutation.isPending}>
@@ -376,69 +250,56 @@ export default function FleetMap() {
           )}
         </div>
 
-        {/* Pipeline health banner */}
-        {currentTenant && isAdmin && (
-          <PipelineHealthBanner tenantId={currentTenant.id} />
-        )}
+        {currentTenant && isAdmin && <PipelineHealthBanner tenantId={currentTenant.id} />}
 
         {/* Vehicle list */}
         <div className="flex-1 overflow-y-auto">
           {posLoading ? (
-            <div className="p-4 text-sm text-muted-foreground">Carregando posições...</div>
-          ) : filtered.length === 0 && filteredNoPos.length === 0 ? (
+            <div className="p-4 text-sm text-muted-foreground">Carregando...</div>
+          ) : filtered.length === 0 ? (
             <div className="p-4 text-sm text-muted-foreground">
               Nenhum veículo encontrado.
               {vehicles.length === 0 && ' Cadastre veículos e vincule rastreadores.'}
             </div>
           ) : (
-            <>
-              {filtered.map(p => (
-                <button
-                  key={p.vehicle_id}
-                  onClick={() => navigate(`/vehicles/${p.vehicle_id}`)}
-                  className={`w-full text-left px-4 py-3 border-b border-border hover:bg-accent/50 transition-colors ${p.status === 'stale' ? 'opacity-70' : ''}`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-2.5 h-2.5 rounded-full ${statusDotClass(p.status)}`} />
-                      <span className="font-medium text-sm text-foreground">{p.vehicle?.plate}</span>
-                    </div>
-                    <Badge variant="outline" className={`text-[10px] ${statusBadgeClasses(p.status)}`}>
-                      {statusLabel(p.status)}
-                    </Badge>
+            filtered.map(e => (
+              <button
+                key={e.vehicle.id}
+                onClick={() => navigate(`/vehicles/${e.vehicle.id}`)}
+                className={`w-full text-left px-4 py-3 border-b border-border hover:bg-accent/50 transition-colors ${e.state === 'offline' || e.state === 'unknown' ? 'opacity-70' : ''}`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2.5 h-2.5 rounded-full ${stateDotClass(e.state)}`} />
+                    <span className="font-medium text-sm text-foreground">{e.vehicle.plate}</span>
                   </div>
-                  {p.vehicle?.nickname && (
-                    <p className="text-xs text-muted-foreground mt-0.5 ml-5">{p.vehicle.nickname}</p>
+                  <Badge variant="outline" className={`text-[10px] ${stateBadgeClasses(e.state)}`}>
+                    {stateLabel(e.state)}
+                  </Badge>
+                </div>
+                {e.vehicle.nickname && (
+                  <p className="text-xs text-muted-foreground mt-0.5 ml-5">{e.vehicle.nickname}</p>
+                )}
+                <div className="flex items-center gap-3 mt-1 ml-5 text-xs text-muted-foreground">
+                  {e.state === 'moving' && (
+                    <span className="flex items-center gap-1">
+                      <Gauge className="h-3 w-3" /> {Math.round(e.speed)} km/h
+                    </span>
                   )}
-                  <div className="flex items-center gap-3 mt-1 ml-5 text-xs text-muted-foreground">
-                    {p.speed != null && p.status === 'moving' && (
-                      <span className="flex items-center gap-1">
-                        <Gauge className="h-3 w-3" /> {Math.round(p.speed)} km/h
-                      </span>
-                    )}
+                  {(e.state === 'stopped' || e.state === 'idle') && e.stoppedDuration > 0 && (
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-3 w-3" /> Parado há {formatStoppedDuration(e.stoppedDuration)}
+                    </span>
+                  )}
+                  {e.lastPositionAt && (
                     <span className="flex items-center gap-1">
                       <Clock className="h-3 w-3" />
-                      {ageDescription(p.captured_at, p.received_at)}
+                      {formatDistanceToNow(new Date(e.lastPositionAt), { addSuffix: true, locale: ptBR })}
                     </span>
-                  </div>
-                </button>
-              ))}
-              {filteredNoPos.map(v => (
-                <button
-                  key={v.id}
-                  onClick={() => navigate(`/vehicles/${v.id}`)}
-                  className="w-full text-left px-4 py-3 border-b border-border hover:bg-accent/50 transition-colors opacity-50"
-                >
-                  <div className="flex items-center gap-2">
-                    <div className={`w-2.5 h-2.5 rounded-full ${statusDotClass('no_position')}`} />
-                    <span className="font-medium text-sm text-foreground">{v.plate}</span>
-                    <Badge variant="outline" className={`text-[10px] ml-auto ${statusBadgeClasses('no_position')}`}>
-                      Sem posição
-                    </Badge>
-                  </div>
-                </button>
-              ))}
-            </>
+                  )}
+                </div>
+              </button>
+            ))
           )}
         </div>
       </div>
@@ -455,34 +316,30 @@ export default function FleetMap() {
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
-          <FitBounds positions={filtered} />
-          {filtered.map(p => (
+          <FitBounds positions={withPosition as any} />
+          {withPosition.map(e => (
             <Marker
-              key={p.vehicle_id}
-              position={[p.lat, p.lng]}
-              icon={createVehicleIcon(p.status)}
+              key={e.vehicle.id}
+              position={[e.lat!, e.lng!]}
+              icon={createVehicleIcon(e.state)}
             >
               <Popup>
                 <div className="min-w-[180px]">
-                  <p className="font-bold text-sm">{p.vehicle?.plate}</p>
-                  {p.vehicle?.nickname && <p className="text-xs text-gray-500">{p.vehicle.nickname}</p>}
+                  <p className="font-bold text-sm">{e.vehicle.plate}</p>
+                  {e.vehicle.nickname && <p className="text-xs text-gray-500">{e.vehicle.nickname}</p>}
                   <div className="mt-2 space-y-1 text-xs">
-                    <p>Status: <strong>{statusLabel(p.status)}</strong></p>
-                    {p.speed != null && <p>Velocidade: <strong>{Math.round(p.speed)} km/h</strong></p>}
-                    {p.heading != null && <p>Direção: {Math.round(p.heading)}°</p>}
-                    <p>{ageDescription(p.captured_at, p.received_at)}</p>
-                    {p.status === 'stale' && (
-                      <p className="text-red-500 font-medium">⚠ Posição muito antiga — dados podem estar desatualizados</p>
+                    <p>Status: <strong>{stateLabel(e.state)}</strong></p>
+                    <p>Velocidade: <strong>{Math.round(e.speed)} km/h</strong></p>
+                    {e.heading != null && <p>Direção: {Math.round(e.heading)}°</p>}
+                    {(e.state === 'stopped' || e.state === 'idle') && e.stoppedDuration > 0 && (
+                      <p>Parado há: <strong>{formatStoppedDuration(e.stoppedDuration)}</strong></p>
                     )}
-                    {p.status === 'offline' && (
-                      <p className="text-muted-foreground font-medium">Veículo offline</p>
-                    )}
-                    {p.status === 'last_position' && (
-                      <p className="text-blue-500 font-medium">Sem confirmação de movimento</p>
+                    {e.lastPositionAt && (
+                      <p>Última posição: {formatDistanceToNow(new Date(e.lastPositionAt), { addSuffix: true, locale: ptBR })}</p>
                     )}
                   </div>
                   <button
-                    onClick={() => navigate(`/vehicles/${p.vehicle_id}`)}
+                    onClick={() => navigate(`/vehicles/${e.vehicle.id}`)}
                     className="mt-2 text-xs text-blue-600 hover:underline flex items-center gap-1"
                   >
                     <Eye className="h-3 w-3" /> Ver detalhes

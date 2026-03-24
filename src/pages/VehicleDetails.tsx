@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useVehicleHistory, PositionRaw } from '@/hooks/usePositions';
+import { useVehicleState, stateLabel, stateBadgeClasses, formatStoppedDuration } from '@/hooks/useVehiclesState';
 import { MapContainer, TileLayer, Marker, Polyline, Popup, CircleMarker } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -58,6 +59,8 @@ export default function VehicleDetails() {
     },
     enabled: !!currentTenant && !!vehicleId,
   });
+
+  const { data: vehicleState } = useVehicleState(vehicleId || null);
 
   const { data: positionLast } = useQuery({
     queryKey: ['position_last', currentTenant?.id, vehicleId],
@@ -183,8 +186,9 @@ export default function VehicleDetails() {
     enabled: !!currentTenant,
   });
 
-  const isOnline = positionLast ? Date.now() - new Date(positionLast.captured_at).getTime() < 10 * 60 * 1000 : false;
-  const isMoving = positionLast?.speed != null && positionLast.speed > 2;
+  const movementState = vehicleState?.movement_state || 'unknown';
+  const isOnline = movementState === 'moving' || movementState === 'stopped' || movementState === 'idle';
+  const isMoving = movementState === 'moving';
   const historyPath = useMemo(() => history.map((p: PositionRaw) => [p.lat, p.lng] as [number, number]), [history]);
   const telemetry = positionLast?.telemetry_snapshot as Record<string, any> | null;
   const hasFuel = capabilities?.fuel === true;
@@ -247,13 +251,23 @@ export default function VehicleDetails() {
             {vehicle?.plate || '...'} {vehicle?.nickname && <span className="text-sm font-normal text-muted-foreground">({vehicle.nickname})</span>}
           </h1>
           <div className="flex items-center gap-2 mt-0.5">
-            {positionLast ? (
+            {vehicleState ? (
               <>
-                <Badge variant={isOnline ? (isMoving ? 'default' : 'secondary') : 'destructive'}>
-                  {isOnline ? (isMoving ? 'Em movimento' : 'Parado') : 'Offline'}
+                <Badge variant="outline" className={stateBadgeClasses(movementState as any)}>
+                  {stateLabel(movementState as any)}
                 </Badge>
-                <span className="text-xs text-muted-foreground">Atualizado {formatDistanceToNow(new Date(positionLast.captured_at), { addSuffix: true, locale: ptBR })}</span>
+                {vehicleState.speed > 0 && (
+                  <span className="text-xs text-muted-foreground">{Math.round(vehicleState.speed)} km/h</span>
+                )}
+                {(movementState === 'stopped' || movementState === 'idle') && vehicleState.stopped_duration_seconds > 0 && (
+                  <span className="text-xs text-muted-foreground">Parado há {formatStoppedDuration(vehicleState.stopped_duration_seconds)}</span>
+                )}
+                {vehicleState.last_position_at && (
+                  <span className="text-xs text-muted-foreground">Atualizado {formatDistanceToNow(new Date(vehicleState.last_position_at), { addSuffix: true, locale: ptBR })}</span>
+                )}
               </>
+            ) : positionLast ? (
+              <span className="text-xs text-muted-foreground">Atualizado {formatDistanceToNow(new Date(positionLast.captured_at), { addSuffix: true, locale: ptBR })}</span>
             ) : <Badge variant="outline">Sem posição registrada</Badge>}
           </div>
         </div>
@@ -293,7 +307,7 @@ export default function VehicleDetails() {
                 </CardContent>
               </Card>
               <Card><CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Gauge className="h-4 w-4 text-primary" />Velocidade</CardTitle></CardHeader>
-                <CardContent>{positionLast?.speed != null ? <div className="text-3xl font-bold text-foreground">{Math.round(positionLast.speed)} <span className="text-sm font-normal text-muted-foreground">km/h</span></div> : <p className="text-muted-foreground text-xs"><Info className="h-3 w-3 inline mr-1" />Indisponível</p>}</CardContent>
+                <CardContent><div className="text-3xl font-bold text-foreground">{Math.round(vehicleState?.speed ?? positionLast?.speed ?? 0)} <span className="text-sm font-normal text-muted-foreground">km/h</span></div></CardContent>
               </Card>
               <Card><CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Clock className="h-4 w-4 text-primary" />Última Atualização</CardTitle></CardHeader>
                 <CardContent className="text-sm">{positionLast ? <><p className="font-medium">{format(new Date(positionLast.captured_at), "dd/MM/yyyy HH:mm:ss", { locale: ptBR })}</p><p className="text-xs text-muted-foreground mt-1">{formatDistanceToNow(new Date(positionLast.captured_at), { addSuffix: true, locale: ptBR })}</p></> : <p className="text-muted-foreground text-xs">Sem dados</p>}</CardContent>

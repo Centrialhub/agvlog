@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
+import { useFleetState, stateLabel, formatStoppedDuration } from '@/hooks/useVehiclesState';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Truck, TruckIcon, AlertTriangle, Clock, Route, MapPin, Gauge, Zap, Activity } from 'lucide-react';
@@ -13,6 +14,7 @@ import { ptBR } from 'date-fns/locale';
 export default function Dashboard() {
   const { currentTenant } = useTenant();
   const navigate = useNavigate();
+  const { data: fleetState = [] } = useFleetState();
 
   const { data: vehicleCount = 0 } = useQuery({
     queryKey: ['dashboard_vehicles', currentTenant?.id],
@@ -135,8 +137,7 @@ export default function Dashboard() {
     enabled: !!currentTenant,
   });
 
-  const now = Date.now();
-  const onlineCount = positions.filter(p => now - new Date(p.captured_at).getTime() < 10 * 60 * 1000).length;
+  const onlineCount = fleetState.filter(s => s.movement_state === 'moving' || s.movement_state === 'stopped' || s.movement_state === 'idle').length;
   const offlineCount = vehicleCount - onlineCount;
 
   // Aggregate weekly data by day
@@ -171,13 +172,13 @@ export default function Dashboard() {
       .slice(0, 10);
   }, [weeklyMetrics, vehiclesForChart]);
 
-  // Offline vehicles (no position in > 30 min)
+  // Offline vehicles from state engine
   const offlineVehicles = useMemo(() => {
-    return positions
-      .filter(p => now - new Date(p.captured_at).getTime() > 30 * 60 * 1000)
-      .sort((a, b) => new Date(a.captured_at).getTime() - new Date(b.captured_at).getTime())
+    return fleetState
+      .filter(s => s.movement_state === 'offline')
+      .sort((a, b) => (a.last_position_at || '').localeCompare(b.last_position_at || ''))
       .slice(0, 5);
-  }, [positions, now]);
+  }, [fleetState]);
 
   const fmtHours = (s: number) => `${Math.floor(s / 3600)}h${Math.floor((s % 3600) / 60)}m`;
 
@@ -303,13 +304,13 @@ export default function Dashboard() {
           <CardContent className="space-y-2">
             {offlineVehicles.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4 text-center">Todos os veículos estão online</p>
-            ) : offlineVehicles.map((p: any) => {
-              const v = vehiclesForChart.find((v: any) => v.id === p.vehicle_id) as any;
+            ) : offlineVehicles.map((s: any) => {
+              const v = vehiclesForChart.find((v: any) => v.id === s.vehicle_id) as any;
               return (
-                <div key={p.vehicle_id} className="flex items-center justify-between text-sm border-b border-border pb-2 last:border-0 cursor-pointer hover:bg-accent/50 -mx-2 px-2 rounded" onClick={() => navigate(`/vehicles/${p.vehicle_id}`)}>
-                  <span className="font-medium text-foreground">{v?.plate || p.vehicle_id.slice(0, 8)}</span>
+                <div key={s.vehicle_id} className="flex items-center justify-between text-sm border-b border-border pb-2 last:border-0 cursor-pointer hover:bg-accent/50 -mx-2 px-2 rounded" onClick={() => navigate(`/vehicles/${s.vehicle_id}`)}>
+                  <span className="font-medium text-foreground">{v?.plate || s.vehicle_id.slice(0, 8)}</span>
                   <span className="text-xs text-muted-foreground">
-                    {formatDistanceToNow(new Date(p.captured_at), { addSuffix: true, locale: ptBR })}
+                    {s.last_position_at ? formatDistanceToNow(new Date(s.last_position_at), { addSuffix: true, locale: ptBR }) : 'Sem posição'}
                   </span>
                 </div>
               );
