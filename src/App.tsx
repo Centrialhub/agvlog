@@ -71,6 +71,7 @@ const App = () => (
             <Route path="/operations" element={<ProtectedRoute><OperationsDashboard /></ProtectedRoute>} />
             <Route path="/events" element={<ProtectedRoute><OperationalEvents /></ProtectedRoute>} />
             <Route path="/ingestion" element={<ProtectedRoute><Ingestion /></ProtectedRoute>} />
+            <Route path="/productivity" element={<ProtectedRoute><ProductivityReports /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="/integration-health" element={<ProtectedRoute><IntegrationHealth /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />

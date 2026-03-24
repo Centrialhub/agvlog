@@ -57,6 +57,7 @@ const navItems: NavItem[] = [
   { label: 'Alertas', href: '/alerts', icon: <Bell className="h-5 w-5" /> },
   { label: 'Geofences', href: '/geofences', icon: <Hexagon className="h-5 w-5" /> },
   { label: 'Relatórios', href: '/reports', icon: <FileText className="h-5 w-5" /> },
+  { label: 'Produtividade', href: '/productivity', icon: <TrendingUp className="h-5 w-5" /> },
   { label: 'Rotas', href: '/routes', icon: <Map className="h-5 w-5" /> },
   { label: 'Configurações', href: '/settings', icon: <Settings className="h-5 w-5" /> },
 ];
