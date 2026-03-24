@@ -48,6 +48,7 @@ const navItems: NavItem[] = [
   { label: 'Documentos Fiscais', href: '/fiscal-documents', icon: <FileText className="h-5 w-5" /> },
   { label: 'Estoque', href: '/inventory', icon: <Warehouse className="h-5 w-5" /> },
   { label: 'Cargas', href: '/loads', icon: <PackageCheck className="h-5 w-5" /> },
+  { label: 'Operações', href: '/operations', icon: <Activity className="h-5 w-5" /> },
   { label: 'Alertas', href: '/alerts', icon: <Bell className="h-5 w-5" /> },
   { label: 'Geofences', href: '/geofences', icon: <Hexagon className="h-5 w-5" /> },
   { label: 'Relatórios', href: '/reports', icon: <FileText className="h-5 w-5" /> },
