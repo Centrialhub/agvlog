@@ -304,13 +304,13 @@ export default function Dashboard() {
           <CardContent className="space-y-2">
             {offlineVehicles.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4 text-center">Todos os veículos estão online</p>
-            ) : offlineVehicles.map((p: any) => {
-              const v = vehiclesForChart.find((v: any) => v.id === p.vehicle_id) as any;
+            ) : offlineVehicles.map((s: any) => {
+              const v = vehiclesForChart.find((v: any) => v.id === s.vehicle_id) as any;
               return (
-                <div key={p.vehicle_id} className="flex items-center justify-between text-sm border-b border-border pb-2 last:border-0 cursor-pointer hover:bg-accent/50 -mx-2 px-2 rounded" onClick={() => navigate(`/vehicles/${p.vehicle_id}`)}>
-                  <span className="font-medium text-foreground">{v?.plate || p.vehicle_id.slice(0, 8)}</span>
+                <div key={s.vehicle_id} className="flex items-center justify-between text-sm border-b border-border pb-2 last:border-0 cursor-pointer hover:bg-accent/50 -mx-2 px-2 rounded" onClick={() => navigate(`/vehicles/${s.vehicle_id}`)}>
+                  <span className="font-medium text-foreground">{v?.plate || s.vehicle_id.slice(0, 8)}</span>
                   <span className="text-xs text-muted-foreground">
-                    {formatDistanceToNow(new Date(p.captured_at), { addSuffix: true, locale: ptBR })}
+                    {s.last_position_at ? formatDistanceToNow(new Date(s.last_position_at), { addSuffix: true, locale: ptBR }) : 'Sem posição'}
                   </span>
                 </div>
               );
