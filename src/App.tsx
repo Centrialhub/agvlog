@@ -18,6 +18,11 @@ import Geofences from "@/pages/Geofences";
 import Reports from "@/pages/Reports";
 import RoutesPage from "@/pages/Routes";
 import IntegrationHealth from "@/pages/IntegrationHealth";
+import Clients from "@/pages/Clients";
+import Orders from "@/pages/Orders";
+import FiscalDocuments from "@/pages/FiscalDocuments";
+import Inventory from "@/pages/Inventory";
+import Loads from "@/pages/Loads";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
