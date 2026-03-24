@@ -28,6 +28,7 @@ import {
   ShoppingCart,
   Warehouse,
   PackageCheck,
+  Activity,
 } from 'lucide-react';
 
 interface NavItem {
