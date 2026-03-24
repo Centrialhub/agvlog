@@ -241,6 +241,20 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ===== STEP F: State reprocessing (only on full/manual) =====
+    if (mode === "full" || mode === "manual") {
+      stats.steps_executed.push("state_reprocess");
+      try {
+        const reprocessResp = await callEdgeFunction(supabaseUrl, anonKey, authHeader, isCron, cronSecret, "agvlog-compute-state", {
+          tenant_id,
+          mode: "reprocess",
+        });
+        stats.state_reprocessed = reprocessResp?.processed || 0;
+      } catch (e: any) {
+        stats.errors.push(`StateReprocess: ${e.message}`);
+      }
+    }
+
     // ===== Update pipeline health on tenant settings =====
     try {
       const { data: tenantData } = await supabase
