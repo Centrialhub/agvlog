@@ -186,8 +186,32 @@ Deno.serve(async (req) => {
           }
         }
 
-        // ===== STEP D: Queue processing (only if polling didn't hit persistence failure) =====
+        // ===== STEP C2: Compute vehicle state (always after polling) =====
         const hasPersistenceFailure = stats.errors.some(e => e.includes("persistence_failure"));
+        if (!hasPersistenceFailure) {
+          stats.steps_executed.push("compute_state");
+          try {
+            // Get all active vehicle IDs for this tenant that have positions
+            const { data: vehiclesWithPos } = await supabase
+              .from("positions_last").select("vehicle_id")
+              .eq("tenant_id", tenant_id);
+            const vehicleIds = (vehiclesWithPos || []).map((v: any) => v.vehicle_id);
+
+            if (vehicleIds.length > 0) {
+              const stateResp = await callEdgeFunction(supabaseUrl, anonKey, authHeader, isCron, cronSecret, "agvlog-compute-state", {
+                tenant_id,
+                vehicle_ids: vehicleIds,
+                mode: "batch",
+              });
+              stats.state_computed = stateResp?.processed || 0;
+              stats.state_events = stateResp?.events_emitted || 0;
+            }
+          } catch (e: any) {
+            stats.errors.push(`ComputeState: ${e.message}`);
+          }
+        }
+
+        // ===== STEP D: Queue processing (only if polling didn't hit persistence failure) =====
         if (!hasPersistenceFailure && stats.total_inserted > 0) {
           stats.steps_executed.push("queue_processing");
           try {

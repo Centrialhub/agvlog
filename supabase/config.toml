@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.ssx-diagnostic]
 verify_jwt = false
+
+[functions.agvlog-compute-state]
+verify_jwt = false
