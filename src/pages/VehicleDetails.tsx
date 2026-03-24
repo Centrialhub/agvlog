@@ -186,8 +186,9 @@ export default function VehicleDetails() {
     enabled: !!currentTenant,
   });
 
-  const isOnline = positionLast ? Date.now() - new Date(positionLast.captured_at).getTime() < 10 * 60 * 1000 : false;
-  const isMoving = positionLast?.speed != null && positionLast.speed > 2;
+  const movementState = vehicleState?.movement_state || 'unknown';
+  const isOnline = movementState === 'moving' || movementState === 'stopped' || movementState === 'idle';
+  const isMoving = movementState === 'moving';
   const historyPath = useMemo(() => history.map((p: PositionRaw) => [p.lat, p.lng] as [number, number]), [history]);
   const telemetry = positionLast?.telemetry_snapshot as Record<string, any> | null;
   const hasFuel = capabilities?.fuel === true;
