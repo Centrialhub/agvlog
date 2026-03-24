@@ -95,9 +95,10 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
               <div className="space-y-4">
                 <div>
                   <Label>Pedido (opcional)</Label>
-                  <Select value={form.order_id} onValueChange={v => setForm(f => ({ ...f, order_id: v }))}>
+                  <Select value={form.order_id || '__none__'} onValueChange={v => setForm(f => ({ ...f, order_id: v === '__none__' ? '' : v }))}>
                     <SelectTrigger><SelectValue placeholder="Vincular a pedido" /></SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="__none__">Nenhum</SelectItem>
                       {orders.filter(o => !['delivered', 'cancelled'].includes(o.status)).map(o => (
                         <SelectItem key={o.id} value={o.id}>
                           {o.order_number} — {o.clients?.company_name || 'Sem cliente'} ({o.pallet_count} pal)

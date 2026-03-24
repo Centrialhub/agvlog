@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -7,35 +8,47 @@ import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { TenantProvider } from "@/hooks/useTenant";
 import AppLayout from "@/components/layout/AppLayout";
 import Auth from "@/pages/Auth";
-import Settings from "@/pages/Settings";
-import Dashboard from "@/pages/Dashboard";
-import Vehicles from "@/pages/Vehicles";
-import Drivers from "@/pages/Drivers";
-import FleetMap from "@/pages/FleetMap";
-import VehicleDetails from "@/pages/VehicleDetails";
-import Alerts from "@/pages/Alerts";
-import Geofences from "@/pages/Geofences";
-import Reports from "@/pages/Reports";
-import RoutesPage from "@/pages/Routes";
-import IntegrationHealth from "@/pages/IntegrationHealth";
-import Clients from "@/pages/Clients";
-import Orders from "@/pages/Orders";
-import FiscalDocuments from "@/pages/FiscalDocuments";
-import Inventory from "@/pages/Inventory";
-import Loads from "@/pages/Loads";
-import OperationsDashboard from "@/pages/OperationsDashboard";
-import OperationalEvents from "@/pages/OperationalEvents";
-import Ingestion from "@/pages/Ingestion";
-import ProductivityReports from "@/pages/ProductivityReports";
-import NotFound from "./pages/NotFound";
+
+const Dashboard = lazy(() => import("@/pages/Dashboard"));
+const Vehicles = lazy(() => import("@/pages/Vehicles"));
+const Drivers = lazy(() => import("@/pages/Drivers"));
+const FleetMap = lazy(() => import("@/pages/FleetMap"));
+const VehicleDetails = lazy(() => import("@/pages/VehicleDetails"));
+const Alerts = lazy(() => import("@/pages/Alerts"));
+const Geofences = lazy(() => import("@/pages/Geofences"));
+const Reports = lazy(() => import("@/pages/Reports"));
+const RoutesPage = lazy(() => import("@/pages/Routes"));
+const IntegrationHealth = lazy(() => import("@/pages/IntegrationHealth"));
+const Clients = lazy(() => import("@/pages/Clients"));
+const Orders = lazy(() => import("@/pages/Orders"));
+const FiscalDocuments = lazy(() => import("@/pages/FiscalDocuments"));
+const Inventory = lazy(() => import("@/pages/Inventory"));
+const Loads = lazy(() => import("@/pages/Loads"));
+const LoadDetail = lazy(() => import("@/pages/LoadDetail"));
+const OperationsDashboard = lazy(() => import("@/pages/OperationsDashboard"));
+const OperationalEvents = lazy(() => import("@/pages/OperationalEvents"));
+const Ingestion = lazy(() => import("@/pages/Ingestion"));
+const ProductivityReports = lazy(() => import("@/pages/ProductivityReports"));
+const Settings = lazy(() => import("@/pages/Settings"));
+const NotFound = lazy(() => import("@/pages/NotFound"));
 
 const queryClient = new QueryClient();
+
+function PageLoader() {
+  return <div className="flex h-64 items-center justify-center text-muted-foreground text-sm">Carregando...</div>;
+}
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   if (loading) return <div className="flex h-screen items-center justify-center text-muted-foreground">Carregando...</div>;
   if (!user) return <Navigate to="/auth" replace />;
-  return <TenantProvider><AppLayout>{children}</AppLayout></TenantProvider>;
+  return (
+    <TenantProvider>
+      <AppLayout>
+        <Suspense fallback={<PageLoader />}>{children}</Suspense>
+      </AppLayout>
+    </TenantProvider>
+  );
 }
 
 function AuthRoute() {
@@ -68,13 +81,14 @@ const App = () => (
             <Route path="/fiscal-documents" element={<ProtectedRoute><FiscalDocuments /></ProtectedRoute>} />
             <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
             <Route path="/loads" element={<ProtectedRoute><Loads /></ProtectedRoute>} />
+            <Route path="/loads/:id" element={<ProtectedRoute><LoadDetail /></ProtectedRoute>} />
             <Route path="/operations" element={<ProtectedRoute><OperationsDashboard /></ProtectedRoute>} />
             <Route path="/events" element={<ProtectedRoute><OperationalEvents /></ProtectedRoute>} />
             <Route path="/ingestion" element={<ProtectedRoute><Ingestion /></ProtectedRoute>} />
             <Route path="/productivity" element={<ProtectedRoute><ProductivityReports /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="/integration-health" element={<ProtectedRoute><IntegrationHealth /></ProtectedRoute>} />
-            <Route path="*" element={<NotFound />} />
+            <Route path="*" element={<Suspense fallback={<PageLoader />}><NotFound /></Suspense>} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>

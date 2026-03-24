@@ -8,6 +8,7 @@ import { useFiscalDocuments, useCreateFiscalDocument } from '@/hooks/useFiscalDo
 import { useClients } from '@/hooks/useClients';
 import { useCreateOrder } from '@/hooks/useOrders';
 import { useCreateLoad } from '@/hooks/useLoads';
+import { useCreateLoadItem } from '@/hooks/useLoadItems';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useToast } from '@/hooks/use-toast';
 import { Upload } from 'lucide-react';
@@ -17,7 +18,6 @@ import ValidationStep from '@/components/ingestion/ValidationStep';
 import GroupingStep from '@/components/ingestion/GroupingStep';
 import ResultsStep from '@/components/ingestion/ResultsStep';
 
-// Import drivers hook
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { useTenant } from '@/hooks/useTenant';
@@ -48,6 +48,7 @@ export default function Ingestion() {
   const createDoc = useCreateFiscalDocument();
   const createOrder = useCreateOrder();
   const createLoad = useCreateLoad();
+  const createLoadItem = useCreateLoadItem();
   const { toast } = useToast();
 
   const [step, setStep] = useState(0);
@@ -93,6 +94,23 @@ export default function Ingestion() {
     setStep(1);
   }, [existingDocs, clients]);
 
+  // Inline editing callbacks
+  const handleUpdateDoc = useCallback((index: number, updates: Partial<ValidatedDocument>) => {
+    setValidatedDocs(prev => prev.map((d, i) => i === index ? { ...d, ...updates } : d));
+  }, []);
+
+  const handleUpdateOrder = useCallback((index: number, updates: Partial<ValidatedOrder>) => {
+    setValidatedOrders(prev => prev.map((o, i) => i === index ? { ...o, ...updates } : o));
+  }, []);
+
+  const handleRemoveDoc = useCallback((index: number) => {
+    setValidatedDocs(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const handleRemoveOrder = useCallback((index: number) => {
+    setValidatedOrders(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
   const handleGenerateSuggestions = () => {
     setSuggestions(generateLoadSuggestions(validatedDocs, validatedOrders));
     setStep(2);
@@ -102,10 +120,15 @@ export default function Ingestion() {
     setExecuting(true);
     const results: string[] = [];
 
+    // Track created entities for linking
+    const createdDocIds: Map<string, string> = new Map(); // invoiceNumber -> id
+    const createdOrderIds: Map<string, string> = new Map(); // orderNumber -> id
+
     try {
+      // 1. Create fiscal documents
       for (const doc of validatedDocs.filter(d => !d.hasErrors && !d.isDuplicate)) {
         try {
-          await createDoc.mutateAsync({
+          const created = await createDoc.mutateAsync({
             document_type: 'inbound',
             invoice_number: doc.source.invoiceNumber,
             access_key: doc.source.accessKey,
@@ -119,15 +142,17 @@ export default function Ingestion() {
             value: doc.source.totalValue,
             status: 'confirmed',
           });
+          createdDocIds.set(doc.source.invoiceNumber, created.id);
           results.push(`✅ NF ${doc.source.invoiceNumber} importada`);
         } catch (e: any) {
           results.push(`❌ NF ${doc.source.invoiceNumber}: ${e.message}`);
         }
       }
 
+      // 2. Create orders
       for (const order of validatedOrders.filter(o => !o.hasErrors)) {
         try {
-          await createOrder.mutateAsync({
+          const created = await createOrder.mutateAsync({
             order_number: order.source.orderNumber,
             client_id: order.matchedClientId,
             destination: order.source.destination,
@@ -137,27 +162,81 @@ export default function Ingestion() {
             promised_date: order.source.promisedDate || null,
             status: 'received',
           } as any);
+          createdOrderIds.set(order.source.orderNumber, created.id);
           results.push(`✅ Pedido ${order.source.orderNumber} criado`);
         } catch (e: any) {
           results.push(`❌ Pedido ${order.source.orderNumber}: ${e.message}`);
         }
       }
 
+      // 3. Create loads WITH load_items linked to documents/orders
       for (let idx = 0; idx < suggestions.length; idx++) {
         const suggestion = suggestions[idx];
         if (suggestion.totalPallets <= 0) continue;
         const assignment = assignments.get(idx);
         try {
-          await createLoad.mutateAsync({
-            load_number: `ING-${Date.now().toString(36).toUpperCase()}-${suggestion.region.substring(0, 5).toUpperCase()}`,
+          const loadNumber = `ING-${Date.now().toString(36).toUpperCase()}-${suggestion.region.substring(0, 5).toUpperCase()}`;
+          const createdLoad = await createLoad.mutateAsync({
+            load_number: loadNumber,
             destination: suggestion.region,
-            total_pallet_count: suggestion.totalPallets,
-            total_weight_kg: suggestion.totalWeight,
             vehicle_id: assignment?.vehicleId || null,
             driver_id: assignment?.driverId || null,
             status: 'planned',
           } as any);
-          results.push(`✅ Carga para ${suggestion.region} criada`);
+
+          const loadId = createdLoad.id;
+          let itemsCreated = 0;
+
+          // Create load_items from documents
+          for (const doc of suggestion.documents) {
+            const docId = createdDocIds.get(doc.source.invoiceNumber);
+            try {
+              await createLoadItem.mutateAsync({
+                load_id: loadId,
+                fiscal_document_id: docId || null,
+                item_description: `NF ${doc.source.invoiceNumber} - ${doc.source.recipientName || 'Sem dest.'}`,
+                quantity: doc.source.items.reduce((s, item) => s + item.quantity, 0),
+                pallet_count: doc.source.estimatedPallets,
+                weight_kg: doc.source.totalWeight,
+                volume_m3: doc.source.totalVolume || 0,
+              } as any);
+              itemsCreated++;
+            } catch {
+              // Continue on item creation failure
+            }
+          }
+
+          // Create load_items from orders
+          for (const order of suggestion.orders) {
+            const orderId = createdOrderIds.get(order.source.orderNumber);
+            try {
+              await createLoadItem.mutateAsync({
+                load_id: loadId,
+                order_id: orderId || null,
+                item_description: `Pedido ${order.source.orderNumber} - ${order.source.clientName || 'Sem cliente'}`,
+                quantity: order.source.quantity || 0,
+                pallet_count: order.source.palletCount || Math.ceil((order.source.quantity || 0) / 50),
+                weight_kg: order.source.weightKg || 0,
+              } as any);
+              itemsCreated++;
+            } catch {
+              // Continue
+            }
+          }
+
+          // Link fiscal documents to load
+          for (const doc of suggestion.documents) {
+            const docId = createdDocIds.get(doc.source.invoiceNumber);
+            if (docId) {
+              try {
+                await supabase.from('fiscal_documents').update({ load_id: loadId } as any).eq('id', docId);
+              } catch {
+                // Non-critical
+              }
+            }
+          }
+
+          results.push(`✅ Carga ${loadNumber} → ${suggestion.region} (${itemsCreated} itens vinculados)`);
         } catch (e: any) {
           results.push(`❌ Carga ${suggestion.region}: ${e.message}`);
         }
@@ -165,7 +244,15 @@ export default function Ingestion() {
 
       setExecutionResults(results);
       setStep(3);
-      toast({ title: 'Importação concluída', description: `${results.filter(r => r.startsWith('✅')).length} itens processados` });
+
+      const successCount = results.filter(r => r.startsWith('✅')).length;
+      const errorCount = results.filter(r => r.startsWith('❌')).length;
+
+      toast({
+        title: 'Importação concluída',
+        description: `${successCount} sucesso${errorCount > 0 ? `, ${errorCount} erros` : ''}`,
+        variant: errorCount > 0 ? 'destructive' : 'default',
+      });
     } catch (e: any) {
       toast({ title: 'Erro na execução', description: e.message, variant: 'destructive' });
     } finally {
@@ -182,12 +269,12 @@ export default function Ingestion() {
   };
 
   return (
-    <div className="animate-fade-in space-y-6">
+    <div className="animate-fade-in space-y-5 max-w-5xl">
       <div>
-        <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-          <Upload className="h-6 w-6 text-primary" /> Importação de Documentos
+        <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
+          <Upload className="h-5 w-5 text-primary" /> Importação
         </h1>
-        <p className="text-sm text-muted-foreground">Upload → Validação → Agrupamento → Execução</p>
+        <p className="text-xs text-muted-foreground mt-0.5">Upload → Validação → Agrupamento → Execução</p>
       </div>
 
       <IngestionStepper currentStep={step} />
@@ -197,8 +284,13 @@ export default function Ingestion() {
         <ValidationStep
           docs={validatedDocs}
           orders={validatedOrders}
+          clients={clients}
           onBack={reset}
           onNext={handleGenerateSuggestions}
+          onUpdateDoc={handleUpdateDoc}
+          onUpdateOrder={handleUpdateOrder}
+          onRemoveDoc={handleRemoveDoc}
+          onRemoveOrder={handleRemoveOrder}
         />
       )}
       {step === 2 && (

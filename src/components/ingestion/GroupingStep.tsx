@@ -3,7 +3,6 @@ import { LoadSuggestion } from '@/lib/ingestionValidator';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowLeft, AlertTriangle, CheckCircle, Loader2, Truck, User } from 'lucide-react';
@@ -56,100 +55,84 @@ export default function GroupingStep({ suggestions, vehicles, drivers, executing
 
   return (
     <div className="space-y-4">
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <Truck className="h-4 w-4" /> Sugestões de Carga por Região
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Região</TableHead>
-                <TableHead>Docs</TableHead>
-                <TableHead>Pedidos</TableHead>
-                <TableHead>Paletes</TableHead>
-                <TableHead>Peso</TableHead>
-                <TableHead>Veículo</TableHead>
-                <TableHead>Motorista</TableHead>
-                <TableHead>Ocupação</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {suggestions.length === 0 ? (
-                <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Nenhuma sugestão gerada</TableCell></TableRow>
-              ) : suggestions.map((s, i) => {
-                const occ = getOccupancy(s, i);
-                const isUnder = occ && occ.pct < 50;
-                const isOver = occ && occ.pct > 100;
-                return (
-                  <TableRow key={i}>
-                    <TableCell className="font-medium">{s.region}</TableCell>
-                    <TableCell>{s.documents.length}</TableCell>
-                    <TableCell>{s.orders.length}</TableCell>
-                    <TableCell className="font-medium">{s.totalPallets}</TableCell>
-                    <TableCell>{s.totalWeight ? `${s.totalWeight} kg` : '—'}</TableCell>
-                    <TableCell>
+      {suggestions.length === 0 ? (
+        <Card><CardContent className="py-12 text-center text-muted-foreground">Nenhuma sugestão gerada — verifique os dados importados</CardContent></Card>
+      ) : (
+        <div className="space-y-3">
+          {suggestions.map((s, i) => {
+            const occ = getOccupancy(s, i);
+            const isUnder = occ && occ.pct < 50;
+            const isOver = occ && occ.pct > 100;
+            const assignment = assignments.get(i);
+
+            return (
+              <Card key={i} className={isOver ? 'border-destructive/30' : ''}>
+                <CardContent className="py-3 px-4">
+                  <div className="flex items-center gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-sm">{s.region}</span>
+                        <Badge variant="outline" className="text-[10px]">{s.documents.length} NF-e</Badge>
+                        {s.orders.length > 0 && <Badge variant="outline" className="text-[10px]">{s.orders.length} pedidos</Badge>}
+                      </div>
+                      <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                        <span>{s.totalPallets} paletes</span>
+                        {s.totalWeight > 0 && <span>{s.totalWeight} kg</span>}
+                        {s.totalValue > 0 && <span>R$ {s.totalValue.toLocaleString('pt-BR')}</span>}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 shrink-0">
                       <Select
-                        value={assignments.get(i)?.vehicleId || ''}
-                        onValueChange={v => setAssignment(i, 'vehicleId', v || null)}
+                        value={assignment?.vehicleId || '__none__'}
+                        onValueChange={v => setAssignment(i, 'vehicleId', v === '__none__' ? null : v)}
                       >
-                        <SelectTrigger className="w-[140px] h-8 text-xs">
-                          <SelectValue placeholder="Selecionar" />
+                        <SelectTrigger className="w-[130px] h-8 text-xs">
+                          <SelectValue placeholder="Veículo" />
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectItem value="__none__">Sem veículo</SelectItem>
                           {vehiclesWithCapacity.map(v => (
                             <SelectItem key={v.id} value={v.id}>
-                              <span className="flex items-center gap-1">
-                                {v.plate}
-                                <Badge variant="outline" className="text-[10px] ml-1">{v.max_pallets}p</Badge>
-                              </span>
+                              {v.plate} <span className="text-muted-foreground ml-1">({v.max_pallets}p)</span>
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
-                    </TableCell>
-                    <TableCell>
+
                       <Select
-                        value={assignments.get(i)?.driverId || ''}
-                        onValueChange={v => setAssignment(i, 'driverId', v || null)}
+                        value={assignment?.driverId || '__none__'}
+                        onValueChange={v => setAssignment(i, 'driverId', v === '__none__' ? null : v)}
                       >
-                        <SelectTrigger className="w-[140px] h-8 text-xs">
-                          <SelectValue placeholder="Selecionar" />
+                        <SelectTrigger className="w-[130px] h-8 text-xs">
+                          <SelectValue placeholder="Motorista" />
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectItem value="__none__">Sem motorista</SelectItem>
                           {activeDrivers.map(d => (
-                            <SelectItem key={d.id} value={d.id}>
-                              <span className="flex items-center gap-1">
-                                <User className="h-3 w-3" /> {d.name}
-                              </span>
-                            </SelectItem>
+                            <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
-                    </TableCell>
-                    <TableCell>
+
                       {occ ? (
-                        <div className="flex items-center gap-2">
-                          <Progress value={Math.min(occ.pct, 100)} className={`w-16 h-2 ${isOver ? '[&>div]:bg-destructive' : isUnder ? '[&>div]:bg-warning' : ''}`} />
-                          <span className={`text-xs font-medium ${isOver ? 'text-destructive' : isUnder ? 'text-warning' : ''}`}>
-                            {occ.pct}%
-                            {isOver && ' ⚠️ Excede'}
-                            {isUnder && ' ⚠️ Baixa'}
+                        <div className="w-20 text-center">
+                          <Progress value={Math.min(occ.pct, 100)} className={`h-2 ${isOver ? '[&>div]:bg-destructive' : isUnder ? '[&>div]:bg-warning' : ''}`} />
+                          <span className={`text-[10px] font-medium ${isOver ? 'text-destructive' : isUnder ? 'text-warning' : 'text-muted-foreground'}`}>
+                            {occ.pct}%{isOver ? ' Excede!' : isUnder ? ' Baixa' : ''}
                           </span>
                         </div>
                       ) : (
-                        <span className="text-xs text-muted-foreground">Sem veículo</span>
+                        <div className="w-20 text-center text-[10px] text-muted-foreground">Sem veículo</div>
                       )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
       <div className="flex gap-3 justify-between">
         <Button variant="outline" onClick={onBack}><ArrowLeft className="h-4 w-4 mr-2" /> Voltar</Button>
