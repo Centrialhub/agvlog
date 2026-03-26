@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant, useIsAdmin } from '@/hooks/useTenant';
@@ -23,7 +24,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function Vehicles() {
@@ -31,6 +32,7 @@ export default function Vehicles() {
   const { user } = useAuth();
   const isAdmin = useIsAdmin();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState<any>(null);
 
@@ -118,7 +120,7 @@ export default function Vehicles() {
                 </TableRow>
               ) : (
                 vehicles.map((v: any) => (
-                  <TableRow key={v.id}>
+                  <TableRow key={v.id} className="cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/vehicles/${v.id}`)}>
                     <TableCell className="font-mono font-medium">{v.plate}</TableCell>
                     <TableCell>{v.nickname || '—'}</TableCell>
                     <TableCell className="capitalize">{v.type}</TableCell>
@@ -132,7 +134,7 @@ export default function Vehicles() {
                     </TableCell>
                     {isAdmin && (
                       <TableCell>
-                        <div className="flex gap-1">
+                        <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                           <Button variant="ghost" size="icon" onClick={() => handleEdit(v)}>
                             <Pencil className="h-4 w-4" />
                           </Button>
