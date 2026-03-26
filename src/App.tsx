@@ -86,6 +86,17 @@ function RoleRouter() {
   return <OperationsCenter />;
 }
 
+function ClientRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="flex h-screen items-center justify-center text-muted-foreground">Carregando...</div>;
+  if (!user) return <Navigate to="/auth" replace />;
+  return (
+    <TenantProvider>
+      <Suspense fallback={<PageLoader />}>{children}</Suspense>
+    </TenantProvider>
+  );
+}
+
 function AuthRoute() {
   const { user, loading } = useAuth();
   if (loading) return <div className="flex h-screen items-center justify-center text-muted-foreground">Carregando...</div>;
