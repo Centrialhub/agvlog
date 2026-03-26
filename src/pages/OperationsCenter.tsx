@@ -230,7 +230,7 @@ export default function OperationsCenter() {
                     <p className="text-xs text-muted-foreground">Aguardando aprovação</p>
                   </div>
                 </div>
-                <Button variant="outline" size="sm" className="text-xs">
+                <Button variant="outline" size="sm" className="text-xs" onClick={() => navigate('/expense-approval')}>
                   Revisar
                 </Button>
               </CardContent>
