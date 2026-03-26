@@ -199,6 +199,45 @@ export default function VehicleDetails() {
 
   const fmtHours = (s: number | null) => { if (!s) return '—'; return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`; };
 
+  // Deduplicate & consolidate fragmented trips
+  const consolidatedTrips = useMemo(() => {
+    if (!trips.length) return [];
+    const sorted = [...(trips as any[])].sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime());
+    const merged: any[] = [];
+    let current = { ...sorted[0], _merged_count: 1 };
+
+    for (let i = 1; i < sorted.length; i++) {
+      const next = sorted[i];
+      const currentEnd = current.end_at ? new Date(current.end_at).getTime() : new Date(current.start_at).getTime();
+      const nextStart = new Date(next.start_at).getTime();
+      const gap = (nextStart - currentEnd) / 60000;
+
+      if (gap < 5) {
+        current = {
+          ...current,
+          end_at: next.end_at && current.end_at
+            ? new Date(Math.max(new Date(next.end_at).getTime(), new Date(current.end_at).getTime())).toISOString()
+            : next.end_at || current.end_at,
+          distance_km_estimated: (current.distance_km_estimated || 0) + (next.distance_km_estimated || 0),
+          moving_time_seconds: (current.moving_time_seconds || 0) + (next.moving_time_seconds || 0),
+          stopped_time_seconds: (current.stopped_time_seconds || 0) + (next.stopped_time_seconds || 0),
+          max_speed_kmh: Math.max(current.max_speed_kmh || 0, next.max_speed_kmh || 0),
+          _merged_count: current._merged_count + 1,
+        };
+      } else {
+        merged.push(current);
+        current = { ...next, _merged_count: 1 };
+      }
+    }
+    merged.push(current);
+    return merged;
+  }, [trips]);
+
+  const tripsTotalKm = consolidatedTrips.reduce((s: number, t: any) => s + (t.distance_km_estimated || 0), 0);
+  const tripsTotalMoving = consolidatedTrips.reduce((s: number, t: any) => s + (t.moving_time_seconds || 0), 0);
+  const tripsTotalStopped = consolidatedTrips.reduce((s: number, t: any) => s + (t.stopped_time_seconds || 0), 0);
+  const tripsMaxSpeed = Math.max(0, ...consolidatedTrips.map((t: any) => t.max_speed_kmh || 0));
+
   // Speed chart data
   const speedChartData = useMemo(() => {
     if (!hasSpeed) return [];
