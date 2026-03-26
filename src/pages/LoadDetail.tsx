@@ -266,6 +266,75 @@ export default function LoadDetail() {
               <FileText className="h-3 w-3 mr-1" /> CT-e
             </Button>
           )}
+          {['ready', 'loaded', 'loading'].includes(load.status) && (
+            <Dialog open={dispatchOpen} onOpenChange={setDispatchOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm">
+                  <Send className="h-3 w-3 mr-1" /> Despachar
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Despachar Carga {load.load_number}</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-3">
+                  <div>
+                    <Label className="text-xs">Motorista</Label>
+                    <Select
+                      value={dispatchForm.driver_id || load.driver_id || ''}
+                      onValueChange={v => setDispatchForm(f => ({ ...f, driver_id: v }))}
+                    >
+                      <SelectTrigger className="h-9"><SelectValue placeholder="Selecionar motorista" /></SelectTrigger>
+                      <SelectContent>
+                        {drivers.map((d: any) => (
+                          <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Veículo</Label>
+                    <Select
+                      value={dispatchForm.vehicle_id || load.vehicle_id || ''}
+                      onValueChange={v => setDispatchForm(f => ({ ...f, vehicle_id: v }))}
+                    >
+                      <SelectTrigger className="h-9"><SelectValue placeholder="Selecionar veículo" /></SelectTrigger>
+                      <SelectContent>
+                        {vehicles.map((v: any) => (
+                          <SelectItem key={v.id} value={v.id}>{v.plate}{v.nickname ? ` (${v.nickname})` : ''}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Destino da parada</Label>
+                    <Input
+                      value={dispatchForm.stop_destination || load.destination || ''}
+                      onChange={e => setDispatchForm(f => ({ ...f, stop_destination: e.target.value }))}
+                      placeholder="Endereço de destino"
+                      className="h-9"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Observações</Label>
+                    <Textarea
+                      rows={2}
+                      value={dispatchForm.notes}
+                      onChange={e => setDispatchForm(f => ({ ...f, notes: e.target.value }))}
+                      className="text-sm"
+                    />
+                  </div>
+                  <Button
+                    className="w-full"
+                    onClick={() => createTrip.mutate()}
+                    disabled={createTrip.isPending}
+                  >
+                    {createTrip.isPending ? 'Criando viagem...' : 'Criar Viagem e Despachar'}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
       </div>
 
