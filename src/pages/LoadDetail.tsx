@@ -106,14 +106,40 @@ export default function LoadDetail() {
   const [dispatchForm, setDispatchForm] = useState({
     driver_id: '',
     vehicle_id: '',
-    stop_destination: '',
     notes: '',
   });
+  const [dispatchStops, setDispatchStops] = useState<{ destination: string; client_id: string }[]>([]);
+
+  // Auto-populate stops from load items when dialog opens
+  const populateStopsFromItems = () => {
+    if (items.length === 0) {
+      setDispatchStops([{ destination: load?.destination || '', client_id: '' }]);
+      return;
+    }
+    // Group items by destination (from orders) — deduplicate
+    const seen = new Set<string>();
+    const stops: { destination: string; client_id: string }[] = [];
+    for (const item of items) {
+      const key = (item as any).orders?.destination || load?.destination || '';
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        stops.push({ destination: key, client_id: '' });
+      }
+    }
+    if (stops.length === 0) {
+      stops.push({ destination: load?.destination || '', client_id: '' });
+    }
+    setDispatchStops(stops);
+  };
+
+  const addStop = () => setDispatchStops(s => [...s, { destination: '', client_id: '' }]);
+  const removeStop = (idx: number) => setDispatchStops(s => s.filter((_, i) => i !== idx));
+  const updateStop = (idx: number, field: string, value: string) =>
+    setDispatchStops(s => s.map((stop, i) => i === idx ? { ...stop, [field]: value } : stop));
 
   const createTrip = useMutation({
     mutationFn: async () => {
       if (!load || !currentTenant) throw new Error('Dados insuficientes');
-      // Create the dispatch trip
       const { data: trip, error: tripErr } = await supabase
         .from('dispatch_trips')
         .insert({
@@ -128,17 +154,19 @@ export default function LoadDetail() {
         .single();
       if (tripErr) throw tripErr;
 
-      // Create a stop if destination is provided
-      const destination = dispatchForm.stop_destination || load.destination;
-      if (destination && trip) {
-        const { error: stopErr } = await supabase.from('dispatch_stops').insert({
+      // Create all stops in batch
+      const validStops = dispatchStops.filter(s => s.destination.trim());
+      if (validStops.length > 0 && trip) {
+        const stopsToInsert = validStops.map((s, idx) => ({
           tenant_id: currentTenant.id,
           dispatch_trip_id: trip.id,
-          destination,
-          stop_order: 1,
+          destination: s.destination,
+          client_id: s.client_id || null,
+          stop_order: idx + 1,
           status: 'pending',
-        } as any);
-        if (stopErr) console.error('Stop creation error:', stopErr);
+        }));
+        const { error: stopErr } = await supabase.from('dispatch_stops').insert(stopsToInsert as any);
+        if (stopErr) console.error('Stops creation error:', stopErr);
       }
 
       // Update load with driver/vehicle if changed
