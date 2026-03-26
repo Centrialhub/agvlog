@@ -75,6 +75,7 @@ const STATUS_COLORS: Record<string, string> = {
 export default function LoadDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { currentTenant } = useTenant();
   const { data: load, isLoading, refetch } = useLoad(id);
   const { data: items = [] } = useLoadItems(id);
   const { data: documents = [] } = useLoadDocuments(id);
@@ -82,6 +83,82 @@ export default function LoadDetail() {
   const updateLoad = useUpdateLoad();
   const generateCTe = useGenerateCTe();
   const { toast } = useToast();
+  const qc = useQueryClient();
+  const [dispatchOpen, setDispatchOpen] = useState(false);
+
+  // Fetch drivers for dispatch
+  const { data: drivers = [] } = useQuery({
+    queryKey: ['drivers_for_dispatch', currentTenant?.id],
+    queryFn: async () => {
+      if (!currentTenant) return [];
+      const { data, error } = await supabase
+        .from('drivers')
+        .select('id, name')
+        .eq('tenant_id', currentTenant.id)
+        .eq('active', true)
+        .order('name');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentTenant && dispatchOpen,
+  });
+
+  const [dispatchForm, setDispatchForm] = useState({
+    driver_id: '',
+    vehicle_id: '',
+    stop_destination: '',
+    notes: '',
+  });
+
+  const createTrip = useMutation({
+    mutationFn: async () => {
+      if (!load || !currentTenant) throw new Error('Dados insuficientes');
+      // Create the dispatch trip
+      const { data: trip, error: tripErr } = await supabase
+        .from('dispatch_trips')
+        .insert({
+          tenant_id: currentTenant.id,
+          load_id: load.id,
+          driver_id: dispatchForm.driver_id || load.driver_id || null,
+          vehicle_id: dispatchForm.vehicle_id || load.vehicle_id || null,
+          status: 'planned',
+          notes: dispatchForm.notes || null,
+        } as any)
+        .select()
+        .single();
+      if (tripErr) throw tripErr;
+
+      // Create a stop if destination is provided
+      const destination = dispatchForm.stop_destination || load.destination;
+      if (destination && trip) {
+        const { error: stopErr } = await supabase.from('dispatch_stops').insert({
+          tenant_id: currentTenant.id,
+          dispatch_trip_id: trip.id,
+          destination,
+          stop_order: 1,
+          status: 'pending',
+        } as any);
+        if (stopErr) console.error('Stop creation error:', stopErr);
+      }
+
+      // Update load with driver/vehicle if changed
+      const updates: any = {};
+      if (dispatchForm.driver_id) updates.driver_id = dispatchForm.driver_id;
+      if (dispatchForm.vehicle_id) updates.vehicle_id = dispatchForm.vehicle_id;
+      if (Object.keys(updates).length > 0) {
+        await supabase.from('loads').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', load.id);
+      }
+
+      return trip;
+    },
+    onSuccess: () => {
+      toast({ title: 'Viagem criada com sucesso' });
+      setDispatchOpen(false);
+      refetch();
+      qc.invalidateQueries({ queryKey: ['loads'] });
+    },
+    onError: (e: any) => toast({ title: 'Erro ao despachar', description: e.message, variant: 'destructive' }),
+  });
 
   const vehicle = useMemo(() => {
     if (!load?.vehicle_id) return null;
