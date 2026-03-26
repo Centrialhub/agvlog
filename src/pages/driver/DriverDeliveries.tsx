@@ -172,15 +172,15 @@ export default function DriverDeliveries() {
       {/* Completed */}
       {completedStops.length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs font-medium text-green-600 uppercase">Concluídas</p>
+          <p className="text-xs font-medium text-primary uppercase">Concluídas</p>
           {completedStops.map((stop: any) => (
             <Card key={stop.id} className="opacity-70">
               <CardContent className="p-3 flex items-center gap-3">
-                <CheckCircle className="h-4 w-4 text-green-600" />
+                <CheckCircle className="h-4 w-4 text-primary" />
                 <div className="flex-1">
                   <p className="text-sm">{stop.clients?.company_name || stop.destination || 'Parada'}</p>
                 </div>
-                <Badge className="bg-green-100 text-green-700 text-[10px]" variant="secondary">OK</Badge>
+                <Badge className="text-[10px]" variant="secondary">OK</Badge>
               </CardContent>
             </Card>
           ))}
