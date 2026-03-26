@@ -319,7 +319,7 @@ export default function VehicleDetails() {
         <TabsList className="flex-wrap">
           <TabsTrigger value="overview">Visão Geral</TabsTrigger>
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
-          <TabsTrigger value="trips">Viagens ({trips.length})</TabsTrigger>
+          <TabsTrigger value="trips">Viagens ({consolidatedTrips.length})</TabsTrigger>
           <TabsTrigger value="stops">Paradas ({stops.length})</TabsTrigger>
           <TabsTrigger value="speed">Velocidade</TabsTrigger>
           <TabsTrigger value="fuel">Combustível</TabsTrigger>
