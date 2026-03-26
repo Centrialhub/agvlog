@@ -120,7 +120,7 @@ export default function Vehicles() {
                 </TableRow>
               ) : (
                 vehicles.map((v: any) => (
-                  <TableRow key={v.id}>
+                  <TableRow key={v.id} className="cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/vehicles/${v.id}`)}>
                     <TableCell className="font-mono font-medium">{v.plate}</TableCell>
                     <TableCell>{v.nickname || '—'}</TableCell>
                     <TableCell className="capitalize">{v.type}</TableCell>
@@ -134,7 +134,7 @@ export default function Vehicles() {
                     </TableCell>
                     {isAdmin && (
                       <TableCell>
-                        <div className="flex gap-1">
+                        <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                           <Button variant="ghost" size="icon" onClick={() => handleEdit(v)}>
                             <Pencil className="h-4 w-4" />
                           </Button>
