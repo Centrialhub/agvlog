@@ -32,6 +32,7 @@ export default function Vehicles() {
   const { user } = useAuth();
   const isAdmin = useIsAdmin();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState<any>(null);
 
