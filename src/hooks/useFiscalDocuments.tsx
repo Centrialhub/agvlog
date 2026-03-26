@@ -7,9 +7,18 @@ export const DOC_TYPES = ['inbound', 'outbound', 'transfer'] as const;
 export type DocType = typeof DOC_TYPES[number];
 
 export const DOC_TYPE_LABELS: Record<DocType, string> = {
-  inbound: 'Entrada',
-  outbound: 'Saída',
+  inbound: 'NF-e Entrada',
+  outbound: 'CT-e / Saída',
   transfer: 'Transferência',
+};
+
+export const DOC_STATUSES = ['pending', 'confirmed', 'cancelled'] as const;
+export type DocStatus = typeof DOC_STATUSES[number];
+
+export const DOC_STATUS_LABELS: Record<DocStatus, string> = {
+  pending: 'Pendente',
+  confirmed: 'Confirmado',
+  cancelled: 'Cancelado',
 };
 
 export interface FiscalDocument {
@@ -31,6 +40,8 @@ export interface FiscalDocument {
   status: string;
   created_at: string;
   clients?: { company_name: string } | null;
+  loads?: { load_number: string } | null;
+  orders?: { order_number: string } | null;
 }
 
 export function useFiscalDocuments() {
@@ -41,7 +52,7 @@ export function useFiscalDocuments() {
       if (!currentTenant) return [];
       const { data, error } = await supabase
         .from('fiscal_documents')
-        .select('*, clients(company_name)')
+        .select('*, clients(company_name), loads(load_number), orders(order_number)')
         .eq('tenant_id', currentTenant.id)
         .order('created_at', { ascending: false });
       if (error) throw error;
