@@ -20,11 +20,14 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import {
   ArrowLeft, MapPin, Clock, Gauge, Navigation, Activity, AlertTriangle, Info,
-  Route, StopCircle, Bell, Hexagon, Fuel, Zap, Moon, Save,
+  Route, StopCircle, Bell, Hexagon, Fuel, Zap, Moon, Save, Wrench,
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import MaintenanceTab from '@/components/fleet/MaintenanceTab';
+import FuelingTab from '@/components/fleet/FuelingTab';
+import OdometerTab from '@/components/fleet/OdometerTab';
 
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
