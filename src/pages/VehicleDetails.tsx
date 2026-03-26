@@ -284,6 +284,15 @@ export default function VehicleDetails() {
           <TabsTrigger value="stops">Paradas ({stops.length})</TabsTrigger>
           <TabsTrigger value="speed">Velocidade</TabsTrigger>
           <TabsTrigger value="fuel">Combustível</TabsTrigger>
+          <TabsTrigger value="maintenance">
+            <Wrench className="h-3.5 w-3.5 mr-1" />Manutenção
+          </TabsTrigger>
+          <TabsTrigger value="fueling">
+            <Fuel className="h-3.5 w-3.5 mr-1" />Abastecimento
+          </TabsTrigger>
+          <TabsTrigger value="odometer">
+            <Gauge className="h-3.5 w-3.5 mr-1" />Odômetro
+          </TabsTrigger>
           <TabsTrigger value="alerts">Alertas ({alerts.length})</TabsTrigger>
           <TabsTrigger value="geofences">Geofences ({geoEvents.length})</TabsTrigger>
           <TabsTrigger value="telemetry">Telemetria</TabsTrigger>
