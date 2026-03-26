@@ -138,6 +138,7 @@ const App = () => (
             <Route path="/ingestion" element={<ProtectedRoute><Ingestion /></ProtectedRoute>} />
             <Route path="/productivity" element={<ProtectedRoute><ProductivityReports /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+            <Route path="/expense-approval" element={<ProtectedRoute><ExpenseApproval /></ProtectedRoute>} />
             <Route path="/integration-health" element={<ProtectedRoute><IntegrationHealth /></ProtectedRoute>} />
 
             {/* Driver routes */}
