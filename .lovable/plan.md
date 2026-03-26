@@ -1,59 +1,129 @@
 
 
-# Diagnóstico: Por que o status dos veículos está errado
+# Diagnóstico: O que falta para acelerar o crescimento
 
-## Dados reais agora
+## Análise do estado atual
 
-| Veículo | received_at (min) | speed | speed_source | movement_state |
-|---------|------------------|-------|-------------|----------------|
-| OPW7913 | 0.7 | 0 | computed | stopped |
-| GVJ3719 | 6.7 | null | null | null |
-| GVJ3744 | 6.7 | null | null | null |
-| PVM3834 | 9.7 | null | null | null |
-| HDO5276 | 12.6 | null | null | null |
-| GVJ2074 | 156 | null | null | null |
-| GVJ3909 | 303 | null | null | null |
+Após revisão completa do código, a plataforma tem uma boa fundação mas possui lacunas significativas que impedem uso real em produção. Abaixo, organizadas por impacto no crescimento:
 
-**Apenas 1 de 16 veículos recebeu o cálculo de velocidade** (OPW7913). Os outros 15 têm `speed=null` e `movement_state=null`.
+---
 
-## Causa raiz
+## 1. LACUNAS CRÍTICAS (bloqueiam uso real)
 
-O código de cálculo de velocidade (haversine) no `ssx-poll-positions` só roda quando uma **nova posição com coordenadas diferentes** é inserida. Mas na maioria dos pollings:
-- O veículo está parado → SSX retorna a mesma posição ou nenhuma posição nova
-- O código faz apenas heartbeat (atualiza `received_at`) sem recalcular speed
-- Resultado: `speed` e `movement_state` ficam `null` para sempre
+### 1.1 Driver Workspace incompleto
+- **DriverStops**: página vazia — não carrega paradas da viagem, não permite marcar chegada/saída
+- **DriverDeliveries**: página vazia — não permite confirmar entrega, entrega parcial, ou reportar divergência
+- **DriverIssues**: página vazia — não permite reportar ocorrências do campo
+- **DriverJourney**: funciona apenas em memória local (useState) — eventos não são persistidos no banco `dispatch_events`
+- **DriverExpenses**: não permite upload de foto do comprovante (bucket `receipts` existe mas não é usado)
+- **DriverChecklist**: checklist não é persistido
+- **DriverHome**: query busca trips mas não filtra pelo driver logado (busca todas do tenant)
 
-## Solução proposta
+**Impacto**: motoristas não conseguem operar pelo app.
 
-Mover a lógica de status para ser **sempre calculada** no upsert de `positions_last`, não apenas quando há nova posição:
+### 1.2 Modelo de Trip/Dispatch desconectado
+- Tabelas `dispatch_trips`, `dispatch_stops`, `dispatch_events` existem mas não há UI para criar trips a partir de uma carga
+- Não há fluxo para: Carga pronta → Criar Trip → Atribuir paradas → Liberar para motorista
+- O LoadDetail não tem botão para "Despachar" (criar viagem)
 
-### 1. Backend: Sempre computar speed no upsert de positions_last
+**Impacto**: a ponte entre operação administrativa e execução no campo não existe.
 
-No `ssx-poll-positions`, em TODOS os caminhos que fazem upsert/update de `positions_last` (incluindo heartbeat):
-- Se há nova posição com coordenadas diferentes → calcular speed via haversine (já existe)
-- Se há nova posição com coordenadas iguais (< 50m) → `speed = 0, movement_state = "stopped"`
-- Se é heartbeat (sem nova posição) → manter speed anterior mas atualizar `movement_state` para `"stopped"` (se speed era 0 ou null) e garantir que `speed` não fique null (defaultar para 0)
+### 1.3 Aprovação de despesas não funciona
+- O botão "Revisar" no OperationsCenter não leva a nenhuma tela
+- Não existe UI para aprovar/rejeitar despesas
 
-### 2. Backend: Patch de inicialização
+### 1.4 Client Portal inexistente
+- `RoleRouter` redireciona para `/portal` mas a rota não existe
+- Clientes não têm nenhuma visibilidade sobre seus pedidos/cargas
 
-Para os 15 veículos que já têm `speed=null`, executar um UPDATE em `positions_last` setando `speed=0` e `source.movement_state="stopped"` e `source.speed_source="inferred"` para todos que têm `speed IS NULL`. Isso corrige o estado atual imediatamente.
+---
 
-### 3. Frontend: Tratar speed null como 0 (parado)
+## 2. FUNCIONALIDADES FRACAS (existem mas são superficiais)
 
-No `getVehicleStatus`, tratar `speed == null` como `speed = 0` (parado). Isso é semanticamente correto: se não temos evidência de movimento, o veículo está parado.
+### 2.1 Pedidos (Orders)
+- CRUD básico genérico — tabela crua sem workflow
+- Não mostra vinculação com cargas
+- Não mostra status de entrega
+- Sem filtros por status ou cliente
 
-## Arquivos a alterar
+### 2.2 Documentos Fiscais
+- Mesma tabela genérica — sem link visual para a carga
+- Sem filtro por tipo (NF-e vs CT-e)
+- CT-e gerado é um mock simplificado
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `supabase/functions/ssx-poll-positions/index.ts` | Garantir que speed e movement_state são sempre preenchidos em todos os caminhos de upsert (nova posição, mesma posição, heartbeat) |
-| `src/pages/FleetMap.tsx` | `speed == null` → tratar como 0 (parado), usar `source.movement_state` como indicador primário |
-| Migration SQL | UPDATE positions_last SET speed=0, source=jsonb_set(...) WHERE speed IS NULL — patch retroativo |
+### 2.3 Produtividade
+- Dados calculados apenas em memória a partir de loads — sem métricas reais de tempo
+- Não usa dados de `dispatch_events` (jornada real do motorista)
+- Sem filtro por período
 
-## Resultado esperado
+### 2.4 Estoque (Inventory)
+- Existe mas desconectado do fluxo de cargas
+- Não baixa automaticamente ao criar carga de saída
 
-- Veículos com polling ativo (received_at < 15 min) e parados → "Parado" (amarelo) com speed=0
-- Veículos com polling ativo e em movimento → "Movendo" (verde) com speed calculada
-- Veículos sem polling recente → "Offline" (cinza)
-- Nenhum veículo com speed=null — sempre preenchido
+### 2.5 Ocorrências Operacionais
+- CRUD genérico sem workflow de resolução
+- Sem vinculação automática a trips/paradas
+
+---
+
+## 3. AUSÊNCIAS ESTRUTURAIS (necessárias para crescer)
+
+### 3.1 Sem testes automatizados
+- Apenas `example.test.ts` com teste trivial
+- Zero testes para: parsing de XML/CSV, validação de ingestão, pipeline de status, cálculo de totais
+
+### 3.2 Sem permissões por role no frontend
+- Operator, driver, client veem exatamente o mesmo menu se acessarem rotas manualmente
+- Navegação não filtra itens por role
+
+### 3.3 Sem notificações/realtime
+- Motorista não recebe aviso quando nova carga é atribuída
+- Operador não vê quando motorista confirma entrega
+- Sem uso de Supabase Realtime
+
+### 3.4 Sem busca global ou atalhos
+- Operadores precisam navegar por múltiplas telas para achar uma carga
+
+---
+
+## 4. PLANO DE AÇÃO RECOMENDADO (por prioridade)
+
+### Fase 1 — Fechar o ciclo operacional (maior impacto)
+1. **Fluxo de Despacho**: LoadDetail → criar trip → definir paradas → liberar
+2. **Driver Stops/Deliveries**: carregar paradas reais, permitir marcar chegada/saída/entrega
+3. **Driver Journey persistido**: salvar eventos em `dispatch_events`
+4. **Upload de comprovante**: integrar bucket `receipts` nas despesas
+5. **Tela de aprovação de despesas**: para admin/operador
+
+### Fase 2 — Fortalecer o que existe
+6. **Filtrar DriverHome por driver logado** (vincular user_id ↔ driver_id)
+7. **Pedidos e Documentos**: adicionar filtros, links para carga, status visual
+8. **Permissões no frontend**: esconder rotas/menus por role
+9. **Client Portal mínimo**: `/portal` com lista de pedidos e status
+
+### Fase 3 — Escalar com confiança
+10. **Testes unitários**: parsing, validação, status pipeline, totais
+11. **Notificações realtime**: Supabase channels para updates de carga/entrega
+12. **Produtividade real**: usar dispatch_events para métricas de tempo
+13. **Busca global**: command palette para cargas/pedidos/clientes
+
+---
+
+## Resumo visual
+
+```text
+FEITO                          FALTANDO
+─────────────────────────────  ─────────────────────────────
+✓ Schema completo              ✗ Trip creation flow
+✓ Ingestion pipeline           ✗ Driver stops/deliveries
+✓ Load CRUD + status pipeline  ✗ Journey persistence
+✓ Role-based routing           ✗ Expense photo upload
+✓ Driver layout                ✗ Expense approval UI
+✓ Operations Center            ✗ Client portal
+✓ CT-e generation (basic)      ✗ Role-based menu filtering
+✓ Productivity page (basic)    ✗ Tests
+✓ Expense table exists         ✗ Realtime notifications
+```
+
+A maior alavanca de crescimento agora é **fechar o ciclo operacional**: permitir que uma carga vire uma viagem e que o motorista execute entregas pelo app. Sem isso, o sistema é apenas um painel administrativo.
 
