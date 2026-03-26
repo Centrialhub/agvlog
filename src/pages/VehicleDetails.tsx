@@ -20,11 +20,14 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import {
   ArrowLeft, MapPin, Clock, Gauge, Navigation, Activity, AlertTriangle, Info,
-  Route, StopCircle, Bell, Hexagon, Fuel, Zap, Moon, Save,
+  Route, StopCircle, Bell, Hexagon, Fuel, Zap, Moon, Save, Wrench,
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import MaintenanceTab from '@/components/fleet/MaintenanceTab';
+import FuelingTab from '@/components/fleet/FuelingTab';
+import OdometerTab from '@/components/fleet/OdometerTab';
 
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -281,6 +284,15 @@ export default function VehicleDetails() {
           <TabsTrigger value="stops">Paradas ({stops.length})</TabsTrigger>
           <TabsTrigger value="speed">Velocidade</TabsTrigger>
           <TabsTrigger value="fuel">Combustível</TabsTrigger>
+          <TabsTrigger value="maintenance">
+            <Wrench className="h-3.5 w-3.5 mr-1" />Manutenção
+          </TabsTrigger>
+          <TabsTrigger value="fueling">
+            <Fuel className="h-3.5 w-3.5 mr-1" />Abastecimento
+          </TabsTrigger>
+          <TabsTrigger value="odometer">
+            <Gauge className="h-3.5 w-3.5 mr-1" />Odômetro
+          </TabsTrigger>
           <TabsTrigger value="alerts">Alertas ({alerts.length})</TabsTrigger>
           <TabsTrigger value="geofences">Geofences ({geoEvents.length})</TabsTrigger>
           <TabsTrigger value="telemetry">Telemetria</TabsTrigger>
@@ -579,6 +591,21 @@ export default function VehicleDetails() {
               )}
             </>
           )}
+        </TabsContent>
+
+        {/* Maintenance */}
+        <TabsContent value="maintenance" className="space-y-4">
+          {vehicleId && <MaintenanceTab vehicleId={vehicleId} currentOdometer={todayMetrics?.km_estimated} />}
+        </TabsContent>
+
+        {/* Fueling */}
+        <TabsContent value="fueling" className="space-y-4">
+          {vehicleId && <FuelingTab vehicleId={vehicleId} />}
+        </TabsContent>
+
+        {/* Odometer */}
+        <TabsContent value="odometer" className="space-y-4">
+          {vehicleId && <OdometerTab vehicleId={vehicleId} />}
         </TabsContent>
 
         {/* Alerts */}

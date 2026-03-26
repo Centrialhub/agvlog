@@ -2659,6 +2659,221 @@ export type Database = {
           },
         ]
       }
+      vehicle_fueling: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          dispatch_trip_id: string | null
+          driver_id: string | null
+          fuel_type: string | null
+          fueled_at: string
+          id: string
+          is_full_tank: boolean | null
+          liters: number
+          notes: string | null
+          odometer_km: number | null
+          price_per_liter: number | null
+          station_name: string | null
+          tenant_id: string
+          total_cost: number | null
+          vehicle_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          dispatch_trip_id?: string | null
+          driver_id?: string | null
+          fuel_type?: string | null
+          fueled_at?: string
+          id?: string
+          is_full_tank?: boolean | null
+          liters?: number
+          notes?: string | null
+          odometer_km?: number | null
+          price_per_liter?: number | null
+          station_name?: string | null
+          tenant_id: string
+          total_cost?: number | null
+          vehicle_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          dispatch_trip_id?: string | null
+          driver_id?: string | null
+          fuel_type?: string | null
+          fueled_at?: string
+          id?: string
+          is_full_tank?: boolean | null
+          liters?: number
+          notes?: string | null
+          odometer_km?: number | null
+          price_per_liter?: number | null
+          station_name?: string | null
+          tenant_id?: string
+          total_cost?: number | null
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_fueling_dispatch_trip_id_fkey"
+            columns: ["dispatch_trip_id"]
+            isOneToOne: false
+            referencedRelation: "dispatch_trips"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_fueling_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_fueling_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_fueling_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vehicle_maintenance: {
+        Row: {
+          category: string
+          completed_date: string | null
+          cost: number | null
+          created_at: string
+          created_by: string | null
+          description: string
+          id: string
+          maintenance_type: string
+          next_date: string | null
+          next_odometer: number | null
+          notes: string | null
+          odometer_at_service: number | null
+          scheduled_date: string | null
+          status: string
+          tenant_id: string
+          updated_at: string
+          vehicle_id: string
+          vendor: string | null
+        }
+        Insert: {
+          category?: string
+          completed_date?: string | null
+          cost?: number | null
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          id?: string
+          maintenance_type?: string
+          next_date?: string | null
+          next_odometer?: number | null
+          notes?: string | null
+          odometer_at_service?: number | null
+          scheduled_date?: string | null
+          status?: string
+          tenant_id: string
+          updated_at?: string
+          vehicle_id: string
+          vendor?: string | null
+        }
+        Update: {
+          category?: string
+          completed_date?: string | null
+          cost?: number | null
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          id?: string
+          maintenance_type?: string
+          next_date?: string | null
+          next_odometer?: number | null
+          notes?: string | null
+          odometer_at_service?: number | null
+          scheduled_date?: string | null
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+          vehicle_id?: string
+          vendor?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_maintenance_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_maintenance_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vehicle_odometer: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          notes: string | null
+          reading_km: number
+          recorded_at: string
+          source: string
+          tenant_id: string
+          vehicle_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          reading_km: number
+          recorded_at?: string
+          source?: string
+          tenant_id: string
+          vehicle_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          reading_km?: number
+          recorded_at?: string
+          source?: string
+          tenant_id?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_odometer_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_odometer_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vehicle_processing_queue: {
         Row: {
           attempts: number
