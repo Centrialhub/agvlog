@@ -33,6 +33,8 @@ const OperationalEvents = lazy(() => import("@/pages/OperationalEvents"));
 const Ingestion = lazy(() => import("@/pages/Ingestion"));
 const ProductivityReports = lazy(() => import("@/pages/ProductivityReports"));
 const Settings = lazy(() => import("@/pages/Settings"));
+const ExpenseApproval = lazy(() => import("@/pages/ExpenseApproval"));
+const ClientPortal = lazy(() => import("@/pages/ClientPortal"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
 // Driver pages
