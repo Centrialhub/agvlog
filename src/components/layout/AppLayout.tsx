@@ -33,6 +33,7 @@ import {
   Plug,
   Radio,
   ShieldCheck,
+  Receipt,
 } from 'lucide-react';
 
 interface NavSection {
