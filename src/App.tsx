@@ -153,6 +153,9 @@ const App = () => (
             {/* Legacy redirect */}
             <Route path="/routes" element={<Navigate to="/corridors" replace />} />
 
+            {/* Client portal */}
+            <Route path="/portal" element={<ClientRoute><ClientPortal /></ClientRoute>} />
+
             <Route path="*" element={<Suspense fallback={<PageLoader />}><NotFound /></Suspense>} />
           </Routes>
         </BrowserRouter>
