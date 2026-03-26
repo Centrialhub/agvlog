@@ -295,17 +295,17 @@ export default function LoadDetail() {
             </Button>
           )}
           {['ready', 'loaded', 'loading'].includes(load.status) && (
-            <Dialog open={dispatchOpen} onOpenChange={setDispatchOpen}>
+            <Dialog open={dispatchOpen} onOpenChange={(v) => { setDispatchOpen(v); if (v) populateStopsFromItems(); }}>
               <DialogTrigger asChild>
                 <Button size="sm">
                   <Send className="h-3 w-3 mr-1" /> Despachar
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-md">
+              <DialogContent className="max-w-lg">
                 <DialogHeader>
                   <DialogTitle>Despachar Carga {load.load_number}</DialogTitle>
                 </DialogHeader>
-                <div className="space-y-3">
+                <div className="space-y-3 max-h-[60vh] overflow-y-auto">
                   <div>
                     <Label className="text-xs">Motorista</Label>
                     <Select
@@ -334,15 +334,37 @@ export default function LoadDetail() {
                       </SelectContent>
                     </Select>
                   </div>
+
+                  {/* Multi-stop section */}
                   <div>
-                    <Label className="text-xs">Destino da parada</Label>
-                    <Input
-                      value={dispatchForm.stop_destination || load.destination || ''}
-                      onChange={e => setDispatchForm(f => ({ ...f, stop_destination: e.target.value }))}
-                      placeholder="Endereço de destino"
-                      className="h-9"
-                    />
+                    <div className="flex items-center justify-between mb-1">
+                      <Label className="text-xs">Paradas ({dispatchStops.length})</Label>
+                      <Button type="button" variant="ghost" size="sm" className="h-6 text-[10px]" onClick={addStop}>
+                        + Parada
+                      </Button>
+                    </div>
+                    <div className="space-y-2">
+                      {dispatchStops.map((stop, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <div className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[10px] font-bold shrink-0">
+                            {idx + 1}
+                          </div>
+                          <Input
+                            value={stop.destination}
+                            onChange={e => updateStop(idx, 'destination', e.target.value)}
+                            placeholder={`Destino parada ${idx + 1}`}
+                            className="h-8 text-xs"
+                          />
+                          {dispatchStops.length > 1 && (
+                            <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive" onClick={() => removeStop(idx)}>
+                              ×
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
+
                   <div>
                     <Label className="text-xs">Observações</Label>
                     <Textarea
@@ -357,7 +379,7 @@ export default function LoadDetail() {
                     onClick={() => createTrip.mutate()}
                     disabled={createTrip.isPending}
                   >
-                    {createTrip.isPending ? 'Criando viagem...' : 'Criar Viagem e Despachar'}
+                    {createTrip.isPending ? 'Criando viagem...' : `Criar Viagem com ${dispatchStops.filter(s => s.destination.trim()).length} Parada(s)`}
                   </Button>
                 </div>
               </DialogContent>
