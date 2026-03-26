@@ -199,6 +199,45 @@ export default function VehicleDetails() {
 
   const fmtHours = (s: number | null) => { if (!s) return '—'; return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`; };
 
+  // Deduplicate & consolidate fragmented trips
+  const consolidatedTrips = useMemo(() => {
+    if (!trips.length) return [];
+    const sorted = [...(trips as any[])].sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime());
+    const merged: any[] = [];
+    let current = { ...sorted[0], _merged_count: 1 };
+
+    for (let i = 1; i < sorted.length; i++) {
+      const next = sorted[i];
+      const currentEnd = current.end_at ? new Date(current.end_at).getTime() : new Date(current.start_at).getTime();
+      const nextStart = new Date(next.start_at).getTime();
+      const gap = (nextStart - currentEnd) / 60000;
+
+      if (gap < 5) {
+        current = {
+          ...current,
+          end_at: next.end_at && current.end_at
+            ? new Date(Math.max(new Date(next.end_at).getTime(), new Date(current.end_at).getTime())).toISOString()
+            : next.end_at || current.end_at,
+          distance_km_estimated: (current.distance_km_estimated || 0) + (next.distance_km_estimated || 0),
+          moving_time_seconds: (current.moving_time_seconds || 0) + (next.moving_time_seconds || 0),
+          stopped_time_seconds: (current.stopped_time_seconds || 0) + (next.stopped_time_seconds || 0),
+          max_speed_kmh: Math.max(current.max_speed_kmh || 0, next.max_speed_kmh || 0),
+          _merged_count: current._merged_count + 1,
+        };
+      } else {
+        merged.push(current);
+        current = { ...next, _merged_count: 1 };
+      }
+    }
+    merged.push(current);
+    return merged;
+  }, [trips]);
+
+  const tripsTotalKm = consolidatedTrips.reduce((s: number, t: any) => s + (t.distance_km_estimated || 0), 0);
+  const tripsTotalMoving = consolidatedTrips.reduce((s: number, t: any) => s + (t.moving_time_seconds || 0), 0);
+  const tripsTotalStopped = consolidatedTrips.reduce((s: number, t: any) => s + (t.stopped_time_seconds || 0), 0);
+  const tripsMaxSpeed = Math.max(0, ...consolidatedTrips.map((t: any) => t.max_speed_kmh || 0));
+
   // Speed chart data
   const speedChartData = useMemo(() => {
     if (!hasSpeed) return [];
@@ -280,7 +319,7 @@ export default function VehicleDetails() {
         <TabsList className="flex-wrap">
           <TabsTrigger value="overview">Visão Geral</TabsTrigger>
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
-          <TabsTrigger value="trips">Viagens ({trips.length})</TabsTrigger>
+          <TabsTrigger value="trips">Viagens ({consolidatedTrips.length})</TabsTrigger>
           <TabsTrigger value="stops">Paradas ({stops.length})</TabsTrigger>
           <TabsTrigger value="speed">Velocidade</TabsTrigger>
           <TabsTrigger value="fuel">Combustível</TabsTrigger>
@@ -367,31 +406,84 @@ export default function VehicleDetails() {
           )}
         </TabsContent>
 
-        {/* Trips */}
+        {/* Trips — deduplicated & consolidated */}
         <TabsContent value="trips" className="space-y-4">
           <div className="flex items-center gap-4">
             <Input type="date" value={historyDate} onChange={e => setHistoryDate(e.target.value)} className="w-48" />
+            {trips.length !== consolidatedTrips.length && (
+              <span className="text-xs text-muted-foreground">
+                {trips.length} registros brutos → {consolidatedTrips.length} viagens consolidadas
+              </span>
+            )}
           </div>
+
+          {consolidatedTrips.length > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              <MiniKPI icon={<Route className="h-4 w-4" />} label="Viagens" value={String(consolidatedTrips.length)} />
+              <MiniKPI icon={<Navigation className="h-4 w-4" />} label="Distância Total" value={`${tripsTotalKm.toFixed(1)} km`} />
+              <MiniKPI icon={<Activity className="h-4 w-4" />} label="Tempo em Mov." value={fmtHours(tripsTotalMoving)} />
+              <MiniKPI icon={<StopCircle className="h-4 w-4" />} label="Tempo Parado" value={fmtHours(tripsTotalStopped)} />
+              <MiniKPI icon={<Gauge className="h-4 w-4" />} label="Vel. Máxima" value={tripsMaxSpeed > 0 ? `${Math.round(tripsMaxSpeed)} km/h` : '—'} />
+            </div>
+          )}
+
           <Card><CardContent className="p-0">
             <Table>
-              <TableHeader><TableRow><TableHead>Início</TableHead><TableHead>Fim</TableHead><TableHead>Km</TableHead><TableHead>Mov.</TableHead><TableHead>Parado</TableHead><TableHead>Modo</TableHead></TableRow></TableHeader>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Início</TableHead>
+                  <TableHead>Fim</TableHead>
+                  <TableHead>Duração</TableHead>
+                  <TableHead className="text-right">Distância</TableHead>
+                  <TableHead>Em Mov.</TableHead>
+                  <TableHead>Parado</TableHead>
+                  <TableHead className="text-right">Vel. Máx</TableHead>
+                  <TableHead>Modo</TableHead>
+                </TableRow>
+              </TableHeader>
               <TableBody>
-                {trips.length === 0 ? (
-                  <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhuma viagem detectada neste dia</TableCell></TableRow>
-                ) : (trips as any[]).map((t: any) => (
-                  <TableRow key={t.id}>
-                    <TableCell className="text-xs">{format(new Date(t.start_at), 'HH:mm')}</TableCell>
-                    <TableCell className="text-xs">{t.end_at ? format(new Date(t.end_at), 'HH:mm') : '—'}</TableCell>
-                    <TableCell>{t.distance_km_estimated ? `${t.distance_km_estimated.toFixed(1)} km` : '—'}</TableCell>
-                    <TableCell className="text-xs">{fmtHours(t.moving_time_seconds)}</TableCell>
-                    <TableCell className="text-xs">{fmtHours(t.stopped_time_seconds)}</TableCell>
-                    <TableCell><Badge variant="outline" className="text-[10px]">{t.detection_mode}</Badge></TableCell>
-                  </TableRow>
-                ))}
+                {consolidatedTrips.length === 0 ? (
+                  <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhuma viagem detectada neste dia</TableCell></TableRow>
+                ) : consolidatedTrips.map((t: any) => {
+                  const startTime = new Date(t.start_at);
+                  const endTime = t.end_at ? new Date(t.end_at) : null;
+                  const durationSec = endTime ? (endTime.getTime() - startTime.getTime()) / 1000 : null;
+                  return (
+                    <TableRow key={t.id}>
+                      <TableCell className="text-sm font-medium">{format(startTime, 'HH:mm')}</TableCell>
+                      <TableCell className="text-sm">{endTime ? format(endTime, 'HH:mm') : '—'}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{durationSec ? fmtHours(durationSec) : '—'}</TableCell>
+                      <TableCell className="text-sm text-right font-mono font-medium">
+                        {t.distance_km_estimated ? `${t.distance_km_estimated.toFixed(1)} km` : '—'}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{fmtHours(t.moving_time_seconds)}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{fmtHours(t.stopped_time_seconds)}</TableCell>
+                      <TableCell className="text-sm text-right font-mono">
+                        {t.max_speed_kmh ? `${Math.round(t.max_speed_kmh)}` : '—'}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-[10px]">
+                          {t.detection_mode}
+                          {t._merged_count > 1 && ` (${t._merged_count}x)`}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </CardContent></Card>
-          <p className="text-xs text-muted-foreground flex items-center gap-1"><Info className="h-3 w-3" />Estimado via GPS (modo básico). Maior precisão com ignição/odômetro.</p>
+
+          <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/50 rounded-lg p-3">
+            <Info className="h-4 w-4 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-medium text-foreground mb-1">Sobre a detecção de viagens</p>
+              <p>O modo <strong>basic</strong> estima viagens apenas por GPS (distância entre pontos), o que pode gerar fragmentação em áreas com sinal fraco ou pontos repetidos. Veículos com sensor de ignição ou odômetro produzem dados mais precisos.</p>
+              {trips.length !== consolidatedTrips.length && (
+                <p className="mt-1">Viagens sobrepostas ou com intervalo {'<'} 5 min foram consolidadas automaticamente.</p>
+              )}
+            </div>
+          </div>
         </TabsContent>
 
         {/* Stops */}
