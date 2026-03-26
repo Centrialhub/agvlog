@@ -33,6 +33,8 @@ const OperationalEvents = lazy(() => import("@/pages/OperationalEvents"));
 const Ingestion = lazy(() => import("@/pages/Ingestion"));
 const ProductivityReports = lazy(() => import("@/pages/ProductivityReports"));
 const Settings = lazy(() => import("@/pages/Settings"));
+const ExpenseApproval = lazy(() => import("@/pages/ExpenseApproval"));
+const ClientPortal = lazy(() => import("@/pages/ClientPortal"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
 // Driver pages
@@ -84,6 +86,17 @@ function RoleRouter() {
   return <OperationsCenter />;
 }
 
+function ClientRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="flex h-screen items-center justify-center text-muted-foreground">Carregando...</div>;
+  if (!user) return <Navigate to="/auth" replace />;
+  return (
+    <TenantProvider>
+      <Suspense fallback={<PageLoader />}>{children}</Suspense>
+    </TenantProvider>
+  );
+}
+
 function AuthRoute() {
   const { user, loading } = useAuth();
   if (loading) return <div className="flex h-screen items-center justify-center text-muted-foreground">Carregando...</div>;
@@ -125,6 +138,7 @@ const App = () => (
             <Route path="/ingestion" element={<ProtectedRoute><Ingestion /></ProtectedRoute>} />
             <Route path="/productivity" element={<ProtectedRoute><ProductivityReports /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+            <Route path="/expense-approval" element={<ProtectedRoute><ExpenseApproval /></ProtectedRoute>} />
             <Route path="/integration-health" element={<ProtectedRoute><IntegrationHealth /></ProtectedRoute>} />
 
             {/* Driver routes */}
@@ -138,6 +152,9 @@ const App = () => (
 
             {/* Legacy redirect */}
             <Route path="/routes" element={<Navigate to="/corridors" replace />} />
+
+            {/* Client portal */}
+            <Route path="/portal" element={<ClientRoute><ClientPortal /></ClientRoute>} />
 
             <Route path="*" element={<Suspense fallback={<PageLoader />}><NotFound /></Suspense>} />
           </Routes>

@@ -33,6 +33,7 @@ import {
   Plug,
   Radio,
   ShieldCheck,
+  Receipt,
 } from 'lucide-react';
 
 interface NavSection {
@@ -48,6 +49,7 @@ const navSections: NavSection[] = [
       { label: 'Importação', href: '/ingestion', icon: <Upload className="h-4 w-4" /> },
       { label: 'Cargas', href: '/loads', icon: <PackageCheck className="h-4 w-4" /> },
       { label: 'Ocorrências', href: '/events', icon: <AlertOctagon className="h-4 w-4" /> },
+      { label: 'Aprovação Despesas', href: '/expense-approval', icon: <Receipt className="h-4 w-4" /> },
       { label: 'Produtividade', href: '/productivity', icon: <TrendingUp className="h-4 w-4" /> },
     ],
   },
