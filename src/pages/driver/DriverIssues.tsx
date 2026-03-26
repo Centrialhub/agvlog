@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
+import { useCurrentDriver, useActiveTrip } from '@/hooks/useCurrentDriver';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -32,41 +33,26 @@ export default function DriverIssues() {
   const { currentTenant } = useTenant();
   const { toast } = useToast();
   const qc = useQueryClient();
+  const { data: driver } = useCurrentDriver();
+  const { data: trip } = useActiveTrip(driver?.id);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ event_type: 'other', severity: 'medium', description: '' });
 
-  const { data: trip } = useQuery({
-    queryKey: ['driver_issues_trip', currentTenant?.id],
-    queryFn: async () => {
-      if (!currentTenant) return null;
-      const { data, error } = await supabase
-        .from('dispatch_trips')
-        .select('id, load_id')
-        .eq('tenant_id', currentTenant.id)
-        .in('status', ['planned', 'in_progress'])
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!currentTenant,
-  });
-
   const { data: events = [] } = useQuery({
-    queryKey: ['driver_operational_events', currentTenant?.id],
+    queryKey: ['driver_operational_events', driver?.id],
     queryFn: async () => {
-      if (!currentTenant) return [];
+      if (!currentTenant || !driver) return [];
       const { data, error } = await supabase
         .from('operational_events')
         .select('*')
         .eq('tenant_id', currentTenant.id)
+        .eq('driver_id', driver.id)
         .order('created_at', { ascending: false })
         .limit(20);
       if (error) throw error;
       return data || [];
     },
-    enabled: !!currentTenant,
+    enabled: !!currentTenant && !!driver,
   });
 
   const createIssue = useMutation({
@@ -77,6 +63,7 @@ export default function DriverIssues() {
         severity: form.severity,
         description: form.description || null,
         load_id: trip?.load_id || null,
+        driver_id: driver?.id || null,
       } as any);
       if (error) throw error;
     },
@@ -111,9 +98,7 @@ export default function DriverIssues() {
                 <Select value={form.event_type} onValueChange={v => setForm(f => ({ ...f, event_type: v }))}>
                   <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {ISSUE_TYPES.map(t => (
-                      <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-                    ))}
+                    {ISSUE_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -122,28 +107,15 @@ export default function DriverIssues() {
                 <Select value={form.severity} onValueChange={v => setForm(f => ({ ...f, severity: v }))}>
                   <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {SEVERITY_OPTIONS.map(s => (
-                      <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-                    ))}
+                    {SEVERITY_OPTIONS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div>
                 <Label className="text-xs">Descrição</Label>
-                <Textarea
-                  rows={3}
-                  value={form.description}
-                  onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                  placeholder="Descreva o ocorrido..."
-                  className="text-sm"
-                />
+                <Textarea rows={3} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Descreva o ocorrido..." className="text-sm" />
               </div>
-              <Button
-                className="w-full"
-                size="sm"
-                onClick={() => createIssue.mutate()}
-                disabled={createIssue.isPending}
-              >
+              <Button className="w-full" size="sm" onClick={() => createIssue.mutate()} disabled={createIssue.isPending}>
                 {createIssue.isPending ? 'Salvando...' : 'Registrar Ocorrência'}
               </Button>
             </div>
@@ -167,13 +139,9 @@ export default function DriverIssues() {
                 <CardContent className="p-3 space-y-1">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-medium">{typeLabel}</p>
-                    <Badge className={`text-[10px] ${severityColors[evt.severity] || ''}`} variant="secondary">
-                      {evt.severity}
-                    </Badge>
+                    <Badge className={`text-[10px] ${severityColors[evt.severity] || ''}`} variant="secondary">{evt.severity}</Badge>
                   </div>
-                  {evt.description && (
-                    <p className="text-xs text-muted-foreground">{evt.description}</p>
-                  )}
+                  {evt.description && <p className="text-xs text-muted-foreground">{evt.description}</p>}
                   <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
                     <Clock className="h-2.5 w-2.5" />
                     {new Date(evt.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}

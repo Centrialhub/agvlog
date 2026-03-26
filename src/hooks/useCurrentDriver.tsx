@@ -15,13 +15,13 @@ export function useCurrentDriver() {
 
   return useQuery({
     queryKey: ['current_driver', user?.id, currentTenant?.id],
-    queryFn: async () => {
+    queryFn: async (): Promise<CurrentDriver | null> => {
       if (!user || !currentTenant) return null;
-      const { data, error } = await supabase
+      const { data, error } = await (supabase
         .from('drivers')
-        .select('id, name, tenant_id')
+        .select('id, name, tenant_id') as any)
+        .eq('user_id', user.id)
         .eq('tenant_id', currentTenant.id)
-        .eq('user_id' as any, user.id)
         .eq('active', true)
         .maybeSingle();
       if (error) throw error;

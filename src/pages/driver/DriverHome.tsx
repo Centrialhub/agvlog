@@ -1,34 +1,34 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
-import { useAuth } from '@/hooks/useAuth';
+import { useCurrentDriver, useActiveTrip } from '@/hooks/useCurrentDriver';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Truck, MapPin, Package, Clock, ArrowRight } from 'lucide-react';
+import { Truck, MapPin, Package, Clock, ArrowRight, ClipboardCheck, AlertTriangle, Receipt } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export default function DriverHome() {
   const { currentTenant } = useTenant();
-  const { user } = useAuth();
+  const { data: driver, isLoading: driverLoading } = useCurrentDriver();
   const navigate = useNavigate();
 
-  // For now, show a driver-oriented home with current trip info
-  const { data: activeTrips = [] } = useQuery({
-    queryKey: ['driver_active_trips', currentTenant?.id],
+  const { data: activeTrips = [], isLoading: tripsLoading } = useQuery({
+    queryKey: ['driver_my_trips', driver?.id],
     queryFn: async () => {
-      if (!currentTenant) return [];
+      if (!driver || !currentTenant) return [];
       const { data, error } = await supabase
         .from('dispatch_trips')
-        .select('*, loads(load_number, origin, destination, status), vehicles(plate, nickname), drivers(name)')
+        .select('*, loads(load_number, origin, destination, status), vehicles(plate, nickname)')
         .eq('tenant_id', currentTenant.id)
+        .eq('driver_id', driver.id)
         .in('status', ['planned', 'in_progress'])
         .order('created_at', { ascending: false })
         .limit(5);
       if (error) throw error;
       return data || [];
     },
-    enabled: !!currentTenant,
+    enabled: !!driver && !!currentTenant,
   });
 
   const statusLabels: Record<string, string> = {
@@ -38,14 +38,28 @@ export default function DriverHome() {
     cancelled: 'Cancelada',
   };
 
+  const loading = driverLoading || tripsLoading;
+
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-lg font-bold">Olá, Motorista</h1>
+        <h1 className="text-lg font-bold">Olá, {driver?.name || 'Motorista'}</h1>
         <p className="text-sm text-muted-foreground">Seu painel de viagem</p>
       </div>
 
-      {activeTrips.length === 0 ? (
+      {!driver && !driverLoading && (
+        <Card>
+          <CardContent className="py-6 text-center">
+            <AlertTriangle className="h-8 w-8 text-warning mx-auto mb-2" />
+            <p className="text-sm font-medium">Conta não vinculada</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Peça ao administrador para vincular seu usuário ao cadastro de motorista.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {driver && activeTrips.length === 0 && !loading && (
         <Card>
           <CardContent className="py-8 text-center">
             <Truck className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
@@ -55,7 +69,9 @@ export default function DriverHome() {
             </p>
           </CardContent>
         </Card>
-      ) : (
+      )}
+
+      {activeTrips.length > 0 && (
         <div className="space-y-3">
           {activeTrips.map((trip: any) => (
             <Card key={trip.id} className="border-l-4 border-l-primary">
@@ -64,7 +80,7 @@ export default function DriverHome() {
                   <div className="flex items-center gap-2">
                     <Package className="h-4 w-4 text-primary" />
                     <span className="text-sm font-medium">
-                      Carga {(trip as any).loads?.load_number || '—'}
+                      Carga {trip.loads?.load_number || '—'}
                     </span>
                   </div>
                   <Badge variant="secondary" className="text-[10px]">
@@ -75,13 +91,13 @@ export default function DriverHome() {
                 <div className="space-y-1.5 text-xs text-muted-foreground">
                   <div className="flex items-center gap-1.5">
                     <MapPin className="h-3 w-3" />
-                    <span>{(trip as any).loads?.origin || '—'}</span>
+                    <span>{trip.loads?.origin || '—'}</span>
                     <ArrowRight className="h-3 w-3" />
-                    <span>{(trip as any).loads?.destination || '—'}</span>
+                    <span>{trip.loads?.destination || '—'}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <Truck className="h-3 w-3" />
-                    <span>{(trip as any).vehicles?.plate || 'Sem veículo'}</span>
+                    <span>{trip.vehicles?.plate || 'Sem veículo'}</span>
                   </div>
                 </div>
 
@@ -100,22 +116,28 @@ export default function DriverHome() {
 
       {/* Quick actions */}
       <div className="grid grid-cols-2 gap-3">
-        <Card
-          className="cursor-pointer hover:bg-accent/50 transition-colors"
-          onClick={() => navigate('/driver/journey')}
-        >
+        <Card className="cursor-pointer hover:bg-accent/50 transition-colors" onClick={() => navigate('/driver/journey')}>
           <CardContent className="p-3 flex flex-col items-center gap-1.5">
             <Clock className="h-5 w-5 text-muted-foreground" />
             <span className="text-xs font-medium">Jornada</span>
           </CardContent>
         </Card>
-        <Card
-          className="cursor-pointer hover:bg-accent/50 transition-colors"
-          onClick={() => navigate('/driver/expenses')}
-        >
+        <Card className="cursor-pointer hover:bg-accent/50 transition-colors" onClick={() => navigate('/driver/expenses')}>
           <CardContent className="p-3 flex flex-col items-center gap-1.5">
-            <Package className="h-5 w-5 text-muted-foreground" />
+            <Receipt className="h-5 w-5 text-muted-foreground" />
             <span className="text-xs font-medium">Despesas</span>
+          </CardContent>
+        </Card>
+        <Card className="cursor-pointer hover:bg-accent/50 transition-colors" onClick={() => navigate('/driver/checklist')}>
+          <CardContent className="p-3 flex flex-col items-center gap-1.5">
+            <ClipboardCheck className="h-5 w-5 text-muted-foreground" />
+            <span className="text-xs font-medium">Checklist</span>
+          </CardContent>
+        </Card>
+        <Card className="cursor-pointer hover:bg-accent/50 transition-colors" onClick={() => navigate('/driver/issues')}>
+          <CardContent className="p-3 flex flex-col items-center gap-1.5">
+            <AlertTriangle className="h-5 w-5 text-muted-foreground" />
+            <span className="text-xs font-medium">Ocorrências</span>
           </CardContent>
         </Card>
       </div>

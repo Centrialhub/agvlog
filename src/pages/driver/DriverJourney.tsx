@@ -1,6 +1,7 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
+import { useCurrentDriver, useActiveTrip } from '@/hooks/useCurrentDriver';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,27 +21,9 @@ export default function DriverJourney() {
   const { currentTenant } = useTenant();
   const { toast } = useToast();
   const qc = useQueryClient();
+  const { data: driver } = useCurrentDriver();
+  const { data: trip } = useActiveTrip(driver?.id);
 
-  // Find active trip
-  const { data: trip } = useQuery({
-    queryKey: ['driver_journey_trip', currentTenant?.id],
-    queryFn: async () => {
-      if (!currentTenant) return null;
-      const { data, error } = await supabase
-        .from('dispatch_trips')
-        .select('id')
-        .eq('tenant_id', currentTenant.id)
-        .in('status', ['planned', 'in_progress'])
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!currentTenant,
-  });
-
-  // Load journey events from dispatch_events
   const { data: events = [] } = useQuery({
     queryKey: ['driver_journey_events', trip?.id],
     queryFn: async () => {
@@ -92,14 +75,7 @@ export default function DriverJourney() {
         <>
           <div className="grid grid-cols-2 gap-2">
             {Object.entries(eventLabels).map(([key, { label, icon: Icon }]) => (
-              <Button
-                key={key}
-                variant="outline"
-                size="sm"
-                className="flex items-center gap-1.5 text-xs h-10"
-                onClick={() => addEvent.mutate(key)}
-                disabled={addEvent.isPending}
-              >
+              <Button key={key} variant="outline" size="sm" className="flex items-center gap-1.5 text-xs h-10" onClick={() => addEvent.mutate(key)} disabled={addEvent.isPending}>
                 <Icon className="h-3.5 w-3.5" />
                 {label}
               </Button>
