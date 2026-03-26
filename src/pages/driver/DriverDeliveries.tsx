@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
+import { useCurrentDriver, useActiveTrip } from '@/hooks/useCurrentDriver';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Package, CheckCircle, AlertTriangle, Truck } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 
 const DELIVERY_ACTIONS = [
   { key: 'delivered', label: 'Entregue', icon: CheckCircle, variant: 'default' as const },
@@ -20,29 +22,11 @@ export default function DriverDeliveries() {
   const { currentTenant } = useTenant();
   const { toast } = useToast();
   const qc = useQueryClient();
+  const { data: driver } = useCurrentDriver();
+  const { data: trip } = useActiveTrip(driver?.id);
   const [actionDialog, setActionDialog] = useState<{ stopId: string; action: string } | null>(null);
   const [notes, setNotes] = useState('');
 
-  // Get active trip
-  const { data: trip } = useQuery({
-    queryKey: ['driver_active_trip_deliveries', currentTenant?.id],
-    queryFn: async () => {
-      if (!currentTenant) return null;
-      const { data, error } = await supabase
-        .from('dispatch_trips')
-        .select('*, loads(load_number)')
-        .eq('tenant_id', currentTenant.id)
-        .in('status', ['planned', 'in_progress'])
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!currentTenant,
-  });
-
-  // Get stops for delivery actions (only arrived or completed)
   const { data: stops = [] } = useQuery({
     queryKey: ['driver_delivery_stops', trip?.id],
     queryFn: async () => {
@@ -60,7 +44,6 @@ export default function DriverDeliveries() {
 
   const recordDelivery = useMutation({
     mutationFn: async ({ stopId, action, notes }: { stopId: string; action: string; notes: string }) => {
-      // Create dispatch event
       const { error: evtErr } = await supabase.from('dispatch_events').insert({
         tenant_id: currentTenant!.id,
         dispatch_trip_id: trip!.id,
@@ -70,7 +53,6 @@ export default function DriverDeliveries() {
       } as any);
       if (evtErr) throw evtErr;
 
-      // Update stop status
       const { error: stopErr } = await supabase
         .from('dispatch_stops')
         .update({
@@ -119,7 +101,6 @@ export default function DriverDeliveries() {
         </p>
       </div>
 
-      {/* Stops ready for delivery action (arrived) */}
       {arrivedStops.length > 0 && (
         <div className="space-y-2">
           <p className="text-xs font-medium text-primary uppercase">Aguardando ação</p>
@@ -127,20 +108,12 @@ export default function DriverDeliveries() {
             <Card key={stop.id} className="border-primary">
               <CardContent className="p-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium">
-                    {stop.clients?.company_name || stop.destination || 'Parada'}
-                  </p>
+                  <p className="text-sm font-medium">{stop.clients?.company_name || stop.destination || 'Parada'}</p>
                   <Badge className="bg-primary/10 text-primary text-[10px]" variant="secondary">No local</Badge>
                 </div>
                 <div className="flex gap-2 flex-wrap">
                   {DELIVERY_ACTIONS.map(({ key, label, icon: Icon, variant }) => (
-                    <Button
-                      key={key}
-                      size="sm"
-                      variant={variant}
-                      className="text-xs"
-                      onClick={() => setActionDialog({ stopId: stop.id, action: key })}
-                    >
+                    <Button key={key} size="sm" variant={variant} className="text-xs" onClick={() => setActionDialog({ stopId: stop.id, action: key })}>
                       <Icon className="h-3 w-3 mr-1" /> {label}
                     </Button>
                   ))}
@@ -151,16 +124,15 @@ export default function DriverDeliveries() {
         </div>
       )}
 
-      {/* Pending */}
       {pendingStops.length > 0 && (
         <div className="space-y-2">
           <p className="text-xs font-medium text-muted-foreground uppercase">Pendentes</p>
-          {pendingStops.map((stop: any, i: number) => (
+          {pendingStops.map((stop: any) => (
             <Card key={stop.id}>
               <CardContent className="p-3 flex items-center gap-3">
                 <Truck className="h-4 w-4 text-muted-foreground" />
                 <div className="flex-1">
-                  <p className="text-sm">{stop.clients?.company_name || stop.destination || `Parada`}</p>
+                  <p className="text-sm">{stop.clients?.company_name || stop.destination || 'Parada'}</p>
                 </div>
                 <Badge variant="secondary" className="text-[10px]">Pendente</Badge>
               </CardContent>
@@ -169,7 +141,6 @@ export default function DriverDeliveries() {
         </div>
       )}
 
-      {/* Completed */}
       {completedStops.length > 0 && (
         <div className="space-y-2">
           <p className="text-xs font-medium text-primary uppercase">Concluídas</p>
@@ -195,7 +166,6 @@ export default function DriverDeliveries() {
         </Card>
       )}
 
-      {/* Delivery action dialog */}
       <Dialog open={!!actionDialog} onOpenChange={() => { setActionDialog(null); setNotes(''); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -206,19 +176,8 @@ export default function DriverDeliveries() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <Textarea
-              placeholder="Observações (opcional)"
-              rows={3}
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              className="text-sm"
-            />
-            <Button
-              className="w-full"
-              size="sm"
-              onClick={() => actionDialog && recordDelivery.mutate({ stopId: actionDialog.stopId, action: actionDialog.action, notes })}
-              disabled={recordDelivery.isPending}
-            >
+            <Textarea placeholder="Observações (opcional)" rows={3} value={notes} onChange={e => setNotes(e.target.value)} className="text-sm" />
+            <Button className="w-full" size="sm" onClick={() => actionDialog && recordDelivery.mutate({ stopId: actionDialog.stopId, action: actionDialog.action, notes })} disabled={recordDelivery.isPending}>
               {recordDelivery.isPending ? 'Registrando...' : 'Confirmar'}
             </Button>
           </div>

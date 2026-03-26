@@ -1,13 +1,15 @@
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Receipt, CheckCircle, XCircle, Clock, ExternalLink } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Receipt, CheckCircle, XCircle, Clock, ExternalLink, ImageIcon } from 'lucide-react';
 
 const CATEGORIES: Record<string, string> = {
   fuel: 'Combustível',
@@ -23,6 +25,8 @@ export default function ExpenseApproval() {
   const { user } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
+  const [receiptDialog, setReceiptDialog] = useState<string | null>(null);
+  const [signedUrl, setSignedUrl] = useState<string | null>(null);
 
   const { data: expenses = [], isLoading } = useQuery({
     queryKey: ['expense_approval', currentTenant?.id],
@@ -39,6 +43,15 @@ export default function ExpenseApproval() {
     },
     enabled: !!currentTenant,
   });
+
+  // Generate signed URL when viewing a receipt
+  useEffect(() => {
+    if (!receiptDialog) { setSignedUrl(null); return; }
+    (async () => {
+      const { data, error } = await supabase.storage.from('receipts').createSignedUrl(receiptDialog, 300);
+      if (!error && data) setSignedUrl(data.signedUrl);
+    })();
+  }, [receiptDialog]);
 
   const updateExpense = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
@@ -86,29 +99,21 @@ export default function ExpenseApproval() {
           <div className="text-right shrink-0">
             <p className="text-base font-bold">R$ {Number(exp.amount).toFixed(2)}</p>
             {exp.receipt_url && (
-              <a href={exp.receipt_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary flex items-center gap-1 justify-end mt-1">
-                <ExternalLink className="h-3 w-3" /> Comprovante
-              </a>
+              <button
+                onClick={() => setReceiptDialog(exp.receipt_url)}
+                className="text-xs text-primary flex items-center gap-1 justify-end mt-1 hover:underline"
+              >
+                <ImageIcon className="h-3 w-3" /> Ver comprovante
+              </button>
             )}
           </div>
         </div>
         {showActions && (
           <div className="flex gap-2 mt-3 justify-end">
-            <Button
-              size="sm"
-              variant="outline"
-              className="text-xs text-destructive"
-              onClick={() => updateExpense.mutate({ id: exp.id, status: 'rejected' })}
-              disabled={updateExpense.isPending}
-            >
+            <Button size="sm" variant="outline" className="text-xs text-destructive" onClick={() => updateExpense.mutate({ id: exp.id, status: 'rejected' })} disabled={updateExpense.isPending}>
               <XCircle className="h-3 w-3 mr-1" /> Rejeitar
             </Button>
-            <Button
-              size="sm"
-              className="text-xs"
-              onClick={() => updateExpense.mutate({ id: exp.id, status: 'approved' })}
-              disabled={updateExpense.isPending}
-            >
+            <Button size="sm" className="text-xs" onClick={() => updateExpense.mutate({ id: exp.id, status: 'approved' })} disabled={updateExpense.isPending}>
               <CheckCircle className="h-3 w-3 mr-1" /> Aprovar
             </Button>
           </div>
@@ -159,6 +164,18 @@ export default function ExpenseApproval() {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Receipt viewer dialog */}
+      <Dialog open={!!receiptDialog} onOpenChange={() => setReceiptDialog(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Comprovante</DialogTitle></DialogHeader>
+          {signedUrl ? (
+            <img src={signedUrl} alt="Comprovante" className="w-full rounded-md" />
+          ) : (
+            <div className="py-8 text-center text-sm text-muted-foreground">Carregando...</div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

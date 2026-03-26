@@ -11,6 +11,7 @@ import { Plus, Receipt, Fuel, UtensilsCrossed, Car, Wrench, ParkingCircle, Camer
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
+import { useCurrentDriver, useActiveTrip } from '@/hooks/useCurrentDriver';
 import { useToast } from '@/hooks/use-toast';
 
 const CATEGORIES = [
@@ -32,6 +33,8 @@ export default function DriverExpenses() {
   const { currentTenant } = useTenant();
   const { toast } = useToast();
   const qc = useQueryClient();
+  const { data: driver } = useCurrentDriver();
+  const { data: trip } = useActiveTrip(driver?.id);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ category: 'fuel', amount: '', notes: '' });
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
@@ -39,19 +42,20 @@ export default function DriverExpenses() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const { data: expenses = [] } = useQuery({
-    queryKey: ['driver_expenses', currentTenant?.id],
+    queryKey: ['driver_expenses', driver?.id],
     queryFn: async () => {
-      if (!currentTenant) return [];
+      if (!currentTenant || !driver) return [];
       const { data, error } = await supabase
         .from('driver_expenses')
         .select('*')
         .eq('tenant_id', currentTenant.id)
+        .eq('driver_id', driver.id)
         .order('expense_at', { ascending: false })
         .limit(50);
       if (error) throw error;
       return data || [];
     },
-    enabled: !!currentTenant,
+    enabled: !!currentTenant && !!driver,
   });
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -67,7 +71,6 @@ export default function DriverExpenses() {
     mutationFn: async () => {
       let receiptUrl: string | null = null;
 
-      // Upload receipt photo if provided
       if (receiptFile && currentTenant) {
         const ext = receiptFile.name.split('.').pop() || 'jpg';
         const path = `${currentTenant.id}/${Date.now()}.${ext}`;
@@ -75,12 +78,14 @@ export default function DriverExpenses() {
           .from('receipts')
           .upload(path, receiptFile, { contentType: receiptFile.type });
         if (uploadErr) throw uploadErr;
-        const { data: urlData } = supabase.storage.from('receipts').getPublicUrl(path);
-        receiptUrl = urlData.publicUrl;
+        // Store the path, not a public URL (bucket is private)
+        receiptUrl = path;
       }
 
       const { error } = await supabase.from('driver_expenses').insert({
         tenant_id: currentTenant!.id,
+        driver_id: driver?.id || null,
+        dispatch_trip_id: trip?.id || null,
         category: form.category,
         amount: parseFloat(form.amount) || 0,
         notes: form.notes || null,
@@ -117,42 +122,21 @@ export default function DriverExpenses() {
                 <Select value={form.category} onValueChange={v => setForm(f => ({ ...f, category: v }))}>
                   <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {CATEGORIES.map(c => (
-                      <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
-                    ))}
+                    {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div>
                 <Label className="text-xs">Valor (R$)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  placeholder="0,00"
-                  value={form.amount}
-                  onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
-                  className="h-9"
-                />
+                <Input type="number" step="0.01" placeholder="0,00" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} className="h-9" />
               </div>
               <div>
                 <Label className="text-xs">Observação</Label>
-                <Textarea
-                  rows={2}
-                  value={form.notes}
-                  onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-                  className="text-sm"
-                />
+                <Textarea rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} className="text-sm" />
               </div>
               <div>
                 <Label className="text-xs">Comprovante (foto)</Label>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  className="hidden"
-                  onChange={handleFileSelect}
-                />
+                <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileSelect} />
                 <div className="flex gap-2 mt-1">
                   <Button type="button" variant="outline" size="sm" className="text-xs" onClick={() => fileRef.current?.click()}>
                     <Camera className="h-3.5 w-3.5 mr-1" /> {receiptFile ? 'Trocar' : 'Tirar foto'}
@@ -167,12 +151,12 @@ export default function DriverExpenses() {
                   <img src={receiptPreview} alt="Comprovante" className="mt-2 rounded-md max-h-32 object-cover" />
                 )}
               </div>
-              <Button
-                className="w-full"
-                size="sm"
-                onClick={() => createExpense.mutate()}
-                disabled={!form.amount || createExpense.isPending}
-              >
+              {trip && (
+                <p className="text-[10px] text-muted-foreground">
+                  Vinculada à viagem da carga {(trip as any).loads?.load_number || ''}
+                </p>
+              )}
+              <Button className="w-full" size="sm" onClick={() => createExpense.mutate()} disabled={!form.amount || createExpense.isPending}>
                 {createExpense.isPending ? 'Salvando...' : 'Registrar'}
               </Button>
             </div>
@@ -204,10 +188,7 @@ export default function DriverExpenses() {
                   </div>
                   <div className="text-right">
                     <p className="text-sm font-semibold">R$ {Number(exp.amount).toFixed(2)}</p>
-                    <Badge
-                      variant={exp.approval_status === 'approved' ? 'default' : 'secondary'}
-                      className="text-[10px]"
-                    >
+                    <Badge variant={exp.approval_status === 'approved' ? 'default' : 'secondary'} className="text-[10px]">
                       {approvalLabels[exp.approval_status] || exp.approval_status}
                     </Badge>
                   </div>

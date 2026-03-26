@@ -1,8 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useTenant } from '@/hooks/useTenant';
+import { useCurrentDriver, useActiveTrip } from '@/hooks/useCurrentDriver';
+import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ClipboardCheck } from 'lucide-react';
+import { ClipboardCheck, Save } from 'lucide-react';
 
 const PRE_TRIP_ITEMS = [
   'Pneus em bom estado',
@@ -23,8 +28,28 @@ const POST_TRIP_ITEMS = [
   'Veículo limpo',
 ];
 
-function ChecklistSection({ title, items }: { title: string; items: string[] }) {
-  const [checked, setChecked] = useState<Set<number>>(new Set());
+function ChecklistSection({
+  title,
+  items,
+  eventType,
+  tripId,
+  tenantId,
+  savedItems,
+}: {
+  title: string;
+  items: string[];
+  eventType: string;
+  tripId: string | undefined;
+  tenantId: string | undefined;
+  savedItems: Set<number>;
+}) {
+  const [checked, setChecked] = useState<Set<number>>(savedItems);
+  const { toast } = useToast();
+  const qc = useQueryClient();
+
+  useEffect(() => {
+    setChecked(savedItems);
+  }, [savedItems]);
 
   const toggle = (idx: number) => {
     setChecked((prev) => {
@@ -34,6 +59,25 @@ function ChecklistSection({ title, items }: { title: string; items: string[] }) 
       return next;
     });
   };
+
+  const saveChecklist = useMutation({
+    mutationFn: async () => {
+      if (!tripId || !tenantId) throw new Error('Nenhuma viagem ativa');
+      const { error } = await supabase.from('dispatch_events').insert({
+        tenant_id: tenantId,
+        dispatch_trip_id: tripId,
+        event_type: eventType,
+        payload: { checked_items: Array.from(checked), total_items: items.length },
+        event_at: new Date().toISOString(),
+      } as any);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: 'Checklist salvo' });
+      qc.invalidateQueries({ queryKey: ['driver_checklist_events'] });
+    },
+    onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
+  });
 
   const allChecked = checked.size === items.length;
 
@@ -47,25 +91,82 @@ function ChecklistSection({ title, items }: { title: string; items: string[] }) 
           )}
         </div>
         {items.map((item, i) => (
-          <label
-            key={i}
-            className="flex items-center gap-2 text-xs cursor-pointer py-1"
-          >
+          <label key={i} className="flex items-center gap-2 text-xs cursor-pointer py-1">
             <Checkbox checked={checked.has(i)} onCheckedChange={() => toggle(i)} />
             <span className={checked.has(i) ? 'line-through text-muted-foreground' : ''}>{item}</span>
           </label>
         ))}
+        {tripId && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-full text-xs mt-2"
+            onClick={() => saveChecklist.mutate()}
+            disabled={saveChecklist.isPending || checked.size === 0}
+          >
+            <Save className="h-3 w-3 mr-1" />
+            {saveChecklist.isPending ? 'Salvando...' : 'Salvar Checklist'}
+          </Button>
+        )}
       </CardContent>
     </Card>
   );
 }
 
 export default function DriverChecklist() {
+  const { currentTenant } = useTenant();
+  const { data: driver } = useCurrentDriver();
+  const { data: trip } = useActiveTrip(driver?.id);
+
+  // Load previously saved checklists
+  const { data: savedEvents = [] } = useQuery({
+    queryKey: ['driver_checklist_events', trip?.id],
+    queryFn: async () => {
+      if (!trip) return [];
+      const { data, error } = await supabase
+        .from('dispatch_events')
+        .select('*')
+        .eq('dispatch_trip_id', trip.id)
+        .in('event_type', ['checklist_pre', 'checklist_post'])
+        .order('event_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!trip?.id,
+  });
+
+  const lastPre = savedEvents.find((e: any) => e.event_type === 'checklist_pre');
+  const lastPost = savedEvents.find((e: any) => e.event_type === 'checklist_post');
+  const preChecked = new Set<number>((lastPre?.payload as any)?.checked_items || []);
+  const postChecked = new Set<number>((lastPost?.payload as any)?.checked_items || []);
+
   return (
     <div className="space-y-4">
       <h1 className="text-lg font-bold">Checklist</h1>
-      <ChecklistSection title="Pré-Viagem" items={PRE_TRIP_ITEMS} />
-      <ChecklistSection title="Pós-Viagem" items={POST_TRIP_ITEMS} />
+      {!trip && (
+        <Card>
+          <CardContent className="py-4 text-center text-xs text-muted-foreground">
+            <ClipboardCheck className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+            Sem viagem ativa. O checklist será salvo quando houver uma viagem.
+          </CardContent>
+        </Card>
+      )}
+      <ChecklistSection
+        title="Pré-Viagem"
+        items={PRE_TRIP_ITEMS}
+        eventType="checklist_pre"
+        tripId={trip?.id}
+        tenantId={currentTenant?.id}
+        savedItems={preChecked}
+      />
+      <ChecklistSection
+        title="Pós-Viagem"
+        items={POST_TRIP_ITEMS}
+        eventType="checklist_post"
+        tripId={trip?.id}
+        tenantId={currentTenant?.id}
+        savedItems={postChecked}
+      />
     </div>
   );
 }

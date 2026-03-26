@@ -106,14 +106,40 @@ export default function LoadDetail() {
   const [dispatchForm, setDispatchForm] = useState({
     driver_id: '',
     vehicle_id: '',
-    stop_destination: '',
     notes: '',
   });
+  const [dispatchStops, setDispatchStops] = useState<{ destination: string; client_id: string }[]>([]);
+
+  // Auto-populate stops from load items when dialog opens
+  const populateStopsFromItems = () => {
+    if (items.length === 0) {
+      setDispatchStops([{ destination: load?.destination || '', client_id: '' }]);
+      return;
+    }
+    // Group items by destination (from orders) — deduplicate
+    const seen = new Set<string>();
+    const stops: { destination: string; client_id: string }[] = [];
+    for (const item of items) {
+      const key = (item as any).orders?.destination || load?.destination || '';
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        stops.push({ destination: key, client_id: '' });
+      }
+    }
+    if (stops.length === 0) {
+      stops.push({ destination: load?.destination || '', client_id: '' });
+    }
+    setDispatchStops(stops);
+  };
+
+  const addStop = () => setDispatchStops(s => [...s, { destination: '', client_id: '' }]);
+  const removeStop = (idx: number) => setDispatchStops(s => s.filter((_, i) => i !== idx));
+  const updateStop = (idx: number, field: string, value: string) =>
+    setDispatchStops(s => s.map((stop, i) => i === idx ? { ...stop, [field]: value } : stop));
 
   const createTrip = useMutation({
     mutationFn: async () => {
       if (!load || !currentTenant) throw new Error('Dados insuficientes');
-      // Create the dispatch trip
       const { data: trip, error: tripErr } = await supabase
         .from('dispatch_trips')
         .insert({
@@ -128,17 +154,19 @@ export default function LoadDetail() {
         .single();
       if (tripErr) throw tripErr;
 
-      // Create a stop if destination is provided
-      const destination = dispatchForm.stop_destination || load.destination;
-      if (destination && trip) {
-        const { error: stopErr } = await supabase.from('dispatch_stops').insert({
+      // Create all stops in batch
+      const validStops = dispatchStops.filter(s => s.destination.trim());
+      if (validStops.length > 0 && trip) {
+        const stopsToInsert = validStops.map((s, idx) => ({
           tenant_id: currentTenant.id,
           dispatch_trip_id: trip.id,
-          destination,
-          stop_order: 1,
+          destination: s.destination,
+          client_id: s.client_id || null,
+          stop_order: idx + 1,
           status: 'pending',
-        } as any);
-        if (stopErr) console.error('Stop creation error:', stopErr);
+        }));
+        const { error: stopErr } = await supabase.from('dispatch_stops').insert(stopsToInsert as any);
+        if (stopErr) console.error('Stops creation error:', stopErr);
       }
 
       // Update load with driver/vehicle if changed
@@ -267,17 +295,17 @@ export default function LoadDetail() {
             </Button>
           )}
           {['ready', 'loaded', 'loading'].includes(load.status) && (
-            <Dialog open={dispatchOpen} onOpenChange={setDispatchOpen}>
+            <Dialog open={dispatchOpen} onOpenChange={(v) => { setDispatchOpen(v); if (v) populateStopsFromItems(); }}>
               <DialogTrigger asChild>
                 <Button size="sm">
                   <Send className="h-3 w-3 mr-1" /> Despachar
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-md">
+              <DialogContent className="max-w-lg">
                 <DialogHeader>
                   <DialogTitle>Despachar Carga {load.load_number}</DialogTitle>
                 </DialogHeader>
-                <div className="space-y-3">
+                <div className="space-y-3 max-h-[60vh] overflow-y-auto">
                   <div>
                     <Label className="text-xs">Motorista</Label>
                     <Select
@@ -306,15 +334,37 @@ export default function LoadDetail() {
                       </SelectContent>
                     </Select>
                   </div>
+
+                  {/* Multi-stop section */}
                   <div>
-                    <Label className="text-xs">Destino da parada</Label>
-                    <Input
-                      value={dispatchForm.stop_destination || load.destination || ''}
-                      onChange={e => setDispatchForm(f => ({ ...f, stop_destination: e.target.value }))}
-                      placeholder="Endereço de destino"
-                      className="h-9"
-                    />
+                    <div className="flex items-center justify-between mb-1">
+                      <Label className="text-xs">Paradas ({dispatchStops.length})</Label>
+                      <Button type="button" variant="ghost" size="sm" className="h-6 text-[10px]" onClick={addStop}>
+                        + Parada
+                      </Button>
+                    </div>
+                    <div className="space-y-2">
+                      {dispatchStops.map((stop, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <div className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[10px] font-bold shrink-0">
+                            {idx + 1}
+                          </div>
+                          <Input
+                            value={stop.destination}
+                            onChange={e => updateStop(idx, 'destination', e.target.value)}
+                            placeholder={`Destino parada ${idx + 1}`}
+                            className="h-8 text-xs"
+                          />
+                          {dispatchStops.length > 1 && (
+                            <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive" onClick={() => removeStop(idx)}>
+                              ×
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
+
                   <div>
                     <Label className="text-xs">Observações</Label>
                     <Textarea
@@ -329,7 +379,7 @@ export default function LoadDetail() {
                     onClick={() => createTrip.mutate()}
                     disabled={createTrip.isPending}
                   >
-                    {createTrip.isPending ? 'Criando viagem...' : 'Criar Viagem e Despachar'}
+                    {createTrip.isPending ? 'Criando viagem...' : `Criar Viagem com ${dispatchStops.filter(s => s.destination.trim()).length} Parada(s)`}
                   </Button>
                 </div>
               </DialogContent>
