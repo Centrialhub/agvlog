@@ -593,6 +593,21 @@ export default function VehicleDetails() {
           )}
         </TabsContent>
 
+        {/* Maintenance */}
+        <TabsContent value="maintenance" className="space-y-4">
+          {vehicleId && <MaintenanceTab vehicleId={vehicleId} currentOdometer={todayMetrics?.km_estimated} />}
+        </TabsContent>
+
+        {/* Fueling */}
+        <TabsContent value="fueling" className="space-y-4">
+          {vehicleId && <FuelingTab vehicleId={vehicleId} />}
+        </TabsContent>
+
+        {/* Odometer */}
+        <TabsContent value="odometer" className="space-y-4">
+          {vehicleId && <OdometerTab vehicleId={vehicleId} />}
+        </TabsContent>
+
         {/* Alerts */}
         <TabsContent value="alerts" className="space-y-4">
           <Card><CardContent className="p-0">
