@@ -2162,6 +2162,89 @@ export type Database = {
           },
         ]
       }
+      route_waypoints: {
+        Row: {
+          address: string | null
+          created_at: string
+          estimated_duration_min: number | null
+          geofence_id: string | null
+          id: string
+          label: string | null
+          lat: number | null
+          lng: number | null
+          notes: string | null
+          poi_id: string | null
+          route_id: string
+          tenant_id: string
+          updated_at: string
+          waypoint_order: number
+          waypoint_type: Database["public"]["Enums"]["waypoint_type"]
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string
+          estimated_duration_min?: number | null
+          geofence_id?: string | null
+          id?: string
+          label?: string | null
+          lat?: number | null
+          lng?: number | null
+          notes?: string | null
+          poi_id?: string | null
+          route_id: string
+          tenant_id: string
+          updated_at?: string
+          waypoint_order?: number
+          waypoint_type?: Database["public"]["Enums"]["waypoint_type"]
+        }
+        Update: {
+          address?: string | null
+          created_at?: string
+          estimated_duration_min?: number | null
+          geofence_id?: string | null
+          id?: string
+          label?: string | null
+          lat?: number | null
+          lng?: number | null
+          notes?: string | null
+          poi_id?: string | null
+          route_id?: string
+          tenant_id?: string
+          updated_at?: string
+          waypoint_order?: number
+          waypoint_type?: Database["public"]["Enums"]["waypoint_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "route_waypoints_geofence_id_fkey"
+            columns: ["geofence_id"]
+            isOneToOne: false
+            referencedRelation: "geofences"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_waypoints_poi_id_fkey"
+            columns: ["poi_id"]
+            isOneToOne: false
+            referencedRelation: "pois"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_waypoints_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "route_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_waypoints_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       telemetry_catalog: {
         Row: {
           created_at: string
@@ -3165,6 +3248,15 @@ export type Database = {
     }
     Enums: {
       app_role: "owner" | "admin" | "operator" | "client" | "driver"
+      waypoint_type:
+        | "origin"
+        | "destination"
+        | "fueling"
+        | "overnight"
+        | "meal"
+        | "client"
+        | "checkpoint"
+        | "other"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -3293,6 +3385,16 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["owner", "admin", "operator", "client", "driver"],
+      waypoint_type: [
+        "origin",
+        "destination",
+        "fueling",
+        "overnight",
+        "meal",
+        "client",
+        "checkpoint",
+        "other",
+      ],
     },
   },
 } as const

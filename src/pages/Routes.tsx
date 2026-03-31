@@ -2,17 +2,14 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant, useIsAdmin } from '@/hooks/useTenant';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { Plus, Route, Trash2, Edit, MapPin } from 'lucide-react';
+import { Plus, Route, Trash2, Edit, MapPin, Fuel, Moon, UtensilsCrossed } from 'lucide-react';
+import { RouteDialog } from '@/components/routes/RouteDialog';
+import { getTypeConfig } from '@/components/routes/WaypointEditor';
 
 export default function Routes() {
   const { currentTenant } = useTenant();
@@ -25,8 +22,26 @@ export default function Routes() {
     queryKey: ['route_templates', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data, error } = await supabase.from('route_templates').select('*, geofences:corridor_geofence_id(name), start_poi:start_poi_id(name), end_poi:end_poi_id(name)')
-        .eq('tenant_id', currentTenant.id).order('created_at', { ascending: false });
+      const { data, error } = await supabase
+        .from('route_templates')
+        .select('*, geofences:corridor_geofence_id(name)')
+        .eq('tenant_id', currentTenant.id)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!currentTenant,
+  });
+
+  const { data: allWaypoints = [] } = useQuery({
+    queryKey: ['route_waypoints_all', currentTenant?.id],
+    queryFn: async () => {
+      if (!currentTenant) return [];
+      const { data, error } = await supabase
+        .from('route_waypoints')
+        .select('route_id, waypoint_type, label, waypoint_order')
+        .eq('tenant_id', currentTenant.id)
+        .order('waypoint_order');
       if (error) throw error;
       return data;
     },
@@ -62,11 +77,14 @@ export default function Routes() {
       const { error } = await supabase.from('route_templates').delete().eq('id', id);
       if (error) throw error;
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['route_templates'] }); toast.success('Rota removida'); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['route_templates'] });
+      queryClient.invalidateQueries({ queryKey: ['route_waypoints_all'] });
+      toast.success('Rota removida');
+    },
     onError: (e: any) => toast.error(e.message),
   });
 
-  // Route runs stats
   const { data: routeRuns = [] } = useQuery({
     queryKey: ['route_runs_recent', currentTenant?.id],
     queryFn: async () => {
@@ -87,12 +105,41 @@ export default function Routes() {
     return { total: runs.length, ok, deviated };
   };
 
+  const getRouteWaypoints = (routeId: string) =>
+    allWaypoints.filter((w: any) => w.route_id === routeId);
+
+  const renderWaypointSummary = (routeId: string) => {
+    const wps = getRouteWaypoints(routeId);
+    if (wps.length === 0) return <span className="text-muted-foreground">—</span>;
+
+    const typeCounts: Record<string, number> = {};
+    wps.forEach((w: any) => {
+      typeCounts[w.waypoint_type] = (typeCounts[w.waypoint_type] || 0) + 1;
+    });
+
+    return (
+      <div className="flex items-center gap-1 flex-wrap">
+        {Object.entries(typeCounts).map(([type, count]) => {
+          const config = getTypeConfig(type);
+          const Icon = config.icon;
+          return (
+            <span key={type} className="inline-flex items-center gap-0.5" title={config.label}>
+              <Icon className={`h-3 w-3 ${config.color}`} />
+              {count > 1 && <span className="text-xs text-muted-foreground">{count}</span>}
+            </span>
+          );
+        })}
+        <span className="text-xs text-muted-foreground ml-1">({wps.length})</span>
+      </div>
+    );
+  };
+
   return (
     <div className="animate-fade-in space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Rotas</h1>
-          <p className="text-sm text-muted-foreground">Controle de rotas por corredor geográfico</p>
+          <p className="text-sm text-muted-foreground">Rotas com pontos estratégicos e corredores monitorados</p>
         </div>
         {isAdmin && (
           <Button onClick={() => { setEditRoute(null); setDialogOpen(true); }}>
@@ -107,7 +154,7 @@ export default function Routes() {
         <Card><CardContent className="flex flex-col items-center py-12">
           <Route className="h-12 w-12 text-muted-foreground mb-4" />
           <p className="font-medium text-foreground">Nenhuma rota configurada</p>
-          <p className="text-sm text-muted-foreground mt-1">Crie corredores via Geofences e vincule aqui</p>
+          <p className="text-sm text-muted-foreground mt-1">Crie rotas com origem, destino e pontos estratégicos</p>
         </CardContent></Card>
       ) : (
         <Card>
@@ -116,11 +163,9 @@ export default function Routes() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Nome</TableHead>
-                  <TableHead>Corredor (Geofence)</TableHead>
-                  <TableHead>POI Início</TableHead>
-                  <TableHead>POI Fim</TableHead>
-                  <TableHead>Limite Vel.</TableHead>
-                  <TableHead>Threshold</TableHead>
+                  <TableHead>Pontos</TableHead>
+                  <TableHead>Corredor</TableHead>
+                  <TableHead>Vel. máx</TableHead>
                   <TableHead>7 dias</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead></TableHead>
@@ -132,11 +177,9 @@ export default function Routes() {
                   return (
                     <TableRow key={r.id}>
                       <TableCell className="font-medium">{r.name}</TableCell>
+                      <TableCell>{renderWaypointSummary(r.id)}</TableCell>
                       <TableCell className="text-sm">{r.geofences?.name || '—'}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{r.start_poi?.name || '—'}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{r.end_poi?.name || '—'}</TableCell>
-                      <TableCell>{r.route_speed_limit_kmh ? `${r.route_speed_limit_kmh} km/h` : '—'}</TableCell>
-                      <TableCell className="text-xs">{Math.round((r.corridor_inside_ratio_threshold || 0.85) * 100)}%</TableCell>
+                      <TableCell className="text-sm">{r.route_speed_limit_kmh ? `${r.route_speed_limit_kmh} km/h` : '—'}</TableCell>
                       <TableCell className="text-xs">
                         {stats.total > 0 ? (
                           <span>{stats.ok} OK / <span className="text-destructive">{stats.deviated} desvio</span></span>
@@ -177,150 +220,5 @@ export default function Routes() {
         editRoute={editRoute}
       />
     </div>
-  );
-}
-
-function RouteDialog({ open, onOpenChange, tenantId, geofences, pois, editRoute }: {
-  open: boolean; onOpenChange: (v: boolean) => void; tenantId?: string;
-  geofences: any[]; pois: any[]; editRoute: any;
-}) {
-  const queryClient = useQueryClient();
-  const [name, setName] = useState('');
-  const [corridorId, setCorridorId] = useState('');
-  const [startPoiId, setStartPoiId] = useState('');
-  const [endPoiId, setEndPoiId] = useState('');
-  const [threshold, setThreshold] = useState('85');
-  const [outsideMin, setOutsideMin] = useState('5');
-  const [speedLimit, setSpeedLimit] = useState('');
-  const [enabled, setEnabled] = useState(true);
-  const [loading, setLoading] = useState(false);
-
-  // Populate form when editing
-  const handleOpen = () => {
-    if (editRoute) {
-      setName(editRoute.name || '');
-      setCorridorId(editRoute.corridor_geofence_id || '');
-      setStartPoiId(editRoute.start_poi_id || '');
-      setEndPoiId(editRoute.end_poi_id || '');
-      setThreshold(String(Math.round((editRoute.corridor_inside_ratio_threshold || 0.85) * 100)));
-      setOutsideMin(String(editRoute.allowed_outside_minutes || 5));
-      setSpeedLimit(editRoute.route_speed_limit_kmh ? String(editRoute.route_speed_limit_kmh) : '');
-      setEnabled(editRoute.enabled ?? true);
-    } else {
-      setName(''); setCorridorId(''); setStartPoiId(''); setEndPoiId('');
-      setThreshold('85'); setOutsideMin('5'); setSpeedLimit(''); setEnabled(true);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!tenantId || !name) return;
-    setLoading(true);
-    try {
-      const payload = {
-        tenant_id: tenantId,
-        name,
-        corridor_geofence_id: corridorId || null,
-        start_poi_id: startPoiId || null,
-        end_poi_id: endPoiId || null,
-        corridor_inside_ratio_threshold: parseInt(threshold) / 100,
-        allowed_outside_minutes: parseInt(outsideMin) || 5,
-        route_speed_limit_kmh: speedLimit ? parseInt(speedLimit) : null,
-        enabled,
-      };
-
-      if (editRoute) {
-        const { error } = await supabase.from('route_templates').update(payload).eq('id', editRoute.id);
-        if (error) throw error;
-        toast.success('Rota atualizada');
-      } else {
-        const { error } = await supabase.from('route_templates').insert(payload);
-        if (error) throw error;
-        toast.success('Rota criada');
-      }
-
-      queryClient.invalidateQueries({ queryKey: ['route_templates'] });
-      onOpenChange(false);
-    } catch (err: any) {
-      toast.error(err.message);
-    }
-    setLoading(false);
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={(v) => { if (v) handleOpen(); onOpenChange(v); }}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader><DialogTitle>{editRoute ? 'Editar Rota' : 'Nova Rota'}</DialogTitle></DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2"><Label>Nome</Label><Input value={name} onChange={e => setName(e.target.value)} required /></div>
-
-          <div className="space-y-2">
-            <Label>Corredor (Geofence)</Label>
-    <Select value={corridorId || '__none__'} onValueChange={v => setCorridorId(v === '__none__' ? '' : v)}>
-               <SelectTrigger><SelectValue placeholder="Selecione um geofence" /></SelectTrigger>
-               <SelectContent>
-                 <SelectItem value="__none__">Nenhum</SelectItem>
-                {geofences.map((g: any) => (
-                  <SelectItem key={g.id} value={g.id}>{g.name} ({g.category})</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">Crie o polígono do corredor na página Geofences (categoria: route_corridor)</p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>POI Início (opcional)</Label>
-              <Select value={startPoiId || '__none__'} onValueChange={v => setStartPoiId(v === '__none__' ? '' : v)}>
-                 <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
-                 <SelectContent>
-                   <SelectItem value="__none__">Nenhum</SelectItem>
-                  {pois.map((p: any) => (
-                    <SelectItem key={p.id} value={p.id}>{p.name || `${p.category}`}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>POI Fim (opcional)</Label>
-              <Select value={endPoiId || '__none__'} onValueChange={v => setEndPoiId(v === '__none__' ? '' : v)}>
-                 <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
-                 <SelectContent>
-                   <SelectItem value="__none__">Nenhum</SelectItem>
-                  {pois.map((p: any) => (
-                    <SelectItem key={p.id} value={p.id}>{p.name || `${p.category}`}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label>Threshold (%)</Label>
-              <Input type="number" value={threshold} onChange={e => setThreshold(e.target.value)} min={50} max={100} />
-            </div>
-            <div className="space-y-2">
-              <Label>Max fora (min)</Label>
-              <Input type="number" value={outsideMin} onChange={e => setOutsideMin(e.target.value)} min={0} />
-            </div>
-            <div className="space-y-2">
-              <Label>Vel. máx (km/h)</Label>
-              <Input type="number" value={speedLimit} onChange={e => setSpeedLimit(e.target.value)} placeholder="Opcional" />
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Switch checked={enabled} onCheckedChange={setEnabled} />
-            <Label>Ativa</Label>
-          </div>
-
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-            <Button type="submit" disabled={loading}>{loading ? 'Salvando...' : 'Salvar'}</Button>
-          </div>
-        </form>
-      </DialogContent>
-    </Dialog>
   );
 }
