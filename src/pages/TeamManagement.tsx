@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Users, UserPlus, ShieldCheck, Truck, Building2, UserCog, Ban, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Users, UserPlus, ShieldCheck, Truck, Building2, UserCog, Ban, CheckCircle2, AlertTriangle, Pencil, KeyRound } from 'lucide-react';
 
 const roleLabels: Record<string, string> = {
   owner: 'Proprietário',
@@ -54,6 +54,7 @@ export default function TeamManagement() {
   const isAdmin = useIsAdmin();
   const queryClient = useQueryClient();
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [editMember, setEditMember] = useState<MemberRow | null>(null);
   const [filterRole, setFilterRole] = useState<string>('all');
 
   const { data: members = [], isLoading } = useQuery({
@@ -289,20 +290,29 @@ export default function TeamManagement() {
                         <TableCell className="text-sm text-muted-foreground">
                           {new Date(m.created_at).toLocaleDateString('pt-BR')}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right space-x-1">
                           {m.role !== 'owner' && (
-                            <Button
-                              size="sm"
-                              variant={m.active ? 'ghost' : 'outline'}
-                              onClick={() => toggleActiveMutation.mutate({ id: m.id, active: !m.active })}
-                              disabled={toggleActiveMutation.isPending}
-                            >
-                              {m.active ? (
-                                <><Ban className="mr-1 h-3 w-3 text-destructive" />Desativar</>
-                              ) : (
-                                <><CheckCircle2 className="mr-1 h-3 w-3 text-success" />Reativar</>
-                              )}
-                            </Button>
+                            <>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => setEditMember(m)}
+                              >
+                                <Pencil className="mr-1 h-3 w-3" />Editar
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant={m.active ? 'ghost' : 'outline'}
+                                onClick={() => toggleActiveMutation.mutate({ id: m.id, active: !m.active })}
+                                disabled={toggleActiveMutation.isPending}
+                              >
+                                {m.active ? (
+                                  <><Ban className="mr-1 h-3 w-3 text-destructive" />Desativar</>
+                                ) : (
+                                  <><CheckCircle2 className="mr-1 h-3 w-3 text-success" />Reativar</>
+                                )}
+                              </Button>
+                            </>
                           )}
                         </TableCell>
                       </TableRow>
@@ -321,6 +331,12 @@ export default function TeamManagement() {
         tenantId={currentTenant?.id}
         drivers={drivers}
         clients={clients}
+      />
+
+      <EditMemberDialog
+        member={editMember}
+        onOpenChange={(open) => { if (!open) setEditMember(null); }}
+        tenantId={currentTenant?.id}
       />
     </div>
   );
@@ -525,6 +541,133 @@ function InviteDialog({
             </div>
           </TabsContent>
         </Tabs>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EditMemberDialog({
+  member,
+  onOpenChange,
+  tenantId,
+}: {
+  member: MemberRow | null;
+  onOpenChange: (open: boolean) => void;
+  tenantId?: string;
+}) {
+  const queryClient = useQueryClient();
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  // Reset form when member changes
+  const open = !!member;
+  useState(() => {
+    if (member) {
+      setFullName(member.profile_name || '');
+      setEmail(member.profile_email || '');
+      setPassword('');
+    }
+  });
+
+  // Use effect-like reset via key
+  const handleOpenChange = (v: boolean) => {
+    if (!v) {
+      setFullName('');
+      setEmail('');
+      setPassword('');
+    }
+    onOpenChange(v);
+  };
+
+  const handleSave = async () => {
+    if (!tenantId || !member) return;
+    setLoading(true);
+    try {
+      const body: Record<string, string> = {
+        tenant_id: tenantId,
+        user_id: member.user_id,
+      };
+      if (fullName.trim()) body.full_name = fullName.trim();
+      if (email.trim()) body.email = email.trim();
+      if (password) body.password = password;
+
+      if (!body.full_name && !body.email && !body.password) {
+        toast.info('Nenhuma alteração informada.');
+        setLoading(false);
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke('update-team-member', { body });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      toast.success('Conta atualizada com sucesso');
+      queryClient.invalidateQueries({ queryKey: ['tenant_members'] });
+      handleOpenChange(false);
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao atualizar conta');
+    }
+    setLoading(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Editar Membro</DialogTitle>
+          <DialogDescription>
+            Altere os dados da conta de {member?.profile_name || 'usuário'}.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label>Nome completo</Label>
+            <Input
+              placeholder={member?.profile_name || 'Nome do usuário'}
+              value={fullName}
+              onChange={e => setFullName(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>E-mail</Label>
+            <Input
+              type="email"
+              placeholder="Novo e-mail (deixe vazio para manter)"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="flex items-center gap-1.5">
+              <KeyRound className="h-3.5 w-3.5" />
+              Nova senha
+            </Label>
+            <Input
+              type="password"
+              placeholder="Deixe vazio para manter a atual"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+            />
+            {password && password.length < 6 && (
+              <p className="text-xs text-destructive">Mínimo 6 caracteres</p>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => handleOpenChange(false)}>Cancelar</Button>
+            <Button
+              onClick={handleSave}
+              disabled={loading || (password.length > 0 && password.length < 6)}
+            >
+              {loading ? 'Salvando...' : 'Salvar alterações'}
+            </Button>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );
