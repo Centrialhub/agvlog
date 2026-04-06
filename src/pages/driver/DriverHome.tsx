@@ -13,6 +13,8 @@ export default function DriverHome() {
   const { currentTenant } = useTenant();
   const { data: driver, isLoading: driverLoading } = useCurrentDriver();
   const navigate = useNavigate();
+  const { data: autoTrip } = useActiveTrip(driver?.id);
+  const checklist = useChecklistStatus(autoTrip?.id);
 
   const { data: activeTrips = [], isLoading: tripsLoading } = useQuery({
     queryKey: ['driver_my_trips', driver?.id],
