@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useCurrentDriver, useActiveTrip } from '@/hooks/useCurrentDriver';
+import { useChecklistStatus } from '@/hooks/useChecklistStatus';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,6 +13,8 @@ export default function DriverHome() {
   const { currentTenant } = useTenant();
   const { data: driver, isLoading: driverLoading } = useCurrentDriver();
   const navigate = useNavigate();
+  const { data: autoTrip } = useActiveTrip(driver?.id);
+  const checklist = useChecklistStatus(autoTrip?.id);
 
   const { data: activeTrips = [], isLoading: tripsLoading } = useQuery({
     queryKey: ['driver_my_trips', driver?.id],
@@ -112,6 +115,27 @@ export default function DriverHome() {
             </Card>
           ))}
         </div>
+      )}
+
+      {/* Checklist status banner */}
+      {autoTrip && !checklist.isLoading && (!checklist.preCompleted || !checklist.postCompleted) && (
+        <Card
+          className="border-warning/50 bg-warning/5 cursor-pointer hover:bg-warning/10 transition-colors"
+          onClick={() => navigate('/driver/checklist')}
+        >
+          <CardContent className="p-3 flex items-center gap-3">
+            <AlertTriangle className="h-5 w-5 text-warning shrink-0" />
+            <div className="flex-1">
+              <p className="text-xs font-medium">Checklist pendente</p>
+              <p className="text-[10px] text-muted-foreground">
+                {!checklist.preCompleted
+                  ? `Pré-viagem: ${checklist.preCheckedCount}/${checklist.preTotalCount} itens`
+                  : `Pós-viagem: ${checklist.postCheckedCount}/${checklist.postTotalCount} itens`}
+              </p>
+            </div>
+            <ClipboardCheck className="h-4 w-4 text-muted-foreground" />
+          </CardContent>
+        </Card>
       )}
 
       {/* Quick actions */}
