@@ -54,6 +54,7 @@ export default function TeamManagement() {
   const isAdmin = useIsAdmin();
   const queryClient = useQueryClient();
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [editMember, setEditMember] = useState<MemberRow | null>(null);
   const [filterRole, setFilterRole] = useState<string>('all');
 
   const { data: members = [], isLoading } = useQuery({
