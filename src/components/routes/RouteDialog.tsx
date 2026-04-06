@@ -48,8 +48,15 @@ export function RouteDialog({ open, onOpenChange, tenantId, geofences, pois, edi
     enabled: !!editRoute?.id && open,
   });
 
+  // Reset form when dialog opens (only once per open)
+  const [initialized, setInitialized] = useState(false);
+
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setInitialized(false);
+      return;
+    }
+    if (initialized) return;
     if (editRoute) {
       setName(editRoute.name || '');
       setCorridorId(editRoute.corridor_geofence_id || '');
@@ -57,6 +64,18 @@ export function RouteDialog({ open, onOpenChange, tenantId, geofences, pois, edi
       setOutsideMin(String(editRoute.allowed_outside_minutes || 5));
       setSpeedLimit(editRoute.route_speed_limit_kmh ? String(editRoute.route_speed_limit_kmh) : '');
       setEnabled(editRoute.enabled ?? true);
+    } else {
+      setName(''); setCorridorId('');
+      setThreshold('85'); setOutsideMin('5'); setSpeedLimit(''); setEnabled(true);
+      setWaypoints([]);
+      setInitialized(true);
+    }
+  }, [open, editRoute, initialized]);
+
+  // Load existing waypoints when editing (only once after they load)
+  useEffect(() => {
+    if (!open || !editRoute || initialized) return;
+    if (existingWaypoints.length > 0 || editRoute) {
       setWaypoints(existingWaypoints.map((w: any) => ({
         id: w.id,
         waypoint_order: w.waypoint_order,
@@ -68,12 +87,9 @@ export function RouteDialog({ open, onOpenChange, tenantId, geofences, pois, edi
         estimated_duration_min: w.estimated_duration_min,
         notes: w.notes || '',
       })));
-    } else {
-      setName(''); setCorridorId('');
-      setThreshold('85'); setOutsideMin('5'); setSpeedLimit(''); setEnabled(true);
-      setWaypoints([]);
+      setInitialized(true);
     }
-  }, [open, editRoute, existingWaypoints]);
+  }, [open, editRoute, existingWaypoints, initialized]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
