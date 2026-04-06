@@ -367,31 +367,35 @@ function InviteDialog({
 }) {
   const queryClient = useQueryClient();
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
   const [role, setRole] = useState<string>('operator');
   const [loading, setLoading] = useState(false);
+  const [tab, setTab] = useState<'create' | 'existing'>('create');
 
-  const handleInvite = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!tenantId || !email) return;
+  const resetForm = () => {
+    setEmail('');
+    setPassword('');
+    setFullName('');
+    setRole('operator');
+    setUserId('');
+  };
+
+  const handleCreateAccount = async () => {
+    if (!tenantId || !email || !password) return;
     setLoading(true);
     try {
-      // Use Supabase Auth admin invite (via edge function) or manual lookup
-      // For now: check if user exists by looking up profiles, then create membership
-      // This is a simplified flow - in production you'd use an edge function with service role
-      
-      // Try to find user by checking if there's a profile with matching full_name/email
-      // Since we can't query auth.users from client, we'll create a pending invite
-      // For MVP: admin must share the signup link and then manually add the user_id
-      
-      toast.info(
-        'Funcionalidade de convite por e-mail requer configuração de Edge Function. ' +
-        'Por enquanto, peça ao usuário para criar uma conta e informe o ID do usuário para adicioná-lo manualmente.',
-        { duration: 8000 }
-      );
-      
-      // Alternative: add by user_id directly
+      const { data, error } = await supabase.functions.invoke('create-team-member', {
+        body: { tenant_id: tenantId, email, password, full_name: fullName || email, role },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success(`Conta criada com sucesso para ${data.email}`);
+      queryClient.invalidateQueries({ queryKey: ['tenant_members'] });
+      resetForm();
+      onOpenChange(false);
     } catch (err: any) {
-      toast.error(err.message);
+      toast.error(err.message || 'Erro ao criar conta');
     }
     setLoading(false);
   };
@@ -416,7 +420,7 @@ function InviteDialog({
       } else {
         toast.success(`Membro adicionado como ${roleLabels[role]}`);
         queryClient.invalidateQueries({ queryKey: ['tenant_members'] });
-        setUserId('');
+        resetForm();
         onOpenChange(false);
       }
     } catch (err: any) {
@@ -425,67 +429,102 @@ function InviteDialog({
     setLoading(false);
   };
 
+  const isCreateValid = email.includes('@') && password.length >= 6;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Adicionar Membro</DialogTitle>
           <DialogDescription>
-            Adicione um novo membro à sua empresa. O usuário precisa já ter uma conta no sistema.
+            Crie uma nova conta ou vincule um usuário existente à sua empresa.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label>Papel</Label>
-            <Select value={role} onValueChange={setRole}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="admin">Administrador — acesso total</SelectItem>
-                <SelectItem value="operator">Operador — acesso operacional</SelectItem>
-                <SelectItem value="driver">Motorista — app do motorista</SelectItem>
-                <SelectItem value="client">Cliente — portal do cliente</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+        <Tabs value={tab} onValueChange={(v) => setTab(v as 'create' | 'existing')}>
+          <TabsList className="w-full">
+            <TabsTrigger value="create" className="flex-1"><UserPlus className="mr-1.5 h-3.5 w-3.5" />Criar conta</TabsTrigger>
+            <TabsTrigger value="existing" className="flex-1"><Users className="mr-1.5 h-3.5 w-3.5" />Usuário existente</TabsTrigger>
+          </TabsList>
 
-          <div className="space-y-2">
-            <Label>ID do Usuário (UUID)</Label>
-            <Input
-              placeholder="ex: a1b2c3d4-e5f6-..."
-              value={userId}
-              onChange={e => setUserId(e.target.value)}
-            />
-            <p className="text-xs text-muted-foreground">
-              O usuário pode encontrar seu ID na página de perfil ou nas configurações da conta.
-            </p>
-          </div>
+          <TabsContent value="create" className="space-y-4 mt-4">
+            <div className="space-y-2">
+              <Label>Nome completo</Label>
+              <Input placeholder="ex: João Silva" value={fullName} onChange={e => setFullName(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>E-mail *</Label>
+              <Input type="email" placeholder="joao@empresa.com" value={email} onChange={e => setEmail(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Senha *</Label>
+              <Input type="password" placeholder="Mínimo 6 caracteres" value={password} onChange={e => setPassword(e.target.value)} />
+              <p className="text-xs text-muted-foreground">O usuário poderá alterar a senha após o primeiro login.</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Papel</Label>
+              <Select value={role} onValueChange={setRole}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">Administrador — acesso total</SelectItem>
+                  <SelectItem value="operator">Operador — acesso operacional</SelectItem>
+                  <SelectItem value="driver">Motorista — app do motorista</SelectItem>
+                  <SelectItem value="client">Cliente — portal do cliente</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-          {role === 'driver' && drivers.length > 0 && (
-            <div className="rounded-md bg-muted/50 p-3">
-              <p className="text-xs text-muted-foreground mb-1">
-                <strong>Dica:</strong> Após adicionar o membro como motorista, vincule-o ao cadastro de motorista na página de Motoristas.
+            {role === 'driver' && drivers.length > 0 && (
+              <div className="rounded-md bg-muted/50 p-3">
+                <p className="text-xs text-muted-foreground">
+                  <strong>Dica:</strong> Após criar a conta, vincule o usuário ao cadastro de motorista na página de Motoristas.
+                </p>
+              </div>
+            )}
+            {role === 'client' && clients.length > 0 && (
+              <div className="rounded-md bg-muted/50 p-3">
+                <p className="text-xs text-muted-foreground">
+                  <strong>Dica:</strong> Após criar a conta, vincule o usuário ao cadastro de cliente na página de Clientes.
+                </p>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+              <Button onClick={handleCreateAccount} disabled={loading || !isCreateValid}>
+                {loading ? 'Criando...' : 'Criar conta e adicionar'}
+              </Button>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="existing" className="space-y-4 mt-4">
+            <div className="space-y-2">
+              <Label>Papel</Label>
+              <Select value={role} onValueChange={setRole}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">Administrador — acesso total</SelectItem>
+                  <SelectItem value="operator">Operador — acesso operacional</SelectItem>
+                  <SelectItem value="driver">Motorista — app do motorista</SelectItem>
+                  <SelectItem value="client">Cliente — portal do cliente</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>ID do Usuário (UUID)</Label>
+              <Input placeholder="ex: a1b2c3d4-e5f6-..." value={userId} onChange={e => setUserId(e.target.value)} />
+              <p className="text-xs text-muted-foreground">
+                O usuário pode encontrar seu ID na página de perfil ou nas configurações da conta.
               </p>
             </div>
-          )}
-
-          {role === 'client' && clients.length > 0 && (
-            <div className="rounded-md bg-muted/50 p-3">
-              <p className="text-xs text-muted-foreground mb-1">
-                <strong>Dica:</strong> Após adicionar o membro como cliente, vincule-o ao cadastro de cliente na página de Clientes.
-              </p>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+              <Button onClick={handleAddById} disabled={loading || !userId.trim()}>
+                {loading ? 'Adicionando...' : 'Vincular membro'}
+              </Button>
             </div>
-          )}
-
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-            <Button onClick={handleAddById} disabled={loading || !userId.trim()}>
-              {loading ? 'Adicionando...' : 'Adicionar membro'}
-            </Button>
-          </div>
-        </div>
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );
