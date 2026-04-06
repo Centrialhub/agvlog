@@ -290,20 +290,29 @@ export default function TeamManagement() {
                         <TableCell className="text-sm text-muted-foreground">
                           {new Date(m.created_at).toLocaleDateString('pt-BR')}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right space-x-1">
                           {m.role !== 'owner' && (
-                            <Button
-                              size="sm"
-                              variant={m.active ? 'ghost' : 'outline'}
-                              onClick={() => toggleActiveMutation.mutate({ id: m.id, active: !m.active })}
-                              disabled={toggleActiveMutation.isPending}
-                            >
-                              {m.active ? (
-                                <><Ban className="mr-1 h-3 w-3 text-destructive" />Desativar</>
-                              ) : (
-                                <><CheckCircle2 className="mr-1 h-3 w-3 text-success" />Reativar</>
-                              )}
-                            </Button>
+                            <>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => setEditMember(m)}
+                              >
+                                <Pencil className="mr-1 h-3 w-3" />Editar
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant={m.active ? 'ghost' : 'outline'}
+                                onClick={() => toggleActiveMutation.mutate({ id: m.id, active: !m.active })}
+                                disabled={toggleActiveMutation.isPending}
+                              >
+                                {m.active ? (
+                                  <><Ban className="mr-1 h-3 w-3 text-destructive" />Desativar</>
+                                ) : (
+                                  <><CheckCircle2 className="mr-1 h-3 w-3 text-success" />Reativar</>
+                                )}
+                              </Button>
+                            </>
                           )}
                         </TableCell>
                       </TableRow>
