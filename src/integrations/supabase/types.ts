@@ -471,6 +471,7 @@ export type Database = {
           active: boolean
           created_at: string
           created_by: string | null
+          current_vehicle_id: string | null
           doc: string | null
           id: string
           name: string
@@ -485,6 +486,7 @@ export type Database = {
           active?: boolean
           created_at?: string
           created_by?: string | null
+          current_vehicle_id?: string | null
           doc?: string | null
           id?: string
           name: string
@@ -499,6 +501,7 @@ export type Database = {
           active?: boolean
           created_at?: string
           created_by?: string | null
+          current_vehicle_id?: string | null
           doc?: string | null
           id?: string
           name?: string
@@ -510,6 +513,13 @@ export type Database = {
           updated_by?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "drivers_current_vehicle_id_fkey"
+            columns: ["current_vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "drivers_tenant_id_fkey"
             columns: ["tenant_id"]
@@ -3064,6 +3074,7 @@ export type Database = {
           body_type: string | null
           created_at: string
           created_by: string | null
+          current_driver_id: string | null
           expected_speed_penalty_loaded: number | null
           fuel_canonical_key: string | null
           id: string
@@ -3087,6 +3098,7 @@ export type Database = {
           body_type?: string | null
           created_at?: string
           created_by?: string | null
+          current_driver_id?: string | null
           expected_speed_penalty_loaded?: number | null
           fuel_canonical_key?: string | null
           id?: string
@@ -3110,6 +3122,7 @@ export type Database = {
           body_type?: string | null
           created_at?: string
           created_by?: string | null
+          current_driver_id?: string | null
           expected_speed_penalty_loaded?: number | null
           fuel_canonical_key?: string | null
           id?: string
@@ -3128,6 +3141,13 @@ export type Database = {
           updated_by?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "vehicles_current_driver_id_fkey"
+            columns: ["current_driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "vehicles_tenant_id_fkey"
             columns: ["tenant_id"]
