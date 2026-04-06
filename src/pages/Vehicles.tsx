@@ -23,8 +23,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Pencil, Trash2, ExternalLink } from 'lucide-react';
+import { Plus, Pencil, Trash2, ExternalLink, User, LinkIcon, Unlink } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function Vehicles() {
@@ -42,13 +43,40 @@ export default function Vehicles() {
       if (!currentTenant) return [];
       const { data, error } = await supabase
         .from('vehicles')
-        .select('*')
+        .select('*, current_driver:drivers!vehicles_current_driver_id_fkey(id, name)')
         .eq('tenant_id', currentTenant.id)
         .order('created_at', { ascending: false });
       if (error) throw error;
       return data;
     },
     enabled: !!currentTenant,
+  });
+
+  const { data: drivers = [] } = useQuery({
+    queryKey: ['drivers_for_assign', currentTenant?.id],
+    queryFn: async () => {
+      if (!currentTenant) return [];
+      const { data } = await supabase.from('drivers').select('id, name, current_vehicle_id')
+        .eq('tenant_id', currentTenant.id).eq('active', true).order('name');
+      return data || [];
+    },
+    enabled: !!currentTenant,
+  });
+
+  const assignMutation = useMutation({
+    mutationFn: async ({ vehicleId, driverId }: { vehicleId: string; driverId: string | null }) => {
+      const { error } = await supabase.from('vehicles')
+        .update({ current_driver_id: driverId })
+        .eq('id', vehicleId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vehicles'] });
+      queryClient.invalidateQueries({ queryKey: ['drivers'] });
+      queryClient.invalidateQueries({ queryKey: ['drivers_for_assign'] });
+      toast.success('Vínculo atualizado');
+    },
+    onError: (e: any) => toast.error(e.message),
   });
 
   const deleteMutation = useMutation({
@@ -98,9 +126,8 @@ export default function Vehicles() {
                 <TableHead>Placa</TableHead>
                 <TableHead>Apelido</TableHead>
                 <TableHead>Tipo</TableHead>
+                <TableHead>Motorista</TableHead>
                 <TableHead>Carroceria</TableHead>
-                <TableHead>Paletes</TableHead>
-                <TableHead>Peso Máx</TableHead>
                 <TableHead>Status</TableHead>
                 {isAdmin && <TableHead className="w-24">Ações</TableHead>}
               </TableRow>
@@ -108,13 +135,13 @@ export default function Vehicles() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     Carregando...
                   </TableCell>
                 </TableRow>
               ) : vehicles.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     Nenhum veículo cadastrado
                   </TableCell>
                 </TableRow>
@@ -124,9 +151,38 @@ export default function Vehicles() {
                     <TableCell className="font-mono font-medium">{v.plate}</TableCell>
                     <TableCell>{v.nickname || '—'}</TableCell>
                     <TableCell className="capitalize">{v.type}</TableCell>
+                    <TableCell onClick={e => e.stopPropagation()}>
+                      {isAdmin ? (
+                        <Select
+                          value={v.current_driver_id || '__none__'}
+                          onValueChange={val => assignMutation.mutate({
+                            vehicleId: v.id,
+                            driverId: val === '__none__' ? null : val,
+                          })}
+                        >
+                          <SelectTrigger className="h-7 w-40 text-xs">
+                            <SelectValue placeholder="Sem motorista" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">Sem motorista</SelectItem>
+                            {drivers.map((d: any) => (
+                              <SelectItem key={d.id} value={d.id}>
+                                {d.name} {d.current_vehicle_id && d.current_vehicle_id !== v.id ? '(em outro)' : ''}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <span className="text-sm flex items-center gap-1">
+                          {v.current_driver ? (
+                            <><User className="h-3 w-3" /> {v.current_driver.name}</>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-sm text-muted-foreground">{v.body_type || '—'}</TableCell>
-                    <TableCell className="text-sm">{v.max_pallets || '—'}</TableCell>
-                    <TableCell className="text-sm">{v.max_weight_kg ? `${v.max_weight_kg} kg` : '—'}</TableCell>
                     <TableCell>
                       <Badge variant={v.active ? 'default' : 'secondary'}>
                         {v.active ? 'Ativo' : 'Inativo'}
