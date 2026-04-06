@@ -34,6 +34,7 @@ const Ingestion = lazy(() => import("@/pages/Ingestion"));
 const ProductivityReports = lazy(() => import("@/pages/ProductivityReports"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const ExpenseApproval = lazy(() => import("@/pages/ExpenseApproval"));
+const TeamManagement = lazy(() => import("@/pages/TeamManagement"));
 const ClientPortal = lazy(() => import("@/pages/ClientPortal"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
@@ -140,6 +141,7 @@ const App = () => (
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="/expense-approval" element={<ProtectedRoute><ExpenseApproval /></ProtectedRoute>} />
             <Route path="/integration-health" element={<ProtectedRoute><IntegrationHealth /></ProtectedRoute>} />
+            <Route path="/team" element={<ProtectedRoute><TeamManagement /></ProtectedRoute>} />
 
             {/* Driver routes */}
             <Route path="/driver" element={<DriverRoute><DriverHome /></DriverRoute>} />

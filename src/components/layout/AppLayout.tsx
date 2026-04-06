@@ -76,6 +76,7 @@ const navSections: NavSection[] = [
   {
     label: 'Sistema',
     items: [
+      { label: 'Equipe & Acessos', href: '/team', icon: <Users className="h-4 w-4" /> },
       { label: 'Integrações', href: '/integration-health', icon: <Plug className="h-4 w-4" /> },
       { label: 'Configurações', href: '/settings', icon: <Settings className="h-4 w-4" /> },
     ],
