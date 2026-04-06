@@ -332,6 +332,12 @@ export default function TeamManagement() {
         drivers={drivers}
         clients={clients}
       />
+
+      <EditMemberDialog
+        member={editMember}
+        onOpenChange={(open) => { if (!open) setEditMember(null); }}
+        tenantId={currentTenant?.id}
+      />
     </div>
   );
 }
