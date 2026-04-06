@@ -545,3 +545,130 @@ function InviteDialog({
     </Dialog>
   );
 }
+
+function EditMemberDialog({
+  member,
+  onOpenChange,
+  tenantId,
+}: {
+  member: MemberRow | null;
+  onOpenChange: (open: boolean) => void;
+  tenantId?: string;
+}) {
+  const queryClient = useQueryClient();
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  // Reset form when member changes
+  const open = !!member;
+  useState(() => {
+    if (member) {
+      setFullName(member.profile_name || '');
+      setEmail(member.profile_email || '');
+      setPassword('');
+    }
+  });
+
+  // Use effect-like reset via key
+  const handleOpenChange = (v: boolean) => {
+    if (!v) {
+      setFullName('');
+      setEmail('');
+      setPassword('');
+    }
+    onOpenChange(v);
+  };
+
+  const handleSave = async () => {
+    if (!tenantId || !member) return;
+    setLoading(true);
+    try {
+      const body: Record<string, string> = {
+        tenant_id: tenantId,
+        user_id: member.user_id,
+      };
+      if (fullName.trim()) body.full_name = fullName.trim();
+      if (email.trim()) body.email = email.trim();
+      if (password) body.password = password;
+
+      if (!body.full_name && !body.email && !body.password) {
+        toast.info('Nenhuma alteração informada.');
+        setLoading(false);
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke('update-team-member', { body });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      toast.success('Conta atualizada com sucesso');
+      queryClient.invalidateQueries({ queryKey: ['tenant_members'] });
+      handleOpenChange(false);
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao atualizar conta');
+    }
+    setLoading(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Editar Membro</DialogTitle>
+          <DialogDescription>
+            Altere os dados da conta de {member?.profile_name || 'usuário'}.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label>Nome completo</Label>
+            <Input
+              placeholder={member?.profile_name || 'Nome do usuário'}
+              value={fullName}
+              onChange={e => setFullName(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>E-mail</Label>
+            <Input
+              type="email"
+              placeholder="Novo e-mail (deixe vazio para manter)"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="flex items-center gap-1.5">
+              <KeyRound className="h-3.5 w-3.5" />
+              Nova senha
+            </Label>
+            <Input
+              type="password"
+              placeholder="Deixe vazio para manter a atual"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+            />
+            {password && password.length < 6 && (
+              <p className="text-xs text-destructive">Mínimo 6 caracteres</p>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => handleOpenChange(false)}>Cancelar</Button>
+            <Button
+              onClick={handleSave}
+              disabled={loading || (password.length > 0 && password.length < 6)}
+            >
+              {loading ? 'Salvando...' : 'Salvar alterações'}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
