@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Pencil, Trash2, RefreshCw } from 'lucide-react';
+import { Plus, Pencil, Trash2, RefreshCw, Truck } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function Drivers() {
@@ -26,12 +26,40 @@ export default function Drivers() {
     queryKey: ['drivers', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data, error } = await supabase.from('drivers').select('*')
+      const { data, error } = await supabase.from('drivers')
+        .select('*, current_vehicle:vehicles!drivers_current_vehicle_id_fkey(id, plate, nickname)')
         .eq('tenant_id', currentTenant.id).order('name');
       if (error) throw error;
       return data;
     },
     enabled: !!currentTenant,
+  });
+
+  const { data: vehicles = [] } = useQuery({
+    queryKey: ['vehicles_for_assign', currentTenant?.id],
+    queryFn: async () => {
+      if (!currentTenant) return [];
+      const { data } = await supabase.from('vehicles').select('id, plate, nickname, current_driver_id')
+        .eq('tenant_id', currentTenant.id).eq('active', true).order('plate');
+      return data || [];
+    },
+    enabled: !!currentTenant,
+  });
+
+  const assignMutation = useMutation({
+    mutationFn: async ({ driverId, vehicleId }: { driverId: string; vehicleId: string | null }) => {
+      const { error } = await supabase.from('drivers')
+        .update({ current_vehicle_id: vehicleId })
+        .eq('id', driverId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['drivers'] });
+      queryClient.invalidateQueries({ queryKey: ['vehicles'] });
+      queryClient.invalidateQueries({ queryKey: ['vehicles_for_assign'] });
+      toast.success('Vínculo atualizado');
+    },
+    onError: (e: any) => toast.error(e.message),
   });
 
   const { data: accounts = [] } = useQuery({
@@ -104,6 +132,7 @@ export default function Drivers() {
                 <TableHead>Nome</TableHead>
                 <TableHead>Documento</TableHead>
                 <TableHead>Telefone</TableHead>
+                <TableHead>Veículo Vinculado</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>SSX Sync</TableHead>
                 {isAdmin && <TableHead className="w-32">Ações</TableHead>}
@@ -111,15 +140,46 @@ export default function Drivers() {
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
               ) : drivers.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhum motorista cadastrado</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhum motorista cadastrado</TableCell></TableRow>
               ) : (
                 drivers.map((d: any) => (
                   <TableRow key={d.id}>
                     <TableCell className="font-medium">{d.name}</TableCell>
                     <TableCell className="font-mono">{d.doc || '—'}</TableCell>
                     <TableCell>{d.phone || '—'}</TableCell>
+                    <TableCell>
+                      {isAdmin ? (
+                        <Select
+                          value={d.current_vehicle_id || '__none__'}
+                          onValueChange={val => assignMutation.mutate({
+                            driverId: d.id,
+                            vehicleId: val === '__none__' ? null : val,
+                          })}
+                        >
+                          <SelectTrigger className="h-7 w-40 text-xs">
+                            <SelectValue placeholder="Sem veículo" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">Sem veículo</SelectItem>
+                            {vehicles.map((v: any) => (
+                              <SelectItem key={v.id} value={v.id}>
+                                {v.plate} {v.nickname ? `(${v.nickname})` : ''} {v.current_driver_id && v.current_driver_id !== d.id ? '(em uso)' : ''}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <span className="text-sm flex items-center gap-1">
+                          {d.current_vehicle ? (
+                            <><Truck className="h-3 w-3" /> {d.current_vehicle.plate}</>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <Badge variant={d.active ? 'default' : 'secondary'}>{d.active ? 'Ativo' : 'Inativo'}</Badge>
                     </TableCell>
