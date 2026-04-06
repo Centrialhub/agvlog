@@ -115,7 +115,7 @@ export default function TeamManagement() {
     mutationFn: async ({ id, role }: { id: string; role: string }) => {
       const { error } = await supabase
         .from('tenant_memberships')
-        .update({ role, updated_at: new Date().toISOString() })
+        .update({ role: role as any, updated_at: new Date().toISOString() })
         .eq('id', id);
       if (error) throw error;
     },
