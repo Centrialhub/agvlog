@@ -117,6 +117,27 @@ export default function DriverHome() {
         </div>
       )}
 
+      {/* Checklist status banner */}
+      {autoTrip && !checklist.isLoading && (!checklist.preCompleted || !checklist.postCompleted) && (
+        <Card
+          className="border-warning/50 bg-warning/5 cursor-pointer hover:bg-warning/10 transition-colors"
+          onClick={() => navigate('/driver/checklist')}
+        >
+          <CardContent className="p-3 flex items-center gap-3">
+            <AlertTriangle className="h-5 w-5 text-warning shrink-0" />
+            <div className="flex-1">
+              <p className="text-xs font-medium">Checklist pendente</p>
+              <p className="text-[10px] text-muted-foreground">
+                {!checklist.preCompleted
+                  ? `Pré-viagem: ${checklist.preCheckedCount}/${checklist.preTotalCount} itens`
+                  : `Pós-viagem: ${checklist.postCheckedCount}/${checklist.postTotalCount} itens`}
+              </p>
+            </div>
+            <ClipboardCheck className="h-4 w-4 text-muted-foreground" />
+          </CardContent>
+        </Card>
+      )}
+
       {/* Quick actions */}
       <div className="grid grid-cols-2 gap-3">
         <Card className="cursor-pointer hover:bg-accent/50 transition-colors" onClick={() => navigate('/driver/journey')}>
