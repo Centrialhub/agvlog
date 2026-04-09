@@ -38,6 +38,8 @@ function OrderForm({ order, clients, onSave, onCancel }: { order?: Order; client
     volume_m3: order?.volume_m3 || '',
     notes: order?.notes || '',
     status: order?.status || 'received',
+    city: order?.city || '',
+    neighborhood: order?.neighborhood || '',
     remitter: order?.remitter || '',
     recipient: order?.recipient || '',
     nf_series: order?.nf_series || '',
@@ -112,7 +114,7 @@ function OrderForm({ order, clients, onSave, onCancel }: { order?: Order; client
     ];
     const out: any = { ...form };
     numFields.forEach(k => { out[k] = out[k] ? Number(out[k]) : null; });
-    ['client_id', 'remitter', 'recipient', 'nf_series', 'issue_date', 'payment_plan'].forEach(k => { out[k] = out[k] || null; });
+    ['client_id', 'remitter', 'recipient', 'nf_series', 'issue_date', 'payment_plan', 'city', 'neighborhood'].forEach(k => { out[k] = out[k] || null; });
     onSave(out);
   };
 
@@ -156,6 +158,10 @@ function OrderForm({ order, clients, onSave, onCancel }: { order?: Order; client
           <div className="grid grid-cols-2 gap-3">
             <div><Label>Origem</Label><Input value={form.origin} onChange={e => set('origin', e.target.value)} /></div>
             <div><Label>Destino</Label><Input value={form.destination} onChange={e => set('destination', e.target.value)} /></div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label>Cidade</Label><Input value={form.city} onChange={e => set('city', e.target.value)} /></div>
+            <div><Label>Bairro</Label><Input value={form.neighborhood} onChange={e => set('neighborhood', e.target.value)} /></div>
           </div>
           <p className="text-xs font-semibold text-muted-foreground pt-2">Carga</p>
           <div className="grid grid-cols-4 gap-3">
