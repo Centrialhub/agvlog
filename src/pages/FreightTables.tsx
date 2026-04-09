@@ -305,6 +305,26 @@ export default function FreightTables() {
                 </div>
               </div>
 
+              <p className="text-xs font-semibold text-muted-foreground pt-2">Classificação</p>
+              <div className="grid grid-cols-4 gap-3">
+                <div>
+                  <Label>Tipo Carga</Label>
+                  <Input value={form.cargo_type} onChange={(e) => setForm({ ...form, cargo_type: e.target.value })} placeholder="Ex: Seca" />
+                </div>
+                <div>
+                  <Label>Tipo Veículo</Label>
+                  <Input value={form.vehicle_type} onChange={(e) => setForm({ ...form, vehicle_type: e.target.value })} placeholder="Ex: Truck" />
+                </div>
+                <div>
+                  <Label>Tipo Carroceria</Label>
+                  <Input value={form.body_type} onChange={(e) => setForm({ ...form, body_type: e.target.value })} placeholder="Ex: Baú" />
+                </div>
+                <div>
+                  <Label>Tipo CTRC</Label>
+                  <Input value={form.ctrc_type} onChange={(e) => setForm({ ...form, ctrc_type: e.target.value })} placeholder="Normal" />
+                </div>
+              </div>
+
               <p className="text-xs font-semibold text-muted-foreground pt-2">Valores do Frete</p>
               <div className="grid grid-cols-3 gap-3">
                 <div>
