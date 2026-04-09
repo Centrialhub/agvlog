@@ -334,6 +334,7 @@ export default function RoutePlanning() {
     toast.success('PDF gerado com sucesso!');
   };
 
+  return (
     <div className="animate-fade-in space-y-6">
       <div className="flex items-center justify-between">
         <div>
