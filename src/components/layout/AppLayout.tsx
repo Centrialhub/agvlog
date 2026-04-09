@@ -34,6 +34,7 @@ import {
   Radio,
   ShieldCheck,
   Receipt,
+  DollarSign,
 } from 'lucide-react';
 
 interface NavSection {
