@@ -38,6 +38,7 @@ const TeamManagement = lazy(() => import("@/pages/TeamManagement"));
 const ClientRegions = lazy(() => import("@/pages/ClientRegions"));
 const FreightTables = lazy(() => import("@/pages/FreightTables"));
 const ClientPortal = lazy(() => import("@/pages/ClientPortal"));
+const RoutePlanning = lazy(() => import("@/pages/RoutePlanning"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
 // Driver pages
@@ -146,6 +147,7 @@ const App = () => (
             <Route path="/team" element={<ProtectedRoute><TeamManagement /></ProtectedRoute>} />
             <Route path="/regions" element={<ProtectedRoute><ClientRegions /></ProtectedRoute>} />
             <Route path="/freight" element={<ProtectedRoute><FreightTables /></ProtectedRoute>} />
+            <Route path="/route-planning" element={<ProtectedRoute><RoutePlanning /></ProtectedRoute>} />
 
             {/* Driver routes */}
             <Route path="/driver" element={<DriverRoute><DriverHome /></DriverRoute>} />
