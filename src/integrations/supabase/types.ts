@@ -1862,6 +1862,9 @@ export type Database = {
       orders: {
         Row: {
           cargo_type: string | null
+          cbs_base: number | null
+          cbs_rate: number | null
+          cbs_value: number | null
           city: string | null
           client_id: string | null
           cofins_rate: number | null
@@ -1874,6 +1877,9 @@ export type Database = {
           freight_delivery_value: number | null
           freight_weight_value: number | null
           gris_value: number | null
+          ibs_base: number | null
+          ibs_rate: number | null
+          ibs_value: number | null
           icms_base: number | null
           icms_rate: number | null
           icms_value: number | null
@@ -1911,6 +1917,9 @@ export type Database = {
         }
         Insert: {
           cargo_type?: string | null
+          cbs_base?: number | null
+          cbs_rate?: number | null
+          cbs_value?: number | null
           city?: string | null
           client_id?: string | null
           cofins_rate?: number | null
@@ -1923,6 +1932,9 @@ export type Database = {
           freight_delivery_value?: number | null
           freight_weight_value?: number | null
           gris_value?: number | null
+          ibs_base?: number | null
+          ibs_rate?: number | null
+          ibs_value?: number | null
           icms_base?: number | null
           icms_rate?: number | null
           icms_value?: number | null
@@ -1960,6 +1972,9 @@ export type Database = {
         }
         Update: {
           cargo_type?: string | null
+          cbs_base?: number | null
+          cbs_rate?: number | null
+          cbs_value?: number | null
           city?: string | null
           client_id?: string | null
           cofins_rate?: number | null
@@ -1972,6 +1987,9 @@ export type Database = {
           freight_delivery_value?: number | null
           freight_weight_value?: number | null
           gris_value?: number | null
+          ibs_base?: number | null
+          ibs_rate?: number | null
+          ibs_value?: number | null
           icms_base?: number | null
           icms_rate?: number | null
           icms_value?: number | null
