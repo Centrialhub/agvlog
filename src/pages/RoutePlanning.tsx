@@ -39,6 +39,8 @@ interface PendingOrder {
   issue_date: string | null;
   remitter: string | null;
   recipient: string | null;
+  city: string | null;
+  neighborhood: string | null;
   clients?: { company_name: string } | null;
 }
 
