@@ -16,7 +16,7 @@ import {
   ChevronLeft, ChevronRight, Hexagon, FileText, Building2, Warehouse,
   PackageCheck, AlertOctagon, Upload, TrendingUp, ChevronDown, Plug,
   Radio, ShieldCheck, Receipt, DollarSign, UserCog, Package, Wrench,
-  Boxes,
+  Boxes, ClipboardCheck,
 } from 'lucide-react';
 
 interface NavSection {
@@ -33,6 +33,7 @@ const navSections: NavSection[] = [
       { label: 'Roteirização', href: '/route-planning', icon: <Radio className="h-4 w-4" /> },
       { label: 'Cargas', href: '/loads', icon: <PackageCheck className="h-4 w-4" /> },
       { label: 'Ocorrências', href: '/incidents', icon: <AlertOctagon className="h-4 w-4" /> },
+      { label: 'Checklists', href: '/checklists', icon: <ClipboardCheck className="h-4 w-4" /> },
       { label: 'Contas a Receber', href: '/receivables', icon: <DollarSign className="h-4 w-4" /> },
       { label: 'Aprovação Despesas', href: '/expense-approval', icon: <Receipt className="h-4 w-4" /> },
       { label: 'Produtividade', href: '/productivity', icon: <TrendingUp className="h-4 w-4" /> },
