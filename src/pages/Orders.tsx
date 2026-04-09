@@ -67,6 +67,12 @@ function OrderForm({ order, clients, onSave, onCancel }: { order?: Order; client
     discount_value: order?.discount_value || '',
     subtotal: order?.subtotal || '',
     financial_value: order?.financial_value || '',
+    cbs_base: order?.cbs_base || '',
+    cbs_rate: order?.cbs_rate ?? '0.90',
+    cbs_value: order?.cbs_value || '',
+    ibs_base: order?.ibs_base || '',
+    ibs_rate: order?.ibs_rate ?? '0.10',
+    ibs_value: order?.ibs_value || '',
   });
 
   const set = useCallback((key: string, val: any) => setForm(f => ({ ...f, [key]: val })), []);
@@ -92,6 +98,12 @@ function OrderForm({ order, clients, onSave, onCancel }: { order?: Order; client
     const pisVal = total * pisRate / 100;
     const cofinsRate = n(form.cofins_rate);
     const cofinsVal = total * cofinsRate / 100;
+    const cbsBase = n(form.cbs_base) || total;
+    const cbsRate = n(form.cbs_rate);
+    const cbsVal = cbsBase * cbsRate / 100;
+    const ibsBase = n(form.ibs_base) || total;
+    const ibsRate = n(form.ibs_rate);
+    const ibsVal = ibsBase * ibsRate / 100;
 
     setForm(f => ({
       ...f,
@@ -100,7 +112,9 @@ function OrderForm({ order, clients, onSave, onCancel }: { order?: Order; client
       icms_value: icmsVal.toFixed(2),
       pis_value: pisVal.toFixed(2),
       cofins_value: cofinsVal.toFixed(2),
-      financial_value: (total - icmsVal - pisVal - cofinsVal).toFixed(2),
+      cbs_value: cbsVal.toFixed(2),
+      ibs_value: ibsVal.toFixed(2),
+      financial_value: (total - icmsVal - pisVal - cofinsVal - cbsVal - ibsVal).toFixed(2),
     }));
   }, [form]);
 
@@ -111,6 +125,7 @@ function OrderForm({ order, clients, onSave, onCancel }: { order?: Order; client
       'toll_value', 'loading_value', 'tracking_value', 'gris_value', 'other_costs',
       'icms_base', 'icms_rate', 'icms_value', 'pis_rate', 'pis_value',
       'cofins_rate', 'cofins_value', 'total_freight', 'discount_value', 'subtotal', 'financial_value',
+      'cbs_base', 'cbs_rate', 'cbs_value', 'ibs_base', 'ibs_rate', 'ibs_value',
     ];
     const out: any = { ...form };
     numFields.forEach(k => { out[k] = out[k] ? Number(out[k]) : null; });
@@ -231,6 +246,17 @@ function OrderForm({ order, clients, onSave, onCancel }: { order?: Order; client
           <div className="grid grid-cols-2 gap-3">
             {numField('Alíquota COFINS (%)', form.cofins_rate, v => set('cofins_rate', v))}
             {numField('Valor COFINS (R$)', form.cofins_value, v => set('cofins_value', v))}
+          </div>
+          <p className="text-xs font-semibold text-muted-foreground pt-2">CBS / IBS (Reforma Tributária)</p>
+          <div className="grid grid-cols-3 gap-3">
+            {numField('Base CBS (R$)', form.cbs_base, v => set('cbs_base', v))}
+            {numField('Alíquota CBS (%)', form.cbs_rate, v => set('cbs_rate', v))}
+            {numField('Valor CBS (R$)', form.cbs_value, v => set('cbs_value', v))}
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            {numField('Base IBS (R$)', form.ibs_base, v => set('ibs_base', v))}
+            {numField('Alíquota IBS (%)', form.ibs_rate, v => set('ibs_rate', v))}
+            {numField('Valor IBS (R$)', form.ibs_value, v => set('ibs_value', v))}
           </div>
           <Button type="button" variant="outline" size="sm" onClick={calcTotals}>
             <DollarSign className="h-4 w-4 mr-1" /> Recalcular
