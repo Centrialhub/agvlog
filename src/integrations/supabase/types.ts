@@ -634,10 +634,19 @@ export type Database = {
       fiscal_documents: {
         Row: {
           access_key: string | null
+          cbs_base: number | null
+          cbs_rate: number | null
+          cbs_value: number | null
           client_id: string | null
           created_at: string
           created_by: string | null
           document_type: string
+          freight_breakdown: Json | null
+          freight_table_id: string | null
+          freight_value: number | null
+          ibs_base: number | null
+          ibs_rate: number | null
+          ibs_value: number | null
           id: string
           invoice_number: string | null
           issue_date: string | null
@@ -655,10 +664,19 @@ export type Database = {
         }
         Insert: {
           access_key?: string | null
+          cbs_base?: number | null
+          cbs_rate?: number | null
+          cbs_value?: number | null
           client_id?: string | null
           created_at?: string
           created_by?: string | null
           document_type?: string
+          freight_breakdown?: Json | null
+          freight_table_id?: string | null
+          freight_value?: number | null
+          ibs_base?: number | null
+          ibs_rate?: number | null
+          ibs_value?: number | null
           id?: string
           invoice_number?: string | null
           issue_date?: string | null
@@ -676,10 +694,19 @@ export type Database = {
         }
         Update: {
           access_key?: string | null
+          cbs_base?: number | null
+          cbs_rate?: number | null
+          cbs_value?: number | null
           client_id?: string | null
           created_at?: string
           created_by?: string | null
           document_type?: string
+          freight_breakdown?: Json | null
+          freight_table_id?: string | null
+          freight_value?: number | null
+          ibs_base?: number | null
+          ibs_rate?: number | null
+          ibs_value?: number | null
           id?: string
           invoice_number?: string | null
           issue_date?: string | null
@@ -726,16 +753,92 @@ export type Database = {
           },
         ]
       }
+      freight_calculation_log: {
+        Row: {
+          base_value: number | null
+          components: Json | null
+          created_at: string
+          created_by: string | null
+          entity_id: string
+          entity_type: string
+          fallback_reason: string | null
+          fallback_used: boolean | null
+          final_value: number | null
+          freight_table_id: string | null
+          freight_table_name: string | null
+          id: string
+          ignored_criteria: Json | null
+          is_override: boolean | null
+          matched_criteria: Json | null
+          override_by: string | null
+          override_reason: string | null
+          region_id: string | null
+          region_name: string | null
+          tenant_id: string
+        }
+        Insert: {
+          base_value?: number | null
+          components?: Json | null
+          created_at?: string
+          created_by?: string | null
+          entity_id: string
+          entity_type: string
+          fallback_reason?: string | null
+          fallback_used?: boolean | null
+          final_value?: number | null
+          freight_table_id?: string | null
+          freight_table_name?: string | null
+          id?: string
+          ignored_criteria?: Json | null
+          is_override?: boolean | null
+          matched_criteria?: Json | null
+          override_by?: string | null
+          override_reason?: string | null
+          region_id?: string | null
+          region_name?: string | null
+          tenant_id: string
+        }
+        Update: {
+          base_value?: number | null
+          components?: Json | null
+          created_at?: string
+          created_by?: string | null
+          entity_id?: string
+          entity_type?: string
+          fallback_reason?: string | null
+          fallback_used?: boolean | null
+          final_value?: number | null
+          freight_table_id?: string | null
+          freight_table_name?: string | null
+          id?: string
+          ignored_criteria?: Json | null
+          is_override?: boolean | null
+          matched_criteria?: Json | null
+          override_by?: string | null
+          override_reason?: string | null
+          region_id?: string | null
+          region_name?: string | null
+          tenant_id?: string
+        }
+        Relationships: []
+      }
       freight_tables: {
         Row: {
           blocked: boolean
+          body_type: string | null
+          cargo_type: string | null
           created_at: string
+          ctrc_type: string | null
           destination_municipality: string | null
           destination_region: string | null
           destination_state: string | null
+          dispatch_value: number | null
           distribution_type: string | null
           fixed_value: number | null
+          gris_value: number | null
           id: string
+          insurance_percent: number | null
+          loading_value: number | null
           min_value: number | null
           notes: string | null
           origin_municipality: string | null
@@ -747,22 +850,33 @@ export type Database = {
           per_pallet_value: number | null
           rate_percent: number | null
           route: string | null
+          specificity_score: number | null
           table_code: number
           table_name: string
           tenant_id: string
+          toll_value: number | null
+          tracking_value: number | null
           updated_at: string
           valid_from: string
           valid_until: string | null
+          vehicle_type: string | null
         }
         Insert: {
           blocked?: boolean
+          body_type?: string | null
+          cargo_type?: string | null
           created_at?: string
+          ctrc_type?: string | null
           destination_municipality?: string | null
           destination_region?: string | null
           destination_state?: string | null
+          dispatch_value?: number | null
           distribution_type?: string | null
           fixed_value?: number | null
+          gris_value?: number | null
           id?: string
+          insurance_percent?: number | null
+          loading_value?: number | null
           min_value?: number | null
           notes?: string | null
           origin_municipality?: string | null
@@ -774,22 +888,33 @@ export type Database = {
           per_pallet_value?: number | null
           rate_percent?: number | null
           route?: string | null
+          specificity_score?: number | null
           table_code?: number
           table_name: string
           tenant_id: string
+          toll_value?: number | null
+          tracking_value?: number | null
           updated_at?: string
           valid_from?: string
           valid_until?: string | null
+          vehicle_type?: string | null
         }
         Update: {
           blocked?: boolean
+          body_type?: string | null
+          cargo_type?: string | null
           created_at?: string
+          ctrc_type?: string | null
           destination_municipality?: string | null
           destination_region?: string | null
           destination_state?: string | null
+          dispatch_value?: number | null
           distribution_type?: string | null
           fixed_value?: number | null
+          gris_value?: number | null
           id?: string
+          insurance_percent?: number | null
+          loading_value?: number | null
           min_value?: number | null
           notes?: string | null
           origin_municipality?: string | null
@@ -801,12 +926,16 @@ export type Database = {
           per_pallet_value?: number | null
           rate_percent?: number | null
           route?: string | null
+          specificity_score?: number | null
           table_code?: number
           table_name?: string
           tenant_id?: string
+          toll_value?: number | null
+          tracking_value?: number | null
           updated_at?: string
           valid_from?: string
           valid_until?: string | null
+          vehicle_type?: string | null
         }
         Relationships: [
           {
@@ -1859,6 +1988,51 @@ export type Database = {
           },
         ]
       }
+      operational_routes: {
+        Row: {
+          active: boolean | null
+          classification: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          destinations: Json | null
+          id: string
+          name: string
+          region_name: string | null
+          tenant_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          active?: boolean | null
+          classification?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          destinations?: Json | null
+          id?: string
+          name: string
+          region_name?: string | null
+          tenant_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          active?: boolean | null
+          classification?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          destinations?: Json | null
+          id?: string
+          name?: string
+          region_name?: string | null
+          tenant_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       orders: {
         Row: {
           cargo_type: string | null
@@ -1874,7 +2048,10 @@ export type Database = {
           destination: string | null
           discount_value: number | null
           financial_value: number | null
+          freight_breakdown: Json | null
           freight_delivery_value: number | null
+          freight_region_id: string | null
+          freight_table_id: string | null
           freight_weight_value: number | null
           gris_value: number | null
           ibs_base: number | null
@@ -1929,7 +2106,10 @@ export type Database = {
           destination?: string | null
           discount_value?: number | null
           financial_value?: number | null
+          freight_breakdown?: Json | null
           freight_delivery_value?: number | null
+          freight_region_id?: string | null
+          freight_table_id?: string | null
           freight_weight_value?: number | null
           gris_value?: number | null
           ibs_base?: number | null
@@ -1984,7 +2164,10 @@ export type Database = {
           destination?: string | null
           discount_value?: number | null
           financial_value?: number | null
+          freight_breakdown?: Json | null
           freight_delivery_value?: number | null
+          freight_region_id?: string | null
+          freight_table_id?: string | null
           freight_weight_value?: number | null
           gris_value?: number | null
           ibs_base?: number | null
@@ -2283,6 +2466,114 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      receivables: {
+        Row: {
+          amount: number
+          client_id: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          due_date: string | null
+          fiscal_document_id: string | null
+          id: string
+          invoice_number: string | null
+          load_id: string | null
+          notes: string | null
+          order_id: string | null
+          received_amount: number | null
+          received_at: string | null
+          status: string
+          tenant_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          amount?: number
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          due_date?: string | null
+          fiscal_document_id?: string | null
+          id?: string
+          invoice_number?: string | null
+          load_id?: string | null
+          notes?: string | null
+          order_id?: string | null
+          received_amount?: number | null
+          received_at?: string | null
+          status?: string
+          tenant_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          amount?: number
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          due_date?: string | null
+          fiscal_document_id?: string | null
+          id?: string
+          invoice_number?: string | null
+          load_id?: string | null
+          notes?: string | null
+          order_id?: string | null
+          received_amount?: number | null
+          received_at?: string | null
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      route_planning_drafts: {
+        Row: {
+          converted_load_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          notes: string | null
+          operational_route_id: string | null
+          order_ids: Json | null
+          status: string
+          tenant_id: string
+          updated_at: string
+          vehicle_id: string | null
+        }
+        Insert: {
+          converted_load_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          operational_route_id?: string | null
+          order_ids?: Json | null
+          status?: string
+          tenant_id: string
+          updated_at?: string
+          vehicle_id?: string | null
+        }
+        Update: {
+          converted_load_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          operational_route_id?: string | null
+          order_ids?: Json | null
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+          vehicle_id?: string | null
+        }
+        Relationships: []
       }
       route_runs: {
         Row: {
