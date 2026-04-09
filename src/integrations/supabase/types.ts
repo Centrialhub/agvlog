@@ -726,6 +726,83 @@ export type Database = {
           },
         ]
       }
+      freight_tables: {
+        Row: {
+          blocked: boolean
+          created_at: string
+          destination_municipality: string | null
+          destination_region: string | null
+          destination_state: string | null
+          distribution_type: string | null
+          id: string
+          notes: string | null
+          origin_municipality: string | null
+          origin_region: string | null
+          origin_state: string | null
+          payer: string | null
+          payer_group: string | null
+          route: string | null
+          table_code: number
+          table_name: string
+          tenant_id: string
+          updated_at: string
+          valid_from: string
+          valid_until: string | null
+        }
+        Insert: {
+          blocked?: boolean
+          created_at?: string
+          destination_municipality?: string | null
+          destination_region?: string | null
+          destination_state?: string | null
+          distribution_type?: string | null
+          id?: string
+          notes?: string | null
+          origin_municipality?: string | null
+          origin_region?: string | null
+          origin_state?: string | null
+          payer?: string | null
+          payer_group?: string | null
+          route?: string | null
+          table_code?: number
+          table_name: string
+          tenant_id: string
+          updated_at?: string
+          valid_from?: string
+          valid_until?: string | null
+        }
+        Update: {
+          blocked?: boolean
+          created_at?: string
+          destination_municipality?: string | null
+          destination_region?: string | null
+          destination_state?: string | null
+          distribution_type?: string | null
+          id?: string
+          notes?: string | null
+          origin_municipality?: string | null
+          origin_region?: string | null
+          origin_state?: string | null
+          payer?: string | null
+          payer_group?: string | null
+          route?: string | null
+          table_code?: number
+          table_name?: string
+          tenant_id?: string
+          updated_at?: string
+          valid_from?: string
+          valid_until?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "freight_tables_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fuel_events: {
         Row: {
           created_at: string
