@@ -36,6 +36,7 @@ const Settings = lazy(() => import("@/pages/Settings"));
 const ExpenseApproval = lazy(() => import("@/pages/ExpenseApproval"));
 const TeamManagement = lazy(() => import("@/pages/TeamManagement"));
 const ClientRegions = lazy(() => import("@/pages/ClientRegions"));
+const FreightTables = lazy(() => import("@/pages/FreightTables"));
 const ClientPortal = lazy(() => import("@/pages/ClientPortal"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
@@ -144,6 +145,7 @@ const App = () => (
             <Route path="/integration-health" element={<ProtectedRoute><IntegrationHealth /></ProtectedRoute>} />
             <Route path="/team" element={<ProtectedRoute><TeamManagement /></ProtectedRoute>} />
             <Route path="/regions" element={<ProtectedRoute><ClientRegions /></ProtectedRoute>} />
+            <Route path="/freight" element={<ProtectedRoute><FreightTables /></ProtectedRoute>} />
 
             {/* Driver routes */}
             <Route path="/driver" element={<DriverRoute><DriverHome /></DriverRoute>} />
