@@ -1862,6 +1862,7 @@ export type Database = {
       orders: {
         Row: {
           cargo_type: string | null
+          city: string | null
           client_id: string | null
           cofins_rate: number | null
           cofins_value: number | null
@@ -1881,6 +1882,7 @@ export type Database = {
           insurance_value: number | null
           issue_date: string | null
           loading_value: number | null
+          neighborhood: string | null
           nf_series: string | null
           notes: string | null
           order_number: string
@@ -1909,6 +1911,7 @@ export type Database = {
         }
         Insert: {
           cargo_type?: string | null
+          city?: string | null
           client_id?: string | null
           cofins_rate?: number | null
           cofins_value?: number | null
@@ -1928,6 +1931,7 @@ export type Database = {
           insurance_value?: number | null
           issue_date?: string | null
           loading_value?: number | null
+          neighborhood?: string | null
           nf_series?: string | null
           notes?: string | null
           order_number: string
@@ -1956,6 +1960,7 @@ export type Database = {
         }
         Update: {
           cargo_type?: string | null
+          city?: string | null
           client_id?: string | null
           cofins_rate?: number | null
           cofins_value?: number | null
@@ -1975,6 +1980,7 @@ export type Database = {
           insurance_value?: number | null
           issue_date?: string | null
           loading_value?: number | null
+          neighborhood?: string | null
           nf_series?: string | null
           notes?: string | null
           order_number?: string
