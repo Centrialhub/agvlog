@@ -45,6 +45,16 @@ const emptyForm = {
   min_value: '',
   per_kg_value: '',
   per_pallet_value: '',
+  cargo_type: '',
+  vehicle_type: '',
+  body_type: '',
+  ctrc_type: '',
+  dispatch_value: '',
+  tracking_value: '',
+  toll_value: '',
+  loading_value: '',
+  gris_value: '',
+  insurance_percent: '',
 };
 
 export default function FreightTables() {
