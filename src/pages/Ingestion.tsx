@@ -17,10 +17,12 @@ import UploadStep from '@/components/ingestion/UploadStep';
 import ValidationStep from '@/components/ingestion/ValidationStep';
 import GroupingStep from '@/components/ingestion/GroupingStep';
 import ResultsStep from '@/components/ingestion/ResultsStep';
+import { calculateFreight, logFreightCalculation } from '@/hooks/useFreightCalculator';
 
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { useTenant } from '@/hooks/useTenant';
+import { useAuth } from '@/hooks/useAuth';
 
 function useDrivers() {
   const { currentTenant } = useTenant();
@@ -45,6 +47,8 @@ export default function Ingestion() {
   const { data: clients = [] } = useClients();
   const { data: vehicles = [] } = useVehicles();
   const { data: drivers = [] } = useDrivers();
+  const { currentTenant } = useTenant();
+  const { user } = useAuth();
   const createDoc = useCreateFiscalDocument();
   const createOrder = useCreateOrder();
   const createLoad = useCreateLoad();
@@ -128,6 +132,28 @@ export default function Ingestion() {
       // 1. Create fiscal documents
       for (const doc of validatedDocs.filter(d => !d.hasErrors && !d.isDuplicate)) {
         try {
+          // Calculate freight for this document
+          let freightValue: number | null = null;
+          let freightBreakdown: any = {};
+          let freightTableId: string | null = null;
+          if (currentTenant) {
+            const freightResult = await calculateFreight({
+              tenantId: currentTenant.id,
+              clientId: doc.matchedClientId,
+              destination: doc.source.recipientCity || null,
+              destinationState: doc.source.recipientState || null,
+              destinationMunicipality: doc.source.recipientCity || null,
+              totalValue: doc.source.totalValue || 0,
+              totalWeight: doc.source.totalWeight || 0,
+              totalPallets: doc.source.estimatedPallets || 0,
+            });
+            if (freightResult.success && freightResult.breakdown) {
+              freightValue = freightResult.value;
+              freightBreakdown = freightResult.breakdown;
+              freightTableId = freightResult.breakdown.tableId || null;
+            }
+          }
+
           const created = await createDoc.mutateAsync({
             document_type: 'inbound',
             invoice_number: doc.source.invoiceNumber,
@@ -140,10 +166,20 @@ export default function Ingestion() {
             pallet_count: doc.source.estimatedPallets,
             weight_kg: doc.source.totalWeight,
             value: doc.source.totalValue,
+            freight_value: freightValue,
+            freight_breakdown: freightBreakdown,
+            freight_table_id: freightTableId,
             status: 'confirmed',
           });
           createdDocIds.set(doc.source.invoiceNumber, created.id);
-          results.push(`✅ NF ${doc.source.invoiceNumber} importada`);
+          
+          // Log freight calculation
+          if (freightValue && freightBreakdown?.tableId && currentTenant) {
+            await logFreightCalculation(currentTenant.id, created.id, 'fiscal_document', freightBreakdown, user?.id);
+          }
+          
+          const freightLabel = freightValue ? ` (frete: R$ ${freightValue.toFixed(2)})` : ' (sem tabela de frete)';
+          results.push(`✅ NF ${doc.source.invoiceNumber} importada${freightLabel}`);
         } catch (e: any) {
           results.push(`❌ NF ${doc.source.invoiceNumber}: ${e.message}`);
         }

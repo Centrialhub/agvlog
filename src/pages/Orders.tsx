@@ -12,10 +12,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Search, Plus, ShoppingCart, Edit, DollarSign } from 'lucide-react';
+import { Search, Plus, ShoppingCart, Edit, DollarSign, FileSearch } from 'lucide-react';
 import { getNextStatuses } from '@/lib/statusPipeline';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import FreightAuditDrawer from '@/components/freight/FreightAuditDrawer';
 
 const n = (v: any) => (v ? Number(v) : 0);
 const numField = (label: string, value: any, onChange: (v: string) => void, opts?: { step?: string; prefix?: string }) => (
@@ -293,6 +294,7 @@ export default function Orders() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<Order | undefined>();
+  const [auditOrderId, setAuditOrderId] = useState<string | null>(null);
   const { toast } = useToast();
 
   const filtered = useMemo(() => {
@@ -394,10 +396,15 @@ export default function Orders() {
                   <TableCell className="text-sm text-right font-medium text-primary">{o.total_freight ? `R$ ${Number(o.total_freight).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'}</TableCell>
                   <TableCell className="text-xs">{o.payer_type || '—'}</TableCell>
                   <TableCell><Badge variant="outline" className={statusColor(o.status)}>{ORDER_STATUS_LABELS[o.status] || o.status}</Badge></TableCell>
-                  <TableCell>
+                  <TableCell className="flex gap-1">
                     <Button variant="ghost" size="icon" onClick={() => { setEditingOrder(o); setDialogOpen(true); }}>
                       <Edit className="h-4 w-4" />
                     </Button>
+                    {o.total_freight ? (
+                      <Button variant="ghost" size="icon" onClick={() => setAuditOrderId(o.id)} title="Auditoria do frete">
+                        <FileSearch className="h-4 w-4" />
+                      </Button>
+                    ) : null}
                   </TableCell>
                 </TableRow>
               ))}
@@ -405,6 +412,13 @@ export default function Orders() {
           </Table>
         </CardContent>
       </Card>
+
+      <FreightAuditDrawer
+        open={!!auditOrderId}
+        onOpenChange={() => setAuditOrderId(null)}
+        entityId={auditOrderId}
+        entityType="order"
+      />
     </div>
   );
 }
