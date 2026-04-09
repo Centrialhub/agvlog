@@ -37,6 +37,12 @@ export interface Order {
   volume_m3: number | null;
   notes: string | null;
   status: OrderStatus;
+  remitter: string | null;
+  recipient: string | null;
+  nf_series: string | null;
+  issue_date: string | null;
+  value: number | null;
+  payment_plan: string | null;
   created_at: string;
   updated_at: string;
   clients?: { company_name: string } | null;
