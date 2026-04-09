@@ -168,6 +168,16 @@ export default function FreightTables() {
       min_value: r.min_value ? String(r.min_value) : '',
       per_kg_value: r.per_kg_value ? String(r.per_kg_value) : '',
       per_pallet_value: r.per_pallet_value ? String(r.per_pallet_value) : '',
+      cargo_type: r.cargo_type || '',
+      vehicle_type: r.vehicle_type || '',
+      body_type: r.body_type || '',
+      ctrc_type: r.ctrc_type || '',
+      dispatch_value: r.dispatch_value ? String(r.dispatch_value) : '',
+      tracking_value: r.tracking_value ? String(r.tracking_value) : '',
+      toll_value: r.toll_value ? String(r.toll_value) : '',
+      loading_value: r.loading_value ? String(r.loading_value) : '',
+      gris_value: r.gris_value ? String(r.gris_value) : '',
+      insurance_percent: r.insurance_percent ? String(r.insurance_percent) : '',
     });
     setDialogOpen(true);
   }
