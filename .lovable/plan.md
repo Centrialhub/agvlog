@@ -1,103 +1,83 @@
 
 
-# Plano de Ação: Completar Funcionalidades para Produção
+# Auditoria Pós-Mudanças Recentes
 
-## Estado Atual
-
-O sistema tem uma base sólida mas várias funcionalidades estão incompletas ou superficiais. Após auditoria do código, identifiquei 13 itens de trabalho organizados em 3 fases por prioridade de impacto.
+Após analisar o código-fonte, o build, os logs de runtime e a estrutura do banco, identifiquei os seguintes problemas e riscos:
 
 ---
 
-## FASE 1 — Fechar o Ciclo Operacional (maior impacto)
+## Bugs Confirmados
 
-Sem estes itens, o sistema é apenas um painel administrativo. Motoristas não conseguem operar e a ponte admin→campo não funciona.
+### 1. `calcTotals` com dependência circular no `useCallback`
+**Arquivo:** `src/pages/Orders.tsx`, linha 81-119
 
-### 1.1 Fluxo de Despacho com Múltiplas Paradas
-**Problema**: O diálogo de despacho em `LoadDetail.tsx` cria apenas 1 parada fixa. Não permite definir sequência de entregas.
-**Solução**: Refatorar o diálogo de despacho para permitir adicionar N paradas (cliente + destino + ordem), usando os `load_items` da carga para sugerir paradas automaticamente por cliente/destino. Criar as `dispatch_stops` em lote.
+A função `calcTotals` depende de `[form]` inteiro no array de dependências do `useCallback`. Isso significa que **a cada tecla digitada**, uma nova referência é criada. Porém o problema real é que `calcTotals` lê `form` do closure e depois chama `setForm` — se o usuário digitar rapidamente e clicar "Calcular", os valores podem estar desatualizados. Deveria usar `setForm(prev => ...)` para ler o estado mais recente.
 
-### 1.2 Filtrar Driver por Usuário Logado
-**Problema**: `DriverHome`, `DriverStops`, `DriverDeliveries`, `DriverJourney` buscam trips de todo o tenant — não filtram pelo motorista logado.
-**Solução**: Adicionar coluna `user_id` na tabela `drivers` (migration). Criar hook `useCurrentDriver` que busca o driver vinculado ao `auth.uid()`. Usar `driver_id` como filtro em todas as queries do workspace do motorista. Adicionar RLS policies para drivers verem apenas seus dados.
+### 2. Cast `(o as any).city` no PDF do RoutePlanning
+**Arquivo:** `src/pages/RoutePlanning.tsx`, linha 307
 
-### 1.3 Persistir Checklist do Motorista
-**Problema**: `DriverChecklist.tsx` usa apenas `useState` local — dados perdem-se ao recarregar.
-**Solução**: Salvar checklists como `dispatch_events` com `event_type = 'checklist_pre'` ou `'checklist_post'` e `payload` contendo os itens marcados. Carregar estado anterior ao abrir.
+O campo `city` está definido na interface `PendingOrder` (linha 44), então o cast `(o as any).city` é desnecessário. Não é um bug funcional, mas indica código inconsistente.
 
-### 1.4 Vincular Despesas à Viagem Ativa
-**Problema**: `DriverExpenses.tsx` cria despesas sem `dispatch_trip_id` nem `driver_id`.
-**Solução**: Usar o hook `useCurrentDriver` para preencher `driver_id`. Buscar trip ativa do motorista para preencher `dispatch_trip_id` automaticamente.
+### 3. `useGenerateCTe` — join incorreto em `load_items`
+**Arquivo:** `src/hooks/useGenerateCTe.tsx`, linhas 82-85
 
-### 1.5 Upload de Comprovante (bucket privado)
-**Problema**: O bucket `receipts` é privado (`is_public: false`), mas o código usa `getPublicUrl()` que não funciona para buckets privados.
-**Solução**: Usar `createSignedUrl()` para visualização, ou criar uma storage policy que permita leitura autenticada. Ajustar `ExpenseApproval.tsx` para usar signed URLs ao exibir comprovantes.
+A query faz `.select('..., orders(order_number, clients(company_name))')` sobre `load_items`, mas a tabela `load_items` não tem foreign key declarada para `orders`. O Supabase PostgREST **não** consegue resolver joins sem FK. O resultado será um erro silencioso ou dados nulos no `itemSummary`. A query precisa ser ajustada para buscar orders separadamente via `load_orders`.
 
----
+### 4. Falta `pallet_count` com default diferente entre Order interface e DB
+**Arquivo:** `src/hooks/useOrders.tsx` — `pallet_count: number` (não nullable)
+**DB:** `pallet_count integer DEFAULT 0` (nullable: Yes)
 
-## FASE 2 — Fortalecer o que Existe
-
-### 2.1 Pedidos com Filtros e Vínculo a Cargas
-**Problema**: `Orders.tsx` é uma tabela crua sem filtros por status/cliente e sem mostrar vínculo com cargas.
-**Solução**: Adicionar filtros por status e cliente. Fazer join com `load_orders` para exibir badge de carga vinculada. Adicionar link para `/loads/:id`.
-
-### 2.2 Documentos Fiscais com Filtros e Link à Carga
-**Problema**: `FiscalDocuments.tsx` não filtra por tipo (NF-e vs CT-e) nem mostra carga vinculada.
-**Solução**: Adicionar filtros por `document_type` e status. Exibir `load_id` como link clicável para `/loads/:id`.
-
-### 2.3 Client Portal Filtrado pelo Cliente Logado
-**Problema**: `ClientPortal.tsx` busca todos os pedidos/cargas do tenant — clientes veem dados de outros clientes.
-**Solução**: Vincular `user_id` ao `client_id` (similar ao driver). Filtrar queries por `client_id` do usuário logado. Adicionar indicador de progresso visual por carga.
-
-### 2.4 Permissões por Role no Frontend
-**Problema**: Qualquer usuário pode acessar qualquer rota digitando a URL. Sidebar mostra tudo para todos.
-**Solução**: Filtrar `navSections` em `AppLayout.tsx` baseado no `currentRole`. Adicionar guard em `ProtectedRoute` que redireciona roles não-autorizadas. Drivers → `/driver`, clients → `/portal`.
-
-### 2.5 Produtividade com Dados Reais
-**Problema**: `ProductivityReports.tsx` calcula métricas apenas de loads em memória, sem usar `dispatch_events` (tempos reais).
-**Solução**: Buscar `dispatch_events` para calcular tempo médio por parada, tempo de jornada, tempo parado. Adicionar filtro por período de data.
+A interface declara `pallet_count: number` mas o DB permite null. Se um pedido antigo tiver null, o TypeScript não reclamará mas o runtime pode mostrar `null` onde espera número.
 
 ---
 
-## FASE 3 — Escalar com Confiança
+## Riscos Funcionais
 
-### 3.1 Testes Unitários para Caminho Crítico
-**Solução**: Criar testes para:
-- `documentParsers.ts` (parsing XML/CSV)
-- `ingestionValidator.ts` (validação)
-- `statusPipeline.ts` (transições de status)
-- Cálculo de totais de load_items
+### 5. Status transition sem validação no frontend
+**Arquivo:** `src/pages/Orders.tsx`, linhas 162-164
 
-### 3.2 Notificações Realtime
-**Solução**: Usar Supabase Realtime channels para:
-- Notificar motorista quando trip é criada
-- Notificar operador quando motorista confirma entrega
-- Atualizar `OperationsCenter` em tempo real
+O formulário permite selecionar **qualquer** status ao editar um pedido. O `statusPipeline.ts` define transições válidas (`ORDER_TRANSITIONS`), mas **nunca é usado** na tela de pedidos. Um operador pode pular de "Recebido" direto para "Entregue".
 
-### 3.3 Busca Global (Command Palette)
-**Solução**: Criar componente de busca global (Cmd+K) que pesquisa cargas, pedidos e clientes simultaneamente usando queries debounced.
+### 6. RoutePlanning — estado perdido ao navegar
+As rotas planejadas ficam apenas em `useState`. Se o usuário sair da página e voltar, perde tudo. Não há persistência no banco.
+
+### 7. Tabela de fretes sem FK — integridade referencial fraca
+`freight_tables`, `client_regions`, `orders`, `loads`, `load_items`, `load_orders` — nenhuma dessas tabelas possui foreign keys declaradas no banco. Isso permite dados órfãos (ex: `load_items.order_id` apontando para um order deletado).
+
+### 8. `useGenerateCTe` — sem campos IBS/CBS no CT-e
+O CT-e gerado pelo `useGenerateCTe` não inclui os novos campos de IBS e CBS que foram adicionados na reforma tributária. A tabela `fiscal_documents` também não possui essas colunas — elas só existem em `orders`.
 
 ---
 
-## Mudanças de Banco de Dados Necessárias
+## Plano de Correção
 
-```text
-Migration 1: ALTER TABLE drivers ADD COLUMN user_id uuid REFERENCES auth.users(id);
-Migration 2: ALTER TABLE clients ADD COLUMN user_id uuid REFERENCES auth.users(id);
-Migration 3: Storage policy para bucket receipts (leitura autenticada)
-Migration 4: RLS policies para drivers INSERT em dispatch_events (permitir motoristas registrarem eventos)
-Migration 5: RLS policies para drivers INSERT em driver_expenses
-Migration 6: RLS policies para drivers UPDATE em dispatch_stops (marcar chegada/saída)
-```
+### Etapa 1 — Corrigir bugs críticos
+- **Corrigir `calcTotals`**: Usar `setForm(prev => { ... })` em vez de ler do closure
+- **Remover cast `(o as any).city`** no RoutePlanning
+- **Corrigir query do CT-e**: Substituir o join inválido `load_items → orders` por busca via `load_orders`
+
+### Etapa 2 — Validação de transições de status
+- Na tela de pedidos, filtrar o Select de status usando `getNextStatuses()` do `statusPipeline.ts`, mostrando apenas transições válidas a partir do status atual
+
+### Etapa 3 — Consistência de tipos
+- Ajustar `pallet_count` na interface `Order` para `number | null` ou garantir coerção no fetch
+
+### Etapa 4 — IBS/CBS no CT-e (se necessário)
+- Avaliar se `fiscal_documents` precisa das colunas de IBS/CBS para o portal fiscal. Se sim, criar migração e atualizar o hook `useGenerateCTe`.
+
+### Etapa 5 — Persistência de rotas planejadas (melhoria futura)
+- Considerar salvar rascunhos de roteirização no banco para não perder ao navegar
 
 ---
 
-## Estimativa de Escopo
+## Resumo de Prioridades
 
-| Fase | Itens | Complexidade |
-|------|-------|-------------|
-| Fase 1 | 5 itens | Alta — fecha o ciclo operacional |
-| Fase 2 | 5 itens | Média — melhora UX e segurança |
-| Fase 3 | 3 itens | Média — qualidade e escala |
-
-**Recomendação**: Implementar Fase 1 primeiro (itens 1.1–1.5), pois desbloqueiam o uso real do sistema por motoristas e operadores.
+| # | Problema | Severidade | Esforço |
+|---|----------|-----------|---------|
+| 3 | Join sem FK no CT-e | Alto — dados sempre nulos | Baixo |
+| 5 | Status sem validação | Médio — erro operacional | Baixo |
+| 1 | calcTotals closure | Baixo — raro em uso normal | Baixo |
+| 8 | IBS/CBS no CT-e | Médio — compliance fiscal | Médio |
+| 6 | Rotas não persistidas | Médio — UX | Alto |
+| 7 | FKs ausentes | Baixo — dados órfãos possíveis | Alto |
 
