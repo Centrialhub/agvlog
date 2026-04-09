@@ -123,6 +123,57 @@ export type Database = {
           },
         ]
       }
+      client_regions: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          id: string
+          municipality: string
+          payer_group: string | null
+          region_name: string
+          state_code: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          municipality: string
+          payer_group?: string | null
+          region_name: string
+          state_code: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          municipality?: string
+          payer_group?: string | null
+          region_name?: string
+          state_code?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_regions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_regions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clients: {
         Row: {
           active: boolean

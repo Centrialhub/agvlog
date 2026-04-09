@@ -61,6 +61,7 @@ const navSections: NavSection[] = [
       { label: 'Motoristas', href: '/drivers', icon: <Users className="h-4 w-4" /> },
       { label: 'Estoque', href: '/inventory', icon: <Warehouse className="h-4 w-4" /> },
       { label: 'Documentos Fiscais', href: '/fiscal-documents', icon: <FileText className="h-4 w-4" /> },
+      { label: 'Regiões', href: '/regions', icon: <Map className="h-4 w-4" /> },
     ],
   },
   {
