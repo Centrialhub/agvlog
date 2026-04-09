@@ -19,9 +19,11 @@ import { toast } from 'sonner';
 import {
   Route, Plus, Wand2, ArrowUpDown, Trash2, GripVertical,
   PackageCheck, MapPin, Truck, Calendar, ChevronDown, ChevronUp,
-  FileText, Edit, Copy, Send,
+  FileText, Edit, Copy, Send, Download,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 /* ────────────── types ────────────── */
 interface PendingOrder {
