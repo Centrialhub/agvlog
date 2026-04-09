@@ -734,13 +734,18 @@ export type Database = {
           destination_region: string | null
           destination_state: string | null
           distribution_type: string | null
+          fixed_value: number | null
           id: string
+          min_value: number | null
           notes: string | null
           origin_municipality: string | null
           origin_region: string | null
           origin_state: string | null
           payer: string | null
           payer_group: string | null
+          per_kg_value: number | null
+          per_pallet_value: number | null
+          rate_percent: number | null
           route: string | null
           table_code: number
           table_name: string
@@ -756,13 +761,18 @@ export type Database = {
           destination_region?: string | null
           destination_state?: string | null
           distribution_type?: string | null
+          fixed_value?: number | null
           id?: string
+          min_value?: number | null
           notes?: string | null
           origin_municipality?: string | null
           origin_region?: string | null
           origin_state?: string | null
           payer?: string | null
           payer_group?: string | null
+          per_kg_value?: number | null
+          per_pallet_value?: number | null
+          rate_percent?: number | null
           route?: string | null
           table_code?: number
           table_name: string
@@ -778,13 +788,18 @@ export type Database = {
           destination_region?: string | null
           destination_state?: string | null
           distribution_type?: string | null
+          fixed_value?: number | null
           id?: string
+          min_value?: number | null
           notes?: string | null
           origin_municipality?: string | null
           origin_region?: string | null
           origin_state?: string | null
           payer?: string | null
           payer_group?: string | null
+          per_kg_value?: number | null
+          per_pallet_value?: number | null
+          rate_percent?: number | null
           route?: string | null
           table_code?: number
           table_name?: string
