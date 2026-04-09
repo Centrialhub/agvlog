@@ -1867,16 +1867,22 @@ export type Database = {
           created_by: string | null
           destination: string | null
           id: string
+          issue_date: string | null
+          nf_series: string | null
           notes: string | null
           order_number: string
           origin: string | null
           pallet_count: number | null
+          payment_plan: string | null
           promised_date: string | null
           quantity: number | null
+          recipient: string | null
+          remitter: string | null
           status: string
           tenant_id: string
           updated_at: string
           updated_by: string | null
+          value: number | null
           volume_m3: number | null
           weight_kg: number | null
         }
@@ -1887,16 +1893,22 @@ export type Database = {
           created_by?: string | null
           destination?: string | null
           id?: string
+          issue_date?: string | null
+          nf_series?: string | null
           notes?: string | null
           order_number: string
           origin?: string | null
           pallet_count?: number | null
+          payment_plan?: string | null
           promised_date?: string | null
           quantity?: number | null
+          recipient?: string | null
+          remitter?: string | null
           status?: string
           tenant_id: string
           updated_at?: string
           updated_by?: string | null
+          value?: number | null
           volume_m3?: number | null
           weight_kg?: number | null
         }
@@ -1907,16 +1919,22 @@ export type Database = {
           created_by?: string | null
           destination?: string | null
           id?: string
+          issue_date?: string | null
+          nf_series?: string | null
           notes?: string | null
           order_number?: string
           origin?: string | null
           pallet_count?: number | null
+          payment_plan?: string | null
           promised_date?: string | null
           quantity?: number | null
+          recipient?: string | null
+          remitter?: string | null
           status?: string
           tenant_id?: string
           updated_at?: string
           updated_by?: string | null
+          value?: number | null
           volume_m3?: number | null
           weight_kg?: number | null
         }
