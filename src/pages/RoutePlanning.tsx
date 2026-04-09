@@ -457,6 +457,9 @@ export default function RoutePlanning() {
                           ))}
                         </SelectContent>
                       </Select>
+                      <Button size="sm" variant="outline" onClick={() => exportRoutePdf(route)}>
+                        <Download className="h-3 w-3 mr-1" /> PDF
+                      </Button>
                       <Button size="sm" variant="default" onClick={() => createLoadMutation.mutate(route)} disabled={createLoadMutation.isPending}>
                         <Send className="h-3 w-3 mr-1" /> Gerar Carga
                       </Button>
