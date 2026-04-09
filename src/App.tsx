@@ -41,6 +41,11 @@ const ClientPortal = lazy(() => import("@/pages/ClientPortal"));
 const RoutePlanning = lazy(() => import("@/pages/RoutePlanning"));
 const Receivables = lazy(() => import("@/pages/Receivables"));
 const OperationalRoutesPage = lazy(() => import("@/pages/OperationalRoutesPage"));
+const Employees = lazy(() => import("@/pages/Employees"));
+const Incidents = lazy(() => import("@/pages/Incidents"));
+const AssetsPage = lazy(() => import("@/pages/Assets"));
+const MaintenanceOrders = lazy(() => import("@/pages/MaintenanceOrders"));
+const StockPage = lazy(() => import("@/pages/Stock"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
 // Driver pages
@@ -152,6 +157,11 @@ const App = () => (
             <Route path="/route-planning" element={<ProtectedRoute><RoutePlanning /></ProtectedRoute>} />
             <Route path="/receivables" element={<ProtectedRoute><Receivables /></ProtectedRoute>} />
             <Route path="/operational-routes" element={<ProtectedRoute><OperationalRoutesPage /></ProtectedRoute>} />
+            <Route path="/employees" element={<ProtectedRoute><Employees /></ProtectedRoute>} />
+            <Route path="/incidents" element={<ProtectedRoute><Incidents /></ProtectedRoute>} />
+            <Route path="/assets" element={<ProtectedRoute><AssetsPage /></ProtectedRoute>} />
+            <Route path="/maintenance-orders" element={<ProtectedRoute><MaintenanceOrders /></ProtectedRoute>} />
+            <Route path="/stock" element={<ProtectedRoute><StockPage /></ProtectedRoute>} />
 
             {/* Driver routes */}
             <Route path="/driver" element={<DriverRoute><DriverHome /></DriverRoute>} />
