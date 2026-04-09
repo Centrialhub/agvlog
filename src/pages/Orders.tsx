@@ -210,25 +210,29 @@ export default function Orders() {
               <TableRow>
                 <TableHead>Pedido</TableHead>
                 <TableHead>Cliente</TableHead>
-                <TableHead>Destino</TableHead>
-                <TableHead>Paletes</TableHead>
-                <TableHead>Data Prometida</TableHead>
+                <TableHead>Remetente</TableHead>
+                <TableHead>Destinatário</TableHead>
+                <TableHead>Emissão</TableHead>
+                <TableHead className="text-right">Valor</TableHead>
+                <TableHead>Peso</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="w-[80px]">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Carregando...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">Carregando...</TableCell></TableRow>
               ) : filtered.length === 0 ? (
-                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Nenhum pedido encontrado</TableCell></TableRow>
+                <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">Nenhum pedido encontrado</TableCell></TableRow>
               ) : filtered.map(o => (
                 <TableRow key={o.id}>
-                  <TableCell className="font-medium">{o.order_number}</TableCell>
+                  <TableCell className="font-medium">{o.order_number}{o.nf_series ? ` / ${o.nf_series}` : ''}</TableCell>
                   <TableCell className="text-sm">{o.clients?.company_name || '—'}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{o.destination || '—'}</TableCell>
-                  <TableCell className="text-sm">{o.pallet_count || 0}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{o.promised_date ? format(new Date(o.promised_date + 'T12:00:00'), 'dd/MM/yyyy') : '—'}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{o.remitter || '—'}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{o.recipient || '—'}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{o.issue_date ? format(new Date(o.issue_date + 'T12:00:00'), 'dd/MM/yyyy') : '—'}</TableCell>
+                  <TableCell className="text-sm text-right font-medium">{o.value ? `R$ ${Number(o.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'}</TableCell>
+                  <TableCell className="text-sm">{o.weight_kg ? `${o.weight_kg} kg` : '—'}</TableCell>
                   <TableCell><Badge variant="outline" className={statusColor(o.status)}>{ORDER_STATUS_LABELS[o.status] || o.status}</Badge></TableCell>
                   <TableCell>
                     <Button variant="ghost" size="icon" onClick={() => { setEditingOrder(o); setDialogOpen(true); }}>
