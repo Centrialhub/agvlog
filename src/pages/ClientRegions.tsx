@@ -285,7 +285,7 @@ export default function ClientRegions() {
             </div>
             <div>
               <Label className="text-xs">UF</Label>
-              <Select value={filterUf} onValueChange={setFilterUf}>
+              <Select value={filterUf} onValueChange={(v) => setFilterUf(v === 'all' ? '' : v)}>
                 <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Todas" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todas</SelectItem>
