@@ -39,6 +39,8 @@ const ClientRegions = lazy(() => import("@/pages/ClientRegions"));
 const FreightTables = lazy(() => import("@/pages/FreightTables"));
 const ClientPortal = lazy(() => import("@/pages/ClientPortal"));
 const RoutePlanning = lazy(() => import("@/pages/RoutePlanning"));
+const Receivables = lazy(() => import("@/pages/Receivables"));
+const OperationalRoutesPage = lazy(() => import("@/pages/OperationalRoutesPage"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
 // Driver pages
@@ -148,6 +150,8 @@ const App = () => (
             <Route path="/regions" element={<ProtectedRoute><ClientRegions /></ProtectedRoute>} />
             <Route path="/freight" element={<ProtectedRoute><FreightTables /></ProtectedRoute>} />
             <Route path="/route-planning" element={<ProtectedRoute><RoutePlanning /></ProtectedRoute>} />
+            <Route path="/receivables" element={<ProtectedRoute><Receivables /></ProtectedRoute>} />
+            <Route path="/operational-routes" element={<ProtectedRoute><OperationalRoutesPage /></ProtectedRoute>} />
 
             {/* Driver routes */}
             <Route path="/driver" element={<DriverRoute><DriverHome /></DriverRoute>} />
