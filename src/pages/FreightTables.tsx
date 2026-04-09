@@ -356,7 +356,42 @@ export default function FreightTables() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <p className="text-xs font-semibold text-muted-foreground pt-2">Componentes Complementares</p>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <Label>Despacho (R$)</Label>
+                  <Input type="number" step="0.01" placeholder="0.00"
+                    value={form.dispatch_value} onChange={(e) => setForm({ ...form, dispatch_value: e.target.value })} />
+                </div>
+                <div>
+                  <Label>Rastreamento (R$)</Label>
+                  <Input type="number" step="0.01" placeholder="0.00"
+                    value={form.tracking_value} onChange={(e) => setForm({ ...form, tracking_value: e.target.value })} />
+                </div>
+                <div>
+                  <Label>Pedágio (R$)</Label>
+                  <Input type="number" step="0.01" placeholder="0.00"
+                    value={form.toll_value} onChange={(e) => setForm({ ...form, toll_value: e.target.value })} />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <Label>Carga/Descarga (R$)</Label>
+                  <Input type="number" step="0.01" placeholder="0.00"
+                    value={form.loading_value} onChange={(e) => setForm({ ...form, loading_value: e.target.value })} />
+                </div>
+                <div>
+                  <Label>GRIS (R$)</Label>
+                  <Input type="number" step="0.01" placeholder="0.00"
+                    value={form.gris_value} onChange={(e) => setForm({ ...form, gris_value: e.target.value })} />
+                </div>
+                <div>
+                  <Label>Seguro (%)</Label>
+                  <Input type="number" step="0.01" placeholder="0.00"
+                    value={form.insurance_percent} onChange={(e) => setForm({ ...form, insurance_percent: e.target.value })} />
+                </div>
+              </div>
+
                 <Switch checked={form.blocked} onCheckedChange={(v) => setForm({ ...form, blocked: v })} />
                 <Label>Bloqueado</Label>
               </div>
