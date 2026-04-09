@@ -64,6 +64,8 @@ export interface Order {
   subtotal: number | null;
   financial_value: number | null;
   payer_type: string | null;
+  city: string | null;
+  neighborhood: string | null;
   created_at: string;
   updated_at: string;
   clients?: { company_name: string } | null;
