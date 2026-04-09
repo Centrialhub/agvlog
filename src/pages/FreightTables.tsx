@@ -40,6 +40,11 @@ const emptyForm = {
   distribution_type: '',
   route: '',
   blocked: false,
+  rate_percent: '',
+  fixed_value: '',
+  min_value: '',
+  per_kg_value: '',
+  per_pallet_value: '',
 };
 
 export default function FreightTables() {
@@ -91,6 +96,11 @@ export default function FreightTables() {
         distribution_type: values.distribution_type || null,
         route: values.route || null,
         blocked: values.blocked,
+        rate_percent: values.rate_percent ? parseFloat(values.rate_percent) : 0,
+        fixed_value: values.fixed_value ? parseFloat(values.fixed_value) : 0,
+        min_value: values.min_value ? parseFloat(values.min_value) : 0,
+        per_kg_value: values.per_kg_value ? parseFloat(values.per_kg_value) : 0,
+        per_pallet_value: values.per_pallet_value ? parseFloat(values.per_pallet_value) : 0,
       };
       if (values.id) {
         const { error } = await supabase.from('freight_tables').update(record).eq('id', values.id);
@@ -143,6 +153,11 @@ export default function FreightTables() {
       distribution_type: r.distribution_type || '',
       route: r.route || '',
       blocked: r.blocked || false,
+      rate_percent: r.rate_percent ? String(r.rate_percent) : '',
+      fixed_value: r.fixed_value ? String(r.fixed_value) : '',
+      min_value: r.min_value ? String(r.min_value) : '',
+      per_kg_value: r.per_kg_value ? String(r.per_kg_value) : '',
+      per_pallet_value: r.per_pallet_value ? String(r.per_pallet_value) : '',
     });
     setDialogOpen(true);
   }
@@ -260,6 +275,37 @@ export default function FreightTables() {
                 </div>
               </div>
 
+              <p className="text-xs font-semibold text-muted-foreground pt-2">Valores do Frete</p>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <Label>% Frete</Label>
+                  <Input type="number" step="0.01" placeholder="Ex: 6.5"
+                    value={form.rate_percent} onChange={(e) => setForm({ ...form, rate_percent: e.target.value })} />
+                </div>
+                <div>
+                  <Label>Valor Fixo (R$)</Label>
+                  <Input type="number" step="0.01" placeholder="0.00"
+                    value={form.fixed_value} onChange={(e) => setForm({ ...form, fixed_value: e.target.value })} />
+                </div>
+                <div>
+                  <Label>Valor Mínimo (R$)</Label>
+                  <Input type="number" step="0.01" placeholder="0.00"
+                    value={form.min_value} onChange={(e) => setForm({ ...form, min_value: e.target.value })} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>R$/kg</Label>
+                  <Input type="number" step="0.0001" placeholder="0.00"
+                    value={form.per_kg_value} onChange={(e) => setForm({ ...form, per_kg_value: e.target.value })} />
+                </div>
+                <div>
+                  <Label>R$/Palete</Label>
+                  <Input type="number" step="0.01" placeholder="0.00"
+                    value={form.per_pallet_value} onChange={(e) => setForm({ ...form, per_pallet_value: e.target.value })} />
+                </div>
+              </div>
+
               <div className="flex items-center gap-2">
                 <Switch checked={form.blocked} onCheckedChange={(v) => setForm({ ...form, blocked: v })} />
                 <Label>Bloqueado</Label>
@@ -353,6 +399,9 @@ export default function FreightTables() {
                   <TableHead>Mun. Destino</TableHead>
                   <TableHead>Região O.</TableHead>
                   <TableHead>Região D.</TableHead>
+                  <TableHead className="text-right">% Frete</TableHead>
+                  <TableHead className="text-right">Fixo</TableHead>
+                  <TableHead className="text-right">Mín.</TableHead>
                   <TableHead className="w-16">BL</TableHead>
                   <TableHead className="w-20">Ações</TableHead>
                 </TableRow>
@@ -360,11 +409,11 @@ export default function FreightTables() {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={14} className="text-center py-8 text-muted-foreground">Carregando...</TableCell>
+                    <TableCell colSpan={17} className="text-center py-8 text-muted-foreground">Carregando...</TableCell>
                   </TableRow>
                 ) : filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={14} className="text-center py-8 text-muted-foreground">Nenhuma tabela encontrada</TableCell>
+                    <TableCell colSpan={17} className="text-center py-8 text-muted-foreground">Nenhuma tabela encontrada</TableCell>
                   </TableRow>
                 ) : (
                   filtered.map((r: any) => (
@@ -381,6 +430,9 @@ export default function FreightTables() {
                       <TableCell className="text-xs">{r.destination_municipality || '*'}</TableCell>
                       <TableCell className="text-xs">{r.origin_region || '*'}</TableCell>
                       <TableCell className="text-xs">{r.destination_region || '*'}</TableCell>
+                      <TableCell className="text-xs text-right font-medium">{r.rate_percent ? `${r.rate_percent}%` : '—'}</TableCell>
+                      <TableCell className="text-xs text-right">{r.fixed_value ? `R$ ${Number(r.fixed_value).toFixed(2)}` : '—'}</TableCell>
+                      <TableCell className="text-xs text-right">{r.min_value ? `R$ ${Number(r.min_value).toFixed(2)}` : '—'}</TableCell>
                       <TableCell>
                         {r.blocked ? (
                           <Badge variant="destructive" className="text-[10px]">Sim</Badge>
