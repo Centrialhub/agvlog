@@ -10,6 +10,7 @@ import { useGenerateCTe } from '@/hooks/useGenerateCTe';
 import { getNextStatuses } from '@/lib/statusPipeline';
 import { useToast } from '@/hooks/use-toast';
 import LoadItemsPanel from '@/components/loads/LoadItemsPanel';
+import CTeWorkbench from '@/components/loads/CTeWorkbench';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -435,52 +436,13 @@ export default function LoadDetail() {
         vehicleMaxWeight={vehicle?.max_weight_kg}
       />
 
-      {/* Related documents */}
-      {documents.length > 0 && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <FileText className="h-4 w-4" /> Documentos Vinculados ({documents.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nº</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Remetente</TableHead>
-                  <TableHead>Destinatário</TableHead>
-                  <TableHead>Paletes</TableHead>
-                  <TableHead>Peso</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {documents.map(doc => (
-                  <TableRow key={doc.id}>
-                    <TableCell className="font-medium text-sm">{doc.invoice_number || '—'}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="text-[10px]">
-                        {doc.document_type === 'inbound' ? 'NF-e' : doc.document_type === 'outbound' ? 'CT-e' : doc.document_type}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{doc.remitter || '—'}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{doc.recipient || '—'}</TableCell>
-                    <TableCell>{doc.pallet_count || 0}</TableCell>
-                    <TableCell>{doc.weight_kg ? `${doc.weight_kg} kg` : '—'}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={cn("text-[10px]",
-                        doc.status === 'confirmed' ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'
-                      )}>{doc.status}</Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
+      {/* CT-e Workbench */}
+      <CTeWorkbench
+        loadId={load.id}
+        loadNumber={load.load_number}
+        destination={load.destination}
+        documents={documents as any}
+      />
     </div>
   );
 }
