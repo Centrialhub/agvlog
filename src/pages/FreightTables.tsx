@@ -111,6 +111,16 @@ export default function FreightTables() {
         min_value: values.min_value ? parseFloat(values.min_value) : 0,
         per_kg_value: values.per_kg_value ? parseFloat(values.per_kg_value) : 0,
         per_pallet_value: values.per_pallet_value ? parseFloat(values.per_pallet_value) : 0,
+        cargo_type: values.cargo_type || null,
+        vehicle_type: values.vehicle_type || null,
+        body_type: values.body_type || null,
+        ctrc_type: values.ctrc_type || null,
+        dispatch_value: values.dispatch_value ? parseFloat(values.dispatch_value) : 0,
+        tracking_value: values.tracking_value ? parseFloat(values.tracking_value) : 0,
+        toll_value: values.toll_value ? parseFloat(values.toll_value) : 0,
+        loading_value: values.loading_value ? parseFloat(values.loading_value) : 0,
+        gris_value: values.gris_value ? parseFloat(values.gris_value) : 0,
+        insurance_percent: values.insurance_percent ? parseFloat(values.insurance_percent) : 0,
       };
       if (values.id) {
         const { error } = await supabase.from('freight_tables').update(record).eq('id', values.id);
