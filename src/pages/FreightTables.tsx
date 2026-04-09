@@ -392,6 +392,7 @@ export default function FreightTables() {
                 </div>
               </div>
 
+              <div className="flex items-center gap-2">
                 <Switch checked={form.blocked} onCheckedChange={(v) => setForm({ ...form, blocked: v })} />
                 <Label>Bloqueado</Label>
               </div>
