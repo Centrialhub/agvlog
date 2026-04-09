@@ -37,6 +37,15 @@ export interface FiscalDocument {
   pallet_count: number;
   weight_kg: number | null;
   value: number | null;
+  freight_value: number | null;
+  freight_breakdown: any | null;
+  freight_table_id: string | null;
+  cbs_base: number | null;
+  cbs_rate: number | null;
+  cbs_value: number | null;
+  ibs_base: number | null;
+  ibs_rate: number | null;
+  ibs_value: number | null;
   status: string;
   created_at: string;
   clients?: { company_name: string } | null;
