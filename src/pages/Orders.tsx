@@ -12,10 +12,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Search, Plus, ShoppingCart, Edit, DollarSign } from 'lucide-react';
+import { Search, Plus, ShoppingCart, Edit, DollarSign, FileSearch } from 'lucide-react';
 import { getNextStatuses } from '@/lib/statusPipeline';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import FreightAuditDrawer from '@/components/freight/FreightAuditDrawer';
 
 const n = (v: any) => (v ? Number(v) : 0);
 const numField = (label: string, value: any, onChange: (v: string) => void, opts?: { step?: string; prefix?: string }) => (
