@@ -48,6 +48,7 @@ const navSections: NavSection[] = [
     items: [
       { label: 'Centro de Operações', href: '/', icon: <LayoutDashboard className="h-4 w-4" /> },
       { label: 'Importação', href: '/ingestion', icon: <Upload className="h-4 w-4" /> },
+      { label: 'Roteirização', href: '/route-planning', icon: <Radio className="h-4 w-4" /> },
       { label: 'Cargas', href: '/loads', icon: <PackageCheck className="h-4 w-4" /> },
       { label: 'Ocorrências', href: '/events', icon: <AlertOctagon className="h-4 w-4" /> },
       { label: 'Aprovação Despesas', href: '/expense-approval', icon: <Receipt className="h-4 w-4" /> },
