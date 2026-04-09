@@ -1863,23 +1863,44 @@ export type Database = {
         Row: {
           cargo_type: string | null
           client_id: string | null
+          cofins_rate: number | null
+          cofins_value: number | null
           created_at: string
           created_by: string | null
           destination: string | null
+          discount_value: number | null
+          financial_value: number | null
+          freight_delivery_value: number | null
+          freight_weight_value: number | null
+          gris_value: number | null
+          icms_base: number | null
+          icms_rate: number | null
+          icms_value: number | null
           id: string
+          insurance_percent: number | null
+          insurance_value: number | null
           issue_date: string | null
+          loading_value: number | null
           nf_series: string | null
           notes: string | null
           order_number: string
           origin: string | null
+          other_costs: number | null
           pallet_count: number | null
+          payer_type: string | null
           payment_plan: string | null
+          pis_rate: number | null
+          pis_value: number | null
           promised_date: string | null
           quantity: number | null
           recipient: string | null
           remitter: string | null
           status: string
+          subtotal: number | null
           tenant_id: string
+          toll_value: number | null
+          total_freight: number | null
+          tracking_value: number | null
           updated_at: string
           updated_by: string | null
           value: number | null
@@ -1889,23 +1910,44 @@ export type Database = {
         Insert: {
           cargo_type?: string | null
           client_id?: string | null
+          cofins_rate?: number | null
+          cofins_value?: number | null
           created_at?: string
           created_by?: string | null
           destination?: string | null
+          discount_value?: number | null
+          financial_value?: number | null
+          freight_delivery_value?: number | null
+          freight_weight_value?: number | null
+          gris_value?: number | null
+          icms_base?: number | null
+          icms_rate?: number | null
+          icms_value?: number | null
           id?: string
+          insurance_percent?: number | null
+          insurance_value?: number | null
           issue_date?: string | null
+          loading_value?: number | null
           nf_series?: string | null
           notes?: string | null
           order_number: string
           origin?: string | null
+          other_costs?: number | null
           pallet_count?: number | null
+          payer_type?: string | null
           payment_plan?: string | null
+          pis_rate?: number | null
+          pis_value?: number | null
           promised_date?: string | null
           quantity?: number | null
           recipient?: string | null
           remitter?: string | null
           status?: string
+          subtotal?: number | null
           tenant_id: string
+          toll_value?: number | null
+          total_freight?: number | null
+          tracking_value?: number | null
           updated_at?: string
           updated_by?: string | null
           value?: number | null
@@ -1915,23 +1957,44 @@ export type Database = {
         Update: {
           cargo_type?: string | null
           client_id?: string | null
+          cofins_rate?: number | null
+          cofins_value?: number | null
           created_at?: string
           created_by?: string | null
           destination?: string | null
+          discount_value?: number | null
+          financial_value?: number | null
+          freight_delivery_value?: number | null
+          freight_weight_value?: number | null
+          gris_value?: number | null
+          icms_base?: number | null
+          icms_rate?: number | null
+          icms_value?: number | null
           id?: string
+          insurance_percent?: number | null
+          insurance_value?: number | null
           issue_date?: string | null
+          loading_value?: number | null
           nf_series?: string | null
           notes?: string | null
           order_number?: string
           origin?: string | null
+          other_costs?: number | null
           pallet_count?: number | null
+          payer_type?: string | null
           payment_plan?: string | null
+          pis_rate?: number | null
+          pis_value?: number | null
           promised_date?: string | null
           quantity?: number | null
           recipient?: string | null
           remitter?: string | null
           status?: string
+          subtotal?: number | null
           tenant_id?: string
+          toll_value?: number | null
+          total_freight?: number | null
+          tracking_value?: number | null
           updated_at?: string
           updated_by?: string | null
           value?: number | null
