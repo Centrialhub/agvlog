@@ -278,7 +278,62 @@ export default function RoutePlanning() {
     value: route.orders.reduce((s, o) => s + (Number(o.value) || 0), 0),
   });
 
-  return (
+  const exportRoutePdf = (route: RoutePlan) => {
+    const totals = routeTotals(route);
+    const vehicle = vehicles.find((v: any) => v.id === route.vehicle_id) as any;
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+    // Header
+    doc.setFontSize(16);
+    doc.text('ROMANEIO DE TRANSPORTE', 148, 15, { align: 'center' });
+    doc.setFontSize(10);
+    doc.text(`Rota: ${route.name}`, 14, 25);
+    doc.text(`Data: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, 14, 30);
+    if (vehicle) doc.text(`Veículo: ${vehicle.plate} ${vehicle.nickname ? `(${vehicle.nickname})` : ''}`, 14, 35);
+    doc.text(`Total: ${totals.orders} pedidos | ${totals.weight.toFixed(0)} kg | ${totals.pallets} paletes`, 14, 40);
+    if (totals.freight > 0) doc.text(`Frete Total: R$ ${totals.freight.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 200, 40);
+
+    // Table
+    autoTable(doc, {
+      startY: 46,
+      head: [['#', 'Pedido', 'Cliente', 'Remetente', 'Destinatário', 'Destino', 'Cidade', 'Peso (kg)', 'Pal.', 'Valor NF', 'Frete', 'Emissão']],
+      body: route.orders.map((o, i) => [
+        i + 1,
+        o.order_number,
+        o.clients?.company_name || '—',
+        o.remitter || '—',
+        o.recipient || '—',
+        o.destination || '—',
+        (o as any).city || '—',
+        o.weight_kg ? Number(o.weight_kg).toFixed(0) : '—',
+        o.pallet_count || 0,
+        o.value ? `R$ ${Number(o.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—',
+        o.total_freight ? `R$ ${Number(o.total_freight).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—',
+        o.issue_date ? format(new Date(o.issue_date + 'T12:00:00'), 'dd/MM/yyyy') : '—',
+      ]),
+      foot: [['', '', '', '', '', '', 'TOTAIS:', `${totals.weight.toFixed(0)}`, `${totals.pallets}`,
+        `R$ ${totals.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+        `R$ ${totals.freight.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, '']],
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [41, 65, 107], fontStyle: 'bold' },
+      footStyles: { fillColor: [230, 230, 230], textColor: [0, 0, 0], fontStyle: 'bold' },
+      theme: 'grid',
+    });
+
+    // Footer with signature lines
+    const finalY = (doc as any).lastAutoTable.finalY + 15;
+    doc.setFontSize(9);
+    doc.line(14, finalY + 10, 80, finalY + 10);
+    doc.text('Motorista', 47, finalY + 15, { align: 'center' });
+    doc.line(100, finalY + 10, 166, finalY + 10);
+    doc.text('Conferente', 133, finalY + 15, { align: 'center' });
+    doc.line(186, finalY + 10, 272, finalY + 10);
+    doc.text('Responsável', 229, finalY + 15, { align: 'center' });
+
+    doc.save(`romaneio-${route.name.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`);
+    toast.success('PDF gerado com sucesso!');
+  };
+
     <div className="animate-fade-in space-y-6">
       <div className="flex items-center justify-between">
         <div>
