@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Search, Plus, ShoppingCart, Edit, DollarSign } from 'lucide-react';
+import { getNextStatuses } from '@/lib/statusPipeline';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 
@@ -79,44 +80,46 @@ function OrderForm({ order, clients, onSave, onCancel }: { order?: Order; client
 
   // Auto-calculate totals
   const calcTotals = useCallback(() => {
-    const fw = n(form.freight_weight_value);
-    const fd = n(form.freight_delivery_value);
-    const ins = n(form.insurance_value);
-    const toll = n(form.toll_value);
-    const load = n(form.loading_value);
-    const track = n(form.tracking_value);
-    const gris = n(form.gris_value);
-    const other = n(form.other_costs);
-    const sub = fw + fd + ins + toll + load + track + gris + other;
-    const disc = n(form.discount_value);
-    const total = Math.max(sub - disc, 0);
+    setForm(prev => {
+      const fw = n(prev.freight_weight_value);
+      const fd = n(prev.freight_delivery_value);
+      const ins = n(prev.insurance_value);
+      const toll = n(prev.toll_value);
+      const load = n(prev.loading_value);
+      const track = n(prev.tracking_value);
+      const gris = n(prev.gris_value);
+      const other = n(prev.other_costs);
+      const sub = fw + fd + ins + toll + load + track + gris + other;
+      const disc = n(prev.discount_value);
+      const total = Math.max(sub - disc, 0);
 
-    const icmsBase = n(form.icms_base) || total;
-    const icmsRate = n(form.icms_rate);
-    const icmsVal = icmsBase * icmsRate / 100;
-    const pisRate = n(form.pis_rate);
-    const pisVal = total * pisRate / 100;
-    const cofinsRate = n(form.cofins_rate);
-    const cofinsVal = total * cofinsRate / 100;
-    const cbsBase = n(form.cbs_base) || total;
-    const cbsRate = n(form.cbs_rate);
-    const cbsVal = cbsBase * cbsRate / 100;
-    const ibsBase = n(form.ibs_base) || total;
-    const ibsRate = n(form.ibs_rate);
-    const ibsVal = ibsBase * ibsRate / 100;
+      const icmsBase = n(prev.icms_base) || total;
+      const icmsRate = n(prev.icms_rate);
+      const icmsVal = icmsBase * icmsRate / 100;
+      const pisRate = n(prev.pis_rate);
+      const pisVal = total * pisRate / 100;
+      const cofinsRate = n(prev.cofins_rate);
+      const cofinsVal = total * cofinsRate / 100;
+      const cbsBase = n(prev.cbs_base) || total;
+      const cbsRate = n(prev.cbs_rate);
+      const cbsVal = cbsBase * cbsRate / 100;
+      const ibsBase = n(prev.ibs_base) || total;
+      const ibsRate = n(prev.ibs_rate);
+      const ibsVal = ibsBase * ibsRate / 100;
 
-    setForm(f => ({
-      ...f,
-      subtotal: sub.toFixed(2),
-      total_freight: total.toFixed(2),
-      icms_value: icmsVal.toFixed(2),
-      pis_value: pisVal.toFixed(2),
-      cofins_value: cofinsVal.toFixed(2),
-      cbs_value: cbsVal.toFixed(2),
-      ibs_value: ibsVal.toFixed(2),
-      financial_value: (total - icmsVal - pisVal - cofinsVal - cbsVal - ibsVal).toFixed(2),
-    }));
-  }, [form]);
+      return {
+        ...prev,
+        subtotal: sub.toFixed(2),
+        total_freight: total.toFixed(2),
+        icms_value: icmsVal.toFixed(2),
+        pis_value: pisVal.toFixed(2),
+        cofins_value: cofinsVal.toFixed(2),
+        cbs_value: cbsVal.toFixed(2),
+        ibs_value: ibsVal.toFixed(2),
+        financial_value: (total - icmsVal - pisVal - cofinsVal - cbsVal - ibsVal).toFixed(2),
+      };
+    });
+  }, []);
 
   const handleSubmit = () => {
     const numFields = [
@@ -161,7 +164,12 @@ function OrderForm({ order, clients, onSave, onCancel }: { order?: Order; client
               <Label>Status</Label>
               <Select value={form.status} onValueChange={v => set('status', v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{ORDER_STATUSES.map(s => <SelectItem key={s} value={s}>{ORDER_STATUS_LABELS[s]}</SelectItem>)}</SelectContent>
+                <SelectContent>
+                  <SelectItem value={form.status}>{ORDER_STATUS_LABELS[form.status as keyof typeof ORDER_STATUS_LABELS] || form.status}</SelectItem>
+                  {getNextStatuses(form.status, 'order').map(s => (
+                    <SelectItem key={s} value={s}>{ORDER_STATUS_LABELS[s as keyof typeof ORDER_STATUS_LABELS] || s}</SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
             </div>
           </div>

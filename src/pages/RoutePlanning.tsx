@@ -304,7 +304,7 @@ export default function RoutePlanning() {
         o.remitter || '—',
         o.recipient || '—',
         o.destination || '—',
-        (o as any).city || '—',
+        o.city || '—',
         o.weight_kg ? Number(o.weight_kg).toFixed(0) : '—',
         o.pallet_count || 0,
         o.value ? `R$ ${Number(o.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—',
