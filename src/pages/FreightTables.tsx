@@ -45,6 +45,16 @@ const emptyForm = {
   min_value: '',
   per_kg_value: '',
   per_pallet_value: '',
+  cargo_type: '',
+  vehicle_type: '',
+  body_type: '',
+  ctrc_type: '',
+  dispatch_value: '',
+  tracking_value: '',
+  toll_value: '',
+  loading_value: '',
+  gris_value: '',
+  insurance_percent: '',
 };
 
 export default function FreightTables() {
@@ -101,6 +111,16 @@ export default function FreightTables() {
         min_value: values.min_value ? parseFloat(values.min_value) : 0,
         per_kg_value: values.per_kg_value ? parseFloat(values.per_kg_value) : 0,
         per_pallet_value: values.per_pallet_value ? parseFloat(values.per_pallet_value) : 0,
+        cargo_type: values.cargo_type || null,
+        vehicle_type: values.vehicle_type || null,
+        body_type: values.body_type || null,
+        ctrc_type: values.ctrc_type || null,
+        dispatch_value: values.dispatch_value ? parseFloat(values.dispatch_value) : 0,
+        tracking_value: values.tracking_value ? parseFloat(values.tracking_value) : 0,
+        toll_value: values.toll_value ? parseFloat(values.toll_value) : 0,
+        loading_value: values.loading_value ? parseFloat(values.loading_value) : 0,
+        gris_value: values.gris_value ? parseFloat(values.gris_value) : 0,
+        insurance_percent: values.insurance_percent ? parseFloat(values.insurance_percent) : 0,
       };
       if (values.id) {
         const { error } = await supabase.from('freight_tables').update(record).eq('id', values.id);
@@ -158,6 +178,16 @@ export default function FreightTables() {
       min_value: r.min_value ? String(r.min_value) : '',
       per_kg_value: r.per_kg_value ? String(r.per_kg_value) : '',
       per_pallet_value: r.per_pallet_value ? String(r.per_pallet_value) : '',
+      cargo_type: r.cargo_type || '',
+      vehicle_type: r.vehicle_type || '',
+      body_type: r.body_type || '',
+      ctrc_type: r.ctrc_type || '',
+      dispatch_value: r.dispatch_value ? String(r.dispatch_value) : '',
+      tracking_value: r.tracking_value ? String(r.tracking_value) : '',
+      toll_value: r.toll_value ? String(r.toll_value) : '',
+      loading_value: r.loading_value ? String(r.loading_value) : '',
+      gris_value: r.gris_value ? String(r.gris_value) : '',
+      insurance_percent: r.insurance_percent ? String(r.insurance_percent) : '',
     });
     setDialogOpen(true);
   }
@@ -275,6 +305,26 @@ export default function FreightTables() {
                 </div>
               </div>
 
+              <p className="text-xs font-semibold text-muted-foreground pt-2">Classificação</p>
+              <div className="grid grid-cols-4 gap-3">
+                <div>
+                  <Label>Tipo Carga</Label>
+                  <Input value={form.cargo_type} onChange={(e) => setForm({ ...form, cargo_type: e.target.value })} placeholder="Ex: Seca" />
+                </div>
+                <div>
+                  <Label>Tipo Veículo</Label>
+                  <Input value={form.vehicle_type} onChange={(e) => setForm({ ...form, vehicle_type: e.target.value })} placeholder="Ex: Truck" />
+                </div>
+                <div>
+                  <Label>Tipo Carroceria</Label>
+                  <Input value={form.body_type} onChange={(e) => setForm({ ...form, body_type: e.target.value })} placeholder="Ex: Baú" />
+                </div>
+                <div>
+                  <Label>Tipo CTRC</Label>
+                  <Input value={form.ctrc_type} onChange={(e) => setForm({ ...form, ctrc_type: e.target.value })} placeholder="Normal" />
+                </div>
+              </div>
+
               <p className="text-xs font-semibold text-muted-foreground pt-2">Valores do Frete</p>
               <div className="grid grid-cols-3 gap-3">
                 <div>
@@ -303,6 +353,42 @@ export default function FreightTables() {
                   <Label>R$/Palete</Label>
                   <Input type="number" step="0.01" placeholder="0.00"
                     value={form.per_pallet_value} onChange={(e) => setForm({ ...form, per_pallet_value: e.target.value })} />
+                </div>
+              </div>
+
+              <p className="text-xs font-semibold text-muted-foreground pt-2">Componentes Complementares</p>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <Label>Despacho (R$)</Label>
+                  <Input type="number" step="0.01" placeholder="0.00"
+                    value={form.dispatch_value} onChange={(e) => setForm({ ...form, dispatch_value: e.target.value })} />
+                </div>
+                <div>
+                  <Label>Rastreamento (R$)</Label>
+                  <Input type="number" step="0.01" placeholder="0.00"
+                    value={form.tracking_value} onChange={(e) => setForm({ ...form, tracking_value: e.target.value })} />
+                </div>
+                <div>
+                  <Label>Pedágio (R$)</Label>
+                  <Input type="number" step="0.01" placeholder="0.00"
+                    value={form.toll_value} onChange={(e) => setForm({ ...form, toll_value: e.target.value })} />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <Label>Carga/Descarga (R$)</Label>
+                  <Input type="number" step="0.01" placeholder="0.00"
+                    value={form.loading_value} onChange={(e) => setForm({ ...form, loading_value: e.target.value })} />
+                </div>
+                <div>
+                  <Label>GRIS (R$)</Label>
+                  <Input type="number" step="0.01" placeholder="0.00"
+                    value={form.gris_value} onChange={(e) => setForm({ ...form, gris_value: e.target.value })} />
+                </div>
+                <div>
+                  <Label>Seguro (%)</Label>
+                  <Input type="number" step="0.01" placeholder="0.00"
+                    value={form.insurance_percent} onChange={(e) => setForm({ ...form, insurance_percent: e.target.value })} />
                 </div>
               </div>
 
