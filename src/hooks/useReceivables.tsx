@@ -20,16 +20,19 @@ export interface Receivable {
   fiscal_document_id: string | null;
   load_id: string | null;
   client_id: string | null;
-  description: string;
+  description: string | null;
+  invoice_number: string | null;
   amount: number;
   due_date: string | null;
-  status: ReceivableStatus;
-  paid_at: string | null;
+  status: string;
+  received_at: string | null;
+  received_amount: number | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
+  created_by: string | null;
+  updated_by: string | null;
   clients?: { company_name: string } | null;
-  orders?: { order_number: string } | null;
 }
 
 export function useReceivables() {
@@ -40,11 +43,11 @@ export function useReceivables() {
       if (!currentTenant) return [];
       const { data, error } = await supabase
         .from('receivables')
-        .select('*, clients(company_name), orders(order_number)')
+        .select('*, clients(company_name)')
         .eq('tenant_id', currentTenant.id)
         .order('created_at', { ascending: false });
       if (error) throw error;
-      return (data || []) as Receivable[];
+      return (data || []) as unknown as Receivable[];
     },
     enabled: !!currentTenant,
   });
@@ -69,11 +72,13 @@ export function useCreateReceivable() {
 }
 
 export function useUpdateReceivable() {
+  const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...values }: Partial<Receivable> & { id: string }) => {
       const { data, error } = await supabase.from('receivables').update({
         ...values,
+        updated_by: user?.id,
         updated_at: new Date().toISOString(),
       } as any).eq('id', id).select().single();
       if (error) throw error;

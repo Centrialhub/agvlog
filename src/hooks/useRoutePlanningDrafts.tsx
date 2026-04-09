@@ -7,8 +7,12 @@ export interface RoutePlanningDraft {
   id: string;
   tenant_id: string;
   name: string;
-  payload: any;
+  order_ids: string[] | null;
+  vehicle_id: string | null;
+  operational_route_id: string | null;
+  notes: string | null;
   status: string;
+  converted_load_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -26,7 +30,7 @@ export function useRoutePlanningDrafts() {
         .eq('status', 'draft')
         .order('updated_at', { ascending: false });
       if (error) throw error;
-      return (data || []) as RoutePlanningDraft[];
+      return (data || []) as unknown as RoutePlanningDraft[];
     },
     enabled: !!currentTenant,
   });
@@ -37,11 +41,15 @@ export function useSaveDraft() {
   const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, name, payload }: { id?: string; name: string; payload: any }) => {
+    mutationFn: async ({ id, name, orderIds, vehicleId, notes }: {
+      id?: string; name: string; orderIds: string[]; vehicleId?: string | null; notes?: string;
+    }) => {
       if (id) {
         const { data, error } = await supabase.from('route_planning_drafts').update({
           name,
-          payload,
+          order_ids: orderIds as any,
+          vehicle_id: vehicleId || null,
+          notes: notes || null,
           updated_at: new Date().toISOString(),
         } as any).eq('id', id).select().single();
         if (error) throw error;
@@ -50,7 +58,9 @@ export function useSaveDraft() {
         const { data, error } = await supabase.from('route_planning_drafts').insert({
           tenant_id: currentTenant!.id,
           name,
-          payload,
+          order_ids: orderIds as any,
+          vehicle_id: vehicleId || null,
+          notes: notes || null,
           status: 'draft',
           created_by: user?.id,
         } as any).select().single();
