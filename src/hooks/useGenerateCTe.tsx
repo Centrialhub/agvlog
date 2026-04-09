@@ -11,7 +11,6 @@ async function lookupFreightValue(
   totalWeight: number,
   totalPallets: number
 ): Promise<number> {
-  // Find matching freight table (not blocked, within validity)
   const today = new Date().toISOString().slice(0, 10);
   const { data: tables } = await supabase
     .from('freight_tables')
@@ -23,12 +22,10 @@ async function lookupFreightValue(
 
   if (!tables || tables.length === 0) return 0;
 
-  // Filter by validity end date
   const valid = tables.filter((t: any) => !t.valid_until || t.valid_until >= today);
   if (valid.length === 0) return 0;
 
-  // Try to match by destination region/municipality
-  let match = valid[0]; // fallback to first valid table
+  let match = valid[0];
   if (destination) {
     const destLower = destination.toLowerCase();
     const regionMatch = valid.find((t: any) =>
@@ -38,7 +35,6 @@ async function lookupFreightValue(
     if (regionMatch) match = regionMatch;
   }
 
-  // Calculate freight value
   let freight = 0;
   const ratePercent = Number(match.rate_percent) || 0;
   const fixedVal = Number(match.fixed_value) || 0;
@@ -78,19 +74,41 @@ export function useGenerateCTe() {
         throw new Error('CT-e já existe para esta carga');
       }
 
-      // Fetch load_items with NF-e values
+      // Fetch load_items (without invalid join)
       const { data: loadItems } = await (supabase as any)
         .from('load_items')
-        .select('item_description, quantity, pallet_count, weight_kg, orders(order_number, clients(company_name))')
+        .select('item_description, quantity, pallet_count, weight_kg, order_id')
         .eq('load_id', load.id);
 
-      const itemSummary = (loadItems || [])
-        .map((li: any) => li.item_description || li.orders?.order_number || 'Item')
+      // Fetch linked orders via load_orders for item summary
+      const { data: loadOrders } = await supabase
+        .from('load_orders')
+        .select('order_id')
+        .eq('load_id', load.id);
+
+      let orderNames: string[] = [];
+      if (loadOrders && loadOrders.length > 0) {
+        const orderIds = loadOrders.map((lo: any) => lo.order_id);
+        const { data: orders } = await supabase
+          .from('orders')
+          .select('order_number, clients(company_name)')
+          .in('id', orderIds);
+        if (orders) {
+          orderNames = orders.map((o: any) => o.order_number || o.clients?.company_name || 'Pedido');
+        }
+      }
+
+      const itemDescriptions = (loadItems || [])
+        .map((li: any) => li.item_description)
+        .filter((d: string) => d && d.trim());
+
+      const itemSummary = [...itemDescriptions, ...orderNames]
+        .filter(Boolean)
         .join(', ')
-        .substring(0, 500);
+        .substring(0, 500) || `Carga ${load.load_number}`;
 
       const totalPallets = (loadItems || []).reduce((s: number, li: any) => s + (li.pallet_count || 0), 0);
-      const totalWeight = (loadItems || []).reduce((s: number, li: any) => s + (li.weight_kg || 0), 0);
+      const totalWeight = (loadItems || []).reduce((s: number, li: any) => s + (Number(li.weight_kg) || 0), 0);
 
       // Fetch NF-e total value for percentage-based freight
       const { data: nfeDocs } = await supabase
@@ -124,7 +142,7 @@ export function useGenerateCTe() {
         pallet_count: totalPallets || load.total_pallet_count || 0,
         weight_kg: totalWeight || load.total_weight_kg || 0,
         value: freightValue > 0 ? freightValue : null,
-        product_summary: itemSummary || `Carga ${load.load_number} - ${load.vehicles?.plate || 'S/V'} - ${load.drivers?.name || 'S/M'}`,
+        product_summary: itemSummary,
         status: 'confirmed',
         issue_date: new Date().toISOString().slice(0, 10),
       } as any).select().single();

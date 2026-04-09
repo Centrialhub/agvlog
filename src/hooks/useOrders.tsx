@@ -32,7 +32,7 @@ export interface Order {
   destination: string | null;
   cargo_type: string | null;
   quantity: number | null;
-  pallet_count: number;
+  pallet_count: number | null;
   weight_kg: number | null;
   volume_m3: number | null;
   notes: string | null;
