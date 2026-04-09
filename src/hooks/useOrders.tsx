@@ -63,6 +63,12 @@ export interface Order {
   discount_value: number | null;
   subtotal: number | null;
   financial_value: number | null;
+  cbs_base: number | null;
+  cbs_rate: number | null;
+  cbs_value: number | null;
+  ibs_base: number | null;
+  ibs_rate: number | null;
+  ibs_value: number | null;
   payer_type: string | null;
   city: string | null;
   neighborhood: string | null;
