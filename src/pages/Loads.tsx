@@ -161,7 +161,15 @@ export default function Loads() {
           </h1>
           <p className="text-xs text-muted-foreground mt-0.5">{loads.length} cargas no total</p>
         </div>
-        <NewLoadDialog vehicles={vehicles} drivers={drivers} onCreated={refetch} />
+        <div className="flex items-center gap-2">
+          {pendingCount > 0 && (
+            <Button size="sm" variant="secondary" onClick={() => setGroupingOpen(true)}>
+              <FileStack className="h-4 w-4 mr-1" /> Agrupar NF-es
+              <Badge className="ml-1.5 bg-primary text-primary-foreground text-[10px] px-1.5">{pendingCount}</Badge>
+            </Button>
+          )}
+          <NewLoadDialog vehicles={vehicles} drivers={drivers} onCreated={refetch} />
+        </div>
       </div>
 
       {/* Status summary */}
