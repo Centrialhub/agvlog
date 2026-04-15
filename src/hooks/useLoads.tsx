@@ -91,3 +91,25 @@ export function useUpdateLoad() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['loads'] }),
   });
 }
+
+export function useDeleteLoad() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('loads').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['loads'] }),
+  });
+}
+
+export function useDeleteLoads() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      const { error } = await supabase.from('loads').delete().in('id', ids);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['loads'] }),
+  });
+}

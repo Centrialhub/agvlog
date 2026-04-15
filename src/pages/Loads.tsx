@@ -1,89 +1,21 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useLoads, useCreateLoad, LOAD_STATUSES, LOAD_STATUS_LABELS, Load } from '@/hooks/useLoads';
+import { useLoads, useDeleteLoad, useDeleteLoads, LOAD_STATUSES, LOAD_STATUS_LABELS, Load } from '@/hooks/useLoads';
 import { useVehicles } from '@/hooks/useVehicles';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Plus, PackageCheck, AlertTriangle, Truck, MapPin, ArrowRight, FileStack } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Search, PackageCheck, Truck, MapPin, ArrowRight, FileStack, Trash2, MoreVertical, X, CheckSquare } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import PendingDocsGrouping from '@/components/loads/PendingDocsGrouping';
-
-function NewLoadDialog({ vehicles, drivers, onCreated }: { vehicles: any[]; drivers: any[]; onCreated: () => void }) {
-  const createLoad = useCreateLoad();
-  const { toast } = useToast();
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ load_number: '', vehicle_id: '', driver_id: '', origin: '', destination: '', notes: '' });
-
-  const handleSave = async () => {
-    try {
-      await createLoad.mutateAsync({
-        ...form,
-        vehicle_id: form.vehicle_id || null,
-        driver_id: form.driver_id || null,
-        status: 'planned',
-      } as any);
-      toast({ title: 'Carga criada' });
-      setOpen(false);
-      setForm({ load_number: '', vehicle_id: '', driver_id: '', origin: '', destination: '', notes: '' });
-      onCreated();
-    } catch (e: any) {
-      toast({ title: 'Erro', description: e.message, variant: 'destructive' });
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm"><Plus className="h-4 w-4 mr-1" /> Nova Carga</Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-lg">
-        <DialogHeader><DialogTitle>Nova Carga</DialogTitle></DialogHeader>
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div><Label className="text-xs">Nº Carga *</Label><Input value={form.load_number} onChange={e => setForm(f => ({ ...f, load_number: e.target.value }))} placeholder="CG-001" /></div>
-            <div>
-              <Label className="text-xs">Veículo</Label>
-              <Select value={form.vehicle_id || '__none__'} onValueChange={v => setForm(f => ({ ...f, vehicle_id: v === '__none__' ? '' : v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">Nenhum</SelectItem>
-                  {vehicles.map(v => <SelectItem key={v.id} value={v.id}>{v.plate}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label className="text-xs">Motorista</Label>
-              <Select value={form.driver_id || '__none__'} onValueChange={v => setForm(f => ({ ...f, driver_id: v === '__none__' ? '' : v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">Nenhum</SelectItem>
-                  {drivers.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div><Label className="text-xs">Destino</Label><Input value={form.destination} onChange={e => setForm(f => ({ ...f, destination: e.target.value }))} /></div>
-          </div>
-          <div><Label className="text-xs">Observações</Label><Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2} /></div>
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSave} disabled={!form.load_number.trim() || createLoad.isPending}>Criar</Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
+import NewLoadDialog from '@/components/loads/NewLoadDialog';
 
 const STATUS_COLORS: Record<string, string> = {
   delivered: 'bg-success/10 text-success',
@@ -99,13 +31,24 @@ const STATUS_COLORS: Record<string, string> = {
 export default function Loads() {
   const navigate = useNavigate();
   const { currentTenant } = useTenant();
+  const { toast } = useToast();
   const { data: loads = [], isLoading, refetch } = useLoads();
   const { data: vehicles = [] } = useVehicles();
+  const deleteOne = useDeleteLoad();
+  const deleteBulk = useDeleteLoads();
+
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [groupingOpen, setGroupingOpen] = useState(false);
 
-  // Count pending docs for badge
+  // Selection state
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selectionMode, setSelectionMode] = useState(false);
+
+  // Confirm dialogs
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+
   const { data: pendingCount = 0 } = useQuery({
     queryKey: ['pending_docs_count', currentTenant?.id],
     queryFn: async () => {
@@ -142,7 +85,6 @@ export default function Loads() {
     });
   }, [loads, search, statusFilter]);
 
-  // Status summary cards
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     loads.forEach(l => { counts[l.status] = (counts[l.status] || 0) + 1; });
@@ -150,6 +92,59 @@ export default function Loads() {
   }, [loads]);
 
   const activeStatuses = ['planned', 'assembling', 'ready', 'loading', 'loaded', 'in_transit'] as const;
+
+  // Selection helpers
+  const toggleSelect = useCallback((id: string) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const selectAll = useCallback(() => {
+    setSelected(new Set(filtered.map(l => l.id)));
+  }, [filtered]);
+
+  const deselectAll = useCallback(() => {
+    setSelected(new Set());
+  }, []);
+
+  const exitSelectionMode = useCallback(() => {
+    setSelectionMode(false);
+    setSelected(new Set());
+  }, []);
+
+  // Delete handlers
+  const handleDeleteOne = async () => {
+    if (!confirmDeleteId) return;
+    try {
+      await deleteOne.mutateAsync(confirmDeleteId);
+      toast({ title: 'Carga excluída' });
+      setSelected(prev => { const n = new Set(prev); n.delete(confirmDeleteId); return n; });
+    } catch (e: any) {
+      toast({ title: 'Erro ao excluir', description: e.message, variant: 'destructive' });
+    } finally {
+      setConfirmDeleteId(null);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selected);
+    if (!ids.length) return;
+    try {
+      await deleteBulk.mutateAsync(ids);
+      toast({ title: `${ids.length} carga(s) excluída(s)` });
+      exitSelectionMode();
+    } catch (e: any) {
+      toast({ title: 'Erro ao excluir', description: e.message, variant: 'destructive' });
+    } finally {
+      setConfirmBulkDelete(false);
+    }
+  };
+
+  const selectedCount = selected.size;
+  const allFilteredSelected = filtered.length > 0 && filtered.every(l => selected.has(l.id));
 
   return (
     <div className="animate-fade-in space-y-5">
@@ -162,6 +157,11 @@ export default function Loads() {
           <p className="text-xs text-muted-foreground mt-0.5">{loads.length} cargas no total</p>
         </div>
         <div className="flex items-center gap-2">
+          {!selectionMode && (
+            <Button size="sm" variant="outline" onClick={() => setSelectionMode(true)}>
+              <CheckSquare className="h-4 w-4 mr-1" /> Selecionar
+            </Button>
+          )}
           {pendingCount > 0 && (
             <Button size="sm" variant="secondary" onClick={() => setGroupingOpen(true)}>
               <FileStack className="h-4 w-4 mr-1" /> Agrupar NF-es
@@ -171,6 +171,28 @@ export default function Loads() {
           <NewLoadDialog vehicles={vehicles} drivers={drivers} onCreated={refetch} />
         </div>
       </div>
+
+      {/* Bulk action bar */}
+      {selectionMode && (
+        <div className="flex items-center gap-3 bg-muted/50 border border-border rounded-lg px-4 py-2">
+          <Checkbox
+            checked={allFilteredSelected}
+            onCheckedChange={c => c ? selectAll() : deselectAll()}
+          />
+          <span className="text-sm text-muted-foreground">
+            {selectedCount > 0 ? `${selectedCount} selecionada(s)` : 'Nenhuma selecionada'}
+          </span>
+          <div className="flex-1" />
+          {selectedCount > 0 && (
+            <Button size="sm" variant="destructive" onClick={() => setConfirmBulkDelete(true)} disabled={deleteBulk.isPending}>
+              <Trash2 className="h-4 w-4 mr-1" /> Excluir {selectedCount}
+            </Button>
+          )}
+          <Button size="sm" variant="ghost" onClick={exitSelectionMode}>
+            <X className="h-4 w-4 mr-1" /> Cancelar
+          </Button>
+        </div>
+      )}
 
       {/* Status summary */}
       <div className="flex gap-2 flex-wrap">
@@ -219,16 +241,24 @@ export default function Loads() {
             const veh = vehicles.find((v: any) => v.id === l.vehicle_id) as any;
             const maxP = veh?.max_pallets;
             const occ = maxP ? Math.round(((l.total_pallet_count || 0) / maxP) * 100) : null;
+            const isSelected = selected.has(l.id);
 
             return (
               <Card
                 key={l.id}
-                className="cursor-pointer hover:shadow-md transition-shadow border-l-4"
+                className={`cursor-pointer hover:shadow-md transition-shadow border-l-4 ${isSelected ? 'ring-2 ring-primary bg-primary/5' : ''}`}
                 style={{ borderLeftColor: l.status === 'divergent' ? 'hsl(var(--destructive))' : l.status === 'delivered' ? 'hsl(var(--success))' : ['in_transit', 'loaded'].includes(l.status) ? 'hsl(var(--info))' : 'hsl(var(--border))' }}
-                onClick={() => navigate(`/loads/${l.id}`)}
+                onClick={() => selectionMode ? toggleSelect(l.id) : navigate(`/loads/${l.id}`)}
               >
                 <CardContent className="py-3 px-4">
                   <div className="flex items-center gap-4">
+                    {selectionMode && (
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={() => toggleSelect(l.id)}
+                        onClick={e => e.stopPropagation()}
+                      />
+                    )}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="font-semibold text-sm">{l.load_number}</span>
@@ -250,7 +280,7 @@ export default function Loads() {
                       </div>
                       {occ !== null && (
                         <div className="w-16">
-                          <div className={`h-2 rounded-full bg-muted overflow-hidden`}>
+                          <div className="h-2 rounded-full bg-muted overflow-hidden">
                             <div
                               className={`h-full rounded-full transition-all ${occ > 100 ? 'bg-destructive' : occ > 80 ? 'bg-warning' : 'bg-success'}`}
                               style={{ width: `${Math.min(occ, 100)}%` }}
@@ -261,7 +291,30 @@ export default function Loads() {
                           </div>
                         </div>
                       )}
-                      <ArrowRight className="h-4 w-4 text-muted-foreground" />
+
+                      {/* Individual actions menu */}
+                      {!selectionMode && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={e => e.stopPropagation()}>
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={e => { e.stopPropagation(); navigate(`/loads/${l.id}`); }}>
+                              Abrir detalhes
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-destructive focus:text-destructive"
+                              onClick={e => { e.stopPropagation(); setConfirmDeleteId(l.id); }}
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" /> Excluir
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+
+                      {!selectionMode && <ArrowRight className="h-4 w-4 text-muted-foreground" />}
                     </div>
                   </div>
                 </CardContent>
@@ -274,10 +327,44 @@ export default function Loads() {
       <PendingDocsGrouping
         open={groupingOpen}
         onOpenChange={setGroupingOpen}
-        onCreated={() => {
-          refetch();
-        }}
+        onCreated={() => { refetch(); }}
       />
+
+      {/* Confirm single delete */}
+      <AlertDialog open={!!confirmDeleteId} onOpenChange={o => !o && setConfirmDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir carga?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita. A carga e seus vínculos serão removidos permanentemente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteOne} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirm bulk delete */}
+      <AlertDialog open={confirmBulkDelete} onOpenChange={setConfirmBulkDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir {selectedCount} carga(s)?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita. Todas as cargas selecionadas serão removidas permanentemente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleBulkDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Excluir {selectedCount} carga(s)
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
