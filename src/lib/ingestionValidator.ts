@@ -208,6 +208,8 @@ export function validateOrderRows(
 // Group documents by destination region for load suggestions
 export interface LoadSuggestion {
   region: string;
+  routeId: string | null;
+  routeName: string | null;
   documents: ValidatedDocument[];
   orders: ValidatedOrder[];
   totalPallets: number;
@@ -216,22 +218,64 @@ export interface LoadSuggestion {
   stopCount: number;
 }
 
+export interface OperationalRouteRef {
+  id: string;
+  name: string;
+  destinations: { name: string }[];
+}
+
+function normalizeCity(city: string): string {
+  return city
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Z0-9 ]/g, '')
+    .trim();
+}
+
+function findRouteForCity(city: string, routes: OperationalRouteRef[]): OperationalRouteRef | null {
+  const normalized = normalizeCity(city);
+  for (const route of routes) {
+    for (const dest of route.destinations) {
+      if (normalizeCity(dest.name) === normalized) {
+        return route;
+      }
+    }
+  }
+  // Partial match fallback
+  for (const route of routes) {
+    for (const dest of route.destinations) {
+      const nd = normalizeCity(dest.name);
+      if (normalized.includes(nd) || nd.includes(normalized)) {
+        return route;
+      }
+    }
+  }
+  return null;
+}
+
 export function generateLoadSuggestions(
   documents: ValidatedDocument[],
   orders: ValidatedOrder[],
+  routes: OperationalRouteRef[] = [],
 ): LoadSuggestion[] {
   const validDocs = documents.filter(d => !d.hasErrors && !d.isDuplicate);
   const validOrders = orders.filter(o => !o.hasErrors);
 
-  // Group by state/city
   const regionMap = new Map<string, LoadSuggestion>();
 
-  validDocs.forEach(doc => {
-    const region = [doc.source.recipientState, doc.source.recipientCity].filter(Boolean).join(' - ') || 'Sem região';
-    if (!regionMap.has(region)) {
-      regionMap.set(region, { region, documents: [], orders: [], totalPallets: 0, totalWeight: 0, totalValue: 0, stopCount: 0 });
+  const getOrCreateGroup = (key: string, routeId: string | null, routeName: string | null): LoadSuggestion => {
+    if (!regionMap.has(key)) {
+      regionMap.set(key, { region: key, routeId, routeName, documents: [], orders: [], totalPallets: 0, totalWeight: 0, totalValue: 0, stopCount: 0 });
     }
-    const group = regionMap.get(region)!;
+    return regionMap.get(key)!;
+  };
+
+  validDocs.forEach(doc => {
+    const city = doc.source.recipientCity || '';
+    const matchedRoute = city ? findRouteForCity(city, routes) : null;
+    const key = matchedRoute ? matchedRoute.name : ([doc.source.recipientState, city].filter(Boolean).join(' - ') || 'Sem região');
+    const group = getOrCreateGroup(key, matchedRoute?.id || null, matchedRoute?.name || null);
     group.documents.push(doc);
     group.totalPallets += doc.source.estimatedPallets;
     group.totalWeight += doc.source.totalWeight;
@@ -240,11 +284,10 @@ export function generateLoadSuggestions(
   });
 
   validOrders.forEach(order => {
-    const region = order.source.destination || 'Sem região';
-    if (!regionMap.has(region)) {
-      regionMap.set(region, { region, documents: [], orders: [], totalPallets: 0, totalWeight: 0, totalValue: 0, stopCount: 0 });
-    }
-    const group = regionMap.get(region)!;
+    const dest = order.source.destination || '';
+    const matchedRoute = dest ? findRouteForCity(dest, routes) : null;
+    const key = matchedRoute ? matchedRoute.name : (dest || 'Sem região');
+    const group = getOrCreateGroup(key, matchedRoute?.id || null, matchedRoute?.name || null);
     group.orders.push(order);
     group.totalPallets += order.source.palletCount || Math.ceil(order.source.quantity / 50);
     group.totalWeight += order.source.weightKg;

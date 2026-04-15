@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { LoadSuggestion } from '@/lib/ingestionValidator';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, AlertTriangle, CheckCircle, Loader2, Truck, User } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Loader2, MapPin } from 'lucide-react';
 
 interface Vehicle {
   id: string;
@@ -21,16 +21,23 @@ interface Driver {
   active: boolean;
 }
 
+interface OperationalRouteOption {
+  id: string;
+  name: string;
+  destinations: { name: string }[];
+}
+
 interface GroupingStepProps {
   suggestions: LoadSuggestion[];
   vehicles: Vehicle[];
   drivers: Driver[];
+  routes?: OperationalRouteOption[];
   executing: boolean;
   onBack: () => void;
   onExecute: (assignments: Map<number, { vehicleId: string | null; driverId: string | null }>) => void;
 }
 
-export default function GroupingStep({ suggestions, vehicles, drivers, executing, onBack, onExecute }: GroupingStepProps) {
+export default function GroupingStep({ suggestions, vehicles, drivers, routes = [], executing, onBack, onExecute }: GroupingStepProps) {
   const [assignments, setAssignments] = useState<Map<number, { vehicleId: string | null; driverId: string | null }>>(new Map());
 
   const vehiclesWithCapacity = vehicles.filter(v => (v.max_pallets || 0) > 0);
@@ -70,14 +77,32 @@ export default function GroupingStep({ suggestions, vehicles, drivers, executing
                 <CardContent className="py-3 px-4">
                   <div className="flex items-center gap-4">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-sm">{s.region}</span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {s.routeName ? (
+                          <Badge className="bg-primary/10 text-primary border-primary/20 gap-1">
+                            <MapPin className="h-3 w-3" />
+                            {s.routeName}
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="gap-1 text-warning border-warning/30">
+                            <MapPin className="h-3 w-3" />
+                            {s.region}
+                            <span className="text-[9px] ml-1">(sem rota)</span>
+                          </Badge>
+                        )}
                         <Badge variant="outline" className="text-[10px]">{s.documents.length} NF-e</Badge>
                         {s.orders.length > 0 && <Badge variant="outline" className="text-[10px]">{s.orders.length} pedidos</Badge>}
                       </div>
+                      {s.routeName && s.documents.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {[...new Set(s.documents.map(d => d.source.recipientCity).filter(Boolean))].map((city, ci) => (
+                            <span key={ci} className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{city}</span>
+                          ))}
+                        </div>
+                      )}
                       <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
                         <span>{s.totalPallets} paletes</span>
-                        {s.totalWeight > 0 && <span>{s.totalWeight} kg</span>}
+                        {s.totalWeight > 0 && <span>{s.totalWeight.toLocaleString('pt-BR')} kg</span>}
                         {s.totalValue > 0 && <span>R$ {s.totalValue.toLocaleString('pt-BR')}</span>}
                       </div>
                     </div>

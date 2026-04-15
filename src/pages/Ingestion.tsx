@@ -10,6 +10,7 @@ import { useCreateOrder } from '@/hooks/useOrders';
 import { useCreateLoad } from '@/hooks/useLoads';
 import { useCreateLoadItem } from '@/hooks/useLoadItems';
 import { useVehicles } from '@/hooks/useVehicles';
+import { useOperationalRoutes } from '@/hooks/useOperationalRoutes';
 import { useToast } from '@/hooks/use-toast';
 import { Upload } from 'lucide-react';
 import IngestionStepper from '@/components/ingestion/IngestionStepper';
@@ -47,6 +48,7 @@ export default function Ingestion() {
   const { data: clients = [] } = useClients();
   const { data: vehicles = [] } = useVehicles();
   const { data: drivers = [] } = useDrivers();
+  const { data: operationalRoutes = [] } = useOperationalRoutes();
   const { currentTenant } = useTenant();
   const { user } = useAuth();
   const createDoc = useCreateFiscalDocument();
@@ -116,7 +118,12 @@ export default function Ingestion() {
   }, []);
 
   const handleGenerateSuggestions = () => {
-    setSuggestions(generateLoadSuggestions(validatedDocs, validatedOrders));
+    const routeRefs = operationalRoutes.map(r => ({
+      id: r.id,
+      name: r.name,
+      destinations: Array.isArray(r.destinations) ? r.destinations.map((d: any) => ({ name: typeof d === 'string' ? d : d.name || '' })) : [],
+    }));
+    setSuggestions(generateLoadSuggestions(validatedDocs, validatedOrders, routeRefs));
     setStep(2);
   };
 
@@ -334,6 +341,11 @@ export default function Ingestion() {
           suggestions={suggestions}
           vehicles={vehicles as any}
           drivers={drivers as any}
+          routes={operationalRoutes.map(r => ({
+            id: r.id,
+            name: r.name,
+            destinations: Array.isArray(r.destinations) ? r.destinations.map((d: any) => ({ name: typeof d === 'string' ? d : d.name || '' })) : [],
+          }))}
           executing={executing}
           onBack={() => setStep(1)}
           onExecute={handleExecute}
