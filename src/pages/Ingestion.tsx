@@ -434,11 +434,17 @@ export default function Ingestion() {
         <RoutingStep
           docs={validatedDocs}
           orders={validatedOrders}
-          routes={operationalRoutes.map(r => ({
-            id: r.id,
-            name: r.name,
-            destinations: Array.isArray(r.destinations) ? r.destinations.map((d: any) => ({ name: typeof d === 'string' ? d : d.name || '' })) : [],
-          }))}
+          routes={(() => {
+            const seen = new Set<string>();
+            return operationalRoutes
+              .filter(r => r.active !== false)
+              .filter(r => { if (seen.has(r.name)) return false; seen.add(r.name); return true; })
+              .map(r => ({
+                id: r.id,
+                name: r.name,
+                destinations: Array.isArray(r.destinations) ? r.destinations.map((d: any) => ({ name: typeof d === 'string' ? d : d.name || '' })) : [],
+              }));
+          })()}
           onBack={() => setStep(1)}
           onNext={handleRoutingNext}
         />
