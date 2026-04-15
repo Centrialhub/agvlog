@@ -45,9 +45,6 @@ export default function ValidationStep({
   const [editingDocIdx, setEditingDocIdx] = useState<number | null>(null);
   const [editingOrderIdx, setEditingOrderIdx] = useState<number | null>(null);
   const [selectedLoadId, setSelectedLoadId] = useState<string | null>(null);
-  const [filter, setFilter] = useState<FilterMode>('all');
-  const [editingDocIdx, setEditingDocIdx] = useState<number | null>(null);
-  const [editingOrderIdx, setEditingOrderIdx] = useState<number | null>(null);
 
   const validDocs = docs.filter(d => !d.hasErrors && !d.isDuplicate);
 
