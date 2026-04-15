@@ -184,6 +184,7 @@ export default function Ingestion() {
             freight_breakdown: freightBreakdown,
             freight_table_id: freightTableId,
             status: 'confirmed',
+            load_id: loadId || null,
           });
 
           if (freightValue && freightBreakdown?.tableId && currentTenant) {
