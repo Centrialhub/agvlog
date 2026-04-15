@@ -118,6 +118,77 @@ export default function Ingestion() {
     setValidatedOrders(prev => prev.filter((_, i) => i !== index));
   }, []);
 
+  const handleSaveDocsOnly = async () => {
+    setSavingDocsOnly(true);
+    const results: string[] = [];
+    try {
+      for (const doc of validatedDocs.filter(d => !d.hasErrors && !d.isDuplicate)) {
+        try {
+          let freightValue: number | null = null;
+          let freightBreakdown: any = {};
+          let freightTableId: string | null = null;
+          if (currentTenant) {
+            const freightResult = await calculateFreight({
+              tenantId: currentTenant.id,
+              clientId: doc.matchedClientId,
+              destination: doc.source.recipientCity || null,
+              destinationState: doc.source.recipientState || null,
+              destinationMunicipality: doc.source.recipientCity || null,
+              totalValue: doc.source.totalValue || 0,
+              totalWeight: doc.source.totalWeight || 0,
+              totalPallets: doc.source.estimatedPallets || 0,
+            });
+            if (freightResult.success && freightResult.breakdown) {
+              freightValue = freightResult.value;
+              freightBreakdown = freightResult.breakdown;
+              freightTableId = freightResult.breakdown.tableId || null;
+            }
+          }
+
+          const created = await createDoc.mutateAsync({
+            document_type: 'inbound',
+            invoice_number: doc.source.invoiceNumber,
+            access_key: doc.source.accessKey,
+            remitter: doc.source.emitterName,
+            recipient: doc.source.recipientName,
+            issue_date: doc.source.issueDate || null,
+            client_id: doc.matchedClientId,
+            product_summary: doc.source.items.map(i => i.description).join(', ').substring(0, 500),
+            pallet_count: doc.source.estimatedPallets,
+            weight_kg: doc.source.totalWeight,
+            value: doc.source.totalValue,
+            freight_value: freightValue,
+            freight_breakdown: freightBreakdown,
+            freight_table_id: freightTableId,
+            status: 'confirmed',
+          });
+
+          if (freightValue && freightBreakdown?.tableId && currentTenant) {
+            await logFreightCalculation(currentTenant.id, created.id, 'fiscal_document', freightBreakdown, user?.id);
+          }
+
+          const freightLabel = freightValue ? ` (frete: R$ ${freightValue.toFixed(2)})` : '';
+          results.push(`✅ NF ${doc.source.invoiceNumber} salva${freightLabel}`);
+        } catch (e: any) {
+          results.push(`❌ NF ${doc.source.invoiceNumber}: ${e.message}`);
+        }
+      }
+
+      setExecutionResults(results);
+      setStep(3);
+
+      const successCount = results.filter(r => r.startsWith('✅')).length;
+      toast({
+        title: 'NF-es salvas',
+        description: `${successCount} documentos salvos. Agrupe em cargas quando quiser na página de Cargas.`,
+      });
+    } catch (e: any) {
+      toast({ title: 'Erro', description: e.message, variant: 'destructive' });
+    } finally {
+      setSavingDocsOnly(false);
+    }
+  };
+
   const handleGenerateSuggestions = () => {
     const routeRefs = operationalRoutes.map(r => ({
       id: r.id,
