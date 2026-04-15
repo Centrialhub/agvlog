@@ -1,6 +1,6 @@
 import { ArrowRight, Check } from 'lucide-react';
 
-const STEPS = ['Upload', 'Validação', 'Agrupamento', 'Resultado'] as const;
+const STEPS = ['Upload', 'Validação', 'Roteirização', 'Agrupamento', 'Resultado'] as const;
 
 interface IngestionStepperProps {
   currentStep: number;

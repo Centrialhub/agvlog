@@ -16,6 +16,8 @@ import { Upload } from 'lucide-react';
 import IngestionStepper from '@/components/ingestion/IngestionStepper';
 import UploadStep from '@/components/ingestion/UploadStep';
 import ValidationStep from '@/components/ingestion/ValidationStep';
+import RoutingStep from '@/components/ingestion/RoutingStep';
+import type { RouteGroup } from '@/components/ingestion/RoutingStep';
 import GroupingStep from '@/components/ingestion/GroupingStep';
 import ResultsStep from '@/components/ingestion/ResultsStep';
 import { calculateFreight, logFreightCalculation } from '@/hooks/useFreightCalculator';
@@ -61,6 +63,7 @@ export default function Ingestion() {
   const [validatedDocs, setValidatedDocs] = useState<ValidatedDocument[]>([]);
   const [validatedOrders, setValidatedOrders] = useState<ValidatedOrder[]>([]);
   const [suggestions, setSuggestions] = useState<LoadSuggestion[]>([]);
+  const [routeGroups, setRouteGroups] = useState<RouteGroup[]>([]);
   const [executing, setExecuting] = useState(false);
   const [savingDocsOnly, setSavingDocsOnly] = useState(false);
   const [executionResults, setExecutionResults] = useState<string[]>([]);
@@ -177,7 +180,7 @@ export default function Ingestion() {
       }
 
       setExecutionResults(results);
-      setStep(3);
+      setStep(4);
 
       const successCount = results.filter(r => r.startsWith('✅')).length;
       toast({
@@ -191,14 +194,26 @@ export default function Ingestion() {
     }
   };
 
-  const handleGenerateSuggestions = () => {
-    const routeRefs = operationalRoutes.map(r => ({
-      id: r.id,
-      name: r.name,
-      destinations: Array.isArray(r.destinations) ? r.destinations.map((d: any) => ({ name: typeof d === 'string' ? d : d.name || '' })) : [],
-    }));
-    setSuggestions(generateLoadSuggestions(validatedDocs, validatedOrders, routeRefs));
+  const handleGoToRouting = () => {
     setStep(2);
+  };
+
+  const handleRoutingNext = (groups: RouteGroup[]) => {
+    setRouteGroups(groups);
+    // Convert route groups to LoadSuggestions for the GroupingStep
+    const loadSuggestions: LoadSuggestion[] = groups.map(g => ({
+      region: g.routeName,
+      routeId: g.routeId,
+      routeName: g.routeId ? g.routeName : null,
+      documents: g.documents,
+      orders: g.orders,
+      totalPallets: g.totalPallets,
+      totalWeight: g.totalWeight,
+      totalValue: g.totalValue,
+      stopCount: g.documents.length + g.orders.length,
+    }));
+    setSuggestions(loadSuggestions);
+    setStep(3);
   };
 
   const handleExecute = async (assignments: Map<number, { vehicleId: string | null; driverId: string | null }>) => {
@@ -362,7 +377,7 @@ export default function Ingestion() {
       }
 
       setExecutionResults(results);
-      setStep(3);
+      setStep(4);
 
       const successCount = results.filter(r => r.startsWith('✅')).length;
       const errorCount = results.filter(r => r.startsWith('❌')).length;
@@ -384,6 +399,7 @@ export default function Ingestion() {
     setValidatedDocs([]);
     setValidatedOrders([]);
     setSuggestions([]);
+    setRouteGroups([]);
     setExecutionResults([]);
   };
 
@@ -393,7 +409,7 @@ export default function Ingestion() {
         <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
           <Upload className="h-5 w-5 text-primary" /> Importação
         </h1>
-        <p className="text-xs text-muted-foreground mt-0.5">Upload → Validação → Agrupamento → Execução</p>
+        <p className="text-xs text-muted-foreground mt-0.5">Upload → Validação → Roteirização → Agrupamento → Execução</p>
       </div>
 
       <IngestionStepper currentStep={step} />
@@ -405,7 +421,7 @@ export default function Ingestion() {
           orders={validatedOrders}
           clients={clients}
           onBack={reset}
-          onNext={handleGenerateSuggestions}
+          onNext={handleGoToRouting}
           onSaveDocsOnly={handleSaveDocsOnly}
           savingDocs={savingDocsOnly}
           onUpdateDoc={handleUpdateDoc}
@@ -415,6 +431,19 @@ export default function Ingestion() {
         />
       )}
       {step === 2 && (
+        <RoutingStep
+          docs={validatedDocs}
+          orders={validatedOrders}
+          routes={operationalRoutes.map(r => ({
+            id: r.id,
+            name: r.name,
+            destinations: Array.isArray(r.destinations) ? r.destinations.map((d: any) => ({ name: typeof d === 'string' ? d : d.name || '' })) : [],
+          }))}
+          onBack={() => setStep(1)}
+          onNext={handleRoutingNext}
+        />
+      )}
+      {step === 3 && (
         <GroupingStep
           suggestions={suggestions}
           vehicles={vehicles as any}
@@ -425,11 +454,11 @@ export default function Ingestion() {
             destinations: Array.isArray(r.destinations) ? r.destinations.map((d: any) => ({ name: typeof d === 'string' ? d : d.name || '' })) : [],
           }))}
           executing={executing}
-          onBack={() => setStep(1)}
+          onBack={() => setStep(2)}
           onExecute={handleExecute}
         />
       )}
-      {step === 3 && <ResultsStep results={executionResults} onReset={reset} />}
+      {step === 4 && <ResultsStep results={executionResults} onReset={reset} />}
     </div>
   );
 }
