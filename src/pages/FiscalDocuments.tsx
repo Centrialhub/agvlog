@@ -369,6 +369,14 @@ export default function FiscalDocuments() {
             {DOC_STATUSES.map(s => <SelectItem key={s} value={s}>{DOC_STATUS_LABELS[s]}</SelectItem>)}
           </SelectContent>
         </Select>
+        <Select value={loadFilter} onValueChange={setLoadFilter}>
+          <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas as cargas</SelectItem>
+            <SelectItem value="no_load">Sem carga</SelectItem>
+            <SelectItem value="with_load">Com carga</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Table */}
