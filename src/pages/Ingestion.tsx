@@ -16,6 +16,8 @@ import { Upload } from 'lucide-react';
 import IngestionStepper from '@/components/ingestion/IngestionStepper';
 import UploadStep from '@/components/ingestion/UploadStep';
 import ValidationStep from '@/components/ingestion/ValidationStep';
+import RoutingStep from '@/components/ingestion/RoutingStep';
+import type { RouteGroup } from '@/components/ingestion/RoutingStep';
 import GroupingStep from '@/components/ingestion/GroupingStep';
 import ResultsStep from '@/components/ingestion/ResultsStep';
 import { calculateFreight, logFreightCalculation } from '@/hooks/useFreightCalculator';
