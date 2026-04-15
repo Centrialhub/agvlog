@@ -191,60 +191,54 @@ export default function GroupingStep({ suggestions, vehicles, drivers, routes = 
 
   const noVehiclesWithCapacity = vehiclesWithCapacity.length === 0;
 
-  const handlePrint = () => {
-    // Build data grouped by city across all suggestions
-    const allDocs: { city: string; state: string; remetente: string; destinatario: string; bairro: string; nfNumber: string; emissao: string; valor: number; peso: number; volumes: number; carga: number }[] = [];
+  const printStyles = `
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; font-size: 10px; color: #1a1a1a; padding: 8mm; }
+    @page { size: landscape; margin: 8mm; }
+    h1 { font-size: 14px; margin-bottom: 2px; }
+    .subtitle { font-size: 10px; color: #666; margin-bottom: 12px; }
+    .city-section { margin-bottom: 14px; page-break-inside: avoid; }
+    .city-header { background: #e8e8e8; padding: 4px 8px; display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: bold; }
+    table { width: 100%; border-collapse: collapse; font-size: 9px; }
+    th { text-align: left; background: #f5f5f5; padding: 3px 5px; border-bottom: 2px solid #aaa; font-weight: 700; font-size: 9px; white-space: nowrap; }
+    td { padding: 2px 5px; border-bottom: 1px solid #ddd; }
+    .right { text-align: right; }
+    .center { text-align: center; }
+    .city-totals { display: flex; gap: 20px; padding: 4px 8px; background: #f0f0f0; font-size: 10px; border-top: 2px solid #999; }
+    .grand-totals { margin-top: 16px; padding: 6px 10px; background: #333; color: #fff; display: flex; gap: 24px; font-size: 11px; font-weight: bold; }
+    .footer { margin-top: 12px; text-align: center; font-size: 8px; color: #999; border-top: 1px solid #ccc; padding-top: 4px; }
+    .route-break { page-break-before: always; }
+    @media print { body { padding: 5mm; } .city-section { page-break-inside: avoid; } }
+  `;
 
-    suggestions.forEach((s, i) => {
-      s.documents.forEach(doc => {
-        allDocs.push({
-          city: doc.source.recipientCity || 'SEM CIDADE',
-          state: doc.source.recipientState || '',
-          remetente: doc.source.emitterName || '—',
-          destinatario: doc.source.recipientName || '—',
-          bairro: (doc.source.recipientAddress || '').split(',')[0]?.trim() || '—',
-          nfNumber: doc.source.invoiceNumber || '—',
-          emissao: doc.source.issueDate ? new Date(doc.source.issueDate + 'T12:00:00').toLocaleDateString('pt-BR') : '',
-          valor: doc.source.totalValue || 0,
-          peso: doc.source.totalWeight || 0,
-          volumes: doc.source.totalVolume || 0,
-          carga: i + 1,
-        });
-      });
-    });
+  const fmt = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+  const fmtN = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
 
-    // Group by city
-    const cityMap = new Map<string, typeof allDocs>();
-    allDocs.forEach(d => {
+  const buildCityBlocks = (docs: { city: string; state: string; remetente: string; destinatario: string; bairro: string; nfNumber: string; emissao: string; valor: number; peso: number; volumes: number }[]) => {
+    const cityMap = new Map<string, typeof docs>();
+    docs.forEach(d => {
       const key = d.city.toUpperCase();
       if (!cityMap.has(key)) cityMap.set(key, []);
       cityMap.get(key)!.push(d);
     });
 
-    const fmt = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
-    const fmtN = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+    let totalNotas = 0, totalEntregas = 0, totalValor = 0, totalPeso = 0, totalVolumes = 0;
+    let html = '';
 
-    let grandNotas = 0, grandEntregas = 0, grandValor = 0, grandPeso = 0, grandVolumes = 0;
+    cityMap.forEach((cityDocs, cityName) => {
+      const entregas = new Set(cityDocs.map(d => d.destinatario)).size;
+      const notas = cityDocs.length;
+      const valor = cityDocs.reduce((s, d) => s + d.valor, 0);
+      const peso = cityDocs.reduce((s, d) => s + d.peso, 0);
+      const volumes = cityDocs.reduce((s, d) => s + d.volumes, 0);
+      totalNotas += notas; totalEntregas += entregas; totalValor += valor; totalPeso += peso; totalVolumes += volumes;
 
-    let cityBlocks = '';
-    cityMap.forEach((docs, cityName) => {
-      const entregas = new Set(docs.map(d => d.destinatario)).size;
-      const totalNotas = docs.length;
-      const totalValor = docs.reduce((s, d) => s + d.valor, 0);
-      const totalPeso = docs.reduce((s, d) => s + d.peso, 0);
-      const totalVolumes = docs.reduce((s, d) => s + d.volumes, 0);
-
-      grandNotas += totalNotas;
-      grandEntregas += entregas;
-      grandValor += totalValor;
-      grandPeso += totalPeso;
-      grandVolumes += totalVolumes;
-
-      const state = docs[0]?.state || '';
-      const rows = docs.map(d => `
+      const state = cityDocs[0]?.state || '';
+      const rows = cityDocs.map(d => `
         <tr>
           <td>${d.remetente}</td>
           <td>${d.destinatario}</td>
+          <td>${d.city}</td>
           <td class="center">${d.bairro}</td>
           <td class="center">${d.nfNumber}</td>
           <td class="center">${d.emissao}</td>
@@ -253,73 +247,98 @@ export default function GroupingStep({ suggestions, vehicles, drivers, routes = 
           <td class="right center">${d.volumes}</td>
         </tr>`).join('');
 
-      cityBlocks += `
+      html += `
         <div class="city-section">
           <div class="city-header">
-            <span class="city-name">Cidade: ${cityName}${state ? ' - ' + state : ''}</span>
-            <span class="city-stats">Qtd Entregas: <b>${entregas}</b></span>
+            <span>${cityName}${state ? ' - ' + state : ''}</span>
+            <span style="font-size:10px">Entregas: <b>${entregas}</b></span>
           </div>
           <table>
-            <thead>
-              <tr>
-                <th>Remetente</th>
-                <th>Destinatário</th>
-                <th class="center">Bairro</th>
-                <th class="center">Nº Nota</th>
-                <th class="center">Emissão</th>
-                <th class="right">Vlr. Nota</th>
-                <th class="right">Peso</th>
-                <th class="right center">Volumes</th>
-              </tr>
-            </thead>
+            <thead><tr>
+              <th>Remetente</th><th>Destinatário</th><th>Cidade</th><th class="center">Bairro</th>
+              <th class="center">Nº Nota</th><th class="center">Emissão</th>
+              <th class="right">Vlr. Nota</th><th class="right">Peso</th><th class="right center">Volumes</th>
+            </tr></thead>
             <tbody>${rows}</tbody>
           </table>
           <div class="city-totals">
-            <span>Qtd Notas: <b>${totalNotas}</b></span>
-            <span>Total Cidade: <b>${fmt(totalValor)}</b></span>
-            <span>Peso: <b>${fmtN(totalPeso)}</b></span>
-            <span>Volumes: <b>${totalVolumes}</b></span>
+            <span>Notas: <b>${notas}</b></span>
+            <span>Total: <b>${fmt(valor)}</b></span>
+            <span>Peso: <b>${fmtN(peso)}</b></span>
+            <span>Volumes: <b>${volumes}</b></span>
           </div>
         </div>`;
     });
 
+    return { html, totalNotas, totalEntregas, totalValor, totalPeso, totalVolumes };
+  };
+
+  const collectDocs = (s: LoadSuggestion) =>
+    s.documents.map(doc => ({
+      city: doc.source.recipientCity || 'SEM CIDADE',
+      state: doc.source.recipientState || '',
+      remetente: doc.source.emitterName || '—',
+      destinatario: doc.source.recipientName || '—',
+      bairro: (doc.source.recipientAddress || '').split(',')[0]?.trim() || '—',
+      nfNumber: doc.source.invoiceNumber || '—',
+      emissao: doc.source.issueDate ? new Date(doc.source.issueDate + 'T12:00:00').toLocaleDateString('pt-BR') : '',
+      valor: doc.source.totalValue || 0,
+      peso: doc.source.totalWeight || 0,
+      volumes: doc.source.totalVolume || 0,
+    }));
+
+  const handlePrint = () => {
+    const allDocs = suggestions.flatMap(s => collectDocs(s));
+    const { html: cityBlocks, totalNotas, totalEntregas, totalValor, totalPeso, totalVolumes } = buildCityBlocks(allDocs);
+
     const win = window.open('', '_blank');
     if (!win) return;
-    win.document.write(`
-      <html><head><title>Análise de Cargas</title>
-      <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; font-size: 10px; color: #1a1a1a; padding: 8mm; }
-        h1 { font-size: 14px; margin-bottom: 2px; }
-        .subtitle { font-size: 10px; color: #666; margin-bottom: 12px; }
-        .city-section { margin-bottom: 14px; page-break-inside: avoid; }
-        .city-header { background: #e8e8e8; padding: 4px 8px; display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: bold; }
-        .city-name { }
-        .city-stats { font-size: 10px; }
-        table { width: 100%; border-collapse: collapse; font-size: 9px; }
-        th { text-align: left; background: #f5f5f5; padding: 3px 5px; border-bottom: 2px solid #aaa; font-weight: 700; font-size: 9px; white-space: nowrap; }
-        td { padding: 2px 5px; border-bottom: 1px solid #ddd; }
-        .right { text-align: right; }
-        .center { text-align: center; }
-        .city-totals { display: flex; gap: 20px; padding: 4px 8px; background: #f0f0f0; font-size: 10px; border-top: 2px solid #999; }
-        .grand-totals { margin-top: 16px; padding: 6px 10px; background: #333; color: #fff; display: flex; gap: 24px; font-size: 11px; font-weight: bold; }
-        .footer { margin-top: 12px; text-align: center; font-size: 8px; color: #999; border-top: 1px solid #ccc; padding-top: 4px; }
-        @media print { body { padding: 5mm; } .city-section { page-break-inside: avoid; } }
-      </style></head><body>
+    win.document.write(`<html><head><title>Análise de Cargas</title><style>${printStyles}</style></head><body>
       <h1>Análise de Cargas — Conferência Galpão</h1>
-      <div class="subtitle">${new Date().toLocaleDateString('pt-BR')} • ${suggestions.length} cargas • ${grandNotas} notas</div>
+      <div class="subtitle">${new Date().toLocaleDateString('pt-BR')} • ${suggestions.length} cargas • ${totalNotas} notas</div>
       ${cityBlocks}
       <div class="grand-totals">
-        <span>Total Geral</span>
-        <span>Notas: ${grandNotas}</span>
-        <span>Entregas: ${grandEntregas}</span>
-        <span>Valor: ${fmt(grandValor)}</span>
-        <span>Peso: ${fmtN(grandPeso)}</span>
-        <span>Volumes: ${grandVolumes}</span>
+        <span>Total Geral</span><span>Notas: ${totalNotas}</span><span>Entregas: ${totalEntregas}</span>
+        <span>Valor: ${fmt(totalValor)}</span><span>Peso: ${fmtN(totalPeso)}</span><span>Volumes: ${totalVolumes}</span>
       </div>
       <div class="footer">Gerado em ${new Date().toLocaleString('pt-BR')} — Sistema de Ingestão Logística</div>
-      </body></html>
-    `);
+    </body></html>`);
+    win.document.close();
+    win.print();
+  };
+
+  const handlePrintPerRoute = () => {
+    const pages: string[] = [];
+
+    suggestions.forEach((s, i) => {
+      const docs = collectDocs(s);
+      if (docs.length === 0) return;
+      const { html: cityBlocks, totalNotas, totalEntregas, totalValor, totalPeso, totalVolumes } = buildCityBlocks(docs);
+      const assignment = assignments.get(i);
+      const vehicle = assignment?.vehicleId ? vehicles.find(v => v.id === assignment.vehicleId) : null;
+      const driver = assignment?.driverId ? drivers.find(d => d.id === assignment.driverId) : null;
+
+      const vehicleInfo = vehicle ? `🚛 ${vehicle.plate} (${vehicle.max_pallets || '?'}p)` : '';
+      const driverInfo = driver ? `👤 ${driver.name}` : '';
+      const assignLine = (vehicleInfo || driverInfo) ? `<div style="font-size:11px;color:#333;background:#f0fdf4;padding:4px 8px;border-radius:4px;margin-bottom:8px">${vehicleInfo}${driverInfo ? (vehicleInfo ? ' — ' : '') + driverInfo : ''}</div>` : '';
+
+      pages.push(`
+        <div class="${i > 0 ? 'route-break' : ''}">
+          <h1>Rota: ${s.routeName || s.region}</h1>
+          <div class="subtitle">${new Date().toLocaleDateString('pt-BR')} • Carga ${i + 1} de ${suggestions.length}</div>
+          ${assignLine}
+          ${cityBlocks}
+          <div class="grand-totals">
+            <span>Total Rota</span><span>Notas: ${totalNotas}</span><span>Entregas: ${totalEntregas}</span>
+            <span>Valor: ${fmt(totalValor)}</span><span>Peso: ${fmtN(totalPeso)}</span><span>Volumes: ${totalVolumes}</span>
+          </div>
+          <div class="footer">Gerado em ${new Date().toLocaleString('pt-BR')} — Sistema de Ingestão Logística</div>
+        </div>`);
+    });
+
+    const win = window.open('', '_blank');
+    if (!win) return;
+    win.document.write(`<html><head><title>Análise por Rota</title><style>${printStyles}</style></head><body>${pages.join('')}</body></html>`);
     win.document.close();
     win.print();
   };
