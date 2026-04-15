@@ -38,9 +38,13 @@ interface ValidationStepProps {
 type FilterMode = 'all' | 'errors' | 'warnings' | 'valid';
 
 export default function ValidationStep({
-  docs, orders, clients, onBack, onNext, onSaveDocsOnly, savingDocs,
+  docs, orders, clients, loads = [], onBack, onNext, onSaveDocsOnly, savingDocs,
   onUpdateDoc, onUpdateOrder, onRemoveDoc, onRemoveOrder,
 }: ValidationStepProps) {
+  const [filter, setFilter] = useState<FilterMode>('all');
+  const [editingDocIdx, setEditingDocIdx] = useState<number | null>(null);
+  const [editingOrderIdx, setEditingOrderIdx] = useState<number | null>(null);
+  const [selectedLoadId, setSelectedLoadId] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterMode>('all');
   const [editingDocIdx, setEditingDocIdx] = useState<number | null>(null);
   const [editingOrderIdx, setEditingOrderIdx] = useState<number | null>(null);
