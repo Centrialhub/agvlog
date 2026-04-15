@@ -60,6 +60,22 @@ export default function Ingestion() {
   const updateRoute = useUpdateOperationalRoute();
   const { toast } = useToast();
 
+  // Learn city → persist to operational_routes destinations
+  const handleLearnCity = useCallback((routeId: string, cityName: string) => {
+    const route = operationalRoutes.find(r => r.id === routeId);
+    if (!route) return;
+    const currentDests: any[] = Array.isArray(route.destinations) ? route.destinations : [];
+    const normalizedNew = cityName.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+    const alreadyExists = currentDests.some((d: any) => {
+      const name = typeof d === 'string' ? d : d.name || '';
+      return name.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim() === normalizedNew;
+    });
+    if (alreadyExists) return;
+    const newDests = [...currentDests, { name: cityName }];
+    updateRoute.mutate({ id: routeId, destinations: newDests } as any);
+    toast({ title: 'Rota atualizada', description: `"${cityName}" adicionada à rota. Próxima vez será automático.` });
+  }, [operationalRoutes, updateRoute, toast]);
+
   const [step, setStep] = useState(0);
   const [validatedDocs, setValidatedDocs] = useState<ValidatedDocument[]>([]);
   const [validatedOrders, setValidatedOrders] = useState<ValidatedOrder[]>([]);
