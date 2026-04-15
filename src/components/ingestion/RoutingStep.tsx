@@ -1,11 +1,11 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo } from 'react';
 import { ValidatedDocument, ValidatedOrder, OperationalRouteRef, findRouteForCity } from '@/lib/ingestionValidator';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ArrowLeft, ArrowRight, MapPin, Plus, X, Route, AlertTriangle, FileText, ArrowDownToLine } from 'lucide-react';
+import { ArrowLeft, ArrowRight, MapPin, Plus, X, Route, AlertTriangle, FileText, ArrowDownToLine, Search } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 
 interface RouteGroup {
@@ -31,14 +31,20 @@ function normalizeCity(city: string): string {
   return city.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Z0-9 ]/g, '').trim();
 }
 
-interface MatchableDoc {
-  doc: ValidatedDocument;
-  fromGroupIdx: number;
+function recalcGroupTotals(g: RouteGroup): RouteGroup {
+  return {
+    ...g,
+    totalPallets: g.documents.reduce((s, d) => s + d.source.estimatedPallets, 0) +
+      g.orders.reduce((s, o) => s + (o.source.palletCount || Math.ceil(o.source.quantity / 50)), 0),
+    totalWeight: g.documents.reduce((s, d) => s + d.source.totalWeight, 0) +
+      g.orders.reduce((s, o) => s + o.source.weightKg, 0),
+    totalValue: g.documents.reduce((s, d) => s + d.source.totalValue, 0),
+  };
 }
 
-interface MatchableOrder {
-  order: ValidatedOrder;
-  fromGroupIdx: number;
+/** Unique key for a doc */
+function docKey(doc: ValidatedDocument): string {
+  return doc.source.accessKey || `${doc.fileName}::${doc.source.invoiceNumber}`;
 }
 
 export default function RoutingStep({ docs, orders, routes, onBack, onNext }: RoutingStepProps) {
@@ -47,7 +53,6 @@ export default function RoutingStep({ docs, orders, routes, onBack, onNext }: Ro
 
   const initialGroups = useMemo(() => {
     const map = new Map<string, RouteGroup>();
-
     const getOrCreate = (key: string, routeId: string | null, routeName: string): RouteGroup => {
       if (!map.has(key)) {
         map.set(key, { routeId, routeName, cities: [], documents: [], orders: [], totalPallets: 0, totalWeight: 0, totalValue: 0 });
@@ -89,133 +94,153 @@ export default function RoutingStep({ docs, orders, routes, onBack, onNext }: Ro
 
   const [groups, setGroups] = useState<RouteGroup[]>(initialGroups);
   const [newCityInputs, setNewCityInputs] = useState<Record<number, string>>({});
-  const [pullDialog, setPullDialog] = useState<{ targetGroupIdx: number; city: string } | null>(null);
-  const [selectedPullDocs, setSelectedPullDocs] = useState<Set<string>>(new Set());
-  const [selectedPullOrders, setSelectedPullOrders] = useState<Set<number>>(new Set());
+
+  // Pull modal state
+  const [pullTargetIdx, setPullTargetIdx] = useState<number | null>(null);
+  const [pullSearch, setPullSearch] = useState('');
+  const [selectedDocs, setSelectedDocs] = useState<Set<string>>(new Set());
+  const [selectedOrders, setSelectedOrders] = useState<Set<number>>(new Set());
 
   const unmatchedCount = groups.filter(g => !g.routeId).length;
-
-  // Find docs/orders from OTHER groups that match a city
-  const findMatchingDocsInOtherGroups = useCallback((city: string, excludeGroupIdx: number) => {
-    const norm = normalizeCity(city);
-    const matchDocs: MatchableDoc[] = [];
-    const matchOrders: MatchableOrder[] = [];
-
-    groups.forEach((g, gi) => {
-      if (gi === excludeGroupIdx) return;
-      g.documents.forEach(doc => {
-        const docCity = normalizeCity(doc.source.recipientCity || '');
-        if (docCity && docCity === norm) {
-          matchDocs.push({ doc, fromGroupIdx: gi });
-        }
-      });
-      g.orders.forEach(order => {
-        const orderCity = normalizeCity(order.source.destination || '');
-        if (orderCity && orderCity === norm) {
-          matchOrders.push({ order, fromGroupIdx: gi });
-        }
-      });
-    });
-
-    return { matchDocs, matchOrders };
-  }, [groups]);
 
   const removeCity = (groupIdx: number, cityIdx: number) => {
     setGroups(prev => prev.map((g, i) => {
       if (i !== groupIdx) return g;
-      const newCities = g.cities.filter((_, ci) => ci !== cityIdx);
-      return { ...g, cities: newCities };
+      return { ...g, cities: g.cities.filter((_, ci) => ci !== cityIdx) };
     }));
   };
 
   const addCity = (groupIdx: number) => {
     const city = (newCityInputs[groupIdx] || '').trim();
     if (!city) return;
-
-    // Check if there are matching docs in other groups
-    const { matchDocs, matchOrders } = findMatchingDocsInOtherGroups(city, groupIdx);
-
-    // Always add city
     setGroups(prev => prev.map((g, i) => {
       if (i !== groupIdx) return g;
       if (g.cities.some(c => normalizeCity(c) === normalizeCity(city))) return g;
       return { ...g, cities: [...g.cities, city] };
     }));
     setNewCityInputs(prev => ({ ...prev, [groupIdx]: '' }));
-
-    // If there are matching docs, open pull dialog
-    if (matchDocs.length > 0 || matchOrders.length > 0) {
-      setPullDialog({ targetGroupIdx: groupIdx, city });
-      // Pre-select all
-      setSelectedPullDocs(new Set(matchDocs.map(m => m.doc.source.accessKey || m.doc.fileName)));
-      setSelectedPullOrders(new Set(matchOrders.map(m => m.order.rowIndex)));
-    }
-  };
-
-  const executePull = () => {
-    if (!pullDialog) return;
-    const { targetGroupIdx, city } = pullDialog;
-    const { matchDocs, matchOrders } = findMatchingDocsInOtherGroups(city, targetGroupIdx);
-
-    const docsToMove = matchDocs.filter(m => selectedPullDocs.has(m.doc.source.accessKey || m.doc.fileName));
-    const ordersToMove = matchOrders.filter(m => selectedPullOrders.has(m.order.rowIndex));
-
-    if (docsToMove.length === 0 && ordersToMove.length === 0) {
-      setPullDialog(null);
-      return;
-    }
-
-    setGroups(prev => {
-      const next = prev.map((g, i) => ({ ...g, documents: [...g.documents], orders: [...g.orders], cities: [...g.cities] }));
-
-      // Remove from source groups
-      const docKeys = new Set(docsToMove.map(m => m.doc.source.accessKey || m.doc.fileName));
-      const orderIdxs = new Set(ordersToMove.map(m => m.order.rowIndex));
-
-      docsToMove.forEach(m => {
-        next[m.fromGroupIdx].documents = next[m.fromGroupIdx].documents.filter(
-          d => (d.source.accessKey || d.fileName) !== (m.doc.source.accessKey || m.doc.fileName)
-        );
-      });
-      ordersToMove.forEach(m => {
-        next[m.fromGroupIdx].orders = next[m.fromGroupIdx].orders.filter(o => o.rowIndex !== m.order.rowIndex);
-      });
-
-      // Add to target group
-      const target = next[targetGroupIdx];
-      docsToMove.forEach(m => {
-        target.documents.push(m.doc);
-      });
-      ordersToMove.forEach(m => {
-        target.orders.push(m.order);
-      });
-
-      // Recalc totals for all affected groups
-      const affectedIdxs = new Set([targetGroupIdx, ...docsToMove.map(m => m.fromGroupIdx), ...ordersToMove.map(m => m.fromGroupIdx)]);
-      affectedIdxs.forEach(idx => {
-        const g = next[idx];
-        g.totalPallets = g.documents.reduce((s, d) => s + d.source.estimatedPallets, 0) +
-          g.orders.reduce((s, o) => s + (o.source.palletCount || Math.ceil(o.source.quantity / 50)), 0);
-        g.totalWeight = g.documents.reduce((s, d) => s + d.source.totalWeight, 0) +
-          g.orders.reduce((s, o) => s + o.source.weightKg, 0);
-        g.totalValue = g.documents.reduce((s, d) => s + d.source.totalValue, 0);
-      });
-
-      // Remove empty groups (but keep the target)
-      return next.filter((g, i) => i === targetGroupIdx || g.documents.length > 0 || g.orders.length > 0);
-    });
-
-    setPullDialog(null);
-    setSelectedPullDocs(new Set());
-    setSelectedPullOrders(new Set());
   };
 
   const removeGroup = (groupIdx: number) => {
     setGroups(prev => prev.filter((_, i) => i !== groupIdx));
   };
 
-  // For the pull dialog
-  const pullMatches = pullDialog ? findMatchingDocsInOtherGroups(pullDialog.city, pullDialog.targetGroupIdx) : { matchDocs: [], matchOrders: [] };
+  // Open pull modal
+  const openPullModal = (groupIdx: number) => {
+    setPullTargetIdx(groupIdx);
+    setPullSearch('');
+    setSelectedDocs(new Set());
+    setSelectedOrders(new Set());
+  };
+
+  // Items available to pull (from all OTHER groups)
+  const pullableItems = useMemo(() => {
+    if (pullTargetIdx === null) return { docs: [] as { doc: ValidatedDocument; groupIdx: number; groupName: string }[], orders: [] as { order: ValidatedOrder; groupIdx: number; groupName: string }[] };
+    
+    const ds: { doc: ValidatedDocument; groupIdx: number; groupName: string }[] = [];
+    const os: { order: ValidatedOrder; groupIdx: number; groupName: string }[] = [];
+
+    groups.forEach((g, gi) => {
+      if (gi === pullTargetIdx) return;
+      g.documents.forEach(doc => ds.push({ doc, groupIdx: gi, groupName: g.routeName }));
+      g.orders.forEach(order => os.push({ order, groupIdx: gi, groupName: g.routeName }));
+    });
+
+    return { docs: ds, orders: os };
+  }, [groups, pullTargetIdx]);
+
+  // Filtered by search
+  const filteredPullable = useMemo(() => {
+    const q = pullSearch.toLowerCase().trim();
+    if (!q) return pullableItems;
+    return {
+      docs: pullableItems.docs.filter(m =>
+        (m.doc.source.invoiceNumber || '').toLowerCase().includes(q) ||
+        (m.doc.source.recipientName || '').toLowerCase().includes(q) ||
+        (m.doc.source.recipientCity || '').toLowerCase().includes(q) ||
+        m.groupName.toLowerCase().includes(q)
+      ),
+      orders: pullableItems.orders.filter(m =>
+        (m.order.source.orderNumber || '').toLowerCase().includes(q) ||
+        (m.order.source.clientName || '').toLowerCase().includes(q) ||
+        (m.order.source.destination || '').toLowerCase().includes(q) ||
+        m.groupName.toLowerCase().includes(q)
+      ),
+    };
+  }, [pullableItems, pullSearch]);
+
+  const toggleAllFiltered = () => {
+    const allDocKeys = filteredPullable.docs.map(m => docKey(m.doc));
+    const allOrderKeys = filteredPullable.orders.map(m => m.order.rowIndex);
+    const allSelected = allDocKeys.every(k => selectedDocs.has(k)) && allOrderKeys.every(k => selectedOrders.has(k));
+
+    if (allSelected) {
+      setSelectedDocs(prev => { const n = new Set(prev); allDocKeys.forEach(k => n.delete(k)); return n; });
+      setSelectedOrders(prev => { const n = new Set(prev); allOrderKeys.forEach(k => n.delete(k)); return n; });
+    } else {
+      setSelectedDocs(prev => { const n = new Set(prev); allDocKeys.forEach(k => n.add(k)); return n; });
+      setSelectedOrders(prev => { const n = new Set(prev); allOrderKeys.forEach(k => n.add(k)); return n; });
+    }
+  };
+
+  const executePull = () => {
+    if (pullTargetIdx === null || (selectedDocs.size === 0 && selectedOrders.size === 0)) return;
+
+    setGroups(prev => {
+      const next = prev.map(g => ({
+        ...g,
+        documents: [...g.documents],
+        orders: [...g.orders],
+        cities: [...g.cities],
+      }));
+
+      const target = next[pullTargetIdx];
+
+      // Move selected docs
+      selectedDocs.forEach(key => {
+        for (let gi = 0; gi < next.length; gi++) {
+          if (gi === pullTargetIdx) continue;
+          const idx = next[gi].documents.findIndex(d => docKey(d) === key);
+          if (idx !== -1) {
+            const [doc] = next[gi].documents.splice(idx, 1);
+            target.documents.push(doc);
+            // Add city if new
+            const city = doc.source.recipientCity;
+            if (city && !target.cities.some(c => normalizeCity(c) === normalizeCity(city))) {
+              target.cities.push(city);
+            }
+            break;
+          }
+        }
+      });
+
+      // Move selected orders
+      selectedOrders.forEach(rowIdx => {
+        for (let gi = 0; gi < next.length; gi++) {
+          if (gi === pullTargetIdx) continue;
+          const idx = next[gi].orders.findIndex(o => o.rowIndex === rowIdx);
+          if (idx !== -1) {
+            const [order] = next[gi].orders.splice(idx, 1);
+            target.orders.push(order);
+            const dest = order.source.destination;
+            if (dest && !target.cities.some(c => normalizeCity(c) === normalizeCity(dest))) {
+              target.cities.push(dest);
+            }
+            break;
+          }
+        }
+      });
+
+      // Recalc totals & remove empty groups
+      return next
+        .map(recalcGroupTotals)
+        .filter((g, i) => i === pullTargetIdx || g.documents.length > 0 || g.orders.length > 0);
+    });
+
+    setPullTargetIdx(null);
+  };
+
+  const totalSelected = selectedDocs.size + selectedOrders.size;
 
   return (
     <div className="space-y-4">
@@ -226,7 +251,7 @@ export default function RoutingStep({ docs, orders, routes, onBack, onNext }: Ro
             Roteirização — {groups.length} rotas identificadas
           </h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Revise as rotas, adicione ou remova cidades, e confirme antes de atribuir veículos.
+            Revise as rotas, adicione cidades ou puxe notas de outras rotas clicando em <ArrowDownToLine className="h-3 w-3 inline" />.
           </p>
         </div>
         {unmatchedCount > 0 && (
@@ -262,12 +287,21 @@ export default function RoutingStep({ docs, orders, routes, onBack, onNext }: Ro
                       {g.documents.length} NF-e{g.orders.length > 0 ? ` · ${g.orders.length} pedidos` : ''}
                     </span>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
                       <span>{g.totalPallets} paletes</span>
                       {g.totalWeight > 0 && <span>{g.totalWeight.toLocaleString('pt-BR')} kg</span>}
                       {g.totalValue > 0 && <span>R$ {g.totalValue.toLocaleString('pt-BR')}</span>}
                     </div>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-6 w-6 text-primary border-primary/30 hover:bg-primary/10"
+                      onClick={() => openPullModal(gi)}
+                      title="Puxar notas de outras rotas"
+                    >
+                      <ArrowDownToLine className="h-3 w-3" />
+                    </Button>
                     <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={() => removeGroup(gi)}>
                       <X className="h-3 w-3" />
                     </Button>
@@ -293,7 +327,7 @@ export default function RoutingStep({ docs, orders, routes, onBack, onNext }: Ro
                       onChange={e => setNewCityInputs(prev => ({ ...prev, [gi]: e.target.value }))}
                       onKeyDown={e => e.key === 'Enter' && addCity(gi)}
                     />
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => addCity(gi)} title="Adicionar cidade (puxa notas correspondentes)">
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => addCity(gi)}>
                       <Plus className="h-3 w-3" />
                     </Button>
                   </div>
@@ -324,89 +358,135 @@ export default function RoutingStep({ docs, orders, routes, onBack, onNext }: Ro
         </Button>
       </div>
 
-      {/* Pull documents dialog */}
-      <Dialog open={!!pullDialog} onOpenChange={open => !open && setPullDialog(null)}>
-        <DialogContent className="max-w-md">
+      {/* Pull documents modal */}
+      <Dialog open={pullTargetIdx !== null} onOpenChange={open => !open && setPullTargetIdx(null)}>
+        <DialogContent className="max-w-lg max-h-[80vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-sm">
               <ArrowDownToLine className="h-4 w-4 text-primary" />
-              Puxar notas para esta rota?
+              Puxar notas para: {pullTargetIdx !== null ? groups[pullTargetIdx]?.routeName : ''}
             </DialogTitle>
           </DialogHeader>
-          <p className="text-xs text-muted-foreground">
-            Encontramos notas da cidade <strong>{pullDialog?.city}</strong> em outras rotas. Selecione quais deseja mover:
-          </p>
-          <div className="space-y-2 max-h-60 overflow-y-auto">
-            {pullMatches.matchDocs.map((m, i) => {
-              const key = m.doc.source.accessKey || m.doc.fileName;
-              const checked = selectedPullDocs.has(key);
-              return (
-                <label key={`doc-${i}`} className="flex items-start gap-2 p-2 rounded border bg-muted/30 cursor-pointer hover:bg-muted/50">
-                  <Checkbox
-                    checked={checked}
-                    onCheckedChange={v => {
-                      setSelectedPullDocs(prev => {
-                        const next = new Set(prev);
-                        v ? next.add(key) : next.delete(key);
-                        return next;
-                      });
-                    }}
-                    className="mt-0.5"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <FileText className="h-3 w-3 text-muted-foreground shrink-0" />
-                      <span className="text-xs font-medium truncate">NF {m.doc.source.invoiceNumber}</span>
-                    </div>
-                    <span className="text-[10px] text-muted-foreground block truncate">
-                      {m.doc.source.recipientName} · {m.doc.source.recipientCity}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground">
-                      Rota atual: <strong>{groups[m.fromGroupIdx]?.routeName}</strong>
-                    </span>
-                  </div>
-                  <div className="text-right text-[10px] text-muted-foreground shrink-0">
-                    <div>{m.doc.source.estimatedPallets} pal</div>
-                    <div>{m.doc.source.totalWeight.toLocaleString('pt-BR')} kg</div>
-                  </div>
-                </label>
-              );
-            })}
-            {pullMatches.matchOrders.map((m, i) => {
-              const checked = selectedPullOrders.has(m.order.rowIndex);
-              return (
-                <label key={`order-${i}`} className="flex items-start gap-2 p-2 rounded border bg-muted/30 cursor-pointer hover:bg-muted/50">
-                  <Checkbox
-                    checked={checked}
-                    onCheckedChange={v => {
-                      setSelectedPullOrders(prev => {
-                        const next = new Set(prev);
-                        v ? next.add(m.order.rowIndex) : next.delete(m.order.rowIndex);
-                        return next;
-                      });
-                    }}
-                    className="mt-0.5"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <span className="text-xs font-medium">Pedido {m.order.source.orderNumber}</span>
-                    <span className="text-[10px] text-muted-foreground block">
-                      {m.order.source.clientName} · {m.order.source.destination}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground">
-                      Rota atual: <strong>{groups[m.fromGroupIdx]?.routeName}</strong>
-                    </span>
-                  </div>
-                </label>
-              );
-            })}
+
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              className="pl-8 h-8 text-xs"
+              placeholder="Pesquisar por NF, destinatário, cidade ou rota..."
+              value={pullSearch}
+              onChange={e => setPullSearch(e.target.value)}
+              autoFocus
+            />
           </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" size="sm" onClick={() => setPullDialog(null)}>
-              Não puxar
+
+          {/* Select all */}
+          {(filteredPullable.docs.length > 0 || filteredPullable.orders.length > 0) && (
+            <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <Checkbox
+                  checked={
+                    filteredPullable.docs.length + filteredPullable.orders.length > 0 &&
+                    filteredPullable.docs.every(m => selectedDocs.has(docKey(m.doc))) &&
+                    filteredPullable.orders.every(m => selectedOrders.has(m.order.rowIndex))
+                  }
+                  onCheckedChange={toggleAllFiltered}
+                />
+                Selecionar todos ({filteredPullable.docs.length + filteredPullable.orders.length})
+              </label>
+              {totalSelected > 0 && (
+                <span className="text-primary font-medium">{totalSelected} selecionado(s)</span>
+              )}
+            </div>
+          )}
+
+          {/* List */}
+          <div className="flex-1 overflow-y-auto space-y-1.5 min-h-0 pr-1">
+            {filteredPullable.docs.length === 0 && filteredPullable.orders.length === 0 ? (
+              <div className="py-8 text-center text-xs text-muted-foreground">
+                {pullSearch ? 'Nenhuma nota encontrada para esta pesquisa' : 'Não há notas em outras rotas para puxar'}
+              </div>
+            ) : (
+              <>
+                {filteredPullable.docs.map((m, i) => {
+                  const key = docKey(m.doc);
+                  const checked = selectedDocs.has(key);
+                  return (
+                    <label
+                      key={`doc-${i}`}
+                      className={`flex items-start gap-2.5 p-2.5 rounded-md border cursor-pointer transition-colors ${checked ? 'bg-primary/5 border-primary/30' : 'bg-muted/20 border-border hover:bg-muted/40'}`}
+                    >
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={v => {
+                          setSelectedDocs(prev => {
+                            const n = new Set(prev);
+                            v ? n.add(key) : n.delete(key);
+                            return n;
+                          });
+                        }}
+                        className="mt-0.5"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <FileText className="h-3 w-3 text-muted-foreground shrink-0" />
+                          <span className="text-xs font-medium">NF {m.doc.source.invoiceNumber}</span>
+                          <span className="text-[10px] text-muted-foreground">· {m.doc.source.recipientCity}</span>
+                        </div>
+                        <span className="text-[10px] text-muted-foreground block truncate">
+                          {m.doc.source.recipientName}
+                        </span>
+                        <Badge variant="outline" className="text-[9px] mt-0.5 h-4 px-1.5">
+                          Rota atual: {m.groupName}
+                        </Badge>
+                      </div>
+                      <div className="text-right text-[10px] text-muted-foreground shrink-0 space-y-0.5">
+                        <div>{m.doc.source.estimatedPallets} pal</div>
+                        <div>{m.doc.source.totalWeight.toLocaleString('pt-BR')} kg</div>
+                        {m.doc.source.totalValue > 0 && <div>R$ {m.doc.source.totalValue.toLocaleString('pt-BR')}</div>}
+                      </div>
+                    </label>
+                  );
+                })}
+                {filteredPullable.orders.map((m, i) => {
+                  const checked = selectedOrders.has(m.order.rowIndex);
+                  return (
+                    <label
+                      key={`order-${i}`}
+                      className={`flex items-start gap-2.5 p-2.5 rounded-md border cursor-pointer transition-colors ${checked ? 'bg-primary/5 border-primary/30' : 'bg-muted/20 border-border hover:bg-muted/40'}`}
+                    >
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={v => {
+                          setSelectedOrders(prev => {
+                            const n = new Set(prev);
+                            v ? n.add(m.order.rowIndex) : n.delete(m.order.rowIndex);
+                            return n;
+                          });
+                        }}
+                        className="mt-0.5"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <span className="text-xs font-medium">Pedido {m.order.source.orderNumber}</span>
+                        <span className="text-[10px] text-muted-foreground block">{m.order.source.clientName} · {m.order.source.destination}</span>
+                        <Badge variant="outline" className="text-[9px] mt-0.5 h-4 px-1.5">
+                          Rota atual: {m.groupName}
+                        </Badge>
+                      </div>
+                    </label>
+                  );
+                })}
+              </>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 pt-2 border-t">
+            <Button variant="outline" size="sm" onClick={() => setPullTargetIdx(null)}>
+              Cancelar
             </Button>
-            <Button size="sm" onClick={executePull} disabled={selectedPullDocs.size === 0 && selectedPullOrders.size === 0}>
+            <Button size="sm" onClick={executePull} disabled={totalSelected === 0}>
               <ArrowDownToLine className="h-3.5 w-3.5 mr-1.5" />
-              Puxar {selectedPullDocs.size + selectedPullOrders.size} nota(s)
+              Puxar {totalSelected} nota(s)
             </Button>
           </DialogFooter>
         </DialogContent>
