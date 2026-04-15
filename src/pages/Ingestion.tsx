@@ -139,7 +139,7 @@ export default function Ingestion() {
     setValidatedOrders(prev => prev.filter((_, i) => i !== index));
   }, []);
 
-  const handleSaveDocsOnly = async () => {
+  const handleSaveDocsOnly = async (loadId?: string | null) => {
     setSavingDocsOnly(true);
     const results: string[] = [];
     try {
