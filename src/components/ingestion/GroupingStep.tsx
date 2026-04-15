@@ -192,36 +192,131 @@ export default function GroupingStep({ suggestions, vehicles, drivers, routes = 
   const noVehiclesWithCapacity = vehiclesWithCapacity.length === 0;
 
   const handlePrint = () => {
-    const content = analysisRef.current;
-    if (!content) return;
+    // Build data grouped by city across all suggestions
+    const allDocs: { city: string; state: string; remetente: string; destinatario: string; bairro: string; nfNumber: string; emissao: string; valor: number; peso: number; volumes: number; carga: number }[] = [];
+
+    suggestions.forEach((s, i) => {
+      s.documents.forEach(doc => {
+        allDocs.push({
+          city: doc.source.recipientCity || 'SEM CIDADE',
+          state: doc.source.recipientState || '',
+          remetente: doc.source.emitterName || '—',
+          destinatario: doc.source.recipientName || '—',
+          bairro: (doc.source.recipientAddress || '').split(',')[0]?.trim() || '—',
+          nfNumber: doc.source.invoiceNumber || '—',
+          emissao: doc.source.issueDate ? new Date(doc.source.issueDate + 'T12:00:00').toLocaleDateString('pt-BR') : '',
+          valor: doc.source.totalValue || 0,
+          peso: doc.source.totalWeight || 0,
+          volumes: doc.source.totalVolume || 0,
+          carga: i + 1,
+        });
+      });
+    });
+
+    // Group by city
+    const cityMap = new Map<string, typeof allDocs>();
+    allDocs.forEach(d => {
+      const key = d.city.toUpperCase();
+      if (!cityMap.has(key)) cityMap.set(key, []);
+      cityMap.get(key)!.push(d);
+    });
+
+    const fmt = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+    const fmtN = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+
+    let grandNotas = 0, grandEntregas = 0, grandValor = 0, grandPeso = 0, grandVolumes = 0;
+
+    let cityBlocks = '';
+    cityMap.forEach((docs, cityName) => {
+      const entregas = new Set(docs.map(d => d.destinatario)).size;
+      const totalNotas = docs.length;
+      const totalValor = docs.reduce((s, d) => s + d.valor, 0);
+      const totalPeso = docs.reduce((s, d) => s + d.peso, 0);
+      const totalVolumes = docs.reduce((s, d) => s + d.volumes, 0);
+
+      grandNotas += totalNotas;
+      grandEntregas += entregas;
+      grandValor += totalValor;
+      grandPeso += totalPeso;
+      grandVolumes += totalVolumes;
+
+      const state = docs[0]?.state || '';
+      const rows = docs.map(d => `
+        <tr>
+          <td>${d.remetente}</td>
+          <td>${d.destinatario}</td>
+          <td class="center">${d.bairro}</td>
+          <td class="center">${d.nfNumber}</td>
+          <td class="center">${d.emissao}</td>
+          <td class="right">${fmt(d.valor)}</td>
+          <td class="right">${fmtN(d.peso)}</td>
+          <td class="right center">${d.volumes}</td>
+        </tr>`).join('');
+
+      cityBlocks += `
+        <div class="city-section">
+          <div class="city-header">
+            <span class="city-name">Cidade: ${cityName}${state ? ' - ' + state : ''}</span>
+            <span class="city-stats">Qtd Entregas: <b>${entregas}</b></span>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Remetente</th>
+                <th>Destinatário</th>
+                <th class="center">Bairro</th>
+                <th class="center">Nº Nota</th>
+                <th class="center">Emissão</th>
+                <th class="right">Vlr. Nota</th>
+                <th class="right">Peso</th>
+                <th class="right center">Volumes</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+          <div class="city-totals">
+            <span>Qtd Notas: <b>${totalNotas}</b></span>
+            <span>Total Cidade: <b>${fmt(totalValor)}</b></span>
+            <span>Peso: <b>${fmtN(totalPeso)}</b></span>
+            <span>Volumes: <b>${totalVolumes}</b></span>
+          </div>
+        </div>`;
+    });
+
     const win = window.open('', '_blank');
     if (!win) return;
     win.document.write(`
       <html><head><title>Análise de Cargas</title>
       <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; font-size: 11px; color: #1a1a1a; padding: 12mm; }
-        h1 { font-size: 16px; margin-bottom: 4px; }
-        .subtitle { font-size: 11px; color: #666; margin-bottom: 16px; }
-        .load-card { border: 1px solid #ddd; border-radius: 6px; padding: 10px; margin-bottom: 12px; page-break-inside: avoid; }
-        .load-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 6px; margin-bottom: 6px; }
-        .load-title { font-size: 13px; font-weight: bold; }
-        .badge { display: inline-block; background: #e8f0fe; color: #1a56db; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; }
-        .badge.warn { background: #fef3c7; color: #92400e; }
-        .stats { display: flex; gap: 16px; margin-bottom: 6px; font-size: 11px; color: #444; }
-        .stat-label { color: #888; }
-        table { width: 100%; border-collapse: collapse; font-size: 10px; }
-        th { text-align: left; background: #f5f5f5; padding: 4px 6px; border-bottom: 1px solid #ddd; font-weight: 600; }
-        td { padding: 3px 6px; border-bottom: 1px solid #eee; }
-        .vehicle-info { font-size: 11px; color: #333; background: #f0fdf4; padding: 4px 8px; border-radius: 4px; }
-        .footer { margin-top: 20px; text-align: center; font-size: 9px; color: #999; border-top: 1px solid #eee; padding-top: 8px; }
-        .occupancy { font-weight: bold; }
-        .occupancy.ok { color: #16a34a; }
-        .occupancy.warn { color: #ca8a04; }
-        .occupancy.over { color: #dc2626; }
-        @media print { body { padding: 8mm; } }
+        body { font-family: Arial, sans-serif; font-size: 10px; color: #1a1a1a; padding: 8mm; }
+        h1 { font-size: 14px; margin-bottom: 2px; }
+        .subtitle { font-size: 10px; color: #666; margin-bottom: 12px; }
+        .city-section { margin-bottom: 14px; page-break-inside: avoid; }
+        .city-header { background: #e8e8e8; padding: 4px 8px; display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: bold; }
+        .city-name { }
+        .city-stats { font-size: 10px; }
+        table { width: 100%; border-collapse: collapse; font-size: 9px; }
+        th { text-align: left; background: #f5f5f5; padding: 3px 5px; border-bottom: 2px solid #aaa; font-weight: 700; font-size: 9px; white-space: nowrap; }
+        td { padding: 2px 5px; border-bottom: 1px solid #ddd; }
+        .right { text-align: right; }
+        .center { text-align: center; }
+        .city-totals { display: flex; gap: 20px; padding: 4px 8px; background: #f0f0f0; font-size: 10px; border-top: 2px solid #999; }
+        .grand-totals { margin-top: 16px; padding: 6px 10px; background: #333; color: #fff; display: flex; gap: 24px; font-size: 11px; font-weight: bold; }
+        .footer { margin-top: 12px; text-align: center; font-size: 8px; color: #999; border-top: 1px solid #ccc; padding-top: 4px; }
+        @media print { body { padding: 5mm; } .city-section { page-break-inside: avoid; } }
       </style></head><body>
-      ${content.innerHTML}
+      <h1>Análise de Cargas — Conferência Galpão</h1>
+      <div class="subtitle">${new Date().toLocaleDateString('pt-BR')} • ${suggestions.length} cargas • ${grandNotas} notas</div>
+      ${cityBlocks}
+      <div class="grand-totals">
+        <span>Total Geral</span>
+        <span>Notas: ${grandNotas}</span>
+        <span>Entregas: ${grandEntregas}</span>
+        <span>Valor: ${fmt(grandValor)}</span>
+        <span>Peso: ${fmtN(grandPeso)}</span>
+        <span>Volumes: ${grandVolumes}</span>
+      </div>
       <div class="footer">Gerado em ${new Date().toLocaleString('pt-BR')} — Sistema de Ingestão Logística</div>
       </body></html>
     `);
