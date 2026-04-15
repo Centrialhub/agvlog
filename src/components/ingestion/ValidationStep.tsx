@@ -9,17 +9,25 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   FileText, CheckCircle, AlertTriangle, XCircle, ArrowRight, ArrowLeft, Package, Info, Trash2, Pencil,
-  Weight, DollarSign, Boxes, LayoutGrid,
+  Weight, DollarSign, Boxes, LayoutGrid, Link2,
 } from 'lucide-react';
 import { Client } from '@/hooks/useClients';
+
+interface LoadOption {
+  id: string;
+  load_number: string;
+  destination: string | null;
+  status: string;
+}
 
 interface ValidationStepProps {
   docs: ValidatedDocument[];
   orders: ValidatedOrder[];
   clients: Client[];
+  loads?: LoadOption[];
   onBack: () => void;
   onNext: () => void;
-  onSaveDocsOnly?: () => void;
+  onSaveDocsOnly?: (loadId?: string | null) => void;
   savingDocs?: boolean;
   onUpdateDoc: (index: number, updates: Partial<ValidatedDocument>) => void;
   onUpdateOrder: (index: number, updates: Partial<ValidatedOrder>) => void;
