@@ -92,10 +92,34 @@ export function useUpdateLoad() {
   });
 }
 
+async function unlinkLoadDependencies(loadIds: string[]) {
+  // Unlink fiscal_documents
+  const { error: fdErr } = await supabase
+    .from('fiscal_documents')
+    .update({ load_id: null } as any)
+    .in('load_id', loadIds);
+  if (fdErr) throw fdErr;
+
+  // Unlink dispatch_trips
+  const { error: dtErr } = await supabase
+    .from('dispatch_trips')
+    .update({ load_id: null } as any)
+    .in('load_id', loadIds);
+  if (dtErr) throw dtErr;
+
+  // Delete load_items
+  const { error: liErr } = await supabase
+    .from('load_items')
+    .delete()
+    .in('load_id', loadIds);
+  if (liErr) throw liErr;
+}
+
 export function useDeleteLoad() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
+      await unlinkLoadDependencies([id]);
       const { error } = await supabase.from('loads').delete().eq('id', id);
       if (error) throw error;
     },
@@ -107,6 +131,7 @@ export function useDeleteLoads() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (ids: string[]) => {
+      await unlinkLoadDependencies(ids);
       const { error } = await supabase.from('loads').delete().in('id', ids);
       if (error) throw error;
     },
