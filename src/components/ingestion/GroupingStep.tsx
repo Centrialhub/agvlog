@@ -649,8 +649,11 @@ export default function GroupingStep({ suggestions, vehicles, drivers, routes = 
 
           <div className="flex justify-end gap-2 mt-2">
             <Button variant="outline" onClick={() => setShowAnalysis(false)}>Fechar</Button>
+            <Button variant="outline" onClick={handlePrintPerRoute} className="gap-1.5">
+              <Printer className="h-4 w-4" /> Imprimir por Rota
+            </Button>
             <Button onClick={handlePrint} className="gap-1.5">
-              <Printer className="h-4 w-4" /> Imprimir
+              <Printer className="h-4 w-4" /> Imprimir Tudo
             </Button>
           </div>
         </DialogContent>
