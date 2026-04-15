@@ -25,6 +25,7 @@ interface RoutingStepProps {
   routes: OperationalRouteRef[];
   onBack: () => void;
   onNext: (groups: RouteGroup[]) => void;
+  onLearnCity?: (routeId: string, cityName: string) => void;
 }
 
 function normalizeCity(city: string): string {
@@ -47,7 +48,7 @@ function docKey(doc: ValidatedDocument): string {
   return doc.source.accessKey || `${doc.fileName}::${doc.source.invoiceNumber}`;
 }
 
-export default function RoutingStep({ docs, orders, routes, onBack, onNext }: RoutingStepProps) {
+export default function RoutingStep({ docs, orders, routes, onBack, onNext, onLearnCity }: RoutingStepProps) {
   const validDocs = useMemo(() => docs.filter(d => !d.hasErrors && !d.isDuplicate), [docs]);
   const validOrders = useMemo(() => orders.filter(o => !o.hasErrors), [orders]);
 
