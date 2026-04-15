@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { ValidatedDocument, ValidatedOrder } from '@/lib/ingestionValidator';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   FileText, CheckCircle, AlertTriangle, XCircle, ArrowRight, ArrowLeft, Package, Info, Trash2, Pencil,
+  Weight, DollarSign, Boxes, LayoutGrid,
 } from 'lucide-react';
 import { Client } from '@/hooks/useClients';
 
@@ -34,10 +35,20 @@ export default function ValidationStep({
   const [editingDocIdx, setEditingDocIdx] = useState<number | null>(null);
   const [editingOrderIdx, setEditingOrderIdx] = useState<number | null>(null);
 
+  const validDocs = docs.filter(d => !d.hasErrors && !d.isDuplicate);
+
   const totalErrors = docs.filter(d => d.hasErrors).length + orders.filter(o => o.hasErrors).length;
   const totalWarnings = docs.filter(d => d.hasWarnings && !d.hasErrors).length + orders.filter(o => o.hasWarnings && !o.hasErrors).length;
   const totalValid = docs.filter(d => !d.hasErrors).length + orders.filter(o => !o.hasErrors).length;
   const totalBlocked = docs.filter(d => d.isDuplicate).length;
+
+  const summaryStats = useMemo(() => {
+    const weight = validDocs.reduce((s, d) => s + (d.source.totalWeight || 0), 0);
+    const value = validDocs.reduce((s, d) => s + (d.source.totalValue || 0), 0);
+    const pallets = validDocs.reduce((s, d) => s + (d.source.estimatedPallets || 0), 0);
+    const volumes = validDocs.reduce((s, d) => s + (d.source.items?.length || 0), 0);
+    return { weight, value, pallets, volumes };
+  }, [validDocs]);
 
   const filterDocs = (list: ValidatedDocument[]) => {
     if (filter === 'errors') return list.filter(d => d.hasErrors);
@@ -96,6 +107,60 @@ export default function ValidationStep({
         )}
       </div>
 
+      {/* Summary KPI cards */}
+      {validDocs.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Card>
+            <CardContent className="py-3 px-4 flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Weight className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <div className="text-lg font-bold text-foreground">
+                  {summaryStats.weight.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} kg
+                </div>
+                <div className="text-[10px] text-muted-foreground">Peso Total</div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="py-3 px-4 flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-success/10">
+                <DollarSign className="h-4 w-4 text-success" />
+              </div>
+              <div>
+                <div className="text-lg font-bold text-foreground">
+                  R$ {summaryStats.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div className="text-[10px] text-muted-foreground">Valor Total</div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="py-3 px-4 flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-info/10">
+                <Boxes className="h-4 w-4 text-info" />
+              </div>
+              <div>
+                <div className="text-lg font-bold text-foreground">{summaryStats.volumes}</div>
+                <div className="text-[10px] text-muted-foreground">Volumes (itens)</div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="py-3 px-4 flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-warning/10">
+                <LayoutGrid className="h-4 w-4 text-warning" />
+              </div>
+              <div>
+                <div className="text-lg font-bold text-foreground">{summaryStats.pallets}</div>
+                <div className="text-[10px] text-muted-foreground">Paletes Estimados</div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       <Tabs defaultValue="docs" className="space-y-3">
         <TabsList>
           <TabsTrigger value="docs" className="text-xs">
@@ -126,7 +191,7 @@ export default function ValidationStep({
                         {!doc.hasErrors && !doc.hasWarnings && <Badge variant="outline" className="bg-success/10 text-success text-[10px]">OK</Badge>}
                       </div>
 
-                      <div className="grid grid-cols-4 gap-x-4 gap-y-1 text-xs">
+                      <div className="grid grid-cols-5 gap-x-4 gap-y-1 text-xs">
                         <div>
                           <span className="text-muted-foreground">Destinatário: </span>
                           {doc.matchedClientName ? (
@@ -136,8 +201,9 @@ export default function ValidationStep({
                           )}
                         </div>
                         <div><span className="text-muted-foreground">Destino: </span>{doc.source.recipientCity || '—'}, {doc.source.recipientState || ''}</div>
-                        <div><span className="text-muted-foreground">Paletes: </span>{doc.source.estimatedPallets}</div>
-                        <div><span className="text-muted-foreground">Peso: </span>{doc.source.totalWeight ? `${doc.source.totalWeight} kg` : '—'}</div>
+                        <div><span className="text-muted-foreground">Peso: </span>{doc.source.totalWeight ? `${doc.source.totalWeight.toLocaleString('pt-BR')} kg` : '—'}</div>
+                        <div><span className="text-muted-foreground">Valor: </span>{doc.source.totalValue ? `R$ ${doc.source.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'}</div>
+                        <div><span className="text-muted-foreground">Paletes: </span>{doc.source.estimatedPallets} <span className="text-muted-foreground">| Itens: </span>{doc.source.items?.length || 0}</div>
                       </div>
 
                       {/* Client matching for unmatched */}
