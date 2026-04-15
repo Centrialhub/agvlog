@@ -262,6 +262,7 @@ export default function GroupingStep({ suggestions, vehicles, drivers, routes = 
             <tbody>${rows}</tbody>
           </table>
           <div class="city-totals">
+            <span>Entregas: <b>${entregas}</b></span>
             <span>Notas: <b>${notas}</b></span>
             <span>Total: <b>${fmt(valor)}</b></span>
             <span>Peso: <b>${fmtN(peso)}</b></span>
