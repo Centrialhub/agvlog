@@ -377,7 +377,7 @@ export default function Ingestion() {
       }
 
       setExecutionResults(results);
-      setStep(3);
+      setStep(4);
 
       const successCount = results.filter(r => r.startsWith('✅')).length;
       const errorCount = results.filter(r => r.startsWith('❌')).length;
@@ -399,6 +399,7 @@ export default function Ingestion() {
     setValidatedDocs([]);
     setValidatedOrders([]);
     setSuggestions([]);
+    setRouteGroups([]);
     setExecutionResults([]);
   };
 
@@ -408,7 +409,7 @@ export default function Ingestion() {
         <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
           <Upload className="h-5 w-5 text-primary" /> Importação
         </h1>
-        <p className="text-xs text-muted-foreground mt-0.5">Upload → Validação → Agrupamento → Execução</p>
+        <p className="text-xs text-muted-foreground mt-0.5">Upload → Validação → Roteirização → Agrupamento → Execução</p>
       </div>
 
       <IngestionStepper currentStep={step} />
@@ -420,7 +421,7 @@ export default function Ingestion() {
           orders={validatedOrders}
           clients={clients}
           onBack={reset}
-          onNext={handleGenerateSuggestions}
+          onNext={handleGoToRouting}
           onSaveDocsOnly={handleSaveDocsOnly}
           savingDocs={savingDocsOnly}
           onUpdateDoc={handleUpdateDoc}
@@ -430,6 +431,19 @@ export default function Ingestion() {
         />
       )}
       {step === 2 && (
+        <RoutingStep
+          docs={validatedDocs}
+          orders={validatedOrders}
+          routes={operationalRoutes.map(r => ({
+            id: r.id,
+            name: r.name,
+            destinations: Array.isArray(r.destinations) ? r.destinations.map((d: any) => ({ name: typeof d === 'string' ? d : d.name || '' })) : [],
+          }))}
+          onBack={() => setStep(1)}
+          onNext={handleRoutingNext}
+        />
+      )}
+      {step === 3 && (
         <GroupingStep
           suggestions={suggestions}
           vehicles={vehicles as any}
@@ -440,11 +454,11 @@ export default function Ingestion() {
             destinations: Array.isArray(r.destinations) ? r.destinations.map((d: any) => ({ name: typeof d === 'string' ? d : d.name || '' })) : [],
           }))}
           executing={executing}
-          onBack={() => setStep(1)}
+          onBack={() => setStep(2)}
           onExecute={handleExecute}
         />
       )}
-      {step === 3 && <ResultsStep results={executionResults} onReset={reset} />}
+      {step === 4 && <ResultsStep results={executionResults} onReset={reset} />}
     </div>
   );
 }
