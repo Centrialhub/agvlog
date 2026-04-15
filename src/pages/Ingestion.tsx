@@ -402,6 +402,8 @@ export default function Ingestion() {
           clients={clients}
           onBack={reset}
           onNext={handleGenerateSuggestions}
+          onSaveDocsOnly={handleSaveDocsOnly}
+          savingDocs={savingDocsOnly}
           onUpdateDoc={handleUpdateDoc}
           onUpdateOrder={handleUpdateOrder}
           onRemoveDoc={handleRemoveDoc}
