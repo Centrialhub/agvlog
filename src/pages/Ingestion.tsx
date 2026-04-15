@@ -10,7 +10,7 @@ import { useCreateOrder } from '@/hooks/useOrders';
 import { useCreateLoad } from '@/hooks/useLoads';
 import { useCreateLoadItem } from '@/hooks/useLoadItems';
 import { useVehicles } from '@/hooks/useVehicles';
-import { useOperationalRoutes } from '@/hooks/useOperationalRoutes';
+import { useOperationalRoutes, useUpdateOperationalRoute } from '@/hooks/useOperationalRoutes';
 import { useToast } from '@/hooks/use-toast';
 import { Upload } from 'lucide-react';
 import IngestionStepper from '@/components/ingestion/IngestionStepper';
@@ -57,7 +57,24 @@ export default function Ingestion() {
   const createOrder = useCreateOrder();
   const createLoad = useCreateLoad();
   const createLoadItem = useCreateLoadItem();
+  const updateRoute = useUpdateOperationalRoute();
   const { toast } = useToast();
+
+  // Learn city → persist to operational_routes destinations
+  const handleLearnCity = useCallback((routeId: string, cityName: string) => {
+    const route = operationalRoutes.find(r => r.id === routeId);
+    if (!route) return;
+    const currentDests: any[] = Array.isArray(route.destinations) ? route.destinations : [];
+    const normalizedNew = cityName.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+    const alreadyExists = currentDests.some((d: any) => {
+      const name = typeof d === 'string' ? d : d.name || '';
+      return name.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim() === normalizedNew;
+    });
+    if (alreadyExists) return;
+    const newDests = [...currentDests, { name: cityName }];
+    updateRoute.mutate({ id: routeId, destinations: newDests } as any);
+    toast({ title: 'Rota atualizada', description: `"${cityName}" adicionada à rota. Próxima vez será automático.` });
+  }, [operationalRoutes, updateRoute, toast]);
 
   const [step, setStep] = useState(0);
   const [validatedDocs, setValidatedDocs] = useState<ValidatedDocument[]>([]);
@@ -447,6 +464,7 @@ export default function Ingestion() {
           })()}
           onBack={() => setStep(1)}
           onNext={handleRoutingNext}
+          onLearnCity={handleLearnCity}
         />
       )}
       {step === 3 && (

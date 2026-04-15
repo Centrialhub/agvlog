@@ -25,6 +25,7 @@ interface RoutingStepProps {
   routes: OperationalRouteRef[];
   onBack: () => void;
   onNext: (groups: RouteGroup[]) => void;
+  onLearnCity?: (routeId: string, cityName: string) => void;
 }
 
 function normalizeCity(city: string): string {
@@ -47,7 +48,7 @@ function docKey(doc: ValidatedDocument): string {
   return doc.source.accessKey || `${doc.fileName}::${doc.source.invoiceNumber}`;
 }
 
-export default function RoutingStep({ docs, orders, routes, onBack, onNext }: RoutingStepProps) {
+export default function RoutingStep({ docs, orders, routes, onBack, onNext, onLearnCity }: RoutingStepProps) {
   const validDocs = useMemo(() => docs.filter(d => !d.hasErrors && !d.isDuplicate), [docs]);
   const validOrders = useMemo(() => orders.filter(o => !o.hasErrors), [orders]);
 
@@ -186,6 +187,8 @@ export default function RoutingStep({ docs, orders, routes, onBack, onNext }: Ro
   const executePull = () => {
     if (pullTargetIdx === null || (selectedDocs.size === 0 && selectedOrders.size === 0)) return;
 
+    const learnedCities: string[] = [];
+
     setGroups(prev => {
       const next = prev.map(g => ({
         ...g,
@@ -204,10 +207,10 @@ export default function RoutingStep({ docs, orders, routes, onBack, onNext }: Ro
           if (idx !== -1) {
             const [doc] = next[gi].documents.splice(idx, 1);
             target.documents.push(doc);
-            // Add city if new
             const city = doc.source.recipientCity;
             if (city && !target.cities.some(c => normalizeCity(c) === normalizeCity(city))) {
               target.cities.push(city);
+              learnedCities.push(city);
             }
             break;
           }
@@ -225,11 +228,17 @@ export default function RoutingStep({ docs, orders, routes, onBack, onNext }: Ro
             const dest = order.source.destination;
             if (dest && !target.cities.some(c => normalizeCity(c) === normalizeCity(dest))) {
               target.cities.push(dest);
+              learnedCities.push(dest);
             }
             break;
           }
         }
       });
+
+      // Learn: persist new cities to the operational route
+      if (target.routeId && learnedCities.length > 0 && onLearnCity) {
+        learnedCities.forEach(city => onLearnCity(target.routeId!, city));
+      }
 
       // Recalc totals & remove empty groups
       return next
