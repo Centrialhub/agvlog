@@ -10,11 +10,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Plus, PackageCheck, AlertTriangle, Truck, MapPin, ArrowRight } from 'lucide-react';
+import { Search, Plus, PackageCheck, AlertTriangle, Truck, MapPin, ArrowRight, FileStack } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
+import PendingDocsGrouping from '@/components/loads/PendingDocsGrouping';
 
 function NewLoadDialog({ vehicles, drivers, onCreated }: { vehicles: any[]; drivers: any[]; onCreated: () => void }) {
   const createLoad = useCreateLoad();
