@@ -180,7 +180,7 @@ export default function Ingestion() {
       }
 
       setExecutionResults(results);
-      setStep(3);
+      setStep(4);
 
       const successCount = results.filter(r => r.startsWith('✅')).length;
       toast({
