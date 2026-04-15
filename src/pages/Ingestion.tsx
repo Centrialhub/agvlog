@@ -464,6 +464,7 @@ export default function Ingestion() {
           })()}
           onBack={() => setStep(1)}
           onNext={handleRoutingNext}
+          onLearnCity={handleLearnCity}
         />
       )}
       {step === 3 && (
