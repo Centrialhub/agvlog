@@ -283,6 +283,7 @@ export default function FiscalDocuments() {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [loadFilter, setLoadFilter] = useState<string>('all');
   const [dialogOpen, setDialogOpen] = useState(false);
   const { toast } = useToast();
 
@@ -297,9 +298,11 @@ export default function FiscalDocuments() {
       ) return false;
       if (typeFilter !== 'all' && d.document_type !== typeFilter) return false;
       if (statusFilter !== 'all' && d.status !== statusFilter) return false;
+      if (loadFilter === 'no_load' && d.load_id) return false;
+      if (loadFilter === 'with_load' && !d.load_id) return false;
       return true;
     });
-  }, [docs, search, typeFilter, statusFilter]);
+  }, [docs, search, typeFilter, statusFilter, loadFilter]);
 
   const handleSave = async (values: any) => {
     try {
