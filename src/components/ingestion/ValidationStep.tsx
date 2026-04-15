@@ -35,10 +35,20 @@ export default function ValidationStep({
   const [editingDocIdx, setEditingDocIdx] = useState<number | null>(null);
   const [editingOrderIdx, setEditingOrderIdx] = useState<number | null>(null);
 
+  const validDocs = docs.filter(d => !d.hasErrors && !d.isDuplicate);
+
   const totalErrors = docs.filter(d => d.hasErrors).length + orders.filter(o => o.hasErrors).length;
   const totalWarnings = docs.filter(d => d.hasWarnings && !d.hasErrors).length + orders.filter(o => o.hasWarnings && !o.hasErrors).length;
   const totalValid = docs.filter(d => !d.hasErrors).length + orders.filter(o => !o.hasErrors).length;
   const totalBlocked = docs.filter(d => d.isDuplicate).length;
+
+  const summaryStats = useMemo(() => {
+    const weight = validDocs.reduce((s, d) => s + (d.source.totalWeight || 0), 0);
+    const value = validDocs.reduce((s, d) => s + (d.source.totalValue || 0), 0);
+    const pallets = validDocs.reduce((s, d) => s + (d.source.estimatedPallets || 0), 0);
+    const volumes = validDocs.reduce((s, d) => s + (d.source.items?.length || 0), 0);
+    return { weight, value, pallets, volumes };
+  }, [validDocs]);
 
   const filterDocs = (list: ValidatedDocument[]) => {
     if (filter === 'errors') return list.filter(d => d.hasErrors);
