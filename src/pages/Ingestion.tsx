@@ -202,9 +202,12 @@ export default function Ingestion() {
       setStep(4);
 
       const successCount = results.filter(r => r.startsWith('✅')).length;
+      const loadLabel = loadId ? loads.find(l => l.id === loadId)?.load_number : null;
       toast({
         title: 'NF-es salvas',
-        description: `${successCount} documentos salvos. Agrupe em cargas quando quiser na página de Cargas.`,
+        description: loadLabel
+          ? `${successCount} documentos vinculados à carga ${loadLabel}.`
+          : `${successCount} documentos salvos. Agrupe em cargas quando quiser na página de Cargas.`,
       });
     } catch (e: any) {
       toast({ title: 'Erro', description: e.message, variant: 'destructive' });
