@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { ValidatedDocument, ValidatedOrder, OperationalRouteRef } from '@/lib/ingestionValidator';
+import { ValidatedDocument, ValidatedOrder, OperationalRouteRef, findRouteForCity } from '@/lib/ingestionValidator';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -27,17 +27,6 @@ interface RoutingStepProps {
 
 function normalizeCity(city: string): string {
   return city.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Z0-9 ]/g, '').trim();
-}
-
-function matchRoute(city: string, routes: OperationalRouteRef[]): OperationalRouteRef | null {
-  const norm = normalizeCity(city);
-  for (const r of routes) {
-    for (const d of r.destinations) {
-      const nd = normalizeCity(d.name);
-      if (nd === norm || norm.includes(nd) || nd.includes(norm)) return r;
-    }
-  }
-  return null;
 }
 
 export default function RoutingStep({ docs, orders, routes, onBack, onNext }: RoutingStepProps) {
