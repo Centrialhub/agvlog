@@ -233,7 +233,49 @@ function normalizeCity(city: string): string {
     .trim();
 }
 
-function findRouteForCity(city: string, routes: OperationalRouteRef[]): OperationalRouteRef | null {
+const PREPOSITIONS = new Set(['DE', 'DO', 'DA', 'DOS', 'DAS', 'D', 'E', 'EM', 'NO', 'NA', 'NOS', 'NAS']);
+
+/** Remove prepositions and split into significant words */
+function cityWords(city: string): string[] {
+  return normalizeCity(city).split(/\s+/).filter(w => w.length > 0 && !PREPOSITIONS.has(w));
+}
+
+/** Check if abbreviated word matches full word (e.g. "G" matches "GRANDE", "M" matches "MINAS") */
+function wordMatches(a: string, b: string): boolean {
+  if (a === b) return true;
+  // One is abbreviation of the other (1-3 chars)
+  if (a.length <= 3 && b.startsWith(a)) return true;
+  if (b.length <= 3 && a.startsWith(b)) return true;
+  return false;
+}
+
+/** Check if all words from the shorter array match words in the longer array (order-independent) */
+function citiesMatch(wordsA: string[], wordsB: string[]): boolean {
+  if (wordsA.length === 0 || wordsB.length === 0) return false;
+  const shorter = wordsA.length <= wordsB.length ? wordsA : wordsB;
+  const longer = wordsA.length <= wordsB.length ? wordsB : wordsA;
+  
+  // Every word in the shorter form must match some word in the longer form
+  const used = new Set<number>();
+  for (const sw of shorter) {
+    let found = false;
+    for (let i = 0; i < longer.length; i++) {
+      if (!used.has(i) && wordMatches(sw, longer[i])) {
+        used.add(i);
+        found = true;
+        break;
+      }
+    }
+    if (!found) return false;
+  }
+  return true;
+}
+
+export function findRouteForCity(city: string, routes: OperationalRouteRef[]): OperationalRouteRef | null {
+  const cw = cityWords(city);
+  if (cw.length === 0) return null;
+  
+  // Exact normalized match first
   const normalized = normalizeCity(city);
   for (const route of routes) {
     for (const dest of route.destinations) {
@@ -242,11 +284,12 @@ function findRouteForCity(city: string, routes: OperationalRouteRef[]): Operatio
       }
     }
   }
-  // Partial match fallback
+  
+  // Smart abbreviation-aware match
   for (const route of routes) {
     for (const dest of route.destinations) {
-      const nd = normalizeCity(dest.name);
-      if (normalized.includes(nd) || nd.includes(normalized)) {
+      const dw = cityWords(dest.name);
+      if (citiesMatch(cw, dw)) {
         return route;
       }
     }
