@@ -62,6 +62,7 @@ export default function Ingestion() {
   const [validatedOrders, setValidatedOrders] = useState<ValidatedOrder[]>([]);
   const [suggestions, setSuggestions] = useState<LoadSuggestion[]>([]);
   const [executing, setExecuting] = useState(false);
+  const [savingDocsOnly, setSavingDocsOnly] = useState(false);
   const [executionResults, setExecutionResults] = useState<string[]>([]);
 
   const handleFiles = useCallback(async (fileList: FileList) => {
