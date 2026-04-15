@@ -63,6 +63,7 @@ export default function Ingestion() {
   const [validatedDocs, setValidatedDocs] = useState<ValidatedDocument[]>([]);
   const [validatedOrders, setValidatedOrders] = useState<ValidatedOrder[]>([]);
   const [suggestions, setSuggestions] = useState<LoadSuggestion[]>([]);
+  const [routeGroups, setRouteGroups] = useState<RouteGroup[]>([]);
   const [executing, setExecuting] = useState(false);
   const [savingDocsOnly, setSavingDocsOnly] = useState(false);
   const [executionResults, setExecutionResults] = useState<string[]>([]);
