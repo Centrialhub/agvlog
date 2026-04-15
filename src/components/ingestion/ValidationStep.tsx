@@ -107,6 +107,60 @@ export default function ValidationStep({
         )}
       </div>
 
+      {/* Summary KPI cards */}
+      {validDocs.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Card>
+            <CardContent className="py-3 px-4 flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Weight className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <div className="text-lg font-bold text-foreground">
+                  {summaryStats.weight.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} kg
+                </div>
+                <div className="text-[10px] text-muted-foreground">Peso Total</div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="py-3 px-4 flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-success/10">
+                <DollarSign className="h-4 w-4 text-success" />
+              </div>
+              <div>
+                <div className="text-lg font-bold text-foreground">
+                  R$ {summaryStats.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div className="text-[10px] text-muted-foreground">Valor Total</div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="py-3 px-4 flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-info/10">
+                <Boxes className="h-4 w-4 text-info" />
+              </div>
+              <div>
+                <div className="text-lg font-bold text-foreground">{summaryStats.volumes}</div>
+                <div className="text-[10px] text-muted-foreground">Volumes (itens)</div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="py-3 px-4 flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-warning/10">
+                <LayoutGrid className="h-4 w-4 text-warning" />
+              </div>
+              <div>
+                <div className="text-lg font-bold text-foreground">{summaryStats.pallets}</div>
+                <div className="text-[10px] text-muted-foreground">Paletes Estimados</div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       <Tabs defaultValue="docs" className="space-y-3">
         <TabsList>
           <TabsTrigger value="docs" className="text-xs">
