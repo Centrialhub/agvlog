@@ -191,7 +191,7 @@ export default function ValidationStep({
                         {!doc.hasErrors && !doc.hasWarnings && <Badge variant="outline" className="bg-success/10 text-success text-[10px]">OK</Badge>}
                       </div>
 
-                      <div className="grid grid-cols-4 gap-x-4 gap-y-1 text-xs">
+                      <div className="grid grid-cols-5 gap-x-4 gap-y-1 text-xs">
                         <div>
                           <span className="text-muted-foreground">Destinatário: </span>
                           {doc.matchedClientName ? (
@@ -201,8 +201,9 @@ export default function ValidationStep({
                           )}
                         </div>
                         <div><span className="text-muted-foreground">Destino: </span>{doc.source.recipientCity || '—'}, {doc.source.recipientState || ''}</div>
-                        <div><span className="text-muted-foreground">Paletes: </span>{doc.source.estimatedPallets}</div>
-                        <div><span className="text-muted-foreground">Peso: </span>{doc.source.totalWeight ? `${doc.source.totalWeight} kg` : '—'}</div>
+                        <div><span className="text-muted-foreground">Peso: </span>{doc.source.totalWeight ? `${doc.source.totalWeight.toLocaleString('pt-BR')} kg` : '—'}</div>
+                        <div><span className="text-muted-foreground">Valor: </span>{doc.source.totalValue ? `R$ ${doc.source.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'}</div>
+                        <div><span className="text-muted-foreground">Paletes: </span>{doc.source.estimatedPallets} <span className="text-muted-foreground">| Itens: </span>{doc.source.items?.length || 0}</div>
                       </div>
 
                       {/* Client matching for unmatched */}
