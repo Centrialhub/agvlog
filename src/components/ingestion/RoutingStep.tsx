@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { ValidatedDocument, ValidatedOrder, OperationalRouteRef } from '@/lib/ingestionValidator';
+import { ValidatedDocument, ValidatedOrder, OperationalRouteRef, findRouteForCity } from '@/lib/ingestionValidator';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -29,17 +29,6 @@ function normalizeCity(city: string): string {
   return city.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Z0-9 ]/g, '').trim();
 }
 
-function matchRoute(city: string, routes: OperationalRouteRef[]): OperationalRouteRef | null {
-  const norm = normalizeCity(city);
-  for (const r of routes) {
-    for (const d of r.destinations) {
-      const nd = normalizeCity(d.name);
-      if (nd === norm || norm.includes(nd) || nd.includes(norm)) return r;
-    }
-  }
-  return null;
-}
-
 export default function RoutingStep({ docs, orders, routes, onBack, onNext }: RoutingStepProps) {
   const validDocs = useMemo(() => docs.filter(d => !d.hasErrors && !d.isDuplicate), [docs]);
   const validOrders = useMemo(() => orders.filter(o => !o.hasErrors), [orders]);
@@ -56,7 +45,7 @@ export default function RoutingStep({ docs, orders, routes, onBack, onNext }: Ro
 
     for (const doc of validDocs) {
       const city = doc.source.recipientCity || '';
-      const matched = city ? matchRoute(city, routes) : null;
+      const matched = city ? findRouteForCity(city, routes) : null;
       const key = matched ? matched.id : `unmatched-${doc.source.recipientState || 'unknown'}-${city}`;
       const name = matched ? matched.name : [doc.source.recipientState, city].filter(Boolean).join(' - ') || 'Sem região';
       const group = getOrCreate(key, matched?.id || null, name);
@@ -71,7 +60,7 @@ export default function RoutingStep({ docs, orders, routes, onBack, onNext }: Ro
 
     for (const order of validOrders) {
       const dest = order.source.destination || '';
-      const matched = dest ? matchRoute(dest, routes) : null;
+      const matched = dest ? findRouteForCity(dest, routes) : null;
       const key = matched ? matched.id : `unmatched-order-${dest}`;
       const name = matched ? matched.name : dest || 'Sem região';
       const group = getOrCreate(key, matched?.id || null, name);
