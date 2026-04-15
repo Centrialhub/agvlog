@@ -243,9 +243,9 @@ function VehicleDialog({ open, onOpenChange, vehicle, tenantId, userId }: {
   const [tankCapacity, setTankCapacity] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Reset form when dialog opens
-  const handleOpenChange = (v: boolean) => {
-    if (v) {
+  // Sync form when dialog opens or vehicle changes
+  useEffect(() => {
+    if (open) {
       setPlate(vehicle?.plate || '');
       setNickname(vehicle?.nickname || '');
       setType(vehicle?.type || 'truck');
@@ -255,8 +255,7 @@ function VehicleDialog({ open, onOpenChange, vehicle, tenantId, userId }: {
       setMaxVolumeM3(vehicle?.max_volume_m3?.toString() || '');
       setTankCapacity(vehicle?.tank_capacity_liters?.toString() || '');
     }
-    onOpenChange(v);
-  };
+  }, [open, vehicle]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
