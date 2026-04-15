@@ -7,12 +7,13 @@ import {
 import { useFiscalDocuments, useCreateFiscalDocument } from '@/hooks/useFiscalDocuments';
 import { useClients } from '@/hooks/useClients';
 import { useCreateOrder } from '@/hooks/useOrders';
-import { useCreateLoad } from '@/hooks/useLoads';
+import { useCreateLoad, useLoads } from '@/hooks/useLoads';
 import { useCreateLoadItem } from '@/hooks/useLoadItems';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useOperationalRoutes, useUpdateOperationalRoute } from '@/hooks/useOperationalRoutes';
 import { useToast } from '@/hooks/use-toast';
-import { Upload } from 'lucide-react';
+import { Upload, FileText } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
 import IngestionStepper from '@/components/ingestion/IngestionStepper';
 import UploadStep from '@/components/ingestion/UploadStep';
 import ValidationStep from '@/components/ingestion/ValidationStep';
@@ -50,6 +51,7 @@ export default function Ingestion() {
   const { data: clients = [] } = useClients();
   const { data: vehicles = [] } = useVehicles();
   const { data: drivers = [] } = useDrivers();
+  const { data: loads = [] } = useLoads();
   const { data: operationalRoutes = [] } = useOperationalRoutes();
   const { currentTenant } = useTenant();
   const { user } = useAuth();
@@ -138,7 +140,7 @@ export default function Ingestion() {
     setValidatedOrders(prev => prev.filter((_, i) => i !== index));
   }, []);
 
-  const handleSaveDocsOnly = async () => {
+  const handleSaveDocsOnly = async (loadId?: string | null) => {
     setSavingDocsOnly(true);
     const results: string[] = [];
     try {
@@ -183,6 +185,7 @@ export default function Ingestion() {
             freight_breakdown: freightBreakdown,
             freight_table_id: freightTableId,
             status: 'confirmed',
+            load_id: loadId || null,
           });
 
           if (freightValue && freightBreakdown?.tableId && currentTenant) {
@@ -200,9 +203,12 @@ export default function Ingestion() {
       setStep(4);
 
       const successCount = results.filter(r => r.startsWith('✅')).length;
+      const loadLabel = loadId ? loads.find(l => l.id === loadId)?.load_number : null;
       toast({
         title: 'NF-es salvas',
-        description: `${successCount} documentos salvos. Agrupe em cargas quando quiser na página de Cargas.`,
+        description: loadLabel
+          ? `${successCount} documentos vinculados à carga ${loadLabel}.`
+          : `${successCount} documentos salvos. Agrupe em cargas quando quiser na página de Cargas.`,
       });
     } catch (e: any) {
       toast({ title: 'Erro', description: e.message, variant: 'destructive' });
@@ -431,12 +437,53 @@ export default function Ingestion() {
 
       <IngestionStepper currentStep={step} />
 
-      {step === 0 && <UploadStep onFiles={handleFiles} />}
+      {step === 0 && (
+        <>
+          <UploadStep onFiles={handleFiles} />
+          {/* Pending NF-es without load */}
+          {(() => {
+            const pending = existingDocs.filter(d => !d.load_id && d.status !== 'cancelled');
+            if (pending.length === 0) return null;
+            return (
+              <Card className="mt-4 border-warning/30">
+                <CardContent className="py-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <FileText className="h-4 w-4 text-warning" />
+                    <h3 className="text-sm font-semibold">{pending.length} NF-e(s) pendentes sem carga</h3>
+                    <span className="text-[10px] text-muted-foreground">Salvas em importações anteriores e ainda não vinculadas a nenhuma carga</span>
+                  </div>
+                  <div className="space-y-1 max-h-48 overflow-y-auto">
+                    {pending.slice(0, 20).map(d => (
+                      <div key={d.id} className="flex items-center justify-between text-xs py-1 px-2 rounded hover:bg-muted/50">
+                        <div className="flex items-center gap-3">
+                          <span className="font-mono font-medium">NF {d.invoice_number || '—'}</span>
+                          <span className="text-muted-foreground">{d.recipient || d.clients?.company_name || '—'}</span>
+                          <span className="text-muted-foreground">{d.recipient_city || ''}{d.recipient_state ? ` - ${d.recipient_state}` : ''}</span>
+                        </div>
+                        <div className="flex items-center gap-3 text-muted-foreground">
+                          {d.pallet_count ? <span>{d.pallet_count} pal</span> : null}
+                          {d.weight_kg ? <span>{Number(d.weight_kg).toLocaleString('pt-BR')} kg</span> : null}
+                          <span>{d.issue_date ? new Date(d.issue_date + 'T12:00:00').toLocaleDateString('pt-BR') : ''}</span>
+                        </div>
+                      </div>
+                    ))}
+                    {pending.length > 20 && <div className="text-[10px] text-muted-foreground text-center py-1">+ {pending.length - 20} mais...</div>}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-2">
+                    Para agrupar, vá em <a href="/fiscal" className="text-primary underline">Documentos Fiscais</a> e filtre por "Sem carga", ou importe novos XMLs e use o fluxo de roteirização.
+                  </p>
+                </CardContent>
+              </Card>
+            );
+          })()}
+        </>
+      )}
       {step === 1 && (
         <ValidationStep
           docs={validatedDocs}
           orders={validatedOrders}
           clients={clients}
+          loads={loads.map(l => ({ id: l.id, load_number: l.load_number, destination: l.destination, status: l.status }))}
           onBack={reset}
           onNext={handleGoToRouting}
           onSaveDocsOnly={handleSaveDocsOnly}

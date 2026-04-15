@@ -283,6 +283,7 @@ export default function FiscalDocuments() {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [loadFilter, setLoadFilter] = useState<string>('all');
   const [dialogOpen, setDialogOpen] = useState(false);
   const { toast } = useToast();
 
@@ -297,9 +298,11 @@ export default function FiscalDocuments() {
       ) return false;
       if (typeFilter !== 'all' && d.document_type !== typeFilter) return false;
       if (statusFilter !== 'all' && d.status !== statusFilter) return false;
+      if (loadFilter === 'no_load' && d.load_id) return false;
+      if (loadFilter === 'with_load' && !d.load_id) return false;
       return true;
     });
-  }, [docs, search, typeFilter, statusFilter]);
+  }, [docs, search, typeFilter, statusFilter, loadFilter]);
 
   const handleSave = async (values: any) => {
     try {
@@ -364,6 +367,14 @@ export default function FiscalDocuments() {
           <SelectContent>
             <SelectItem value="all">Todos os status</SelectItem>
             {DOC_STATUSES.map(s => <SelectItem key={s} value={s}>{DOC_STATUS_LABELS[s]}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={loadFilter} onValueChange={setLoadFilter}>
+          <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas as cargas</SelectItem>
+            <SelectItem value="no_load">Sem carga</SelectItem>
+            <SelectItem value="with_load">Com carga</SelectItem>
           </SelectContent>
         </Select>
       </div>

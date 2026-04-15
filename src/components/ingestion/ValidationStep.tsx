@@ -9,17 +9,25 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   FileText, CheckCircle, AlertTriangle, XCircle, ArrowRight, ArrowLeft, Package, Info, Trash2, Pencil,
-  Weight, DollarSign, Boxes, LayoutGrid,
+  Weight, DollarSign, Boxes, LayoutGrid, Link2,
 } from 'lucide-react';
 import { Client } from '@/hooks/useClients';
+
+interface LoadOption {
+  id: string;
+  load_number: string;
+  destination: string | null;
+  status: string;
+}
 
 interface ValidationStepProps {
   docs: ValidatedDocument[];
   orders: ValidatedOrder[];
   clients: Client[];
+  loads?: LoadOption[];
   onBack: () => void;
   onNext: () => void;
-  onSaveDocsOnly?: () => void;
+  onSaveDocsOnly?: (loadId?: string | null) => void;
   savingDocs?: boolean;
   onUpdateDoc: (index: number, updates: Partial<ValidatedDocument>) => void;
   onUpdateOrder: (index: number, updates: Partial<ValidatedOrder>) => void;
@@ -30,12 +38,13 @@ interface ValidationStepProps {
 type FilterMode = 'all' | 'errors' | 'warnings' | 'valid';
 
 export default function ValidationStep({
-  docs, orders, clients, onBack, onNext, onSaveDocsOnly, savingDocs,
+  docs, orders, clients, loads = [], onBack, onNext, onSaveDocsOnly, savingDocs,
   onUpdateDoc, onUpdateOrder, onRemoveDoc, onRemoveOrder,
 }: ValidationStepProps) {
   const [filter, setFilter] = useState<FilterMode>('all');
   const [editingDocIdx, setEditingDocIdx] = useState<number | null>(null);
   const [editingOrderIdx, setEditingOrderIdx] = useState<number | null>(null);
+  const [selectedLoadId, setSelectedLoadId] = useState<string | null>(null);
 
   const validDocs = docs.filter(d => !d.hasErrors && !d.isDuplicate);
 
@@ -314,13 +323,31 @@ export default function ValidationStep({
         </TabsContent>
       </Tabs>
 
-      <div className="flex gap-3 justify-between">
+      <div className="flex gap-3 justify-between items-end">
         <Button variant="outline" onClick={onBack}><ArrowLeft className="h-4 w-4 mr-2" /> Recomeçar</Button>
-        <div className="flex gap-2">
+        <div className="flex flex-col items-end gap-2">
           {onSaveDocsOnly && (
-            <Button variant="secondary" onClick={onSaveDocsOnly} disabled={totalValid === 0 || savingDocs}>
-              {savingDocs ? 'Salvando...' : 'Salvar NF-es apenas'}
-            </Button>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
+                <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
+                <Select value={selectedLoadId || '__none__'} onValueChange={v => setSelectedLoadId(v === '__none__' ? null : v)}>
+                  <SelectTrigger className="h-8 w-[220px] text-xs">
+                    <SelectValue placeholder="Vincular a carga existente" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Sem vínculo (avulsa)</SelectItem>
+                    {loads.filter(l => l.status !== 'delivered').map(l => (
+                      <SelectItem key={l.id} value={l.id} className="text-xs">
+                        {l.load_number} {l.destination ? `→ ${l.destination}` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button variant="secondary" onClick={() => onSaveDocsOnly(selectedLoadId)} disabled={totalValid === 0 || savingDocs}>
+                {savingDocs ? 'Salvando...' : selectedLoadId ? 'Salvar e Vincular' : 'Salvar NF-es apenas'}
+              </Button>
+            </div>
           )}
           <Button onClick={onNext} disabled={totalValid === 0}>
             Agrupar em Cargas <ArrowRight className="h-4 w-4 ml-2" />
