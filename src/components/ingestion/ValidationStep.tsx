@@ -323,13 +323,31 @@ export default function ValidationStep({
         </TabsContent>
       </Tabs>
 
-      <div className="flex gap-3 justify-between">
+      <div className="flex gap-3 justify-between items-end">
         <Button variant="outline" onClick={onBack}><ArrowLeft className="h-4 w-4 mr-2" /> Recomeçar</Button>
-        <div className="flex gap-2">
+        <div className="flex flex-col items-end gap-2">
           {onSaveDocsOnly && (
-            <Button variant="secondary" onClick={onSaveDocsOnly} disabled={totalValid === 0 || savingDocs}>
-              {savingDocs ? 'Salvando...' : 'Salvar NF-es apenas'}
-            </Button>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
+                <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
+                <Select value={selectedLoadId || '__none__'} onValueChange={v => setSelectedLoadId(v === '__none__' ? null : v)}>
+                  <SelectTrigger className="h-8 w-[220px] text-xs">
+                    <SelectValue placeholder="Vincular a carga existente" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Sem vínculo (avulsa)</SelectItem>
+                    {loads.filter(l => l.status !== 'delivered').map(l => (
+                      <SelectItem key={l.id} value={l.id} className="text-xs">
+                        {l.load_number} {l.destination ? `→ ${l.destination}` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button variant="secondary" onClick={() => onSaveDocsOnly(selectedLoadId)} disabled={totalValid === 0 || savingDocs}>
+                {savingDocs ? 'Salvando...' : selectedLoadId ? 'Salvar e Vincular' : 'Salvar NF-es apenas'}
+              </Button>
+            </div>
           )}
           <Button onClick={onNext} disabled={totalValid === 0}>
             Agrupar em Cargas <ArrowRight className="h-4 w-4 ml-2" />
