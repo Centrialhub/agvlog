@@ -19,6 +19,8 @@ interface ValidationStepProps {
   clients: Client[];
   onBack: () => void;
   onNext: () => void;
+  onSaveDocsOnly?: () => void;
+  savingDocs?: boolean;
   onUpdateDoc: (index: number, updates: Partial<ValidatedDocument>) => void;
   onUpdateOrder: (index: number, updates: Partial<ValidatedOrder>) => void;
   onRemoveDoc: (index: number) => void;
@@ -28,7 +30,7 @@ interface ValidationStepProps {
 type FilterMode = 'all' | 'errors' | 'warnings' | 'valid';
 
 export default function ValidationStep({
-  docs, orders, clients, onBack, onNext,
+  docs, orders, clients, onBack, onNext, onSaveDocsOnly, savingDocs,
   onUpdateDoc, onUpdateOrder, onRemoveDoc, onRemoveOrder,
 }: ValidationStepProps) {
   const [filter, setFilter] = useState<FilterMode>('all');
@@ -314,9 +316,16 @@ export default function ValidationStep({
 
       <div className="flex gap-3 justify-between">
         <Button variant="outline" onClick={onBack}><ArrowLeft className="h-4 w-4 mr-2" /> Recomeçar</Button>
-        <Button onClick={onNext} disabled={totalValid === 0}>
-          Gerar Sugestões de Carga <ArrowRight className="h-4 w-4 ml-2" />
-        </Button>
+        <div className="flex gap-2">
+          {onSaveDocsOnly && (
+            <Button variant="secondary" onClick={onSaveDocsOnly} disabled={totalValid === 0 || savingDocs}>
+              {savingDocs ? 'Salvando...' : 'Salvar NF-es apenas'}
+            </Button>
+          )}
+          <Button onClick={onNext} disabled={totalValid === 0}>
+            Agrupar em Cargas <ArrowRight className="h-4 w-4 ml-2" />
+          </Button>
+        </div>
       </div>
     </div>
   );

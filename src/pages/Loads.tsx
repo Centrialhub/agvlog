@@ -10,11 +10,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Plus, PackageCheck, AlertTriangle, Truck, MapPin, ArrowRight } from 'lucide-react';
+import { Search, Plus, PackageCheck, AlertTriangle, Truck, MapPin, ArrowRight, FileStack } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
+import PendingDocsGrouping from '@/components/loads/PendingDocsGrouping';
 
 function NewLoadDialog({ vehicles, drivers, onCreated }: { vehicles: any[]; drivers: any[]; onCreated: () => void }) {
   const createLoad = useCreateLoad();
@@ -102,6 +103,25 @@ export default function Loads() {
   const { data: vehicles = [] } = useVehicles();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [groupingOpen, setGroupingOpen] = useState(false);
+
+  // Count pending docs for badge
+  const { data: pendingCount = 0 } = useQuery({
+    queryKey: ['pending_docs_count', currentTenant?.id],
+    queryFn: async () => {
+      if (!currentTenant) return 0;
+      const { count, error } = await supabase
+        .from('fiscal_documents')
+        .select('id', { count: 'exact', head: true })
+        .eq('tenant_id', currentTenant.id)
+        .eq('status', 'confirmed')
+        .eq('document_type', 'inbound')
+        .is('load_id', null);
+      if (error) return 0;
+      return count || 0;
+    },
+    enabled: !!currentTenant,
+  });
 
   const { data: drivers = [] } = useQuery({
     queryKey: ['drivers', currentTenant?.id],
@@ -141,7 +161,15 @@ export default function Loads() {
           </h1>
           <p className="text-xs text-muted-foreground mt-0.5">{loads.length} cargas no total</p>
         </div>
-        <NewLoadDialog vehicles={vehicles} drivers={drivers} onCreated={refetch} />
+        <div className="flex items-center gap-2">
+          {pendingCount > 0 && (
+            <Button size="sm" variant="secondary" onClick={() => setGroupingOpen(true)}>
+              <FileStack className="h-4 w-4 mr-1" /> Agrupar NF-es
+              <Badge className="ml-1.5 bg-primary text-primary-foreground text-[10px] px-1.5">{pendingCount}</Badge>
+            </Button>
+          )}
+          <NewLoadDialog vehicles={vehicles} drivers={drivers} onCreated={refetch} />
+        </div>
       </div>
 
       {/* Status summary */}
@@ -242,6 +270,14 @@ export default function Loads() {
           })}
         </div>
       )}
+
+      <PendingDocsGrouping
+        open={groupingOpen}
+        onOpenChange={setGroupingOpen}
+        onCreated={() => {
+          refetch();
+        }}
+      />
     </div>
   );
 }

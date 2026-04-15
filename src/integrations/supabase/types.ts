@@ -1145,6 +1145,8 @@ export type Database = {
           pallet_count: number | null
           product_summary: string | null
           recipient: string | null
+          recipient_city: string | null
+          recipient_state: string | null
           remitter: string | null
           status: string
           tenant_id: string
@@ -1175,6 +1177,8 @@ export type Database = {
           pallet_count?: number | null
           product_summary?: string | null
           recipient?: string | null
+          recipient_city?: string | null
+          recipient_state?: string | null
           remitter?: string | null
           status?: string
           tenant_id: string
@@ -1205,6 +1209,8 @@ export type Database = {
           pallet_count?: number | null
           product_summary?: string | null
           recipient?: string | null
+          recipient_city?: string | null
+          recipient_state?: string | null
           remitter?: string | null
           status?: string
           tenant_id?: string

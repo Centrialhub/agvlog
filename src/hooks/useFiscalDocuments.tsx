@@ -30,6 +30,8 @@ export interface FiscalDocument {
   client_id: string | null;
   remitter: string | null;
   recipient: string | null;
+  recipient_city: string | null;
+  recipient_state: string | null;
   issue_date: string | null;
   order_id: string | null;
   load_id: string | null;
