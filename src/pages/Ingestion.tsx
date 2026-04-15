@@ -442,6 +442,7 @@ export default function Ingestion() {
           docs={validatedDocs}
           orders={validatedOrders}
           clients={clients}
+          loads={loads.map(l => ({ id: l.id, load_number: l.load_number, destination: l.destination, status: l.status }))}
           onBack={reset}
           onNext={handleGoToRouting}
           onSaveDocsOnly={handleSaveDocsOnly}
