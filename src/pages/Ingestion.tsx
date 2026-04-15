@@ -313,61 +313,66 @@ export default function Ingestion() {
     const createdOrderIds: Map<string, string> = new Map(); // orderNumber -> id
 
     try {
-      // 1. Create fiscal documents
+      // 1. Map fiscal documents (already saved on upload)
       for (const doc of validatedDocs.filter(d => !d.hasErrors && !d.isDuplicate)) {
-        try {
-          // Calculate freight for this document
-          let freightValue: number | null = null;
-          let freightBreakdown: any = {};
-          let freightTableId: string | null = null;
-          if (currentTenant) {
-            const freightResult = await calculateFreight({
-              tenantId: currentTenant.id,
-              clientId: doc.matchedClientId,
-              destination: doc.source.recipientCity || null,
-              destinationState: doc.source.recipientState || null,
-              destinationMunicipality: doc.source.recipientCity || null,
-              totalValue: doc.source.totalValue || 0,
-              totalWeight: doc.source.totalWeight || 0,
-              totalPallets: doc.source.estimatedPallets || 0,
-            });
-            if (freightResult.success && freightResult.breakdown) {
-              freightValue = freightResult.value;
-              freightBreakdown = freightResult.breakdown;
-              freightTableId = freightResult.breakdown.tableId || null;
+        const savedId = (doc as any)._savedId;
+        if (savedId) {
+          createdDocIds.set(doc.source.invoiceNumber, savedId);
+          results.push(`✅ NF ${doc.source.invoiceNumber} (já salva)`);
+        } else {
+          // Fallback: save now if somehow not saved earlier
+          try {
+            let freightValue: number | null = null;
+            let freightBreakdown: any = {};
+            let freightTableId: string | null = null;
+            if (currentTenant) {
+              const freightResult = await calculateFreight({
+                tenantId: currentTenant.id,
+                clientId: doc.matchedClientId,
+                destination: doc.source.recipientCity || null,
+                destinationState: doc.source.recipientState || null,
+                destinationMunicipality: doc.source.recipientCity || null,
+                totalValue: doc.source.totalValue || 0,
+                totalWeight: doc.source.totalWeight || 0,
+                totalPallets: doc.source.estimatedPallets || 0,
+              });
+              if (freightResult.success && freightResult.breakdown) {
+                freightValue = freightResult.value;
+                freightBreakdown = freightResult.breakdown;
+                freightTableId = freightResult.breakdown.tableId || null;
+              }
             }
-          }
 
-          const created = await createDoc.mutateAsync({
-            document_type: 'inbound',
-            invoice_number: doc.source.invoiceNumber,
-            access_key: doc.source.accessKey,
-            remitter: doc.source.emitterName,
-            recipient: doc.source.recipientName,
-            recipient_city: doc.source.recipientCity || null,
-            recipient_state: doc.source.recipientState || null,
-            issue_date: doc.source.issueDate || null,
-            client_id: doc.matchedClientId,
-            product_summary: doc.source.items.map(i => i.description).join(', ').substring(0, 500),
-            pallet_count: doc.source.estimatedPallets,
-            weight_kg: doc.source.totalWeight,
-            value: doc.source.totalValue,
-            freight_value: freightValue,
-            freight_breakdown: freightBreakdown,
-            freight_table_id: freightTableId,
-            status: 'confirmed',
-          });
-          createdDocIds.set(doc.source.invoiceNumber, created.id);
-          
-          // Log freight calculation
-          if (freightValue && freightBreakdown?.tableId && currentTenant) {
-            await logFreightCalculation(currentTenant.id, created.id, 'fiscal_document', freightBreakdown, user?.id);
+            const created = await createDoc.mutateAsync({
+              document_type: 'inbound',
+              invoice_number: doc.source.invoiceNumber,
+              access_key: doc.source.accessKey,
+              remitter: doc.source.emitterName,
+              recipient: doc.source.recipientName,
+              recipient_city: doc.source.recipientCity || null,
+              recipient_state: doc.source.recipientState || null,
+              issue_date: doc.source.issueDate || null,
+              client_id: doc.matchedClientId,
+              product_summary: doc.source.items.map(i => i.description).join(', ').substring(0, 500),
+              pallet_count: doc.source.estimatedPallets,
+              weight_kg: doc.source.totalWeight,
+              value: doc.source.totalValue,
+              freight_value: freightValue,
+              freight_breakdown: freightBreakdown,
+              freight_table_id: freightTableId,
+              status: 'confirmed',
+            });
+            createdDocIds.set(doc.source.invoiceNumber, created.id);
+
+            if (freightValue && freightBreakdown?.tableId && currentTenant) {
+              await logFreightCalculation(currentTenant.id, created.id, 'fiscal_document', freightBreakdown, user?.id);
+            }
+
+            const freightLabel = freightValue ? ` (frete: R$ ${freightValue.toFixed(2)})` : ' (sem tabela de frete)';
+            results.push(`✅ NF ${doc.source.invoiceNumber} importada${freightLabel}`);
+          } catch (e: any) {
+            results.push(`❌ NF ${doc.source.invoiceNumber}: ${e.message}`);
           }
-          
-          const freightLabel = freightValue ? ` (frete: R$ ${freightValue.toFixed(2)})` : ' (sem tabela de frete)';
-          results.push(`✅ NF ${doc.source.invoiceNumber} importada${freightLabel}`);
-        } catch (e: any) {
-          results.push(`❌ NF ${doc.source.invoiceNumber}: ${e.message}`);
         }
       }
 
