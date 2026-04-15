@@ -194,14 +194,26 @@ export default function Ingestion() {
     }
   };
 
-  const handleGenerateSuggestions = () => {
-    const routeRefs = operationalRoutes.map(r => ({
-      id: r.id,
-      name: r.name,
-      destinations: Array.isArray(r.destinations) ? r.destinations.map((d: any) => ({ name: typeof d === 'string' ? d : d.name || '' })) : [],
-    }));
-    setSuggestions(generateLoadSuggestions(validatedDocs, validatedOrders, routeRefs));
+  const handleGoToRouting = () => {
     setStep(2);
+  };
+
+  const handleRoutingNext = (groups: RouteGroup[]) => {
+    setRouteGroups(groups);
+    // Convert route groups to LoadSuggestions for the GroupingStep
+    const loadSuggestions: LoadSuggestion[] = groups.map(g => ({
+      region: g.routeName,
+      routeId: g.routeId,
+      routeName: g.routeId ? g.routeName : null,
+      documents: g.documents,
+      orders: g.orders,
+      totalPallets: g.totalPallets,
+      totalWeight: g.totalWeight,
+      totalValue: g.totalValue,
+      stopCount: g.documents.length + g.orders.length,
+    }));
+    setSuggestions(loadSuggestions);
+    setStep(3);
   };
 
   const handleExecute = async (assignments: Map<number, { vehicleId: string | null; driverId: string | null }>) => {
