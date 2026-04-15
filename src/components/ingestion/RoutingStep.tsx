@@ -45,7 +45,7 @@ export default function RoutingStep({ docs, orders, routes, onBack, onNext }: Ro
 
     for (const doc of validDocs) {
       const city = doc.source.recipientCity || '';
-      const matched = city ? matchRoute(city, routes) : null;
+      const matched = city ? findRouteForCity(city, routes) : null;
       const key = matched ? matched.id : `unmatched-${doc.source.recipientState || 'unknown'}-${city}`;
       const name = matched ? matched.name : [doc.source.recipientState, city].filter(Boolean).join(' - ') || 'Sem região';
       const group = getOrCreate(key, matched?.id || null, name);
@@ -60,7 +60,7 @@ export default function RoutingStep({ docs, orders, routes, onBack, onNext }: Ro
 
     for (const order of validOrders) {
       const dest = order.source.destination || '';
-      const matched = dest ? matchRoute(dest, routes) : null;
+      const matched = dest ? findRouteForCity(dest, routes) : null;
       const key = matched ? matched.id : `unmatched-order-${dest}`;
       const name = matched ? matched.name : dest || 'Sem região';
       const group = getOrCreate(key, matched?.id || null, name);
