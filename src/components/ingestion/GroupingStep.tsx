@@ -1,11 +1,13 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { LoadSuggestion } from '@/lib/ingestionValidator';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, CheckCircle, Loader2, MapPin, Truck, AlertTriangle } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ArrowLeft, CheckCircle, Loader2, MapPin, Truck, AlertTriangle, FileSearch, Printer, Save } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 interface Vehicle {
   id: string;
@@ -37,13 +39,14 @@ interface GroupingStepProps {
   onExecute: (assignments: Map<number, { vehicleId: string | null; driverId: string | null }>) => void;
 }
 
+const STORAGE_KEY = 'ingestion_grouping_state';
+
 function findBestVehicle(
   pallets: number,
   weightKg: number,
   vehicles: Vehicle[],
   alreadyAssigned: Set<string>,
 ): Vehicle | null {
-  // Find the smallest vehicle that fits both pallets and weight, not already assigned
   const candidates = vehicles
     .filter(v => !alreadyAssigned.has(v.id))
     .filter(v => {
@@ -59,9 +62,84 @@ function findBestVehicle(
 export default function GroupingStep({ suggestions, vehicles, drivers, routes = [], executing, onBack, onExecute }: GroupingStepProps) {
   const [assignments, setAssignments] = useState<Map<number, { vehicleId: string | null; driverId: string | null }>>(new Map());
   const [autoSuggested, setAutoSuggested] = useState(false);
+  const [showAnalysis, setShowAnalysis] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const analysisRef = useRef<HTMLDivElement>(null);
+  const { toast } = useToast();
 
   const vehiclesWithCapacity = useMemo(() => vehicles.filter(v => (v.max_pallets || 0) > 0), [vehicles]);
   const activeDrivers = drivers.filter(d => d.active);
+
+  // ──────────── Auto-save / restore ────────────
+  const persistState = useCallback(() => {
+    try {
+      const serializable = {
+        ts: Date.now(),
+        assignments: Array.from(assignments.entries()).map(([k, v]) => [k, v]),
+        suggestionsSnapshot: suggestions.map(s => ({
+          region: s.region,
+          routeName: s.routeName,
+          totalPallets: s.totalPallets,
+          totalWeight: s.totalWeight,
+          totalValue: s.totalValue,
+          docCount: s.documents.length,
+          orderCount: s.orders.length,
+          cities: [...new Set(s.documents.map(d => d.source.recipientCity).filter(Boolean))],
+          docs: s.documents.map(d => ({
+            invoiceNumber: d.source.invoiceNumber,
+            recipientName: d.source.recipientName,
+            recipientCity: d.source.recipientCity,
+            pallets: d.source.estimatedPallets,
+            weight: d.source.totalWeight,
+            value: d.source.totalValue,
+          })),
+          orders: s.orders.map(o => ({
+            orderNumber: o.source.orderNumber,
+            clientName: o.source.clientName,
+            destination: o.source.destination,
+            pallets: o.source.palletCount,
+            weight: o.source.weightKg,
+          })),
+        })),
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(serializable));
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch {
+      // Storage full or unavailable
+    }
+  }, [assignments, suggestions]);
+
+  // Restore assignments from localStorage on mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      // Only restore if less than 4 hours old and same number of suggestions
+      if (Date.now() - parsed.ts > 4 * 60 * 60 * 1000) return;
+      if (parsed.suggestionsSnapshot?.length !== suggestions.length) return;
+      const restored = new Map<number, { vehicleId: string | null; driverId: string | null }>();
+      for (const [k, v] of parsed.assignments) {
+        restored.set(Number(k), v as any);
+      }
+      if (restored.size > 0) {
+        setAssignments(restored);
+        setAutoSuggested(true); // Don't overwrite with auto
+        toast({ title: 'Sessão restaurada', description: 'Agrupamento recuperado automaticamente.' });
+      }
+    } catch {
+      // Ignore
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto-save on every assignment change
+  useEffect(() => {
+    if (assignments.size === 0) return;
+    const timer = setTimeout(() => persistState(), 1500);
+    return () => clearTimeout(timer);
+  }, [assignments, persistState]);
 
   // Auto-suggest vehicles on mount
   useEffect(() => {
@@ -70,7 +148,6 @@ export default function GroupingStep({ suggestions, vehicles, drivers, routes = 
     const newAssignments = new Map<number, { vehicleId: string | null; driverId: string | null }>();
     const usedVehicles = new Set<string>();
 
-    // Sort suggestions by pallets desc so bigger loads get priority
     const sortedIndices = suggestions
       .map((s, i) => ({ s, i }))
       .sort((a, b) => b.s.totalPallets - a.s.totalPallets);
@@ -114,6 +191,58 @@ export default function GroupingStep({ suggestions, vehicles, drivers, routes = 
 
   const noVehiclesWithCapacity = vehiclesWithCapacity.length === 0;
 
+  const handlePrint = () => {
+    const content = analysisRef.current;
+    if (!content) return;
+    const win = window.open('', '_blank');
+    if (!win) return;
+    win.document.write(`
+      <html><head><title>Análise de Cargas</title>
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; font-size: 11px; color: #1a1a1a; padding: 12mm; }
+        h1 { font-size: 16px; margin-bottom: 4px; }
+        .subtitle { font-size: 11px; color: #666; margin-bottom: 16px; }
+        .load-card { border: 1px solid #ddd; border-radius: 6px; padding: 10px; margin-bottom: 12px; page-break-inside: avoid; }
+        .load-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 6px; margin-bottom: 6px; }
+        .load-title { font-size: 13px; font-weight: bold; }
+        .badge { display: inline-block; background: #e8f0fe; color: #1a56db; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; }
+        .badge.warn { background: #fef3c7; color: #92400e; }
+        .stats { display: flex; gap: 16px; margin-bottom: 6px; font-size: 11px; color: #444; }
+        .stat-label { color: #888; }
+        table { width: 100%; border-collapse: collapse; font-size: 10px; }
+        th { text-align: left; background: #f5f5f5; padding: 4px 6px; border-bottom: 1px solid #ddd; font-weight: 600; }
+        td { padding: 3px 6px; border-bottom: 1px solid #eee; }
+        .vehicle-info { font-size: 11px; color: #333; background: #f0fdf4; padding: 4px 8px; border-radius: 4px; }
+        .footer { margin-top: 20px; text-align: center; font-size: 9px; color: #999; border-top: 1px solid #eee; padding-top: 8px; }
+        .occupancy { font-weight: bold; }
+        .occupancy.ok { color: #16a34a; }
+        .occupancy.warn { color: #ca8a04; }
+        .occupancy.over { color: #dc2626; }
+        @media print { body { padding: 8mm; } }
+      </style></head><body>
+      ${content.innerHTML}
+      <div class="footer">Gerado em ${new Date().toLocaleString('pt-BR')} — Sistema de Ingestão Logística</div>
+      </body></html>
+    `);
+    win.document.close();
+    win.print();
+  };
+
+  const handleManualSave = () => {
+    persistState();
+    toast({ title: 'Salvo!', description: 'Estado do agrupamento salvo com sucesso.' });
+  };
+
+  // Grand totals
+  const totals = useMemo(() => ({
+    pallets: suggestions.reduce((s, g) => s + g.totalPallets, 0),
+    weight: suggestions.reduce((s, g) => s + g.totalWeight, 0),
+    value: suggestions.reduce((s, g) => s + g.totalValue, 0),
+    docs: suggestions.reduce((s, g) => s + g.documents.length, 0),
+    orders: suggestions.reduce((s, g) => s + g.orders.length, 0),
+  }), [suggestions]);
+
   return (
     <div className="space-y-4">
       {noVehiclesWithCapacity && (
@@ -129,6 +258,17 @@ export default function GroupingStep({ suggestions, vehicles, drivers, routes = 
           </CardContent>
         </Card>
       )}
+
+      {/* Analysis + Save buttons */}
+      <div className="flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={() => setShowAnalysis(true)} className="gap-1.5">
+          <FileSearch className="h-4 w-4" /> Analisar Cargas
+        </Button>
+        <Button variant="outline" size="sm" onClick={handleManualSave} className="gap-1.5">
+          <Save className="h-4 w-4" /> {saved ? 'Salvo ✓' : 'Salvar'}
+        </Button>
+        <span className="text-[10px] text-muted-foreground ml-1">Auto-salvo a cada alteração</span>
+      </div>
 
       {suggestions.length === 0 ? (
         <Card><CardContent className="py-12 text-center text-muted-foreground">Nenhuma sugestão gerada — verifique os dados importados</CardContent></Card>
@@ -261,10 +401,146 @@ export default function GroupingStep({ suggestions, vehicles, drivers, routes = 
 
       <div className="flex gap-3 justify-between">
         <Button variant="outline" onClick={onBack}><ArrowLeft className="h-4 w-4 mr-2" /> Voltar</Button>
-        <Button onClick={() => onExecute(assignments)} disabled={executing || suggestions.length === 0}>
+        <Button onClick={() => { localStorage.removeItem(STORAGE_KEY); onExecute(assignments); }} disabled={executing || suggestions.length === 0}>
           {executing ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Executando...</> : <>Confirmar e Executar <CheckCircle className="h-4 w-4 ml-2" /></>}
         </Button>
       </div>
+
+      {/* ──────── Analysis Modal ──────── */}
+      <Dialog open={showAnalysis} onOpenChange={setShowAnalysis}>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileSearch className="h-5 w-5 text-primary" /> Análise de Cargas
+            </DialogTitle>
+          </DialogHeader>
+
+          <div ref={analysisRef}>
+            <h1 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '4px' }}>Análise de Cargas — Remanejamento</h1>
+            <div className="subtitle" style={{ fontSize: '11px', color: '#666', marginBottom: '16px' }}>
+              {new Date().toLocaleDateString('pt-BR')} • {totals.docs} NF-e • {totals.orders} pedidos • {totals.pallets} paletes • {totals.weight.toLocaleString('pt-BR')} kg
+            </div>
+
+            {suggestions.map((s, i) => {
+              const assignment = assignments.get(i);
+              const vehicle = assignment?.vehicleId ? vehicles.find(v => v.id === assignment.vehicleId) : null;
+              const driver = assignment?.driverId ? drivers.find(d => d.id === assignment.driverId) : null;
+              const occ = getOccupancy(s, i);
+              const cities = [...new Set(s.documents.map(d => d.source.recipientCity).filter(Boolean))];
+
+              return (
+                <div key={i} className="load-card" style={{ border: '1px solid #ddd', borderRadius: '6px', padding: '10px', marginBottom: '12px', pageBreakInside: 'avoid' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #eee', paddingBottom: '6px', marginBottom: '6px' }}>
+                    <div>
+                      <span style={{ fontSize: '13px', fontWeight: 'bold' }}>
+                        {s.routeName || s.region}
+                      </span>
+                      {!s.routeName && (
+                        <span style={{ fontSize: '10px', color: '#92400e', marginLeft: '8px' }}>(sem rota cadastrada)</span>
+                      )}
+                    </div>
+                    <span style={{ fontSize: '10px', background: '#e8f0fe', color: '#1a56db', padding: '2px 8px', borderRadius: '10px', fontWeight: 600 }}>
+                      Carga {i + 1}
+                    </span>
+                  </div>
+
+                  {/* Vehicle & driver info */}
+                  {(vehicle || driver) && (
+                    <div style={{ fontSize: '11px', color: '#333', background: '#f0fdf4', padding: '4px 8px', borderRadius: '4px', marginBottom: '6px' }}>
+                      {vehicle && <span>🚛 {vehicle.plate} ({vehicle.max_pallets}p{vehicle.max_weight_kg ? ` / ${(vehicle.max_weight_kg / 1000).toFixed(0)}t` : ''})</span>}
+                      {driver && <span style={{ marginLeft: vehicle ? '12px' : 0 }}>👤 {driver.name}</span>}
+                      {occ && (
+                        <span style={{
+                          marginLeft: '12px',
+                          fontWeight: 'bold',
+                          color: occ.maxPct > 100 ? '#dc2626' : occ.maxPct < 50 ? '#ca8a04' : '#16a34a',
+                        }}>
+                          {occ.palletPct}% ocupação
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Stats */}
+                  <div style={{ display: 'flex', gap: '16px', marginBottom: '6px', fontSize: '11px', color: '#444' }}>
+                    <span><span style={{ color: '#888' }}>Paletes:</span> {s.totalPallets}</span>
+                    <span><span style={{ color: '#888' }}>Peso:</span> {s.totalWeight.toLocaleString('pt-BR')} kg</span>
+                    {s.totalValue > 0 && <span><span style={{ color: '#888' }}>Valor:</span> R$ {s.totalValue.toLocaleString('pt-BR')}</span>}
+                    <span><span style={{ color: '#888' }}>Paradas:</span> {s.documents.length + s.orders.length}</span>
+                  </div>
+
+                  {cities.length > 0 && (
+                    <div style={{ fontSize: '10px', color: '#666', marginBottom: '6px' }}>
+                      Cidades: {cities.join(', ')}
+                    </div>
+                  )}
+
+                  {/* Documents table */}
+                  {s.documents.length > 0 && (
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px', marginBottom: '4px' }}>
+                      <thead>
+                        <tr>
+                          <th style={{ textAlign: 'left', background: '#f5f5f5', padding: '4px 6px', borderBottom: '1px solid #ddd', fontWeight: 600 }}>NF-e</th>
+                          <th style={{ textAlign: 'left', background: '#f5f5f5', padding: '4px 6px', borderBottom: '1px solid #ddd', fontWeight: 600 }}>Destinatário</th>
+                          <th style={{ textAlign: 'left', background: '#f5f5f5', padding: '4px 6px', borderBottom: '1px solid #ddd', fontWeight: 600 }}>Cidade</th>
+                          <th style={{ textAlign: 'right', background: '#f5f5f5', padding: '4px 6px', borderBottom: '1px solid #ddd', fontWeight: 600 }}>Paletes</th>
+                          <th style={{ textAlign: 'right', background: '#f5f5f5', padding: '4px 6px', borderBottom: '1px solid #ddd', fontWeight: 600 }}>Peso (kg)</th>
+                          <th style={{ textAlign: 'right', background: '#f5f5f5', padding: '4px 6px', borderBottom: '1px solid #ddd', fontWeight: 600 }}>Valor</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {s.documents.map((doc, di) => (
+                          <tr key={di}>
+                            <td style={{ padding: '3px 6px', borderBottom: '1px solid #eee' }}>{doc.source.invoiceNumber}</td>
+                            <td style={{ padding: '3px 6px', borderBottom: '1px solid #eee' }}>{doc.source.recipientName || '—'}</td>
+                            <td style={{ padding: '3px 6px', borderBottom: '1px solid #eee' }}>{doc.source.recipientCity || '—'}</td>
+                            <td style={{ padding: '3px 6px', borderBottom: '1px solid #eee', textAlign: 'right' }}>{doc.source.estimatedPallets}</td>
+                            <td style={{ padding: '3px 6px', borderBottom: '1px solid #eee', textAlign: 'right' }}>{doc.source.totalWeight.toLocaleString('pt-BR')}</td>
+                            <td style={{ padding: '3px 6px', borderBottom: '1px solid #eee', textAlign: 'right' }}>R$ {doc.source.totalValue.toLocaleString('pt-BR')}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+
+                  {/* Orders table */}
+                  {s.orders.length > 0 && (
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
+                      <thead>
+                        <tr>
+                          <th style={{ textAlign: 'left', background: '#f5f5f5', padding: '4px 6px', borderBottom: '1px solid #ddd', fontWeight: 600 }}>Pedido</th>
+                          <th style={{ textAlign: 'left', background: '#f5f5f5', padding: '4px 6px', borderBottom: '1px solid #ddd', fontWeight: 600 }}>Cliente</th>
+                          <th style={{ textAlign: 'left', background: '#f5f5f5', padding: '4px 6px', borderBottom: '1px solid #ddd', fontWeight: 600 }}>Destino</th>
+                          <th style={{ textAlign: 'right', background: '#f5f5f5', padding: '4px 6px', borderBottom: '1px solid #ddd', fontWeight: 600 }}>Paletes</th>
+                          <th style={{ textAlign: 'right', background: '#f5f5f5', padding: '4px 6px', borderBottom: '1px solid #ddd', fontWeight: 600 }}>Peso (kg)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {s.orders.map((order, oi) => (
+                          <tr key={oi}>
+                            <td style={{ padding: '3px 6px', borderBottom: '1px solid #eee' }}>{order.source.orderNumber}</td>
+                            <td style={{ padding: '3px 6px', borderBottom: '1px solid #eee' }}>{order.source.clientName || '—'}</td>
+                            <td style={{ padding: '3px 6px', borderBottom: '1px solid #eee' }}>{order.source.destination || '—'}</td>
+                            <td style={{ padding: '3px 6px', borderBottom: '1px solid #eee', textAlign: 'right' }}>{order.source.palletCount || '—'}</td>
+                            <td style={{ padding: '3px 6px', borderBottom: '1px solid #eee', textAlign: 'right' }}>{order.source.weightKg ? order.source.weightKg.toLocaleString('pt-BR') : '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex justify-end gap-2 mt-2">
+            <Button variant="outline" onClick={() => setShowAnalysis(false)}>Fechar</Button>
+            <Button onClick={handlePrint} className="gap-1.5">
+              <Printer className="h-4 w-4" /> Imprimir
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
