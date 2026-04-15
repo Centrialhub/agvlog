@@ -47,6 +47,7 @@ const AssetsPage = lazy(() => import("@/pages/Assets"));
 const MaintenanceOrders = lazy(() => import("@/pages/MaintenanceOrders"));
 const StockPage = lazy(() => import("@/pages/Stock"));
 const Checklists = lazy(() => import("@/pages/Checklists"));
+const LoadReallocation = lazy(() => import("@/pages/LoadReallocation"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
 // Driver pages
@@ -164,6 +165,7 @@ const App = () => (
             <Route path="/maintenance-orders" element={<ProtectedRoute><MaintenanceOrders /></ProtectedRoute>} />
             <Route path="/stock" element={<ProtectedRoute><StockPage /></ProtectedRoute>} />
             <Route path="/checklists" element={<ProtectedRoute><Checklists /></ProtectedRoute>} />
+            <Route path="/reallocation" element={<ProtectedRoute><LoadReallocation /></ProtectedRoute>} />
 
             {/* Driver routes */}
             <Route path="/driver" element={<DriverRoute><DriverHome /></DriverRoute>} />
