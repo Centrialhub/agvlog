@@ -304,12 +304,16 @@ export default function GroupingStep({ suggestions, vehicles, drivers, routes = 
     const win = window.open('', '_blank');
     if (!win) return;
     win.document.write(`<html><head><title>Análise de Cargas</title><style>${printStyles}</style></head><body>
-      <h1>Análise de Cargas — Conferência Galpão</h1>
-      <div class="subtitle">${new Date().toLocaleDateString('pt-BR')} • ${suggestions.length} cargas • ${totalNotas} notas</div>
+      <h1>ANÁLISE DE CARGAS — CONFERÊNCIA GALPÃO</h1>
+      <div class="subtitle">${new Date().toLocaleDateString('pt-BR')} | ${suggestions.length} cargas | ${totalNotas} notas</div>
       ${cityBlocks}
       <div class="grand-totals">
-        <span>Total Geral</span><span>Notas: ${totalNotas}</span><span>Entregas: ${totalEntregas}</span>
-        <span>Valor: ${fmt(totalValor)}</span><span>Peso: ${fmtN(totalPeso)}</span><span>Volumes: ${totalVolumes}</span>
+        <span>TOTAL GERAL</span>
+        <span>Qtd Total Entregas: ${totalEntregas}</span>
+        <span>Qtd Total Notas: ${totalNotas}</span>
+        <span>Valor: ${fmt(totalValor)}</span>
+        <span>Peso: ${fmtN(totalPeso)}</span>
+        <span>Volumes: ${totalVolumes}</span>
       </div>
       <div class="footer">Gerado em ${new Date().toLocaleString('pt-BR')} — Sistema de Ingestão Logística</div>
     </body></html>`);
