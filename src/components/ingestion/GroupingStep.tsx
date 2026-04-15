@@ -193,22 +193,25 @@ export default function GroupingStep({ suggestions, vehicles, drivers, routes = 
 
   const printStyles = `
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: Arial, sans-serif; font-size: 10px; color: #1a1a1a; padding: 8mm; }
-    @page { size: landscape; margin: 8mm; }
-    h1 { font-size: 14px; margin-bottom: 2px; border-bottom: 3px solid #222; padding-bottom: 4px; }
-    .subtitle { font-size: 10px; color: #666; margin-bottom: 12px; }
-    .city-section { margin-bottom: 14px; page-break-inside: avoid; border: 1px solid #bbb; }
-    .city-header { background: #e8e8e8; padding: 4px 8px; display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: bold; border-bottom: 1px solid #bbb; }
+    body { font-family: Arial, Helvetica, sans-serif; font-size: 10px; color: #000; padding: 8mm; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    @page { size: landscape; margin: 6mm; }
+    h1 { font-size: 15px; font-weight: 900; margin-bottom: 2px; border-bottom: 3px solid #000; padding-bottom: 4px; text-transform: uppercase; }
+    .subtitle { font-size: 10px; color: #333; margin-bottom: 10px; font-weight: 600; }
+    .city-section { margin-bottom: 12px; page-break-inside: avoid; }
+    .city-header { background: #d9d9d9; padding: 5px 8px; font-size: 12px; font-weight: 900; color: #000; border: 2px solid #000; display: flex; justify-content: space-between; align-items: center; }
+    .city-meta { display: flex; gap: 20px; padding: 3px 8px; background: #eee; border: 1px solid #000; border-top: none; font-size: 10px; font-weight: 700; }
     table { width: 100%; border-collapse: collapse; font-size: 9px; }
-    th { text-align: left; background: #f5f5f5; padding: 4px 6px; border: 1px solid #bbb; font-weight: 700; font-size: 9px; white-space: nowrap; }
-    td { padding: 3px 6px; border: 1px solid #ccc; }
-    tr:nth-child(even) td { background: #fafafa; }
+    th { text-align: left; background: #e0e0e0; padding: 4px 5px; border: 1.5px solid #000; font-weight: 900; font-size: 9px; white-space: nowrap; color: #000; text-transform: uppercase; }
+    td { padding: 3px 5px; border: 1px solid #000; color: #000; font-weight: 600; }
+    tr:nth-child(even) td { background: #f5f5f5; }
     .right { text-align: right; }
     .center { text-align: center; }
-    .city-totals { display: flex; gap: 20px; padding: 4px 8px; background: #f0f0f0; font-size: 10px; border-top: 2px solid #999; }
-    .grand-totals { margin-top: 16px; padding: 6px 10px; background: #333; color: #fff; display: flex; gap: 24px; font-size: 11px; font-weight: bold; border: 2px solid #111; }
-    .footer { margin-top: 12px; text-align: center; font-size: 8px; color: #999; border-top: 1px solid #ccc; padding-top: 4px; }
+    .total-row td { background: #d9d9d9 !important; font-weight: 900; font-size: 10px; border-top: 2.5px solid #000; }
+    .grand-totals { margin-top: 14px; padding: 8px 10px; background: #000; color: #fff; font-size: 12px; font-weight: 900; border: 3px solid #000; display: flex; gap: 20px; flex-wrap: wrap; }
+    .grand-totals span { white-space: nowrap; }
+    .footer { margin-top: 10px; text-align: center; font-size: 8px; color: #666; border-top: 1px solid #999; padding-top: 4px; }
     .route-break { page-break-before: always; }
+    .assign-info { font-size: 11px; color: #000; background: #e8f5e9; padding: 4px 8px; border: 1px solid #000; margin-bottom: 8px; font-weight: 700; }
     @media print { body { padding: 5mm; } .city-section { page-break-inside: avoid; } }
   `;
 
@@ -245,30 +248,35 @@ export default function GroupingStep({ suggestions, vehicles, drivers, routes = 
           <td class="center">${d.emissao}</td>
           <td class="right">${fmt(d.valor)}</td>
           <td class="right">${fmtN(d.peso)}</td>
-          <td class="right center">${d.volumes}</td>
+          <td class="center">${d.volumes}</td>
         </tr>`).join('');
 
       html += `
         <div class="city-section">
           <div class="city-header">
-            <span>${cityName}${state ? ' - ' + state : ''}</span>
-            <span style="font-size:10px">Entregas: <b>${entregas}</b></span>
+            <span>Cidade: ${cityName}${state ? ' - ' + state : ''}</span>
+          </div>
+          <div class="city-meta">
+            <span>Qtd Entregas: ${entregas}</span>
+            <span>Qtd Notas: ${notas}</span>
           </div>
           <table>
             <thead><tr>
               <th>Remetente</th><th>Destinatário</th><th>Cidade</th><th class="center">Bairro</th>
               <th class="center">Nº Nota</th><th class="center">Emissão</th>
-              <th class="right">Vlr. Nota</th><th class="right">Peso</th><th class="right center">Volumes</th>
+              <th class="right">Vlr. Nota</th><th class="right">Peso</th><th class="center">Volumes</th>
             </tr></thead>
-            <tbody>${rows}</tbody>
+            <tbody>
+              ${rows}
+              <tr class="total-row">
+                <td colspan="5">Total Cidade:</td>
+                <td></td>
+                <td class="right">${fmt(valor)}</td>
+                <td class="right">${fmtN(peso)}</td>
+                <td class="center">${volumes}</td>
+              </tr>
+            </tbody>
           </table>
-          <div class="city-totals">
-            <span>Entregas: <b>${entregas}</b></span>
-            <span>Notas: <b>${notas}</b></span>
-            <span>Total: <b>${fmt(valor)}</b></span>
-            <span>Peso: <b>${fmtN(peso)}</b></span>
-            <span>Volumes: <b>${volumes}</b></span>
-          </div>
         </div>`;
     });
 
