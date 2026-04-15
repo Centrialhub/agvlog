@@ -332,19 +332,23 @@ export default function GroupingStep({ suggestions, vehicles, drivers, routes = 
       const vehicle = assignment?.vehicleId ? vehicles.find(v => v.id === assignment.vehicleId) : null;
       const driver = assignment?.driverId ? drivers.find(d => d.id === assignment.driverId) : null;
 
-      const vehicleInfo = vehicle ? `🚛 ${vehicle.plate} (${vehicle.max_pallets || '?'}p)` : '';
-      const driverInfo = driver ? `👤 ${driver.name}` : '';
-      const assignLine = (vehicleInfo || driverInfo) ? `<div style="font-size:11px;color:#333;background:#f0fdf4;padding:4px 8px;border-radius:4px;margin-bottom:8px">${vehicleInfo}${driverInfo ? (vehicleInfo ? ' — ' : '') + driverInfo : ''}</div>` : '';
+      const vehicleInfo = vehicle ? `Veículo: ${vehicle.plate} (${vehicle.max_pallets || '?'}p)` : '';
+      const driverInfo = driver ? `Motorista: ${driver.name}` : '';
+      const assignLine = (vehicleInfo || driverInfo) ? `<div class="assign-info">${vehicleInfo}${driverInfo ? (vehicleInfo ? ' | ' : '') + driverInfo : ''}</div>` : '';
 
       pages.push(`
         <div class="${i > 0 ? 'route-break' : ''}">
-          <h1>Rota: ${s.routeName || s.region}</h1>
-          <div class="subtitle">${new Date().toLocaleDateString('pt-BR')} • Carga ${i + 1} de ${suggestions.length}</div>
+          <h1>ROTA: ${(s.routeName || s.region).toUpperCase()}</h1>
+          <div class="subtitle">${new Date().toLocaleDateString('pt-BR')} | Carga ${i + 1} de ${suggestions.length}</div>
           ${assignLine}
           ${cityBlocks}
           <div class="grand-totals">
-            <span>Total Rota</span><span>Notas: ${totalNotas}</span><span>Entregas: ${totalEntregas}</span>
-            <span>Valor: ${fmt(totalValor)}</span><span>Peso: ${fmtN(totalPeso)}</span><span>Volumes: ${totalVolumes}</span>
+            <span>TOTAL ROTA</span>
+            <span>Qtd Total Entregas: ${totalEntregas}</span>
+            <span>Qtd Total Notas: ${totalNotas}</span>
+            <span>Valor: ${fmt(totalValor)}</span>
+            <span>Peso: ${fmtN(totalPeso)}</span>
+            <span>Volumes: ${totalVolumes}</span>
           </div>
           <div class="footer">Gerado em ${new Date().toLocaleString('pt-BR')} — Sistema de Ingestão Logística</div>
         </div>`);
