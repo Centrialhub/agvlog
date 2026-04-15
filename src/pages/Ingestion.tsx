@@ -230,8 +230,73 @@ export default function Ingestion() {
     setStep(2);
   };
 
-  const handleRoutingNext = (groups: RouteGroup[]) => {
+  const handleRoutingNext = async (groups: RouteGroup[]) => {
     setRouteGroups(groups);
+
+    // ── Auto-save valid docs to DB at grouping step so nothing is lost ──
+    const validDocs = validatedDocs.filter(d => !d.hasErrors && !d.isDuplicate && !(d as any)._savedId);
+    let savedCount = 0;
+    for (const doc of validDocs) {
+      try {
+        let freightValue: number | null = null;
+        let freightBreakdown: any = {};
+        let freightTableId: string | null = null;
+        if (currentTenant) {
+          const freightResult = await calculateFreight({
+            tenantId: currentTenant.id,
+            clientId: doc.matchedClientId,
+            destination: doc.source.recipientCity || null,
+            destinationState: doc.source.recipientState || null,
+            destinationMunicipality: doc.source.recipientCity || null,
+            totalValue: doc.source.totalValue || 0,
+            totalWeight: doc.source.totalWeight || 0,
+            totalPallets: doc.source.estimatedPallets || 0,
+          });
+          if (freightResult.success && freightResult.breakdown) {
+            freightValue = freightResult.value;
+            freightBreakdown = freightResult.breakdown;
+            freightTableId = freightResult.breakdown.tableId || null;
+          }
+        }
+
+        const created = await createDoc.mutateAsync({
+          document_type: 'inbound',
+          invoice_number: doc.source.invoiceNumber,
+          access_key: doc.source.accessKey,
+          remitter: doc.source.emitterName,
+          recipient: doc.source.recipientName,
+          recipient_city: doc.source.recipientCity || null,
+          recipient_state: doc.source.recipientState || null,
+          issue_date: doc.source.issueDate || null,
+          client_id: doc.matchedClientId,
+          product_summary: doc.source.items.map(i => i.description).join(', ').substring(0, 500),
+          pallet_count: doc.source.estimatedPallets,
+          weight_kg: doc.source.totalWeight,
+          value: doc.source.totalValue,
+          freight_value: freightValue,
+          freight_breakdown: freightBreakdown,
+          freight_table_id: freightTableId,
+          status: 'confirmed',
+        });
+
+        (doc as any)._savedId = created.id;
+
+        if (freightValue && freightBreakdown?.tableId && currentTenant) {
+          await logFreightCalculation(currentTenant.id, created.id, 'fiscal_document', freightBreakdown, user?.id);
+        }
+        savedCount++;
+      } catch {
+        // Will still proceed to grouping
+      }
+    }
+
+    if (savedCount > 0) {
+      toast({
+        title: `${savedCount} NF-e(s) salvas automaticamente`,
+        description: 'Documentos salvos no banco. Mesmo que feche a página, não serão perdidos.',
+      });
+    }
+
     // Convert route groups to LoadSuggestions for the GroupingStep
     const loadSuggestions: LoadSuggestion[] = groups.map(g => ({
       region: g.routeName,
