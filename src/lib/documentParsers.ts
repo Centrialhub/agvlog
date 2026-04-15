@@ -87,16 +87,25 @@ export function parseNFeXml(xmlString: string): ParsedNFe {
   const total = infNFe.getElementsByTagName('ICMSTot')[0];
   const totalValue = parseFloat(getTagText(total || infNFe, 'vNF')) || 0;
   const transp = infNFe.getElementsByTagName('transp')[0];
-  const vol = transp?.getElementsByTagName('vol')[0];
-  const totalWeight = parseFloat(getTagText(vol || infNFe, 'pesoB')) || 
-                      parseFloat(getTagText(vol || infNFe, 'pesoL')) || 0;
+  const volElements = transp?.getElementsByTagName('vol');
+  let totalWeight = 0;
+  let totalVolume = 0;
+
+  if (volElements && volElements.length > 0) {
+    for (let i = 0; i < volElements.length; i++) {
+      const v = volElements[i];
+      totalWeight += parseFloat(getTagText(v, 'pesoB')) || parseFloat(getTagText(v, 'pesoL')) || 0;
+      totalVolume += parseFloat(getTagText(v, 'qVol')) || 0;
+    }
+  }
+
   const estimatedPallets = Math.max(1, Math.ceil(totalWeight / 800));
 
   return {
     invoiceNumber, series, accessKey, issueDate,
     emitterName, emitterCnpj, recipientName, recipientCnpj,
     recipientCity, recipientState, recipientAddress,
-    items, totalValue, totalWeight, totalVolume: 0, estimatedPallets,
+    items, totalValue, totalWeight, totalVolume, estimatedPallets,
   };
 }
 
