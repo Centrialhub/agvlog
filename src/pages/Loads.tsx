@@ -103,6 +103,25 @@ export default function Loads() {
   const { data: vehicles = [] } = useVehicles();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [groupingOpen, setGroupingOpen] = useState(false);
+
+  // Count pending docs for badge
+  const { data: pendingCount = 0 } = useQuery({
+    queryKey: ['pending_docs_count', currentTenant?.id],
+    queryFn: async () => {
+      if (!currentTenant) return 0;
+      const { count, error } = await supabase
+        .from('fiscal_documents')
+        .select('id', { count: 'exact', head: true })
+        .eq('tenant_id', currentTenant.id)
+        .eq('status', 'confirmed')
+        .eq('document_type', 'inbound')
+        .is('load_id', null);
+      if (error) return 0;
+      return count || 0;
+    },
+    enabled: !!currentTenant,
+  });
 
   const { data: drivers = [] } = useQuery({
     queryKey: ['drivers', currentTenant?.id],
