@@ -270,6 +270,14 @@ export default function Loads() {
           })}
         </div>
       )}
+
+      <PendingDocsGrouping
+        open={groupingOpen}
+        onOpenChange={setGroupingOpen}
+        onCreated={() => {
+          refetch();
+        }}
+      />
     </div>
   );
 }
