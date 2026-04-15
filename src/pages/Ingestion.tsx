@@ -118,7 +118,12 @@ export default function Ingestion() {
   }, []);
 
   const handleGenerateSuggestions = () => {
-    setSuggestions(generateLoadSuggestions(validatedDocs, validatedOrders));
+    const routeRefs = operationalRoutes.map(r => ({
+      id: r.id,
+      name: r.name,
+      destinations: Array.isArray(r.destinations) ? r.destinations.map((d: any) => ({ name: typeof d === 'string' ? d : d.name || '' })) : [],
+    }));
+    setSuggestions(generateLoadSuggestions(validatedDocs, validatedOrders, routeRefs));
     setStep(2);
   };
 
