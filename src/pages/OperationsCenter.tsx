@@ -383,26 +383,57 @@ export default function OperationsCenter() {
 
   return (
     <div className="animate-fade-in space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-            <Activity className="h-6 w-6 text-primary" /> Centro de Operações
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Visão unificada da operação · Atualiza a cada 30s
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => navigate('/ingestion')}>
-            <FileText className="h-4 w-4 mr-1" /> Importar
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => navigate('/route-planning')}>
-            <MapPin className="h-4 w-4 mr-1" /> Roteirizar
-          </Button>
-          <Button size="sm" onClick={() => navigate('/loads')}>
-            <PackageCheck className="h-4 w-4 mr-1" /> Cargas
-          </Button>
+      {/* ── Welcome Banner ── */}
+      <div className="relative overflow-hidden rounded-2xl border bg-card p-6">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/8 via-primary/3 to-accent/5" />
+        <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full bg-primary/5 blur-2xl" />
+        <div className="absolute -bottom-12 -left-12 w-36 h-36 rounded-full bg-accent/5 blur-2xl" />
+
+        <div className="relative flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            {/* Avatar / Greeting Icon */}
+            <div className="h-14 w-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center shadow-sm">
+              {getGreetingIcon()}
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-bold text-foreground">
+                  {getGreeting()}, <span className="text-primary">{userName}</span>
+                </h1>
+              </div>
+              <p className="text-sm text-muted-foreground mt-0.5 capitalize">
+                {brasiliaDate}
+              </p>
+            </div>
+          </div>
+
+          {/* Clock + Actions */}
+          <div className="flex items-center gap-4">
+            {/* Clock */}
+            <div className="hidden md:flex flex-col items-end mr-2">
+              <div className="flex items-center gap-1.5">
+                <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-xs text-muted-foreground font-medium">Brasília</span>
+              </div>
+              <p className="text-2xl font-mono font-bold text-foreground tracking-wider tabular-nums mt-0.5">
+                {brasiliaTime}
+              </p>
+            </div>
+
+            <div className="h-10 w-px bg-border hidden md:block" />
+
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => navigate('/ingestion')}>
+                <FileText className="h-4 w-4 mr-1" /> Importar
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => navigate('/route-planning')}>
+                <MapPin className="h-4 w-4 mr-1" /> Roteirizar
+              </Button>
+              <Button size="sm" onClick={() => navigate('/loads')}>
+                <PackageCheck className="h-4 w-4 mr-1" /> Cargas
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
 
