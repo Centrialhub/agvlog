@@ -255,19 +255,6 @@ export default function Financial() {
           </p>
         </div>
         <div className="flex gap-2">
-          <div className="flex bg-muted rounded-lg p-0.5">
-            {(['7d', '30d', '90d', 'all'] as const).map(p => (
-              <button
-                key={p}
-                onClick={() => setPeriod(p)}
-                className={`px-3 py-1 text-xs rounded-md transition-colors ${
-                  period === p ? 'bg-background text-foreground shadow-sm font-medium' : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {p === '7d' ? '7 dias' : p === '30d' ? '30 dias' : p === '90d' ? '90 dias' : 'Tudo'}
-              </button>
-            ))}
-          </div>
           <Button variant="outline" size="sm" onClick={() => navigate('/receivables')}>
             <DollarSign className="h-4 w-4 mr-1" /> Contas a Receber
           </Button>
@@ -276,6 +263,125 @@ export default function Financial() {
           </Button>
         </div>
       </div>
+
+      {/* ── Collapsible Filter Bar ── */}
+      <Collapsible open={filtersOpen} onOpenChange={setFiltersOpen}>
+        <div className="flex items-center gap-2">
+          <CollapsibleTrigger asChild>
+            <Button
+              variant={filtersOpen || activeFilterCount > 0 ? 'default' : 'outline'}
+              size="sm"
+              className="gap-2"
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              Filtros Avançados
+              {activeFilterCount > 0 && (
+                <Badge variant="secondary" className="ml-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-[10px]">
+                  {activeFilterCount}
+                </Badge>
+              )}
+              <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${filtersOpen ? 'rotate-180' : ''}`} />
+            </Button>
+          </CollapsibleTrigger>
+
+          {/* Quick period pills */}
+          <div className="flex bg-muted rounded-lg p-0.5">
+            {(['7d', '30d', '90d', 'all'] as const).map(p => (
+              <button
+                key={p}
+                onClick={() => { setPeriod(p); setDateFrom(''); setDateTo(''); }}
+                className={`px-3 py-1 text-xs rounded-md transition-colors ${
+                  period === p && !dateFrom ? 'bg-background text-foreground shadow-sm font-medium' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {p === '7d' ? '7 dias' : p === '30d' ? '30 dias' : p === '90d' ? '90 dias' : 'Tudo'}
+              </button>
+            ))}
+          </div>
+
+          {activeFilterCount > 0 && (
+            <Button variant="ghost" size="sm" onClick={clearFilters} className="text-muted-foreground hover:text-foreground gap-1 text-xs">
+              <X className="h-3.5 w-3.5" /> Limpar filtros
+            </Button>
+          )}
+        </div>
+
+        <CollapsibleContent className="mt-3">
+          <Card className="border-dashed">
+            <CardContent className="p-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                {/* Date range */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Data início</label>
+                  <Input
+                    type="date"
+                    value={dateFrom}
+                    onChange={e => setDateFrom(e.target.value)}
+                    className="h-8 text-xs"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Data fim</label>
+                  <Input
+                    type="date"
+                    value={dateTo}
+                    onChange={e => setDateTo(e.target.value)}
+                    className="h-8 text-xs"
+                  />
+                </div>
+
+                {/* Client */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Cliente</label>
+                  <Select value={selectedClient} onValueChange={setSelectedClient}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="Todos" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos os clientes</SelectItem>
+                      {clients.map((c: any) => (
+                        <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Document type */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Tipo Documento</label>
+                  <Select value={docType} onValueChange={setDocType}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="Todos" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      <SelectItem value="inbound">NF-e Entrada</SelectItem>
+                      <SelectItem value="outbound">CT-e / Saída</SelectItem>
+                      <SelectItem value="transfer">Transferência</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Expense category */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Categoria Despesa</label>
+                  <Select value={expenseCategory} onValueChange={setExpenseCategory}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="Todas" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas</SelectItem>
+                      {expenseCategories.map((cat: string) => (
+                        <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </CollapsibleContent>
+      </Collapsible>
 
       {/* ── Hero KPIs ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
