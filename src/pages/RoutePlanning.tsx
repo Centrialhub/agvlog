@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
@@ -72,6 +73,7 @@ export default function RoutePlanning() {
   const { user } = useAuth();
   const { data: vehicles = [] } = useVehicles();
   const qc = useQueryClient();
+  const navigate = useNavigate();
 
   // Cargas pendentes (planned, sem trip vinculada)
   const { data: pendingLoads = [], isLoading } = useQuery({
@@ -261,7 +263,12 @@ export default function RoutePlanning() {
       qc.invalidateQueries({ queryKey: ['loads'] });
       qc.invalidateQueries({ queryKey: ['pending_loads_for_routing'] });
       qc.invalidateQueries({ queryKey: ['dispatch_trips'] });
-      toast.success('Rota despachada com sucesso!');
+      toast.success('Rota despachada! Redirecionando para a carga...');
+      // Redirecionar para o detalhe da primeira carga para faturamento/CT-e
+      const firstLoadId = route.loads[0]?.id;
+      if (firstLoadId) {
+        navigate(`/loads/${firstLoadId}`);
+      }
     },
     onError: (e: any) => toast.error(e.message),
   });
