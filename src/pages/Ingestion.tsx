@@ -123,7 +123,7 @@ export default function Ingestion() {
       if (fb.kind === 'xml') {
         try {
           const parsed = parseNFeXml(fb.text);
-          docs.push(validateNFe(parsed, fb.file.name, existingDocs, clients));
+          docs.push(validateNFe(parsed, fb.file.name, existingDocs, clients, indexes));
         } catch (e: any) {
           docs.push({
             source: { invoiceNumber: '', accessKey: '', items: [] } as any,
