@@ -1146,6 +1146,7 @@ export type Database = {
           product_summary: string | null
           recipient: string | null
           recipient_city: string | null
+          recipient_neighborhood: string | null
           recipient_state: string | null
           remitter: string | null
           status: string
@@ -1178,6 +1179,7 @@ export type Database = {
           product_summary?: string | null
           recipient?: string | null
           recipient_city?: string | null
+          recipient_neighborhood?: string | null
           recipient_state?: string | null
           remitter?: string | null
           status?: string
@@ -1210,6 +1212,7 @@ export type Database = {
           product_summary?: string | null
           recipient?: string | null
           recipient_city?: string | null
+          recipient_neighborhood?: string | null
           recipient_state?: string | null
           remitter?: string | null
           status?: string
