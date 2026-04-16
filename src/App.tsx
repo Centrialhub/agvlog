@@ -60,10 +60,26 @@ const DriverJourney = lazy(() => import("@/pages/driver/DriverJourney"));
 const DriverExpenses = lazy(() => import("@/pages/driver/DriverExpenses"));
 const DriverChecklist = lazy(() => import("@/pages/driver/DriverChecklist"));
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 2,      // 2 min — evita refetch ao navegar entre páginas
+      gcTime: 1000 * 60 * 10,         // 10 min — mantém cache em memória
+      refetchOnWindowFocus: false,     // não refaz ao voltar à aba
+      retry: 1,
+    },
+  },
+});
 
 function PageLoader() {
-  return <div className="flex h-64 items-center justify-center text-muted-foreground text-sm">Carregando...</div>;
+  return (
+    <div className="flex h-64 items-center justify-center">
+      <div className="flex flex-col items-center gap-3">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+        <span className="text-sm text-muted-foreground">Carregando...</span>
+      </div>
+    </div>
+  );
 }
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
