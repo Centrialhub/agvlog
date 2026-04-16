@@ -149,7 +149,7 @@ export default function Loads() {
     try {
       const { data: load } = await supabase
         .from('loads')
-        .select('*, vehicles(plate, nickname), drivers(name)')
+        .select('*, vehicles(plate, nickname, max_pallets), drivers(name)')
         .eq('id', loadId)
         .eq('tenant_id', currentTenant.id)
         .maybeSingle();
@@ -157,80 +157,40 @@ export default function Loads() {
 
       const { data: items } = await supabase
         .from('load_items')
-        .select('*, fiscal_documents(invoice_number, remitter, recipient, recipient_city, recipient_state, value, weight_kg, issue_date)')
+        .select('*, fiscal_documents(invoice_number, remitter, recipient, recipient_city, recipient_state, value, weight_kg, issue_date, product_summary)')
         .eq('load_id', loadId)
         .order('created_at');
 
-      const itemsList = items || [];
-      const totalWeight = itemsList.reduce((s: number, i: any) => s + (Number(i.weight_kg) || Number(i.fiscal_documents?.weight_kg) || 0), 0);
-      const totalPallets = itemsList.reduce((s: number, i: any) => s + (Number(i.pallet_count) || 0), 0);
-      const totalValue = itemsList.reduce((s: number, i: any) => s + (Number(i.fiscal_documents?.value) || 0), 0);
       const veh: any = (load as any).vehicles;
-      const routeName = load.destination || load.load_number;
+      const drv: any = (load as any).drivers;
 
-      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-
-      doc.setFontSize(16);
-      doc.text('ROMANEIO DE TRANSPORTE', 148, 15, { align: 'center' });
-      doc.setFontSize(10);
-      doc.text(`Rota: ${routeName}`, 14, 25);
-      const now = new Date();
-      const dataStr = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-      doc.text(`Data: ${dataStr}`, 14, 30);
-      if (veh) doc.text(`Veículo: ${veh.plate} ${veh.nickname ? `(${veh.nickname})` : ''}`, 14, 35);
-      doc.text(`Total: 1 cargas | ${itemsList.length} NF-es | ${totalWeight.toFixed(0)} kg | ${totalPallets} paletes`, 14, 40);
-
-      let startY = 46;
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'bold');
-      doc.text(`${load.destination || 'Sem destino'} — ${load.load_number} (${itemsList.length} NF-es)`, 14, startY);
-      startY += 4;
-
-      autoTable(doc, {
-        startY,
-        head: [['#', 'Nº NF', 'Remetente', 'Destinatário', 'Cidade', 'Peso (kg)', 'Vol.', 'Valor NF', 'Emissão']],
-        body: itemsList.map((item: any, i: number) => {
-          const fd = item.fiscal_documents || {};
-          let emissao = '—';
-          if (fd.issue_date) {
-            const d = new Date(fd.issue_date + 'T12:00:00');
-            emissao = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getFullYear()).slice(-2)}`;
-          }
-          return [
-            i + 1,
-            fd.invoice_number || '—',
-            fd.remitter || '—',
-            fd.recipient || '—',
-            fd.recipient_city || '—',
-            fd.weight_kg ? Number(fd.weight_kg).toFixed(1) : '—',
-            item.pallet_count || 0,
-            fd.value ? `R$ ${Number(fd.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—',
-            emissao,
-          ];
-        }),
-        foot: [['', '', '', '', 'SUBTOTAL:',
-          `${totalWeight.toFixed(0)}`,
-          `${totalPallets}`,
-          `R$ ${totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-          '']],
-        styles: { fontSize: 7, cellPadding: 1.5 },
-        headStyles: { fillColor: [41, 65, 107], fontStyle: 'bold' },
-        footStyles: { fillColor: [230, 230, 230], textColor: [0, 0, 0], fontStyle: 'bold' },
-        theme: 'grid',
+      const docs: RomaneioDoc[] = (items || []).map((it: any) => {
+        const fd = it.fiscal_documents || {};
+        const emissao = fd.issue_date
+          ? new Date(fd.issue_date + 'T12:00:00').toLocaleDateString('pt-BR')
+          : '';
+        return {
+          city: fd.recipient_city || 'SEM CIDADE',
+          state: fd.recipient_state || '',
+          remetente: fd.remitter || '—',
+          destinatario: fd.recipient || '—',
+          bairro: '—',
+          nfNumber: fd.invoice_number || '—',
+          emissao,
+          valor: Number(fd.value) || 0,
+          peso: Number(it.weight_kg) || Number(fd.weight_kg) || 0,
+          volumes: Number(it.pallet_count) || 0,
+        };
       });
 
-      const finalY = (doc as any).lastAutoTable.finalY + 15;
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'normal');
-      doc.line(14, finalY + 10, 80, finalY + 10);
-      doc.text('Motorista', 47, finalY + 15, { align: 'center' });
-      doc.line(100, finalY + 10, 166, finalY + 10);
-      doc.text('Conferente', 133, finalY + 15, { align: 'center' });
-      doc.line(186, finalY + 10, 272, finalY + 10);
-      doc.text('Responsável', 229, finalY + 15, { align: 'center' });
+      printRomaneioRoutes([{
+        routeName: load.destination || load.load_number,
+        vehicleInfo: veh ? `Veículo: ${veh.plate}${veh.nickname ? ` (${veh.nickname})` : ''}${veh.max_pallets ? ` - ${veh.max_pallets}p` : ''}` : undefined,
+        driverInfo: drv ? `Motorista: ${drv.name}` : undefined,
+        docs,
+      }], `Romaneio ${load.load_number}`);
 
-      doc.save(`romaneio-${routeName.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`);
-      toast({ title: 'Romaneio gerado' });
+      toast({ title: 'Romaneio aberto para impressão' });
     } catch (e: any) {
       toast({ title: 'Erro ao gerar romaneio', description: e.message, variant: 'destructive' });
     }
