@@ -63,10 +63,11 @@ export function parseNFeXml(xmlString: string): ParsedNFe {
   const enderDest = dest?.getElementsByTagName('enderDest')[0];
   const recipientCity = getTagText(enderDest || infNFe, 'xMun');
   const recipientState = getTagText(enderDest || infNFe, 'UF');
+  const recipientNeighborhood = getTagText(enderDest || infNFe, 'xBairro');
   const recipientAddress = [
     getTagText(enderDest || infNFe, 'xLgr'),
     getTagText(enderDest || infNFe, 'nro'),
-    getTagText(enderDest || infNFe, 'xBairro'),
+    recipientNeighborhood,
   ].filter(Boolean).join(', ');
 
   const detElements = infNFe.getElementsByTagName('det');
