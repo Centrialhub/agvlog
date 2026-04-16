@@ -313,28 +313,40 @@ export default function LoadReallocation() {
         </div>
       )}
 
-      {sourceLoadId && targetLoadId && (
-        <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border">
-          {selectedCount > 0 ? (
-            <>
-              <Badge className="bg-primary/10 text-primary">{selectedCount} selecionado(s)</Badge>
-              <span className="text-xs text-muted-foreground">
-                {selectedPallets} pal · {selectedWeight.toLocaleString('pt-BR')} kg
-              </span>
-              <div className="flex-1" />
-              <Button size="sm" onClick={handleMoveItems} disabled={moving}>
-                {moving ? 'Movendo...' : `Mover para ${targetLoad?.load_number}`}
-                <ArrowRightLeft className="h-3.5 w-3.5 ml-2" />
-              </Button>
-            </>
-          ) : (
-            <>
-              <AlertTriangle className="h-4 w-4 text-warning" />
-              <span className="text-xs text-muted-foreground">Clique nos itens da carga origem para selecionar e mover para a carga destino</span>
-            </>
-          )}
-        </div>
-      )}
+      {/* Action bar — sempre visível */}
+      <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border flex-wrap">
+        {!sourceLoadId || !targetLoadId ? (
+          <>
+            <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
+            <span className="text-xs text-muted-foreground">
+              Passo 1 — Selecione a <b>carga de origem</b> e a <b>carga de destino</b> nos campos acima.
+            </span>
+          </>
+        ) : selectedCount === 0 ? (
+          <>
+            <Package className="h-4 w-4 text-muted-foreground shrink-0" />
+            <span className="text-xs text-muted-foreground">
+              Passo 2 — Clique nos itens (NF-es) da carga origem que quer mover para <b>{targetLoad?.load_number}</b>.
+            </span>
+            <div className="flex-1" />
+            <Button size="sm" disabled>
+              <ArrowRightLeft className="h-3.5 w-3.5 mr-2" /> Mover (selecione itens)
+            </Button>
+          </>
+        ) : (
+          <>
+            <Badge className="bg-primary/10 text-primary">{selectedCount} selecionado(s)</Badge>
+            <span className="text-xs text-muted-foreground">
+              {selectedPallets} pal · {selectedWeight.toLocaleString('pt-BR')} kg
+            </span>
+            <div className="flex-1" />
+            <Button size="sm" onClick={handleMoveItems} disabled={moving}>
+              {moving ? 'Movendo...' : `Mover para ${targetLoad?.load_number}`}
+              <ArrowRightLeft className="h-3.5 w-3.5 ml-2" />
+            </Button>
+          </>
+        )}
+      </div>
 
       {/* Side by side loads */}
       {sourceLoadId && targetLoadId ? (
