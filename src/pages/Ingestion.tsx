@@ -308,6 +308,7 @@ export default function Ingestion() {
           recipient_city: doc.source.recipientCity || null,
           recipient_state: doc.source.recipientState || null,
           recipient_neighborhood: doc.source.recipientNeighborhood || null,
+          issue_date: doc.source.issueDate || null,
           product_summary: doc.source.items.map(i => i.description).join(', ').substring(0, 500),
           pallet_count: doc.source.estimatedPallets,
           weight_kg: doc.source.totalWeight,
