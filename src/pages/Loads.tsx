@@ -164,11 +164,16 @@ export default function Loads() {
       const veh: any = (load as any).vehicles;
       const drv: any = (load as any).drivers;
 
+      const fmtEmissao = (raw: any): string => {
+        if (!raw) return '';
+        const s = String(raw).substring(0, 10);
+        const d = new Date(s + 'T12:00:00');
+        return isNaN(d.getTime()) ? '' : d.toLocaleDateString('pt-BR');
+      };
+
       const docs: RomaneioDoc[] = (items || []).map((it: any) => {
         const fd = it.fiscal_documents || {};
-        const emissao = fd.issue_date
-          ? new Date(fd.issue_date + 'T12:00:00').toLocaleDateString('pt-BR')
-          : '';
+        const emissao = fmtEmissao(fd.issue_date);
         return {
           city: fd.recipient_city || 'SEM CIDADE',
           state: fd.recipient_state || '',
