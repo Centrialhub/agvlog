@@ -12,8 +12,10 @@ import { useCreateLoadItem } from '@/hooks/useLoadItems';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useOperationalRoutes, useUpdateOperationalRoute } from '@/hooks/useOperationalRoutes';
 import { useToast } from '@/hooks/use-toast';
-import { Upload, FileText } from 'lucide-react';
+import { Upload, FileText, FileStack } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import PendingDocsGrouping from '@/components/loads/PendingDocsGrouping';
 import IngestionStepper from '@/components/ingestion/IngestionStepper';
 import UploadStep from '@/components/ingestion/UploadStep';
 import ValidationStep from '@/components/ingestion/ValidationStep';
@@ -79,6 +81,7 @@ export default function Ingestion() {
   }, [operationalRoutes, updateRoute, toast]);
 
   const [step, setStep] = useState(0);
+  const [resumeOpen, setResumeOpen] = useState(false);
   const [validatedDocs, setValidatedDocs] = useState<ValidatedDocument[]>([]);
   const [validatedOrders, setValidatedOrders] = useState<ValidatedOrder[]>([]);
   const [suggestions, setSuggestions] = useState<LoadSuggestion[]>([]);
@@ -562,10 +565,16 @@ export default function Ingestion() {
             return (
               <Card className="mt-4 border-warning/30">
                 <CardContent className="py-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <FileText className="h-4 w-4 text-warning" />
-                    <h3 className="text-sm font-semibold">{pending.length} NF-e(s) pendentes sem carga</h3>
-                    <span className="text-[10px] text-muted-foreground">Salvas em importações anteriores e ainda não vinculadas a nenhuma carga</span>
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <FileText className="h-4 w-4 text-warning" />
+                      <h3 className="text-sm font-semibold">{pending.length} NF-e(s) pendentes sem carga</h3>
+                      <span className="text-[10px] text-muted-foreground">Salvas em importações anteriores e ainda não vinculadas a nenhuma carga</span>
+                    </div>
+                    <Button size="sm" onClick={() => setResumeOpen(true)} className="shrink-0 gap-1.5">
+                      <FileStack className="h-3.5 w-3.5" />
+                      Retomar agrupamento
+                    </Button>
                   </div>
                   <div className="space-y-1 max-h-48 overflow-y-auto">
                     {pending.slice(0, 20).map(d => (
@@ -585,7 +594,7 @@ export default function Ingestion() {
                     {pending.length > 20 && <div className="text-[10px] text-muted-foreground text-center py-1">+ {pending.length - 20} mais...</div>}
                   </div>
                   <p className="text-[10px] text-muted-foreground mt-2">
-                    Para agrupar, vá em <a href="/fiscal" className="text-primary underline">Documentos Fiscais</a> e filtre por "Sem carga", ou importe novos XMLs e use o fluxo de roteirização.
+                    Clique em <strong>Retomar agrupamento</strong> para reagrupar essas NF-es por rota e atribuir veículos sem precisar reimportar.
                   </p>
                 </CardContent>
               </Card>
@@ -593,6 +602,12 @@ export default function Ingestion() {
           })()}
         </>
       )}
+
+      <PendingDocsGrouping
+        open={resumeOpen}
+        onOpenChange={setResumeOpen}
+        onCreated={() => setResumeOpen(false)}
+      />
       {step === 1 && (
         <ValidationStep
           docs={validatedDocs}
