@@ -3071,6 +3071,7 @@ export type Database = {
           destinations: Json | null
           id: string
           name: string
+          periodicity_default: string | null
           region_name: string | null
           tenant_id: string
           updated_at: string
@@ -3085,6 +3086,7 @@ export type Database = {
           destinations?: Json | null
           id?: string
           name: string
+          periodicity_default?: string | null
           region_name?: string | null
           tenant_id: string
           updated_at?: string
@@ -3099,6 +3101,7 @@ export type Database = {
           destinations?: Json | null
           id?: string
           name?: string
+          periodicity_default?: string | null
           region_name?: string | null
           tenant_id?: string
           updated_at?: string
