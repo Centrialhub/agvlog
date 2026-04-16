@@ -109,6 +109,9 @@ export default function Ingestion() {
       })
     );
 
+    // Build validation indexes ONCE (O(N+M) lookups instead of O(N*M))
+    const indexes = buildValidationIndexes(existingDocs, clients);
+
     // Build a Map for client lookup once (used inside validateNFe via clients array — already O(n) per doc, so we keep clients but skip rebuilds)
     const docs: ValidatedDocument[] = [];
     const orderRows: ParsedOrderRow[] = [];
