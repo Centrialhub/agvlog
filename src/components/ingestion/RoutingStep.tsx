@@ -95,6 +95,7 @@ export default function RoutingStep({ docs, orders, routes, onBack, onNext, onLe
 
   const [groups, setGroups] = useState<RouteGroup[]>(initialGroups);
   const [newCityInputs, setNewCityInputs] = useState<Record<number, string>>({});
+  const [advancing, setAdvancing] = useState(false);
   const userTouched = useRef(false);
 
   // Re-sync groups when initialGroups change (e.g. routes loaded after mount),
