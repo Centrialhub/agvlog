@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowRightLeft, Truck, Package, AlertTriangle, CheckCircle, ChevronRight, History, X, ExternalLink } from 'lucide-react';
+import { ArrowRightLeft, Truck, Package, AlertTriangle, CheckCircle, ChevronRight, History, X, ExternalLink, Route as RouteIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
@@ -235,13 +235,21 @@ export default function LoadReallocation() {
 
   return (
     <div className="animate-fade-in space-y-5 max-w-6xl">
-      <div>
-        <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
-          <ArrowRightLeft className="h-5 w-5 text-primary" /> Realocação de Cargas
-        </h1>
-        <p className="text-xs text-muted-foreground mt-0.5">
-          Mova NF-es e itens entre cargas. Troque veículos quando necessário.
-        </p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
+            <ArrowRightLeft className="h-5 w-5 text-primary" /> Mover Cargas entre Veículos
+          </h1>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Transfira NF-es e itens de uma carga para outra (e assim mude qual veículo as transporta).
+          </p>
+        </div>
+        <Link to="/route-planning">
+          <Button variant="outline" size="sm" className="gap-2">
+            <RouteIcon className="h-3.5 w-3.5" />
+            Voltar para Roteirização
+          </Button>
+        </Link>
       </div>
 
       {/* Load selectors */}
@@ -322,11 +330,7 @@ export default function LoadReallocation() {
           ) : (
             <>
               <AlertTriangle className="h-4 w-4 text-warning" />
-              <span className="text-xs text-muted-foreground">Clique nos itens da carga origem para selecionar e mover</span>
-              <div className="flex-1" />
-              <Button size="sm" variant="outline" onClick={handleSwapVehicles}>
-                <Truck className="h-3.5 w-3.5 mr-2" /> Trocar Veículos
-              </Button>
+              <span className="text-xs text-muted-foreground">Clique nos itens da carga origem para selecionar e mover para a carga destino</span>
             </>
           )}
         </div>

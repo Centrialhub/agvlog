@@ -23,7 +23,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import {
   PackageCheck, ArrowLeft, ArrowRight, FileText, Truck, User,
-  MapPin, Calendar, AlertTriangle, CheckCircle, Clock, Send,
+  MapPin, Calendar, AlertTriangle, CheckCircle, Clock, Send, Route as RouteIcon,
 } from 'lucide-react';
 
 function useLoad(id: string | undefined) {
@@ -284,6 +284,9 @@ export default function LoadDetail() {
 
         {/* Actions */}
         <div className="flex gap-2 flex-wrap shrink-0">
+          <Button size="sm" variant="ghost" onClick={() => navigate('/route-planning')} title="Voltar para reanalisar / reimprimir romaneio">
+            <RouteIcon className="h-3.5 w-3.5 mr-1" /> Roteirização
+          </Button>
           {nextStatuses.map(ns => (
             <Button key={ns} size="sm" variant="outline" onClick={() => handleStatusChange(ns)} disabled={updateLoad.isPending}>
               <ArrowRight className="h-3 w-3 mr-1" />
