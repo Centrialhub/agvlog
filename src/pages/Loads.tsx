@@ -9,7 +9,9 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Search, PackageCheck, Truck, MapPin, ArrowRight, FileStack, Trash2, MoreVertical, X, CheckSquare } from 'lucide-react';
+import { Search, PackageCheck, Truck, MapPin, ArrowRight, FileStack, Trash2, MoreVertical, X, CheckSquare, Printer, Route as RouteIcon } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -142,6 +144,73 @@ export default function Loads() {
       setConfirmBulkDelete(false);
     }
   };
+
+  const printRomaneio = useCallback(async (loadId: string) => {
+    if (!currentTenant) return;
+    try {
+      // Fetch load + items + fiscal docs
+      const { data: load } = await supabase
+        .from('loads')
+        .select('*, vehicles(plate, nickname), drivers(name)')
+        .eq('id', loadId)
+        .eq('tenant_id', currentTenant.id)
+        .maybeSingle();
+      if (!load) throw new Error('Carga não encontrada');
+
+      const { data: items } = await supabase
+        .from('load_items')
+        .select('*, fiscal_documents(invoice_number, remitter, recipient, recipient_city, recipient_state, value, weight_kg)')
+        .eq('load_id', loadId)
+        .order('created_at');
+
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+      doc.setFontSize(16);
+      doc.text('ROMANEIO DE TRANSPORTE', 148, 15, { align: 'center' });
+      doc.setFontSize(10);
+      doc.text(`Carga: ${load.load_number}`, 14, 25);
+      doc.text(`Destino: ${load.destination || '—'}`, 14, 31);
+      doc.text(`Veículo: ${(load as any).vehicles?.plate || '—'}`, 14, 37);
+      doc.text(`Motorista: ${(load as any).drivers?.name || '—'}`, 100, 37);
+      doc.text(`Data: ${new Date().toLocaleDateString('pt-BR')}`, 230, 25);
+
+      const rows = (items || []).map((it: any, idx: number) => {
+        const fd = it.fiscal_documents || {};
+        return [
+          String(idx + 1),
+          fd.invoice_number || '—',
+          fd.recipient || it.item_description || '—',
+          `${fd.recipient_city || ''}${fd.recipient_state ? '/' + fd.recipient_state : ''}`,
+          String(it.pallet_count || 0),
+          (it.weight_kg || 0).toLocaleString('pt-BR'),
+          (fd.value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+        ];
+      });
+
+      autoTable(doc, {
+        startY: 45,
+        head: [['#', 'NF-e', 'Destinatário', 'Cidade/UF', 'Pal', 'Peso (kg)', 'Valor']],
+        body: rows,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [40, 40, 40] },
+      });
+
+      const finalY = (doc as any).lastAutoTable.finalY + 10;
+      const totalPal = (items || []).reduce((s: number, i: any) => s + (i.pallet_count || 0), 0);
+      const totalKg = (items || []).reduce((s: number, i: any) => s + (i.weight_kg || 0), 0);
+      doc.setFontSize(10);
+      doc.text(`Total NF-es: ${(items || []).length}   |   Paletes: ${totalPal}   |   Peso: ${totalKg.toLocaleString('pt-BR')} kg`, 14, finalY);
+
+      doc.line(20, finalY + 25, 100, finalY + 25);
+      doc.text('Motorista', 60, finalY + 30, { align: 'center' });
+      doc.line(180, finalY + 25, 260, finalY + 25);
+      doc.text('Responsável', 220, finalY + 30, { align: 'center' });
+
+      doc.save(`romaneio-${load.load_number}.pdf`);
+      toast({ title: 'Romaneio gerado' });
+    } catch (e: any) {
+      toast({ title: 'Erro ao gerar romaneio', description: e.message, variant: 'destructive' });
+    }
+  }, [currentTenant, toast]);
 
   const selectedCount = selected.size;
   const allFilteredSelected = filtered.length > 0 && filtered.every(l => selected.has(l.id));
@@ -303,6 +372,12 @@ export default function Loads() {
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={e => { e.stopPropagation(); navigate(`/loads/${l.id}`); }}>
                               Abrir detalhes
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={e => { e.stopPropagation(); printRomaneio(l.id); }}>
+                              <Printer className="h-4 w-4 mr-2" /> Reimprimir romaneio
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={e => { e.stopPropagation(); navigate('/route-planning'); }}>
+                              <RouteIcon className="h-4 w-4 mr-2" /> Reanalisar na Roteirização
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               className="text-destructive focus:text-destructive"
