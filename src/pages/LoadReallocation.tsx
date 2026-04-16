@@ -8,10 +8,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowRightLeft, Truck, Package, AlertTriangle, CheckCircle, ChevronRight, History, X } from 'lucide-react';
+import { ArrowRightLeft, Truck, Package, AlertTriangle, CheckCircle, ChevronRight, History, X, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 
 function LoadColumn({ load, items, vehicles, selectedItems, onToggleItem, isTarget }: {
   load: Load;
@@ -34,9 +35,17 @@ function LoadColumn({ load, items, vehicles, selectedItems, onToggleItem, isTarg
   return (
     <Card className={`flex-1 min-w-0 ${isTarget ? 'ring-2 ring-primary/30' : ''}`}>
       <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <CardTitle className="text-sm font-semibold truncate">{load.load_number}</CardTitle>
-          <Badge variant="outline" className="text-[10px] shrink-0">{load.destination || 'Sem destino'}</Badge>
+          <div className="flex items-center gap-1 shrink-0">
+            <Badge variant="outline" className="text-[10px]">{load.destination || 'Sem destino'}</Badge>
+            <Link to={`/loads/${load.id}`}>
+              <Button size="sm" variant="ghost" className="h-6 px-2 gap-1 text-[10px]" title="Abrir carga para fechar/emitir CT-e">
+                <ExternalLink className="h-3 w-3" />
+                Abrir
+              </Button>
+            </Link>
+          </div>
         </div>
         <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
           <Truck className="h-3 w-3" />
