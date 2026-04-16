@@ -21,8 +21,7 @@ import {
   FileText, Send, Download,
 } from 'lucide-react';
 import { format } from 'date-fns';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { printRomaneioRoutes, RomaneioDoc } from '@/lib/romaneioPrint';
 
 /* ────────────── types ────────────── */
 interface LoadItem {
