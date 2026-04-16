@@ -15,12 +15,15 @@ import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
-function LoadColumn({ load, items, vehicles, selectedItems, onToggleItem, isTarget }: {
+type FilterField = 'all' | 'remitter' | 'recipient' | 'city' | 'invoice';
+
+function LoadColumn({ load, items, vehicles, selectedItems, onToggleItem, onSelectMany, isTarget }: {
   load: Load;
   items: LoadItem[];
   vehicles: any[];
   selectedItems: Set<string>;
   onToggleItem: (id: string) => void;
+  onSelectMany?: (ids: string[], checked: boolean) => void;
   isTarget?: boolean;
 }) {
   const vehicle = vehicles.find(v => v.id === load.vehicle_id);
@@ -33,9 +36,37 @@ function LoadColumn({ load, items, vehicles, selectedItems, onToggleItem, isTarg
   const isOverPallet = palletPct > 100;
   const isOverWeight = weightPct > 100;
 
+  const [search, setSearch] = useState('');
+  const [field, setField] = useState<FilterField>('all');
+
+  const filteredItems = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter(i => {
+      const fd: any = i.fiscal_documents || {};
+      const desc = (i.item_description || '').toLowerCase();
+      const remitter = (fd.remitter || '').toLowerCase();
+      const recipient = (fd.recipient || '').toLowerCase();
+      const city = (fd.recipient_city || '').toLowerCase();
+      const invoice = (fd.invoice_number || '').toLowerCase();
+      switch (field) {
+        case 'remitter': return remitter.includes(q);
+        case 'recipient': return recipient.includes(q);
+        case 'city': return city.includes(q);
+        case 'invoice': return invoice.includes(q);
+        default:
+          return desc.includes(q) || remitter.includes(q) || recipient.includes(q) || city.includes(q) || invoice.includes(q);
+      }
+    });
+  }, [items, search, field]);
+
+  const filteredIds = useMemo(() => filteredItems.map(i => i.id), [filteredItems]);
+  const allFilteredSelected = filteredIds.length > 0 && filteredIds.every(id => selectedItems.has(id));
+  const canSelect = !isTarget && !!onSelectMany;
+
   return (
     <Card className={`flex-1 min-w-0 ${isTarget ? 'ring-2 ring-primary/30' : ''}`}>
-      <CardHeader className="pb-2">
+      <CardHeader className="pb-2 space-y-2">
         <div className="flex items-center justify-between gap-2">
           <CardTitle className="text-sm font-semibold truncate">{load.load_number}</CardTitle>
           <div className="flex items-center gap-1 shrink-0">
@@ -76,12 +107,66 @@ function LoadColumn({ load, items, vehicles, selectedItems, onToggleItem, isTarg
             )}
           </div>
         )}
+
+        {/* Search + filter */}
+        <div className="flex gap-1.5 pt-1">
+          <Select value={field} onValueChange={(v) => setField(v as FilterField)}>
+            <SelectTrigger className="h-7 w-[110px] text-[10px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all" className="text-xs">Tudo</SelectItem>
+              <SelectItem value="remitter" className="text-xs">Remetente</SelectItem>
+              <SelectItem value="recipient" className="text-xs">Destinatário</SelectItem>
+              <SelectItem value="city" className="text-xs">Cidade</SelectItem>
+              <SelectItem value="invoice" className="text-xs">Nº NF</SelectItem>
+            </SelectContent>
+          </Select>
+          <div className="relative flex-1">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar..."
+              className="h-7 pl-7 text-xs"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {canSelect && (
+          <div className="flex items-center justify-between text-[10px] pt-0.5">
+            <button
+              onClick={() => onSelectMany!(filteredIds, !allFilteredSelected)}
+              disabled={filteredIds.length === 0}
+              className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground disabled:opacity-40"
+            >
+              {allFilteredSelected
+                ? <CheckSquare className="h-3.5 w-3.5 text-primary" />
+                : <Square className="h-3.5 w-3.5" />}
+              {allFilteredSelected ? 'Desmarcar' : 'Marcar'} {search ? `filtrados (${filteredIds.length})` : `todos (${filteredIds.length})`}
+            </button>
+            <span className="text-muted-foreground">
+              {filteredItems.length} de {items.length}
+            </span>
+          </div>
+        )}
       </CardHeader>
       <CardContent className="p-2 space-y-1 max-h-[400px] overflow-y-auto">
-        {items.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-4">Nenhum item nesta carga</p>
-        ) : items.map(item => {
+        {filteredItems.length === 0 ? (
+          <p className="text-xs text-muted-foreground text-center py-4">
+            {items.length === 0 ? 'Nenhum item nesta carga' : 'Nenhum item encontrado'}
+          </p>
+        ) : filteredItems.map(item => {
           const selected = selectedItems.has(item.id);
+          const fd: any = item.fiscal_documents || {};
           return (
             <button
               key={item.id}
@@ -97,11 +182,12 @@ function LoadColumn({ load, items, vehicles, selectedItems, onToggleItem, isTarg
                 <span className="flex-1 truncate font-medium">{item.item_description}</span>
                 {selected && <CheckCircle className="h-3 w-3 text-primary shrink-0" />}
               </div>
-              <div className="flex gap-3 mt-1 text-[10px] text-muted-foreground pl-5">
+              <div className="flex gap-3 mt-1 text-[10px] text-muted-foreground pl-5 flex-wrap">
                 {item.pallet_count > 0 && <span>{item.pallet_count} pal</span>}
                 {item.weight_kg > 0 && <span>{item.weight_kg.toLocaleString('pt-BR')} kg</span>}
                 {item.quantity > 0 && <span>{item.quantity} un</span>}
-                {item.fiscal_documents?.invoice_number && <span>NF {item.fiscal_documents.invoice_number}</span>}
+                {fd.invoice_number && <span>NF {fd.invoice_number}</span>}
+                {fd.recipient_city && <span>{fd.recipient_city}{fd.recipient_state ? `/${fd.recipient_state}` : ''}</span>}
               </div>
             </button>
           );
