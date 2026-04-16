@@ -573,6 +573,10 @@ export default function OperationsCenter() {
                 ))}
               </MapContainer>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Alerts + Incidents */}
         <div className="lg:col-span-2 space-y-4">
           {/* Active Alerts */}
           <Card className={`${alerts.length > 0 ? 'border-destructive/20' : ''}`}>
