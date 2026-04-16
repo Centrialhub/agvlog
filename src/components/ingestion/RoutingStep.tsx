@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { ValidatedDocument, ValidatedOrder, OperationalRouteRef, findRouteForCity } from '@/lib/ingestionValidator';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -95,6 +95,15 @@ export default function RoutingStep({ docs, orders, routes, onBack, onNext, onLe
 
   const [groups, setGroups] = useState<RouteGroup[]>(initialGroups);
   const [newCityInputs, setNewCityInputs] = useState<Record<number, string>>({});
+  const userTouched = useRef(false);
+
+  // Re-sync groups when initialGroups change (e.g. routes loaded after mount),
+  // but only if the user hasn't manually edited yet.
+  useEffect(() => {
+    if (!userTouched.current) {
+      setGroups(initialGroups);
+    }
+  }, [initialGroups]);
 
   // Pull modal state
   const [pullTargetIdx, setPullTargetIdx] = useState<number | null>(null);
@@ -105,6 +114,7 @@ export default function RoutingStep({ docs, orders, routes, onBack, onNext, onLe
   const unmatchedCount = groups.filter(g => !g.routeId).length;
 
   const removeCity = (groupIdx: number, cityIdx: number) => {
+    userTouched.current = true;
     setGroups(prev => prev.map((g, i) => {
       if (i !== groupIdx) return g;
       return { ...g, cities: g.cities.filter((_, ci) => ci !== cityIdx) };
@@ -114,6 +124,7 @@ export default function RoutingStep({ docs, orders, routes, onBack, onNext, onLe
   const addCity = (groupIdx: number) => {
     const city = (newCityInputs[groupIdx] || '').trim();
     if (!city) return;
+    userTouched.current = true;
     setGroups(prev => prev.map((g, i) => {
       if (i !== groupIdx) return g;
       if (g.cities.some(c => normalizeCity(c) === normalizeCity(city))) return g;
@@ -123,6 +134,7 @@ export default function RoutingStep({ docs, orders, routes, onBack, onNext, onLe
   };
 
   const removeGroup = (groupIdx: number) => {
+    userTouched.current = true;
     setGroups(prev => prev.filter((_, i) => i !== groupIdx));
   };
 
@@ -186,7 +198,7 @@ export default function RoutingStep({ docs, orders, routes, onBack, onNext, onLe
 
   const executePull = () => {
     if (pullTargetIdx === null || (selectedDocs.size === 0 && selectedOrders.size === 0)) return;
-
+    userTouched.current = true;
     const learnedCities: string[] = [];
 
     setGroups(prev => {
