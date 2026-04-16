@@ -109,17 +109,49 @@ export default function Financial() {
 
   const { data: clients = [] } = useClients();
 
+  // ── Unique expense categories ──
+  const expenseCategories = useMemo(() => {
+    const cats = new Set(expenses.map((e: any) => e.category).filter(Boolean));
+    return Array.from(cats).sort();
+  }, [expenses]);
+
+  // ── Active filter count ──
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (dateFrom) count++;
+    if (dateTo) count++;
+    if (selectedClient !== 'all') count++;
+    if (docType !== 'all') count++;
+    if (expenseCategory !== 'all') count++;
+    return count;
+  }, [dateFrom, dateTo, selectedClient, docType, expenseCategory]);
+
+  const clearFilters = () => {
+    setDateFrom('');
+    setDateTo('');
+    setSelectedClient('all');
+    setDocType('all');
+    setExpenseCategory('all');
+  };
+
   // ── Period filter ──
   const periodStart = useMemo(() => {
+    if (dateFrom) return new Date(dateFrom);
     if (period === '7d') return subDays(new Date(), 7);
     if (period === '30d') return subDays(new Date(), 30);
     if (period === '90d') return subDays(new Date(), 90);
     return new Date('2000-01-01');
-  }, [period]);
+  }, [period, dateFrom]);
+
+  const periodEnd = useMemo(() => {
+    if (dateTo) return new Date(dateTo + 'T23:59:59');
+    return new Date();
+  }, [dateTo]);
 
   const filterByPeriod = (dateStr: string | null) => {
     if (!dateStr) return false;
-    return new Date(dateStr) >= periodStart;
+    const d = new Date(dateStr);
+    return d >= periodStart && d <= periodEnd;
   };
 
   // ── Computed KPIs ──
