@@ -284,67 +284,35 @@ export default function RoutePlanning() {
   };
 
   const exportRoutePdf = (route: RoutePlan) => {
-    const totals = routeTotals(route);
     const vehicle = vehicles.find((v: any) => v.id === route.vehicle_id) as any;
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const docs: RomaneioDoc[] = route.loads.flatMap(load =>
+      load.items.map(item => {
+        const fd = item.fiscal_documents;
+        const emissao = fd?.issue_date
+          ? new Date(fd.issue_date + 'T12:00:00').toLocaleDateString('pt-BR')
+          : '';
+        return {
+          city: fd?.recipient_city || 'SEM CIDADE',
+          state: fd?.recipient_state || '',
+          remetente: fd?.remitter || '—',
+          destinatario: fd?.recipient || '—',
+          bairro: '—',
+          nfNumber: fd?.invoice_number || '—',
+          emissao,
+          valor: Number(fd?.value) || 0,
+          peso: Number(item.weight_kg) || Number(fd?.weight_kg) || 0,
+          volumes: Number(item.pallet_count) || 0,
+        };
+      })
+    );
 
-    doc.setFontSize(16);
-    doc.text('ROMANEIO DE TRANSPORTE', 148, 15, { align: 'center' });
-    doc.setFontSize(10);
-    doc.text(`Rota: ${route.name}`, 14, 25);
-    doc.text(`Data: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, 14, 30);
-    if (vehicle) doc.text(`Veículo: ${vehicle.plate} ${vehicle.nickname ? `(${vehicle.nickname})` : ''}`, 14, 35);
-    doc.text(`Total: ${totals.loads} cargas | ${totals.nfes} NF-es | ${totals.weight.toFixed(0)} kg | ${totals.pallets} paletes`, 14, 40);
+    printRomaneioRoutes([{
+      routeName: route.name,
+      vehicleInfo: vehicle ? `Veículo: ${vehicle.plate}${vehicle.nickname ? ` (${vehicle.nickname})` : ''}${vehicle.max_pallets ? ` - ${vehicle.max_pallets}p` : ''}` : undefined,
+      docs,
+    }], `Romaneio ${route.name}`);
 
-    let startY = 46;
-    route.loads.forEach((load, loadIdx) => {
-      if (loadIdx > 0) startY = (doc as any).lastAutoTable.finalY + 8;
-
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'bold');
-      doc.text(`${load.destination || 'Sem destino'} — ${load.load_number} (${load.items.length} NF-es)`, 14, startY);
-      startY += 4;
-
-      autoTable(doc, {
-        startY,
-        head: [['#', 'Nº NF', 'Remetente', 'Destinatário', 'Cidade', 'Peso (kg)', 'Vol.', 'Valor NF', 'Emissão']],
-        body: load.items.map((item, i) => {
-          const fd = item.fiscal_documents;
-          return [
-            i + 1,
-            fd?.invoice_number || '—',
-            fd?.remitter || '—',
-            fd?.recipient || '—',
-            fd?.recipient_city || '—',
-            fd?.weight_kg ? Number(fd.weight_kg).toFixed(1) : '—',
-            item.pallet_count || 0,
-            fd?.value ? `R$ ${Number(fd.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—',
-            fd?.issue_date ? format(new Date(fd.issue_date + 'T12:00:00'), 'dd/MM/yy') : '—',
-          ];
-        }),
-        foot: [['', '', '', '', 'SUBTOTAL:',
-          `${(Number(load.total_weight_kg) || 0).toFixed(0)}`,
-          `${load.total_pallet_count || 0}`,
-          `R$ ${load.items.reduce((s, i) => s + (Number(i.fiscal_documents?.value) || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-          '']],
-        styles: { fontSize: 7, cellPadding: 1.5 },
-        headStyles: { fillColor: [41, 65, 107], fontStyle: 'bold' },
-        footStyles: { fillColor: [230, 230, 230], textColor: [0, 0, 0], fontStyle: 'bold' },
-        theme: 'grid',
-      });
-    });
-
-    const finalY = (doc as any).lastAutoTable.finalY + 15;
-    doc.setFontSize(9);
-    doc.line(14, finalY + 10, 80, finalY + 10);
-    doc.text('Motorista', 47, finalY + 15, { align: 'center' });
-    doc.line(100, finalY + 10, 166, finalY + 10);
-    doc.text('Conferente', 133, finalY + 15, { align: 'center' });
-    doc.line(186, finalY + 10, 272, finalY + 10);
-    doc.text('Responsável', 229, finalY + 15, { align: 'center' });
-
-    doc.save(`romaneio-${route.name.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`);
-    toast.success('PDF gerado!');
+    toast.success('Romaneio aberto para impressão!');
   };
 
   return (
