@@ -198,7 +198,7 @@ export default function RoutingStep({ docs, orders, routes, onBack, onNext, onLe
 
   const executePull = () => {
     if (pullTargetIdx === null || (selectedDocs.size === 0 && selectedOrders.size === 0)) return;
-
+    userTouched.current = true;
     const learnedCities: string[] = [];
 
     setGroups(prev => {
