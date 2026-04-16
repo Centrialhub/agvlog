@@ -289,9 +289,10 @@ export default function RoutePlanning() {
     const docs: RomaneioDoc[] = route.loads.flatMap(load =>
       load.items.map(item => {
         const fd = item.fiscal_documents;
-        const emissao = fd?.issue_date
-          ? new Date(fd.issue_date + 'T12:00:00').toLocaleDateString('pt-BR')
-          : '';
+        const raw = fd?.issue_date;
+        const s = raw ? String(raw).substring(0, 10) : '';
+        const d = s ? new Date(s + 'T12:00:00') : null;
+        const emissao = d && !isNaN(d.getTime()) ? d.toLocaleDateString('pt-BR') : '';
         return {
           city: fd?.recipient_city || 'SEM CIDADE',
           state: fd?.recipient_state || '',
