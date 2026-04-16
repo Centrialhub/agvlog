@@ -114,6 +114,7 @@ export default function RoutingStep({ docs, orders, routes, onBack, onNext, onLe
   const unmatchedCount = groups.filter(g => !g.routeId).length;
 
   const removeCity = (groupIdx: number, cityIdx: number) => {
+    userTouched.current = true;
     setGroups(prev => prev.map((g, i) => {
       if (i !== groupIdx) return g;
       return { ...g, cities: g.cities.filter((_, ci) => ci !== cityIdx) };
@@ -123,6 +124,7 @@ export default function RoutingStep({ docs, orders, routes, onBack, onNext, onLe
   const addCity = (groupIdx: number) => {
     const city = (newCityInputs[groupIdx] || '').trim();
     if (!city) return;
+    userTouched.current = true;
     setGroups(prev => prev.map((g, i) => {
       if (i !== groupIdx) return g;
       if (g.cities.some(c => normalizeCity(c) === normalizeCity(city))) return g;
@@ -132,6 +134,7 @@ export default function RoutingStep({ docs, orders, routes, onBack, onNext, onLe
   };
 
   const removeGroup = (groupIdx: number) => {
+    userTouched.current = true;
     setGroups(prev => prev.filter((_, i) => i !== groupIdx));
   };
 
