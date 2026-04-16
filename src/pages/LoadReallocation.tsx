@@ -274,7 +274,28 @@ export default function LoadReallocation() {
         </div>
       </div>
 
-      {/* Action bar */}
+      {/* Confirmation banner */}
+      {lastResult && (
+        <div className={`flex items-start gap-3 p-3 rounded-lg border ${
+          lastResult.errors > 0 ? 'bg-warning/10 border-warning/30' : 'bg-success/10 border-success/30'
+        }`}>
+          <CheckCircle className={`h-5 w-5 shrink-0 mt-0.5 ${lastResult.errors > 0 ? 'text-warning' : 'text-success'}`} />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold">
+              {lastResult.errors > 0
+                ? `${lastResult.moved} item(ns) movido(s), ${lastResult.errors} com erro`
+                : `${lastResult.moved} item(ns) movido(s) com sucesso para ${lastResult.targetLabel}`}
+            </p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              As capacidades das cargas e os totais foram atualizados. Veja o histórico abaixo para conferir.
+            </p>
+          </div>
+          <button onClick={() => setLastResult(null)} className="text-muted-foreground hover:text-foreground">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       {sourceLoadId && targetLoadId && (
         <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border">
           {selectedCount > 0 ? (
