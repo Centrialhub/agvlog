@@ -9,11 +9,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   DollarSign, TrendingUp, TrendingDown, ArrowRight, Receipt,
   Search, Filter, FileText, AlertTriangle, CheckCircle, Clock,
   BarChart3, PieChart as PieChartIcon, Wallet, CreditCard,
-  ArrowUpRight, ArrowDownRight, Calendar, Download,
+  ArrowUpRight, ArrowDownRight, Calendar, Download, ChevronDown, X, SlidersHorizontal,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -32,6 +34,12 @@ export default function Financial() {
   const { currentTenant } = useTenant();
   const navigate = useNavigate();
   const [period, setPeriod] = useState<'7d' | '30d' | '90d' | 'all'>('30d');
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [selectedClient, setSelectedClient] = useState<string>('all');
+  const [docType, setDocType] = useState<string>('all');
+  const [expenseCategory, setExpenseCategory] = useState<string>('all');
 
   // ── Receivables ──
   const { data: receivables = [] } = useReceivables();
@@ -101,22 +109,57 @@ export default function Financial() {
 
   const { data: clients = [] } = useClients();
 
+  // ── Unique expense categories ──
+  const expenseCategories = useMemo(() => {
+    const cats = new Set(expenses.map((e: any) => e.category).filter(Boolean));
+    return Array.from(cats).sort();
+  }, [expenses]);
+
+  // ── Active filter count ──
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (dateFrom) count++;
+    if (dateTo) count++;
+    if (selectedClient !== 'all') count++;
+    if (docType !== 'all') count++;
+    if (expenseCategory !== 'all') count++;
+    return count;
+  }, [dateFrom, dateTo, selectedClient, docType, expenseCategory]);
+
+  const clearFilters = () => {
+    setDateFrom('');
+    setDateTo('');
+    setSelectedClient('all');
+    setDocType('all');
+    setExpenseCategory('all');
+  };
+
   // ── Period filter ──
   const periodStart = useMemo(() => {
+    if (dateFrom) return new Date(dateFrom);
     if (period === '7d') return subDays(new Date(), 7);
     if (period === '30d') return subDays(new Date(), 30);
     if (period === '90d') return subDays(new Date(), 90);
     return new Date('2000-01-01');
-  }, [period]);
+  }, [period, dateFrom]);
+
+  const periodEnd = useMemo(() => {
+    if (dateTo) return new Date(dateTo + 'T23:59:59');
+    return new Date();
+  }, [dateTo]);
 
   const filterByPeriod = (dateStr: string | null) => {
     if (!dateStr) return false;
-    return new Date(dateStr) >= periodStart;
+    const d = new Date(dateStr);
+    return d >= periodStart && d <= periodEnd;
   };
 
   // ── Computed KPIs ──
   const kpis = useMemo(() => {
-    const filteredDocs = fiscalDocs.filter((d: any) => filterByPeriod(d.issue_date || d.created_at));
+    let filteredDocs = fiscalDocs.filter((d: any) => filterByPeriod(d.issue_date || d.created_at));
+    if (selectedClient !== 'all') filteredDocs = filteredDocs.filter((d: any) => d.client_id === selectedClient);
+    if (docType !== 'all') filteredDocs = filteredDocs.filter((d: any) => d.document_type === docType);
+
     const nfes = filteredDocs.filter((d: any) => d.document_type === 'inbound');
     const ctes = filteredDocs.filter((d: any) => d.document_type === 'outbound');
 
@@ -124,12 +167,13 @@ export default function Financial() {
     const totalCteValue = ctes.reduce((s: number, d: any) => s + (Number(d.value) || 0), 0);
     const totalFreight = ctes.reduce((s: number, d: any) => s + (Number(d.freight_value) || 0), 0);
 
-    const filteredExpenses = expenses.filter((e: any) => filterByPeriod(e.expense_at));
+    let filteredExpenses = expenses.filter((e: any) => filterByPeriod(e.expense_at));
+    if (expenseCategory !== 'all') filteredExpenses = filteredExpenses.filter((e: any) => e.category === expenseCategory);
     const totalExpenses = filteredExpenses.reduce((s: number, e: any) => s + (Number(e.amount) || 0), 0);
     const pendingExpenses = filteredExpenses.filter((e: any) => e.approval_status === 'pending');
-    const approvedExpenses = filteredExpenses.filter((e: any) => e.approval_status === 'approved');
 
-    const filteredReceivables = receivables.filter((r: any) => filterByPeriod(r.created_at));
+    let filteredReceivables = receivables.filter((r: any) => filterByPeriod(r.created_at));
+    if (selectedClient !== 'all') filteredReceivables = filteredReceivables.filter((r: any) => r.client_id === selectedClient);
     const totalReceivable = filteredReceivables.reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0);
     const pendingReceivable = filteredReceivables.filter((r: any) => r.status === 'pending').reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0);
     const paidReceivable = filteredReceivables.filter((r: any) => r.status === 'paid').reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0);
@@ -151,7 +195,7 @@ export default function Financial() {
       revenue, outflow, balance,
       receivablesCount: filteredReceivables.length,
     };
-  }, [fiscalDocs, expenses, receivables, maintenanceCosts, periodStart]);
+  }, [fiscalDocs, expenses, receivables, maintenanceCosts, periodStart, periodEnd, selectedClient, docType, expenseCategory]);
 
   // ── Chart: Revenue vs Expenses by day ──
   const revenueExpenseChart = useMemo(() => {
@@ -215,19 +259,6 @@ export default function Financial() {
           </p>
         </div>
         <div className="flex gap-2">
-          <div className="flex bg-muted rounded-lg p-0.5">
-            {(['7d', '30d', '90d', 'all'] as const).map(p => (
-              <button
-                key={p}
-                onClick={() => setPeriod(p)}
-                className={`px-3 py-1 text-xs rounded-md transition-colors ${
-                  period === p ? 'bg-background text-foreground shadow-sm font-medium' : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {p === '7d' ? '7 dias' : p === '30d' ? '30 dias' : p === '90d' ? '90 dias' : 'Tudo'}
-              </button>
-            ))}
-          </div>
           <Button variant="outline" size="sm" onClick={() => navigate('/receivables')}>
             <DollarSign className="h-4 w-4 mr-1" /> Contas a Receber
           </Button>
@@ -236,6 +267,125 @@ export default function Financial() {
           </Button>
         </div>
       </div>
+
+      {/* ── Collapsible Filter Bar ── */}
+      <Collapsible open={filtersOpen} onOpenChange={setFiltersOpen}>
+        <div className="flex items-center gap-2">
+          <CollapsibleTrigger asChild>
+            <Button
+              variant={filtersOpen || activeFilterCount > 0 ? 'default' : 'outline'}
+              size="sm"
+              className="gap-2"
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              Filtros Avançados
+              {activeFilterCount > 0 && (
+                <Badge variant="secondary" className="ml-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-[10px]">
+                  {activeFilterCount}
+                </Badge>
+              )}
+              <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${filtersOpen ? 'rotate-180' : ''}`} />
+            </Button>
+          </CollapsibleTrigger>
+
+          {/* Quick period pills */}
+          <div className="flex bg-muted rounded-lg p-0.5">
+            {(['7d', '30d', '90d', 'all'] as const).map(p => (
+              <button
+                key={p}
+                onClick={() => { setPeriod(p); setDateFrom(''); setDateTo(''); }}
+                className={`px-3 py-1 text-xs rounded-md transition-colors ${
+                  period === p && !dateFrom ? 'bg-background text-foreground shadow-sm font-medium' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {p === '7d' ? '7 dias' : p === '30d' ? '30 dias' : p === '90d' ? '90 dias' : 'Tudo'}
+              </button>
+            ))}
+          </div>
+
+          {activeFilterCount > 0 && (
+            <Button variant="ghost" size="sm" onClick={clearFilters} className="text-muted-foreground hover:text-foreground gap-1 text-xs">
+              <X className="h-3.5 w-3.5" /> Limpar filtros
+            </Button>
+          )}
+        </div>
+
+        <CollapsibleContent className="mt-3">
+          <Card className="border-dashed">
+            <CardContent className="p-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                {/* Date range */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Data início</label>
+                  <Input
+                    type="date"
+                    value={dateFrom}
+                    onChange={e => setDateFrom(e.target.value)}
+                    className="h-8 text-xs"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Data fim</label>
+                  <Input
+                    type="date"
+                    value={dateTo}
+                    onChange={e => setDateTo(e.target.value)}
+                    className="h-8 text-xs"
+                  />
+                </div>
+
+                {/* Client */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Cliente</label>
+                  <Select value={selectedClient} onValueChange={setSelectedClient}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="Todos" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos os clientes</SelectItem>
+                      {clients.map((c: any) => (
+                        <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Document type */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Tipo Documento</label>
+                  <Select value={docType} onValueChange={setDocType}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="Todos" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      <SelectItem value="inbound">NF-e Entrada</SelectItem>
+                      <SelectItem value="outbound">CT-e / Saída</SelectItem>
+                      <SelectItem value="transfer">Transferência</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Expense category */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Categoria Despesa</label>
+                  <Select value={expenseCategory} onValueChange={setExpenseCategory}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="Todas" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas</SelectItem>
+                      {expenseCategories.map((cat: string) => (
+                        <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </CollapsibleContent>
+      </Collapsible>
 
       {/* ── Hero KPIs ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
