@@ -9,11 +9,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   DollarSign, TrendingUp, TrendingDown, ArrowRight, Receipt,
   Search, Filter, FileText, AlertTriangle, CheckCircle, Clock,
   BarChart3, PieChart as PieChartIcon, Wallet, CreditCard,
-  ArrowUpRight, ArrowDownRight, Calendar, Download,
+  ArrowUpRight, ArrowDownRight, Calendar, Download, ChevronDown, X, SlidersHorizontal,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -32,6 +34,12 @@ export default function Financial() {
   const { currentTenant } = useTenant();
   const navigate = useNavigate();
   const [period, setPeriod] = useState<'7d' | '30d' | '90d' | 'all'>('30d');
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [selectedClient, setSelectedClient] = useState<string>('all');
+  const [docType, setDocType] = useState<string>('all');
+  const [expenseCategory, setExpenseCategory] = useState<string>('all');
 
   // ── Receivables ──
   const { data: receivables = [] } = useReceivables();
