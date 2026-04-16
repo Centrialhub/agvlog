@@ -442,6 +442,9 @@ export default function OperationsCenter() {
               <p className="text-sm text-muted-foreground mt-0.5 capitalize">
                 {brasiliaDate}
               </p>
+              <p className="text-[11px] text-muted-foreground/70 mt-1 italic max-w-md">
+                "{dailyQuote}"
+              </p>
             </div>
           </div>
 
