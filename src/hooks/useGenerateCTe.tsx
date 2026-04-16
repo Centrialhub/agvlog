@@ -131,6 +131,12 @@ export function useGenerateCTe() {
 
       const cteNumber = `CTE-${load.load_number}`;
 
+      // Calculate IBS/CBS based on freight value (reform tributária)
+      const cbsRate = 0.90;
+      const ibsRate = 0.10;
+      const cbsValue = freightValue > 0 ? freightValue * cbsRate / 100 : null;
+      const ibsValue = freightValue > 0 ? freightValue * ibsRate / 100 : null;
+
       const { data, error } = await supabase.from('fiscal_documents').insert({
         tenant_id: currentTenant.id,
         created_by: user?.id,
@@ -142,9 +148,16 @@ export function useGenerateCTe() {
         pallet_count: totalPallets || load.total_pallet_count || 0,
         weight_kg: totalWeight || load.total_weight_kg || 0,
         value: freightValue > 0 ? freightValue : null,
+        freight_value: freightValue > 0 ? freightValue : null,
         product_summary: itemSummary,
         status: 'confirmed',
         issue_date: new Date().toISOString().slice(0, 10),
+        cbs_base: freightValue > 0 ? freightValue : null,
+        cbs_rate: cbsRate,
+        cbs_value: cbsValue,
+        ibs_base: freightValue > 0 ? freightValue : null,
+        ibs_rate: ibsRate,
+        ibs_value: ibsValue,
       } as any).select().single();
 
       if (error) throw error;
