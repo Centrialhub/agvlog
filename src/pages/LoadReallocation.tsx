@@ -354,6 +354,69 @@ export default function LoadReallocation() {
           </CardContent>
         </Card>
       )}
+
+      {/* History panel */}
+      {history.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <History className="h-4 w-4 text-primary" />
+              Histórico desta sessão ({history.length})
+            </CardTitle>
+            <p className="text-[11px] text-muted-foreground">Movimentações feitas agora — confira se está tudo certo antes de sair</p>
+          </CardHeader>
+          <CardContent className="space-y-2 max-h-[300px] overflow-y-auto">
+            {history.map(h => (
+              <div key={h.id} className={`p-2.5 rounded-md border text-xs ${
+                h.success ? 'bg-success/5 border-success/20' : 'bg-warning/5 border-warning/30'
+              }`}>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <CheckCircle className={`h-3.5 w-3.5 shrink-0 ${h.success ? 'text-success' : 'text-warning'}`} />
+                  {h.kind === 'move' ? (
+                    <>
+                      <Badge variant="outline" className="text-[10px]">{h.fromLabel}</Badge>
+                      <ArrowRightLeft className="h-3 w-3 text-muted-foreground" />
+                      <Badge variant="outline" className="text-[10px] border-primary/30 text-primary">{h.toLabel}</Badge>
+                      <span className="text-muted-foreground">
+                        {h.items?.length || 0} item(ns)
+                        {h.errorCount && h.errorCount > 0 ? ` · ${h.errorCount} erro(s)` : ''}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <Truck className="h-3.5 w-3.5 text-primary" />
+                      <span className="font-medium">Troca de veículos:</span>
+                      <Badge variant="outline" className="text-[10px]">{h.fromLabel} ↔ {h.toLabel}</Badge>
+                      {h.vehicleSwap && (
+                        <span className="text-muted-foreground">
+                          {h.vehicleSwap.fromPlate} ↔ {h.vehicleSwap.toPlate}
+                        </span>
+                      )}
+                    </>
+                  )}
+                  <span className="ml-auto text-[10px] text-muted-foreground">
+                    {h.at.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                  </span>
+                </div>
+                {h.kind === 'move' && h.items && h.items.length > 0 && (
+                  <div className="mt-1.5 pl-5 space-y-0.5">
+                    {h.items.slice(0, 5).map((it, i) => (
+                      <div key={i} className="flex gap-3 text-[10px] text-muted-foreground">
+                        <span className="truncate flex-1">{it.desc}</span>
+                        {it.pallets > 0 && <span>{it.pallets} pal</span>}
+                        {it.weight > 0 && <span>{it.weight.toLocaleString('pt-BR')} kg</span>}
+                      </div>
+                    ))}
+                    {h.items.length > 5 && (
+                      <div className="text-[10px] text-muted-foreground">+ {h.items.length - 5} mais</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
