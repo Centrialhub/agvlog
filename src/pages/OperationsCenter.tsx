@@ -1,7 +1,8 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
+import { useAuth } from '@/hooks/useAuth';
 import { useFleetPositions } from '@/hooks/usePositions';
 import { useFleetState, MovementState, stateColor, stateLabel, stateDotClass, formatStoppedDuration } from '@/hooks/useVehiclesState';
 import { useVehicles } from '@/hooks/useVehicles';
@@ -17,6 +18,7 @@ import {
   TrendingUp, FileText, Wrench, Users, Weight, Layers, MapPin,
   BarChart3, Activity, ShieldAlert, Fuel, Bell, Eye, Zap,
   ChevronRight, Navigation, CircleDot, Package, Scale,
+  Sun, Moon, CloudRain, Cloud, CloudSun, Sunrise, Sunset,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { format, formatDistanceToNow, subDays } from 'date-fns';
@@ -25,7 +27,6 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, CartesianGrid, Area, AreaChart, Legend,
 } from 'recharts';
-import { useEffect } from 'react';
 
 // Fix Leaflet icons
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -94,7 +95,33 @@ const SEVERITY_COLORS: Record<string, string> = {
 
 export default function OperationsCenter() {
   const { currentTenant } = useTenant();
+  const { user } = useAuth();
   const navigate = useNavigate();
+
+  // ── Clock (Brasilia) ──
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const brasiliaTime = now.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const brasiliaDate = now.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const brasiliaHour = parseInt(now.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', hour12: false }));
+
+  const getGreeting = () => {
+    if (brasiliaHour >= 5 && brasiliaHour < 12) return 'Bom dia';
+    if (brasiliaHour >= 12 && brasiliaHour < 18) return 'Boa tarde';
+    return 'Boa noite';
+  };
+
+  const getGreetingIcon = () => {
+    if (brasiliaHour >= 5 && brasiliaHour < 12) return <Sunrise className="h-5 w-5 text-amber-400" />;
+    if (brasiliaHour >= 12 && brasiliaHour < 18) return <Sun className="h-5 w-5 text-amber-500" />;
+    return <Moon className="h-5 w-5 text-indigo-400" />;
+  };
+
+  const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Operador';
 
   // ── Loads ──
   const { data: loads = [] } = useQuery({
@@ -356,26 +383,57 @@ export default function OperationsCenter() {
 
   return (
     <div className="animate-fade-in space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-            <Activity className="h-6 w-6 text-primary" /> Centro de Operações
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Visão unificada da operação · Atualiza a cada 30s
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => navigate('/ingestion')}>
-            <FileText className="h-4 w-4 mr-1" /> Importar
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => navigate('/route-planning')}>
-            <MapPin className="h-4 w-4 mr-1" /> Roteirizar
-          </Button>
-          <Button size="sm" onClick={() => navigate('/loads')}>
-            <PackageCheck className="h-4 w-4 mr-1" /> Cargas
-          </Button>
+      {/* ── Welcome Banner ── */}
+      <div className="relative overflow-hidden rounded-2xl border bg-card p-6">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/8 via-primary/3 to-accent/5" />
+        <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full bg-primary/5 blur-2xl" />
+        <div className="absolute -bottom-12 -left-12 w-36 h-36 rounded-full bg-accent/5 blur-2xl" />
+
+        <div className="relative flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            {/* Avatar / Greeting Icon */}
+            <div className="h-14 w-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center shadow-sm">
+              {getGreetingIcon()}
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-bold text-foreground">
+                  {getGreeting()}, <span className="text-primary">{userName}</span>
+                </h1>
+              </div>
+              <p className="text-sm text-muted-foreground mt-0.5 capitalize">
+                {brasiliaDate}
+              </p>
+            </div>
+          </div>
+
+          {/* Clock + Actions */}
+          <div className="flex items-center gap-4">
+            {/* Clock */}
+            <div className="hidden md:flex flex-col items-end mr-2">
+              <div className="flex items-center gap-1.5">
+                <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-xs text-muted-foreground font-medium">Brasília</span>
+              </div>
+              <p className="text-2xl font-mono font-bold text-foreground tracking-wider tabular-nums mt-0.5">
+                {brasiliaTime}
+              </p>
+            </div>
+
+            <div className="h-10 w-px bg-border hidden md:block" />
+
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => navigate('/ingestion')}>
+                <FileText className="h-4 w-4 mr-1" /> Importar
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => navigate('/route-planning')}>
+                <MapPin className="h-4 w-4 mr-1" /> Roteirizar
+              </Button>
+              <Button size="sm" onClick={() => navigate('/loads')}>
+                <PackageCheck className="h-4 w-4 mr-1" /> Cargas
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
 
