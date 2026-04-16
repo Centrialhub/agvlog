@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { parseNFeXml, parseCsvOrders, parseExcelOrders, ParsedOrderRow } from '@/lib/documentParsers';
 import {
-  validateNFe, validateOrderRows, generateLoadSuggestions,
+  validateNFe, validateOrderRows, generateLoadSuggestions, buildValidationIndexes,
   ValidatedDocument, ValidatedOrder, LoadSuggestion,
 } from '@/lib/ingestionValidator';
 import { useFiscalDocuments, useCreateFiscalDocument } from '@/hooks/useFiscalDocuments';
