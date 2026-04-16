@@ -289,7 +289,7 @@ export default function GroupingStep({ suggestions, vehicles, drivers, routes = 
       state: doc.source.recipientState || '',
       remetente: doc.source.emitterName || '—',
       destinatario: doc.source.recipientName || '—',
-      bairro: (doc.source.recipientAddress || '').split(',')[0]?.trim() || '—',
+      bairro: doc.source.recipientNeighborhood || (doc.source.recipientAddress || '').split(',').slice(2).join(',').trim() || '—',
       nfNumber: doc.source.invoiceNumber || '—',
       emissao: doc.source.issueDate ? new Date(doc.source.issueDate + 'T12:00:00').toLocaleDateString('pt-BR') : '',
       valor: doc.source.totalValue || 0,

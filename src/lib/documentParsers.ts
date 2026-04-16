@@ -23,6 +23,7 @@ export interface ParsedNFe {
   recipientCity: string;
   recipientState: string;
   recipientAddress: string;
+  recipientNeighborhood: string;
   items: ParsedNFeItem[];
   totalValue: number;
   totalWeight: number;
@@ -62,10 +63,11 @@ export function parseNFeXml(xmlString: string): ParsedNFe {
   const enderDest = dest?.getElementsByTagName('enderDest')[0];
   const recipientCity = getTagText(enderDest || infNFe, 'xMun');
   const recipientState = getTagText(enderDest || infNFe, 'UF');
+  const recipientNeighborhood = getTagText(enderDest || infNFe, 'xBairro');
   const recipientAddress = [
     getTagText(enderDest || infNFe, 'xLgr'),
     getTagText(enderDest || infNFe, 'nro'),
-    getTagText(enderDest || infNFe, 'xBairro'),
+    recipientNeighborhood,
   ].filter(Boolean).join(', ');
 
   const detElements = infNFe.getElementsByTagName('det');
@@ -104,7 +106,7 @@ export function parseNFeXml(xmlString: string): ParsedNFe {
   return {
     invoiceNumber, series, accessKey, issueDate,
     emitterName, emitterCnpj, recipientName, recipientCnpj,
-    recipientCity, recipientState, recipientAddress,
+    recipientCity, recipientState, recipientAddress, recipientNeighborhood,
     items, totalValue, totalWeight, totalVolume, estimatedPallets,
   };
 }
