@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowRightLeft, Truck, Package, AlertTriangle, CheckCircle, ChevronRight } from 'lucide-react';
+import { ArrowRightLeft, Truck, Package, AlertTriangle, CheckCircle, ChevronRight, History, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
@@ -111,6 +111,14 @@ export default function LoadReallocation() {
   const [targetLoadId, setTargetLoadId] = useState<string>('');
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [moving, setMoving] = useState(false);
+  const [history, setHistory] = useState<Array<{
+    id: string; at: Date; kind: 'move' | 'swap';
+    fromLabel: string; toLabel: string;
+    items?: Array<{ desc: string; pallets: number; weight: number }>;
+    vehicleSwap?: { fromPlate: string; toPlate: string };
+    success: boolean; errorCount?: number;
+  }>>([]);
+  const [lastResult, setLastResult] = useState<{ moved: number; errors: number; targetLabel: string } | null>(null);
 
   // Only show active loads (not delivered)
   const activeLoads = useMemo(() =>
@@ -138,8 +146,10 @@ export default function LoadReallocation() {
     setMoving(true);
     let moved = 0;
     let errors = 0;
+    const movedItems: Array<{ desc: string; pallets: number; weight: number }> = [];
 
     for (const itemId of selectedItems) {
+      const item = sourceItems.find(i => i.id === itemId);
       try {
         const { error } = await (supabase as any)
           .from('load_items')
@@ -147,22 +157,37 @@ export default function LoadReallocation() {
           .eq('id', itemId);
         if (error) throw error;
         moved++;
+        if (item) movedItems.push({ desc: item.item_description, pallets: item.pallet_count || 0, weight: item.weight_kg || 0 });
       } catch {
         errors++;
       }
     }
 
-    // Invalidate queries to refresh totals
     qc.invalidateQueries({ queryKey: ['load_items'] });
     qc.invalidateQueries({ queryKey: ['loads'] });
 
+    const fromLabel = sourceLoad?.load_number || '—';
+    const toLabel = targetLoad?.load_number || '—';
+
+    setHistory(prev => [{
+      id: crypto.randomUUID(),
+      at: new Date(),
+      kind: 'move',
+      fromLabel,
+      toLabel,
+      items: movedItems,
+      success: errors === 0,
+      errorCount: errors,
+    }, ...prev].slice(0, 20));
+
+    setLastResult({ moved, errors, targetLabel: toLabel });
     setSelectedItems(new Set());
     setMoving(false);
 
     if (errors > 0) {
       toast.error(`${moved} movidos, ${errors} erros`);
     } else {
-      toast.success(`${moved} item(ns) realocado(s) para ${targetLoad?.load_number}`);
+      toast.success(`${moved} item(ns) realocado(s) para ${toLabel}`);
     }
   };
 
@@ -173,9 +198,21 @@ export default function LoadReallocation() {
       const tgtVehicle = targetLoad.vehicle_id;
       const srcDriver = sourceLoad.driver_id;
       const tgtDriver = targetLoad.driver_id;
+      const srcPlate = (vehicles as any[]).find(v => v.id === srcVehicle)?.plate || '—';
+      const tgtPlate = (vehicles as any[]).find(v => v.id === tgtVehicle)?.plate || '—';
 
       await updateLoad.mutateAsync({ id: sourceLoad.id, vehicle_id: tgtVehicle, driver_id: tgtDriver } as any);
       await updateLoad.mutateAsync({ id: targetLoad.id, vehicle_id: srcVehicle, driver_id: srcDriver } as any);
+
+      setHistory(prev => [{
+        id: crypto.randomUUID(),
+        at: new Date(),
+        kind: 'swap',
+        fromLabel: sourceLoad.load_number,
+        toLabel: targetLoad.load_number,
+        vehicleSwap: { fromPlate: srcPlate, toPlate: tgtPlate },
+        success: true,
+      }, ...prev].slice(0, 20));
 
       toast.success('Veículos trocados entre as cargas');
     } catch (e: any) {
