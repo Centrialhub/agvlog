@@ -157,7 +157,7 @@ export default function Loads() {
 
       const { data: items } = await supabase
         .from('load_items')
-        .select('*, fiscal_documents(invoice_number, remitter, recipient, recipient_city, recipient_state, value, weight_kg, issue_date, product_summary)')
+        .select('*, fiscal_documents(invoice_number, remitter, recipient, recipient_city, recipient_state, recipient_neighborhood, value, weight_kg, issue_date, product_summary)')
         .eq('load_id', loadId)
         .order('created_at');
 
