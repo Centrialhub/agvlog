@@ -23,6 +23,7 @@ export interface ParsedNFe {
   recipientCity: string;
   recipientState: string;
   recipientAddress: string;
+  recipientNeighborhood: string;
   items: ParsedNFeItem[];
   totalValue: number;
   totalWeight: number;
