@@ -172,7 +172,7 @@ export default function LoadReallocation() {
     setHistory(prev => [{
       id: crypto.randomUUID(),
       at: new Date(),
-      kind: 'move',
+      kind: 'move' as const,
       fromLabel,
       toLabel,
       items: movedItems,
@@ -207,7 +207,7 @@ export default function LoadReallocation() {
       setHistory(prev => [{
         id: crypto.randomUUID(),
         at: new Date(),
-        kind: 'swap',
+        kind: 'swap' as const,
         fromLabel: sourceLoad.load_number,
         toLabel: targetLoad.load_number,
         vehicleSwap: { fromPlate: srcPlate, toPlate: tgtPlate },
