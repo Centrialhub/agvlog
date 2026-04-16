@@ -187,9 +187,10 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
     let errors = 0;
 
     try {
-      for (const group of selected) {
+      // Create all loads in parallel
+      const loadPromises = selected.map(async (group) => {
         try {
-          const loadNumber = `CG-${Date.now().toString(36).toUpperCase()}-${group.routeName.substring(0, 8).toUpperCase().replace(/\s/g, '')}`;
+          const loadNumber = `CG-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 5).toUpperCase()}-${group.routeName.substring(0, 6).toUpperCase().replace(/\s/g, '')}`;
           const vehicleId = vehicleAssignments.get(group.routeName) || null;
 
           const createdLoad = await createLoad.mutateAsync({
@@ -199,33 +200,43 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
             status: 'planned',
           } as any);
 
-          // Create load_items for each doc
-          for (const doc of group.docs) {
-            await createLoadItem.mutateAsync({
-              load_id: createdLoad.id,
-              fiscal_document_id: doc.id,
-              item_description: `NF ${doc.invoice_number || '—'} - ${doc.recipient || 'Sem dest.'}`,
-              quantity: 1,
-              pallet_count: doc.pallet_count || 0,
-              weight_kg: Number(doc.weight_kg) || 0,
-            } as any);
+          // Batch insert all load_items at once
+          const loadItems = group.docs.map(doc => ({
+            load_id: createdLoad.id,
+            tenant_id: currentTenant!.id,
+            fiscal_document_id: doc.id,
+            item_description: `NF ${doc.invoice_number || '—'} - ${doc.recipient || 'Sem dest.'}`,
+            quantity: 1,
+            pallet_count: doc.pallet_count || 0,
+            weight_kg: Number(doc.weight_kg) || 0,
+          }));
 
-            // Link doc to load
-            await supabase.from('fiscal_documents')
-              .update({ load_id: createdLoad.id } as any)
-              .eq('id', doc.id);
-          }
+          const { error: itemsError } = await (supabase as any)
+            .from('load_items')
+            .insert(loadItems);
+          if (itemsError) throw itemsError;
+
+          // Batch update all fiscal_documents to link to this load
+          const docIds = group.docs.map(d => d.id);
+          const { error: linkError } = await supabase
+            .from('fiscal_documents')
+            .update({ load_id: createdLoad.id } as any)
+            .in('id', docIds);
+          if (linkError) throw linkError;
 
           created++;
         } catch {
           errors++;
         }
-      }
+      });
+
+      await Promise.all(loadPromises);
 
       queryClient.invalidateQueries({ queryKey: ['loads'] });
       queryClient.invalidateQueries({ queryKey: ['fiscal_documents'] });
       queryClient.invalidateQueries({ queryKey: ['pending_fiscal_docs'] });
       queryClient.invalidateQueries({ queryKey: ['load_items'] });
+      queryClient.invalidateQueries({ queryKey: ['pending_docs_count'] });
 
       toast.success(`${created} carga(s) criada(s)${errors > 0 ? `, ${errors} erro(s)` : ''}`);
       onCreated();
