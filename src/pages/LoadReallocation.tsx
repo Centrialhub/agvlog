@@ -330,11 +330,7 @@ export default function LoadReallocation() {
           ) : (
             <>
               <AlertTriangle className="h-4 w-4 text-warning" />
-              <span className="text-xs text-muted-foreground">Clique nos itens da carga origem para selecionar e mover</span>
-              <div className="flex-1" />
-              <Button size="sm" variant="outline" onClick={handleSwapVehicles}>
-                <Truck className="h-3.5 w-3.5 mr-2" /> Trocar Veículos
-              </Button>
+              <span className="text-xs text-muted-foreground">Clique nos itens da carga origem para selecionar e mover para a carga destino</span>
             </>
           )}
         </div>
