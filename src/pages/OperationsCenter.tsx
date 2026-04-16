@@ -95,7 +95,33 @@ const SEVERITY_COLORS: Record<string, string> = {
 
 export default function OperationsCenter() {
   const { currentTenant } = useTenant();
+  const { user } = useAuth();
   const navigate = useNavigate();
+
+  // ── Clock (Brasilia) ──
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const brasiliaTime = now.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const brasiliaDate = now.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const brasiliaHour = parseInt(now.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', hour12: false }));
+
+  const getGreeting = () => {
+    if (brasiliaHour >= 5 && brasiliaHour < 12) return 'Bom dia';
+    if (brasiliaHour >= 12 && brasiliaHour < 18) return 'Boa tarde';
+    return 'Boa noite';
+  };
+
+  const getGreetingIcon = () => {
+    if (brasiliaHour >= 5 && brasiliaHour < 12) return <Sunrise className="h-5 w-5 text-amber-400" />;
+    if (brasiliaHour >= 12 && brasiliaHour < 18) return <Sun className="h-5 w-5 text-amber-500" />;
+    return <Moon className="h-5 w-5 text-indigo-400" />;
+  };
+
+  const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Operador';
 
   // ── Loads ──
   const { data: loads = [] } = useQuery({
