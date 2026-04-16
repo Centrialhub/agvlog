@@ -1,7 +1,8 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
+import { useAuth } from '@/hooks/useAuth';
 import { useFleetPositions } from '@/hooks/usePositions';
 import { useFleetState, MovementState, stateColor, stateLabel, stateDotClass, formatStoppedDuration } from '@/hooks/useVehiclesState';
 import { useVehicles } from '@/hooks/useVehicles';
@@ -17,6 +18,7 @@ import {
   TrendingUp, FileText, Wrench, Users, Weight, Layers, MapPin,
   BarChart3, Activity, ShieldAlert, Fuel, Bell, Eye, Zap,
   ChevronRight, Navigation, CircleDot, Package, Scale,
+  Sun, Moon, CloudRain, Cloud, CloudSun, Sunrise, Sunset,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { format, formatDistanceToNow, subDays } from 'date-fns';
@@ -25,7 +27,6 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, CartesianGrid, Area, AreaChart, Legend,
 } from 'recharts';
-import { useEffect } from 'react';
 
 // Fix Leaflet icons
 delete (L.Icon.Default.prototype as any)._getIconUrl;
