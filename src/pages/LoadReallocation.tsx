@@ -445,6 +445,14 @@ export default function LoadReallocation() {
               vehicles={vehicles as any[]}
               selectedItems={selectedItems}
               onToggleItem={toggleItem}
+              onSelectMany={(ids, checked) => {
+                setSelectedItems(prev => {
+                  const next = new Set(prev);
+                  if (checked) ids.forEach(id => next.add(id));
+                  else ids.forEach(id => next.delete(id));
+                  return next;
+                });
+              }}
             />
           )}
           {targetLoad && (
