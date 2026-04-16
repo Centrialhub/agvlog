@@ -50,7 +50,7 @@ export function parseNFeXml(xmlString: string): ParsedNFe {
   const ide = infNFe.getElementsByTagName('ide')[0];
   const invoiceNumber = getTagText(ide || infNFe, 'nNF');
   const series = getTagText(ide || infNFe, 'serie');
-  const issueDate = getTagText(ide || infNFe, 'dhEmi').substring(0, 10);
+  const issueDate = (getTagText(ide || infNFe, 'dhEmi') || getTagText(ide || infNFe, 'dEmi') || '').substring(0, 10);
 
   const emit = infNFe.getElementsByTagName('emit')[0];
   const emitterName = getTagText(emit || infNFe, 'xNome');
