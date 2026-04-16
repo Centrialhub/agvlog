@@ -35,13 +35,20 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
 });
 
-function createMiniIcon(state: MovementState) {
+function createVehicleIcon(state: MovementState) {
   const color = stateColor(state);
+  const opacity = state === 'offline' || state === 'unknown' ? '0.6' : '1';
   return L.divIcon({
-    className: 'ops-mini-marker',
-    html: `<div style="width:14px;height:14px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.3);"></div>`,
-    iconSize: [14, 14],
-    iconAnchor: [7, 7],
+    className: 'custom-vehicle-marker',
+    html: `<div style="
+      width: 32px; height: 32px; border-radius: 50%;
+      background: ${color}; border: 3px solid white;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      display: flex; align-items: center; justify-content: center;
+      opacity: ${opacity};
+    "><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg></div>`,
+    iconSize: [32, 32],
+    iconAnchor: [16, 16],
   });
 }
 
@@ -520,15 +527,17 @@ export default function OperationsCenter() {
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="h-[280px] w-full">
+            <div className="h-[320px] w-full">
               <MapContainer
-                center={[-15.78, -47.93]}
+                center={[-14.235, -51.925]}
                 zoom={4}
                 style={{ height: '100%', width: '100%' }}
-                zoomControl={false}
-                attributionControl={false}
+                zoomControl={true}
               >
-                <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" />
+                <TileLayer
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                />
                 {vehiclesWithPosition.length > 0 && (
                   <FitBounds positions={vehiclesWithPosition.map(e => ({ lat: e.lat!, lng: e.lng! }))} />
                 )}
@@ -536,17 +545,29 @@ export default function OperationsCenter() {
                   <Marker
                     key={e.vehicle.id}
                     position={[e.lat!, e.lng!]}
-                    icon={createMiniIcon(e.state)}
+                    icon={createVehicleIcon(e.state)}
                   >
-                    <Popup className="text-xs">
-                      <strong>{e.vehicle.plate}</strong>
-                      {e.vehicle.nickname && <span className="text-muted-foreground ml-1">({e.vehicle.nickname})</span>}
-                      <br />
-                      <span>{stateLabel(e.state)}</span>
-                      {e.speed > 0 && <span className="ml-1">· {e.speed.toFixed(0)} km/h</span>}
-                      {e.state === 'stopped' && e.stoppedDuration > 0 && (
-                        <span className="ml-1">· {formatStoppedDuration(e.stoppedDuration)}</span>
-                      )}
+                    <Popup>
+                      <div className="min-w-[180px]">
+                        <p className="font-bold text-sm">{e.vehicle.plate}</p>
+                        {e.vehicle.nickname && <p className="text-xs text-gray-500">{e.vehicle.nickname}</p>}
+                        <div className="mt-2 space-y-1 text-xs">
+                          <p>Status: <strong>{stateLabel(e.state)}</strong></p>
+                          <p>Velocidade: <strong>{Math.round(e.speed)} km/h</strong></p>
+                          {(e.state === 'stopped' || e.state === 'idle') && e.stoppedDuration > 0 && (
+                            <p>Parado há: <strong>{formatStoppedDuration(e.stoppedDuration)}</strong></p>
+                          )}
+                          {e.lastPositionAt && (
+                            <p>Última posição: {formatDistanceToNow(new Date(e.lastPositionAt), { addSuffix: true, locale: ptBR })}</p>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => navigate(`/vehicles/${e.vehicle.id}`)}
+                          className="mt-2 text-xs text-blue-600 hover:underline flex items-center gap-1"
+                        >
+                          <Eye className="h-3 w-3" /> Ver detalhes
+                        </button>
+                      </div>
                     </Popup>
                   </Marker>
                 ))}
