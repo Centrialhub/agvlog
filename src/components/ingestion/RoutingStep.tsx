@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { ValidatedDocument, ValidatedOrder, OperationalRouteRef, findRouteForCity } from '@/lib/ingestionValidator';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -95,6 +95,15 @@ export default function RoutingStep({ docs, orders, routes, onBack, onNext, onLe
 
   const [groups, setGroups] = useState<RouteGroup[]>(initialGroups);
   const [newCityInputs, setNewCityInputs] = useState<Record<number, string>>({});
+  const userTouched = useRef(false);
+
+  // Re-sync groups when initialGroups change (e.g. routes loaded after mount),
+  // but only if the user hasn't manually edited yet.
+  useEffect(() => {
+    if (!userTouched.current) {
+      setGroups(initialGroups);
+    }
+  }, [initialGroups]);
 
   // Pull modal state
   const [pullTargetIdx, setPullTargetIdx] = useState<number | null>(null);
