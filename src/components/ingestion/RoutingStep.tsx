@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ArrowLeft, ArrowRight, MapPin, Plus, X, Route, AlertTriangle, FileText, ArrowDownToLine, Search } from 'lucide-react';
+import { ArrowLeft, ArrowRight, MapPin, Plus, X, Route, AlertTriangle, FileText, ArrowDownToLine, Search, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 
 interface RouteGroup {
@@ -24,7 +24,7 @@ interface RoutingStepProps {
   orders: ValidatedOrder[];
   routes: OperationalRouteRef[];
   onBack: () => void;
-  onNext: (groups: RouteGroup[]) => void;
+  onNext: (groups: RouteGroup[]) => void | Promise<void>;
   onLearnCity?: (routeId: string, cityName: string) => void;
 }
 
@@ -371,11 +371,29 @@ export default function RoutingStep({ docs, orders, routes, onBack, onNext, onLe
       )}
 
       <div className="flex gap-3 justify-between">
-        <Button variant="outline" onClick={onBack}>
+        <Button variant="outline" onClick={onBack} disabled={advancing}>
           <ArrowLeft className="h-4 w-4 mr-2" /> Voltar
         </Button>
-        <Button onClick={() => onNext(groups)} disabled={groups.length === 0}>
-          Atribuir Veículos <ArrowRight className="h-4 w-4 ml-2" />
+        <Button
+          onClick={async () => {
+            if (advancing) return;
+            try {
+              setAdvancing(true);
+              await onNext(groups);
+            } catch (e: any) {
+              console.error('[RoutingStep] onNext failed:', e);
+              alert(`Erro ao avançar: ${e?.message || e}`);
+            } finally {
+              setAdvancing(false);
+            }
+          }}
+          disabled={groups.length === 0 || advancing}
+        >
+          {advancing ? (
+            <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Processando...</>
+          ) : (
+            <>Atribuir Veículos <ArrowRight className="h-4 w-4 ml-2" /></>
+          )}
         </Button>
       </div>
 
