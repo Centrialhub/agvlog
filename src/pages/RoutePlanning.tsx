@@ -297,7 +297,7 @@ export default function RoutePlanning() {
           state: fd?.recipient_state || '',
           remetente: fd?.remitter || '—',
           destinatario: fd?.recipient || '—',
-          bairro: '—',
+          bairro: fd?.recipient_neighborhood || '—',
           nfNumber: fd?.invoice_number || '—',
           emissao,
           valor: Number(fd?.value) || 0,
