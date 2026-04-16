@@ -1,0 +1,518 @@
+import { useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useTenant } from '@/hooks/useTenant';
+import { useReceivables } from '@/hooks/useReceivables';
+import { useClients } from '@/hooks/useClients';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Input } from '@/components/ui/input';
+import {
+  DollarSign, TrendingUp, TrendingDown, ArrowRight, Receipt,
+  Search, Filter, FileText, AlertTriangle, CheckCircle, Clock,
+  BarChart3, PieChart as PieChartIcon, Wallet, CreditCard,
+  ArrowUpRight, ArrowDownRight, Calendar, Download,
+} from 'lucide-react';
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, CartesianGrid, Area, AreaChart, Legend,
+} from 'recharts';
+import { format, subDays, startOfMonth, endOfMonth, parseISO } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { useNavigate } from 'react-router-dom';
+
+const COLORS = [
+  'hsl(215, 80%, 48%)', 'hsl(142, 64%, 38%)', 'hsl(38, 92%, 50%)',
+  'hsl(0, 72%, 51%)', 'hsl(270, 60%, 55%)', 'hsl(180, 60%, 40%)',
+];
+
+export default function Financial() {
+  const { currentTenant } = useTenant();
+  const navigate = useNavigate();
+  const [period, setPeriod] = useState<'7d' | '30d' | '90d' | 'all'>('30d');
+
+  // ── Receivables ──
+  const { data: receivables = [] } = useReceivables();
+
+  // ── Fiscal Documents (NF-es inbound = entrada, CT-es outbound = receita frete) ──
+  const { data: fiscalDocs = [] } = useQuery({
+    queryKey: ['fin_fiscal', currentTenant?.id],
+    queryFn: async () => {
+      if (!currentTenant) return [];
+      const { data } = await supabase
+        .from('fiscal_documents')
+        .select('id, document_type, value, weight_kg, freight_value, status, created_at, issue_date, client_id, invoice_number')
+        .eq('tenant_id', currentTenant.id)
+        .order('created_at', { ascending: false })
+        .limit(1000);
+      return data || [];
+    },
+    enabled: !!currentTenant,
+  });
+
+  // ── Driver Expenses ──
+  const { data: expenses = [] } = useQuery({
+    queryKey: ['fin_expenses', currentTenant?.id],
+    queryFn: async () => {
+      if (!currentTenant) return [];
+      const { data } = await supabase
+        .from('driver_expenses')
+        .select('id, amount, category, approval_status, expense_at, driver_id, notes, drivers(name)')
+        .eq('tenant_id', currentTenant.id)
+        .order('expense_at', { ascending: false })
+        .limit(500);
+      return data || [];
+    },
+    enabled: !!currentTenant,
+  });
+
+  // ── Freight Calculation Logs ──
+  const { data: freightLogs = [] } = useQuery({
+    queryKey: ['fin_freight_logs', currentTenant?.id],
+    queryFn: async () => {
+      if (!currentTenant) return [];
+      const { data } = await supabase
+        .from('freight_calculation_log')
+        .select('id, final_value, entity_type, created_at, freight_table_name')
+        .eq('tenant_id', currentTenant.id)
+        .order('created_at', { ascending: false })
+        .limit(500);
+      return data || [];
+    },
+    enabled: !!currentTenant,
+  });
+
+  // ── Maintenance Orders (costs) ──
+  const { data: maintenanceCosts = [] } = useQuery({
+    queryKey: ['fin_maintenance', currentTenant?.id],
+    queryFn: async () => {
+      if (!currentTenant) return [];
+      const { data } = await supabase
+        .from('maintenance_orders')
+        .select('id, total_cost, labor_cost, parts_cost, status, created_at, maintenance_type')
+        .eq('tenant_id', currentTenant.id)
+        .limit(500);
+      return data || [];
+    },
+    enabled: !!currentTenant,
+  });
+
+  const { data: clients = [] } = useClients();
+
+  // ── Period filter ──
+  const periodStart = useMemo(() => {
+    if (period === '7d') return subDays(new Date(), 7);
+    if (period === '30d') return subDays(new Date(), 30);
+    if (period === '90d') return subDays(new Date(), 90);
+    return new Date('2000-01-01');
+  }, [period]);
+
+  const filterByPeriod = (dateStr: string | null) => {
+    if (!dateStr) return false;
+    return new Date(dateStr) >= periodStart;
+  };
+
+  // ── Computed KPIs ──
+  const kpis = useMemo(() => {
+    const filteredDocs = fiscalDocs.filter((d: any) => filterByPeriod(d.issue_date || d.created_at));
+    const nfes = filteredDocs.filter((d: any) => d.document_type === 'inbound');
+    const ctes = filteredDocs.filter((d: any) => d.document_type === 'outbound');
+
+    const totalNfeValue = nfes.reduce((s: number, d: any) => s + (Number(d.value) || 0), 0);
+    const totalCteValue = ctes.reduce((s: number, d: any) => s + (Number(d.value) || 0), 0);
+    const totalFreight = ctes.reduce((s: number, d: any) => s + (Number(d.freight_value) || 0), 0);
+
+    const filteredExpenses = expenses.filter((e: any) => filterByPeriod(e.expense_at));
+    const totalExpenses = filteredExpenses.reduce((s: number, e: any) => s + (Number(e.amount) || 0), 0);
+    const pendingExpenses = filteredExpenses.filter((e: any) => e.approval_status === 'pending');
+    const approvedExpenses = filteredExpenses.filter((e: any) => e.approval_status === 'approved');
+
+    const filteredReceivables = receivables.filter((r: any) => filterByPeriod(r.created_at));
+    const totalReceivable = filteredReceivables.reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0);
+    const pendingReceivable = filteredReceivables.filter((r: any) => r.status === 'pending').reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0);
+    const paidReceivable = filteredReceivables.filter((r: any) => r.status === 'paid').reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0);
+    const overdueReceivable = filteredReceivables.filter((r: any) => r.status === 'overdue').reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0);
+
+    const filteredMaint = maintenanceCosts.filter((m: any) => filterByPeriod(m.created_at));
+    const totalMaintenance = filteredMaint.reduce((s: number, m: any) => s + (Number(m.total_cost) || 0), 0);
+
+    const revenue = totalFreight + totalCteValue;
+    const outflow = totalExpenses + totalMaintenance;
+    const balance = revenue - outflow;
+
+    return {
+      nfeCount: nfes.length, cteCount: ctes.length,
+      totalNfeValue, totalCteValue, totalFreight,
+      totalExpenses, pendingExpensesCount: pendingExpenses.length,
+      totalReceivable, pendingReceivable, paidReceivable, overdueReceivable,
+      totalMaintenance,
+      revenue, outflow, balance,
+      receivablesCount: filteredReceivables.length,
+    };
+  }, [fiscalDocs, expenses, receivables, maintenanceCosts, periodStart]);
+
+  // ── Chart: Revenue vs Expenses by day ──
+  const revenueExpenseChart = useMemo(() => {
+    const days: Record<string, { day: string; receita: number; despesa: number }> = {};
+
+    fiscalDocs.filter((d: any) => d.document_type === 'outbound' && filterByPeriod(d.issue_date || d.created_at)).forEach((d: any) => {
+      const day = (d.issue_date || d.created_at?.slice(0, 10)) || '';
+      if (!days[day]) days[day] = { day, receita: 0, despesa: 0 };
+      days[day].receita += Number(d.freight_value) || Number(d.value) || 0;
+    });
+
+    expenses.filter((e: any) => filterByPeriod(e.expense_at)).forEach((e: any) => {
+      const day = e.expense_at?.slice(0, 10) || '';
+      if (!days[day]) days[day] = { day, receita: 0, despesa: 0 };
+      days[day].despesa += Number(e.amount) || 0;
+    });
+
+    return Object.values(days)
+      .sort((a, b) => a.day.localeCompare(b.day))
+      .map(d => ({ ...d, day: d.day.length >= 10 ? format(new Date(d.day + 'T12:00:00'), 'dd/MM') : d.day }));
+  }, [fiscalDocs, expenses, periodStart]);
+
+  // ── Chart: Expense breakdown by category ──
+  const expenseByCategoryChart = useMemo(() => {
+    const cats: Record<string, number> = {};
+    expenses.filter((e: any) => filterByPeriod(e.expense_at)).forEach((e: any) => {
+      const cat = e.category || 'outros';
+      cats[cat] = (cats[cat] || 0) + (Number(e.amount) || 0);
+    });
+    return Object.entries(cats).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+  }, [expenses, periodStart]);
+
+  // ── Chart: Receivables status ──
+  const receivablesChart = useMemo(() => {
+    const statuses: Record<string, number> = {};
+    receivables.filter((r: any) => filterByPeriod(r.created_at)).forEach((r: any) => {
+      const s = r.status || 'pending';
+      statuses[s] = (statuses[s] || 0) + (Number(r.amount) || 0);
+    });
+    const labels: Record<string, string> = { pending: 'Pendente', paid: 'Pago', overdue: 'Vencido', cancelled: 'Cancelado' };
+    return Object.entries(statuses).map(([status, value]) => ({ name: labels[status] || status, value }));
+  }, [receivables, periodStart]);
+
+  const fmtCurrency = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const fmtCurrencyShort = (v: number) => {
+    if (v >= 1000000) return `R$ ${(v / 1000000).toFixed(1)}M`;
+    if (v >= 1000) return `R$ ${(v / 1000).toFixed(1)}k`;
+    return `R$ ${v.toFixed(0)}`;
+  };
+
+  return (
+    <div className="animate-fade-in space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+            <Wallet className="h-6 w-6 text-primary" /> Financeiro
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Painel financeiro integrado · Receitas, despesas e contas a receber
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <div className="flex bg-muted rounded-lg p-0.5">
+            {(['7d', '30d', '90d', 'all'] as const).map(p => (
+              <button
+                key={p}
+                onClick={() => setPeriod(p)}
+                className={`px-3 py-1 text-xs rounded-md transition-colors ${
+                  period === p ? 'bg-background text-foreground shadow-sm font-medium' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {p === '7d' ? '7 dias' : p === '30d' ? '30 dias' : p === '90d' ? '90 dias' : 'Tudo'}
+              </button>
+            ))}
+          </div>
+          <Button variant="outline" size="sm" onClick={() => navigate('/receivables')}>
+            <DollarSign className="h-4 w-4 mr-1" /> Contas a Receber
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => navigate('/expense-approval')}>
+            <Receipt className="h-4 w-4 mr-1" /> Despesas
+          </Button>
+        </div>
+      </div>
+
+      {/* ── Hero KPIs ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="relative overflow-hidden border-primary/20 group hover:shadow-xl transition-all duration-300">
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/8 via-emerald-500/4 to-transparent" />
+          <div className="absolute -top-8 -right-8 w-24 h-24 rounded-full bg-emerald-500/5 group-hover:bg-emerald-500/10 transition-colors" />
+          <CardContent className="p-5 relative">
+            <div className="flex items-center justify-between mb-3">
+              <div className="h-10 w-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+                <ArrowUpRight className="h-5 w-5 text-emerald-600" />
+              </div>
+              <Badge variant="secondary" className="text-[10px] font-medium">receita</Badge>
+            </div>
+            <p className="text-2xl font-extrabold text-foreground tracking-tight">{fmtCurrencyShort(kpis.revenue)}</p>
+            <p className="text-xs text-muted-foreground mt-1">Receita de frete</p>
+            <p className="text-[10px] text-muted-foreground mt-2">{kpis.cteCount} CT-es emitidos</p>
+          </CardContent>
+        </Card>
+
+        <Card className="relative overflow-hidden border-destructive/20 group hover:shadow-xl transition-all duration-300">
+          <div className="absolute inset-0 bg-gradient-to-br from-red-500/8 via-red-500/4 to-transparent" />
+          <div className="absolute -top-8 -right-8 w-24 h-24 rounded-full bg-red-500/5 group-hover:bg-red-500/10 transition-colors" />
+          <CardContent className="p-5 relative">
+            <div className="flex items-center justify-between mb-3">
+              <div className="h-10 w-10 rounded-xl bg-red-500/10 flex items-center justify-center">
+                <ArrowDownRight className="h-5 w-5 text-red-600" />
+              </div>
+              <Badge variant="secondary" className="text-[10px] font-medium">saída</Badge>
+            </div>
+            <p className="text-2xl font-extrabold text-foreground tracking-tight">{fmtCurrencyShort(kpis.outflow)}</p>
+            <p className="text-xs text-muted-foreground mt-1">Despesas + Manutenção</p>
+            <p className="text-[10px] text-muted-foreground mt-2">
+              {kpis.pendingExpensesCount > 0 && <span className="text-warning">{kpis.pendingExpensesCount} pendentes</span>}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className={`relative overflow-hidden group hover:shadow-xl transition-all duration-300 ${kpis.balance >= 0 ? 'border-emerald-500/20' : 'border-destructive/20'}`}>
+          <div className={`absolute inset-0 ${kpis.balance >= 0 ? 'bg-gradient-to-br from-emerald-500/8 to-transparent' : 'bg-gradient-to-br from-red-500/8 to-transparent'}`} />
+          <CardContent className="p-5 relative">
+            <div className="flex items-center justify-between mb-3">
+              <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${kpis.balance >= 0 ? 'bg-emerald-500/10' : 'bg-red-500/10'}`}>
+                <TrendingUp className={`h-5 w-5 ${kpis.balance >= 0 ? 'text-emerald-600' : 'text-red-600'}`} />
+              </div>
+              <Badge variant="secondary" className="text-[10px] font-medium">saldo</Badge>
+            </div>
+            <p className={`text-2xl font-extrabold tracking-tight ${kpis.balance >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+              {fmtCurrencyShort(kpis.balance)}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">Resultado do período</p>
+          </CardContent>
+        </Card>
+
+        <Card className={`relative overflow-hidden group hover:shadow-xl transition-all duration-300 ${kpis.overdueReceivable > 0 ? 'border-warning/30' : 'border-primary/20'}`}>
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/8 via-primary/4 to-transparent" />
+          <CardContent className="p-5 relative">
+            <div className="flex items-center justify-between mb-3">
+              <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                <CreditCard className="h-5 w-5 text-primary" />
+              </div>
+              {kpis.overdueReceivable > 0 && (
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-warning opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-warning" />
+                </span>
+              )}
+            </div>
+            <p className="text-2xl font-extrabold text-foreground tracking-tight">{fmtCurrencyShort(kpis.pendingReceivable)}</p>
+            <p className="text-xs text-muted-foreground mt-1">A receber</p>
+            {kpis.overdueReceivable > 0 && (
+              <p className="text-[10px] text-destructive font-medium mt-2">{fmtCurrencyShort(kpis.overdueReceivable)} vencido</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ── Secondary KPIs ── */}
+      <div className="grid grid-cols-3 lg:grid-cols-6 gap-3">
+        {[
+          { icon: FileText, label: 'NF-es', value: kpis.nfeCount, sub: fmtCurrencyShort(kpis.totalNfeValue), color: 'text-blue-500' },
+          { icon: Receipt, label: 'CT-es', value: kpis.cteCount, sub: fmtCurrencyShort(kpis.totalCteValue), color: 'text-emerald-500' },
+          { icon: DollarSign, label: 'Frete Total', value: fmtCurrencyShort(kpis.totalFreight), sub: 'receita', color: 'text-green-600' },
+          { icon: Receipt, label: 'Despesas Op.', value: fmtCurrencyShort(kpis.totalExpenses), sub: `${expenses.filter((e: any) => filterByPeriod(e.expense_at)).length} lançamentos`, color: 'text-red-500' },
+          { icon: Wallet, label: 'Manutenção', value: fmtCurrencyShort(kpis.totalMaintenance), sub: 'custos', color: 'text-orange-500' },
+          { icon: CheckCircle, label: 'Recebidos', value: fmtCurrencyShort(kpis.paidReceivable), sub: 'liquidados', color: 'text-teal-500' },
+        ].map(({ icon: Icon, label, value, sub, color }) => (
+          <Card key={label} className="hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+            <CardContent className="p-3">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Icon className={`h-3.5 w-3.5 ${color}`} />
+                <span className="text-[10px] text-muted-foreground font-medium">{label}</span>
+              </div>
+              <p className="text-lg font-bold">{value}</p>
+              <p className="text-[10px] text-muted-foreground truncate">{sub}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* ── Charts ── */}
+      <div className="grid lg:grid-cols-3 gap-4">
+        {/* Revenue vs Expenses */}
+        <Card className="lg:col-span-2 shadow-sm hover:shadow-md transition-shadow">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <BarChart3 className="h-4 w-4 text-primary" /> Receita × Despesa
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {revenueExpenseChart.length > 0 ? (
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={revenueExpenseChart} margin={{ left: -10, right: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="day" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+                  <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={(v) => fmtCurrencyShort(v)} />
+                  <Tooltip
+                    contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))' }}
+                    formatter={(value: number, name: string) => [fmtCurrency(value), name === 'receita' ? 'Receita' : 'Despesa']}
+                  />
+                  <Legend formatter={(value) => value === 'receita' ? 'Receita' : 'Despesa'} />
+                  <Bar dataKey="receita" fill="hsl(var(--success))" radius={[4, 4, 0, 0]} name="receita" />
+                  <Bar dataKey="despesa" fill="hsl(var(--destructive))" radius={[4, 4, 0, 0]} name="despesa" />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-[240px] text-sm text-muted-foreground">
+                Sem dados no período selecionado
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Expense Categories Pie */}
+        <Card className="shadow-sm hover:shadow-md transition-shadow">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <PieChartIcon className="h-4 w-4 text-primary" /> Despesas por Categoria
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col items-center">
+            {expenseByCategoryChart.length > 0 ? (
+              <>
+                <ResponsiveContainer width="100%" height={170}>
+                  <PieChart>
+                    <Pie
+                      data={expenseByCategoryChart}
+                      cx="50%" cy="50%"
+                      innerRadius={45} outerRadius={70}
+                      paddingAngle={3}
+                      dataKey="value"
+                      strokeWidth={0}
+                    >
+                      {expenseByCategoryChart.map((_, i) => (
+                        <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, background: 'hsl(var(--card))' }} formatter={(v: number) => fmtCurrency(v)} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="flex flex-wrap gap-x-3 gap-y-1 justify-center mt-1">
+                  {expenseByCategoryChart.map((entry, i) => (
+                    <div key={i} className="flex items-center gap-1">
+                      <div className="h-2 w-2 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
+                      <span className="text-[10px] text-muted-foreground">{entry.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-center h-[200px] text-sm text-muted-foreground">
+                Sem despesas no período
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ── Receivables Chart ── */}
+      {receivablesChart.length > 0 && (
+        <Card className="shadow-sm hover:shadow-md transition-shadow">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <CreditCard className="h-4 w-4 text-primary" /> Contas a Receber por Status
+              </CardTitle>
+              <Button variant="ghost" size="sm" className="text-xs h-7" onClick={() => navigate('/receivables')}>
+                Gerenciar <ArrowRight className="h-3 w-3 ml-1" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              {receivablesChart.map((entry, i) => (
+                <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-muted/30">
+                  <div className="h-3 w-3 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
+                  <div>
+                    <p className="text-xs font-medium">{entry.name}</p>
+                    <p className="text-sm font-bold">{fmtCurrency(entry.value)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Recent Transactions ── */}
+      <div className="grid lg:grid-cols-2 gap-4">
+        {/* Recent Expenses */}
+        <Card className="shadow-sm">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <ArrowDownRight className="h-4 w-4 text-destructive" /> Últimas Despesas
+              </CardTitle>
+              <Button variant="ghost" size="sm" className="text-xs h-7" onClick={() => navigate('/expense-approval')}>
+                Ver todas <ArrowRight className="h-3 w-3 ml-1" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="divide-y divide-border">
+              {expenses.slice(0, 6).map((exp: any) => (
+                <div key={exp.id} className="flex items-center justify-between py-2.5 px-4">
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium">{exp.category}</p>
+                    <p className="text-[10px] text-muted-foreground truncate">
+                      {exp.drivers?.name || '—'} · {exp.expense_at ? format(new Date(exp.expense_at), 'dd/MM/yy', { locale: ptBR }) : '—'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs font-semibold text-destructive">-{fmtCurrency(Number(exp.amount))}</span>
+                    <Badge variant={exp.approval_status === 'approved' ? 'secondary' : exp.approval_status === 'pending' ? 'outline' : 'destructive'} className="text-[9px]">
+                      {exp.approval_status === 'approved' ? 'Aprovada' : exp.approval_status === 'pending' ? 'Pendente' : 'Rejeitada'}
+                    </Badge>
+                  </div>
+                </div>
+              ))}
+              {expenses.length === 0 && (
+                <p className="text-xs text-muted-foreground text-center py-6">Nenhuma despesa registrada</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Recent CT-es / Revenue */}
+        <Card className="shadow-sm">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <ArrowUpRight className="h-4 w-4 text-emerald-600" /> Últimos CT-es
+              </CardTitle>
+              <Button variant="ghost" size="sm" className="text-xs h-7" onClick={() => navigate('/fiscal-documents')}>
+                Ver todos <ArrowRight className="h-3 w-3 ml-1" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="divide-y divide-border">
+              {fiscalDocs.filter((d: any) => d.document_type === 'outbound').slice(0, 6).map((doc: any) => (
+                <div key={doc.id} className="flex items-center justify-between py-2.5 px-4">
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium">CT-e {doc.invoice_number || '—'}</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {doc.issue_date ? format(new Date(doc.issue_date + 'T12:00:00'), 'dd/MM/yy', { locale: ptBR }) : '—'}
+                    </p>
+                  </div>
+                  <span className="text-xs font-semibold text-emerald-600">+{fmtCurrency(Number(doc.freight_value || doc.value || 0))}</span>
+                </div>
+              ))}
+              {fiscalDocs.filter((d: any) => d.document_type === 'outbound').length === 0 && (
+                <p className="text-xs text-muted-foreground text-center py-6">Nenhum CT-e emitido</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
