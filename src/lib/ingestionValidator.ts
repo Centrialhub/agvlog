@@ -33,19 +33,43 @@ export interface ValidatedOrder {
   matchedClientName: string | null;
 }
 
+// Pre-built indexes to avoid O(N*M) lookups when validating many docs
+export interface ValidationIndexes {
+  accessKeySet: Set<string>;
+  invoiceNumberSet: Set<string>;
+  clientByTaxId: Map<string, Client>;
+  clientByNameLower: Map<string, Client>;
+}
+
+export function buildValidationIndexes(existingDocs: FiscalDocument[], clients: Client[]): ValidationIndexes {
+  const accessKeySet = new Set<string>();
+  const invoiceNumberSet = new Set<string>();
+  for (const d of existingDocs) {
+    if (d.access_key) accessKeySet.add(d.access_key);
+    if (d.invoice_number) invoiceNumberSet.add(d.invoice_number);
+  }
+  const clientByTaxId = new Map<string, Client>();
+  const clientByNameLower = new Map<string, Client>();
+  for (const c of clients) {
+    const tax = (c.tax_id || '').replace(/\D/g, '');
+    if (tax) clientByTaxId.set(tax, c);
+    if (c.company_name) clientByNameLower.set(c.company_name.toLowerCase(), c);
+  }
+  return { accessKeySet, invoiceNumberSet, clientByTaxId, clientByNameLower };
+}
+
 // Validate a parsed NF-e against existing data
 export function validateNFe(
   nfe: ParsedNFe,
   fileName: string,
   existingDocs: FiscalDocument[],
   clients: Client[],
+  indexes?: ValidationIndexes,
 ): ValidatedDocument {
+  const idx = indexes || buildValidationIndexes(existingDocs, clients);
   const validations: ValidationResult[] = [];
 
-  // Check duplicate by access key
-  const isDuplicate = existingDocs.some(
-    d => d.access_key && d.access_key === nfe.accessKey
-  );
+  const isDuplicate = !!nfe.accessKey && idx.accessKeySet.has(nfe.accessKey);
   if (isDuplicate) {
     validations.push({
       field: 'accessKey',
@@ -54,10 +78,7 @@ export function validateNFe(
     });
   }
 
-  // Check duplicate by invoice number
-  const duplicateByNumber = existingDocs.some(
-    d => d.invoice_number === nfe.invoiceNumber && !isDuplicate
-  );
+  const duplicateByNumber = !isDuplicate && !!nfe.invoiceNumber && idx.invoiceNumberSet.has(nfe.invoiceNumber);
   if (duplicateByNumber) {
     validations.push({
       field: 'invoiceNumber',
@@ -66,7 +87,6 @@ export function validateNFe(
     });
   }
 
-  // Validate required fields
   if (!nfe.invoiceNumber) {
     validations.push({ field: 'invoiceNumber', message: 'Número da NF não encontrado', severity: 'error' });
   }
@@ -86,12 +106,11 @@ export function validateNFe(
     validations.push({ field: 'totalWeight', message: 'Peso não informado — estimativa de paletes pode ser imprecisa', severity: 'info' });
   }
 
-  // Match client by CNPJ
   let matchedClientId: string | null = null;
   let matchedClientName: string | null = null;
   const recipientDoc = (nfe.recipientCnpj || '').replace(/\D/g, '');
   if (recipientDoc) {
-    const matched = clients.find(c => (c.tax_id || '').replace(/\D/g, '') === recipientDoc);
+    const matched = idx.clientByTaxId.get(recipientDoc);
     if (matched) {
       matchedClientId = matched.id;
       matchedClientName = matched.company_name;
@@ -104,19 +123,17 @@ export function validateNFe(
     }
   }
 
-  // Validate destination
   if (!nfe.recipientCity && !nfe.recipientState) {
     validations.push({ field: 'destination', message: 'Endereço de destino incompleto', severity: 'warning' });
   }
 
-  // Check item quantities
-  nfe.items.forEach((item, idx) => {
+  nfe.items.forEach((item, idx2) => {
     if (item.quantity <= 0) {
       validations.push({
         field: 'itemQuantity',
         message: `Item "${item.description}" com quantidade inválida`,
         severity: 'error',
-        index: idx,
+        index: idx2,
       });
     }
   });

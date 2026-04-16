@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { parseNFeXml, parseCsvOrders, parseExcelOrders, ParsedOrderRow } from '@/lib/documentParsers';
 import {
-  validateNFe, validateOrderRows, generateLoadSuggestions,
+  validateNFe, validateOrderRows, generateLoadSuggestions, buildValidationIndexes,
   ValidatedDocument, ValidatedOrder, LoadSuggestion,
 } from '@/lib/ingestionValidator';
 import { useFiscalDocuments, useCreateFiscalDocument } from '@/hooks/useFiscalDocuments';
@@ -88,40 +88,76 @@ export default function Ingestion() {
   const [executionResults, setExecutionResults] = useState<string[]>([]);
 
   const handleFiles = useCallback(async (fileList: FileList) => {
+    const files = Array.from(fileList);
+    const t0 = performance.now();
+
+    // Read ALL files in parallel (I/O bound) — huge speedup vs sequential await
+    const fileBuffers = await Promise.all(
+      files.map(async (file) => {
+        const name = file.name.toLowerCase();
+        try {
+          if (name.endsWith('.xml') || name.endsWith('.csv') || name.endsWith('.txt')) {
+            return { file, name, kind: name.endsWith('.xml') ? 'xml' : 'csv', text: await file.text(), buffer: null as ArrayBuffer | null };
+          }
+          if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
+            return { file, name, kind: 'excel' as const, text: '', buffer: await file.arrayBuffer() };
+          }
+          return { file, name, kind: 'unknown' as const, text: '', buffer: null };
+        } catch (e: any) {
+          return { file, name, kind: 'error' as const, text: '', buffer: null, error: e?.message || 'Erro de leitura' };
+        }
+      })
+    );
+
+    // Build validation indexes ONCE (O(N+M) lookups instead of O(N*M))
+    const indexes = buildValidationIndexes(existingDocs, clients);
+
+    // Build a Map for client lookup once (used inside validateNFe via clients array — already O(n) per doc, so we keep clients but skip rebuilds)
     const docs: ValidatedDocument[] = [];
     const orderRows: ParsedOrderRow[] = [];
 
-    for (let i = 0; i < fileList.length; i++) {
-      const file = fileList[i];
-      const name = file.name.toLowerCase();
-
-      if (name.endsWith('.xml')) {
+    // Parse + validate (CPU bound, but sync and fast). Yield to UI between large batches.
+    const BATCH = 50;
+    for (let i = 0; i < fileBuffers.length; i++) {
+      const fb = fileBuffers[i];
+      if (fb.kind === 'xml') {
         try {
-          const text = await file.text();
-          const parsed = parseNFeXml(text);
-          docs.push(validateNFe(parsed, file.name, existingDocs, clients));
+          const parsed = parseNFeXml(fb.text);
+          docs.push(validateNFe(parsed, fb.file.name, existingDocs, clients, indexes));
         } catch (e: any) {
           docs.push({
             source: { invoiceNumber: '', accessKey: '', items: [] } as any,
-            fileName: file.name,
+            fileName: fb.file.name,
             validations: [{ field: 'parse', message: `Erro ao ler XML: ${e.message}`, severity: 'error' }],
             hasErrors: true, hasWarnings: false,
             matchedClientId: null, matchedClientName: null, isDuplicate: false,
           });
         }
-      } else if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
-        const buffer = await file.arrayBuffer();
-        orderRows.push(...parseExcelOrders(buffer));
-      } else if (name.endsWith('.csv') || name.endsWith('.txt')) {
-        const text = await file.text();
-        orderRows.push(...parseCsvOrders(text));
+      } else if (fb.kind === 'excel' && fb.buffer) {
+        orderRows.push(...parseExcelOrders(fb.buffer));
+      } else if (fb.kind === 'csv') {
+        orderRows.push(...parseCsvOrders(fb.text));
+      } else if (fb.kind === 'error') {
+        docs.push({
+          source: { invoiceNumber: '', accessKey: '', items: [] } as any,
+          fileName: fb.file.name,
+          validations: [{ field: 'parse', message: `Erro ao ler arquivo: ${(fb as any).error}`, severity: 'error' }],
+          hasErrors: true, hasWarnings: false,
+          matchedClientId: null, matchedClientName: null, isDuplicate: false,
+        });
+      }
+      // Yield to event loop every BATCH to keep UI responsive on huge uploads
+      if (i > 0 && i % BATCH === 0) {
+        await new Promise(r => setTimeout(r, 0));
       }
     }
 
     setValidatedDocs(docs);
     setValidatedOrders(validateOrderRows(orderRows, clients));
+    const elapsed = Math.round(performance.now() - t0);
+    console.log(`[Ingestion] processed ${files.length} files in ${elapsed}ms`);
     setStep(1);
-  }, [existingDocs, clients, currentTenant, createDoc, user, toast]);
+  }, [existingDocs, clients]);
 
   // Inline editing callbacks
   const handleUpdateDoc = useCallback((index: number, updates: Partial<ValidatedDocument>) => {
