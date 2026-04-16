@@ -527,15 +527,17 @@ export default function OperationsCenter() {
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="h-[280px] w-full">
+            <div className="h-[320px] w-full">
               <MapContainer
-                center={[-15.78, -47.93]}
+                center={[-14.235, -51.925]}
                 zoom={4}
                 style={{ height: '100%', width: '100%' }}
-                zoomControl={false}
-                attributionControl={false}
+                zoomControl={true}
               >
-                <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" />
+                <TileLayer
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                />
                 {vehiclesWithPosition.length > 0 && (
                   <FitBounds positions={vehiclesWithPosition.map(e => ({ lat: e.lat!, lng: e.lng! }))} />
                 )}
@@ -543,26 +545,34 @@ export default function OperationsCenter() {
                   <Marker
                     key={e.vehicle.id}
                     position={[e.lat!, e.lng!]}
-                    icon={createMiniIcon(e.state)}
+                    icon={createVehicleIcon(e.state)}
                   >
-                    <Popup className="text-xs">
-                      <strong>{e.vehicle.plate}</strong>
-                      {e.vehicle.nickname && <span className="text-muted-foreground ml-1">({e.vehicle.nickname})</span>}
-                      <br />
-                      <span>{stateLabel(e.state)}</span>
-                      {e.speed > 0 && <span className="ml-1">· {e.speed.toFixed(0)} km/h</span>}
-                      {e.state === 'stopped' && e.stoppedDuration > 0 && (
-                        <span className="ml-1">· {formatStoppedDuration(e.stoppedDuration)}</span>
-                      )}
+                    <Popup>
+                      <div className="min-w-[180px]">
+                        <p className="font-bold text-sm">{e.vehicle.plate}</p>
+                        {e.vehicle.nickname && <p className="text-xs text-gray-500">{e.vehicle.nickname}</p>}
+                        <div className="mt-2 space-y-1 text-xs">
+                          <p>Status: <strong>{stateLabel(e.state)}</strong></p>
+                          <p>Velocidade: <strong>{Math.round(e.speed)} km/h</strong></p>
+                          {(e.state === 'stopped' || e.state === 'idle') && e.stoppedDuration > 0 && (
+                            <p>Parado há: <strong>{formatStoppedDuration(e.stoppedDuration)}</strong></p>
+                          )}
+                          {e.lastPositionAt && (
+                            <p>Última posição: {formatDistanceToNow(new Date(e.lastPositionAt), { addSuffix: true, locale: ptBR })}</p>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => navigate(`/vehicles/${e.vehicle.id}`)}
+                          className="mt-2 text-xs text-blue-600 hover:underline flex items-center gap-1"
+                        >
+                          <Eye className="h-3 w-3" /> Ver detalhes
+                        </button>
+                      </div>
                     </Popup>
                   </Marker>
                 ))}
               </MapContainer>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Alerts + Incidents */}
         <div className="lg:col-span-2 space-y-4">
           {/* Active Alerts */}
           <Card className={`${alerts.length > 0 ? 'border-destructive/20' : ''}`}>
