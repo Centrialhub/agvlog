@@ -156,7 +156,10 @@ export default function Financial() {
 
   // ── Computed KPIs ──
   const kpis = useMemo(() => {
-    const filteredDocs = fiscalDocs.filter((d: any) => filterByPeriod(d.issue_date || d.created_at));
+    let filteredDocs = fiscalDocs.filter((d: any) => filterByPeriod(d.issue_date || d.created_at));
+    if (selectedClient !== 'all') filteredDocs = filteredDocs.filter((d: any) => d.client_id === selectedClient);
+    if (docType !== 'all') filteredDocs = filteredDocs.filter((d: any) => d.document_type === docType);
+
     const nfes = filteredDocs.filter((d: any) => d.document_type === 'inbound');
     const ctes = filteredDocs.filter((d: any) => d.document_type === 'outbound');
 
@@ -164,12 +167,13 @@ export default function Financial() {
     const totalCteValue = ctes.reduce((s: number, d: any) => s + (Number(d.value) || 0), 0);
     const totalFreight = ctes.reduce((s: number, d: any) => s + (Number(d.freight_value) || 0), 0);
 
-    const filteredExpenses = expenses.filter((e: any) => filterByPeriod(e.expense_at));
+    let filteredExpenses = expenses.filter((e: any) => filterByPeriod(e.expense_at));
+    if (expenseCategory !== 'all') filteredExpenses = filteredExpenses.filter((e: any) => e.category === expenseCategory);
     const totalExpenses = filteredExpenses.reduce((s: number, e: any) => s + (Number(e.amount) || 0), 0);
     const pendingExpenses = filteredExpenses.filter((e: any) => e.approval_status === 'pending');
-    const approvedExpenses = filteredExpenses.filter((e: any) => e.approval_status === 'approved');
 
-    const filteredReceivables = receivables.filter((r: any) => filterByPeriod(r.created_at));
+    let filteredReceivables = receivables.filter((r: any) => filterByPeriod(r.created_at));
+    if (selectedClient !== 'all') filteredReceivables = filteredReceivables.filter((r: any) => r.client_id === selectedClient);
     const totalReceivable = filteredReceivables.reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0);
     const pendingReceivable = filteredReceivables.filter((r: any) => r.status === 'pending').reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0);
     const paidReceivable = filteredReceivables.filter((r: any) => r.status === 'paid').reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0);
@@ -191,7 +195,7 @@ export default function Financial() {
       revenue, outflow, balance,
       receivablesCount: filteredReceivables.length,
     };
-  }, [fiscalDocs, expenses, receivables, maintenanceCosts, periodStart]);
+  }, [fiscalDocs, expenses, receivables, maintenanceCosts, periodStart, periodEnd, selectedClient, docType, expenseCategory]);
 
   // ── Chart: Revenue vs Expenses by day ──
   const revenueExpenseChart = useMemo(() => {
