@@ -106,7 +106,7 @@ export function parseNFeXml(xmlString: string): ParsedNFe {
   return {
     invoiceNumber, series, accessKey, issueDate,
     emitterName, emitterCnpj, recipientName, recipientCnpj,
-    recipientCity, recipientState, recipientAddress,
+    recipientCity, recipientState, recipientAddress, recipientNeighborhood,
     items, totalValue, totalWeight, totalVolume, estimatedPallets,
   };
 }
