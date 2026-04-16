@@ -38,6 +38,7 @@ interface LoadItem {
     recipient: string | null;
     recipient_city: string | null;
     recipient_state: string | null;
+    recipient_neighborhood: string | null;
     value: number | null;
     weight_kg: number | null;
     issue_date: string | null;
