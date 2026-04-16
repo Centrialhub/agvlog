@@ -6,7 +6,6 @@ import { useAuth } from '@/hooks/useAuth';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useOperationalRoutes } from '@/hooks/useOperationalRoutes';
 import { useCreateLoad } from '@/hooks/useLoads';
-import { useCreateLoadItem } from '@/hooks/useLoadItems';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -61,7 +60,7 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
   const { data: vehicles = [] } = useVehicles();
   const { data: operationalRoutes = [] } = useOperationalRoutes();
   const createLoad = useCreateLoad();
-  const createLoadItem = useCreateLoadItem();
+  
   const queryClient = useQueryClient();
 
   const [executing, setExecuting] = useState(false);
