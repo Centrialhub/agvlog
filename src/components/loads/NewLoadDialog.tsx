@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { AlertTriangle, Plus, Search } from 'lucide-react';
+import { AlertTriangle, Eye, Plus, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface Props {
@@ -36,6 +36,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   const [docFilters, setDocFilters] = useState({ invoice: '', client: '', neighborhood: '' });
   const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
   const [previewDoc, setPreviewDoc] = useState<any | null>(null);
+  const [detailsDoc, setDetailsDoc] = useState<any | null>(null);
   const [docAutofillSnapshots, setDocAutofillSnapshots] = useState<Record<string, Record<string, string>>>({});
 
   const normalize = (value: string) => value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -383,6 +384,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
       setSelectedDocIds(new Set());
       setDocAutofillSnapshots({});
       setPreviewDoc(null);
+      setDetailsDoc(null);
       queryClient.invalidateQueries({ queryKey: ['fiscal_documents'] });
       queryClient.invalidateQueries({ queryKey: ['load_items'] });
       onCreated();
