@@ -1,16 +1,20 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { useLoadItems, useCreateLoadItem, useDeleteLoadItem, useUpdateLoadItem, ITEM_STATUSES, ITEM_STATUS_LABELS, LoadItem } from '@/hooks/useLoadItems';
 import { useOrders } from '@/hooks/useOrders';
+import { useTenant } from '@/hooks/useTenant';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
-import { Plus, Trash2, AlertTriangle } from 'lucide-react';
+import { Plus, Trash2, AlertTriangle, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface LoadItemsPanelProps {
@@ -22,11 +26,16 @@ interface LoadItemsPanelProps {
 export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWeight }: LoadItemsPanelProps) {
   const { data: items = [], isLoading } = useLoadItems(loadId);
   const { data: orders = [] } = useOrders();
+  const { currentTenant } = useTenant();
+  const qc = useQueryClient();
   const createItem = useCreateLoadItem();
   const deleteItem = useDeleteLoadItem();
   const updateItem = useUpdateLoadItem();
   const { toast } = useToast();
   const [addOpen, setAddOpen] = useState(false);
+  const [mode, setMode] = useState<'note' | 'manual'>('note');
+  const [docFilters, setDocFilters] = useState({ invoice: '', client: '', neighborhood: '' });
+  const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
   const [form, setForm] = useState({
     order_id: '',
     item_description: '',
@@ -34,6 +43,43 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
     pallet_count: 0,
     weight_kg: 0,
   });
+
+  const { data: fiscalDocs = [] } = useQuery({
+    queryKey: ['load_item_pull_fiscal_docs', currentTenant?.id, addOpen],
+    queryFn: async () => {
+      if (!currentTenant) return [];
+      const { data, error } = await supabase
+        .from('fiscal_documents')
+        .select('id, invoice_number, remitter, recipient, recipient_neighborhood, recipient_city, recipient_state, pallet_count, weight_kg, product_summary, load_id, loads(id, load_number), clients(company_name)')
+        .eq('tenant_id', currentTenant.id)
+        .eq('document_type', 'inbound')
+        .order('created_at', { ascending: false })
+        .limit(1000);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentTenant && addOpen,
+  });
+
+  const normalize = (value: string) => value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const filteredDocs = useMemo(() => {
+    const invoice = normalize(docFilters.invoice);
+    const invoiceDigits = docFilters.invoice.replace(/\D/g, '');
+    const client = normalize(docFilters.client);
+    const neighborhood = normalize(docFilters.neighborhood);
+    const currentDocIds = new Set(items.map(item => item.fiscal_document_id).filter(Boolean));
+    return fiscalDocs.filter((doc: any) => {
+      if (currentDocIds.has(doc.id)) return false;
+      const docInvoice = normalize(doc.invoice_number || '');
+      const docInvoiceDigits = String(doc.invoice_number || '').replace(/\D/g, '');
+      const docClient = normalize(doc.clients?.company_name || doc.recipient || '');
+      const docNeighborhood = normalize(doc.recipient_neighborhood || '');
+      if (invoice && !docInvoice.includes(invoice) && (!invoiceDigits || !docInvoiceDigits.includes(invoiceDigits))) return false;
+      if (client && !docClient.includes(client)) return false;
+      if (neighborhood && !docNeighborhood.includes(neighborhood)) return false;
+      return true;
+    });
+  }, [docFilters, fiscalDocs, items]);
 
   const totalPallets = items.reduce((s, i) => s + i.pallet_count, 0);
   const totalWeight = items.reduce((s, i) => s + (i.weight_kg || 0), 0);
