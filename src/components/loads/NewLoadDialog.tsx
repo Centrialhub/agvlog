@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Search } from 'lucide-react';
+import { AlertTriangle, Plus, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface Props {
@@ -63,6 +63,57 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   }, [docSearch, fiscalDocs]);
 
   const selectedDocs = useMemo(() => fiscalDocs.filter((doc: any) => selectedDocIds.has(doc.id)), [fiscalDocs, selectedDocIds]);
+
+  const normalize = (value: string) => value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+  const validationSuggestions = useMemo(() => {
+    const primaryDoc: any = selectedDocs[0];
+    const knownNeighborhoods = new Set(fiscalDocs.map((doc: any) => normalize(doc.recipient_neighborhood || '')).filter(Boolean));
+    const suggestions: { key: string; title: string; description: string; action?: 'neighborhood' | 'destination' | 'client' | 'invoice' }[] = [];
+
+    if (form.neighborhood.trim() && knownNeighborhoods.size > 0 && !knownNeighborhoods.has(normalize(form.neighborhood))) {
+      suggestions.push({
+        key: 'unknown-neighborhood',
+        title: 'Bairro não cadastrado nas notas pendentes',
+        description: primaryDoc?.recipient_neighborhood ? `Sugestão: usar "${primaryDoc.recipient_neighborhood}" da nota selecionada.` : 'Confira a digitação ou mantenha como rota personalizada.',
+        action: primaryDoc?.recipient_neighborhood ? 'neighborhood' : undefined,
+      });
+    }
+
+    if (primaryDoc) {
+      const expectedDestination = [primaryDoc.recipient_neighborhood, primaryDoc.recipient_city, primaryDoc.recipient_state].filter(Boolean).join(' - ');
+      const expectedClient = primaryDoc.clients?.company_name || primaryDoc.recipient || '';
+
+      if (primaryDoc.invoice_number && form.invoice_number.trim() && normalize(form.invoice_number) !== normalize(primaryDoc.invoice_number)) {
+        suggestions.push({ key: 'invoice-mismatch', title: 'Número da NF diferente da nota selecionada', description: `Sugestão: voltar para "${primaryDoc.invoice_number}".`, action: 'invoice' });
+      }
+      if (expectedClient && form.client_name.trim() && normalize(form.client_name) !== normalize(expectedClient)) {
+        suggestions.push({ key: 'client-mismatch', title: 'Cliente divergente da nota', description: `Sugestão: usar "${expectedClient}".`, action: 'client' });
+      }
+      if (!primaryDoc.recipient_neighborhood) {
+        suggestions.push({ key: 'missing-doc-neighborhood', title: 'Nota sem bairro cadastrado', description: 'Preencha o bairro manualmente antes de criar a carga.' });
+      } else if (form.neighborhood.trim() && normalize(form.neighborhood) !== normalize(primaryDoc.recipient_neighborhood)) {
+        suggestions.push({ key: 'neighborhood-mismatch', title: 'Bairro divergente da nota', description: `Sugestão: usar "${primaryDoc.recipient_neighborhood}".`, action: 'neighborhood' });
+      }
+      if (expectedDestination && form.destination.trim() && !normalize(form.destination).includes(normalize(primaryDoc.recipient_city || primaryDoc.recipient_neighborhood || ''))) {
+        suggestions.push({ key: 'destination-mismatch', title: 'Destino/rota divergente', description: `Sugestão: usar "${expectedDestination}" ou revisar a rota personalizada.`, action: 'destination' });
+      }
+    }
+
+    return suggestions;
+  }, [fiscalDocs, form.client_name, form.destination, form.invoice_number, form.neighborhood, selectedDocs]);
+
+  const applySuggestion = (action: 'neighborhood' | 'destination' | 'client' | 'invoice') => {
+    const doc: any = selectedDocs[0];
+    if (!doc) return;
+    setForm(f => ({
+      ...f,
+      ...(action === 'neighborhood' ? { neighborhood: doc.recipient_neighborhood || '' } : {}),
+      ...(action === 'destination' ? { destination: [doc.recipient_neighborhood, doc.recipient_city, doc.recipient_state].filter(Boolean).join(' - ') } : {}),
+      ...(action === 'client' ? { client_name: doc.clients?.company_name || doc.recipient || '' } : {}),
+      ...(action === 'invoice' ? { invoice_number: doc.invoice_number || '' } : {}),
+    }));
+  };
 
   const applyDocSelection = (doc: any) => {
     setSelectedDocIds(prev => {
@@ -226,6 +277,28 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
             </div>
             <div><Label className="text-xs">Fornecedor</Label><Input value={form.supplier} onChange={e => setForm(f => ({ ...f, supplier: e.target.value }))} placeholder="Remetente / fornecedor" /></div>
           </div>
+          {validationSuggestions.length > 0 && (
+            <div className="space-y-2 rounded-md border border-warning/30 bg-warning/10 p-3">
+              <div className="flex items-center gap-2 text-xs font-medium text-warning">
+                <AlertTriangle className="h-4 w-4" /> Inconsistências encontradas
+              </div>
+              <div className="space-y-2">
+                {validationSuggestions.map(suggestion => (
+                  <div key={suggestion.key} className="flex items-start justify-between gap-3 rounded-md bg-background/60 p-2">
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium">{suggestion.title}</div>
+                      <div className="text-[11px] text-muted-foreground">{suggestion.description}</div>
+                    </div>
+                    {suggestion.action && (
+                      <Button type="button" variant="outline" size="sm" className="h-7 shrink-0 text-[11px]" onClick={() => applySuggestion(suggestion.action!)}>
+                        Aplicar
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="space-y-2 rounded-md border border-border p-3">
             <div className="flex items-center justify-between gap-3">
               <Label className="text-xs">Puxar notas disponíveis</Label>
