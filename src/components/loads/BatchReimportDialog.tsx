@@ -45,6 +45,7 @@ interface DedupEntry {
   fileName: string;
   invoiceNumber: string;
   reason: string;
+  identifier?: string;
 }
 
 const EMPTY_FILE_LIST: File[] = [];
@@ -297,12 +298,17 @@ export default function BatchReimportDialog() {
     error: 'Erro',
   };
 
+  const detailedDedupEntries = [
+    ...dedupReport.updated.map(item => ({ ...item, status: 'Atualizado' })),
+    ...dedupReport.ignored.map(item => ({ ...item, status: 'Ignorado' })),
+  ];
+
   const exportDedupCSV = () => {
     const escapeCell = (value: string | number) => `"${String(value ?? '').replace(/"/g, '""')}"`;
     const rows = [
-      ['Status', 'Arquivo', 'Nota fiscal', 'Motivo', 'Competência inicial', 'Competência final'],
-      ...dedupReport.updated.map(item => ['Atualizado/importado', item.fileName, item.invoiceNumber, item.reason, toDateParam(startDate) || '', toDateParam(endDate) || '']),
-      ...dedupReport.ignored.map(item => ['Ignorado', item.fileName, item.invoiceNumber, item.reason, toDateParam(startDate) || '', toDateParam(endDate) || '']),
+      ['Status', 'Arquivo', 'Nota fiscal', 'Identificador', 'Motivo', 'Competência inicial', 'Competência final'],
+      ...dedupReport.updated.map(item => ['Atualizado/importado', item.fileName, item.invoiceNumber, item.identifier || '', item.reason, toDateParam(startDate) || '', toDateParam(endDate) || '']),
+      ...dedupReport.ignored.map(item => ['Ignorado', item.fileName, item.invoiceNumber, item.identifier || '', item.reason, toDateParam(startDate) || '', toDateParam(endDate) || '']),
     ];
     const csv = rows.map(row => row.map(escapeCell).join(';')).join('\n');
     const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
