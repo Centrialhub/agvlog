@@ -74,6 +74,25 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     enabled: !!currentTenant && open,
   });
 
+  const { data: linkedLoads = [] } = useQuery({
+    queryKey: ['new_load_linked_load_lookup', currentTenant?.id],
+    queryFn: async () => {
+      if (!currentTenant) return [];
+      const { data, error } = await supabase
+        .from('loads')
+        .select('id, load_number')
+        .eq('tenant_id', currentTenant.id)
+        .limit(1000);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentTenant && open,
+  });
+
+  const linkedLoadById = useMemo(() => new Map(linkedLoads.map((load: any) => [load.id, load])), [linkedLoads]);
+
+  const getLinkedLoad = (doc: any) => doc.loads || linkedLoadById.get(doc.load_id) || null;
+
   const nextLoadNumber = useMemo(() => {
     const highest = existingLoadNumbers.reduce((max: number, load: any) => {
       const matches = String(load.load_number || '').match(/\d+/g);
