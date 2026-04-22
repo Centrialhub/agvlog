@@ -230,6 +230,14 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     });
   };
 
+  const clearDocFilters = () => {
+    setDocFilters(emptyDocFilters);
+    setDocSort('recent');
+    setVisibleDocCount(DOC_PAGE_SIZE);
+    setVisibleRecentDocCount(DOC_PAGE_SIZE);
+    window.requestAnimationFrame(() => docListRef.current?.scrollTo({ top: 0 }));
+  };
+
   const previewValidationIssues = useMemo(() => {
     if (!previewDoc) return [];
     const expectedClient = previewDoc.clients?.company_name || previewDoc.recipient || '';
@@ -675,7 +683,10 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
               <Input value={docFilters.client} onChange={e => setDocFilters(f => ({ ...f, client: e.target.value }))} placeholder="Cliente" className="h-9" />
               <Input value={docFilters.neighborhood} onChange={e => setDocFilters(f => ({ ...f, neighborhood: e.target.value }))} placeholder="Bairro" className="h-9" />
             </div>
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={clearDocFilters}>
+                Limpar filtros
+              </Button>
               <Select value={docSort} onValueChange={(value: 'recent' | 'alpha') => setDocSort(value)}>
                 <SelectTrigger className="h-8 w-48 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
