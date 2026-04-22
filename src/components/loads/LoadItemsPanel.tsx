@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
-import { Plus, Trash2, AlertTriangle, Search } from 'lucide-react';
+import { Plus, Trash2, AlertTriangle, Loader2, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface LoadItemsPanelProps {
@@ -62,7 +62,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
     weight_kg: 0,
   });
 
-  const { data: fiscalDocs = [] } = useQuery({
+  const { data: fiscalDocs = [], isFetching: isFetchingFiscalDocs } = useQuery({
     queryKey: ['load_item_pull_fiscal_docs', currentTenant?.id, addOpen],
     queryFn: async () => {
       if (!currentTenant) return [];
@@ -100,6 +100,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
   }, [debouncedDocFilters, fiscalDocs, items]);
 
   const visibleFilteredDocs = useMemo(() => filteredDocs.slice(0, visibleDocCount), [filteredDocs, visibleDocCount]);
+  const isDocsUpdating = isFetchingFiscalDocs || docFilters.invoice !== debouncedDocFilters.invoice || docFilters.client !== debouncedDocFilters.client || docFilters.neighborhood !== debouncedDocFilters.neighborhood;
 
   useEffect(() => {
     setVisibleDocCount(DOC_PAGE_SIZE);
@@ -268,7 +269,10 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
                       <Input value={docFilters.neighborhood} onChange={e => setDocFilters(f => ({ ...f, neighborhood: e.target.value }))} placeholder="Bairro" />
                     </div>
                     <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
-                      <span>{selectedDocIds.size} selecionada(s)</span>
+                      <span className="inline-flex items-center gap-2">
+                        {isDocsUpdating && <span className="inline-flex items-center gap-1 font-medium"><Loader2 className="h-3 w-3 animate-spin" /> Atualizando...</span>}
+                        {selectedDocIds.size} selecionada(s)
+                      </span>
                       <Button type="button" variant="ghost" size="sm" className="h-7 text-[11px]" onClick={reorganizeDocsLayout}>Reorganizar layout</Button>
                     </div>
                     <div key={docsLayoutKey} ref={docListRef} className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1" onScroll={handleDocListScroll}>
