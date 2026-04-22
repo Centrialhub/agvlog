@@ -26,6 +26,18 @@ import { printRomaneioRoutes, RomaneioDoc } from '@/lib/romaneioPrint';
 /* ────────────── types ────────────── */
 const recipientCollator = new Intl.Collator('pt-BR', { sensitivity: 'base', numeric: true });
 
+const getLoadRecipient = (load: PendingLoad) => load.items[0]?.fiscal_documents?.recipient || load.destination || load.load_number || '';
+
+const sortLoadsByRecipient = (loads: PendingLoad[]) => [...loads].sort((a, b) =>
+  recipientCollator.compare(getLoadRecipient(a), getLoadRecipient(b)) ||
+  recipientCollator.compare(a.load_number, b.load_number)
+);
+
+const sortItemsByRecipient = (items: LoadItem[]) => [...items].sort((a, b) =>
+  recipientCollator.compare(a.fiscal_documents?.recipient || '—', b.fiscal_documents?.recipient || '—') ||
+  recipientCollator.compare(a.fiscal_documents?.invoice_number || '—', b.fiscal_documents?.invoice_number || '—')
+);
+
 interface LoadItem {
   id: string;
   load_id: string;
