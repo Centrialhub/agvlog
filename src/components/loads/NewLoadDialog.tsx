@@ -35,6 +35,8 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
   const [previewDoc, setPreviewDoc] = useState<any | null>(null);
 
+  const normalize = (value: string) => value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
   const { data: fiscalDocs = [] } = useQuery({
     queryKey: ['new_load_available_fiscal_docs', currentTenant?.id],
     queryFn: async () => {
@@ -70,7 +72,35 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
 
   const selectedDocs = useMemo(() => fiscalDocs.filter((doc: any) => selectedDocIds.has(doc.id)), [fiscalDocs, selectedDocIds]);
 
-  const normalize = (value: string) => value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const previewValidationIssues = useMemo(() => {
+    if (!previewDoc) return [];
+    const expectedClient = previewDoc.clients?.company_name || previewDoc.recipient || '';
+    const expectedDestination = [previewDoc.recipient_neighborhood, previewDoc.recipient_city, previewDoc.recipient_state].filter(Boolean).join(' - ');
+    const issues: { key: string; field: string; message: string; severity: 'warning' | 'error' }[] = [];
+
+    if (!previewDoc.invoice_number) issues.push({ key: 'missing-invoice', field: 'invoice', message: 'Número da NF ausente na nota.', severity: 'error' });
+    if (!expectedClient) issues.push({ key: 'missing-client', field: 'client', message: 'Cliente/destinatário ausente na nota.', severity: 'error' });
+    if (!previewDoc.remitter) issues.push({ key: 'missing-supplier', field: 'supplier', message: 'Fornecedor/remetente ausente na nota.', severity: 'warning' });
+    if (!previewDoc.recipient_neighborhood) issues.push({ key: 'missing-neighborhood', field: 'neighborhood', message: 'Bairro ausente na nota.', severity: 'error' });
+    if (!previewDoc.recipient_city || !previewDoc.recipient_state) issues.push({ key: 'missing-city-state', field: 'destination', message: 'Cidade ou UF ausente para montar a rota.', severity: 'warning' });
+
+    if (form.invoice_number.trim() && previewDoc.invoice_number && normalize(form.invoice_number) !== normalize(previewDoc.invoice_number)) {
+      issues.push({ key: 'inconsistent-invoice', field: 'invoice', message: `NF atual difere da nota (${previewDoc.invoice_number}).`, severity: 'warning' });
+    }
+    if (form.client_name.trim() && expectedClient && normalize(form.client_name) !== normalize(expectedClient)) {
+      issues.push({ key: 'inconsistent-client', field: 'client', message: `Cliente atual difere da nota (${expectedClient}).`, severity: 'warning' });
+    }
+    if (form.neighborhood.trim() && previewDoc.recipient_neighborhood && normalize(form.neighborhood) !== normalize(previewDoc.recipient_neighborhood)) {
+      issues.push({ key: 'inconsistent-neighborhood', field: 'neighborhood', message: `Bairro atual difere da nota (${previewDoc.recipient_neighborhood}).`, severity: 'warning' });
+    }
+    if (form.destination.trim() && expectedDestination && !normalize(form.destination).includes(normalize(previewDoc.recipient_city || previewDoc.recipient_neighborhood || ''))) {
+      issues.push({ key: 'inconsistent-destination', field: 'destination', message: `Rota atual pode divergir do destino da nota (${expectedDestination}).`, severity: 'warning' });
+    }
+
+    return issues;
+  }, [form.client_name, form.destination, form.invoice_number, form.neighborhood, previewDoc]);
+
+  const previewIssueFields = useMemo(() => new Set(previewValidationIssues.map(issue => issue.field)), [previewValidationIssues]);
 
   const validationSuggestions = useMemo(() => {
     const primaryDoc: any = selectedDocs[0];
@@ -343,11 +373,21 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                   </div>
                   <Button size="sm" onClick={() => applyDocSelection(previewDoc)}>Confirmar nota</Button>
                 </div>
+                {previewValidationIssues.length > 0 && (
+                  <div className="space-y-1 rounded-md border border-warning/30 bg-warning/10 p-2">
+                    {previewValidationIssues.map(issue => (
+                      <div key={issue.key} className="flex items-start gap-2 text-[11px]">
+                        <AlertTriangle className={`mt-0.5 h-3.5 w-3.5 ${issue.severity === 'error' ? 'text-destructive' : 'text-warning'}`} />
+                        <span>{issue.message}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-                  <div><span className="text-muted-foreground">Cliente:</span> {previewDoc.clients?.company_name || previewDoc.recipient || '—'}</div>
-                  <div><span className="text-muted-foreground">Fornecedor:</span> {previewDoc.remitter || '—'}</div>
-                  <div><span className="text-muted-foreground">Bairro:</span> {previewDoc.recipient_neighborhood || '—'}</div>
-                  <div><span className="text-muted-foreground">Cidade/UF:</span> {[previewDoc.recipient_city, previewDoc.recipient_state].filter(Boolean).join(' / ') || '—'}</div>
+                  <div className={previewIssueFields.has('client') ? 'rounded border border-warning/30 bg-warning/10 px-2 py-1' : ''}><span className="text-muted-foreground">Cliente:</span> {previewDoc.clients?.company_name || previewDoc.recipient || '—'}</div>
+                  <div className={previewIssueFields.has('supplier') ? 'rounded border border-warning/30 bg-warning/10 px-2 py-1' : ''}><span className="text-muted-foreground">Fornecedor:</span> {previewDoc.remitter || '—'}</div>
+                  <div className={previewIssueFields.has('neighborhood') ? 'rounded border border-warning/30 bg-warning/10 px-2 py-1' : ''}><span className="text-muted-foreground">Bairro:</span> {previewDoc.recipient_neighborhood || '—'}</div>
+                  <div className={previewIssueFields.has('destination') ? 'rounded border border-warning/30 bg-warning/10 px-2 py-1' : ''}><span className="text-muted-foreground">Cidade/UF:</span> {[previewDoc.recipient_city, previewDoc.recipient_state].filter(Boolean).join(' / ') || '—'}</div>
                   <div><span className="text-muted-foreground">Paletes:</span> {previewDoc.pallet_count ?? 0}</div>
                   <div><span className="text-muted-foreground">Peso:</span> {previewDoc.weight_kg ?? 0} kg</div>
                   <div className="col-span-2"><span className="text-muted-foreground">Produto:</span> {previewDoc.product_summary || '—'}</div>
