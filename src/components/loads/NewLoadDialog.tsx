@@ -224,16 +224,39 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
             <div className="max-h-40 overflow-y-auto space-y-1">
               {filteredDocs.length === 0 ? (
                 <div className="text-xs text-muted-foreground py-3 text-center">Nenhuma nota pendente encontrada</div>
-              ) : filteredDocs.map((doc: any) => (
-                <button key={doc.id} type="button" onClick={() => toggleDoc(doc)} className="w-full flex items-start gap-2 rounded-md border border-border px-2 py-2 text-left hover:bg-muted/60">
-                  <Checkbox checked={selectedDocIds.has(doc.id)} className="mt-0.5" />
+              ) : filteredDocs.map((doc: any) => {
+                const isSelected = selectedDocIds.has(doc.id);
+                return (
+                <button key={doc.id} type="button" onClick={() => isSelected ? removeDocSelection(doc.id) : setPreviewDoc(doc)} className="w-full flex items-start gap-2 rounded-md border border-border px-2 py-2 text-left hover:bg-muted/60">
+                  <Checkbox checked={isSelected} className="mt-0.5" />
                   <span className="min-w-0 flex-1">
                     <span className="block text-xs font-medium">NF {doc.invoice_number || '—'} · {doc.clients?.company_name || doc.recipient || 'Sem cliente'}</span>
                     <span className="block text-[11px] text-muted-foreground truncate">{doc.remitter || 'Fornecedor não informado'} · {doc.recipient_neighborhood || 'Sem bairro'}</span>
                   </span>
                 </button>
-              ))}
+                );
+              })}
             </div>
+            {previewDoc && (
+              <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-medium">Pré-visualização da NF {previewDoc.invoice_number || '—'}</div>
+                    <div className="text-[11px] text-muted-foreground">Confira os dados que serão preenchidos automaticamente.</div>
+                  </div>
+                  <Button size="sm" onClick={() => applyDocSelection(previewDoc)}>Confirmar nota</Button>
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                  <div><span className="text-muted-foreground">Cliente:</span> {previewDoc.clients?.company_name || previewDoc.recipient || '—'}</div>
+                  <div><span className="text-muted-foreground">Fornecedor:</span> {previewDoc.remitter || '—'}</div>
+                  <div><span className="text-muted-foreground">Bairro:</span> {previewDoc.recipient_neighborhood || '—'}</div>
+                  <div><span className="text-muted-foreground">Cidade/UF:</span> {[previewDoc.recipient_city, previewDoc.recipient_state].filter(Boolean).join(' / ') || '—'}</div>
+                  <div><span className="text-muted-foreground">Paletes:</span> {previewDoc.pallet_count ?? 0}</div>
+                  <div><span className="text-muted-foreground">Peso:</span> {previewDoc.weight_kg ?? 0} kg</div>
+                  <div className="col-span-2"><span className="text-muted-foreground">Produto:</span> {previewDoc.product_summary || '—'}</div>
+                </div>
+              </div>
+            )}
           </div>
           <div><Label className="text-xs">Observações</Label><Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2} /></div>
           <div className="flex justify-end gap-2">
