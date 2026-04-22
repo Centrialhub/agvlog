@@ -59,6 +59,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   const { data: clients = [] } = useClients();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [sessionOnlyPreference, setSessionOnlyPreference] = useState(loadSessionOnly);
   const [open, setOpen] = useState(false);
   const [recentDocsOpen, setRecentDocsOpen] = useState(false);
   const emptyForm = { load_number: '', vehicle_id: '', driver_id: '', origin: '', destination: '', neighborhood: '', invoice_number: '', client_id: '', client_name: '', supplier: '', notes: '' };
@@ -82,6 +83,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   const isDocPreferenceHydrated = useRef(false);
   const skipNextFilterReset = useRef(false);
   const debouncedDocFilters = useDebouncedValue(docFilters, FILTER_DEBOUNCE_MS);
+  const currentDocPreference = { filters: docFilters, sort: docSort, visibleDocCount, visibleRecentDocCount, scrollTop: docScrollTop, recentScrollTop: recentDocScrollTop };
 
   const normalize = (value: string) => value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
@@ -138,21 +140,28 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
 
   useEffect(() => {
     if (!isDocPreferenceLoaded) return;
-    setDocFilters({ ...emptyDocFilters, ...(docPreference as any).filters });
-    setDocSort((docPreference as any).sort === 'alpha' ? 'alpha' : 'recent');
-    setVisibleDocCount(Math.max(DOC_PAGE_SIZE, Number((docPreference as any).visibleDocCount) || DOC_PAGE_SIZE));
-    setVisibleRecentDocCount(Math.max(DOC_PAGE_SIZE, Number((docPreference as any).visibleRecentDocCount) || DOC_PAGE_SIZE));
-    setDocScrollTop(Number((docPreference as any).scrollTop) || 0);
-    setRecentDocScrollTop(Number((docPreference as any).recentScrollTop) || 0);
+    const sourcePreference = sessionOnlyPreference ? loadSessionPreference() : docPreference;
+    setDocFilters({ ...emptyDocFilters, ...(sourcePreference as any).filters });
+    setDocSort((sourcePreference as any).sort === 'alpha' ? 'alpha' : 'recent');
+    setVisibleDocCount(Math.max(DOC_PAGE_SIZE, Number((sourcePreference as any).visibleDocCount) || DOC_PAGE_SIZE));
+    setVisibleRecentDocCount(Math.max(DOC_PAGE_SIZE, Number((sourcePreference as any).visibleRecentDocCount) || DOC_PAGE_SIZE));
+    setDocScrollTop(Number((sourcePreference as any).scrollTop) || 0);
+    setRecentDocScrollTop(Number((sourcePreference as any).recentScrollTop) || 0);
     skipNextFilterReset.current = true;
     isDocPreferenceHydrated.current = true;
-  }, [docPreference, isDocPreferenceLoaded]);
+  }, [docPreference, isDocPreferenceLoaded, sessionOnlyPreference]);
 
   useEffect(() => {
     if (!isDocPreferenceHydrated.current) return;
-    const timeout = window.setTimeout(() => saveDocPreference({ filters: docFilters, sort: docSort, visibleDocCount, visibleRecentDocCount, scrollTop: docScrollTop, recentScrollTop: recentDocScrollTop }), 300);
+    const timeout = window.setTimeout(() => {
+      if (sessionOnlyPreference) {
+        window.sessionStorage.setItem(NEW_LOAD_SESSION_PREF_KEY, JSON.stringify(currentDocPreference));
+      } else {
+        saveDocPreference(currentDocPreference);
+      }
+    }, 300);
     return () => window.clearTimeout(timeout);
-  }, [docFilters, docSort, visibleDocCount, visibleRecentDocCount, docScrollTop, recentDocScrollTop, saveDocPreference]);
+  }, [currentDocPreference, saveDocPreference, sessionOnlyPreference]);
 
   const filteredDocs = useMemo(() => {
     const invoice = normalize(debouncedDocFilters.invoice);
