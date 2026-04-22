@@ -277,6 +277,28 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
             </div>
             <div><Label className="text-xs">Fornecedor</Label><Input value={form.supplier} onChange={e => setForm(f => ({ ...f, supplier: e.target.value }))} placeholder="Remetente / fornecedor" /></div>
           </div>
+          {validationSuggestions.length > 0 && (
+            <div className="space-y-2 rounded-md border border-warning/30 bg-warning/10 p-3">
+              <div className="flex items-center gap-2 text-xs font-medium text-warning">
+                <AlertTriangle className="h-4 w-4" /> Inconsistências encontradas
+              </div>
+              <div className="space-y-2">
+                {validationSuggestions.map(suggestion => (
+                  <div key={suggestion.key} className="flex items-start justify-between gap-3 rounded-md bg-background/60 p-2">
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium">{suggestion.title}</div>
+                      <div className="text-[11px] text-muted-foreground">{suggestion.description}</div>
+                    </div>
+                    {suggestion.action && (
+                      <Button type="button" variant="outline" size="sm" className="h-7 shrink-0 text-[11px]" onClick={() => applySuggestion(suggestion.action!)}>
+                        Aplicar
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="space-y-2 rounded-md border border-border p-3">
             <div className="flex items-center justify-between gap-3">
               <Label className="text-xs">Puxar notas disponíveis</Label>
