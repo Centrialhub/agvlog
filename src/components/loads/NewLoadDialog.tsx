@@ -33,6 +33,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   const [form, setForm] = useState(emptyForm);
   const [docSearch, setDocSearch] = useState('');
   const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
+  const [previewDoc, setPreviewDoc] = useState<any | null>(null);
 
   const { data: fiscalDocs = [] } = useQuery({
     queryKey: ['new_load_available_fiscal_docs', currentTenant?.id],
@@ -63,10 +64,10 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
 
   const selectedDocs = useMemo(() => fiscalDocs.filter((doc: any) => selectedDocIds.has(doc.id)), [fiscalDocs, selectedDocIds]);
 
-  const toggleDoc = (doc: any) => {
+  const applyDocSelection = (doc: any) => {
     setSelectedDocIds(prev => {
       const next = new Set(prev);
-      next.has(doc.id) ? next.delete(doc.id) : next.add(doc.id);
+      next.add(doc.id);
       return next;
     });
     if (!form.invoice_number && !form.client_name && !form.supplier) {
@@ -79,6 +80,15 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
         destination: [doc.recipient_neighborhood, doc.recipient_city, doc.recipient_state].filter(Boolean).join(' - '),
       }));
     }
+    setPreviewDoc(null);
+  };
+
+  const removeDocSelection = (docId: string) => {
+    setSelectedDocIds(prev => {
+      const next = new Set(prev);
+      next.delete(docId);
+      return next;
+    });
   };
 
   const handleSave = async () => {
@@ -148,6 +158,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
       setForm(emptyForm);
       setDocSearch('');
       setSelectedDocIds(new Set());
+      setPreviewDoc(null);
       queryClient.invalidateQueries({ queryKey: ['fiscal_documents'] });
       queryClient.invalidateQueries({ queryKey: ['load_items'] });
       onCreated();
