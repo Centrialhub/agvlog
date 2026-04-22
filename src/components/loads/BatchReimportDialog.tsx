@@ -318,6 +318,31 @@ export default function BatchReimportDialog() {
             <div className="text-sm font-semibold text-foreground">Será apagado antes da importação</div>
             <Badge variant="destructive">{previewLoading ? 'contando...' : `${previewTotal} registro(s)`}</Badge>
           </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className={cn('justify-start text-left font-normal', !startDate && 'text-muted-foreground')} disabled={busy}>
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {startDate ? format(startDate, 'dd/MM/yyyy') : 'Início da competência'}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar mode="single" selected={startDate} onSelect={setStartDate} initialFocus className={cn('p-3 pointer-events-auto')} />
+              </PopoverContent>
+            </Popover>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className={cn('justify-start text-left font-normal', !endDate && 'text-muted-foreground')} disabled={busy}>
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {endDate ? format(endDate, 'dd/MM/yyyy') : 'Fim da competência'}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar mode="single" selected={endDate} onSelect={setEndDate} initialFocus className={cn('p-3 pointer-events-auto')} />
+              </PopoverContent>
+            </Popover>
+          </div>
+          {dateRangeInvalid && <div className="text-xs font-medium text-destructive">A data inicial não pode ser maior que a final.</div>}
           <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
             {Object.entries(erasePreview || {}).map(([label, count]) => (
               <div key={label} className="rounded-md bg-background/70 border border-border p-2">
@@ -373,7 +398,7 @@ export default function BatchReimportDialog() {
           <Alert>
             <CheckCircle2 className="h-4 w-4" />
             <AlertTitle>Resumo</AlertTitle>
-            <AlertDescription>{imported} nota(s) importada(s). {errors.length} arquivo(s) com erro.</AlertDescription>
+            <AlertDescription>{imported} nota(s) importada(s). {errors.length} arquivo(s) com erro. Período: {startDate ? format(startDate, 'dd/MM/yyyy') : 'início'} até {endDate ? format(endDate, 'dd/MM/yyyy') : 'fim'}.</AlertDescription>
           </Alert>
         )}
 
@@ -443,7 +468,7 @@ export default function BatchReimportDialog() {
 
         <div className="flex items-center justify-between gap-3">
           <Button variant="ghost" onClick={reset} disabled={busy}>Limpar seleção</Button>
-          <Button onClick={startReimport} disabled={!total || busy || !currentTenant || !confirmed}>
+          <Button onClick={startReimport} disabled={!total || busy || !currentTenant || !confirmed || dateRangeInvalid}>
             {phase === 'clearing' ? 'Limpando...' : phase === 'importing' ? 'Importando...' : 'Limpar e importar'}
           </Button>
         </div>
