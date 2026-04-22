@@ -5089,6 +5089,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      clear_reimport_batch_data: { Args: { _tenant_id: string }; Returns: Json }
       count_points_in_geofence: {
         Args: { _geofence_id: string; _points: Json }
         Returns: Json

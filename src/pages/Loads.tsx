@@ -17,6 +17,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import PendingDocsGrouping from '@/components/loads/PendingDocsGrouping';
 import NewLoadDialog from '@/components/loads/NewLoadDialog';
+import BatchReimportDialog from '@/components/loads/BatchReimportDialog';
 
 const STATUS_COLORS: Record<string, string> = {
   delivered: 'bg-success/10 text-success',
@@ -290,6 +291,7 @@ export default function Loads() {
           <Button size="sm" variant="outline" onClick={printAllRomaneios} disabled={isLoading || filtered.length === 0}>
             <Printer className="h-4 w-4 mr-1" /> Reimprimir todas
           </Button>
+          <BatchReimportDialog />
           {pendingCount > 0 && (
             <Button size="sm" variant="secondary" onClick={() => setGroupingOpen(true)}>
               <FileStack className="h-4 w-4 mr-1" /> Agrupar NF-es
