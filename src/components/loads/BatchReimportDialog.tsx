@@ -68,9 +68,16 @@ export default function BatchReimportDialog() {
     return Math.round((processed / total) * 100);
   }, [phase, processed, total]);
 
+  const setFileStatus = (fileName: string, updates: Partial<FileImportStatus>) => {
+    setFileStatuses(prev => prev.map(status => (
+      status.fileName === fileName ? { ...status, ...updates } : status
+    )));
+  };
+
   const handleFiles = (fileList: FileList | null) => {
     const xmlFiles = Array.from(fileList || []).filter(file => file.name.toLowerCase().endsWith('.xml'));
     setFiles(xmlFiles);
+    setFileStatuses(xmlFiles.map(file => ({ fileName: file.name, state: 'pending' })));
     setPhase(xmlFiles.length ? 'ready' : 'idle');
     setProcessed(0);
     setImported(0);
@@ -118,6 +125,7 @@ export default function BatchReimportDialog() {
     setErrors([]);
     setClearSummary(null);
     setConfirmationText('');
+    setFileStatuses([]);
     if (inputRef.current) inputRef.current.value = '';
   };
 
@@ -137,6 +145,7 @@ export default function BatchReimportDialog() {
     setImported(0);
     setErrors([]);
     setClearSummary(null);
+    setFileStatuses(files.map(file => ({ fileName: file.name, state: 'pending' })));
 
     try {
       const { data: cleaned, error: cleanError } = await (supabase as any).rpc('clear_reimport_batch_data', {
@@ -152,6 +161,7 @@ export default function BatchReimportDialog() {
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
+        setFileStatus(file.name, { state: 'importing', message: 'Importando...' });
         try {
           const parsed = parseNFeXml(await file.text());
           const validated = validateNFe(parsed, file.name, [], clients, indexes);
@@ -181,9 +191,16 @@ export default function BatchReimportDialog() {
           if (error) throw error;
           successCount++;
           setImported(successCount);
+          setFileStatus(file.name, {
+            state: 'success',
+            invoiceNumber: validated.source.invoiceNumber,
+            message: `NF ${validated.source.invoiceNumber || 'sem número'} importada`,
+          });
         } catch (error: any) {
-          importErrors.push({ fileName: file.name, message: error?.message || 'Erro desconhecido ao importar' });
+          const message = error?.message || 'Erro desconhecido ao importar';
+          importErrors.push({ fileName: file.name, message });
           setErrors([...importErrors]);
+          setFileStatus(file.name, { state: 'error', message });
         } finally {
           setProcessed(i + 1);
           await new Promise(resolve => setTimeout(resolve, 0));
