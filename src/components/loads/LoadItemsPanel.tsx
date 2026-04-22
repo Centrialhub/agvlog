@@ -210,6 +210,17 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
     window.requestAnimationFrame(() => docListRef.current?.scrollTo({ top: 0 }));
   };
 
+  const toggleSessionOnlyPreference = (checked: boolean) => {
+    setSessionOnlyPreference(checked);
+    window.sessionStorage.setItem(LOAD_ITEMS_SESSION_ONLY_KEY, String(checked));
+    if (checked) {
+      window.sessionStorage.setItem(LOAD_ITEMS_SESSION_PREF_KEY, JSON.stringify(currentDocPreference));
+    } else {
+      window.sessionStorage.removeItem(LOAD_ITEMS_SESSION_PREF_KEY);
+      saveDocPreference(currentDocPreference);
+    }
+  };
+
   const totalPallets = items.reduce((s, i) => s + i.pallet_count, 0);
   const totalWeight = items.reduce((s, i) => s + (i.weight_kg || 0), 0);
   const palletOccupancy = vehicleMaxPallets ? Math.round((totalPallets / vehicleMaxPallets) * 100) : null;
@@ -374,7 +385,13 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
                         {isDocsUpdating && <span className="inline-flex items-center gap-1 font-medium"><Loader2 className="h-3 w-3 animate-spin" /> Atualizando...</span>}
                         {selectedDocIds.size} selecionada(s)
                       </span>
-                      <Button type="button" variant="ghost" size="sm" className="h-7 text-[11px]" onClick={reorganizeDocsLayout}>Reorganizar layout</Button>
+                      <span className="inline-flex items-center gap-2">
+                        <label className="inline-flex items-center gap-1">
+                          <Checkbox checked={sessionOnlyPreference} onCheckedChange={checked => toggleSessionOnlyPreference(checked === true)} className="h-3.5 w-3.5" />
+                          Usar apenas nesta sessão
+                        </label>
+                        <Button type="button" variant="ghost" size="sm" className="h-7 text-[11px]" onClick={reorganizeDocsLayout}>Reorganizar layout</Button>
+                      </span>
                     </div>
                     {selectedDocs.length > 0 && (
                       <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs">
