@@ -122,6 +122,11 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
   const isDocsUpdating = isFetchingFiscalDocs || docFilters.invoice !== debouncedDocFilters.invoice || docFilters.client !== debouncedDocFilters.client || docFilters.neighborhood !== debouncedDocFilters.neighborhood;
 
   useEffect(() => {
+    if (!addOpen || !isDocPreferenceHydrated.current) return;
+    window.requestAnimationFrame(() => docListRef.current?.scrollTo({ top: docScrollTop }));
+  }, [addOpen, docScrollTop, visibleDocCount]);
+
+  useEffect(() => {
     if (!isDocPreferenceLoaded) return;
     setDocFilters({ ...emptyDocFilters, ...(docPreference as any).filters });
     setDocSort((docPreference as any).sort === 'alpha' ? 'alpha' : 'recent');
