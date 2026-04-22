@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { format } from 'date-fns';
-import { RotateCcw, Upload, AlertTriangle, CheckCircle2, FileText, XCircle, Clock, Loader2, CalendarIcon } from 'lucide-react';
+import { RotateCcw, Upload, AlertTriangle, CheckCircle2, FileText, XCircle, Clock, Loader2, CalendarIcon, Download } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { parseNFeXml } from '@/lib/documentParsers';
@@ -297,6 +297,23 @@ export default function BatchReimportDialog() {
     error: 'Erro',
   };
 
+  const exportDedupCSV = () => {
+    const escapeCell = (value: string | number) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+    const rows = [
+      ['Status', 'Arquivo', 'Nota fiscal', 'Motivo', 'Competência inicial', 'Competência final'],
+      ...dedupReport.updated.map(item => ['Atualizado/importado', item.fileName, item.invoiceNumber, item.reason, toDateParam(startDate) || '', toDateParam(endDate) || '']),
+      ...dedupReport.ignored.map(item => ['Ignorado', item.fileName, item.invoiceNumber, item.reason, toDateParam(startDate) || '', toDateParam(endDate) || '']),
+    ];
+    const csv = rows.map(row => row.map(escapeCell).join(';')).join('\n');
+    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `relatorio_deduplicacao_${toDateParam(startDate) || 'inicio'}_${toDateParam(endDate) || 'fim'}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -429,7 +446,10 @@ export default function BatchReimportDialog() {
           <div className="rounded-lg border border-border p-4 space-y-3">
             <div className="flex items-center justify-between gap-3">
               <div className="text-sm font-semibold text-foreground">Relatório de deduplicação</div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={exportDedupCSV}>
+                  <Download className="h-4 w-4 mr-1" /> CSV
+                </Button>
                 <Badge variant="outline">{dedupReport.updated.length} atualizado(s)</Badge>
                 <Badge variant="secondary">{dedupReport.ignored.length} ignorado(s)</Badge>
               </div>
