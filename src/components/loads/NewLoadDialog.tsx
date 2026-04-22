@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { AlertTriangle, Eye, Plus, Search } from 'lucide-react';
+import { AlertTriangle, Eye, Loader2, Plus, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface Props {
@@ -62,7 +62,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
 
   const normalize = (value: string) => value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
-  const { data: fiscalDocs = [] } = useQuery({
+  const { data: fiscalDocs = [], isFetching: isFetchingFiscalDocs } = useQuery({
     queryKey: ['new_load_available_fiscal_docs', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
@@ -79,7 +79,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     enabled: !!currentTenant && open,
   });
 
-  const { data: nextLoadNumber = '' } = useQuery({
+  const { data: nextLoadNumber = '', isFetching: isFetchingNextLoadNumber } = useQuery({
     queryKey: ['next_load_number_preview', currentTenant?.id, open],
     queryFn: async () => {
       if (!currentTenant) return '';
@@ -108,6 +108,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   });
 
   const linkedLoadById = useMemo(() => new Map(linkedLoads.map((load: any) => [load.id, load])), [linkedLoads]);
+  const isDocsUpdating = isFetchingFiscalDocs || isFetchingNextLoadNumber || docFilters.invoice !== debouncedDocFilters.invoice || docFilters.client !== debouncedDocFilters.client || docFilters.neighborhood !== debouncedDocFilters.neighborhood;
 
   const getLinkedLoad = (doc: any) => doc.loads || linkedLoadById.get(doc.load_id) || null;
 
@@ -599,6 +600,11 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
             <div className="flex items-center justify-between gap-3">
               <Label className="text-xs">Puxar notas</Label>
               <div className="flex items-center gap-2">
+                {isDocsUpdating && (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
+                    <Loader2 className="h-3 w-3 animate-spin" /> Atualizando...
+                  </span>
+                )}
                 <span className="text-[11px] text-muted-foreground">{selectedDocIds.size} selecionada(s)</span>
                 <Button type="button" variant="ghost" size="sm" className="h-7 text-[11px]" onClick={reorganizeDocsLayout}>
                   Reorganizar layout
