@@ -22,6 +22,8 @@ interface Props {
   onCreated: () => void;
 }
 
+const DOC_PAGE_SIZE = 25;
+
 export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   const createLoad = useCreateLoad();
   const { currentTenant } = useTenant();
@@ -39,6 +41,8 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   const [previewDoc, setPreviewDoc] = useState<any | null>(null);
   const [detailsDoc, setDetailsDoc] = useState<any | null>(null);
   const [docAutofillSnapshots, setDocAutofillSnapshots] = useState<Record<string, Record<string, string>>>({});
+  const [visibleDocCount, setVisibleDocCount] = useState(DOC_PAGE_SIZE);
+  const [visibleRecentDocCount, setVisibleRecentDocCount] = useState(DOC_PAGE_SIZE);
 
   const normalize = (value: string) => value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
@@ -124,13 +128,24 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     });
   }, [docFilters, fiscalDocs]);
 
-  const recentDocs = useMemo(() => fiscalDocs.slice(0, 20), [fiscalDocs]);
+  const recentDocs = useMemo(() => fiscalDocs, [fiscalDocs]);
 
   const selectableFilteredDocs = useMemo(() => filteredDocs, [filteredDocs]);
 
   const linkedFilteredDocs = useMemo(() => filteredDocs.filter((doc: any) => doc.load_id), [filteredDocs]);
 
   const selectedDocs = useMemo(() => fiscalDocs.filter((doc: any) => selectedDocIds.has(doc.id)), [fiscalDocs, selectedDocIds]);
+
+  const visibleFilteredDocs = useMemo(() => filteredDocs.slice(0, visibleDocCount), [filteredDocs, visibleDocCount]);
+  const visibleRecentDocs = useMemo(() => recentDocs.slice(0, visibleRecentDocCount), [recentDocs, visibleRecentDocCount]);
+
+  useEffect(() => {
+    setVisibleDocCount(DOC_PAGE_SIZE);
+  }, [docFilters.invoice, docFilters.client, docFilters.neighborhood, open]);
+
+  useEffect(() => {
+    if (recentDocsOpen) setVisibleRecentDocCount(DOC_PAGE_SIZE);
+  }, [recentDocsOpen]);
 
   const previewValidationIssues = useMemo(() => {
     if (!previewDoc) return [];
