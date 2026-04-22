@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Search, PackageCheck, Truck, MapPin, ArrowRight, FileStack, Trash2, MoreVertical, X, CheckSquare, Printer, Route as RouteIcon } from 'lucide-react';
+import { Search, PackageCheck, Truck, MapPin, ArrowRight, FileStack, Trash2, MoreVertical, X, CheckSquare, Printer, Route as RouteIcon, CalendarDays } from 'lucide-react';
 import { printRomaneioRoutes, RomaneioDoc } from '@/lib/romaneioPrint';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
@@ -28,6 +28,29 @@ const STATUS_COLORS: Record<string, string> = {
   loading: 'bg-primary/10 text-primary',
   planned: 'bg-muted text-muted-foreground',
   assembling: 'bg-warning/10 text-warning',
+};
+
+type DatePreset = 'all' | 'today' | '7' | '14' | '30' | 'custom';
+
+const datePresetLabels: Record<DatePreset, string> = {
+  all: 'Todas',
+  today: 'Hoje',
+  '7': '7 dias',
+  '14': '14 dias',
+  '30': '30 dias',
+  custom: 'Personalizado',
+};
+
+const startOfDay = (date: Date) => {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  return next;
+};
+
+const endOfDay = (date: Date) => {
+  const next = new Date(date);
+  next.setHours(23, 59, 59, 999);
+  return next;
 };
 
 export default function Loads() {
