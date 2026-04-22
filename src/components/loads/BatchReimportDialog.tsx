@@ -45,6 +45,7 @@ interface DedupEntry {
   fileName: string;
   invoiceNumber: string;
   reason: string;
+  identifier?: string;
 }
 
 const EMPTY_FILE_LIST: File[] = [];
@@ -206,7 +207,7 @@ export default function BatchReimportDialog() {
 
           if (!isWithinSelectedPeriod(validated.source.issueDate)) {
             const reason = `Emissão ${validated.source.issueDate || 'sem data'} fora do período selecionado`;
-            dedup.ignored.push({ fileName: file.name, invoiceNumber: validated.source.invoiceNumber || '—', reason });
+            dedup.ignored.push({ fileName: file.name, invoiceNumber: validated.source.invoiceNumber || '—', identifier: validated.source.accessKey || validated.source.invoiceNumber || '—', reason });
             setDedupReport({ ignored: [...dedup.ignored], updated: [...dedup.updated] });
             setFileStatus(file.name, { state: 'ignored', invoiceNumber: validated.source.invoiceNumber, message: reason });
             continue;
@@ -215,8 +216,9 @@ export default function BatchReimportDialog() {
           const duplicateKey = validated.source.accessKey && seenAccessKeys.get(validated.source.accessKey);
           const duplicateNumber = !duplicateKey && validated.source.invoiceNumber && seenInvoiceNumbers.get(validated.source.invoiceNumber);
           if (duplicateKey || duplicateNumber) {
-            const reason = duplicateKey ? `Chave já importada em ${duplicateKey}` : `Número já importado em ${duplicateNumber}`;
-            dedup.ignored.push({ fileName: file.name, invoiceNumber: validated.source.invoiceNumber || '—', reason });
+            const identifier = duplicateKey ? `Chave de acesso: ${validated.source.accessKey}` : `Número da NF: ${validated.source.invoiceNumber}`;
+            const reason = duplicateKey ? `${identifier} já importada no arquivo ${duplicateKey}` : `${identifier} já importado no arquivo ${duplicateNumber}`;
+            dedup.ignored.push({ fileName: file.name, invoiceNumber: validated.source.invoiceNumber || '—', identifier, reason });
             setDedupReport({ ignored: [...dedup.ignored], updated: [...dedup.updated] });
             setFileStatus(file.name, { state: 'ignored', invoiceNumber: validated.source.invoiceNumber, message: reason });
             continue;
@@ -246,7 +248,7 @@ export default function BatchReimportDialog() {
           setImported(successCount);
           if (validated.source.accessKey) seenAccessKeys.set(validated.source.accessKey, file.name);
           if (validated.source.invoiceNumber) seenInvoiceNumbers.set(validated.source.invoiceNumber, file.name);
-          dedup.updated.push({ fileName: file.name, invoiceNumber: validated.source.invoiceNumber || '—', reason: 'Novo registro importado após limpeza' });
+          dedup.updated.push({ fileName: file.name, invoiceNumber: validated.source.invoiceNumber || '—', identifier: validated.source.accessKey ? `Chave de acesso: ${validated.source.accessKey}` : `Número da NF: ${validated.source.invoiceNumber || '—'}`, reason: 'Novo registro importado após limpeza da competência' });
           setDedupReport({ ignored: [...dedup.ignored], updated: [...dedup.updated] });
           setFileStatus(file.name, {
             state: 'updated',
@@ -297,12 +299,17 @@ export default function BatchReimportDialog() {
     error: 'Erro',
   };
 
+  const detailedDedupEntries = [
+    ...dedupReport.updated.map(item => ({ ...item, status: 'Atualizado' })),
+    ...dedupReport.ignored.map(item => ({ ...item, status: 'Ignorado' })),
+  ];
+
   const exportDedupCSV = () => {
     const escapeCell = (value: string | number) => `"${String(value ?? '').replace(/"/g, '""')}"`;
     const rows = [
-      ['Status', 'Arquivo', 'Nota fiscal', 'Motivo', 'Competência inicial', 'Competência final'],
-      ...dedupReport.updated.map(item => ['Atualizado/importado', item.fileName, item.invoiceNumber, item.reason, toDateParam(startDate) || '', toDateParam(endDate) || '']),
-      ...dedupReport.ignored.map(item => ['Ignorado', item.fileName, item.invoiceNumber, item.reason, toDateParam(startDate) || '', toDateParam(endDate) || '']),
+      ['Status', 'Arquivo', 'Nota fiscal', 'Identificador', 'Motivo', 'Competência inicial', 'Competência final'],
+      ...dedupReport.updated.map(item => ['Atualizado/importado', item.fileName, item.invoiceNumber, item.identifier || '', item.reason, toDateParam(startDate) || '', toDateParam(endDate) || '']),
+      ...dedupReport.ignored.map(item => ['Ignorado', item.fileName, item.invoiceNumber, item.identifier || '', item.reason, toDateParam(startDate) || '', toDateParam(endDate) || '']),
     ];
     const csv = rows.map(row => row.map(escapeCell).join(';')).join('\n');
     const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
@@ -478,6 +485,22 @@ export default function BatchReimportDialog() {
                 </div>
               </div>
             </div>
+            <details className="rounded-md border border-border bg-muted/30 p-3">
+              <summary className="cursor-pointer text-xs font-semibold text-foreground">Ver motivo completo por arquivo</summary>
+              <div className="mt-3 max-h-56 overflow-y-auto space-y-2">
+                {detailedDedupEntries.map((item, index) => (
+                  <div key={`${item.fileName}-detail-${index}`} className="rounded-md bg-background/70 border border-border p-3 text-xs">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="font-medium text-foreground">{item.fileName}</div>
+                      <Badge variant={item.status === 'Ignorado' ? 'secondary' : 'outline'}>{item.status}</Badge>
+                    </div>
+                    <div className="mt-2 text-muted-foreground">NF {item.invoiceNumber}</div>
+                    <div className="mt-1 break-words text-muted-foreground">{item.identifier || 'Sem chave de acesso/número identificado'}</div>
+                    <div className="mt-1 break-words text-foreground">{item.reason}</div>
+                  </div>
+                ))}
+              </div>
+            </details>
           </div>
         )}
 
