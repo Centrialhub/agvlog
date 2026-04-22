@@ -117,21 +117,23 @@ export default function BatchReimportDialog() {
       } as const;
 
       const entries = await Promise.all(Object.entries(tableMap).map(async ([label, table]) => {
-        const { count } = await supabase
-          .from(table as any)
-          .select('id', { count: 'exact', head: true })
-          .eq('tenant_id', currentTenant.id);
-        return [label, count || 0] as const;
+        return [label, 0] as const;
       }));
-      setErasePreview(Object.fromEntries(entries));
+      const { data, error } = await (supabase as any).rpc('preview_reimport_cleanup_counts', {
+        _tenant_id: currentTenant.id,
+        _start_date: toDateParam(startDate),
+        _end_date: toDateParam(endDate),
+      });
+      if (error) throw error;
+      setErasePreview({ ...Object.fromEntries(entries), ...(data || {}) });
     } finally {
       setPreviewLoading(false);
     }
   };
 
   useEffect(() => {
-    if (open) fetchErasePreview();
-  }, [open, currentTenant?.id]);
+    if (open && !dateRangeInvalid) fetchErasePreview();
+  }, [open, currentTenant?.id, startDate, endDate, dateRangeInvalid]);
 
   const reset = () => {
     setFiles(EMPTY_FILE_LIST);
@@ -168,6 +170,8 @@ export default function BatchReimportDialog() {
     try {
       const { data: cleaned, error: cleanError } = await (supabase as any).rpc('clear_reimport_batch_data', {
         _tenant_id: currentTenant.id,
+        _start_date: toDateParam(startDate),
+        _end_date: toDateParam(endDate),
       });
       if (cleanError) throw cleanError;
       setClearSummary((cleaned || {}) as Record<string, number>);
