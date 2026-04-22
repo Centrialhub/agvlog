@@ -1,15 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { RotateCcw, Upload, AlertTriangle, CheckCircle2, FileText, XCircle, Clock, Loader2 } from 'lucide-react';
+import { format } from 'date-fns';
+import { RotateCcw, Upload, AlertTriangle, CheckCircle2, FileText, XCircle, Clock, Loader2, CalendarIcon } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { parseNFeXml } from '@/lib/documentParsers';
 import { buildValidationIndexes, validateNFe } from '@/lib/ingestionValidator';
+import { cn } from '@/lib/utils';
 import { useClients } from '@/hooks/useClients';
 import { useTenant } from '@/hooks/useTenant';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
@@ -65,10 +69,14 @@ export default function BatchReimportDialog() {
   const [confirmationText, setConfirmationText] = useState('');
   const [fileStatuses, setFileStatuses] = useState<FileImportStatus[]>([]);
   const [dedupReport, setDedupReport] = useState<{ ignored: DedupEntry[]; updated: DedupEntry[] }>({ ignored: [], updated: [] });
+  const [startDate, setStartDate] = useState<Date | undefined>();
+  const [endDate, setEndDate] = useState<Date | undefined>();
 
   const total = files.length;
   const busy = phase === 'clearing' || phase === 'importing';
   const confirmed = confirmationText.trim().toUpperCase() === 'LIMPAR';
+  const dateRangeInvalid = !!startDate && !!endDate && startDate > endDate;
+  const toDateParam = (date?: Date) => date ? format(date, 'yyyy-MM-dd') : null;
   const progress = useMemo(() => {
     if (phase === 'clearing') return 8;
     if (!total) return 0;
