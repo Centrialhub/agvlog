@@ -345,7 +345,9 @@ export default function BatchReimportDialog() {
   const previewTotal = erasePreview ? Object.values(erasePreview).reduce((sum, value) => sum + Number(value || 0), 0) : 0;
   const statusIcon = (state: FileImportState) => {
     if (state === 'success') return <CheckCircle2 className="h-4 w-4 text-success" />;
+    if (state === 'imported') return <CheckCircle2 className="h-4 w-4 text-success" />;
     if (state === 'updated') return <CheckCircle2 className="h-4 w-4 text-success" />;
+    if (state === 'unchanged') return <Clock className="h-4 w-4 text-muted-foreground" />;
     if (state === 'ignored') return <AlertTriangle className="h-4 w-4 text-warning" />;
     if (state === 'error') return <XCircle className="h-4 w-4 text-destructive" />;
     if (state === 'importing') return <Loader2 className="h-4 w-4 animate-spin text-primary" />;
@@ -365,6 +367,8 @@ export default function BatchReimportDialog() {
 
   const detailedDedupEntries = [
     ...dedupReport.updated.map(item => ({ ...item, status: 'Atualizado' })),
+    ...dedupReport.imported.map(item => ({ ...item, status: 'Novo' })),
+    ...dedupReport.unchanged.map(item => ({ ...item, status: 'Sem alteração' })),
     ...dedupReport.ignored.map(item => ({ ...item, status: 'Ignorado' })),
   ];
 
@@ -372,7 +376,9 @@ export default function BatchReimportDialog() {
     const escapeCell = (value: string | number) => `"${String(value ?? '').replace(/"/g, '""')}"`;
     const rows = [
       ['Status', 'Arquivo', 'Nota fiscal', 'Identificador', 'Motivo', 'Competência inicial', 'Competência final'],
-      ...dedupReport.updated.map(item => ['Atualizado/importado', item.fileName, item.invoiceNumber, item.identifier || '', item.reason, toDateParam(startDate) || '', toDateParam(endDate) || '']),
+      ...dedupReport.updated.map(item => ['Atualizado', item.fileName, item.invoiceNumber, item.identifier || '', item.reason, toDateParam(startDate) || '', toDateParam(endDate) || '']),
+      ...dedupReport.imported.map(item => ['Novo', item.fileName, item.invoiceNumber, item.identifier || '', item.reason, toDateParam(startDate) || '', toDateParam(endDate) || '']),
+      ...dedupReport.unchanged.map(item => ['Sem alteração', item.fileName, item.invoiceNumber, item.identifier || '', item.reason, toDateParam(startDate) || '', toDateParam(endDate) || '']),
       ...dedupReport.ignored.map(item => ['Ignorado', item.fileName, item.invoiceNumber, item.identifier || '', item.reason, toDateParam(startDate) || '', toDateParam(endDate) || '']),
     ];
     const csv = rows.map(row => row.map(escapeCell).join(';')).join('\n');
