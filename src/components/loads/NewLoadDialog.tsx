@@ -157,16 +157,14 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
       next.add(doc.id);
       return next;
     });
-    if (!form.invoice_number && !form.client_name && !form.supplier) {
-      setForm(f => ({
-        ...f,
-        invoice_number: doc.invoice_number || '',
-        client_name: doc.clients?.company_name || doc.recipient || '',
-        supplier: doc.remitter || '',
-        neighborhood: doc.recipient_neighborhood || '',
-        destination: [doc.recipient_neighborhood, doc.recipient_city, doc.recipient_state].filter(Boolean).join(' - '),
-      }));
-    }
+    setForm(f => ({
+      ...f,
+      invoice_number: doc.invoice_number || '',
+      client_name: doc.clients?.company_name || doc.recipient || '',
+      supplier: doc.remitter || '',
+      neighborhood: doc.recipient_neighborhood || '',
+      destination: [doc.recipient_neighborhood, doc.recipient_city, doc.recipient_state].filter(Boolean).join(' - '),
+    }));
     setPreviewDoc(null);
   };
 
@@ -306,6 +304,11 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
             <div><Label className="text-xs">Número da NF</Label><Input value={form.invoice_number} onChange={e => setForm(f => ({ ...f, invoice_number: e.target.value }))} placeholder="NF 12345" /></div>
             <div><Label className="text-xs">Bairro</Label><Input value={form.neighborhood} onChange={e => setForm(f => ({ ...f, neighborhood: e.target.value }))} placeholder="Bairro de entrega" /></div>
           </div>
+          {selectedDocIds.size > 0 && (
+            <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-[11px] text-muted-foreground">
+              Nota vinculada: os campos preenchidos automaticamente podem ser editados sem perder o vínculo.
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="text-xs">Razão social do cliente</Label>
