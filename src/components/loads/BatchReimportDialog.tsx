@@ -28,13 +28,19 @@ interface ImportError {
   message: string;
 }
 
-type FileImportState = 'pending' | 'importing' | 'success' | 'error';
+type FileImportState = 'pending' | 'importing' | 'success' | 'updated' | 'ignored' | 'error';
 
 interface FileImportStatus {
   fileName: string;
   state: FileImportState;
   invoiceNumber?: string;
   message?: string;
+}
+
+interface DedupEntry {
+  fileName: string;
+  invoiceNumber: string;
+  reason: string;
 }
 
 const EMPTY_FILE_LIST: File[] = [];
@@ -58,6 +64,7 @@ export default function BatchReimportDialog() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [confirmationText, setConfirmationText] = useState('');
   const [fileStatuses, setFileStatuses] = useState<FileImportStatus[]>([]);
+  const [dedupReport, setDedupReport] = useState<{ ignored: DedupEntry[]; updated: DedupEntry[] }>({ ignored: [], updated: [] });
 
   const total = files.length;
   const busy = phase === 'clearing' || phase === 'importing';
