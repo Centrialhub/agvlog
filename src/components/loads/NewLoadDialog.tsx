@@ -515,6 +515,34 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
               Nota vinculada: ao criar, notas já roteirizadas sairão da carga antiga e entrarão nesta nova carga.
             </div>
           )}
+          <div className="rounded-md border border-border bg-muted/30 p-3">
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold">Prévia da carga {loadPreview.number}</div>
+                <div className="text-[11px] text-muted-foreground">{loadPreview.destination}</div>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                <div className="rounded-md border border-border bg-background px-2 py-1"><div className="font-semibold">{loadPreview.docsCount}</div><div className="text-[10px] text-muted-foreground">NFs</div></div>
+                <div className="rounded-md border border-border bg-background px-2 py-1"><div className="font-semibold">{loadPreview.pallets}</div><div className="text-[10px] text-muted-foreground">Paletes</div></div>
+                <div className="rounded-md border border-border bg-background px-2 py-1"><div className="font-semibold">{loadPreview.weight.toLocaleString('pt-BR')}</div><div className="text-[10px] text-muted-foreground">Kg</div></div>
+              </div>
+            </div>
+            {selectedDocs.length === 0 ? (
+              <div className="rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">Nenhuma NF selecionada ainda.</div>
+            ) : (
+              <div className="max-h-28 space-y-1 overflow-y-auto pr-1">
+                {selectedDocs.map((doc: any) => {
+                  const linkedLoad = getLinkedLoad(doc);
+                  return (
+                    <div key={doc.id} className="flex items-center justify-between gap-2 rounded-md border border-border bg-background px-2 py-1.5 text-xs">
+                      <span className="min-w-0 truncate">NF {doc.invoice_number || '—'} · {doc.clients?.company_name || doc.recipient || 'Sem cliente'}</span>
+                      <span className="shrink-0 text-[10px] text-muted-foreground">{Number(doc.pallet_count) || 0} pal · {Number(doc.weight_kg) || 0} kg{doc.load_id ? ` · sai da ${linkedLoad?.load_number || 'atual'}` : ''}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="text-xs">Razão social do cliente</Label>
