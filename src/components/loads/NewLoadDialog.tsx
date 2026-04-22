@@ -280,6 +280,17 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     });
   };
 
+  const toggleSessionOnlyPreference = (checked: boolean) => {
+    setSessionOnlyPreference(checked);
+    window.sessionStorage.setItem(NEW_LOAD_SESSION_ONLY_KEY, String(checked));
+    if (checked) {
+      window.sessionStorage.setItem(NEW_LOAD_SESSION_PREF_KEY, JSON.stringify(currentDocPreference));
+    } else {
+      window.sessionStorage.removeItem(NEW_LOAD_SESSION_PREF_KEY);
+      saveDocPreference(currentDocPreference);
+    }
+  };
+
   const previewValidationIssues = useMemo(() => {
     if (!previewDoc) return [];
     const expectedClient = previewDoc.clients?.company_name || previewDoc.recipient || '';
@@ -694,6 +705,10 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
             <div className="flex items-center justify-between gap-3">
               <Label className="text-xs">Puxar notas</Label>
               <div className="flex items-center gap-2">
+                <label className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                  <Checkbox checked={sessionOnlyPreference} onCheckedChange={checked => toggleSessionOnlyPreference(checked === true)} className="h-3.5 w-3.5" />
+                  Usar apenas nesta sessão
+                </label>
                 {isDocsUpdating && (
                   <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
                     <Loader2 className="h-3 w-3 animate-spin" /> Atualizando...
