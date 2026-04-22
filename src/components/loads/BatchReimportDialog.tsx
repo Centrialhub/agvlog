@@ -65,6 +65,12 @@ interface ExistingFiscalDocument {
 }
 
 const EMPTY_FILE_LIST: File[] = [];
+const EMPTY_DEDUP_REPORT = { ignored: [], updated: [], imported: [], unchanged: [] } as {
+  ignored: DedupEntry[];
+  updated: DedupEntry[];
+  imported: DedupEntry[];
+  unchanged: DedupEntry[];
+};
 
 const CLEANUP_TABLE_LABELS: Record<string, string> = {
   fiscal_documents: 'Notas fiscais',
@@ -96,7 +102,7 @@ export default function BatchReimportDialog() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [confirmationText, setConfirmationText] = useState('');
   const [fileStatuses, setFileStatuses] = useState<FileImportStatus[]>([]);
-  const [dedupReport, setDedupReport] = useState<{ ignored: DedupEntry[]; updated: DedupEntry[]; imported: DedupEntry[]; unchanged: DedupEntry[] }>({ ignored: [], updated: [], imported: [], unchanged: [] });
+  const [dedupReport, setDedupReport] = useState<typeof EMPTY_DEDUP_REPORT>(EMPTY_DEDUP_REPORT);
   const [startDate, setStartDate] = useState<Date | undefined>();
   const [endDate, setEndDate] = useState<Date | undefined>();
 
@@ -139,7 +145,7 @@ export default function BatchReimportDialog() {
     setImported(0);
     setErrors([]);
     setClearSummary(null);
-    setDedupReport({ ignored: [], updated: [] });
+    setDedupReport(EMPTY_DEDUP_REPORT);
   };
 
   const fetchErasePreview = async () => {
@@ -171,7 +177,7 @@ export default function BatchReimportDialog() {
     setClearSummary(null);
     setConfirmationText('');
     setFileStatuses([]);
-    setDedupReport({ ignored: [], updated: [] });
+    setDedupReport(EMPTY_DEDUP_REPORT);
     if (inputRef.current) inputRef.current.value = '';
   };
 
@@ -192,7 +198,7 @@ export default function BatchReimportDialog() {
     setErrors([]);
     setClearSummary(null);
     setFileStatuses(files.map(file => ({ fileName: file.name, state: 'pending' })));
-    setDedupReport({ ignored: [], updated: [] });
+    setDedupReport(EMPTY_DEDUP_REPORT);
 
     try {
       const { data: cleaned, error: cleanError } = await (supabase as any).rpc('clear_reimport_batch_data', {
