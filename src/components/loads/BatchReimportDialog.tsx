@@ -1,15 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { RotateCcw, Upload, AlertTriangle, CheckCircle2, FileText, XCircle, Clock, Loader2 } from 'lucide-react';
+import { format } from 'date-fns';
+import { RotateCcw, Upload, AlertTriangle, CheckCircle2, FileText, XCircle, Clock, Loader2, CalendarIcon } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { parseNFeXml } from '@/lib/documentParsers';
 import { buildValidationIndexes, validateNFe } from '@/lib/ingestionValidator';
+import { cn } from '@/lib/utils';
 import { useClients } from '@/hooks/useClients';
 import { useTenant } from '@/hooks/useTenant';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
@@ -45,6 +49,17 @@ interface DedupEntry {
 
 const EMPTY_FILE_LIST: File[] = [];
 
+const CLEANUP_TABLE_LABELS: Record<string, string> = {
+  fiscal_documents: 'Notas fiscais',
+  loads: 'Cargas',
+  load_items: 'Itens de carga',
+  dispatch_trips: 'Viagens',
+  dispatch_stops: 'Paradas',
+  dispatch_events: 'Eventos',
+  freight_calculation_log: 'Logs de frete',
+  route_planning_drafts: 'Rascunhos',
+};
+
 export default function BatchReimportDialog() {
   const { currentTenant } = useTenant();
   const { user } = useAuth();
@@ -65,10 +80,27 @@ export default function BatchReimportDialog() {
   const [confirmationText, setConfirmationText] = useState('');
   const [fileStatuses, setFileStatuses] = useState<FileImportStatus[]>([]);
   const [dedupReport, setDedupReport] = useState<{ ignored: DedupEntry[]; updated: DedupEntry[] }>({ ignored: [], updated: [] });
+  const [startDate, setStartDate] = useState<Date | undefined>();
+  const [endDate, setEndDate] = useState<Date | undefined>();
 
   const total = files.length;
   const busy = phase === 'clearing' || phase === 'importing';
   const confirmed = confirmationText.trim().toUpperCase() === 'LIMPAR';
+  const periodRequired = !startDate || !endDate;
+  const dateRangeInvalid = !!startDate && !!endDate && startDate > endDate;
+  const toDateParam = (date?: Date) => date ? format(date, 'yyyy-MM-dd') : null;
+  const isWithinSelectedPeriod = (issueDate?: string) => {
+    if (!issueDate) return true;
+    const date = new Date(`${issueDate.substring(0, 10)}T12:00:00`);
+    if (Number.isNaN(date.getTime())) return true;
+    const start = startDate ? new Date(startDate) : undefined;
+    const end = endDate ? new Date(endDate) : undefined;
+    start?.setHours(0, 0, 0, 0);
+    end?.setHours(23, 59, 59, 999);
+    if (start && date < start) return false;
+    if (end && date > end) return false;
+    return true;
+  };
   const progress = useMemo(() => {
     if (phase === 'clearing') return 8;
     if (!total) return 0;
@@ -97,33 +129,21 @@ export default function BatchReimportDialog() {
     if (!currentTenant) return;
     setPreviewLoading(true);
     try {
-      const tableMap = {
-        'Notas fiscais': 'fiscal_documents',
-        'Cargas': 'loads',
-        'Itens de carga': 'load_items',
-        'Viagens': 'dispatch_trips',
-        'Paradas': 'dispatch_stops',
-        'Eventos': 'dispatch_events',
-        'Logs de frete': 'freight_calculation_log',
-        'Rascunhos': 'route_planning_drafts',
-      } as const;
-
-      const entries = await Promise.all(Object.entries(tableMap).map(async ([label, table]) => {
-        const { count } = await supabase
-          .from(table as any)
-          .select('id', { count: 'exact', head: true })
-          .eq('tenant_id', currentTenant.id);
-        return [label, count || 0] as const;
-      }));
-      setErasePreview(Object.fromEntries(entries));
+      const { data, error } = await (supabase as any).rpc('preview_reimport_cleanup_counts', {
+        _tenant_id: currentTenant.id,
+        _start_date: toDateParam(startDate),
+        _end_date: toDateParam(endDate),
+      });
+      if (error) throw error;
+      setErasePreview(Object.fromEntries(Object.entries(CLEANUP_TABLE_LABELS).map(([key, label]) => [label, Number((data || {})[key] || 0)])));
     } finally {
       setPreviewLoading(false);
     }
   };
 
   useEffect(() => {
-    if (open) fetchErasePreview();
-  }, [open, currentTenant?.id]);
+    if (open && !dateRangeInvalid) fetchErasePreview();
+  }, [open, currentTenant?.id, startDate, endDate, dateRangeInvalid]);
 
   const reset = () => {
     setFiles(EMPTY_FILE_LIST);
@@ -148,7 +168,7 @@ export default function BatchReimportDialog() {
   };
 
   const startReimport = async () => {
-    if (!currentTenant || !files.length || !confirmed) return;
+    if (!currentTenant || !files.length || !confirmed || periodRequired || dateRangeInvalid) return;
     setPhase('clearing');
     setProcessed(0);
     setImported(0);
@@ -160,6 +180,8 @@ export default function BatchReimportDialog() {
     try {
       const { data: cleaned, error: cleanError } = await (supabase as any).rpc('clear_reimport_batch_data', {
         _tenant_id: currentTenant.id,
+        _start_date: toDateParam(startDate),
+        _end_date: toDateParam(endDate),
       });
       if (cleanError) throw cleanError;
       setClearSummary((cleaned || {}) as Record<string, number>);
@@ -180,6 +202,14 @@ export default function BatchReimportDialog() {
           const validated = validateNFe(parsed, file.name, [], clients, indexes);
           if (validated.hasErrors) {
             throw new Error(validated.validations.filter(v => v.severity === 'error').map(v => v.message).join('; '));
+          }
+
+          if (!isWithinSelectedPeriod(validated.source.issueDate)) {
+            const reason = `Emissão ${validated.source.issueDate || 'sem data'} fora do período selecionado`;
+            dedup.ignored.push({ fileName: file.name, invoiceNumber: validated.source.invoiceNumber || '—', reason });
+            setDedupReport({ ignored: [...dedup.ignored], updated: [...dedup.updated] });
+            setFileStatus(file.name, { state: 'ignored', invoiceNumber: validated.source.invoiceNumber, message: reason });
+            continue;
           }
 
           const duplicateKey = validated.source.accessKey && seenAccessKeys.get(validated.source.accessKey);
@@ -293,6 +323,32 @@ export default function BatchReimportDialog() {
             <div className="text-sm font-semibold text-foreground">Será apagado antes da importação</div>
             <Badge variant="destructive">{previewLoading ? 'contando...' : `${previewTotal} registro(s)`}</Badge>
           </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className={cn('justify-start text-left font-normal', !startDate && 'text-muted-foreground')} disabled={busy}>
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {startDate ? format(startDate, 'dd/MM/yyyy') : 'Início da competência'}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar mode="single" selected={startDate} onSelect={setStartDate} initialFocus className={cn('p-3 pointer-events-auto')} />
+              </PopoverContent>
+            </Popover>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className={cn('justify-start text-left font-normal', !endDate && 'text-muted-foreground')} disabled={busy}>
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {endDate ? format(endDate, 'dd/MM/yyyy') : 'Fim da competência'}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar mode="single" selected={endDate} onSelect={setEndDate} initialFocus className={cn('p-3 pointer-events-auto')} />
+              </PopoverContent>
+            </Popover>
+          </div>
+          {periodRequired && <div className="text-xs font-medium text-warning">Informe data inicial e final para evitar limpeza fora da competência.</div>}
+          {dateRangeInvalid && <div className="text-xs font-medium text-destructive">A data inicial não pode ser maior que a final.</div>}
           <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
             {Object.entries(erasePreview || {}).map(([label, count]) => (
               <div key={label} className="rounded-md bg-background/70 border border-border p-2">
@@ -348,7 +404,7 @@ export default function BatchReimportDialog() {
           <Alert>
             <CheckCircle2 className="h-4 w-4" />
             <AlertTitle>Resumo</AlertTitle>
-            <AlertDescription>{imported} nota(s) importada(s). {errors.length} arquivo(s) com erro.</AlertDescription>
+            <AlertDescription>{imported} nota(s) importada(s). {errors.length} arquivo(s) com erro. Período: {startDate ? format(startDate, 'dd/MM/yyyy') : 'início'} até {endDate ? format(endDate, 'dd/MM/yyyy') : 'fim'}.</AlertDescription>
           </Alert>
         )}
 
@@ -418,7 +474,7 @@ export default function BatchReimportDialog() {
 
         <div className="flex items-center justify-between gap-3">
           <Button variant="ghost" onClick={reset} disabled={busy}>Limpar seleção</Button>
-          <Button onClick={startReimport} disabled={!total || busy || !currentTenant || !confirmed}>
+          <Button onClick={startReimport} disabled={!total || busy || !currentTenant || !confirmed || periodRequired || dateRangeInvalid}>
             {phase === 'clearing' ? 'Limpando...' : phase === 'importing' ? 'Importando...' : 'Limpar e importar'}
           </Button>
         </div>

@@ -5089,7 +5089,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      clear_reimport_batch_data: { Args: { _tenant_id: string }; Returns: Json }
+      clear_reimport_batch_data:
+        | { Args: { _tenant_id: string }; Returns: Json }
+        | {
+            Args: {
+              _end_date?: string
+              _start_date?: string
+              _tenant_id: string
+            }
+            Returns: Json
+          }
       count_points_in_geofence: {
         Args: { _geofence_id: string; _points: Json }
         Returns: Json
@@ -5112,6 +5121,10 @@ export type Database = {
       }
       is_tenant_admin: { Args: { _tenant_id: string }; Returns: boolean }
       is_tenant_member: { Args: { _tenant_id: string }; Returns: boolean }
+      preview_reimport_cleanup_counts: {
+        Args: { _end_date?: string; _start_date?: string; _tenant_id: string }
+        Returns: Json
+      }
       upsert_geofence: {
         Args: {
           _category: string
