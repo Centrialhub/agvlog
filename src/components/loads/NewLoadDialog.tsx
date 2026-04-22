@@ -646,6 +646,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                 const isSelected = selectedDocIds.has(doc.id);
                 const isLinked = !!doc.load_id;
                 const linkedLoad = getLinkedLoad(doc);
+                const actionLabel = isSelected ? 'Selecionada para esta carga' : isLinked ? 'Será reatribuída' : 'Será puxada';
                 return (
                 <div key={doc.id} className="flex items-start gap-2 rounded-md border border-border px-2 py-2 hover:bg-muted/60">
                   <button
@@ -664,9 +665,12 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                     <Checkbox checked={isSelected} className="mt-0.5" />
                     <span className="min-w-0 flex-1">
                       <span className="block text-xs font-medium">NF {doc.invoice_number || '—'} · {doc.clients?.company_name || doc.recipient || 'Sem cliente'}</span>
-                       <span className="block truncate text-[11px] text-muted-foreground">{doc.remitter || 'Fornecedor não informado'} · {doc.recipient_neighborhood || 'Sem bairro'}{isLinked ? ` · Será reatribuída da carga ${linkedLoad?.load_number || 'atual'}` : ''}</span>
+                       <span className="block truncate text-[11px] text-muted-foreground">{doc.remitter || 'Fornecedor não informado'} · {doc.recipient_neighborhood || 'Sem bairro'}{isLinked ? ` · sai da carga ${linkedLoad?.load_number || 'atual'}` : ''}</span>
                     </span>
                   </button>
+                  <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${isSelected ? 'border-primary/30 bg-primary/10 text-primary' : isLinked ? 'border-warning/30 bg-warning/10 text-warning' : 'border-border bg-muted text-muted-foreground'}`}>
+                    {actionLabel}
+                  </span>
                   <Button type="button" variant="outline" size="sm" className="h-7 shrink-0 gap-1 text-[11px]" onClick={() => setDetailsDoc(doc)}>
                     <Eye className="h-3.5 w-3.5" /> Ver nota
                   </Button>
@@ -729,6 +733,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                   const isSelected = selectedDocIds.has(doc.id);
                   const isLinked = !!doc.load_id;
                   const linkedLoad = getLinkedLoad(doc);
+                  const actionLabel = isSelected ? 'Selecionada para esta carga' : isLinked ? 'Será reatribuída' : 'Será puxada';
                   return (
                     <button
                       key={doc.id}
@@ -748,8 +753,11 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                         <Checkbox checked={isSelected} className="mt-0.5" />
                         <div className="min-w-0 flex-1">
                           <div className="text-sm font-medium">NF {doc.invoice_number || '—'} · {doc.clients?.company_name || doc.recipient || 'Sem cliente'}</div>
-                          <div className="text-xs text-muted-foreground truncate">{doc.remitter || 'Fornecedor não informado'} · {doc.recipient_neighborhood || 'Sem bairro'} · {[doc.recipient_city, doc.recipient_state].filter(Boolean).join(' / ') || 'Sem cidade'}{isLinked ? ` · Será reatribuída da carga ${linkedLoad?.load_number || 'atual'}` : ''}</div>
+                          <div className="text-xs text-muted-foreground truncate">{doc.remitter || 'Fornecedor não informado'} · {doc.recipient_neighborhood || 'Sem bairro'} · {[doc.recipient_city, doc.recipient_state].filter(Boolean).join(' / ') || 'Sem cidade'}{isLinked ? ` · sai da carga ${linkedLoad?.load_number || 'atual'}` : ''}</div>
                         </div>
+                        <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${isSelected ? 'border-primary/30 bg-primary/10 text-primary' : isLinked ? 'border-warning/30 bg-warning/10 text-warning' : 'border-border bg-muted text-muted-foreground'}`}>
+                          {actionLabel}
+                        </span>
                       </div>
                     </button>
                   );
