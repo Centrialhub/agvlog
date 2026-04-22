@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { RotateCcw, Upload, AlertTriangle, CheckCircle2, FileText, XCircle } from 'lucide-react';
+import { RotateCcw, Upload, AlertTriangle, CheckCircle2, FileText, XCircle, Clock, Loader2 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { parseNFeXml } from '@/lib/documentParsers';
@@ -28,6 +28,15 @@ interface ImportError {
   message: string;
 }
 
+type FileImportState = 'pending' | 'importing' | 'success' | 'error';
+
+interface FileImportStatus {
+  fileName: string;
+  state: FileImportState;
+  invoiceNumber?: string;
+  message?: string;
+}
+
 const EMPTY_FILE_LIST: File[] = [];
 
 export default function BatchReimportDialog() {
@@ -48,6 +57,7 @@ export default function BatchReimportDialog() {
   const [erasePreview, setErasePreview] = useState<Record<string, number> | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [confirmationText, setConfirmationText] = useState('');
+  const [fileStatuses, setFileStatuses] = useState<FileImportStatus[]>([]);
 
   const total = files.length;
   const busy = phase === 'clearing' || phase === 'importing';
