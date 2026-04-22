@@ -103,6 +103,13 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
       : new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
   }, [debouncedDocFilters, docSort, fiscalDocs, items]);
 
+  const selectedDocs = useMemo(() => fiscalDocs.filter((doc: any) => selectedDocIds.has(doc.id)), [fiscalDocs, selectedDocIds]);
+  const selectedDocTotals = useMemo(() => selectedDocs.reduce((acc: any, doc: any) => ({
+    pallets: acc.pallets + (Number(doc.pallet_count) || 0),
+    weight: acc.weight + (Number(doc.weight_kg) || 0),
+  }), { pallets: 0, weight: 0 }), [selectedDocs]);
+  const selectedDocsPreview = selectedDocs.slice(0, 4);
+
   const visibleFilteredDocs = useMemo(() => filteredDocs.slice(0, visibleDocCount), [filteredDocs, visibleDocCount]);
   const isDocsUpdating = isFetchingFiscalDocs || docFilters.invoice !== debouncedDocFilters.invoice || docFilters.client !== debouncedDocFilters.client || docFilters.neighborhood !== debouncedDocFilters.neighborhood;
 
@@ -288,6 +295,14 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
                       </span>
                       <Button type="button" variant="ghost" size="sm" className="h-7 text-[11px]" onClick={reorganizeDocsLayout}>Reorganizar layout</Button>
                     </div>
+                    {selectedDocs.length > 0 && (
+                      <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs">
+                        <div className="font-medium text-primary">Seleções mantidas: {selectedDocs.length} NF(s) · {selectedDocTotals.pallets} pal · {selectedDocTotals.weight.toLocaleString('pt-BR')} kg</div>
+                        <div className="mt-1 truncate text-[11px] text-muted-foreground">
+                          {selectedDocsPreview.map((doc: any) => `NF ${doc.invoice_number || '—'}`).join(' · ')}{selectedDocs.length > selectedDocsPreview.length ? ` · +${selectedDocs.length - selectedDocsPreview.length}` : ''}
+                        </div>
+                      </div>
+                    )}
                     <div key={docsLayoutKey} ref={docListRef} className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1" onScroll={handleDocListScroll}>
                       {filteredDocs.length === 0 ? (
                         <div className="rounded-md border border-border py-6 text-center text-sm text-muted-foreground">Nenhuma NF disponível para esses filtros</div>
