@@ -26,7 +26,7 @@ interface Props {
 const DOC_PAGE_SIZE = 25;
 const FILTER_DEBOUNCE_MS = 250;
 const emptyDocFilters = { invoice: '', client: '', neighborhood: '' };
-const defaultDocPreference = { filters: emptyDocFilters, sort: 'recent' as 'recent' | 'alpha' };
+const defaultDocPreference = { filters: emptyDocFilters, sort: 'recent' as 'recent' | 'alpha', visibleDocCount: DOC_PAGE_SIZE, visibleRecentDocCount: DOC_PAGE_SIZE, scrollTop: 0, recentScrollTop: 0 };
 
 function useDebouncedValue<T>(value: T, delay: number) {
   const [debouncedValue, setDebouncedValue] = useState(value);
@@ -62,8 +62,12 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   const [visibleRecentDocCount, setVisibleRecentDocCount] = useState(DOC_PAGE_SIZE);
   const [docsLayoutKey, setDocsLayoutKey] = useState(0);
   const [modalHeight, setModalHeight] = useState('min(92vh, 860px)');
+  const [docScrollTop, setDocScrollTop] = useState(0);
+  const [recentDocScrollTop, setRecentDocScrollTop] = useState(0);
   const docListRef = useRef<HTMLDivElement | null>(null);
   const recentDocListRef = useRef<HTMLDivElement | null>(null);
+  const isDocPreferenceHydrated = useRef(false);
+  const skipNextFilterReset = useRef(false);
   const debouncedDocFilters = useDebouncedValue(docFilters, FILTER_DEBOUNCE_MS);
 
   const normalize = (value: string) => value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -123,12 +127,19 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     if (!isDocPreferenceLoaded) return;
     setDocFilters({ ...emptyDocFilters, ...(docPreference as any).filters });
     setDocSort((docPreference as any).sort === 'alpha' ? 'alpha' : 'recent');
+    setVisibleDocCount(Math.max(DOC_PAGE_SIZE, Number((docPreference as any).visibleDocCount) || DOC_PAGE_SIZE));
+    setVisibleRecentDocCount(Math.max(DOC_PAGE_SIZE, Number((docPreference as any).visibleRecentDocCount) || DOC_PAGE_SIZE));
+    setDocScrollTop(Number((docPreference as any).scrollTop) || 0);
+    setRecentDocScrollTop(Number((docPreference as any).recentScrollTop) || 0);
+    skipNextFilterReset.current = true;
+    isDocPreferenceHydrated.current = true;
   }, [docPreference, isDocPreferenceLoaded]);
 
   useEffect(() => {
-    if (!isDocPreferenceLoaded) return;
-    saveDocPreference({ filters: docFilters, sort: docSort });
-  }, [docFilters, docSort, isDocPreferenceLoaded, saveDocPreference]);
+    if (!isDocPreferenceHydrated.current) return;
+    const timeout = window.setTimeout(() => saveDocPreference({ filters: docFilters, sort: docSort, visibleDocCount, visibleRecentDocCount, scrollTop: docScrollTop, recentScrollTop: recentDocScrollTop }), 300);
+    return () => window.clearTimeout(timeout);
+  }, [docFilters, docSort, visibleDocCount, visibleRecentDocCount, docScrollTop, recentDocScrollTop, saveDocPreference]);
 
   const filteredDocs = useMemo(() => {
     const invoice = normalize(debouncedDocFilters.invoice);
@@ -180,8 +191,14 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   const visibleRecentDocs = useMemo(() => recentDocs.slice(0, visibleRecentDocCount), [recentDocs, visibleRecentDocCount]);
 
   useEffect(() => {
+    if (skipNextFilterReset.current) {
+      skipNextFilterReset.current = false;
+      return;
+    }
     setVisibleDocCount(DOC_PAGE_SIZE);
-  }, [debouncedDocFilters.invoice, debouncedDocFilters.client, debouncedDocFilters.neighborhood, open]);
+    setDocScrollTop(0);
+    window.requestAnimationFrame(() => docListRef.current?.scrollTo({ top: 0 }));
+  }, [debouncedDocFilters.invoice, debouncedDocFilters.client, debouncedDocFilters.neighborhood]);
 
   useEffect(() => {
     if (recentDocsOpen) setVisibleRecentDocCount(DOC_PAGE_SIZE);
@@ -200,8 +217,9 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     return () => window.removeEventListener('resize', recalculateModalHeight);
   }, [open]);
 
-  const handleListScroll = (event: any, total: number, visible: number, setVisible: (updater: (count: number) => number) => void) => {
+  const handleListScroll = (event: any, total: number, visible: number, setVisible: (updater: (count: number) => number) => void, setScroll: (top: number) => void) => {
     const target = event.currentTarget;
+    setScroll(target.scrollTop);
     const nearBottom = target.scrollHeight - target.scrollTop - target.clientHeight < 80;
     if (nearBottom && visible < total) {
       setVisible(count => Math.min(count + DOC_PAGE_SIZE, total));
@@ -210,12 +228,10 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
 
   const reorganizeDocsLayout = () => {
     recalculateModalHeight();
-    setVisibleDocCount(DOC_PAGE_SIZE);
-    setVisibleRecentDocCount(DOC_PAGE_SIZE);
     setDocsLayoutKey(key => key + 1);
     window.requestAnimationFrame(() => {
-      docListRef.current?.scrollTo({ top: 0 });
-      recentDocListRef.current?.scrollTo({ top: 0 });
+      docListRef.current?.scrollTo({ top: docScrollTop });
+      recentDocListRef.current?.scrollTo({ top: recentDocScrollTop });
     });
   };
 
@@ -224,7 +240,12 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     setDocSort('recent');
     setVisibleDocCount(DOC_PAGE_SIZE);
     setVisibleRecentDocCount(DOC_PAGE_SIZE);
-    window.requestAnimationFrame(() => docListRef.current?.scrollTo({ top: 0 }));
+    setDocScrollTop(0);
+    setRecentDocScrollTop(0);
+    window.requestAnimationFrame(() => {
+      docListRef.current?.scrollTo({ top: 0 });
+      recentDocListRef.current?.scrollTo({ top: 0 });
+    });
   };
 
   const previewValidationIssues = useMemo(() => {
