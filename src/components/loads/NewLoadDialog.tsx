@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCreateLoadWithNextNumber } from '@/hooks/useLoads';
@@ -55,6 +55,9 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   const [docAutofillSnapshots, setDocAutofillSnapshots] = useState<Record<string, Record<string, string>>>({});
   const [visibleDocCount, setVisibleDocCount] = useState(DOC_PAGE_SIZE);
   const [visibleRecentDocCount, setVisibleRecentDocCount] = useState(DOC_PAGE_SIZE);
+  const [docsLayoutKey, setDocsLayoutKey] = useState(0);
+  const docListRef = useRef<HTMLDivElement | null>(null);
+  const recentDocListRef = useRef<HTMLDivElement | null>(null);
   const debouncedDocFilters = useDebouncedValue(docFilters, FILTER_DEBOUNCE_MS);
 
   const normalize = (value: string) => value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -181,6 +184,16 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     if (nearBottom && visible < total) {
       setVisible(count => Math.min(count + DOC_PAGE_SIZE, total));
     }
+  };
+
+  const reorganizeDocsLayout = () => {
+    setVisibleDocCount(DOC_PAGE_SIZE);
+    setVisibleRecentDocCount(DOC_PAGE_SIZE);
+    setDocsLayoutKey(key => key + 1);
+    window.requestAnimationFrame(() => {
+      docListRef.current?.scrollTo({ top: 0 });
+      recentDocListRef.current?.scrollTo({ top: 0 });
+    });
   };
 
   const previewValidationIssues = useMemo(() => {
