@@ -64,6 +64,9 @@ export default function Loads() {
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [datePreset, setDatePreset] = useState<DatePreset>('30');
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
   const [groupingOpen, setGroupingOpen] = useState(false);
 
   // Selection state
@@ -103,12 +106,33 @@ export default function Loads() {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
+    const now = new Date();
+    const start = datePreset === 'today'
+      ? startOfDay(now)
+      : ['7', '14', '30'].includes(datePreset)
+        ? startOfDay(new Date(now.getTime() - (Number(datePreset) - 1) * 24 * 60 * 60 * 1000))
+        : datePreset === 'custom' && customStart
+          ? startOfDay(new Date(`${customStart}T12:00:00`))
+          : null;
+    const end = datePreset === 'custom' && customEnd ? endOfDay(new Date(`${customEnd}T12:00:00`)) : endOfDay(now);
     return loads.filter(l => {
       if (q && !l.load_number.toLowerCase().includes(q) && !(l.vehicles?.plate || '').toLowerCase().includes(q) && !(l.destination || '').toLowerCase().includes(q)) return false;
       if (statusFilter !== 'all' && l.status !== statusFilter) return false;
+      const createdAt = new Date(l.created_at);
+      if (datePreset !== 'all' && start && createdAt < start) return false;
+      if (datePreset !== 'all' && createdAt > end) return false;
       return true;
     });
-  }, [loads, search, statusFilter]);
+  }, [customEnd, customStart, datePreset, loads, search, statusFilter]);
+
+  const groupedByDay = useMemo(() => {
+    return filtered.reduce((groups, load) => {
+      const label = new Date(load.created_at).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' });
+      groups[label] = groups[label] || [];
+      groups[label].push(load);
+      return groups;
+    }, {} as Record<string, Load[]>);
+  }, [filtered]);
 
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = {};
