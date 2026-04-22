@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useLoadItems, useCreateLoadItem, useDeleteLoadItem, useUpdateLoadItem, ITEM_STATUSES, ITEM_STATUS_LABELS, LoadItem } from '@/hooks/useLoadItems';
@@ -51,6 +51,8 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
   const [docFilters, setDocFilters] = useState({ invoice: '', client: '', neighborhood: '' });
   const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
   const [visibleDocCount, setVisibleDocCount] = useState(DOC_PAGE_SIZE);
+  const [docsLayoutKey, setDocsLayoutKey] = useState(0);
+  const docListRef = useRef<HTMLDivElement | null>(null);
   const debouncedDocFilters = useDebouncedValue(docFilters, FILTER_DEBOUNCE_MS);
   const [form, setForm] = useState({
     order_id: '',
@@ -109,6 +111,12 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
     if (nearBottom && visibleFilteredDocs.length < filteredDocs.length) {
       setVisibleDocCount(count => Math.min(count + DOC_PAGE_SIZE, filteredDocs.length));
     }
+  };
+
+  const reorganizeDocsLayout = () => {
+    setVisibleDocCount(DOC_PAGE_SIZE);
+    setDocsLayoutKey(key => key + 1);
+    window.requestAnimationFrame(() => docListRef.current?.scrollTo({ top: 0 }));
   };
 
   const totalPallets = items.reduce((s, i) => s + i.pallet_count, 0);
