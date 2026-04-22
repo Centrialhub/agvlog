@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCreateLoadWithNextNumber } from '@/hooks/useLoads';
@@ -55,6 +55,9 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   const [docAutofillSnapshots, setDocAutofillSnapshots] = useState<Record<string, Record<string, string>>>({});
   const [visibleDocCount, setVisibleDocCount] = useState(DOC_PAGE_SIZE);
   const [visibleRecentDocCount, setVisibleRecentDocCount] = useState(DOC_PAGE_SIZE);
+  const [docsLayoutKey, setDocsLayoutKey] = useState(0);
+  const docListRef = useRef<HTMLDivElement | null>(null);
+  const recentDocListRef = useRef<HTMLDivElement | null>(null);
   const debouncedDocFilters = useDebouncedValue(docFilters, FILTER_DEBOUNCE_MS);
 
   const normalize = (value: string) => value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -181,6 +184,16 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     if (nearBottom && visible < total) {
       setVisible(count => Math.min(count + DOC_PAGE_SIZE, total));
     }
+  };
+
+  const reorganizeDocsLayout = () => {
+    setVisibleDocCount(DOC_PAGE_SIZE);
+    setVisibleRecentDocCount(DOC_PAGE_SIZE);
+    setDocsLayoutKey(key => key + 1);
+    window.requestAnimationFrame(() => {
+      docListRef.current?.scrollTo({ top: 0 });
+      recentDocListRef.current?.scrollTo({ top: 0 });
+    });
   };
 
   const previewValidationIssues = useMemo(() => {
@@ -598,6 +611,9 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
               <Label className="text-xs">Puxar notas</Label>
               <div className="flex items-center gap-2">
                 <span className="text-[11px] text-muted-foreground">{selectedDocIds.size} selecionada(s)</span>
+                <Button type="button" variant="ghost" size="sm" className="h-7 text-[11px]" onClick={reorganizeDocsLayout}>
+                  Reorganizar layout
+                </Button>
                 {selectableFilteredDocs.length > 0 && (
                   <Button type="button" variant="outline" size="sm" className="h-7 text-[11px]" onClick={selectFilteredDocs}>
                     Selecionar filtradas
@@ -620,7 +636,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
               <Input value={docFilters.client} onChange={e => setDocFilters(f => ({ ...f, client: e.target.value }))} placeholder="Cliente" className="h-9" />
               <Input value={docFilters.neighborhood} onChange={e => setDocFilters(f => ({ ...f, neighborhood: e.target.value }))} placeholder="Bairro" className="h-9" />
             </div>
-            <div className="max-h-[28vh] space-y-1 overflow-y-auto pr-1" onScroll={event => handleListScroll(event, filteredDocs.length, visibleFilteredDocs.length, setVisibleDocCount)}>
+            <div key={docsLayoutKey} ref={docListRef} className="max-h-[28vh] space-y-1 overflow-y-auto pr-1" onScroll={event => handleListScroll(event, filteredDocs.length, visibleFilteredDocs.length, setVisibleDocCount)}>
               {filteredDocs.length === 0 ? (
                 <div className="text-xs text-muted-foreground py-3 text-center">Nenhuma nota encontrada para esses filtros</div>
               ) : selectableFilteredDocs.length === 0 && linkedFilteredDocs.length > 0 ? (
@@ -726,7 +742,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
           <Dialog open={recentDocsOpen} onOpenChange={setRecentDocsOpen}>
             <DialogContent className="flex h-[min(88vh,760px)] max-w-4xl flex-col overflow-hidden p-0">
               <DialogHeader className="shrink-0 border-b border-border px-5 py-4"><DialogTitle>Notas enviadas recentes</DialogTitle></DialogHeader>
-              <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-5 py-4" onScroll={event => handleListScroll(event, recentDocs.length, visibleRecentDocs.length, setVisibleRecentDocCount)}>
+              <div key={`recent-${docsLayoutKey}`} ref={recentDocListRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto px-5 py-4" onScroll={event => handleListScroll(event, recentDocs.length, visibleRecentDocs.length, setVisibleRecentDocCount)}>
                 {recentDocs.length === 0 ? (
                   <div className="text-sm text-muted-foreground py-6 text-center">Nenhuma nota recente disponível</div>
                 ) : visibleRecentDocs.map((doc: any) => {

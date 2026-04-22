@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useLoadItems, useCreateLoadItem, useDeleteLoadItem, useUpdateLoadItem, ITEM_STATUSES, ITEM_STATUS_LABELS, LoadItem } from '@/hooks/useLoadItems';
@@ -51,6 +51,8 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
   const [docFilters, setDocFilters] = useState({ invoice: '', client: '', neighborhood: '' });
   const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
   const [visibleDocCount, setVisibleDocCount] = useState(DOC_PAGE_SIZE);
+  const [docsLayoutKey, setDocsLayoutKey] = useState(0);
+  const docListRef = useRef<HTMLDivElement | null>(null);
   const debouncedDocFilters = useDebouncedValue(docFilters, FILTER_DEBOUNCE_MS);
   const [form, setForm] = useState({
     order_id: '',
@@ -109,6 +111,12 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
     if (nearBottom && visibleFilteredDocs.length < filteredDocs.length) {
       setVisibleDocCount(count => Math.min(count + DOC_PAGE_SIZE, filteredDocs.length));
     }
+  };
+
+  const reorganizeDocsLayout = () => {
+    setVisibleDocCount(DOC_PAGE_SIZE);
+    setDocsLayoutKey(key => key + 1);
+    window.requestAnimationFrame(() => docListRef.current?.scrollTo({ top: 0 }));
   };
 
   const totalPallets = items.reduce((s, i) => s + i.pallet_count, 0);
@@ -259,7 +267,11 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
                       <Input value={docFilters.client} onChange={e => setDocFilters(f => ({ ...f, client: e.target.value }))} placeholder="Cliente" />
                       <Input value={docFilters.neighborhood} onChange={e => setDocFilters(f => ({ ...f, neighborhood: e.target.value }))} placeholder="Bairro" />
                     </div>
-                    <div className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1" onScroll={handleDocListScroll}>
+                    <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                      <span>{selectedDocIds.size} selecionada(s)</span>
+                      <Button type="button" variant="ghost" size="sm" className="h-7 text-[11px]" onClick={reorganizeDocsLayout}>Reorganizar layout</Button>
+                    </div>
+                    <div key={docsLayoutKey} ref={docListRef} className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1" onScroll={handleDocListScroll}>
                       {filteredDocs.length === 0 ? (
                         <div className="rounded-md border border-border py-6 text-center text-sm text-muted-foreground">Nenhuma NF disponível para esses filtros</div>
                       ) : visibleFilteredDocs.map((doc: any) => {
