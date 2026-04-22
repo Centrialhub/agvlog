@@ -5,6 +5,7 @@ import { getNextLoadNumberFromExisting, useCreateLoadWithNextNumber } from '@/ho
 import { useClients } from '@/hooks/useClients';
 import { useTenant } from '@/hooks/useTenant';
 import { useAuth } from '@/hooks/useAuth';
+import { useUserUiPreference } from '@/hooks/useUserUiPreference';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,24 +25,8 @@ interface Props {
 
 const DOC_PAGE_SIZE = 25;
 const FILTER_DEBOUNCE_MS = 250;
-const NEW_LOAD_DOC_FILTERS_KEY = 'agvlog:new-load-doc-filters';
-const NEW_LOAD_DOC_SORT_KEY = 'agvlog:new-load-doc-sort';
-
 const emptyDocFilters = { invoice: '', client: '', neighborhood: '' };
-
-const loadStoredDocFilters = () => {
-  try {
-    const stored = window.localStorage.getItem(NEW_LOAD_DOC_FILTERS_KEY);
-    return stored ? { ...emptyDocFilters, ...JSON.parse(stored) } : emptyDocFilters;
-  } catch {
-    return emptyDocFilters;
-  }
-};
-
-const loadStoredDocSort = (): 'recent' | 'alpha' => {
-  const stored = window.localStorage.getItem(NEW_LOAD_DOC_SORT_KEY);
-  return stored === 'alpha' ? 'alpha' : 'recent';
-};
+const defaultDocPreference = { filters: emptyDocFilters, sort: 'recent' as 'recent' | 'alpha' };
 
 function useDebouncedValue<T>(value: T, delay: number) {
   const [debouncedValue, setDebouncedValue] = useState(value);
@@ -66,8 +51,9 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   const emptyForm = { load_number: '', vehicle_id: '', driver_id: '', origin: '', destination: '', neighborhood: '', invoice_number: '', client_id: '', client_name: '', supplier: '', notes: '' };
   const [form, setForm] = useState(emptyForm);
   const [loadNumberTouched, setLoadNumberTouched] = useState(false);
-  const [docFilters, setDocFilters] = useState(loadStoredDocFilters);
-  const [docSort, setDocSort] = useState<'recent' | 'alpha'>(loadStoredDocSort);
+  const { preference: docPreference, isLoaded: isDocPreferenceLoaded, savePreference: saveDocPreference } = useUserUiPreference('new_load_doc_filters', defaultDocPreference);
+  const [docFilters, setDocFilters] = useState(emptyDocFilters);
+  const [docSort, setDocSort] = useState<'recent' | 'alpha'>('recent');
   const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
   const [previewDoc, setPreviewDoc] = useState<any | null>(null);
   const [detailsDoc, setDetailsDoc] = useState<any | null>(null);
@@ -134,12 +120,15 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   }, [loadNumberTouched, nextLoadNumber, open]);
 
   useEffect(() => {
-    window.localStorage.setItem(NEW_LOAD_DOC_FILTERS_KEY, JSON.stringify(docFilters));
-  }, [docFilters]);
+    if (!isDocPreferenceLoaded) return;
+    setDocFilters({ ...emptyDocFilters, ...(docPreference as any).filters });
+    setDocSort((docPreference as any).sort === 'alpha' ? 'alpha' : 'recent');
+  }, [docPreference, isDocPreferenceLoaded]);
 
   useEffect(() => {
-    window.localStorage.setItem(NEW_LOAD_DOC_SORT_KEY, docSort);
-  }, [docSort]);
+    if (!isDocPreferenceLoaded) return;
+    saveDocPreference({ filters: docFilters, sort: docSort });
+  }, [docFilters, docSort, isDocPreferenceLoaded, saveDocPreference]);
 
   const filteredDocs = useMemo(() => {
     const invoice = normalize(debouncedDocFilters.invoice);
