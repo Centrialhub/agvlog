@@ -28,13 +28,19 @@ interface ImportError {
   message: string;
 }
 
-type FileImportState = 'pending' | 'importing' | 'success' | 'error';
+type FileImportState = 'pending' | 'importing' | 'success' | 'updated' | 'ignored' | 'error';
 
 interface FileImportStatus {
   fileName: string;
   state: FileImportState;
   invoiceNumber?: string;
   message?: string;
+}
+
+interface DedupEntry {
+  fileName: string;
+  invoiceNumber: string;
+  reason: string;
 }
 
 const EMPTY_FILE_LIST: File[] = [];
@@ -58,6 +64,7 @@ export default function BatchReimportDialog() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [confirmationText, setConfirmationText] = useState('');
   const [fileStatuses, setFileStatuses] = useState<FileImportStatus[]>([]);
+  const [dedupReport, setDedupReport] = useState<{ ignored: DedupEntry[]; updated: DedupEntry[] }>({ ignored: [], updated: [] });
 
   const total = files.length;
   const busy = phase === 'clearing' || phase === 'importing';
@@ -83,6 +90,7 @@ export default function BatchReimportDialog() {
     setImported(0);
     setErrors([]);
     setClearSummary(null);
+    setDedupReport({ ignored: [], updated: [] });
   };
 
   const fetchErasePreview = async () => {
@@ -126,6 +134,7 @@ export default function BatchReimportDialog() {
     setClearSummary(null);
     setConfirmationText('');
     setFileStatuses([]);
+    setDedupReport({ ignored: [], updated: [] });
     if (inputRef.current) inputRef.current.value = '';
   };
 
@@ -146,6 +155,7 @@ export default function BatchReimportDialog() {
     setErrors([]);
     setClearSummary(null);
     setFileStatuses(files.map(file => ({ fileName: file.name, state: 'pending' })));
+    setDedupReport({ ignored: [], updated: [] });
 
     try {
       const { data: cleaned, error: cleanError } = await (supabase as any).rpc('clear_reimport_batch_data', {
@@ -158,6 +168,9 @@ export default function BatchReimportDialog() {
       const indexes = buildValidationIndexes([], clients);
       let successCount = 0;
       const importErrors: ImportError[] = [];
+      const seenAccessKeys = new Map<string, string>();
+      const seenInvoiceNumbers = new Map<string, string>();
+      const dedup = { ignored: [] as DedupEntry[], updated: [] as DedupEntry[] };
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
@@ -167,6 +180,16 @@ export default function BatchReimportDialog() {
           const validated = validateNFe(parsed, file.name, [], clients, indexes);
           if (validated.hasErrors) {
             throw new Error(validated.validations.filter(v => v.severity === 'error').map(v => v.message).join('; '));
+          }
+
+          const duplicateKey = validated.source.accessKey && seenAccessKeys.get(validated.source.accessKey);
+          const duplicateNumber = !duplicateKey && validated.source.invoiceNumber && seenInvoiceNumbers.get(validated.source.invoiceNumber);
+          if (duplicateKey || duplicateNumber) {
+            const reason = duplicateKey ? `Chave já importada em ${duplicateKey}` : `Número já importado em ${duplicateNumber}`;
+            dedup.ignored.push({ fileName: file.name, invoiceNumber: validated.source.invoiceNumber || '—', reason });
+            setDedupReport({ ignored: [...dedup.ignored], updated: [...dedup.updated] });
+            setFileStatus(file.name, { state: 'ignored', invoiceNumber: validated.source.invoiceNumber, message: reason });
+            continue;
           }
 
           const { error } = await supabase.from('fiscal_documents').insert({
@@ -191,8 +214,12 @@ export default function BatchReimportDialog() {
           if (error) throw error;
           successCount++;
           setImported(successCount);
+          if (validated.source.accessKey) seenAccessKeys.set(validated.source.accessKey, file.name);
+          if (validated.source.invoiceNumber) seenInvoiceNumbers.set(validated.source.invoiceNumber, file.name);
+          dedup.updated.push({ fileName: file.name, invoiceNumber: validated.source.invoiceNumber || '—', reason: 'Novo registro importado após limpeza' });
+          setDedupReport({ ignored: [...dedup.ignored], updated: [...dedup.updated] });
           setFileStatus(file.name, {
-            state: 'success',
+            state: 'updated',
             invoiceNumber: validated.source.invoiceNumber,
             message: `NF ${validated.source.invoiceNumber || 'sem número'} importada`,
           });
@@ -224,6 +251,8 @@ export default function BatchReimportDialog() {
   const previewTotal = erasePreview ? Object.values(erasePreview).reduce((sum, value) => sum + Number(value || 0), 0) : 0;
   const statusIcon = (state: FileImportState) => {
     if (state === 'success') return <CheckCircle2 className="h-4 w-4 text-success" />;
+    if (state === 'updated') return <CheckCircle2 className="h-4 w-4 text-success" />;
+    if (state === 'ignored') return <AlertTriangle className="h-4 w-4 text-warning" />;
     if (state === 'error') return <XCircle className="h-4 w-4 text-destructive" />;
     if (state === 'importing') return <Loader2 className="h-4 w-4 animate-spin text-primary" />;
     return <Clock className="h-4 w-4 text-muted-foreground" />;
@@ -233,6 +262,8 @@ export default function BatchReimportDialog() {
     pending: 'Aguardando',
     importing: 'Importando',
     success: 'Sucesso',
+    updated: 'Atualizado',
+    ignored: 'Ignorado',
     error: 'Erro',
   };
 
@@ -335,6 +366,42 @@ export default function BatchReimportDialog() {
                 <Badge variant={status.state === 'error' ? 'destructive' : 'outline'}>{statusLabel[status.state]}</Badge>
               </div>
             ))}
+          </div>
+        )}
+
+        {phase === 'done' && (dedupReport.ignored.length > 0 || dedupReport.updated.length > 0) && (
+          <div className="rounded-lg border border-border p-4 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-sm font-semibold text-foreground">Relatório de deduplicação</div>
+              <div className="flex gap-2">
+                <Badge variant="outline">{dedupReport.updated.length} atualizado(s)</Badge>
+                <Badge variant="secondary">{dedupReport.ignored.length} ignorado(s)</Badge>
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <div className="text-xs font-medium text-success">Atualizados/importados</div>
+                <div className="max-h-32 overflow-y-auto rounded-md bg-muted/50 p-2 space-y-2">
+                  {dedupReport.updated.length === 0 ? <div className="text-xs text-muted-foreground">Nenhum documento atualizado.</div> : dedupReport.updated.map((item, index) => (
+                    <div key={`${item.fileName}-updated-${index}`} className="text-xs">
+                      <div className="font-medium text-foreground">NF {item.invoiceNumber}</div>
+                      <div className="text-muted-foreground truncate">{item.fileName} — {item.reason}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="text-xs font-medium text-warning">Ignorados por duplicidade</div>
+                <div className="max-h-32 overflow-y-auto rounded-md bg-muted/50 p-2 space-y-2">
+                  {dedupReport.ignored.length === 0 ? <div className="text-xs text-muted-foreground">Nenhum documento ignorado.</div> : dedupReport.ignored.map((item, index) => (
+                    <div key={`${item.fileName}-ignored-${index}`} className="text-xs">
+                      <div className="font-medium text-foreground">NF {item.invoiceNumber}</div>
+                      <div className="text-muted-foreground">{item.fileName} — {item.reason}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
