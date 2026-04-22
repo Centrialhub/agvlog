@@ -67,7 +67,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
         .from('loads')
         .select('load_number')
         .eq('tenant_id', currentTenant.id)
-        .limit(1000);
+        .range(0, 4999);
       if (error) throw error;
       return data || [];
     },
@@ -97,9 +97,9 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     const highest = existingLoadNumbers.reduce((max: number, load: any) => {
       const matches = String(load.load_number || '').match(/\d+/g);
       const sequence = matches ? Number(matches[matches.length - 1]) : 0;
-      return sequence >= 1000 ? Math.max(max, sequence) : max;
-    }, 999);
-    return String(highest + 1);
+      return Number.isFinite(sequence) ? Math.max(max, sequence) : max;
+    }, 0);
+    return String(Math.max(highest + 1, 1000));
   }, [existingLoadNumbers]);
 
   useEffect(() => {
@@ -447,9 +447,10 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
       <DialogTrigger asChild>
         <Button size="sm"><Plus className="h-4 w-4 mr-1" /> Nova Carga</Button>
       </DialogTrigger>
-      <DialogContent className="max-w-5xl max-h-[calc(100vh-2rem)] overflow-visible p-5">
-        <DialogHeader><DialogTitle>Nova Carga</DialogTitle></DialogHeader>
-        <div className="space-y-3">
+      <DialogContent className="flex h-[min(92vh,860px)] max-w-5xl flex-col overflow-hidden p-0">
+        <DialogHeader className="shrink-0 border-b border-border px-5 py-4"><DialogTitle>Nova Carga</DialogTitle></DialogHeader>
+        <div className="flex min-h-0 flex-1 flex-col px-5 py-4">
+          <div className="flex-1 space-y-3 overflow-y-auto pr-1">
           <div className="grid grid-cols-2 gap-3">
             <div><Label className="text-xs">Nº Carga *</Label><Input value={form.load_number} onChange={e => { setLoadNumberTouched(true); setForm(f => ({ ...f, load_number: e.target.value })); }} placeholder="1000" /></div>
             <div>
@@ -541,7 +542,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
               <Input value={docFilters.client} onChange={e => setDocFilters(f => ({ ...f, client: e.target.value }))} placeholder="Cliente" className="h-9" />
               <Input value={docFilters.neighborhood} onChange={e => setDocFilters(f => ({ ...f, neighborhood: e.target.value }))} placeholder="Bairro" className="h-9" />
             </div>
-            <div className="space-y-1">
+            <div className="max-h-[28vh] space-y-1 overflow-y-auto pr-1">
               {filteredDocs.length === 0 ? (
                 <div className="text-xs text-muted-foreground py-3 text-center">Nenhuma nota encontrada para esses filtros</div>
               ) : selectableFilteredDocs.length === 0 && linkedFilteredDocs.length > 0 ? (
@@ -569,7 +570,19 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                 const linkedLoad = getLinkedLoad(doc);
                 return (
                 <div key={doc.id} className="flex items-start gap-2 rounded-md border border-border px-2 py-2 hover:bg-muted/60">
-                  <button type="button" onClick={() => isSelected ? removeDocSelection(doc.id) : setPreviewDoc(doc)} className="flex min-w-0 flex-1 items-start gap-2 text-left">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isSelected) {
+                        removeDocSelection(doc.id);
+                        if (previewDoc?.id === doc.id) setPreviewDoc(null);
+                        return;
+                      }
+                      applyDocSelection(doc);
+                      setPreviewDoc(doc);
+                    }}
+                    className="flex min-w-0 flex-1 items-start gap-2 text-left"
+                  >
                     <Checkbox checked={isSelected} className="mt-0.5" />
                     <span className="min-w-0 flex-1">
                       <span className="block text-xs font-medium">NF {doc.invoice_number || '—'} · {doc.clients?.company_name || doc.recipient || 'Sem cliente'}</span>
@@ -613,11 +626,20 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                 </div>
               </div>
             )}
+            <div>
+              <Label className="text-xs">Observações</Label>
+              <Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2} />
+            </div>
+          </div>
+          </div>
+          <div className="mt-4 flex shrink-0 justify-end gap-2 border-t border-border pt-4">
+            <Button variant="outline" onClick={() => { setOpen(false); setLoadNumberTouched(false); }}>Cancelar</Button>
+            <Button onClick={handleSave} disabled={!form.load_number.trim() || createLoad.isPending}>Criar</Button>
           </div>
           <Dialog open={recentDocsOpen} onOpenChange={setRecentDocsOpen}>
-            <DialogContent className="max-w-4xl max-h-[calc(100vh-2rem)] overflow-visible">
-              <DialogHeader><DialogTitle>Notas enviadas recentes</DialogTitle></DialogHeader>
-              <div className="space-y-2">
+            <DialogContent className="flex h-[min(88vh,760px)] max-w-4xl flex-col overflow-hidden p-0">
+              <DialogHeader className="shrink-0 border-b border-border px-5 py-4"><DialogTitle>Notas enviadas recentes</DialogTitle></DialogHeader>
+              <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-5 py-4">
                 {recentDocs.length === 0 ? (
                   <div className="text-sm text-muted-foreground py-6 text-center">Nenhuma nota recente disponível</div>
                 ) : recentDocs.map((doc: any) => {
@@ -625,7 +647,20 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                   const isLinked = !!doc.load_id;
                   const linkedLoad = getLinkedLoad(doc);
                   return (
-                    <button key={doc.id} type="button" onClick={() => isSelected ? removeDocSelection(doc.id) : applyDocSelection(doc)} className="w-full rounded-md border border-border px-3 py-2 text-left hover:bg-muted/60">
+                    <button
+                      key={doc.id}
+                      type="button"
+                      onClick={() => {
+                        if (isSelected) {
+                          removeDocSelection(doc.id);
+                          if (previewDoc?.id === doc.id) setPreviewDoc(null);
+                          return;
+                        }
+                        applyDocSelection(doc);
+                        setPreviewDoc(doc);
+                      }}
+                      className="w-full rounded-md border border-border px-3 py-2 text-left hover:bg-muted/60"
+                    >
                       <div className="flex items-start gap-3">
                         <Checkbox checked={isSelected} className="mt-0.5" />
                         <div className="min-w-0 flex-1">
@@ -640,7 +675,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
             </DialogContent>
           </Dialog>
           <Dialog open={!!detailsDoc} onOpenChange={(isOpen) => !isOpen && setDetailsDoc(null)}>
-            <DialogContent className="max-w-3xl max-h-[calc(100vh-2rem)] overflow-visible">
+            <DialogContent className="max-w-3xl max-h-[calc(100vh-2rem)] overflow-y-auto">
               <DialogHeader><DialogTitle>Detalhes da NF {detailsDoc?.invoice_number || '—'}</DialogTitle></DialogHeader>
               {detailsDoc && (
                 <div className="grid grid-cols-2 gap-3 text-sm">
@@ -657,11 +692,6 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
               )}
             </DialogContent>
           </Dialog>
-          <div><Label className="text-xs">Observações</Label><Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2} /></div>
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => { setOpen(false); setLoadNumberTouched(false); }}>Cancelar</Button>
-            <Button onClick={handleSave} disabled={!form.load_number.trim() || createLoad.isPending}>Criar</Button>
-          </div>
         </div>
       </DialogContent>
     </Dialog>
