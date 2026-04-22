@@ -126,7 +126,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
 
   const recentDocs = useMemo(() => fiscalDocs.slice(0, 20), [fiscalDocs]);
 
-  const selectableFilteredDocs = useMemo(() => filteredDocs.filter((doc: any) => !doc.load_id), [filteredDocs]);
+  const selectableFilteredDocs = useMemo(() => filteredDocs, [filteredDocs]);
 
   const linkedFilteredDocs = useMemo(() => filteredDocs.filter((doc: any) => doc.load_id), [filteredDocs]);
 
@@ -237,11 +237,6 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   };
 
   const applyDocSelection = (doc: any) => {
-    if (doc.load_id) {
-      const linkedLoad = getLinkedLoad(doc);
-      toast({ title: 'Nota já vinculada', description: `NF ${doc.invoice_number || '—'} já está na carga ${linkedLoad?.load_number || 'existente'}.`, variant: 'destructive' });
-      return;
-    }
     const autoFilledFields = getDocAutofillFields(doc);
     setSelectedDocIds(prev => {
       const next = new Set(prev);
