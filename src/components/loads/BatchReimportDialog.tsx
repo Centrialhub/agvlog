@@ -519,7 +519,7 @@ export default function BatchReimportDialog() {
           </div>
         )}
 
-        {phase === 'done' && (dedupReport.ignored.length > 0 || dedupReport.updated.length > 0) && (
+        {phase === 'done' && detailedDedupEntries.length > 0 && (
           <div className="rounded-lg border border-border p-4 space-y-3">
             <div className="flex items-center justify-between gap-3">
               <div className="text-sm font-semibold text-foreground">Relatório de deduplicação</div>
@@ -528,15 +528,28 @@ export default function BatchReimportDialog() {
                   <Download className="h-4 w-4 mr-1" /> CSV
                 </Button>
                 <Badge variant="outline">{dedupReport.updated.length} atualizado(s)</Badge>
+                <Badge variant="outline">{dedupReport.imported.length} novo(s)</Badge>
+                <Badge variant="outline">{dedupReport.unchanged.length} sem alteração</Badge>
                 <Badge variant="secondary">{dedupReport.ignored.length} ignorado(s)</Badge>
               </div>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-3">
               <div className="space-y-2">
-                <div className="text-xs font-medium text-success">Atualizados/importados</div>
+                <div className="text-xs font-medium text-success">Atualizados</div>
                 <div className="max-h-32 overflow-y-auto rounded-md bg-muted/50 p-2 space-y-2">
                   {dedupReport.updated.length === 0 ? <div className="text-xs text-muted-foreground">Nenhum documento atualizado.</div> : dedupReport.updated.map((item, index) => (
                     <div key={`${item.fileName}-updated-${index}`} className="text-xs">
+                      <div className="font-medium text-foreground">NF {item.invoiceNumber}</div>
+                      <div className="text-muted-foreground truncate">{item.fileName} — {item.reason}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="text-xs font-medium text-foreground">Novos/sem alteração</div>
+                <div className="max-h-32 overflow-y-auto rounded-md bg-muted/50 p-2 space-y-2">
+                  {[...dedupReport.imported, ...dedupReport.unchanged].length === 0 ? <div className="text-xs text-muted-foreground">Nenhum documento novo ou sem alteração.</div> : [...dedupReport.imported, ...dedupReport.unchanged].map((item, index) => (
+                    <div key={`${item.fileName}-stable-${index}`} className="text-xs">
                       <div className="font-medium text-foreground">NF {item.invoiceNumber}</div>
                       <div className="text-muted-foreground truncate">{item.fileName} — {item.reason}</div>
                     </div>
