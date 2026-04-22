@@ -34,6 +34,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   const [docFilters, setDocFilters] = useState({ invoice: '', client: '', neighborhood: '' });
   const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
   const [previewDoc, setPreviewDoc] = useState<any | null>(null);
+  const [docAutofillSnapshots, setDocAutofillSnapshots] = useState<Record<string, Record<string, string>>>({});
 
   const normalize = (value: string) => value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
@@ -152,19 +153,20 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   };
 
   const applyDocSelection = (doc: any) => {
-    setSelectedDocIds(prev => {
-      const next = new Set(prev);
-      next.add(doc.id);
-      return next;
-    });
-    setForm(f => ({
-      ...f,
+    const autoFilledFields = {
       invoice_number: doc.invoice_number || '',
       client_name: doc.clients?.company_name || doc.recipient || '',
       supplier: doc.remitter || '',
       neighborhood: doc.recipient_neighborhood || '',
       destination: [doc.recipient_neighborhood, doc.recipient_city, doc.recipient_state].filter(Boolean).join(' - '),
-    }));
+    };
+    setSelectedDocIds(prev => {
+      const next = new Set(prev);
+      next.add(doc.id);
+      return next;
+    });
+    setDocAutofillSnapshots(prev => ({ ...prev, [doc.id]: autoFilledFields }));
+    setForm(f => ({ ...f, ...autoFilledFields }));
     setPreviewDoc(null);
   };
 
@@ -172,6 +174,11 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     setSelectedDocIds(prev => {
       const next = new Set(prev);
       next.delete(docId);
+      return next;
+    });
+    setDocAutofillSnapshots(prev => {
+      const next = { ...prev };
+      delete next[docId];
       return next;
     });
   };
@@ -234,6 +241,45 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
         if (selectedDocIdList.length > 0) {
           const { error: linkError } = await supabase.from('fiscal_documents').update({ load_id: load.id } as any).in('id', selectedDocIdList);
           if (linkError) throw linkError;
+          const auditEvents = selectedDocIdList.map(docId => {
+            const doc: any = fiscalDocs.find((d: any) => d.id === docId);
+            const autoFilledFields = docAutofillSnapshots[docId] || {};
+            return {
+              tenant_id: currentTenant!.id,
+              load_id: load.id,
+              fiscal_document_id: docId,
+              previous_load_id: doc?.load_id || null,
+              created_by: user?.id,
+              action_type: 'selected_for_load',
+              invoice_number: doc?.invoice_number || form.invoice_number || null,
+              client_name: autoFilledFields.client_name || form.client_name || null,
+              supplier_name: autoFilledFields.supplier || form.supplier || null,
+              neighborhood: autoFilledFields.neighborhood || form.neighborhood || null,
+              route_destination: autoFilledFields.destination || form.destination || null,
+              details: {
+                source: 'new_load_dialog',
+                selected_document: {
+                  id: docId,
+                  invoice_number: doc?.invoice_number || null,
+                  recipient: doc?.recipient || null,
+                  remitter: doc?.remitter || null,
+                  neighborhood: doc?.recipient_neighborhood || null,
+                  city: doc?.recipient_city || null,
+                  state: doc?.recipient_state || null,
+                },
+                auto_filled_fields: autoFilledFields,
+                final_fields: {
+                  invoice_number: form.invoice_number || null,
+                  client_name: form.client_name || null,
+                  supplier: form.supplier || null,
+                  neighborhood: form.neighborhood || null,
+                  destination: form.destination || null,
+                },
+              },
+            };
+          });
+          const { error: auditError } = await (supabase as any).from('load_note_audit_events').insert(auditEvents);
+          if (auditError) throw auditError;
         }
         const items = docIds.map(id => {
           const doc: any = fiscalDocs.find((d: any) => d.id === id);
@@ -257,6 +303,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
       setForm(emptyForm);
       setDocFilters({ invoice: '', client: '', neighborhood: '' });
       setSelectedDocIds(new Set());
+      setDocAutofillSnapshots({});
       setPreviewDoc(null);
       queryClient.invalidateQueries({ queryKey: ['fiscal_documents'] });
       queryClient.invalidateQueries({ queryKey: ['load_items'] });
