@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { RotateCcw, Upload, AlertTriangle, CheckCircle2, FileText, XCircle } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -45,9 +45,13 @@ export default function BatchReimportDialog() {
   const [imported, setImported] = useState(0);
   const [errors, setErrors] = useState<ImportError[]>([]);
   const [clearSummary, setClearSummary] = useState<Record<string, number> | null>(null);
+  const [erasePreview, setErasePreview] = useState<Record<string, number> | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [confirmationText, setConfirmationText] = useState('');
 
   const total = files.length;
   const busy = phase === 'clearing' || phase === 'importing';
+  const confirmed = confirmationText.trim().toUpperCase() === 'LIMPAR';
   const progress = useMemo(() => {
     if (phase === 'clearing') return 8;
     if (!total) return 0;
@@ -64,6 +68,38 @@ export default function BatchReimportDialog() {
     setClearSummary(null);
   };
 
+  const fetchErasePreview = async () => {
+    if (!currentTenant) return;
+    setPreviewLoading(true);
+    try {
+      const tableMap = {
+        'Notas fiscais': 'fiscal_documents',
+        'Cargas': 'loads',
+        'Itens de carga': 'load_items',
+        'Viagens': 'dispatch_trips',
+        'Paradas': 'dispatch_stops',
+        'Eventos': 'dispatch_events',
+        'Logs de frete': 'freight_calculation_log',
+        'Rascunhos': 'route_planning_drafts',
+      } as const;
+
+      const entries = await Promise.all(Object.entries(tableMap).map(async ([label, table]) => {
+        const { count } = await supabase
+          .from(table as any)
+          .select('id', { count: 'exact', head: true })
+          .eq('tenant_id', currentTenant.id);
+        return [label, count || 0] as const;
+      }));
+      setErasePreview(Object.fromEntries(entries));
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (open) fetchErasePreview();
+  }, [open, currentTenant?.id]);
+
   const reset = () => {
     setFiles(EMPTY_FILE_LIST);
     setPhase('idle');
@@ -71,6 +107,7 @@ export default function BatchReimportDialog() {
     setImported(0);
     setErrors([]);
     setClearSummary(null);
+    setConfirmationText('');
     if (inputRef.current) inputRef.current.value = '';
   };
 
@@ -84,7 +121,7 @@ export default function BatchReimportDialog() {
   };
 
   const startReimport = async () => {
-    if (!currentTenant || !files.length) return;
+    if (!currentTenant || !files.length || !confirmed) return;
     setPhase('clearing');
     setProcessed(0);
     setImported(0);
