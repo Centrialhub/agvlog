@@ -373,6 +373,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
       toast({ title: 'Carga criada' });
       setOpen(false);
       setForm(emptyForm);
+      setLoadNumberTouched(false);
       setDocFilters({ invoice: '', client: '', neighborhood: '' });
       setSelectedDocIds(new Set());
       setDocAutofillSnapshots({});
@@ -394,7 +395,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
         <DialogHeader><DialogTitle>Nova Carga</DialogTitle></DialogHeader>
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <div><Label className="text-xs">Nº Carga *</Label><Input value={form.load_number} onChange={e => setForm(f => ({ ...f, load_number: e.target.value }))} placeholder="CG-001" /></div>
+            <div><Label className="text-xs">Nº Carga *</Label><Input value={form.load_number} onChange={e => { setLoadNumberTouched(true); setForm(f => ({ ...f, load_number: e.target.value })); }} placeholder="1000" /></div>
             <div>
               <Label className="text-xs">Veículo</Label>
               <Select value={form.vehicle_id || '__none__'} onValueChange={v => setForm(f => ({ ...f, vehicle_id: v === '__none__' ? '' : v }))}>
@@ -556,7 +557,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
           </Dialog>
           <div><Label className="text-xs">Observações</Label><Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2} /></div>
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
+            <Button variant="outline" onClick={() => { setOpen(false); setLoadNumberTouched(false); }}>Cancelar</Button>
             <Button onClick={handleSave} disabled={!form.load_number.trim() || createLoad.isPending}>Criar</Button>
           </div>
         </div>
