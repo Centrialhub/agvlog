@@ -29,6 +29,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
+  const [recentDocsOpen, setRecentDocsOpen] = useState(false);
   const emptyForm = { load_number: '', vehicle_id: '', driver_id: '', origin: '', destination: '', neighborhood: '', invoice_number: '', client_id: '', client_name: '', supplier: '', notes: '' };
   const [form, setForm] = useState(emptyForm);
   const [docFilters, setDocFilters] = useState({ invoice: '', client: '', neighborhood: '' });
@@ -70,6 +71,8 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
       return true;
     });
   }, [docFilters, fiscalDocs]);
+
+  const recentDocs = useMemo(() => fiscalDocs.slice(0, 20), [fiscalDocs]);
 
   const selectedDocs = useMemo(() => fiscalDocs.filter((doc: any) => selectedDocIds.has(doc.id)), [fiscalDocs, selectedDocIds]);
 
@@ -188,6 +191,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     });
     setDocAutofillSnapshots(prev => ({ ...prev, [doc.id]: autoFilledFields }));
     setPreviewDoc(null);
+    setRecentDocsOpen(false);
   };
 
   const removeDocSelection = (docId: string) => {
