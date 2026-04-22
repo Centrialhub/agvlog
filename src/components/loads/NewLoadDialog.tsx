@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCreateLoad } from '@/hooks/useLoads';
+import { useCreateLoadWithNextNumber } from '@/hooks/useLoads';
 import { useClients } from '@/hooks/useClients';
 import { useTenant } from '@/hooks/useTenant';
 import { useAuth } from '@/hooks/useAuth';
@@ -25,7 +25,7 @@ interface Props {
 const DOC_PAGE_SIZE = 25;
 
 export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
-  const createLoad = useCreateLoad();
+  const createLoad = useCreateLoadWithNextNumber();
   const { currentTenant } = useTenant();
   const { user } = useAuth();
   const { data: clients = [] } = useClients();
@@ -327,7 +327,6 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
       ].filter(Boolean).join('\n');
 
       const load = await createLoad.mutateAsync({
-        load_number: form.load_number,
         origin: form.origin || null,
         destination: form.destination || form.neighborhood || null,
         notes: notes || null,
