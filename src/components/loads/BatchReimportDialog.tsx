@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/dialog';
 
 type ReimportPhase = 'idle' | 'ready' | 'clearing' | 'importing' | 'done';
+type FileStatusFilter = 'all' | 'duplicates' | 'errors' | 'ignored';
 
 interface ImportError {
   fileName: string;
@@ -105,6 +106,8 @@ export default function BatchReimportDialog() {
   const [dedupReport, setDedupReport] = useState<typeof EMPTY_DEDUP_REPORT>(EMPTY_DEDUP_REPORT);
   const [startDate, setStartDate] = useState<Date | undefined>();
   const [endDate, setEndDate] = useState<Date | undefined>();
+  const [fileSearch, setFileSearch] = useState('');
+  const [fileStatusFilter, setFileStatusFilter] = useState<FileStatusFilter>('all');
 
   const total = files.length;
   const busy = phase === 'clearing' || phase === 'importing';
@@ -152,6 +155,18 @@ export default function BatchReimportDialog() {
     if (!total) return 0;
     return Math.round((processed / total) * 100);
   }, [phase, processed, total]);
+  const filteredFileStatuses = useMemo(() => {
+    const query = fileSearch.trim().toLowerCase();
+    return fileStatuses.filter(status => {
+      const duplicateIgnored = status.state === 'ignored' && /chave de acesso|número da nf|duplic/i.test(status.message || '');
+      const matchesFilter = fileStatusFilter === 'all'
+        || (fileStatusFilter === 'duplicates' && duplicateIgnored)
+        || (fileStatusFilter === 'errors' && status.state === 'error')
+        || (fileStatusFilter === 'ignored' && status.state === 'ignored');
+      const haystack = `${status.fileName} ${status.invoiceNumber || ''} ${status.message || ''}`.toLowerCase();
+      return matchesFilter && (!query || haystack.includes(query));
+    });
+  }, [fileSearch, fileStatusFilter, fileStatuses]);
 
   const setFileStatus = (fileName: string, updates: Partial<FileImportStatus>) => {
     setFileStatuses(prev => prev.map(status => (
@@ -169,6 +184,8 @@ export default function BatchReimportDialog() {
     setErrors([]);
     setClearSummary(null);
     setDedupReport(EMPTY_DEDUP_REPORT);
+    setFileSearch('');
+    setFileStatusFilter('all');
   };
 
   const fetchErasePreview = async () => {
