@@ -172,6 +172,13 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
     window.requestAnimationFrame(() => docListRef.current?.scrollTo({ top: 0 }));
   };
 
+  const clearDocFilters = () => {
+    setDocFilters(emptyDocFilters);
+    setDocSort('recent');
+    setVisibleDocCount(DOC_PAGE_SIZE);
+    window.requestAnimationFrame(() => docListRef.current?.scrollTo({ top: 0 }));
+  };
+
   const totalPallets = items.reduce((s, i) => s + i.pallet_count, 0);
   const totalWeight = items.reduce((s, i) => s + (i.weight_kg || 0), 0);
   const palletOccupancy = vehicleMaxPallets ? Math.round((totalPallets / vehicleMaxPallets) * 100) : null;
@@ -319,7 +326,10 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
                       <Input value={docFilters.client} onChange={e => setDocFilters(f => ({ ...f, client: e.target.value }))} placeholder="Cliente" />
                       <Input value={docFilters.neighborhood} onChange={e => setDocFilters(f => ({ ...f, neighborhood: e.target.value }))} placeholder="Bairro" />
                     </div>
-                    <div className="flex justify-end">
+                    <div className="flex justify-end gap-2">
+                      <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={clearDocFilters}>
+                        Limpar filtros
+                      </Button>
                       <Select value={docSort} onValueChange={(value: 'recent' | 'alpha') => setDocSort(value)}>
                         <SelectTrigger className="h-8 w-48 text-xs"><SelectValue /></SelectTrigger>
                         <SelectContent>
