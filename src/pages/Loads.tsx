@@ -201,6 +201,73 @@ export default function Loads() {
     }
   }, [currentTenant, toast]);
 
+  const printAllRomaneios = useCallback(async () => {
+    if (!currentTenant || filtered.length === 0) return;
+    try {
+      const loadIds = filtered.map(l => l.id);
+      const { data: fullLoads, error: loadsError } = await supabase
+        .from('loads')
+        .select('*, vehicles(plate, nickname, max_pallets), drivers(name)')
+        .eq('tenant_id', currentTenant.id)
+        .in('id', loadIds);
+      if (loadsError) throw loadsError;
+
+      const { data: items, error: itemsError } = await supabase
+        .from('load_items')
+        .select('*, fiscal_documents(invoice_number, remitter, recipient, recipient_city, recipient_state, recipient_neighborhood, value, weight_kg, issue_date, product_summary)')
+        .in('load_id', loadIds)
+        .order('created_at');
+      if (itemsError) throw itemsError;
+
+      const fmtEmissao = (raw: any): string => {
+        if (!raw) return '';
+        const s = String(raw).substring(0, 10);
+        const d = new Date(s + 'T12:00:00');
+        return isNaN(d.getTime()) ? '' : d.toLocaleDateString('pt-BR');
+      };
+
+      const itemsByLoad = new Map<string, any[]>();
+      (items || []).forEach((item: any) => {
+        const current = itemsByLoad.get(item.load_id) || [];
+        current.push(item);
+        itemsByLoad.set(item.load_id, current);
+      });
+
+      const loadsById = new Map((fullLoads || []).map((load: any) => [load.id, load]));
+      const routes = loadIds.map(id => loadsById.get(id)).filter(Boolean).map((load: any) => {
+        const veh: any = load.vehicles;
+        const drv: any = load.drivers;
+        const docs: RomaneioDoc[] = (itemsByLoad.get(load.id) || []).map((it: any) => {
+          const fd = it.fiscal_documents || {};
+          return {
+            city: fd.recipient_city || 'SEM CIDADE',
+            state: fd.recipient_state || '',
+            remetente: fd.remitter || '—',
+            destinatario: fd.recipient || '—',
+            bairro: fd.recipient_neighborhood || '—',
+            nfNumber: fd.invoice_number || '—',
+            emissao: fmtEmissao(fd.issue_date),
+            valor: Number(fd.value) || 0,
+            peso: Number(it.weight_kg) || Number(fd.weight_kg) || 0,
+            volumes: Number(it.pallet_count) || 0,
+          };
+        });
+
+        return {
+          routeName: load.destination || load.load_number,
+          vehicleInfo: veh ? `Veículo: ${veh.plate}${veh.nickname ? ` (${veh.nickname})` : ''}${veh.max_pallets ? ` - ${veh.max_pallets}p` : ''}` : undefined,
+          driverInfo: drv ? `Motorista: ${drv.name}` : undefined,
+          docs,
+        };
+      });
+
+      printRomaneioRoutes(routes, 'Romaneios de Cargas');
+      toast({ title: 'Romaneios abertos para impressão' });
+    } catch (e: any) {
+      toast({ title: 'Erro ao gerar romaneios', description: e.message, variant: 'destructive' });
+    }
+  }, [currentTenant, filtered, toast]);
+
   const selectedCount = selected.size;
   const allFilteredSelected = filtered.length > 0 && filtered.every(l => selected.has(l.id));
 
@@ -220,6 +287,9 @@ export default function Loads() {
               <CheckSquare className="h-4 w-4 mr-1" /> Selecionar
             </Button>
           )}
+          <Button size="sm" variant="outline" onClick={printAllRomaneios} disabled={isLoading || filtered.length === 0}>
+            <Printer className="h-4 w-4 mr-1" /> Reimprimir todas
+          </Button>
           {pendingCount > 0 && (
             <Button size="sm" variant="secondary" onClick={() => setGroupingOpen(true)}>
               <FileStack className="h-4 w-4 mr-1" /> Agrupar NF-es
