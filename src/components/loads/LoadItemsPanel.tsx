@@ -28,6 +28,19 @@ const DOC_PAGE_SIZE = 25;
 const FILTER_DEBOUNCE_MS = 250;
 const emptyDocFilters = { invoice: '', client: '', neighborhood: '' };
 const defaultDocPreference = { filters: emptyDocFilters, sort: 'recent' as 'recent' | 'alpha', visibleDocCount: DOC_PAGE_SIZE, scrollTop: 0 };
+const LOAD_ITEMS_SESSION_ONLY_KEY = 'agvlog:load-items-doc-session-only';
+const LOAD_ITEMS_SESSION_PREF_KEY = 'agvlog:load-items-doc-session-preference';
+
+const loadSessionOnly = () => window.sessionStorage.getItem(LOAD_ITEMS_SESSION_ONLY_KEY) === 'true';
+
+const loadSessionPreference = () => {
+  try {
+    const stored = window.sessionStorage.getItem(LOAD_ITEMS_SESSION_PREF_KEY);
+    return stored ? { ...defaultDocPreference, ...JSON.parse(stored) } : defaultDocPreference;
+  } catch {
+    return defaultDocPreference;
+  }
+};
 
 function useDebouncedValue<T>(value: T, delay: number) {
   const [debouncedValue, setDebouncedValue] = useState(value);
@@ -50,6 +63,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
   const updateItem = useUpdateLoadItem();
   const { toast } = useToast();
   const { preference: docPreference, isLoaded: isDocPreferenceLoaded, savePreference: saveDocPreference } = useUserUiPreference('load_items_doc_filters', defaultDocPreference);
+  const [sessionOnlyPreference, setSessionOnlyPreference] = useState(loadSessionOnly);
   const [addOpen, setAddOpen] = useState(false);
   const [mode, setMode] = useState<'note' | 'manual'>('note');
   const [docFilters, setDocFilters] = useState(emptyDocFilters);
@@ -63,6 +77,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
   const isDocPreferenceHydrated = useRef(false);
   const skipNextFilterReset = useRef(false);
   const debouncedDocFilters = useDebouncedValue(docFilters, FILTER_DEBOUNCE_MS);
+  const currentDocPreference = useMemo(() => ({ filters: docFilters, sort: docSort, visibleDocCount, scrollTop: docScrollTop }), [docFilters, docSort, visibleDocCount, docScrollTop]);
   const [form, setForm] = useState({
     order_id: '',
     item_description: '',
@@ -128,19 +143,26 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
 
   useEffect(() => {
     if (!isDocPreferenceLoaded) return;
-    setDocFilters({ ...emptyDocFilters, ...(docPreference as any).filters });
-    setDocSort((docPreference as any).sort === 'alpha' ? 'alpha' : 'recent');
-    setVisibleDocCount(Math.max(DOC_PAGE_SIZE, Number((docPreference as any).visibleDocCount) || DOC_PAGE_SIZE));
-    setDocScrollTop(Number((docPreference as any).scrollTop) || 0);
+    const sourcePreference = sessionOnlyPreference ? loadSessionPreference() : docPreference;
+    setDocFilters({ ...emptyDocFilters, ...(sourcePreference as any).filters });
+    setDocSort((sourcePreference as any).sort === 'alpha' ? 'alpha' : 'recent');
+    setVisibleDocCount(Math.max(DOC_PAGE_SIZE, Number((sourcePreference as any).visibleDocCount) || DOC_PAGE_SIZE));
+    setDocScrollTop(Number((sourcePreference as any).scrollTop) || 0);
     skipNextFilterReset.current = true;
     isDocPreferenceHydrated.current = true;
-  }, [docPreference, isDocPreferenceLoaded]);
+  }, [docPreference, isDocPreferenceLoaded, sessionOnlyPreference]);
 
   useEffect(() => {
     if (!isDocPreferenceHydrated.current) return;
-    const timeout = window.setTimeout(() => saveDocPreference({ filters: docFilters, sort: docSort, visibleDocCount, scrollTop: docScrollTop }), 300);
+    const timeout = window.setTimeout(() => {
+      if (sessionOnlyPreference) {
+        window.sessionStorage.setItem(LOAD_ITEMS_SESSION_PREF_KEY, JSON.stringify(currentDocPreference));
+      } else {
+        saveDocPreference(currentDocPreference);
+      }
+    }, 300);
     return () => window.clearTimeout(timeout);
-  }, [docFilters, docSort, visibleDocCount, docScrollTop, saveDocPreference]);
+  }, [currentDocPreference, saveDocPreference, sessionOnlyPreference]);
 
   useEffect(() => {
     if (skipNextFilterReset.current) {
