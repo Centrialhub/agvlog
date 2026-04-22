@@ -401,10 +401,29 @@ export default function Loads() {
         )}
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input placeholder="Buscar carga, placa ou destino..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-9" />
+      {/* Advanced filters */}
+      <div className="space-y-3 rounded-lg border border-border bg-card p-3">
+        <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+          <CalendarDays className="h-4 w-4" /> Filtros avançados por período
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {(Object.keys(datePresetLabels) as DatePreset[]).map(preset => (
+            <Button key={preset} type="button" size="sm" variant={datePreset === preset ? 'default' : 'outline'} className="h-8" onClick={() => setDatePreset(preset)}>
+              {datePresetLabels[preset]}
+            </Button>
+          ))}
+          {datePreset === 'custom' && (
+            <div className="flex items-center gap-2">
+              <Input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} className="h-8 w-36" />
+              <span className="text-xs text-muted-foreground">até</span>
+              <Input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} className="h-8 w-36" />
+            </div>
+          )}
+        </div>
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input placeholder="Buscar carga, placa ou destino..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-9" />
+        </div>
       </div>
 
       {/* Load cards */}
@@ -413,8 +432,14 @@ export default function Loads() {
       ) : filtered.length === 0 ? (
         <div className="text-center text-muted-foreground py-12">Nenhuma carga encontrada</div>
       ) : (
-        <div className="grid gap-3">
-          {filtered.map(l => {
+        <div className="space-y-5">
+          {Object.entries(groupedByDay).map(([day, dayLoads]) => (
+            <div key={day} className="space-y-2">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase text-muted-foreground">
+                <CalendarDays className="h-3.5 w-3.5" /> {day} <Badge variant="outline" className="text-[10px]">{dayLoads.length}</Badge>
+              </div>
+              <div className="grid gap-3">
+          {dayLoads.map(l => {
             const veh = vehicles.find((v: any) => v.id === l.vehicle_id) as any;
             const maxP = veh?.max_pallets;
             const occ = maxP ? Math.round(((l.total_pallet_count || 0) / maxP) * 100) : null;
@@ -504,6 +529,9 @@ export default function Loads() {
               </Card>
             );
           })}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
