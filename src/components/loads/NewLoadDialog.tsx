@@ -79,17 +79,15 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     enabled: !!currentTenant && open,
   });
 
-  const { data: existingLoadNumbers = [] } = useQuery({
-    queryKey: ['next_load_number_seed', currentTenant?.id],
+  const { data: nextLoadNumber = '' } = useQuery({
+    queryKey: ['next_load_number_preview', currentTenant?.id, open],
     queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data, error } = await supabase
-        .from('loads')
-        .select('load_number')
-        .eq('tenant_id', currentTenant.id)
-        .range(0, 4999);
+      if (!currentTenant) return '';
+      const { data, error } = await (supabase as any).rpc('peek_next_load_number', {
+        _tenant_id: currentTenant.id,
+      });
       if (error) throw error;
-      return data || [];
+      return String(data || '');
     },
     enabled: !!currentTenant && open,
   });
@@ -112,15 +110,6 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   const linkedLoadById = useMemo(() => new Map(linkedLoads.map((load: any) => [load.id, load])), [linkedLoads]);
 
   const getLinkedLoad = (doc: any) => doc.loads || linkedLoadById.get(doc.load_id) || null;
-
-  const nextLoadNumber = useMemo(() => {
-    const highest = existingLoadNumbers.reduce((max: number, load: any) => {
-      const matches = String(load.load_number || '').match(/\d+/g);
-      const sequence = matches ? Number(matches[matches.length - 1]) : 0;
-      return Number.isFinite(sequence) ? Math.max(max, sequence) : max;
-    }, 0);
-    return String(Math.max(highest + 1, 1000));
-  }, [existingLoadNumbers]);
 
   useEffect(() => {
     if (!open || loadNumberTouched || !nextLoadNumber) return;
@@ -515,7 +504,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
         <div className="flex min-h-0 flex-1 flex-col px-5 py-4">
           <div className="flex-1 space-y-3 overflow-y-auto pr-1">
           <div className="grid grid-cols-2 gap-3">
-            <div><Label className="text-xs">Nº Carga *</Label><Input value={form.load_number} onChange={e => { setLoadNumberTouched(true); setForm(f => ({ ...f, load_number: e.target.value })); }} placeholder="1000" /></div>
+            <div><Label className="text-xs">Nº Carga *</Label><Input value={form.load_number} onChange={e => { setLoadNumberTouched(true); setForm(f => ({ ...f, load_number: e.target.value })); }} placeholder={nextLoadNumber || 'Sequência automática'} /></div>
             <div>
               <Label className="text-xs">Veículo</Label>
               <Select value={form.vehicle_id || '__none__'} onValueChange={v => setForm(f => ({ ...f, vehicle_id: v === '__none__' ? '' : v }))}>
