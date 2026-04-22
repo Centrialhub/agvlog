@@ -126,7 +126,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
 
   const recentDocs = useMemo(() => fiscalDocs.slice(0, 20), [fiscalDocs]);
 
-  const selectableFilteredDocs = useMemo(() => filteredDocs.filter((doc: any) => !doc.load_id), [filteredDocs]);
+  const selectableFilteredDocs = useMemo(() => filteredDocs, [filteredDocs]);
 
   const linkedFilteredDocs = useMemo(() => filteredDocs.filter((doc: any) => doc.load_id), [filteredDocs]);
 
@@ -237,11 +237,6 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   };
 
   const applyDocSelection = (doc: any) => {
-    if (doc.load_id) {
-      const linkedLoad = getLinkedLoad(doc);
-      toast({ title: 'Nota já vinculada', description: `NF ${doc.invoice_number || '—'} já está na carga ${linkedLoad?.load_number || 'existente'}.`, variant: 'destructive' });
-      return;
-    }
     const autoFilledFields = getDocAutofillFields(doc);
     setSelectedDocIds(prev => {
       const next = new Set(prev);
@@ -286,6 +281,26 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     setPreviewDoc(null);
   };
 
+  const refreshLoadTotals = async (loadIds: string[]) => {
+    const uniqueLoadIds = Array.from(new Set(loadIds.filter(Boolean)));
+    await Promise.all(uniqueLoadIds.map(async loadId => {
+      const { data, error } = await (supabase as any).from('load_items').select('pallet_count, weight_kg, volume_m3').eq('load_id', loadId);
+      if (error) throw error;
+      const totals = (data || []).reduce((acc: any, item: any) => ({
+        pallet_count: acc.pallet_count + (Number(item.pallet_count) || 0),
+        weight_kg: acc.weight_kg + (Number(item.weight_kg) || 0),
+        volume_m3: acc.volume_m3 + (Number(item.volume_m3) || 0),
+      }), { pallet_count: 0, weight_kg: 0, volume_m3: 0 });
+      const { error: updateError } = await supabase.from('loads').update({
+        total_pallet_count: totals.pallet_count,
+        total_weight_kg: totals.weight_kg,
+        total_volume_m3: totals.volume_m3,
+        updated_at: new Date().toISOString(),
+      } as any).eq('id', loadId);
+      if (updateError) throw updateError;
+    }));
+  };
+
   const handleSave = async () => {
     try {
       const notes = [
@@ -308,6 +323,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
 
       let manualDocId: string | null = null;
       const selectedDocIdList = Array.from(selectedDocIds);
+      const previousLoadIds = Array.from(new Set(selectedDocIdList.map(docId => fiscalDocs.find((d: any) => d.id === docId)?.load_id).filter(Boolean)));
 
       if (selectedDocIdList.length === 1) {
         const { error: updateDocError } = await supabase.from('fiscal_documents').update({
@@ -342,6 +358,13 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
       const docIds = [...selectedDocIdList, ...(manualDocId ? [manualDocId] : [])];
       if (docIds.length > 0) {
         if (selectedDocIdList.length > 0) {
+          const { error: unlinkItemsError } = await (supabase as any)
+            .from('load_items')
+            .delete()
+            .eq('tenant_id', currentTenant!.id)
+            .in('fiscal_document_id', selectedDocIdList);
+          if (unlinkItemsError) throw unlinkItemsError;
+
           const { error: linkError } = await supabase.from('fiscal_documents').update({ load_id: load.id } as any).in('id', selectedDocIdList);
           if (linkError) throw linkError;
           const auditEvents = selectedDocIdList.map(docId => {
@@ -399,6 +422,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
         });
         const { error: itemError } = await (supabase as any).from('load_items').insert(items);
         if (itemError) throw itemError;
+        await refreshLoadTotals([...previousLoadIds, load.id]);
       }
 
       toast({ title: 'Carga criada' });
@@ -458,7 +482,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
           </div>
           {selectedDocIds.size > 0 && (
             <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-[11px] text-muted-foreground">
-              Nota vinculada: os campos preenchidos automaticamente podem ser editados sem perder o vínculo.
+              Nota vinculada: ao criar, notas já roteirizadas sairão da carga antiga e entrarão nesta nova carga.
             </div>
           )}
           <div className="grid grid-cols-2 gap-3">
@@ -492,7 +516,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
           )}
           <div className="space-y-2 rounded-md border border-border p-3">
             <div className="flex items-center justify-between gap-3">
-              <Label className="text-xs">Puxar notas disponíveis</Label>
+              <Label className="text-xs">Puxar notas</Label>
               <div className="flex items-center gap-2">
                 <span className="text-[11px] text-muted-foreground">{selectedDocIds.size} selecionada(s)</span>
                 {selectableFilteredDocs.length > 0 && (
@@ -526,7 +550,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                     <AlertTriangle className="h-4 w-4" /> NF já vinculada a outra carga
                   </div>
                   <div className="text-center text-muted-foreground">
-                    A nota foi encontrada, mas não aparece como disponível porque já está vinculada.
+                    A nota foi encontrada e pode ser reatribuída para a nova carga. Ela sairá da carga antiga ao criar.
                   </div>
                   <div className="mt-2 flex flex-wrap justify-center gap-2">
                     {linkedFilteredDocs.map((doc: any) => {
@@ -542,13 +566,14 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
               ) : filteredDocs.map((doc: any) => {
                 const isSelected = selectedDocIds.has(doc.id);
                 const isLinked = !!doc.load_id;
+                const linkedLoad = getLinkedLoad(doc);
                 return (
                 <div key={doc.id} className="flex items-start gap-2 rounded-md border border-border px-2 py-2 hover:bg-muted/60">
-                  <button type="button" onClick={() => isLinked ? undefined : isSelected ? removeDocSelection(doc.id) : setPreviewDoc(doc)} disabled={isLinked} className="flex min-w-0 flex-1 items-start gap-2 text-left disabled:cursor-not-allowed disabled:opacity-60">
+                  <button type="button" onClick={() => isSelected ? removeDocSelection(doc.id) : setPreviewDoc(doc)} className="flex min-w-0 flex-1 items-start gap-2 text-left">
                     <Checkbox checked={isSelected} className="mt-0.5" />
                     <span className="min-w-0 flex-1">
                       <span className="block text-xs font-medium">NF {doc.invoice_number || '—'} · {doc.clients?.company_name || doc.recipient || 'Sem cliente'}</span>
-                       <span className="block truncate text-[11px] text-muted-foreground">{doc.remitter || 'Fornecedor não informado'} · {doc.recipient_neighborhood || 'Sem bairro'}{isLinked ? ` · Já vinculada à carga ${getLinkedLoad(doc)?.load_number || ''}` : ''}</span>
+                       <span className="block truncate text-[11px] text-muted-foreground">{doc.remitter || 'Fornecedor não informado'} · {doc.recipient_neighborhood || 'Sem bairro'}{isLinked ? ` · Será reatribuída da carga ${linkedLoad?.load_number || 'atual'}` : ''}</span>
                     </span>
                   </button>
                   <Button type="button" variant="outline" size="sm" className="h-7 shrink-0 gap-1 text-[11px]" onClick={() => setDetailsDoc(doc)}>
@@ -600,12 +625,12 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                   const isLinked = !!doc.load_id;
                   const linkedLoad = getLinkedLoad(doc);
                   return (
-                    <button key={doc.id} type="button" onClick={() => isLinked ? undefined : isSelected ? removeDocSelection(doc.id) : applyDocSelection(doc)} disabled={isLinked} className="w-full rounded-md border border-border px-3 py-2 text-left hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60">
+                    <button key={doc.id} type="button" onClick={() => isSelected ? removeDocSelection(doc.id) : applyDocSelection(doc)} className="w-full rounded-md border border-border px-3 py-2 text-left hover:bg-muted/60">
                       <div className="flex items-start gap-3">
                         <Checkbox checked={isSelected} className="mt-0.5" />
                         <div className="min-w-0 flex-1">
                           <div className="text-sm font-medium">NF {doc.invoice_number || '—'} · {doc.clients?.company_name || doc.recipient || 'Sem cliente'}</div>
-                          <div className="text-xs text-muted-foreground truncate">{doc.remitter || 'Fornecedor não informado'} · {doc.recipient_neighborhood || 'Sem bairro'} · {[doc.recipient_city, doc.recipient_state].filter(Boolean).join(' / ') || 'Sem cidade'}{isLinked ? ` · Já vinculada à carga ${linkedLoad?.load_number || ''}` : ''}</div>
+                          <div className="text-xs text-muted-foreground truncate">{doc.remitter || 'Fornecedor não informado'} · {doc.recipient_neighborhood || 'Sem bairro'} · {[doc.recipient_city, doc.recipient_state].filter(Boolean).join(' / ') || 'Sem cidade'}{isLinked ? ` · Será reatribuída da carga ${linkedLoad?.load_number || 'atual'}` : ''}</div>
                         </div>
                       </div>
                     </button>
