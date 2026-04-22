@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCreateLoad } from '@/hooks/useLoads';
 import { useClients } from '@/hooks/useClients';
@@ -32,6 +32,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   const [recentDocsOpen, setRecentDocsOpen] = useState(false);
   const emptyForm = { load_number: '', vehicle_id: '', driver_id: '', origin: '', destination: '', neighborhood: '', invoice_number: '', client_id: '', client_name: '', supplier: '', notes: '' };
   const [form, setForm] = useState(emptyForm);
+  const [loadNumberTouched, setLoadNumberTouched] = useState(false);
   const [docFilters, setDocFilters] = useState({ invoice: '', client: '', neighborhood: '' });
   const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
   const [previewDoc, setPreviewDoc] = useState<any | null>(null);
@@ -56,6 +57,35 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     },
     enabled: !!currentTenant && open,
   });
+
+  const { data: existingLoadNumbers = [] } = useQuery({
+    queryKey: ['next_load_number_seed', currentTenant?.id],
+    queryFn: async () => {
+      if (!currentTenant) return [];
+      const { data, error } = await supabase
+        .from('loads')
+        .select('load_number')
+        .eq('tenant_id', currentTenant.id)
+        .limit(1000);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentTenant && open,
+  });
+
+  const nextLoadNumber = useMemo(() => {
+    const highest = existingLoadNumbers.reduce((max: number, load: any) => {
+      const matches = String(load.load_number || '').match(/\d+/g);
+      const sequence = matches ? Number(matches[matches.length - 1]) : 0;
+      return sequence >= 1000 ? Math.max(max, sequence) : max;
+    }, 999);
+    return String(highest + 1);
+  }, [existingLoadNumbers]);
+
+  useEffect(() => {
+    if (!open || loadNumberTouched || !nextLoadNumber) return;
+    setForm(f => ({ ...f, load_number: nextLoadNumber }));
+  }, [loadNumberTouched, nextLoadNumber, open]);
 
   const filteredDocs = useMemo(() => {
     const invoice = normalize(docFilters.invoice);
