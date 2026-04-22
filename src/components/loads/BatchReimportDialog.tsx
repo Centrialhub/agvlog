@@ -194,6 +194,7 @@ export default function BatchReimportDialog() {
   };
 
   const cleanedTotal = clearSummary ? Object.values(clearSummary).reduce((sum, value) => sum + Number(value || 0), 0) : 0;
+  const previewTotal = erasePreview ? Object.values(erasePreview).reduce((sum, value) => sum + Number(value || 0), 0) : 0;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -215,6 +216,31 @@ export default function BatchReimportDialog() {
           <AlertTitle>Esta ação limpa os dados operacionais atuais</AlertTitle>
           <AlertDescription>Notas, cargas, itens, viagens, rascunhos e logs de frete serão removidos antes da nova importação.</AlertDescription>
         </Alert>
+
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm font-semibold text-foreground">Será apagado antes da importação</div>
+            <Badge variant="destructive">{previewLoading ? 'contando...' : `${previewTotal} registro(s)`}</Badge>
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+            {Object.entries(erasePreview || {}).map(([label, count]) => (
+              <div key={label} className="rounded-md bg-background/70 border border-border p-2">
+                <div className="font-semibold text-foreground">{count}</div>
+                <div className="text-muted-foreground">{label}</div>
+              </div>
+            ))}
+          </div>
+          <label className="block text-xs font-medium text-foreground">
+            Digite LIMPAR para liberar a reimportação
+            <input
+              value={confirmationText}
+              onChange={event => setConfirmationText(event.target.value)}
+              disabled={busy}
+              className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+              placeholder="LIMPAR"
+            />
+          </label>
+        </div>
 
         <div
           className="rounded-lg border border-dashed border-border p-6 text-center hover:border-primary/50 transition-colors"
@@ -268,7 +294,7 @@ export default function BatchReimportDialog() {
 
         <div className="flex items-center justify-between gap-3">
           <Button variant="ghost" onClick={reset} disabled={busy}>Limpar seleção</Button>
-          <Button onClick={startReimport} disabled={!total || busy || !currentTenant}>
+          <Button onClick={startReimport} disabled={!total || busy || !currentTenant || !confirmed}>
             {phase === 'clearing' ? 'Limpando...' : phase === 'importing' ? 'Importando...' : 'Limpar e importar'}
           </Button>
         </div>
