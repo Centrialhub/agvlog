@@ -74,6 +74,25 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     enabled: !!currentTenant && open,
   });
 
+  const { data: linkedLoads = [] } = useQuery({
+    queryKey: ['new_load_linked_load_lookup', currentTenant?.id],
+    queryFn: async () => {
+      if (!currentTenant) return [];
+      const { data, error } = await supabase
+        .from('loads')
+        .select('id, load_number')
+        .eq('tenant_id', currentTenant.id)
+        .limit(1000);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentTenant && open,
+  });
+
+  const linkedLoadById = useMemo(() => new Map(linkedLoads.map((load: any) => [load.id, load])), [linkedLoads]);
+
+  const getLinkedLoad = (doc: any) => doc.loads || linkedLoadById.get(doc.load_id) || null;
+
   const nextLoadNumber = useMemo(() => {
     const highest = existingLoadNumbers.reduce((max: number, load: any) => {
       const matches = String(load.load_number || '').match(/\d+/g);
@@ -219,7 +238,8 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
 
   const applyDocSelection = (doc: any) => {
     if (doc.load_id) {
-      toast({ title: 'Nota já vinculada', description: `NF ${doc.invoice_number || '—'} já está na carga ${doc.loads?.load_number || 'existente'}.`, variant: 'destructive' });
+      const linkedLoad = getLinkedLoad(doc);
+      toast({ title: 'Nota já vinculada', description: `NF ${doc.invoice_number || '—'} já está na carga ${linkedLoad?.load_number || 'existente'}.`, variant: 'destructive' });
       return;
     }
     const autoFilledFields = getDocAutofillFields(doc);
@@ -509,11 +529,14 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                     A nota foi encontrada, mas não aparece como disponível porque já está vinculada.
                   </div>
                   <div className="mt-2 flex flex-wrap justify-center gap-2">
-                    {linkedFilteredDocs.map((doc: any) => (
-                      <Button key={doc.id} asChild type="button" variant="outline" size="sm" className="h-7 text-[11px]">
-                        <Link to={`/loads/${doc.loads?.id || doc.load_id}`}>Abrir carga {doc.loads?.load_number || 'vinculada'}</Link>
-                      </Button>
-                    ))}
+                    {linkedFilteredDocs.map((doc: any) => {
+                      const linkedLoad = getLinkedLoad(doc);
+                      return (
+                        <Button key={doc.id} asChild type="button" variant="outline" size="sm" className="h-7 text-[11px]">
+                          <Link to={`/loads/${linkedLoad?.id || doc.load_id}`}>Abrir carga {linkedLoad?.load_number || 'vinculada'}</Link>
+                        </Button>
+                      );
+                    })}
                   </div>
                 </div>
               ) : filteredDocs.map((doc: any) => {
@@ -525,7 +548,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                     <Checkbox checked={isSelected} className="mt-0.5" />
                     <span className="min-w-0 flex-1">
                       <span className="block text-xs font-medium">NF {doc.invoice_number || '—'} · {doc.clients?.company_name || doc.recipient || 'Sem cliente'}</span>
-                      <span className="block truncate text-[11px] text-muted-foreground">{doc.remitter || 'Fornecedor não informado'} · {doc.recipient_neighborhood || 'Sem bairro'}{isLinked ? ` · Já vinculada à carga ${doc.loads?.load_number || ''}` : ''}</span>
+                       <span className="block truncate text-[11px] text-muted-foreground">{doc.remitter || 'Fornecedor não informado'} · {doc.recipient_neighborhood || 'Sem bairro'}{isLinked ? ` · Já vinculada à carga ${getLinkedLoad(doc)?.load_number || ''}` : ''}</span>
                     </span>
                   </button>
                   <Button type="button" variant="outline" size="sm" className="h-7 shrink-0 gap-1 text-[11px]" onClick={() => setDetailsDoc(doc)}>
@@ -575,13 +598,14 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                 ) : recentDocs.map((doc: any) => {
                   const isSelected = selectedDocIds.has(doc.id);
                   const isLinked = !!doc.load_id;
+                  const linkedLoad = getLinkedLoad(doc);
                   return (
                     <button key={doc.id} type="button" onClick={() => isLinked ? undefined : isSelected ? removeDocSelection(doc.id) : applyDocSelection(doc)} disabled={isLinked} className="w-full rounded-md border border-border px-3 py-2 text-left hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60">
                       <div className="flex items-start gap-3">
                         <Checkbox checked={isSelected} className="mt-0.5" />
                         <div className="min-w-0 flex-1">
                           <div className="text-sm font-medium">NF {doc.invoice_number || '—'} · {doc.clients?.company_name || doc.recipient || 'Sem cliente'}</div>
-                          <div className="text-xs text-muted-foreground truncate">{doc.remitter || 'Fornecedor não informado'} · {doc.recipient_neighborhood || 'Sem bairro'} · {[doc.recipient_city, doc.recipient_state].filter(Boolean).join(' / ') || 'Sem cidade'}{isLinked ? ` · Já vinculada à carga ${doc.loads?.load_number || ''}` : ''}</div>
+                          <div className="text-xs text-muted-foreground truncate">{doc.remitter || 'Fornecedor não informado'} · {doc.recipient_neighborhood || 'Sem bairro'} · {[doc.recipient_city, doc.recipient_state].filter(Boolean).join(' / ') || 'Sem cidade'}{isLinked ? ` · Já vinculada à carga ${linkedLoad?.load_number || ''}` : ''}</div>
                         </div>
                       </div>
                     </button>
@@ -595,7 +619,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
               <DialogHeader><DialogTitle>Detalhes da NF {detailsDoc?.invoice_number || '—'}</DialogTitle></DialogHeader>
               {detailsDoc && (
                 <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div><span className="text-muted-foreground">Carga vinculada:</span><div className="font-medium">{detailsDoc.loads?.load_number || 'Não vinculada'}</div></div>
+                  <div><span className="text-muted-foreground">Carga vinculada:</span><div className="font-medium">{getLinkedLoad(detailsDoc)?.load_number || 'Não vinculada'}</div></div>
                   <div><span className="text-muted-foreground">Status:</span><div className="font-medium">{detailsDoc.status || '—'}</div></div>
                   <div><span className="text-muted-foreground">Cliente:</span><div className="font-medium">{detailsDoc.clients?.company_name || detailsDoc.recipient || '—'}</div></div>
                   <div><span className="text-muted-foreground">Fornecedor:</span><div className="font-medium">{detailsDoc.remitter || '—'}</div></div>
