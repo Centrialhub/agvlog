@@ -2422,6 +2422,79 @@ export type Database = {
           },
         ]
       }
+      load_note_audit_events: {
+        Row: {
+          action_type: string
+          client_name: string | null
+          created_at: string
+          created_by: string | null
+          details: Json
+          fiscal_document_id: string | null
+          id: string
+          invoice_number: string | null
+          load_id: string
+          neighborhood: string | null
+          previous_load_id: string | null
+          route_destination: string | null
+          supplier_name: string | null
+          tenant_id: string
+        }
+        Insert: {
+          action_type?: string
+          client_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          details?: Json
+          fiscal_document_id?: string | null
+          id?: string
+          invoice_number?: string | null
+          load_id: string
+          neighborhood?: string | null
+          previous_load_id?: string | null
+          route_destination?: string | null
+          supplier_name?: string | null
+          tenant_id: string
+        }
+        Update: {
+          action_type?: string
+          client_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          details?: Json
+          fiscal_document_id?: string | null
+          id?: string
+          invoice_number?: string | null
+          load_id?: string
+          neighborhood?: string | null
+          previous_load_id?: string | null
+          route_destination?: string | null
+          supplier_name?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "load_note_audit_events_fiscal_document_id_fkey"
+            columns: ["fiscal_document_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "load_note_audit_events_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "load_note_audit_events_previous_load_id_fkey"
+            columns: ["previous_load_id"]
+            isOneToOne: false
+            referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       load_orders: {
         Row: {
           created_at: string
