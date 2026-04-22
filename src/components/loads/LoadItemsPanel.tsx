@@ -212,15 +212,15 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
             <DialogTrigger asChild>
               <Button size="sm"><Plus className="h-3 w-3 mr-1" /> Adicionar Item</Button>
             </DialogTrigger>
-            <DialogContent className="max-w-3xl">
+            <DialogContent className="max-w-2xl max-h-[82vh] overflow-hidden">
               <DialogHeader><DialogTitle>Adicionar Item à Carga</DialogTitle></DialogHeader>
-              <div className="space-y-4">
+              <div className="flex max-h-[70vh] flex-col gap-3">
                 <div className="flex gap-2 rounded-md bg-muted p-1">
                   <Button type="button" variant={mode === 'note' ? 'secondary' : 'ghost'} size="sm" className="flex-1" onClick={() => setMode('note')}>Puxar NF</Button>
                   <Button type="button" variant={mode === 'manual' ? 'secondary' : 'ghost'} size="sm" className="flex-1" onClick={() => setMode('manual')}>Item manual</Button>
                 </div>
                 {mode === 'note' ? (
-                  <div className="space-y-3">
+                  <div className="flex min-h-0 flex-1 flex-col gap-3">
                     <div className="grid grid-cols-3 gap-2">
                       <div className="relative">
                         <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -229,13 +229,13 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
                       <Input value={docFilters.client} onChange={e => setDocFilters(f => ({ ...f, client: e.target.value }))} placeholder="Cliente" />
                       <Input value={docFilters.neighborhood} onChange={e => setDocFilters(f => ({ ...f, neighborhood: e.target.value }))} placeholder="Bairro" />
                     </div>
-                    <div className="space-y-1">
+                    <div className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
                       {filteredDocs.length === 0 ? (
                         <div className="rounded-md border border-border py-6 text-center text-sm text-muted-foreground">Nenhuma NF disponível para esses filtros</div>
-                      ) : filteredDocs.slice(0, 12).map((doc: any) => {
+                      ) : filteredDocs.map((doc: any) => {
                         const isSelected = selectedDocIds.has(doc.id);
                         return (
-                          <button key={doc.id} type="button" onClick={() => setSelectedDocIds(prev => { const next = new Set(prev); next.has(doc.id) ? next.delete(doc.id) : next.add(doc.id); return next; })} className="flex w-full items-start gap-2 rounded-md border border-border px-3 py-2 text-left hover:bg-muted/60">
+                          <button key={doc.id} type="button" onClick={() => setSelectedDocIds(prev => { const next = new Set(prev); next.has(doc.id) ? next.delete(doc.id) : next.add(doc.id); return next; })} className="flex w-full items-start gap-2 rounded-md border border-border px-3 py-1.5 text-left hover:bg-muted/60">
                             <Checkbox checked={isSelected} className="mt-0.5" />
                             <span className="min-w-0 flex-1">
                               <span className="block text-sm font-medium">NF {doc.invoice_number || '—'} · {doc.clients?.company_name || doc.recipient || 'Sem cliente'}</span>
@@ -270,7 +270,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
                 </div>
                   </>
                 )}
-                <div className="flex gap-2 justify-end">
+                <div className="flex shrink-0 gap-2 justify-end border-t border-border pt-3">
                   <Button variant="outline" onClick={() => setAddOpen(false)}>Cancelar</Button>
                   <Button onClick={handleAdd} disabled={createItem.isPending}>{mode === 'note' ? 'Puxar NF(s)' : 'Adicionar'}</Button>
                 </div>
