@@ -32,7 +32,7 @@ interface ImportError {
   message: string;
 }
 
-type FileImportState = 'pending' | 'importing' | 'success' | 'updated' | 'ignored' | 'error';
+type FileImportState = 'pending' | 'importing' | 'success' | 'imported' | 'updated' | 'unchanged' | 'ignored' | 'error';
 
 interface FileImportStatus {
   fileName: string;
@@ -124,6 +124,29 @@ export default function BatchReimportDialog() {
     if (end && date > end) return false;
     return true;
   };
+  const buildDedupSnapshot = (dedup: typeof EMPTY_DEDUP_REPORT) => ({
+    ignored: [...dedup.ignored],
+    updated: [...dedup.updated],
+    imported: [...dedup.imported],
+    unchanged: [...dedup.unchanged],
+  });
+  const normalizeText = (value?: string | null) => (value || '').trim();
+  const normalizeNumber = (value?: number | null) => Number(value || 0);
+  const hasFiscalDocumentChanges = (existing: ExistingFiscalDocument, next: ExistingFiscalDocument) => [
+    normalizeText(existing.invoice_number) !== normalizeText(next.invoice_number),
+    normalizeText(existing.access_key) !== normalizeText(next.access_key),
+    normalizeText(existing.remitter) !== normalizeText(next.remitter),
+    normalizeText(existing.recipient) !== normalizeText(next.recipient),
+    normalizeText(existing.recipient_city) !== normalizeText(next.recipient_city),
+    normalizeText(existing.recipient_state) !== normalizeText(next.recipient_state),
+    normalizeText(existing.recipient_neighborhood) !== normalizeText(next.recipient_neighborhood),
+    normalizeText(existing.issue_date) !== normalizeText(next.issue_date),
+    normalizeText(existing.client_id) !== normalizeText(next.client_id),
+    normalizeText(existing.product_summary) !== normalizeText(next.product_summary),
+    normalizeNumber(existing.pallet_count) !== normalizeNumber(next.pallet_count),
+    normalizeNumber(existing.weight_kg) !== normalizeNumber(next.weight_kg),
+    normalizeNumber(existing.value) !== normalizeNumber(next.value),
+  ].some(Boolean);
   const progress = useMemo(() => {
     if (phase === 'clearing') return 8;
     if (!total) return 0;
