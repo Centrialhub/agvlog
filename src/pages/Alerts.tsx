@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant, useIsAdmin } from '@/hooks/useTenant';
@@ -14,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { Bell, CheckCircle2, Eye, EyeOff, Plus, AlertTriangle, Clock, X, Play } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
+import { addDays, differenceInCalendarDays, format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 function ProcessButton() {
@@ -65,9 +66,11 @@ export default function Alerts() {
       <Tabs defaultValue="instances">
         <TabsList>
           <TabsTrigger value="instances">Alertas Ativos</TabsTrigger>
+          <TabsTrigger value="stale-docs">Notas paradas</TabsTrigger>
           <TabsTrigger value="rules">Regras</TabsTrigger>
         </TabsList>
         <TabsContent value="instances" className="mt-4"><AlertInstancesSection /></TabsContent>
+        <TabsContent value="stale-docs" className="mt-4"><StaleFiscalDocsSection /></TabsContent>
         <TabsContent value="rules" className="mt-4"><AlertRulesSection /></TabsContent>
       </Tabs>
     </div>
