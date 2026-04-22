@@ -212,6 +212,10 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   };
 
   const applyDocSelection = (doc: any) => {
+    if (doc.load_id) {
+      toast({ title: 'Nota já vinculada', description: `NF ${doc.invoice_number || '—'} já está na carga ${doc.loads?.load_number || 'existente'}.`, variant: 'destructive' });
+      return;
+    }
     const autoFilledFields = getDocAutofillFields(doc);
     setSelectedDocIds(prev => {
       const next = new Set(prev);
@@ -488,15 +492,16 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
             </div>
             <div className="max-h-40 overflow-y-auto space-y-1">
               {filteredDocs.length === 0 ? (
-                <div className="text-xs text-muted-foreground py-3 text-center">Nenhuma nota pendente encontrada</div>
+                <div className="text-xs text-muted-foreground py-3 text-center">Nenhuma nota encontrada para esses filtros</div>
               ) : filteredDocs.map((doc: any) => {
                 const isSelected = selectedDocIds.has(doc.id);
+                const isLinked = !!doc.load_id;
                 return (
-                <button key={doc.id} type="button" onClick={() => isSelected ? removeDocSelection(doc.id) : setPreviewDoc(doc)} className="w-full flex items-start gap-2 rounded-md border border-border px-2 py-2 text-left hover:bg-muted/60">
+                <button key={doc.id} type="button" onClick={() => isLinked ? undefined : isSelected ? removeDocSelection(doc.id) : setPreviewDoc(doc)} disabled={isLinked} className="w-full flex items-start gap-2 rounded-md border border-border px-2 py-2 text-left hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60">
                   <Checkbox checked={isSelected} className="mt-0.5" />
                   <span className="min-w-0 flex-1">
                     <span className="block text-xs font-medium">NF {doc.invoice_number || '—'} · {doc.clients?.company_name || doc.recipient || 'Sem cliente'}</span>
-                    <span className="block text-[11px] text-muted-foreground truncate">{doc.remitter || 'Fornecedor não informado'} · {doc.recipient_neighborhood || 'Sem bairro'}</span>
+                    <span className="block text-[11px] text-muted-foreground truncate">{doc.remitter || 'Fornecedor não informado'} · {doc.recipient_neighborhood || 'Sem bairro'}{isLinked ? ` · Já vinculada à carga ${doc.loads?.load_number || ''}` : ''}</span>
                   </span>
                 </button>
                 );
