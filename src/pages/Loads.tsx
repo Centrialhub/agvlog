@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Search, PackageCheck, Truck, MapPin, ArrowRight, FileStack, Trash2, MoreVertical, X, CheckSquare, Printer, Route as RouteIcon } from 'lucide-react';
+import { Search, PackageCheck, Truck, MapPin, ArrowRight, FileStack, Trash2, MoreVertical, X, CheckSquare, Printer, Route as RouteIcon, CalendarDays } from 'lucide-react';
 import { printRomaneioRoutes, RomaneioDoc } from '@/lib/romaneioPrint';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
@@ -30,6 +30,29 @@ const STATUS_COLORS: Record<string, string> = {
   assembling: 'bg-warning/10 text-warning',
 };
 
+type DatePreset = 'all' | 'today' | '7' | '14' | '30' | 'custom';
+
+const datePresetLabels: Record<DatePreset, string> = {
+  all: 'Todas',
+  today: 'Hoje',
+  '7': '7 dias',
+  '14': '14 dias',
+  '30': '30 dias',
+  custom: 'Personalizado',
+};
+
+const startOfDay = (date: Date) => {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  return next;
+};
+
+const endOfDay = (date: Date) => {
+  const next = new Date(date);
+  next.setHours(23, 59, 59, 999);
+  return next;
+};
+
 export default function Loads() {
   const navigate = useNavigate();
   const { currentTenant } = useTenant();
@@ -41,6 +64,9 @@ export default function Loads() {
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [datePreset, setDatePreset] = useState<DatePreset>('30');
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
   const [groupingOpen, setGroupingOpen] = useState(false);
 
   // Selection state
@@ -80,12 +106,33 @@ export default function Loads() {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
+    const now = new Date();
+    const start = datePreset === 'today'
+      ? startOfDay(now)
+      : ['7', '14', '30'].includes(datePreset)
+        ? startOfDay(new Date(now.getTime() - (Number(datePreset) - 1) * 24 * 60 * 60 * 1000))
+        : datePreset === 'custom' && customStart
+          ? startOfDay(new Date(`${customStart}T12:00:00`))
+          : null;
+    const end = datePreset === 'custom' && customEnd ? endOfDay(new Date(`${customEnd}T12:00:00`)) : endOfDay(now);
     return loads.filter(l => {
       if (q && !l.load_number.toLowerCase().includes(q) && !(l.vehicles?.plate || '').toLowerCase().includes(q) && !(l.destination || '').toLowerCase().includes(q)) return false;
       if (statusFilter !== 'all' && l.status !== statusFilter) return false;
+      const createdAt = new Date(l.created_at);
+      if (datePreset !== 'all' && start && createdAt < start) return false;
+      if (datePreset !== 'all' && createdAt > end) return false;
       return true;
     });
-  }, [loads, search, statusFilter]);
+  }, [customEnd, customStart, datePreset, loads, search, statusFilter]);
+
+  const groupedByDay = useMemo(() => {
+    return filtered.reduce((groups, load) => {
+      const label = new Date(load.created_at).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' });
+      groups[label] = groups[label] || [];
+      groups[label].push(load);
+      return groups;
+    }, {} as Record<string, Load[]>);
+  }, [filtered]);
 
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -354,10 +401,29 @@ export default function Loads() {
         )}
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input placeholder="Buscar carga, placa ou destino..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-9" />
+      {/* Advanced filters */}
+      <div className="space-y-3 rounded-lg border border-border bg-card p-3">
+        <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+          <CalendarDays className="h-4 w-4" /> Filtros avançados por período
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {(Object.keys(datePresetLabels) as DatePreset[]).map(preset => (
+            <Button key={preset} type="button" size="sm" variant={datePreset === preset ? 'default' : 'outline'} className="h-8" onClick={() => setDatePreset(preset)}>
+              {datePresetLabels[preset]}
+            </Button>
+          ))}
+          {datePreset === 'custom' && (
+            <div className="flex items-center gap-2">
+              <Input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} className="h-8 w-36" />
+              <span className="text-xs text-muted-foreground">até</span>
+              <Input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} className="h-8 w-36" />
+            </div>
+          )}
+        </div>
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input placeholder="Buscar carga, placa ou destino..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-9" />
+        </div>
       </div>
 
       {/* Load cards */}
@@ -366,8 +432,14 @@ export default function Loads() {
       ) : filtered.length === 0 ? (
         <div className="text-center text-muted-foreground py-12">Nenhuma carga encontrada</div>
       ) : (
-        <div className="grid gap-3">
-          {filtered.map(l => {
+        <div className="space-y-5">
+          {Object.entries(groupedByDay).map(([day, dayLoads]) => (
+            <div key={day} className="space-y-2">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase text-muted-foreground">
+                <CalendarDays className="h-3.5 w-3.5" /> {day} <Badge variant="outline" className="text-[10px]">{dayLoads.length}</Badge>
+              </div>
+              <div className="grid gap-3">
+          {dayLoads.map(l => {
             const veh = vehicles.find((v: any) => v.id === l.vehicle_id) as any;
             const maxP = veh?.max_pallets;
             const occ = maxP ? Math.round(((l.total_pallet_count || 0) / maxP) * 100) : null;
@@ -457,6 +529,9 @@ export default function Loads() {
               </Card>
             );
           })}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
