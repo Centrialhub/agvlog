@@ -426,7 +426,19 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
           <div className="space-y-2 rounded-md border border-border p-3">
             <div className="flex items-center justify-between gap-3">
               <Label className="text-xs">Puxar notas disponíveis</Label>
-              <span className="text-[11px] text-muted-foreground">{selectedDocIds.size} selecionada(s)</span>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-muted-foreground">{selectedDocIds.size} selecionada(s)</span>
+                {filteredDocs.length > 0 && (
+                  <Button type="button" variant="outline" size="sm" className="h-7 text-[11px]" onClick={selectFilteredDocs}>
+                    Selecionar filtradas
+                  </Button>
+                )}
+                {selectedDocIds.size > 0 && (
+                  <Button type="button" variant="ghost" size="sm" className="h-7 text-[11px]" onClick={clearDocSelection}>
+                    Limpar
+                  </Button>
+                )}
+              </div>
             </div>
             <div className="grid grid-cols-3 gap-2">
               <div className="relative">
