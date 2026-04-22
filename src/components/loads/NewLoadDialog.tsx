@@ -373,11 +373,21 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                   </div>
                   <Button size="sm" onClick={() => applyDocSelection(previewDoc)}>Confirmar nota</Button>
                 </div>
+                {previewValidationIssues.length > 0 && (
+                  <div className="space-y-1 rounded-md border border-warning/30 bg-warning/10 p-2">
+                    {previewValidationIssues.map(issue => (
+                      <div key={issue.key} className="flex items-start gap-2 text-[11px]">
+                        <AlertTriangle className={`mt-0.5 h-3.5 w-3.5 ${issue.severity === 'error' ? 'text-destructive' : 'text-warning'}`} />
+                        <span>{issue.message}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-                  <div><span className="text-muted-foreground">Cliente:</span> {previewDoc.clients?.company_name || previewDoc.recipient || '—'}</div>
-                  <div><span className="text-muted-foreground">Fornecedor:</span> {previewDoc.remitter || '—'}</div>
-                  <div><span className="text-muted-foreground">Bairro:</span> {previewDoc.recipient_neighborhood || '—'}</div>
-                  <div><span className="text-muted-foreground">Cidade/UF:</span> {[previewDoc.recipient_city, previewDoc.recipient_state].filter(Boolean).join(' / ') || '—'}</div>
+                  <div className={previewIssueFields.has('client') ? 'rounded border border-warning/30 bg-warning/10 px-2 py-1' : ''}><span className="text-muted-foreground">Cliente:</span> {previewDoc.clients?.company_name || previewDoc.recipient || '—'}</div>
+                  <div className={previewIssueFields.has('supplier') ? 'rounded border border-warning/30 bg-warning/10 px-2 py-1' : ''}><span className="text-muted-foreground">Fornecedor:</span> {previewDoc.remitter || '—'}</div>
+                  <div className={previewIssueFields.has('neighborhood') ? 'rounded border border-warning/30 bg-warning/10 px-2 py-1' : ''}><span className="text-muted-foreground">Bairro:</span> {previewDoc.recipient_neighborhood || '—'}</div>
+                  <div className={previewIssueFields.has('destination') ? 'rounded border border-warning/30 bg-warning/10 px-2 py-1' : ''}><span className="text-muted-foreground">Cidade/UF:</span> {[previewDoc.recipient_city, previewDoc.recipient_state].filter(Boolean).join(' / ') || '—'}</div>
                   <div><span className="text-muted-foreground">Paletes:</span> {previewDoc.pallet_count ?? 0}</div>
                   <div><span className="text-muted-foreground">Peso:</span> {previewDoc.weight_kg ?? 0} kg</div>
                   <div className="col-span-2"><span className="text-muted-foreground">Produto:</span> {previewDoc.product_summary || '—'}</div>
