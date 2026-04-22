@@ -713,7 +713,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                 </div>
               </div>
             )}
-            <div key={docsLayoutKey} ref={docListRef} className="max-h-[28vh] space-y-1 overflow-y-auto pr-1" onScroll={event => handleListScroll(event, filteredDocs.length, visibleFilteredDocs.length, setVisibleDocCount)}>
+            <div key={docsLayoutKey} ref={docListRef} className="max-h-[28vh] space-y-1 overflow-y-auto pr-1" onScroll={event => handleListScroll(event, filteredDocs.length, visibleFilteredDocs.length, setVisibleDocCount, setDocScrollTop)}>
               {filteredDocs.length === 0 ? (
                 <div className="text-xs text-muted-foreground py-3 text-center">Nenhuma nota encontrada para esses filtros</div>
               ) : selectableFilteredDocs.length === 0 && linkedFilteredDocs.length > 0 ? (
@@ -819,7 +819,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
           <Dialog open={recentDocsOpen} onOpenChange={setRecentDocsOpen}>
             <DialogContent className="flex h-[min(88vh,760px)] max-w-4xl flex-col overflow-hidden p-0">
               <DialogHeader className="shrink-0 border-b border-border px-5 py-4"><DialogTitle>Notas enviadas recentes</DialogTitle></DialogHeader>
-              <div key={`recent-${docsLayoutKey}`} ref={recentDocListRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto px-5 py-4" onScroll={event => handleListScroll(event, recentDocs.length, visibleRecentDocs.length, setVisibleRecentDocCount)}>
+              <div key={`recent-${docsLayoutKey}`} ref={recentDocListRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto px-5 py-4" onScroll={event => handleListScroll(event, recentDocs.length, visibleRecentDocs.length, setVisibleRecentDocCount, setRecentDocScrollTop)}>
                 {recentDocs.length === 0 ? (
                   <div className="text-sm text-muted-foreground py-6 text-center">Nenhuma nota recente disponível</div>
                 ) : visibleRecentDocs.map((doc: any) => {
