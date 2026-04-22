@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { RotateCcw, Upload, AlertTriangle, CheckCircle2, FileText, XCircle } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -45,9 +45,13 @@ export default function BatchReimportDialog() {
   const [imported, setImported] = useState(0);
   const [errors, setErrors] = useState<ImportError[]>([]);
   const [clearSummary, setClearSummary] = useState<Record<string, number> | null>(null);
+  const [erasePreview, setErasePreview] = useState<Record<string, number> | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [confirmationText, setConfirmationText] = useState('');
 
   const total = files.length;
   const busy = phase === 'clearing' || phase === 'importing';
+  const confirmed = confirmationText.trim().toUpperCase() === 'LIMPAR';
   const progress = useMemo(() => {
     if (phase === 'clearing') return 8;
     if (!total) return 0;
@@ -64,6 +68,38 @@ export default function BatchReimportDialog() {
     setClearSummary(null);
   };
 
+  const fetchErasePreview = async () => {
+    if (!currentTenant) return;
+    setPreviewLoading(true);
+    try {
+      const tableMap = {
+        'Notas fiscais': 'fiscal_documents',
+        'Cargas': 'loads',
+        'Itens de carga': 'load_items',
+        'Viagens': 'dispatch_trips',
+        'Paradas': 'dispatch_stops',
+        'Eventos': 'dispatch_events',
+        'Logs de frete': 'freight_calculation_log',
+        'Rascunhos': 'route_planning_drafts',
+      } as const;
+
+      const entries = await Promise.all(Object.entries(tableMap).map(async ([label, table]) => {
+        const { count } = await supabase
+          .from(table as any)
+          .select('id', { count: 'exact', head: true })
+          .eq('tenant_id', currentTenant.id);
+        return [label, count || 0] as const;
+      }));
+      setErasePreview(Object.fromEntries(entries));
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (open) fetchErasePreview();
+  }, [open, currentTenant?.id]);
+
   const reset = () => {
     setFiles(EMPTY_FILE_LIST);
     setPhase('idle');
@@ -71,6 +107,7 @@ export default function BatchReimportDialog() {
     setImported(0);
     setErrors([]);
     setClearSummary(null);
+    setConfirmationText('');
     if (inputRef.current) inputRef.current.value = '';
   };
 
@@ -84,7 +121,7 @@ export default function BatchReimportDialog() {
   };
 
   const startReimport = async () => {
-    if (!currentTenant || !files.length) return;
+    if (!currentTenant || !files.length || !confirmed) return;
     setPhase('clearing');
     setProcessed(0);
     setImported(0);
@@ -157,6 +194,7 @@ export default function BatchReimportDialog() {
   };
 
   const cleanedTotal = clearSummary ? Object.values(clearSummary).reduce((sum, value) => sum + Number(value || 0), 0) : 0;
+  const previewTotal = erasePreview ? Object.values(erasePreview).reduce((sum, value) => sum + Number(value || 0), 0) : 0;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -178,6 +216,31 @@ export default function BatchReimportDialog() {
           <AlertTitle>Esta ação limpa os dados operacionais atuais</AlertTitle>
           <AlertDescription>Notas, cargas, itens, viagens, rascunhos e logs de frete serão removidos antes da nova importação.</AlertDescription>
         </Alert>
+
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm font-semibold text-foreground">Será apagado antes da importação</div>
+            <Badge variant="destructive">{previewLoading ? 'contando...' : `${previewTotal} registro(s)`}</Badge>
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+            {Object.entries(erasePreview || {}).map(([label, count]) => (
+              <div key={label} className="rounded-md bg-background/70 border border-border p-2">
+                <div className="font-semibold text-foreground">{count}</div>
+                <div className="text-muted-foreground">{label}</div>
+              </div>
+            ))}
+          </div>
+          <label className="block text-xs font-medium text-foreground">
+            Digite LIMPAR para liberar a reimportação
+            <input
+              value={confirmationText}
+              onChange={event => setConfirmationText(event.target.value)}
+              disabled={busy}
+              className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+              placeholder="LIMPAR"
+            />
+          </label>
+        </div>
 
         <div
           className="rounded-lg border border-dashed border-border p-6 text-center hover:border-primary/50 transition-colors"
@@ -231,7 +294,7 @@ export default function BatchReimportDialog() {
 
         <div className="flex items-center justify-between gap-3">
           <Button variant="ghost" onClick={reset} disabled={busy}>Limpar seleção</Button>
-          <Button onClick={startReimport} disabled={!total || busy || !currentTenant}>
+          <Button onClick={startReimport} disabled={!total || busy || !currentTenant || !confirmed}>
             {phase === 'clearing' ? 'Limpando...' : phase === 'importing' ? 'Importando...' : 'Limpar e importar'}
           </Button>
         </div>
