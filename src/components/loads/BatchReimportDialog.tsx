@@ -49,6 +49,17 @@ interface DedupEntry {
 
 const EMPTY_FILE_LIST: File[] = [];
 
+const CLEANUP_TABLE_LABELS: Record<string, string> = {
+  fiscal_documents: 'Notas fiscais',
+  loads: 'Cargas',
+  load_items: 'Itens de carga',
+  dispatch_trips: 'Viagens',
+  dispatch_stops: 'Paradas',
+  dispatch_events: 'Eventos',
+  freight_calculation_log: 'Logs de frete',
+  route_planning_drafts: 'Rascunhos',
+};
+
 export default function BatchReimportDialog() {
   const { currentTenant } = useTenant();
   const { user } = useAuth();
@@ -77,6 +88,14 @@ export default function BatchReimportDialog() {
   const confirmed = confirmationText.trim().toUpperCase() === 'LIMPAR';
   const dateRangeInvalid = !!startDate && !!endDate && startDate > endDate;
   const toDateParam = (date?: Date) => date ? format(date, 'yyyy-MM-dd') : null;
+  const isWithinSelectedPeriod = (issueDate?: string) => {
+    if (!issueDate) return true;
+    const date = new Date(`${issueDate.substring(0, 10)}T12:00:00`);
+    if (Number.isNaN(date.getTime())) return true;
+    if (startDate && date < startDate) return false;
+    if (endDate && date > endDate) return false;
+    return true;
+  };
   const progress = useMemo(() => {
     if (phase === 'clearing') return 8;
     if (!total) return 0;
@@ -105,27 +124,13 @@ export default function BatchReimportDialog() {
     if (!currentTenant) return;
     setPreviewLoading(true);
     try {
-      const tableMap = {
-        'Notas fiscais': 'fiscal_documents',
-        'Cargas': 'loads',
-        'Itens de carga': 'load_items',
-        'Viagens': 'dispatch_trips',
-        'Paradas': 'dispatch_stops',
-        'Eventos': 'dispatch_events',
-        'Logs de frete': 'freight_calculation_log',
-        'Rascunhos': 'route_planning_drafts',
-      } as const;
-
-      const entries = await Promise.all(Object.entries(tableMap).map(async ([label, table]) => {
-        return [label, 0] as const;
-      }));
       const { data, error } = await (supabase as any).rpc('preview_reimport_cleanup_counts', {
         _tenant_id: currentTenant.id,
         _start_date: toDateParam(startDate),
         _end_date: toDateParam(endDate),
       });
       if (error) throw error;
-      setErasePreview({ ...Object.fromEntries(entries), ...(data || {}) });
+      setErasePreview(Object.fromEntries(Object.entries(CLEANUP_TABLE_LABELS).map(([key, label]) => [label, Number((data || {})[key] || 0)])));
     } finally {
       setPreviewLoading(false);
     }
