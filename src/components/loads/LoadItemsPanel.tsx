@@ -25,6 +25,24 @@ interface LoadItemsPanelProps {
 
 const DOC_PAGE_SIZE = 25;
 const FILTER_DEBOUNCE_MS = 250;
+const LOAD_ITEMS_DOC_FILTERS_KEY = 'agvlog:load-items-doc-filters';
+const LOAD_ITEMS_DOC_SORT_KEY = 'agvlog:load-items-doc-sort';
+
+const emptyDocFilters = { invoice: '', client: '', neighborhood: '' };
+
+const loadStoredDocFilters = () => {
+  try {
+    const stored = window.localStorage.getItem(LOAD_ITEMS_DOC_FILTERS_KEY);
+    return stored ? { ...emptyDocFilters, ...JSON.parse(stored) } : emptyDocFilters;
+  } catch {
+    return emptyDocFilters;
+  }
+};
+
+const loadStoredDocSort = (): 'recent' | 'alpha' => {
+  const stored = window.localStorage.getItem(LOAD_ITEMS_DOC_SORT_KEY);
+  return stored === 'alpha' ? 'alpha' : 'recent';
+};
 
 function useDebouncedValue<T>(value: T, delay: number) {
   const [debouncedValue, setDebouncedValue] = useState(value);
@@ -48,8 +66,8 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
   const { toast } = useToast();
   const [addOpen, setAddOpen] = useState(false);
   const [mode, setMode] = useState<'note' | 'manual'>('note');
-  const [docFilters, setDocFilters] = useState({ invoice: '', client: '', neighborhood: '' });
-  const [docSort, setDocSort] = useState<'recent' | 'alpha'>('recent');
+  const [docFilters, setDocFilters] = useState(loadStoredDocFilters);
+  const [docSort, setDocSort] = useState<'recent' | 'alpha'>(loadStoredDocSort);
   const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
   const [visibleDocCount, setVisibleDocCount] = useState(DOC_PAGE_SIZE);
   const [docsLayoutKey, setDocsLayoutKey] = useState(0);
@@ -113,6 +131,14 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
 
   const visibleFilteredDocs = useMemo(() => filteredDocs.slice(0, visibleDocCount), [filteredDocs, visibleDocCount]);
   const isDocsUpdating = isFetchingFiscalDocs || docFilters.invoice !== debouncedDocFilters.invoice || docFilters.client !== debouncedDocFilters.client || docFilters.neighborhood !== debouncedDocFilters.neighborhood;
+
+  useEffect(() => {
+    window.localStorage.setItem(LOAD_ITEMS_DOC_FILTERS_KEY, JSON.stringify(docFilters));
+  }, [docFilters]);
+
+  useEffect(() => {
+    window.localStorage.setItem(LOAD_ITEMS_DOC_SORT_KEY, docSort);
+  }, [docSort]);
 
   useEffect(() => {
     setVisibleDocCount(DOC_PAGE_SIZE);
@@ -184,7 +210,6 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
         await refreshLoadTotals([...previousLoadIds, loadId]);
         setAddOpen(false);
         setSelectedDocIds(new Set());
-        setDocFilters({ invoice: '', client: '', neighborhood: '' });
         qc.invalidateQueries({ queryKey: ['load_items'] });
         qc.invalidateQueries({ queryKey: ['load_documents'] });
         qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
