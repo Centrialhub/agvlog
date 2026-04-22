@@ -224,6 +224,16 @@ export default function BatchReimportDialog() {
     setDedupReport(EMPTY_DEDUP_REPORT);
 
     try {
+      const { data: existingDocs, error: existingError } = await supabase
+        .from('fiscal_documents')
+        .select('invoice_number, access_key, remitter, recipient, recipient_city, recipient_state, recipient_neighborhood, issue_date, client_id, product_summary, pallet_count, weight_kg, value')
+        .eq('tenant_id', currentTenant.id)
+        .gte('issue_date', toDateParam(startDate))
+        .lte('issue_date', toDateParam(endDate));
+      if (existingError) throw existingError;
+      const existingByAccessKey = new Map((existingDocs || []).filter(doc => doc.access_key).map(doc => [doc.access_key as string, doc as ExistingFiscalDocument]));
+      const existingByInvoiceNumber = new Map((existingDocs || []).filter(doc => doc.invoice_number).map(doc => [doc.invoice_number as string, doc as ExistingFiscalDocument]));
+
       const { data: cleaned, error: cleanError } = await (supabase as any).rpc('clear_reimport_batch_data', {
         _tenant_id: currentTenant.id,
         _start_date: toDateParam(startDate),
@@ -238,7 +248,7 @@ export default function BatchReimportDialog() {
       const importErrors: ImportError[] = [];
       const seenAccessKeys = new Map<string, string>();
       const seenInvoiceNumbers = new Map<string, string>();
-      const dedup = { ignored: [] as DedupEntry[], updated: [] as DedupEntry[] };
+      const dedup = buildDedupSnapshot(EMPTY_DEDUP_REPORT);
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
@@ -253,7 +263,7 @@ export default function BatchReimportDialog() {
           if (!isWithinSelectedPeriod(validated.source.issueDate)) {
             const reason = `Emissão ${validated.source.issueDate || 'sem data'} fora do período selecionado`;
             dedup.ignored.push({ fileName: file.name, invoiceNumber: validated.source.invoiceNumber || '—', identifier: validated.source.accessKey || validated.source.invoiceNumber || '—', reason });
-            setDedupReport({ ignored: [...dedup.ignored], updated: [...dedup.updated] });
+            setDedupReport(buildDedupSnapshot(dedup));
             setFileStatus(file.name, { state: 'ignored', invoiceNumber: validated.source.invoiceNumber, message: reason });
             continue;
           }
@@ -264,7 +274,7 @@ export default function BatchReimportDialog() {
             const identifier = duplicateKey ? `Chave de acesso: ${validated.source.accessKey}` : `Número da NF: ${validated.source.invoiceNumber}`;
             const reason = duplicateKey ? `${identifier} já importada no arquivo ${duplicateKey}` : `${identifier} já importado no arquivo ${duplicateNumber}`;
             dedup.ignored.push({ fileName: file.name, invoiceNumber: validated.source.invoiceNumber || '—', identifier, reason });
-            setDedupReport({ ignored: [...dedup.ignored], updated: [...dedup.updated] });
+            setDedupReport(buildDedupSnapshot(dedup));
             setFileStatus(file.name, { state: 'ignored', invoiceNumber: validated.source.invoiceNumber, message: reason });
             continue;
           }
