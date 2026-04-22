@@ -48,6 +48,22 @@ interface DedupEntry {
   identifier?: string;
 }
 
+interface ExistingFiscalDocument {
+  invoice_number: string | null;
+  access_key: string | null;
+  remitter: string | null;
+  recipient: string | null;
+  recipient_city: string | null;
+  recipient_state: string | null;
+  recipient_neighborhood: string | null;
+  issue_date: string | null;
+  client_id: string | null;
+  product_summary: string | null;
+  pallet_count: number | null;
+  weight_kg: number | null;
+  value: number | null;
+}
+
 const EMPTY_FILE_LIST: File[] = [];
 
 const CLEANUP_TABLE_LABELS: Record<string, string> = {
@@ -80,7 +96,7 @@ export default function BatchReimportDialog() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [confirmationText, setConfirmationText] = useState('');
   const [fileStatuses, setFileStatuses] = useState<FileImportStatus[]>([]);
-  const [dedupReport, setDedupReport] = useState<{ ignored: DedupEntry[]; updated: DedupEntry[] }>({ ignored: [], updated: [] });
+  const [dedupReport, setDedupReport] = useState<{ ignored: DedupEntry[]; updated: DedupEntry[]; imported: DedupEntry[]; unchanged: DedupEntry[] }>({ ignored: [], updated: [], imported: [], unchanged: [] });
   const [startDate, setStartDate] = useState<Date | undefined>();
   const [endDate, setEndDate] = useState<Date | undefined>();
 
