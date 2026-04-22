@@ -207,7 +207,7 @@ export default function BatchReimportDialog() {
 
           if (!isWithinSelectedPeriod(validated.source.issueDate)) {
             const reason = `Emissão ${validated.source.issueDate || 'sem data'} fora do período selecionado`;
-            dedup.ignored.push({ fileName: file.name, invoiceNumber: validated.source.invoiceNumber || '—', reason });
+            dedup.ignored.push({ fileName: file.name, invoiceNumber: validated.source.invoiceNumber || '—', identifier: validated.source.accessKey || validated.source.invoiceNumber || '—', reason });
             setDedupReport({ ignored: [...dedup.ignored], updated: [...dedup.updated] });
             setFileStatus(file.name, { state: 'ignored', invoiceNumber: validated.source.invoiceNumber, message: reason });
             continue;
@@ -216,8 +216,9 @@ export default function BatchReimportDialog() {
           const duplicateKey = validated.source.accessKey && seenAccessKeys.get(validated.source.accessKey);
           const duplicateNumber = !duplicateKey && validated.source.invoiceNumber && seenInvoiceNumbers.get(validated.source.invoiceNumber);
           if (duplicateKey || duplicateNumber) {
-            const reason = duplicateKey ? `Chave já importada em ${duplicateKey}` : `Número já importado em ${duplicateNumber}`;
-            dedup.ignored.push({ fileName: file.name, invoiceNumber: validated.source.invoiceNumber || '—', reason });
+            const identifier = duplicateKey ? `Chave de acesso: ${validated.source.accessKey}` : `Número da NF: ${validated.source.invoiceNumber}`;
+            const reason = duplicateKey ? `${identifier} já importada no arquivo ${duplicateKey}` : `${identifier} já importado no arquivo ${duplicateNumber}`;
+            dedup.ignored.push({ fileName: file.name, invoiceNumber: validated.source.invoiceNumber || '—', identifier, reason });
             setDedupReport({ ignored: [...dedup.ignored], updated: [...dedup.updated] });
             setFileStatus(file.name, { state: 'ignored', invoiceNumber: validated.source.invoiceNumber, message: reason });
             continue;
@@ -247,7 +248,7 @@ export default function BatchReimportDialog() {
           setImported(successCount);
           if (validated.source.accessKey) seenAccessKeys.set(validated.source.accessKey, file.name);
           if (validated.source.invoiceNumber) seenInvoiceNumbers.set(validated.source.invoiceNumber, file.name);
-          dedup.updated.push({ fileName: file.name, invoiceNumber: validated.source.invoiceNumber || '—', reason: 'Novo registro importado após limpeza' });
+          dedup.updated.push({ fileName: file.name, invoiceNumber: validated.source.invoiceNumber || '—', identifier: validated.source.accessKey ? `Chave de acesso: ${validated.source.accessKey}` : `Número da NF: ${validated.source.invoiceNumber || '—'}`, reason: 'Novo registro importado após limpeza da competência' });
           setDedupReport({ ignored: [...dedup.ignored], updated: [...dedup.updated] });
           setFileStatus(file.name, {
             state: 'updated',
