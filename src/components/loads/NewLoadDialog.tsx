@@ -598,13 +598,14 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                 ) : recentDocs.map((doc: any) => {
                   const isSelected = selectedDocIds.has(doc.id);
                   const isLinked = !!doc.load_id;
+                  const linkedLoad = getLinkedLoad(doc);
                   return (
                     <button key={doc.id} type="button" onClick={() => isLinked ? undefined : isSelected ? removeDocSelection(doc.id) : applyDocSelection(doc)} disabled={isLinked} className="w-full rounded-md border border-border px-3 py-2 text-left hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60">
                       <div className="flex items-start gap-3">
                         <Checkbox checked={isSelected} className="mt-0.5" />
                         <div className="min-w-0 flex-1">
                           <div className="text-sm font-medium">NF {doc.invoice_number || '—'} · {doc.clients?.company_name || doc.recipient || 'Sem cliente'}</div>
-                          <div className="text-xs text-muted-foreground truncate">{doc.remitter || 'Fornecedor não informado'} · {doc.recipient_neighborhood || 'Sem bairro'} · {[doc.recipient_city, doc.recipient_state].filter(Boolean).join(' / ') || 'Sem cidade'}{isLinked ? ` · Já vinculada à carga ${doc.loads?.load_number || ''}` : ''}</div>
+                          <div className="text-xs text-muted-foreground truncate">{doc.remitter || 'Fornecedor não informado'} · {doc.recipient_neighborhood || 'Sem bairro'} · {[doc.recipient_city, doc.recipient_state].filter(Boolean).join(' / ') || 'Sem cidade'}{isLinked ? ` · Já vinculada à carga ${linkedLoad?.load_number || ''}` : ''}</div>
                         </div>
                       </div>
                     </button>
@@ -618,7 +619,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
               <DialogHeader><DialogTitle>Detalhes da NF {detailsDoc?.invoice_number || '—'}</DialogTitle></DialogHeader>
               {detailsDoc && (
                 <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div><span className="text-muted-foreground">Carga vinculada:</span><div className="font-medium">{detailsDoc.loads?.load_number || 'Não vinculada'}</div></div>
+                  <div><span className="text-muted-foreground">Carga vinculada:</span><div className="font-medium">{getLinkedLoad(detailsDoc)?.load_number || 'Não vinculada'}</div></div>
                   <div><span className="text-muted-foreground">Status:</span><div className="font-medium">{detailsDoc.status || '—'}</div></div>
                   <div><span className="text-muted-foreground">Cliente:</span><div className="font-medium">{detailsDoc.clients?.company_name || detailsDoc.recipient || '—'}</div></div>
                   <div><span className="text-muted-foreground">Fornecedor:</span><div className="font-medium">{detailsDoc.remitter || '—'}</div></div>
