@@ -306,8 +306,8 @@ export default function RoutePlanning() {
 
   const exportRoutePdf = (route: RoutePlan) => {
     const vehicle = vehicles.find((v: any) => v.id === route.vehicle_id) as any;
-    const docs: RomaneioDoc[] = route.loads.flatMap(load =>
-      load.items.map(item => {
+    const docs: RomaneioDoc[] = sortLoadsByRecipient(route.loads).flatMap(load =>
+      sortItemsByRecipient(load.items).map(item => {
         const fd = item.fiscal_documents;
         const raw = fd?.issue_date;
         const s = raw ? String(raw).substring(0, 10) : '';
@@ -473,7 +473,7 @@ export default function RoutePlanning() {
                 </CardHeader>
                 {!route.collapsed && (
                   <CardContent className="pt-0 space-y-3">
-                    {route.loads.map((load, loadIdx) => (
+                    {sortLoadsByRecipient(route.loads).map((load, loadIdx) => (
                       <div key={load.id} className="border rounded-md overflow-hidden">
                         <div className="flex items-center justify-between px-3 py-2 bg-muted/50">
                           <div className="flex items-center gap-2">
@@ -509,7 +509,7 @@ export default function RoutePlanning() {
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {load.items.map(item => {
+                            {sortItemsByRecipient(load.items).map(item => {
                               const fd = item.fiscal_documents;
                               return (
                                 <TableRow key={item.id}>
