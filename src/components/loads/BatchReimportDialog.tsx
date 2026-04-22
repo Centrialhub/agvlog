@@ -369,6 +369,42 @@ export default function BatchReimportDialog() {
           </div>
         )}
 
+        {phase === 'done' && (dedupReport.ignored.length > 0 || dedupReport.updated.length > 0) && (
+          <div className="rounded-lg border border-border p-4 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-sm font-semibold text-foreground">Relatório de deduplicação</div>
+              <div className="flex gap-2">
+                <Badge variant="outline">{dedupReport.updated.length} atualizado(s)</Badge>
+                <Badge variant="secondary">{dedupReport.ignored.length} ignorado(s)</Badge>
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <div className="text-xs font-medium text-success">Atualizados/importados</div>
+                <div className="max-h-32 overflow-y-auto rounded-md bg-muted/50 p-2 space-y-2">
+                  {dedupReport.updated.length === 0 ? <div className="text-xs text-muted-foreground">Nenhum documento atualizado.</div> : dedupReport.updated.map((item, index) => (
+                    <div key={`${item.fileName}-updated-${index}`} className="text-xs">
+                      <div className="font-medium text-foreground">NF {item.invoiceNumber}</div>
+                      <div className="text-muted-foreground truncate">{item.fileName} — {item.reason}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="text-xs font-medium text-warning">Ignorados por duplicidade</div>
+                <div className="max-h-32 overflow-y-auto rounded-md bg-muted/50 p-2 space-y-2">
+                  {dedupReport.ignored.length === 0 ? <div className="text-xs text-muted-foreground">Nenhum documento ignorado.</div> : dedupReport.ignored.map((item, index) => (
+                    <div key={`${item.fileName}-ignored-${index}`} className="text-xs">
+                      <div className="font-medium text-foreground">NF {item.invoiceNumber}</div>
+                      <div className="text-muted-foreground">{item.fileName} — {item.reason}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {errors.length > 0 && (
           <div className="max-h-40 overflow-y-auto rounded-lg border border-border divide-y divide-border">
             {errors.map((error, index) => (
