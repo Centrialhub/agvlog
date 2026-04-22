@@ -27,6 +27,19 @@ const DOC_PAGE_SIZE = 25;
 const FILTER_DEBOUNCE_MS = 250;
 const emptyDocFilters = { invoice: '', client: '', neighborhood: '' };
 const defaultDocPreference = { filters: emptyDocFilters, sort: 'recent' as 'recent' | 'alpha', visibleDocCount: DOC_PAGE_SIZE, visibleRecentDocCount: DOC_PAGE_SIZE, scrollTop: 0, recentScrollTop: 0 };
+const NEW_LOAD_SESSION_ONLY_KEY = 'agvlog:new-load-doc-session-only';
+const NEW_LOAD_SESSION_PREF_KEY = 'agvlog:new-load-doc-session-preference';
+
+const loadSessionOnly = () => window.sessionStorage.getItem(NEW_LOAD_SESSION_ONLY_KEY) === 'true';
+
+const loadSessionPreference = () => {
+  try {
+    const stored = window.sessionStorage.getItem(NEW_LOAD_SESSION_PREF_KEY);
+    return stored ? { ...defaultDocPreference, ...JSON.parse(stored) } : defaultDocPreference;
+  } catch {
+    return defaultDocPreference;
+  }
+};
 
 function useDebouncedValue<T>(value: T, delay: number) {
   const [debouncedValue, setDebouncedValue] = useState(value);
