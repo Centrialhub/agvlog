@@ -264,12 +264,17 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
                         <div className="rounded-md border border-border py-6 text-center text-sm text-muted-foreground">Nenhuma NF disponível para esses filtros</div>
                       ) : visibleFilteredDocs.map((doc: any) => {
                         const isSelected = selectedDocIds.has(doc.id);
+                        const isLinked = !!doc.load_id;
+                        const actionLabel = isSelected ? 'Selecionada' : isLinked ? 'Será reatribuída' : 'Será puxada';
                         return (
                           <button key={doc.id} type="button" onClick={() => setSelectedDocIds(prev => { const next = new Set(prev); next.has(doc.id) ? next.delete(doc.id) : next.add(doc.id); return next; })} className="flex w-full items-start gap-2 rounded-md border border-border px-3 py-1.5 text-left hover:bg-muted/60">
                             <Checkbox checked={isSelected} className="mt-0.5" />
                             <span className="min-w-0 flex-1">
                               <span className="block text-sm font-medium">NF {doc.invoice_number || '—'} · {doc.clients?.company_name || doc.recipient || 'Sem cliente'}</span>
-                              <span className="block text-xs text-muted-foreground">{doc.recipient_neighborhood || 'Sem bairro'} · {doc.pallet_count || 0} pal · {doc.weight_kg || 0} kg{doc.load_id ? ` · sairá da carga ${doc.loads?.load_number || 'atual'}` : ''}</span>
+                              <span className="block text-xs text-muted-foreground">{doc.recipient_neighborhood || 'Sem bairro'} · {doc.pallet_count || 0} pal · {doc.weight_kg || 0} kg{isLinked ? ` · sai da carga ${doc.loads?.load_number || 'atual'}` : ''}</span>
+                            </span>
+                            <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${isSelected ? 'border-primary/30 bg-primary/10 text-primary' : isLinked ? 'border-warning/30 bg-warning/10 text-warning' : 'border-border bg-muted text-muted-foreground'}`}>
+                              {actionLabel}
                             </span>
                           </button>
                         );
