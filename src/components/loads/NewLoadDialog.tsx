@@ -46,12 +46,11 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
       if (!currentTenant) return [];
       const { data, error } = await supabase
         .from('fiscal_documents')
-        .select('id, invoice_number, remitter, recipient, recipient_neighborhood, recipient_city, recipient_state, pallet_count, weight_kg, product_summary, load_id, clients(company_name)')
+        .select('id, invoice_number, remitter, recipient, recipient_neighborhood, recipient_city, recipient_state, pallet_count, weight_kg, product_summary, load_id, clients(company_name), loads(load_number)')
         .eq('tenant_id', currentTenant.id)
         .eq('document_type', 'inbound')
-        .is('load_id', null)
         .order('created_at', { ascending: false })
-        .limit(60);
+        .limit(100);
       if (error) throw error;
       return data || [];
     },
@@ -89,13 +88,15 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
 
   const filteredDocs = useMemo(() => {
     const invoice = normalize(docFilters.invoice);
+    const invoiceDigits = docFilters.invoice.replace(/\D/g, '');
     const client = normalize(docFilters.client);
     const neighborhood = normalize(docFilters.neighborhood);
     return fiscalDocs.filter((doc: any) => {
       const docInvoice = normalize(doc.invoice_number || '');
+      const docInvoiceDigits = String(doc.invoice_number || '').replace(/\D/g, '');
       const docClient = normalize(doc.clients?.company_name || doc.recipient || '');
       const docNeighborhood = normalize(doc.recipient_neighborhood || '');
-      if (invoice && !docInvoice.includes(invoice)) return false;
+      if (invoice && !docInvoice.includes(invoice) && (!invoiceDigits || !docInvoiceDigits.includes(invoiceDigits))) return false;
       if (client && !docClient.includes(client)) return false;
       if (neighborhood && !docNeighborhood.includes(neighborhood)) return false;
       return true;
