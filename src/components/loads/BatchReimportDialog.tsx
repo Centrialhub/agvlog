@@ -279,10 +279,7 @@ export default function BatchReimportDialog() {
             continue;
           }
 
-          const { error } = await supabase.from('fiscal_documents').insert({
-            tenant_id: currentTenant.id,
-            created_by: user?.id,
-            document_type: 'inbound',
+          const nextDoc: ExistingFiscalDocument = {
             invoice_number: validated.source.invoiceNumber,
             access_key: validated.source.accessKey,
             remitter: validated.source.emitterName,
@@ -296,6 +293,13 @@ export default function BatchReimportDialog() {
             pallet_count: validated.source.estimatedPallets,
             weight_kg: validated.source.totalWeight,
             value: validated.source.totalValue,
+          };
+          const existingDoc = (nextDoc.access_key && existingByAccessKey.get(nextDoc.access_key)) || (nextDoc.invoice_number && existingByInvoiceNumber.get(nextDoc.invoice_number));
+          const { error } = await supabase.from('fiscal_documents').insert({
+            tenant_id: currentTenant.id,
+            created_by: user?.id,
+            document_type: 'inbound',
+            ...nextDoc,
             status: 'confirmed',
           } as any);
           if (error) throw error;
@@ -303,10 +307,13 @@ export default function BatchReimportDialog() {
           setImported(successCount);
           if (validated.source.accessKey) seenAccessKeys.set(validated.source.accessKey, file.name);
           if (validated.source.invoiceNumber) seenInvoiceNumbers.set(validated.source.invoiceNumber, file.name);
-          dedup.updated.push({ fileName: file.name, invoiceNumber: validated.source.invoiceNumber || '—', identifier: validated.source.accessKey ? `Chave de acesso: ${validated.source.accessKey}` : `Número da NF: ${validated.source.invoiceNumber || '—'}`, reason: 'Novo registro importado após limpeza da competência' });
-          setDedupReport({ ignored: [...dedup.ignored], updated: [...dedup.updated] });
+          const entry = { fileName: file.name, invoiceNumber: validated.source.invoiceNumber || '—', identifier: validated.source.accessKey ? `Chave de acesso: ${validated.source.accessKey}` : `Número da NF: ${validated.source.invoiceNumber || '—'}` };
+          const state: FileImportState = !existingDoc ? 'imported' : hasFiscalDocumentChanges(existingDoc, nextDoc) ? 'updated' : 'unchanged';
+          const reason = state === 'imported' ? 'Novo registro importado; não havia fiscal_document correspondente antes da limpeza' : state === 'updated' ? 'Registro existente tinha alterações em campos fiscais relevantes' : 'Registro reimportado sem alterações nos campos fiscais relevantes';
+          dedup[state].push({ ...entry, reason });
+          setDedupReport(buildDedupSnapshot(dedup));
           setFileStatus(file.name, {
-            state: 'updated',
+            state,
             invoiceNumber: validated.source.invoiceNumber,
             message: `NF ${validated.source.invoiceNumber || 'sem número'} importada`,
           });
