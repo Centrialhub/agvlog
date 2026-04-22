@@ -24,6 +24,8 @@ import { format } from 'date-fns';
 import { printRomaneioRoutes, RomaneioDoc } from '@/lib/romaneioPrint';
 
 /* ────────────── types ────────────── */
+const recipientCollator = new Intl.Collator('pt-BR', { sensitivity: 'base', numeric: true });
+
 interface LoadItem {
   id: string;
   load_id: string;
@@ -129,8 +131,14 @@ export default function RoutePlanning() {
   }, [pendingLoads, assignedLoadIds]);
 
   const filteredLoads = useMemo(() => {
-    if (filterDest === 'all') return availableLoads;
-    return availableLoads.filter(l => (l.destination || '').toUpperCase().includes(filterDest));
+    const loads = filterDest === 'all'
+      ? availableLoads
+      : availableLoads.filter(l => (l.destination || '').toUpperCase().includes(filterDest));
+    return [...loads].sort((a, b) => {
+      const recipientA = a.items[0]?.fiscal_documents?.recipient || a.destination || '';
+      const recipientB = b.items[0]?.fiscal_documents?.recipient || b.destination || '';
+      return recipientCollator.compare(recipientA, recipientB) || recipientCollator.compare(a.load_number, b.load_number);
+    });
   }, [availableLoads, filterDest]);
 
   const destinations = useMemo(() => {
@@ -159,7 +167,7 @@ export default function RoutePlanning() {
     const selected = availableLoads.filter(l => selectedLoads.has(l.id));
     if (selected.length === 0) return;
     setRoutes(prev => prev.map(r =>
-      r.id === routeId ? { ...r, loads: [...r.loads, ...selected] } : r
+      r.id === routeId ? { ...r, loads: sortLoadsByRecipient([...r.loads, ...selected]) } : r
     ));
     setSelectedLoads(new Set());
   };
@@ -172,7 +180,7 @@ export default function RoutePlanning() {
     setRoutes(prev => [...prev, {
       id: crypto.randomUUID(),
       name,
-      loads: selected,
+      loads: sortLoadsByRecipient(selected),
     }]);
     setSelectedLoads(new Set());
     setNewRouteName('');
@@ -190,7 +198,7 @@ export default function RoutePlanning() {
     const suggested: RoutePlan[] = Object.entries(groups).map(([dest, loads]) => ({
       id: crypto.randomUUID(),
       name: `${dest} - ${format(new Date(), 'dd/MM')}`,
-      loads,
+      loads: sortLoadsByRecipient(loads),
     }));
     setRoutes(prev => [...prev, ...suggested]);
     setSelectedLoads(new Set());
