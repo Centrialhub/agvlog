@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useLoadItems, useCreateLoadItem, useDeleteLoadItem, useUpdateLoadItem, ITEM_STATUSES, ITEM_STATUS_LABELS, LoadItem } from '@/hooks/useLoadItems';
@@ -86,7 +86,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
 
   const visibleFilteredDocs = useMemo(() => filteredDocs.slice(0, visibleDocCount), [filteredDocs, visibleDocCount]);
 
-  useMemo(() => {
+  useEffect(() => {
     setVisibleDocCount(DOC_PAGE_SIZE);
   }, [docFilters.invoice, docFilters.client, docFilters.neighborhood, addOpen]);
 
