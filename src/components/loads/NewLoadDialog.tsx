@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCreateLoad } from '@/hooks/useLoads';
 import { useClients } from '@/hooks/useClients';
@@ -47,11 +48,11 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
       if (!currentTenant) return [];
       const { data, error } = await supabase
         .from('fiscal_documents')
-        .select('id, invoice_number, remitter, recipient, recipient_neighborhood, recipient_city, recipient_state, pallet_count, weight_kg, product_summary, load_id, clients(company_name), loads(load_number)')
+        .select('id, invoice_number, remitter, recipient, recipient_neighborhood, recipient_city, recipient_state, pallet_count, weight_kg, product_summary, load_id, clients(company_name), loads(id, load_number)')
         .eq('tenant_id', currentTenant.id)
         .eq('document_type', 'inbound')
         .order('created_at', { ascending: false })
-        .limit(100);
+        .limit(1000);
       if (error) throw error;
       return data || [];
     },
@@ -105,6 +106,10 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   }, [docFilters, fiscalDocs]);
 
   const recentDocs = useMemo(() => fiscalDocs.slice(0, 20), [fiscalDocs]);
+
+  const selectableFilteredDocs = useMemo(() => filteredDocs.filter((doc: any) => !doc.load_id), [filteredDocs]);
+
+  const linkedFilteredDocs = useMemo(() => filteredDocs.filter((doc: any) => doc.load_id), [filteredDocs]);
 
   const selectedDocs = useMemo(() => fiscalDocs.filter((doc: any) => selectedDocIds.has(doc.id)), [fiscalDocs, selectedDocIds]);
 
@@ -246,8 +251,8 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   };
 
   const selectFilteredDocs = () => {
-    const nextIds = new Set([...Array.from(selectedDocIds), ...filteredDocs.map((doc: any) => doc.id)]);
-    const nextSnapshots = filteredDocs.reduce((acc, doc: any) => ({ ...acc, [doc.id]: getDocAutofillFields(doc) }), docAutofillSnapshots);
+    const nextIds = new Set([...Array.from(selectedDocIds), ...selectableFilteredDocs.map((doc: any) => doc.id)]);
+    const nextSnapshots = selectableFilteredDocs.reduce((acc, doc: any) => ({ ...acc, [doc.id]: getDocAutofillFields(doc) }), docAutofillSnapshots);
     setSelectedDocIds(nextIds);
     setDocAutofillSnapshots(nextSnapshots);
     setForm(f => ({ ...f, ...buildAggregatedFields(fiscalDocs.filter((doc: any) => nextIds.has(doc.id))) }));
@@ -470,7 +475,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
               <Label className="text-xs">Puxar notas disponíveis</Label>
               <div className="flex items-center gap-2">
                 <span className="text-[11px] text-muted-foreground">{selectedDocIds.size} selecionada(s)</span>
-                {filteredDocs.length > 0 && (
+                {selectableFilteredDocs.length > 0 && (
                   <Button type="button" variant="outline" size="sm" className="h-7 text-[11px]" onClick={selectFilteredDocs}>
                     Selecionar filtradas
                   </Button>
@@ -495,6 +500,22 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
             <div className="max-h-40 overflow-y-auto space-y-1">
               {filteredDocs.length === 0 ? (
                 <div className="text-xs text-muted-foreground py-3 text-center">Nenhuma nota encontrada para esses filtros</div>
+              ) : selectableFilteredDocs.length === 0 && linkedFilteredDocs.length > 0 ? (
+                <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-xs">
+                  <div className="mb-1 flex items-center justify-center gap-2 font-medium text-warning">
+                    <AlertTriangle className="h-4 w-4" /> NF já vinculada a outra carga
+                  </div>
+                  <div className="text-center text-muted-foreground">
+                    A nota foi encontrada, mas não aparece como disponível porque já está vinculada.
+                  </div>
+                  <div className="mt-2 flex flex-wrap justify-center gap-2">
+                    {linkedFilteredDocs.map((doc: any) => (
+                      <Button key={doc.id} asChild type="button" variant="outline" size="sm" className="h-7 text-[11px]">
+                        <Link to={`/loads/${doc.loads?.id || doc.load_id}`}>Abrir carga {doc.loads?.load_number || 'vinculada'}</Link>
+                      </Button>
+                    ))}
+                  </div>
+                </div>
               ) : filteredDocs.map((doc: any) => {
                 const isSelected = selectedDocIds.has(doc.id);
                 const isLinked = !!doc.load_id;
