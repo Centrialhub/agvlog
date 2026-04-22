@@ -631,6 +631,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
               <Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2} />
             </div>
           </div>
+          </div>
           <div className="mt-4 flex shrink-0 justify-end gap-2 border-t border-border pt-4">
             <Button variant="outline" onClick={() => { setOpen(false); setLoadNumberTouched(false); }}>Cancelar</Button>
             <Button onClick={handleSave} disabled={!form.load_number.trim() || createLoad.isPending}>Criar</Button>
