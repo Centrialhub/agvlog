@@ -86,14 +86,19 @@ export default function BatchReimportDialog() {
   const total = files.length;
   const busy = phase === 'clearing' || phase === 'importing';
   const confirmed = confirmationText.trim().toUpperCase() === 'LIMPAR';
+  const periodRequired = !startDate || !endDate;
   const dateRangeInvalid = !!startDate && !!endDate && startDate > endDate;
   const toDateParam = (date?: Date) => date ? format(date, 'yyyy-MM-dd') : null;
   const isWithinSelectedPeriod = (issueDate?: string) => {
     if (!issueDate) return true;
     const date = new Date(`${issueDate.substring(0, 10)}T12:00:00`);
     if (Number.isNaN(date.getTime())) return true;
-    if (startDate && date < startDate) return false;
-    if (endDate && date > endDate) return false;
+    const start = startDate ? new Date(startDate) : undefined;
+    const end = endDate ? new Date(endDate) : undefined;
+    start?.setHours(0, 0, 0, 0);
+    end?.setHours(23, 59, 59, 999);
+    if (start && date < start) return false;
+    if (end && date > end) return false;
     return true;
   };
   const progress = useMemo(() => {
@@ -163,7 +168,7 @@ export default function BatchReimportDialog() {
   };
 
   const startReimport = async () => {
-    if (!currentTenant || !files.length || !confirmed) return;
+    if (!currentTenant || !files.length || !confirmed || periodRequired || dateRangeInvalid) return;
     setPhase('clearing');
     setProcessed(0);
     setImported(0);
@@ -342,6 +347,7 @@ export default function BatchReimportDialog() {
               </PopoverContent>
             </Popover>
           </div>
+          {periodRequired && <div className="text-xs font-medium text-warning">Informe data inicial e final para evitar limpeza fora da competência.</div>}
           {dateRangeInvalid && <div className="text-xs font-medium text-destructive">A data inicial não pode ser maior que a final.</div>}
           <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
             {Object.entries(erasePreview || {}).map(([label, count]) => (
@@ -468,7 +474,7 @@ export default function BatchReimportDialog() {
 
         <div className="flex items-center justify-between gap-3">
           <Button variant="ghost" onClick={reset} disabled={busy}>Limpar seleção</Button>
-          <Button onClick={startReimport} disabled={!total || busy || !currentTenant || !confirmed || dateRangeInvalid}>
+          <Button onClick={startReimport} disabled={!total || busy || !currentTenant || !confirmed || periodRequired || dateRangeInvalid}>
             {phase === 'clearing' ? 'Limpando...' : phase === 'importing' ? 'Importando...' : 'Limpar e importar'}
           </Button>
         </div>
