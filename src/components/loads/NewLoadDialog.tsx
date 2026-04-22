@@ -251,8 +251,8 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   };
 
   const selectFilteredDocs = () => {
-    const nextIds = new Set([...Array.from(selectedDocIds), ...filteredDocs.map((doc: any) => doc.id)]);
-    const nextSnapshots = filteredDocs.reduce((acc, doc: any) => ({ ...acc, [doc.id]: getDocAutofillFields(doc) }), docAutofillSnapshots);
+    const nextIds = new Set([...Array.from(selectedDocIds), ...selectableFilteredDocs.map((doc: any) => doc.id)]);
+    const nextSnapshots = selectableFilteredDocs.reduce((acc, doc: any) => ({ ...acc, [doc.id]: getDocAutofillFields(doc) }), docAutofillSnapshots);
     setSelectedDocIds(nextIds);
     setDocAutofillSnapshots(nextSnapshots);
     setForm(f => ({ ...f, ...buildAggregatedFields(fiscalDocs.filter((doc: any) => nextIds.has(doc.id))) }));
