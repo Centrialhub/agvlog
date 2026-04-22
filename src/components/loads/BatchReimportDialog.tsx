@@ -90,6 +90,7 @@ export default function BatchReimportDialog() {
     setImported(0);
     setErrors([]);
     setClearSummary(null);
+    setDedupReport({ ignored: [], updated: [] });
   };
 
   const fetchErasePreview = async () => {
@@ -133,6 +134,7 @@ export default function BatchReimportDialog() {
     setClearSummary(null);
     setConfirmationText('');
     setFileStatuses([]);
+    setDedupReport({ ignored: [], updated: [] });
     if (inputRef.current) inputRef.current.value = '';
   };
 
@@ -153,6 +155,7 @@ export default function BatchReimportDialog() {
     setErrors([]);
     setClearSummary(null);
     setFileStatuses(files.map(file => ({ fileName: file.name, state: 'pending' })));
+    setDedupReport({ ignored: [], updated: [] });
 
     try {
       const { data: cleaned, error: cleanError } = await (supabase as any).rpc('clear_reimport_batch_data', {
