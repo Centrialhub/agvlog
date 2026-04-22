@@ -356,7 +356,9 @@ export default function BatchReimportDialog() {
     pending: 'Aguardando',
     importing: 'Importando',
     success: 'Sucesso',
+    imported: 'Novo',
     updated: 'Atualizado',
+    unchanged: 'Sem alteração',
     ignored: 'Ignorado',
     error: 'Erro',
   };
