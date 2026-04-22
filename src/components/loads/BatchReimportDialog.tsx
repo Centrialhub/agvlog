@@ -485,6 +485,22 @@ export default function BatchReimportDialog() {
                 </div>
               </div>
             </div>
+            <details className="rounded-md border border-border bg-muted/30 p-3">
+              <summary className="cursor-pointer text-xs font-semibold text-foreground">Ver motivo completo por arquivo</summary>
+              <div className="mt-3 max-h-56 overflow-y-auto space-y-2">
+                {detailedDedupEntries.map((item, index) => (
+                  <div key={`${item.fileName}-detail-${index}`} className="rounded-md bg-background/70 border border-border p-3 text-xs">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="font-medium text-foreground">{item.fileName}</div>
+                      <Badge variant={item.status === 'Ignorado' ? 'secondary' : 'outline'}>{item.status}</Badge>
+                    </div>
+                    <div className="mt-2 text-muted-foreground">NF {item.invoiceNumber}</div>
+                    <div className="mt-1 break-words text-muted-foreground">{item.identifier || 'Sem chave de acesso/número identificado'}</div>
+                    <div className="mt-1 break-words text-foreground">{item.reason}</div>
+                  </div>
+                ))}
+              </div>
+            </details>
           </div>
         )}
 
