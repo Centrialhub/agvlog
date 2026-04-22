@@ -157,16 +157,14 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
       next.add(doc.id);
       return next;
     });
-    if (!form.invoice_number && !form.client_name && !form.supplier) {
-      setForm(f => ({
-        ...f,
-        invoice_number: doc.invoice_number || '',
-        client_name: doc.clients?.company_name || doc.recipient || '',
-        supplier: doc.remitter || '',
-        neighborhood: doc.recipient_neighborhood || '',
-        destination: [doc.recipient_neighborhood, doc.recipient_city, doc.recipient_state].filter(Boolean).join(' - '),
-      }));
-    }
+    setForm(f => ({
+      ...f,
+      invoice_number: doc.invoice_number || '',
+      client_name: doc.clients?.company_name || doc.recipient || '',
+      supplier: doc.remitter || '',
+      neighborhood: doc.recipient_neighborhood || '',
+      destination: [doc.recipient_neighborhood, doc.recipient_city, doc.recipient_state].filter(Boolean).join(' - '),
+    }));
     setPreviewDoc(null);
   };
 
