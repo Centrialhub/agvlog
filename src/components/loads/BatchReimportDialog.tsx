@@ -251,6 +251,8 @@ export default function BatchReimportDialog() {
   const previewTotal = erasePreview ? Object.values(erasePreview).reduce((sum, value) => sum + Number(value || 0), 0) : 0;
   const statusIcon = (state: FileImportState) => {
     if (state === 'success') return <CheckCircle2 className="h-4 w-4 text-success" />;
+    if (state === 'updated') return <CheckCircle2 className="h-4 w-4 text-success" />;
+    if (state === 'ignored') return <AlertTriangle className="h-4 w-4 text-warning" />;
     if (state === 'error') return <XCircle className="h-4 w-4 text-destructive" />;
     if (state === 'importing') return <Loader2 className="h-4 w-4 animate-spin text-primary" />;
     return <Clock className="h-4 w-4 text-muted-foreground" />;
@@ -260,6 +262,8 @@ export default function BatchReimportDialog() {
     pending: 'Aguardando',
     importing: 'Importando',
     success: 'Sucesso',
+    updated: 'Atualizado',
+    ignored: 'Ignorado',
     error: 'Erro',
   };
 
