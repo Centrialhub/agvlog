@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCreateLoad } from '@/hooks/useLoads';
 import { useClients } from '@/hooks/useClients';
@@ -47,11 +48,11 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
       if (!currentTenant) return [];
       const { data, error } = await supabase
         .from('fiscal_documents')
-        .select('id, invoice_number, remitter, recipient, recipient_neighborhood, recipient_city, recipient_state, pallet_count, weight_kg, product_summary, load_id, clients(company_name), loads(load_number)')
+        .select('id, invoice_number, remitter, recipient, recipient_neighborhood, recipient_city, recipient_state, pallet_count, weight_kg, product_summary, load_id, clients(company_name), loads(id, load_number)')
         .eq('tenant_id', currentTenant.id)
         .eq('document_type', 'inbound')
         .order('created_at', { ascending: false })
-        .limit(100);
+        .limit(1000);
       if (error) throw error;
       return data || [];
     },
@@ -105,6 +106,10 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   }, [docFilters, fiscalDocs]);
 
   const recentDocs = useMemo(() => fiscalDocs.slice(0, 20), [fiscalDocs]);
+
+  const selectableFilteredDocs = useMemo(() => filteredDocs.filter((doc: any) => !doc.load_id), [filteredDocs]);
+
+  const linkedFilteredDocs = useMemo(() => filteredDocs.filter((doc: any) => doc.load_id), [filteredDocs]);
 
   const selectedDocs = useMemo(() => fiscalDocs.filter((doc: any) => selectedDocIds.has(doc.id)), [fiscalDocs, selectedDocIds]);
 
