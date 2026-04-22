@@ -475,7 +475,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
               <Label className="text-xs">Puxar notas disponíveis</Label>
               <div className="flex items-center gap-2">
                 <span className="text-[11px] text-muted-foreground">{selectedDocIds.size} selecionada(s)</span>
-                {filteredDocs.length > 0 && (
+                {selectableFilteredDocs.length > 0 && (
                   <Button type="button" variant="outline" size="sm" className="h-7 text-[11px]" onClick={selectFilteredDocs}>
                     Selecionar filtradas
                   </Button>
@@ -500,6 +500,22 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
             <div className="max-h-40 overflow-y-auto space-y-1">
               {filteredDocs.length === 0 ? (
                 <div className="text-xs text-muted-foreground py-3 text-center">Nenhuma nota encontrada para esses filtros</div>
+              ) : selectableFilteredDocs.length === 0 && linkedFilteredDocs.length > 0 ? (
+                <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-xs">
+                  <div className="mb-1 flex items-center justify-center gap-2 font-medium text-warning">
+                    <AlertTriangle className="h-4 w-4" /> NF já vinculada a outra carga
+                  </div>
+                  <div className="text-center text-muted-foreground">
+                    A nota foi encontrada, mas não aparece como disponível porque já está vinculada.
+                  </div>
+                  <div className="mt-2 flex flex-wrap justify-center gap-2">
+                    {linkedFilteredDocs.map((doc: any) => (
+                      <Button key={doc.id} asChild type="button" variant="outline" size="sm" className="h-7 text-[11px]">
+                        <Link to={`/loads/${doc.loads?.id || doc.load_id}`}>Abrir carga {doc.loads?.load_number || 'vinculada'}</Link>
+                      </Button>
+                    ))}
+                  </div>
+                </div>
               ) : filteredDocs.map((doc: any) => {
                 const isSelected = selectedDocIds.has(doc.id);
                 const isLinked = !!doc.load_id;
