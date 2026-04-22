@@ -569,6 +569,24 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
               </div>
             </DialogContent>
           </Dialog>
+          <Dialog open={!!detailsDoc} onOpenChange={(isOpen) => !isOpen && setDetailsDoc(null)}>
+            <DialogContent className="max-w-xl">
+              <DialogHeader><DialogTitle>Detalhes da NF {detailsDoc?.invoice_number || '—'}</DialogTitle></DialogHeader>
+              {detailsDoc && (
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div><span className="text-muted-foreground">Carga vinculada:</span><div className="font-medium">{detailsDoc.loads?.load_number || 'Não vinculada'}</div></div>
+                  <div><span className="text-muted-foreground">Status:</span><div className="font-medium">{detailsDoc.status || '—'}</div></div>
+                  <div><span className="text-muted-foreground">Cliente:</span><div className="font-medium">{detailsDoc.clients?.company_name || detailsDoc.recipient || '—'}</div></div>
+                  <div><span className="text-muted-foreground">Fornecedor:</span><div className="font-medium">{detailsDoc.remitter || '—'}</div></div>
+                  <div><span className="text-muted-foreground">Bairro:</span><div className="font-medium">{detailsDoc.recipient_neighborhood || '—'}</div></div>
+                  <div><span className="text-muted-foreground">Cidade/UF:</span><div className="font-medium">{[detailsDoc.recipient_city, detailsDoc.recipient_state].filter(Boolean).join(' / ') || '—'}</div></div>
+                  <div><span className="text-muted-foreground">Paletes:</span><div className="font-medium">{detailsDoc.pallet_count ?? 0}</div></div>
+                  <div><span className="text-muted-foreground">Peso:</span><div className="font-medium">{detailsDoc.weight_kg ?? 0} kg</div></div>
+                  <div className="col-span-2"><span className="text-muted-foreground">Produto:</span><div className="font-medium">{detailsDoc.product_summary || '—'}</div></div>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
           <div><Label className="text-xs">Observações</Label><Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2} /></div>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => { setOpen(false); setLoadNumberTouched(false); }}>Cancelar</Button>
