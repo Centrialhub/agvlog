@@ -32,7 +32,7 @@ interface ImportError {
   message: string;
 }
 
-type FileImportState = 'pending' | 'importing' | 'success' | 'updated' | 'ignored' | 'error';
+type FileImportState = 'pending' | 'importing' | 'success' | 'imported' | 'updated' | 'unchanged' | 'ignored' | 'error';
 
 interface FileImportStatus {
   fileName: string;
@@ -48,7 +48,29 @@ interface DedupEntry {
   identifier?: string;
 }
 
+interface ExistingFiscalDocument {
+  invoice_number: string | null;
+  access_key: string | null;
+  remitter: string | null;
+  recipient: string | null;
+  recipient_city: string | null;
+  recipient_state: string | null;
+  recipient_neighborhood: string | null;
+  issue_date: string | null;
+  client_id: string | null;
+  product_summary: string | null;
+  pallet_count: number | null;
+  weight_kg: number | null;
+  value: number | null;
+}
+
 const EMPTY_FILE_LIST: File[] = [];
+const EMPTY_DEDUP_REPORT = { ignored: [], updated: [], imported: [], unchanged: [] } as {
+  ignored: DedupEntry[];
+  updated: DedupEntry[];
+  imported: DedupEntry[];
+  unchanged: DedupEntry[];
+};
 
 const CLEANUP_TABLE_LABELS: Record<string, string> = {
   fiscal_documents: 'Notas fiscais',
@@ -80,7 +102,7 @@ export default function BatchReimportDialog() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [confirmationText, setConfirmationText] = useState('');
   const [fileStatuses, setFileStatuses] = useState<FileImportStatus[]>([]);
-  const [dedupReport, setDedupReport] = useState<{ ignored: DedupEntry[]; updated: DedupEntry[] }>({ ignored: [], updated: [] });
+  const [dedupReport, setDedupReport] = useState<typeof EMPTY_DEDUP_REPORT>(EMPTY_DEDUP_REPORT);
   const [startDate, setStartDate] = useState<Date | undefined>();
   const [endDate, setEndDate] = useState<Date | undefined>();
 
@@ -102,6 +124,29 @@ export default function BatchReimportDialog() {
     if (end && date > end) return false;
     return true;
   };
+  const buildDedupSnapshot = (dedup: typeof EMPTY_DEDUP_REPORT) => ({
+    ignored: [...dedup.ignored],
+    updated: [...dedup.updated],
+    imported: [...dedup.imported],
+    unchanged: [...dedup.unchanged],
+  });
+  const normalizeText = (value?: string | null) => (value || '').trim();
+  const normalizeNumber = (value?: number | null) => Number(value || 0);
+  const hasFiscalDocumentChanges = (existing: ExistingFiscalDocument, next: ExistingFiscalDocument) => [
+    normalizeText(existing.invoice_number) !== normalizeText(next.invoice_number),
+    normalizeText(existing.access_key) !== normalizeText(next.access_key),
+    normalizeText(existing.remitter) !== normalizeText(next.remitter),
+    normalizeText(existing.recipient) !== normalizeText(next.recipient),
+    normalizeText(existing.recipient_city) !== normalizeText(next.recipient_city),
+    normalizeText(existing.recipient_state) !== normalizeText(next.recipient_state),
+    normalizeText(existing.recipient_neighborhood) !== normalizeText(next.recipient_neighborhood),
+    normalizeText(existing.issue_date) !== normalizeText(next.issue_date),
+    normalizeText(existing.client_id) !== normalizeText(next.client_id),
+    normalizeText(existing.product_summary) !== normalizeText(next.product_summary),
+    normalizeNumber(existing.pallet_count) !== normalizeNumber(next.pallet_count),
+    normalizeNumber(existing.weight_kg) !== normalizeNumber(next.weight_kg),
+    normalizeNumber(existing.value) !== normalizeNumber(next.value),
+  ].some(Boolean);
   const progress = useMemo(() => {
     if (phase === 'clearing') return 8;
     if (!total) return 0;
@@ -123,7 +168,7 @@ export default function BatchReimportDialog() {
     setImported(0);
     setErrors([]);
     setClearSummary(null);
-    setDedupReport({ ignored: [], updated: [] });
+    setDedupReport(EMPTY_DEDUP_REPORT);
   };
 
   const fetchErasePreview = async () => {
@@ -155,7 +200,7 @@ export default function BatchReimportDialog() {
     setClearSummary(null);
     setConfirmationText('');
     setFileStatuses([]);
-    setDedupReport({ ignored: [], updated: [] });
+    setDedupReport(EMPTY_DEDUP_REPORT);
     if (inputRef.current) inputRef.current.value = '';
   };
 
@@ -176,9 +221,19 @@ export default function BatchReimportDialog() {
     setErrors([]);
     setClearSummary(null);
     setFileStatuses(files.map(file => ({ fileName: file.name, state: 'pending' })));
-    setDedupReport({ ignored: [], updated: [] });
+    setDedupReport(EMPTY_DEDUP_REPORT);
 
     try {
+      const { data: existingDocs, error: existingError } = await supabase
+        .from('fiscal_documents')
+        .select('invoice_number, access_key, remitter, recipient, recipient_city, recipient_state, recipient_neighborhood, issue_date, client_id, product_summary, pallet_count, weight_kg, value')
+        .eq('tenant_id', currentTenant.id)
+        .gte('issue_date', toDateParam(startDate))
+        .lte('issue_date', toDateParam(endDate));
+      if (existingError) throw existingError;
+      const existingByAccessKey = new Map((existingDocs || []).filter(doc => doc.access_key).map(doc => [doc.access_key as string, doc as ExistingFiscalDocument]));
+      const existingByInvoiceNumber = new Map((existingDocs || []).filter(doc => doc.invoice_number).map(doc => [doc.invoice_number as string, doc as ExistingFiscalDocument]));
+
       const { data: cleaned, error: cleanError } = await (supabase as any).rpc('clear_reimport_batch_data', {
         _tenant_id: currentTenant.id,
         _start_date: toDateParam(startDate),
@@ -193,7 +248,7 @@ export default function BatchReimportDialog() {
       const importErrors: ImportError[] = [];
       const seenAccessKeys = new Map<string, string>();
       const seenInvoiceNumbers = new Map<string, string>();
-      const dedup = { ignored: [] as DedupEntry[], updated: [] as DedupEntry[] };
+      const dedup = buildDedupSnapshot(EMPTY_DEDUP_REPORT);
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
@@ -208,7 +263,7 @@ export default function BatchReimportDialog() {
           if (!isWithinSelectedPeriod(validated.source.issueDate)) {
             const reason = `Emissão ${validated.source.issueDate || 'sem data'} fora do período selecionado`;
             dedup.ignored.push({ fileName: file.name, invoiceNumber: validated.source.invoiceNumber || '—', identifier: validated.source.accessKey || validated.source.invoiceNumber || '—', reason });
-            setDedupReport({ ignored: [...dedup.ignored], updated: [...dedup.updated] });
+            setDedupReport(buildDedupSnapshot(dedup));
             setFileStatus(file.name, { state: 'ignored', invoiceNumber: validated.source.invoiceNumber, message: reason });
             continue;
           }
@@ -219,15 +274,12 @@ export default function BatchReimportDialog() {
             const identifier = duplicateKey ? `Chave de acesso: ${validated.source.accessKey}` : `Número da NF: ${validated.source.invoiceNumber}`;
             const reason = duplicateKey ? `${identifier} já importada no arquivo ${duplicateKey}` : `${identifier} já importado no arquivo ${duplicateNumber}`;
             dedup.ignored.push({ fileName: file.name, invoiceNumber: validated.source.invoiceNumber || '—', identifier, reason });
-            setDedupReport({ ignored: [...dedup.ignored], updated: [...dedup.updated] });
+            setDedupReport(buildDedupSnapshot(dedup));
             setFileStatus(file.name, { state: 'ignored', invoiceNumber: validated.source.invoiceNumber, message: reason });
             continue;
           }
 
-          const { error } = await supabase.from('fiscal_documents').insert({
-            tenant_id: currentTenant.id,
-            created_by: user?.id,
-            document_type: 'inbound',
+          const nextDoc: ExistingFiscalDocument = {
             invoice_number: validated.source.invoiceNumber,
             access_key: validated.source.accessKey,
             remitter: validated.source.emitterName,
@@ -241,6 +293,13 @@ export default function BatchReimportDialog() {
             pallet_count: validated.source.estimatedPallets,
             weight_kg: validated.source.totalWeight,
             value: validated.source.totalValue,
+          };
+          const existingDoc = (nextDoc.access_key && existingByAccessKey.get(nextDoc.access_key)) || (nextDoc.invoice_number && existingByInvoiceNumber.get(nextDoc.invoice_number));
+          const { error } = await supabase.from('fiscal_documents').insert({
+            tenant_id: currentTenant.id,
+            created_by: user?.id,
+            document_type: 'inbound',
+            ...nextDoc,
             status: 'confirmed',
           } as any);
           if (error) throw error;
@@ -248,10 +307,13 @@ export default function BatchReimportDialog() {
           setImported(successCount);
           if (validated.source.accessKey) seenAccessKeys.set(validated.source.accessKey, file.name);
           if (validated.source.invoiceNumber) seenInvoiceNumbers.set(validated.source.invoiceNumber, file.name);
-          dedup.updated.push({ fileName: file.name, invoiceNumber: validated.source.invoiceNumber || '—', identifier: validated.source.accessKey ? `Chave de acesso: ${validated.source.accessKey}` : `Número da NF: ${validated.source.invoiceNumber || '—'}`, reason: 'Novo registro importado após limpeza da competência' });
-          setDedupReport({ ignored: [...dedup.ignored], updated: [...dedup.updated] });
+          const entry = { fileName: file.name, invoiceNumber: validated.source.invoiceNumber || '—', identifier: validated.source.accessKey ? `Chave de acesso: ${validated.source.accessKey}` : `Número da NF: ${validated.source.invoiceNumber || '—'}` };
+          const state: FileImportState = !existingDoc ? 'imported' : hasFiscalDocumentChanges(existingDoc, nextDoc) ? 'updated' : 'unchanged';
+          const reason = state === 'imported' ? 'Novo registro importado; não havia fiscal_document correspondente antes da limpeza' : state === 'updated' ? 'Registro existente tinha alterações em campos fiscais relevantes' : 'Registro reimportado sem alterações nos campos fiscais relevantes';
+          dedup[state].push({ ...entry, reason });
+          setDedupReport(buildDedupSnapshot(dedup));
           setFileStatus(file.name, {
-            state: 'updated',
+            state,
             invoiceNumber: validated.source.invoiceNumber,
             message: `NF ${validated.source.invoiceNumber || 'sem número'} importada`,
           });
@@ -283,7 +345,9 @@ export default function BatchReimportDialog() {
   const previewTotal = erasePreview ? Object.values(erasePreview).reduce((sum, value) => sum + Number(value || 0), 0) : 0;
   const statusIcon = (state: FileImportState) => {
     if (state === 'success') return <CheckCircle2 className="h-4 w-4 text-success" />;
+    if (state === 'imported') return <CheckCircle2 className="h-4 w-4 text-success" />;
     if (state === 'updated') return <CheckCircle2 className="h-4 w-4 text-success" />;
+    if (state === 'unchanged') return <Clock className="h-4 w-4 text-muted-foreground" />;
     if (state === 'ignored') return <AlertTriangle className="h-4 w-4 text-warning" />;
     if (state === 'error') return <XCircle className="h-4 w-4 text-destructive" />;
     if (state === 'importing') return <Loader2 className="h-4 w-4 animate-spin text-primary" />;
@@ -294,13 +358,17 @@ export default function BatchReimportDialog() {
     pending: 'Aguardando',
     importing: 'Importando',
     success: 'Sucesso',
+    imported: 'Novo',
     updated: 'Atualizado',
+    unchanged: 'Sem alteração',
     ignored: 'Ignorado',
     error: 'Erro',
   };
 
   const detailedDedupEntries = [
     ...dedupReport.updated.map(item => ({ ...item, status: 'Atualizado' })),
+    ...dedupReport.imported.map(item => ({ ...item, status: 'Novo' })),
+    ...dedupReport.unchanged.map(item => ({ ...item, status: 'Sem alteração' })),
     ...dedupReport.ignored.map(item => ({ ...item, status: 'Ignorado' })),
   ];
 
@@ -308,7 +376,9 @@ export default function BatchReimportDialog() {
     const escapeCell = (value: string | number) => `"${String(value ?? '').replace(/"/g, '""')}"`;
     const rows = [
       ['Status', 'Arquivo', 'Nota fiscal', 'Identificador', 'Motivo', 'Competência inicial', 'Competência final'],
-      ...dedupReport.updated.map(item => ['Atualizado/importado', item.fileName, item.invoiceNumber, item.identifier || '', item.reason, toDateParam(startDate) || '', toDateParam(endDate) || '']),
+      ...dedupReport.updated.map(item => ['Atualizado', item.fileName, item.invoiceNumber, item.identifier || '', item.reason, toDateParam(startDate) || '', toDateParam(endDate) || '']),
+      ...dedupReport.imported.map(item => ['Novo', item.fileName, item.invoiceNumber, item.identifier || '', item.reason, toDateParam(startDate) || '', toDateParam(endDate) || '']),
+      ...dedupReport.unchanged.map(item => ['Sem alteração', item.fileName, item.invoiceNumber, item.identifier || '', item.reason, toDateParam(startDate) || '', toDateParam(endDate) || '']),
       ...dedupReport.ignored.map(item => ['Ignorado', item.fileName, item.invoiceNumber, item.identifier || '', item.reason, toDateParam(startDate) || '', toDateParam(endDate) || '']),
     ];
     const csv = rows.map(row => row.map(escapeCell).join(';')).join('\n');
@@ -449,7 +519,7 @@ export default function BatchReimportDialog() {
           </div>
         )}
 
-        {phase === 'done' && (dedupReport.ignored.length > 0 || dedupReport.updated.length > 0) && (
+        {phase === 'done' && detailedDedupEntries.length > 0 && (
           <div className="rounded-lg border border-border p-4 space-y-3">
             <div className="flex items-center justify-between gap-3">
               <div className="text-sm font-semibold text-foreground">Relatório de deduplicação</div>
@@ -458,15 +528,28 @@ export default function BatchReimportDialog() {
                   <Download className="h-4 w-4 mr-1" /> CSV
                 </Button>
                 <Badge variant="outline">{dedupReport.updated.length} atualizado(s)</Badge>
+                <Badge variant="outline">{dedupReport.imported.length} novo(s)</Badge>
+                <Badge variant="outline">{dedupReport.unchanged.length} sem alteração</Badge>
                 <Badge variant="secondary">{dedupReport.ignored.length} ignorado(s)</Badge>
               </div>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-3">
               <div className="space-y-2">
-                <div className="text-xs font-medium text-success">Atualizados/importados</div>
+                <div className="text-xs font-medium text-success">Atualizados</div>
                 <div className="max-h-32 overflow-y-auto rounded-md bg-muted/50 p-2 space-y-2">
                   {dedupReport.updated.length === 0 ? <div className="text-xs text-muted-foreground">Nenhum documento atualizado.</div> : dedupReport.updated.map((item, index) => (
                     <div key={`${item.fileName}-updated-${index}`} className="text-xs">
+                      <div className="font-medium text-foreground">NF {item.invoiceNumber}</div>
+                      <div className="text-muted-foreground truncate">{item.fileName} — {item.reason}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="text-xs font-medium text-foreground">Novos/sem alteração</div>
+                <div className="max-h-32 overflow-y-auto rounded-md bg-muted/50 p-2 space-y-2">
+                  {[...dedupReport.imported, ...dedupReport.unchanged].length === 0 ? <div className="text-xs text-muted-foreground">Nenhum documento novo ou sem alteração.</div> : [...dedupReport.imported, ...dedupReport.unchanged].map((item, index) => (
+                    <div key={`${item.fileName}-stable-${index}`} className="text-xs">
                       <div className="font-medium text-foreground">NF {item.invoiceNumber}</div>
                       <div className="text-muted-foreground truncate">{item.fileName} — {item.reason}</div>
                     </div>
