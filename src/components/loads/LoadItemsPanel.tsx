@@ -24,6 +24,18 @@ interface LoadItemsPanelProps {
 }
 
 const DOC_PAGE_SIZE = 25;
+const FILTER_DEBOUNCE_MS = 250;
+
+function useDebouncedValue<T>(value: T, delay: number) {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setDebouncedValue(value), delay);
+    return () => window.clearTimeout(timeout);
+  }, [delay, value]);
+
+  return debouncedValue;
+}
 
 export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWeight }: LoadItemsPanelProps) {
   const { data: items = [], isLoading } = useLoadItems(loadId);
@@ -39,6 +51,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
   const [docFilters, setDocFilters] = useState({ invoice: '', client: '', neighborhood: '' });
   const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
   const [visibleDocCount, setVisibleDocCount] = useState(DOC_PAGE_SIZE);
+  const debouncedDocFilters = useDebouncedValue(docFilters, FILTER_DEBOUNCE_MS);
   const [form, setForm] = useState({
     order_id: '',
     item_description: '',
@@ -66,10 +79,10 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
 
   const normalize = (value: string) => value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const filteredDocs = useMemo(() => {
-    const invoice = normalize(docFilters.invoice);
-    const invoiceDigits = docFilters.invoice.replace(/\D/g, '');
-    const client = normalize(docFilters.client);
-    const neighborhood = normalize(docFilters.neighborhood);
+    const invoice = normalize(debouncedDocFilters.invoice);
+    const invoiceDigits = debouncedDocFilters.invoice.replace(/\D/g, '');
+    const client = normalize(debouncedDocFilters.client);
+    const neighborhood = normalize(debouncedDocFilters.neighborhood);
     const currentDocIds = new Set(items.map(item => item.fiscal_document_id).filter(Boolean));
     return fiscalDocs.filter((doc: any) => {
       if (currentDocIds.has(doc.id)) return false;
@@ -82,13 +95,21 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
       if (neighborhood && !docNeighborhood.includes(neighborhood)) return false;
       return true;
     });
-  }, [docFilters, fiscalDocs, items]);
+  }, [debouncedDocFilters, fiscalDocs, items]);
 
   const visibleFilteredDocs = useMemo(() => filteredDocs.slice(0, visibleDocCount), [filteredDocs, visibleDocCount]);
 
   useEffect(() => {
     setVisibleDocCount(DOC_PAGE_SIZE);
-  }, [docFilters.invoice, docFilters.client, docFilters.neighborhood, addOpen]);
+  }, [debouncedDocFilters.invoice, debouncedDocFilters.client, debouncedDocFilters.neighborhood, addOpen]);
+
+  const handleDocListScroll = (event: any) => {
+    const target = event.currentTarget;
+    const nearBottom = target.scrollHeight - target.scrollTop - target.clientHeight < 80;
+    if (nearBottom && visibleFilteredDocs.length < filteredDocs.length) {
+      setVisibleDocCount(count => Math.min(count + DOC_PAGE_SIZE, filteredDocs.length));
+    }
+  };
 
   const totalPallets = items.reduce((s, i) => s + i.pallet_count, 0);
   const totalWeight = items.reduce((s, i) => s + (i.weight_kg || 0), 0);
