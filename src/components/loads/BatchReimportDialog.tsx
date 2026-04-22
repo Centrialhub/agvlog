@@ -199,6 +199,14 @@ export default function BatchReimportDialog() {
             throw new Error(validated.validations.filter(v => v.severity === 'error').map(v => v.message).join('; '));
           }
 
+          if (!isWithinSelectedPeriod(validated.source.issueDate)) {
+            const reason = `Emissão ${validated.source.issueDate || 'sem data'} fora do período selecionado`;
+            dedup.ignored.push({ fileName: file.name, invoiceNumber: validated.source.invoiceNumber || '—', reason });
+            setDedupReport({ ignored: [...dedup.ignored], updated: [...dedup.updated] });
+            setFileStatus(file.name, { state: 'ignored', invoiceNumber: validated.source.invoiceNumber, message: reason });
+            continue;
+          }
+
           const duplicateKey = validated.source.accessKey && seenAccessKeys.get(validated.source.accessKey);
           const duplicateNumber = !duplicateKey && validated.source.invoiceNumber && seenInvoiceNumbers.get(validated.source.invoiceNumber);
           if (duplicateKey || duplicateNumber) {
