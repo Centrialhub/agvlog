@@ -222,6 +222,19 @@ export default function BatchReimportDialog() {
 
   const cleanedTotal = clearSummary ? Object.values(clearSummary).reduce((sum, value) => sum + Number(value || 0), 0) : 0;
   const previewTotal = erasePreview ? Object.values(erasePreview).reduce((sum, value) => sum + Number(value || 0), 0) : 0;
+  const statusIcon = (state: FileImportState) => {
+    if (state === 'success') return <CheckCircle2 className="h-4 w-4 text-success" />;
+    if (state === 'error') return <XCircle className="h-4 w-4 text-destructive" />;
+    if (state === 'importing') return <Loader2 className="h-4 w-4 animate-spin text-primary" />;
+    return <Clock className="h-4 w-4 text-muted-foreground" />;
+  };
+
+  const statusLabel: Record<FileImportState, string> = {
+    pending: 'Aguardando',
+    importing: 'Importando',
+    success: 'Sucesso',
+    error: 'Erro',
+  };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -306,6 +319,23 @@ export default function BatchReimportDialog() {
             <AlertTitle>Resumo</AlertTitle>
             <AlertDescription>{imported} nota(s) importada(s). {errors.length} arquivo(s) com erro.</AlertDescription>
           </Alert>
+        )}
+
+        {fileStatuses.length > 0 && (
+          <div className="max-h-56 overflow-y-auto rounded-lg border border-border divide-y divide-border">
+            {fileStatuses.map(status => (
+              <div key={status.fileName} className="flex items-start justify-between gap-3 p-3 text-sm">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 font-medium text-foreground">
+                    {statusIcon(status.state)}
+                    <span className="truncate">{status.fileName}</span>
+                  </div>
+                  {status.message && <div className="mt-1 text-xs text-muted-foreground">{status.message}</div>}
+                </div>
+                <Badge variant={status.state === 'error' ? 'destructive' : 'outline'}>{statusLabel[status.state]}</Badge>
+              </div>
+            ))}
+          </div>
         )}
 
         {errors.length > 0 && (
