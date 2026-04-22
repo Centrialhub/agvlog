@@ -499,13 +499,18 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                 const isSelected = selectedDocIds.has(doc.id);
                 const isLinked = !!doc.load_id;
                 return (
-                <button key={doc.id} type="button" onClick={() => isLinked ? undefined : isSelected ? removeDocSelection(doc.id) : setPreviewDoc(doc)} disabled={isLinked} className="w-full flex items-start gap-2 rounded-md border border-border px-2 py-2 text-left hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60">
-                  <Checkbox checked={isSelected} className="mt-0.5" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-xs font-medium">NF {doc.invoice_number || '—'} · {doc.clients?.company_name || doc.recipient || 'Sem cliente'}</span>
-                    <span className="block text-[11px] text-muted-foreground truncate">{doc.remitter || 'Fornecedor não informado'} · {doc.recipient_neighborhood || 'Sem bairro'}{isLinked ? ` · Já vinculada à carga ${doc.loads?.load_number || ''}` : ''}</span>
-                  </span>
-                </button>
+                <div key={doc.id} className="flex items-start gap-2 rounded-md border border-border px-2 py-2 hover:bg-muted/60">
+                  <button type="button" onClick={() => isLinked ? undefined : isSelected ? removeDocSelection(doc.id) : setPreviewDoc(doc)} disabled={isLinked} className="flex min-w-0 flex-1 items-start gap-2 text-left disabled:cursor-not-allowed disabled:opacity-60">
+                    <Checkbox checked={isSelected} className="mt-0.5" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-xs font-medium">NF {doc.invoice_number || '—'} · {doc.clients?.company_name || doc.recipient || 'Sem cliente'}</span>
+                      <span className="block truncate text-[11px] text-muted-foreground">{doc.remitter || 'Fornecedor não informado'} · {doc.recipient_neighborhood || 'Sem bairro'}{isLinked ? ` · Já vinculada à carga ${doc.loads?.load_number || ''}` : ''}</span>
+                    </span>
+                  </button>
+                  <Button type="button" variant="outline" size="sm" className="h-7 shrink-0 gap-1 text-[11px]" onClick={() => setDetailsDoc(doc)}>
+                    <Eye className="h-3.5 w-3.5" /> Ver nota
+                  </Button>
+                </div>
                 );
               })}
             </div>
