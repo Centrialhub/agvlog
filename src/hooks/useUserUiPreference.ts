@@ -2,6 +2,8 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 
+const PREFERENCE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
 export function useUserUiPreference<T>(preferenceKey: string, defaultValue: T) {
   const { user } = useAuth();
 
@@ -11,11 +13,19 @@ export function useUserUiPreference<T>(preferenceKey: string, defaultValue: T) {
       if (!user) return defaultValue;
       const { data, error } = await (supabase as any)
         .from('user_ui_preferences')
-        .select('preference_value')
+        .select('preference_value, updated_at')
         .eq('user_id', user.id)
         .eq('preference_key', preferenceKey)
         .maybeSingle();
       if (error) throw error;
+      if (data?.updated_at && Date.now() - new Date(data.updated_at).getTime() > PREFERENCE_MAX_AGE_MS) {
+        await (supabase as any)
+          .from('user_ui_preferences')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('preference_key', preferenceKey);
+        return defaultValue;
+      }
       return (data?.preference_value || defaultValue) as T;
     },
     enabled: !!user,
