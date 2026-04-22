@@ -89,6 +89,47 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
   const isOverWeight = weightOccupancy !== null && weightOccupancy > 100;
 
   const handleAdd = async () => {
+    if (mode === 'note') {
+      const docs = fiscalDocs.filter((doc: any) => selectedDocIds.has(doc.id));
+      if (docs.length === 0) {
+        toast({ title: 'Selecione ao menos uma NF', variant: 'destructive' });
+        return;
+      }
+      const newPallets = totalPallets + docs.reduce((sum: number, doc: any) => sum + (Number(doc.pallet_count) || 0), 0);
+      if (vehicleMaxPallets && newPallets > vehicleMaxPallets) {
+        toast({ title: 'Capacidade excedida', description: `Máx: ${vehicleMaxPallets} paletes. Atual + novo: ${newPallets}`, variant: 'destructive' });
+        return;
+      }
+      try {
+        const previousLoadIds = Array.from(new Set(docs.map((doc: any) => doc.load_id).filter(Boolean)));
+        const docIds = docs.map((doc: any) => doc.id);
+        await (supabase as any).from('load_items').delete().eq('tenant_id', currentTenant!.id).in('fiscal_document_id', docIds);
+        await supabase.from('fiscal_documents').update({ load_id: loadId, updated_at: new Date().toISOString() } as any).in('id', docIds);
+        const { error: insertError } = await (supabase as any).from('load_items').insert(docs.map((doc: any) => ({
+          tenant_id: currentTenant!.id,
+          load_id: loadId,
+          fiscal_document_id: doc.id,
+          item_description: doc.product_summary || `NF ${doc.invoice_number || ''}`.trim(),
+          quantity: 1,
+          pallet_count: Number(doc.pallet_count) || 0,
+          weight_kg: Number(doc.weight_kg) || 0,
+          status: 'pending',
+        })));
+        if (insertError) throw insertError;
+        await refreshLoadTotals([...previousLoadIds, loadId]);
+        setAddOpen(false);
+        setSelectedDocIds(new Set());
+        setDocFilters({ invoice: '', client: '', neighborhood: '' });
+        qc.invalidateQueries({ queryKey: ['load_items'] });
+        qc.invalidateQueries({ queryKey: ['load_documents'] });
+        qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
+        toast({ title: 'NF(s) puxada(s) para a carga' });
+      } catch (e: any) {
+        toast({ title: 'Erro', description: e.message, variant: 'destructive' });
+      }
+      return;
+    }
+
     const newPallets = totalPallets + form.pallet_count;
     if (vehicleMaxPallets && newPallets > vehicleMaxPallets) {
       toast({ title: 'Capacidade excedida', description: `Máx: ${vehicleMaxPallets} paletes. Atual + novo: ${newPallets}`, variant: 'destructive' });
@@ -106,6 +147,41 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
       setAddOpen(false);
       setForm({ order_id: '', item_description: '', quantity: 0, pallet_count: 0, weight_kg: 0 });
       toast({ title: 'Item adicionado' });
+    } catch (e: any) {
+      toast({ title: 'Erro', description: e.message, variant: 'destructive' });
+    }
+  };
+
+  const refreshLoadTotals = async (loadIds: string[]) => {
+    const uniqueLoadIds = Array.from(new Set(loadIds.filter(Boolean)));
+    await Promise.all(uniqueLoadIds.map(async id => {
+      const { data, error } = await (supabase as any).from('load_items').select('pallet_count, weight_kg, volume_m3').eq('load_id', id);
+      if (error) throw error;
+      const totals = (data || []).reduce((acc: any, item: any) => ({
+        pallet_count: acc.pallet_count + (Number(item.pallet_count) || 0),
+        weight_kg: acc.weight_kg + (Number(item.weight_kg) || 0),
+        volume_m3: acc.volume_m3 + (Number(item.volume_m3) || 0),
+      }), { pallet_count: 0, weight_kg: 0, volume_m3: 0 });
+      const { error: updateError } = await supabase.from('loads').update({
+        total_pallet_count: totals.pallet_count,
+        total_weight_kg: totals.weight_kg,
+        total_volume_m3: totals.volume_m3,
+        updated_at: new Date().toISOString(),
+      } as any).eq('id', id);
+      if (updateError) throw updateError;
+    }));
+  };
+
+  const handleDelete = async (item: LoadItem) => {
+    try {
+      await deleteItem.mutateAsync(item.id);
+      if (item.fiscal_document_id) {
+        await supabase.from('fiscal_documents').update({ load_id: null, updated_at: new Date().toISOString() } as any).eq('id', item.fiscal_document_id);
+      }
+      await refreshLoadTotals([loadId]);
+      qc.invalidateQueries({ queryKey: ['load_documents'] });
+      qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
+      toast({ title: 'NF removida da carga e da geração de CT-e' });
     } catch (e: any) {
       toast({ title: 'Erro', description: e.message, variant: 'destructive' });
     }
