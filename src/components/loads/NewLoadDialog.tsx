@@ -67,7 +67,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
         .from('loads')
         .select('load_number')
         .eq('tenant_id', currentTenant.id)
-        .limit(1000);
+        .range(0, 4999);
       if (error) throw error;
       return data || [];
     },
@@ -97,9 +97,9 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     const highest = existingLoadNumbers.reduce((max: number, load: any) => {
       const matches = String(load.load_number || '').match(/\d+/g);
       const sequence = matches ? Number(matches[matches.length - 1]) : 0;
-      return sequence >= 1000 ? Math.max(max, sequence) : max;
-    }, 999);
-    return String(highest + 1);
+      return Number.isFinite(sequence) ? Math.max(max, sequence) : max;
+    }, 0);
+    return String(Math.max(highest + 1, 1000));
   }, [existingLoadNumbers]);
 
   useEffect(() => {
@@ -447,9 +447,10 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
       <DialogTrigger asChild>
         <Button size="sm"><Plus className="h-4 w-4 mr-1" /> Nova Carga</Button>
       </DialogTrigger>
-      <DialogContent className="max-w-5xl max-h-[calc(100vh-2rem)] overflow-visible p-5">
-        <DialogHeader><DialogTitle>Nova Carga</DialogTitle></DialogHeader>
-        <div className="space-y-3">
+      <DialogContent className="flex h-[min(92vh,860px)] max-w-5xl flex-col overflow-hidden p-0">
+        <DialogHeader className="shrink-0 border-b border-border px-5 py-4"><DialogTitle>Nova Carga</DialogTitle></DialogHeader>
+        <div className="flex min-h-0 flex-1 flex-col px-5 py-4">
+          <div className="flex-1 space-y-3 overflow-y-auto pr-1">
           <div className="grid grid-cols-2 gap-3">
             <div><Label className="text-xs">Nº Carga *</Label><Input value={form.load_number} onChange={e => { setLoadNumberTouched(true); setForm(f => ({ ...f, load_number: e.target.value })); }} placeholder="1000" /></div>
             <div>
@@ -541,7 +542,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
               <Input value={docFilters.client} onChange={e => setDocFilters(f => ({ ...f, client: e.target.value }))} placeholder="Cliente" className="h-9" />
               <Input value={docFilters.neighborhood} onChange={e => setDocFilters(f => ({ ...f, neighborhood: e.target.value }))} placeholder="Bairro" className="h-9" />
             </div>
-            <div className="space-y-1">
+            <div className="max-h-[28vh] space-y-1 overflow-y-auto pr-1">
               {filteredDocs.length === 0 ? (
                 <div className="text-xs text-muted-foreground py-3 text-center">Nenhuma nota encontrada para esses filtros</div>
               ) : selectableFilteredDocs.length === 0 && linkedFilteredDocs.length > 0 ? (
@@ -613,6 +614,11 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                 </div>
               </div>
             )}
+          </div>
+          </div>
+          <div className="mt-4 flex shrink-0 justify-end gap-2 border-t border-border pt-4">
+            <Button variant="outline" onClick={() => { setOpen(false); setLoadNumberTouched(false); }}>Cancelar</Button>
+            <Button onClick={handleSave} disabled={!form.load_number.trim() || createLoad.isPending}>Criar</Button>
           </div>
           <Dialog open={recentDocsOpen} onOpenChange={setRecentDocsOpen}>
             <DialogContent className="max-w-4xl max-h-[calc(100vh-2rem)] overflow-visible">
