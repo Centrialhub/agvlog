@@ -49,10 +49,17 @@ const printStyles = `
 
 const fmt = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
 const fmtN = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+const collator = new Intl.Collator('pt-BR', { sensitivity: 'base', numeric: true });
+
+const sortByRecipient = (docs: RomaneioDoc[]) => [...docs].sort((a, b) =>
+  collator.compare(a.destinatario || '—', b.destinatario || '—') ||
+  collator.compare(a.bairro || '—', b.bairro || '—') ||
+  collator.compare(a.nfNumber || '—', b.nfNumber || '—')
+);
 
 function buildCityBlocks(docs: RomaneioDoc[]) {
   const cityMap = new Map<string, RomaneioDoc[]>();
-  docs.forEach(d => {
+  sortByRecipient(docs).forEach(d => {
     const key = (d.city || 'SEM CIDADE').toUpperCase();
     if (!cityMap.has(key)) cityMap.set(key, []);
     cityMap.get(key)!.push(d);
@@ -61,7 +68,7 @@ function buildCityBlocks(docs: RomaneioDoc[]) {
   let totalNotas = 0, totalEntregas = 0, totalValor = 0, totalPeso = 0, totalVolumes = 0;
   let html = '';
 
-  cityMap.forEach((cityDocs, cityName) => {
+  Array.from(cityMap.entries()).sort(([a], [b]) => collator.compare(a, b)).forEach(([cityName, cityDocs]) => {
     const entregas = new Set(cityDocs.map(d => d.destinatario)).size;
     const notas = cityDocs.length;
     const valor = cityDocs.reduce((s, d) => s + d.valor, 0);
