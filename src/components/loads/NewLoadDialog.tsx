@@ -49,6 +49,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   const [form, setForm] = useState(emptyForm);
   const [loadNumberTouched, setLoadNumberTouched] = useState(false);
   const [docFilters, setDocFilters] = useState({ invoice: '', client: '', neighborhood: '' });
+  const [docSort, setDocSort] = useState<'recent' | 'alpha'>('recent');
   const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
   const [previewDoc, setPreviewDoc] = useState<any | null>(null);
   const [detailsDoc, setDetailsDoc] = useState<any | null>(null);
@@ -68,7 +69,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
       if (!currentTenant) return [];
       const { data, error } = await supabase
         .from('fiscal_documents')
-        .select('id, invoice_number, remitter, recipient, recipient_neighborhood, recipient_city, recipient_state, pallet_count, weight_kg, product_summary, load_id, clients(company_name), loads(id, load_number)')
+        .select('id, invoice_number, remitter, recipient, recipient_neighborhood, recipient_city, recipient_state, pallet_count, weight_kg, product_summary, load_id, created_at, clients(company_name), loads(id, load_number)')
         .eq('tenant_id', currentTenant.id)
         .eq('document_type', 'inbound')
         .order('created_at', { ascending: false })
@@ -122,7 +123,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     const invoiceDigits = debouncedDocFilters.invoice.replace(/\D/g, '');
     const client = normalize(debouncedDocFilters.client);
     const neighborhood = normalize(debouncedDocFilters.neighborhood);
-    return fiscalDocs.filter((doc: any) => {
+    const docs = fiscalDocs.filter((doc: any) => {
       const docInvoice = normalize(doc.invoice_number || '');
       const docInvoiceDigits = String(doc.invoice_number || '').replace(/\D/g, '');
       const docClient = normalize(doc.clients?.company_name || doc.recipient || '');
@@ -132,9 +133,14 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
       if (neighborhood && !docNeighborhood.includes(neighborhood)) return false;
       return true;
     });
-  }, [debouncedDocFilters, fiscalDocs]);
+    return docs.sort((a: any, b: any) => docSort === 'alpha'
+      ? String(a.clients?.company_name || a.recipient || a.invoice_number || '').localeCompare(String(b.clients?.company_name || b.recipient || b.invoice_number || ''), 'pt-BR')
+      : new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+  }, [debouncedDocFilters, docSort, fiscalDocs]);
 
-  const recentDocs = useMemo(() => fiscalDocs, [fiscalDocs]);
+  const recentDocs = useMemo(() => [...fiscalDocs].sort((a: any, b: any) => docSort === 'alpha'
+    ? String(a.clients?.company_name || a.recipient || a.invoice_number || '').localeCompare(String(b.clients?.company_name || b.recipient || b.invoice_number || ''), 'pt-BR')
+    : new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()), [docSort, fiscalDocs]);
 
   const selectableFilteredDocs = useMemo(() => filteredDocs, [filteredDocs]);
 
@@ -630,6 +636,15 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
               </div>
               <Input value={docFilters.client} onChange={e => setDocFilters(f => ({ ...f, client: e.target.value }))} placeholder="Cliente" className="h-9" />
               <Input value={docFilters.neighborhood} onChange={e => setDocFilters(f => ({ ...f, neighborhood: e.target.value }))} placeholder="Bairro" className="h-9" />
+            </div>
+            <div className="flex justify-end">
+              <Select value={docSort} onValueChange={(value: 'recent' | 'alpha') => setDocSort(value)}>
+                <SelectTrigger className="h-8 w-48 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="recent">Mais recentes</SelectItem>
+                  <SelectItem value="alpha">Ordem alfabética</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div key={docsLayoutKey} ref={docListRef} className="max-h-[28vh] space-y-1 overflow-y-auto pr-1" onScroll={event => handleListScroll(event, filteredDocs.length, visibleFilteredDocs.length, setVisibleDocCount)}>
               {filteredDocs.length === 0 ? (
