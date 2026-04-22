@@ -103,6 +103,36 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
 
   const previewIssueFields = useMemo(() => new Set(previewValidationIssues.map(issue => issue.field)), [previewValidationIssues]);
 
+  const getDocAutofillFields = (doc: any) => ({
+    invoice_number: doc.invoice_number || '',
+    client_name: doc.clients?.company_name || doc.recipient || '',
+    supplier: doc.remitter || '',
+    neighborhood: doc.recipient_neighborhood || '',
+    destination: [doc.recipient_neighborhood, doc.recipient_city, doc.recipient_state].filter(Boolean).join(' - '),
+  });
+
+  const buildAggregatedFields = (docs: any[]) => {
+    const unique = (values: string[]) => Array.from(new Set(values.map(v => v.trim()).filter(Boolean)));
+    const invoices = unique(docs.map(doc => doc.invoice_number || ''));
+    const clientsList = unique(docs.map(doc => doc.clients?.company_name || doc.recipient || ''));
+    const suppliers = unique(docs.map(doc => doc.remitter || ''));
+    const neighborhoods = unique(docs.map(doc => doc.recipient_neighborhood || ''));
+    const destinations = unique(docs.map(doc => [doc.recipient_neighborhood, doc.recipient_city, doc.recipient_state].filter(Boolean).join(' - ')));
+
+    return {
+      invoice_number: invoices.join(', '),
+      client_name: clientsList.length <= 1 ? clientsList[0] || '' : `Múltiplos clientes (${clientsList.length})`,
+      supplier: suppliers.length <= 1 ? suppliers[0] || '' : `Múltiplos fornecedores (${suppliers.length})`,
+      neighborhood: neighborhoods.length <= 1 ? neighborhoods[0] || '' : neighborhoods.join(', '),
+      destination: destinations.length <= 1 ? destinations[0] || '' : destinations.join(' | '),
+    };
+  };
+
+  const applyAggregatedSelection = (docIds: Set<string>) => {
+    const docs = fiscalDocs.filter((doc: any) => docIds.has(doc.id));
+    setForm(f => ({ ...f, ...buildAggregatedFields(docs) }));
+  };
+
   const validationSuggestions = useMemo(() => {
     const primaryDoc: any = selectedDocs[0];
     const knownNeighborhoods = new Set(fiscalDocs.map((doc: any) => normalize(doc.recipient_neighborhood || '')).filter(Boolean));
@@ -153,20 +183,15 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   };
 
   const applyDocSelection = (doc: any) => {
-    const autoFilledFields = {
-      invoice_number: doc.invoice_number || '',
-      client_name: doc.clients?.company_name || doc.recipient || '',
-      supplier: doc.remitter || '',
-      neighborhood: doc.recipient_neighborhood || '',
-      destination: [doc.recipient_neighborhood, doc.recipient_city, doc.recipient_state].filter(Boolean).join(' - '),
-    };
+    const autoFilledFields = getDocAutofillFields(doc);
     setSelectedDocIds(prev => {
       const next = new Set(prev);
       next.add(doc.id);
+      const docs = fiscalDocs.filter((item: any) => next.has(item.id));
+      setForm(f => ({ ...f, ...buildAggregatedFields(docs) }));
       return next;
     });
     setDocAutofillSnapshots(prev => ({ ...prev, [doc.id]: autoFilledFields }));
-    setForm(f => ({ ...f, ...autoFilledFields }));
     setPreviewDoc(null);
   };
 
@@ -174,6 +199,8 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     setSelectedDocIds(prev => {
       const next = new Set(prev);
       next.delete(docId);
+      const docs = fiscalDocs.filter((item: any) => next.has(item.id));
+      setForm(f => ({ ...f, ...buildAggregatedFields(docs) }));
       return next;
     });
     setDocAutofillSnapshots(prev => {
