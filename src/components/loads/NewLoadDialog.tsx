@@ -620,7 +620,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
               <Input value={docFilters.client} onChange={e => setDocFilters(f => ({ ...f, client: e.target.value }))} placeholder="Cliente" className="h-9" />
               <Input value={docFilters.neighborhood} onChange={e => setDocFilters(f => ({ ...f, neighborhood: e.target.value }))} placeholder="Bairro" className="h-9" />
             </div>
-            <div className="max-h-[28vh] space-y-1 overflow-y-auto pr-1">
+            <div className="max-h-[28vh] space-y-1 overflow-y-auto pr-1" onScroll={event => handleListScroll(event, filteredDocs.length, visibleFilteredDocs.length, setVisibleDocCount)}>
               {filteredDocs.length === 0 ? (
                 <div className="text-xs text-muted-foreground py-3 text-center">Nenhuma nota encontrada para esses filtros</div>
               ) : selectableFilteredDocs.length === 0 && linkedFilteredDocs.length > 0 ? (
@@ -674,9 +674,9 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                 );
               })}
               {filteredDocs.length > visibleFilteredDocs.length && (
-                <Button type="button" variant="outline" size="sm" className="mt-2 w-full" onClick={() => setVisibleDocCount(count => count + DOC_PAGE_SIZE)}>
-                  Carregar mais {Math.min(DOC_PAGE_SIZE, filteredDocs.length - visibleFilteredDocs.length)} de {filteredDocs.length - visibleFilteredDocs.length} NF(s)
-                </Button>
+                <div className="py-2 text-center text-[11px] text-muted-foreground">
+                  Role para carregar mais {filteredDocs.length - visibleFilteredDocs.length} NF(s)
+                </div>
               )}
             </div>
             {previewDoc && (
@@ -722,7 +722,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
           <Dialog open={recentDocsOpen} onOpenChange={setRecentDocsOpen}>
             <DialogContent className="flex h-[min(88vh,760px)] max-w-4xl flex-col overflow-hidden p-0">
               <DialogHeader className="shrink-0 border-b border-border px-5 py-4"><DialogTitle>Notas enviadas recentes</DialogTitle></DialogHeader>
-              <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-5 py-4">
+              <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-5 py-4" onScroll={event => handleListScroll(event, recentDocs.length, visibleRecentDocs.length, setVisibleRecentDocCount)}>
                 {recentDocs.length === 0 ? (
                   <div className="text-sm text-muted-foreground py-6 text-center">Nenhuma nota recente disponível</div>
                 ) : visibleRecentDocs.map((doc: any) => {
@@ -755,9 +755,9 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                   );
                 })}
                 {recentDocs.length > visibleRecentDocs.length && (
-                  <Button type="button" variant="outline" size="sm" className="w-full" onClick={() => setVisibleRecentDocCount(count => count + DOC_PAGE_SIZE)}>
-                    Carregar mais {Math.min(DOC_PAGE_SIZE, recentDocs.length - visibleRecentDocs.length)} de {recentDocs.length - visibleRecentDocs.length} NF(s)
-                  </Button>
+                  <div className="py-2 text-center text-[11px] text-muted-foreground">
+                    Role para carregar mais {recentDocs.length - visibleRecentDocs.length} NF(s)
+                  </div>
                 )}
               </div>
             </DialogContent>
