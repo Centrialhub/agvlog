@@ -136,6 +136,21 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
 
   const selectedDocs = useMemo(() => fiscalDocs.filter((doc: any) => selectedDocIds.has(doc.id)), [fiscalDocs, selectedDocIds]);
 
+  const loadPreview = useMemo(() => {
+    const totals = selectedDocs.reduce((acc: any, doc: any) => ({
+      pallets: acc.pallets + (Number(doc.pallet_count) || 0),
+      weight: acc.weight + (Number(doc.weight_kg) || 0),
+    }), { pallets: 0, weight: 0 });
+
+    return {
+      number: form.load_number || nextLoadNumber || '—',
+      destination: form.destination || form.neighborhood || 'Sem destino definido',
+      docsCount: selectedDocs.length,
+      pallets: totals.pallets,
+      weight: totals.weight,
+    };
+  }, [form.destination, form.load_number, form.neighborhood, nextLoadNumber, selectedDocs]);
+
   const visibleFilteredDocs = useMemo(() => filteredDocs.slice(0, visibleDocCount), [filteredDocs, visibleDocCount]);
   const visibleRecentDocs = useMemo(() => recentDocs.slice(0, visibleRecentDocCount), [recentDocs, visibleRecentDocCount]);
 
