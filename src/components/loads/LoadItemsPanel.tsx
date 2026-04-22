@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useLoadItems, useCreateLoadItem, useDeleteLoadItem, useUpdateLoadItem, ITEM_STATUSES, ITEM_STATUS_LABELS, LoadItem } from '@/hooks/useLoadItems';
 import { useOrders } from '@/hooks/useOrders';
 import { useTenant } from '@/hooks/useTenant';
+import { useUserUiPreference } from '@/hooks/useUserUiPreference';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -25,24 +26,8 @@ interface LoadItemsPanelProps {
 
 const DOC_PAGE_SIZE = 25;
 const FILTER_DEBOUNCE_MS = 250;
-const LOAD_ITEMS_DOC_FILTERS_KEY = 'agvlog:load-items-doc-filters';
-const LOAD_ITEMS_DOC_SORT_KEY = 'agvlog:load-items-doc-sort';
-
 const emptyDocFilters = { invoice: '', client: '', neighborhood: '' };
-
-const loadStoredDocFilters = () => {
-  try {
-    const stored = window.localStorage.getItem(LOAD_ITEMS_DOC_FILTERS_KEY);
-    return stored ? { ...emptyDocFilters, ...JSON.parse(stored) } : emptyDocFilters;
-  } catch {
-    return emptyDocFilters;
-  }
-};
-
-const loadStoredDocSort = (): 'recent' | 'alpha' => {
-  const stored = window.localStorage.getItem(LOAD_ITEMS_DOC_SORT_KEY);
-  return stored === 'alpha' ? 'alpha' : 'recent';
-};
+const defaultDocPreference = { filters: emptyDocFilters, sort: 'recent' as 'recent' | 'alpha' };
 
 function useDebouncedValue<T>(value: T, delay: number) {
   const [debouncedValue, setDebouncedValue] = useState(value);
@@ -64,10 +49,11 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
   const deleteItem = useDeleteLoadItem();
   const updateItem = useUpdateLoadItem();
   const { toast } = useToast();
+  const { preference: docPreference, isLoaded: isDocPreferenceLoaded, savePreference: saveDocPreference } = useUserUiPreference('load_items_doc_filters', defaultDocPreference);
   const [addOpen, setAddOpen] = useState(false);
   const [mode, setMode] = useState<'note' | 'manual'>('note');
-  const [docFilters, setDocFilters] = useState(loadStoredDocFilters);
-  const [docSort, setDocSort] = useState<'recent' | 'alpha'>(loadStoredDocSort);
+  const [docFilters, setDocFilters] = useState(emptyDocFilters);
+  const [docSort, setDocSort] = useState<'recent' | 'alpha'>('recent');
   const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
   const [visibleDocCount, setVisibleDocCount] = useState(DOC_PAGE_SIZE);
   const [docsLayoutKey, setDocsLayoutKey] = useState(0);
@@ -133,12 +119,15 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
   const isDocsUpdating = isFetchingFiscalDocs || docFilters.invoice !== debouncedDocFilters.invoice || docFilters.client !== debouncedDocFilters.client || docFilters.neighborhood !== debouncedDocFilters.neighborhood;
 
   useEffect(() => {
-    window.localStorage.setItem(LOAD_ITEMS_DOC_FILTERS_KEY, JSON.stringify(docFilters));
-  }, [docFilters]);
+    if (!isDocPreferenceLoaded) return;
+    setDocFilters({ ...emptyDocFilters, ...(docPreference as any).filters });
+    setDocSort((docPreference as any).sort === 'alpha' ? 'alpha' : 'recent');
+  }, [docPreference, isDocPreferenceLoaded]);
 
   useEffect(() => {
-    window.localStorage.setItem(LOAD_ITEMS_DOC_SORT_KEY, docSort);
-  }, [docSort]);
+    if (!isDocPreferenceLoaded) return;
+    saveDocPreference({ filters: docFilters, sort: docSort });
+  }, [docFilters, docSort, isDocPreferenceLoaded, saveDocPreference]);
 
   useEffect(() => {
     setVisibleDocCount(DOC_PAGE_SIZE);
