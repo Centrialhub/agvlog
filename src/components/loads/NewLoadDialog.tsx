@@ -191,6 +191,16 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   const visibleRecentDocs = useMemo(() => recentDocs.slice(0, visibleRecentDocCount), [recentDocs, visibleRecentDocCount]);
 
   useEffect(() => {
+    if (!open || !isDocPreferenceHydrated.current) return;
+    window.requestAnimationFrame(() => docListRef.current?.scrollTo({ top: docScrollTop }));
+  }, [docScrollTop, open, visibleDocCount]);
+
+  useEffect(() => {
+    if (!recentDocsOpen || !isDocPreferenceHydrated.current) return;
+    window.requestAnimationFrame(() => recentDocListRef.current?.scrollTo({ top: recentDocScrollTop }));
+  }, [recentDocScrollTop, recentDocsOpen, visibleRecentDocCount]);
+
+  useEffect(() => {
     if (skipNextFilterReset.current) {
       skipNextFilterReset.current = false;
       return;
