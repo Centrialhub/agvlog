@@ -195,6 +195,85 @@ function AlertInstancesSection() {
   );
 }
 
+function StaleFiscalDocsSection() {
+  const { currentTenant } = useTenant();
+  const cutoff = useMemoDate(7);
+
+  const { data: docs = [], isLoading } = useQuery({
+    queryKey: ['stale_fiscal_docs_without_load', currentTenant?.id, cutoff],
+    queryFn: async () => {
+      if (!currentTenant) return [];
+      const { data, error } = await supabase
+        .from('fiscal_documents')
+        .select('id, invoice_number, issue_date, recipient, recipient_neighborhood, recipient_city, recipient_state, remitter, pallet_count, weight_kg, value, status, clients(company_name)')
+        .eq('tenant_id', currentTenant.id)
+        .eq('document_type', 'inbound')
+        .is('load_id', null)
+        .neq('status', 'cancelled')
+        .lte('issue_date', cutoff)
+        .order('issue_date', { ascending: true })
+        .limit(200);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentTenant,
+  });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <AlertTriangle className="h-4 w-4 text-warning" /> Notas com mais de 7 dias sem romaneio/saída
+        </CardTitle>
+        <CardDescription>Notas de entrada sem carga vinculada para corrigir antes do fechamento operacional.</CardDescription>
+      </CardHeader>
+      <CardContent className="p-0">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>NF</TableHead>
+              <TableHead>Cliente</TableHead>
+              <TableHead>Destino</TableHead>
+              <TableHead>Emissão</TableHead>
+              <TableHead>Fechamento</TableHead>
+              <TableHead>Atraso</TableHead>
+              <TableHead></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading ? (
+              <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">Carregando...</TableCell></TableRow>
+            ) : docs.length === 0 ? (
+              <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">Nenhuma nota com mais de 7 dias pendente de romaneio/saída.</TableCell></TableRow>
+            ) : docs.map((doc: any) => {
+              const issueDate = doc.issue_date ? new Date(`${doc.issue_date}T12:00:00`) : null;
+              const closingDate = issueDate ? addDays(issueDate, 7) : null;
+              const overdueDays = closingDate ? Math.max(0, differenceInCalendarDays(new Date(), closingDate)) : 0;
+              return (
+                <TableRow key={doc.id}>
+                  <TableCell className="font-mono font-medium">{doc.invoice_number || '—'}</TableCell>
+                  <TableCell>{doc.clients?.company_name || doc.recipient || '—'}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{[doc.recipient_neighborhood, doc.recipient_city, doc.recipient_state].filter(Boolean).join(' / ') || '—'}</TableCell>
+                  <TableCell>{issueDate ? format(issueDate, 'dd/MM/yyyy') : '—'}</TableCell>
+                  <TableCell>{closingDate ? format(closingDate, 'dd/MM/yyyy') : '—'}</TableCell>
+                  <TableCell><Badge variant="destructive" className="text-xs">{overdueDays} dia(s)</Badge></TableCell>
+                  <TableCell className="text-right"><Button asChild variant="outline" size="sm"><Link to="/fiscal-documents">Corrigir</Link></Button></TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+}
+
+function useMemoDate(daysAgo: number) {
+  const date = new Date();
+  date.setDate(date.getDate() - daysAgo);
+  return format(date, 'yyyy-MM-dd');
+}
+
 function AlertRulesSection() {
   const { currentTenant } = useTenant();
   const isAdmin = useIsAdmin();
