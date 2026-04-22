@@ -112,7 +112,21 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
       } as any);
 
       let manualDocId: string | null = null;
-      if (form.invoice_number.trim()) {
+      const selectedDocIdList = Array.from(selectedDocIds);
+
+      if (selectedDocIdList.length === 1) {
+        const { error: updateDocError } = await supabase.from('fiscal_documents').update({
+          invoice_number: form.invoice_number.trim() || null,
+          client_id: form.client_id || null,
+          recipient: form.client_name || clients.find(c => c.id === form.client_id)?.company_name || null,
+          recipient_neighborhood: form.neighborhood || null,
+          recipient_city: form.destination || null,
+          updated_at: new Date().toISOString(),
+        } as any).eq('id', selectedDocIdList[0]);
+        if (updateDocError) throw updateDocError;
+      }
+
+      if (form.invoice_number.trim() && selectedDocIdList.length === 0) {
         const { data: createdDoc, error: docError } = await supabase.from('fiscal_documents').insert({
           tenant_id: currentTenant!.id,
           created_by: user?.id,
@@ -130,10 +144,10 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
         manualDocId = createdDoc.id;
       }
 
-      const docIds = [...selectedDocIds, ...(manualDocId ? [manualDocId] : [])];
+      const docIds = [...selectedDocIdList, ...(manualDocId ? [manualDocId] : [])];
       if (docIds.length > 0) {
-        if (selectedDocIds.size > 0) {
-          const { error: linkError } = await supabase.from('fiscal_documents').update({ load_id: load.id } as any).in('id', Array.from(selectedDocIds));
+        if (selectedDocIdList.length > 0) {
+          const { error: linkError } = await supabase.from('fiscal_documents').update({ load_id: load.id } as any).in('id', selectedDocIdList);
           if (linkError) throw linkError;
         }
         const items = docIds.map(id => {
