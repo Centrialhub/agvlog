@@ -24,6 +24,24 @@ interface Props {
 
 const DOC_PAGE_SIZE = 25;
 const FILTER_DEBOUNCE_MS = 250;
+const NEW_LOAD_DOC_FILTERS_KEY = 'agvlog:new-load-doc-filters';
+const NEW_LOAD_DOC_SORT_KEY = 'agvlog:new-load-doc-sort';
+
+const emptyDocFilters = { invoice: '', client: '', neighborhood: '' };
+
+const loadStoredDocFilters = () => {
+  try {
+    const stored = window.localStorage.getItem(NEW_LOAD_DOC_FILTERS_KEY);
+    return stored ? { ...emptyDocFilters, ...JSON.parse(stored) } : emptyDocFilters;
+  } catch {
+    return emptyDocFilters;
+  }
+};
+
+const loadStoredDocSort = (): 'recent' | 'alpha' => {
+  const stored = window.localStorage.getItem(NEW_LOAD_DOC_SORT_KEY);
+  return stored === 'alpha' ? 'alpha' : 'recent';
+};
 
 function useDebouncedValue<T>(value: T, delay: number) {
   const [debouncedValue, setDebouncedValue] = useState(value);
@@ -48,8 +66,8 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   const emptyForm = { load_number: '', vehicle_id: '', driver_id: '', origin: '', destination: '', neighborhood: '', invoice_number: '', client_id: '', client_name: '', supplier: '', notes: '' };
   const [form, setForm] = useState(emptyForm);
   const [loadNumberTouched, setLoadNumberTouched] = useState(false);
-  const [docFilters, setDocFilters] = useState({ invoice: '', client: '', neighborhood: '' });
-  const [docSort, setDocSort] = useState<'recent' | 'alpha'>('recent');
+  const [docFilters, setDocFilters] = useState(loadStoredDocFilters);
+  const [docSort, setDocSort] = useState<'recent' | 'alpha'>(loadStoredDocSort);
   const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
   const [previewDoc, setPreviewDoc] = useState<any | null>(null);
   const [detailsDoc, setDetailsDoc] = useState<any | null>(null);
@@ -118,6 +136,14 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     if (!open || loadNumberTouched || !nextLoadNumber) return;
     setForm(f => ({ ...f, load_number: nextLoadNumber }));
   }, [loadNumberTouched, nextLoadNumber, open]);
+
+  useEffect(() => {
+    window.localStorage.setItem(NEW_LOAD_DOC_FILTERS_KEY, JSON.stringify(docFilters));
+  }, [docFilters]);
+
+  useEffect(() => {
+    window.localStorage.setItem(NEW_LOAD_DOC_SORT_KEY, docSort);
+  }, [docSort]);
 
   const filteredDocs = useMemo(() => {
     const invoice = normalize(debouncedDocFilters.invoice);
@@ -504,7 +530,6 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
       setOpen(false);
       setForm(emptyForm);
       setLoadNumberTouched(false);
-      setDocFilters({ invoice: '', client: '', neighborhood: '' });
       setSelectedDocIds(new Set());
       setDocAutofillSnapshots({});
       setPreviewDoc(null);
