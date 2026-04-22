@@ -23,6 +23,18 @@ interface Props {
 }
 
 const DOC_PAGE_SIZE = 25;
+const FILTER_DEBOUNCE_MS = 250;
+
+function useDebouncedValue<T>(value: T, delay: number) {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setDebouncedValue(value), delay);
+    return () => window.clearTimeout(timeout);
+  }, [delay, value]);
+
+  return debouncedValue;
+}
 
 export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   const createLoad = useCreateLoadWithNextNumber();
@@ -43,6 +55,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   const [docAutofillSnapshots, setDocAutofillSnapshots] = useState<Record<string, Record<string, string>>>({});
   const [visibleDocCount, setVisibleDocCount] = useState(DOC_PAGE_SIZE);
   const [visibleRecentDocCount, setVisibleRecentDocCount] = useState(DOC_PAGE_SIZE);
+  const debouncedDocFilters = useDebouncedValue(docFilters, FILTER_DEBOUNCE_MS);
 
   const normalize = (value: string) => value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
@@ -112,10 +125,10 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   }, [loadNumberTouched, nextLoadNumber, open]);
 
   const filteredDocs = useMemo(() => {
-    const invoice = normalize(docFilters.invoice);
-    const invoiceDigits = docFilters.invoice.replace(/\D/g, '');
-    const client = normalize(docFilters.client);
-    const neighborhood = normalize(docFilters.neighborhood);
+    const invoice = normalize(debouncedDocFilters.invoice);
+    const invoiceDigits = debouncedDocFilters.invoice.replace(/\D/g, '');
+    const client = normalize(debouncedDocFilters.client);
+    const neighborhood = normalize(debouncedDocFilters.neighborhood);
     return fiscalDocs.filter((doc: any) => {
       const docInvoice = normalize(doc.invoice_number || '');
       const docInvoiceDigits = String(doc.invoice_number || '').replace(/\D/g, '');
@@ -126,7 +139,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
       if (neighborhood && !docNeighborhood.includes(neighborhood)) return false;
       return true;
     });
-  }, [docFilters, fiscalDocs]);
+  }, [debouncedDocFilters, fiscalDocs]);
 
   const recentDocs = useMemo(() => fiscalDocs, [fiscalDocs]);
 
@@ -156,11 +169,19 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
 
   useEffect(() => {
     setVisibleDocCount(DOC_PAGE_SIZE);
-  }, [docFilters.invoice, docFilters.client, docFilters.neighborhood, open]);
+  }, [debouncedDocFilters.invoice, debouncedDocFilters.client, debouncedDocFilters.neighborhood, open]);
 
   useEffect(() => {
     if (recentDocsOpen) setVisibleRecentDocCount(DOC_PAGE_SIZE);
   }, [recentDocsOpen]);
+
+  const handleListScroll = (event: any, total: number, visible: number, setVisible: (updater: (count: number) => number) => void) => {
+    const target = event.currentTarget;
+    const nearBottom = target.scrollHeight - target.scrollTop - target.clientHeight < 80;
+    if (nearBottom && visible < total) {
+      setVisible(count => Math.min(count + DOC_PAGE_SIZE, total));
+    }
+  };
 
   const previewValidationIssues = useMemo(() => {
     if (!previewDoc) return [];
