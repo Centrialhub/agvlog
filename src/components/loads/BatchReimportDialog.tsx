@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/dialog';
 
 type ReimportPhase = 'idle' | 'ready' | 'clearing' | 'importing' | 'done';
+type FileStatusFilter = 'all' | 'duplicates' | 'errors' | 'ignored';
 
 interface ImportError {
   fileName: string;
@@ -105,6 +106,8 @@ export default function BatchReimportDialog() {
   const [dedupReport, setDedupReport] = useState<typeof EMPTY_DEDUP_REPORT>(EMPTY_DEDUP_REPORT);
   const [startDate, setStartDate] = useState<Date | undefined>();
   const [endDate, setEndDate] = useState<Date | undefined>();
+  const [fileSearch, setFileSearch] = useState('');
+  const [fileStatusFilter, setFileStatusFilter] = useState<FileStatusFilter>('all');
 
   const total = files.length;
   const busy = phase === 'clearing' || phase === 'importing';
@@ -152,6 +155,18 @@ export default function BatchReimportDialog() {
     if (!total) return 0;
     return Math.round((processed / total) * 100);
   }, [phase, processed, total]);
+  const filteredFileStatuses = useMemo(() => {
+    const query = fileSearch.trim().toLowerCase();
+    return fileStatuses.filter(status => {
+      const duplicateIgnored = status.state === 'ignored' && /chave de acesso|número da nf|duplic/i.test(status.message || '');
+      const matchesFilter = fileStatusFilter === 'all'
+        || (fileStatusFilter === 'duplicates' && duplicateIgnored)
+        || (fileStatusFilter === 'errors' && status.state === 'error')
+        || (fileStatusFilter === 'ignored' && status.state === 'ignored');
+      const haystack = `${status.fileName} ${status.invoiceNumber || ''} ${status.message || ''}`.toLowerCase();
+      return matchesFilter && (!query || haystack.includes(query));
+    });
+  }, [fileSearch, fileStatusFilter, fileStatuses]);
 
   const setFileStatus = (fileName: string, updates: Partial<FileImportStatus>) => {
     setFileStatuses(prev => prev.map(status => (
@@ -169,6 +184,8 @@ export default function BatchReimportDialog() {
     setErrors([]);
     setClearSummary(null);
     setDedupReport(EMPTY_DEDUP_REPORT);
+    setFileSearch('');
+    setFileStatusFilter('all');
   };
 
   const fetchErasePreview = async () => {
@@ -201,6 +218,8 @@ export default function BatchReimportDialog() {
     setConfirmationText('');
     setFileStatuses([]);
     setDedupReport(EMPTY_DEDUP_REPORT);
+    setFileSearch('');
+    setFileStatusFilter('all');
     if (inputRef.current) inputRef.current.value = '';
   };
 
@@ -503,19 +522,43 @@ export default function BatchReimportDialog() {
         )}
 
         {fileStatuses.length > 0 && (
-          <div className="max-h-56 overflow-y-auto rounded-lg border border-border divide-y divide-border">
-            {fileStatuses.map(status => (
-              <div key={status.fileName} className="flex items-start justify-between gap-3 p-3 text-sm">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 font-medium text-foreground">
-                    {statusIcon(status.state)}
-                    <span className="truncate">{status.fileName}</span>
-                  </div>
-                  {status.message && <div className="mt-1 text-xs text-muted-foreground">{status.message}</div>}
-                </div>
-                <Badge variant={status.state === 'error' ? 'destructive' : 'outline'}>{statusLabel[status.state]}</Badge>
+          <div className="rounded-lg border border-border">
+            <div className="space-y-2 border-b border-border p-3">
+              <input
+                value={fileSearch}
+                onChange={event => setFileSearch(event.target.value)}
+                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                placeholder="Buscar por arquivo, NF ou motivo"
+              />
+              <div className="flex flex-wrap gap-2">
+                {([
+                  ['all', `Todos (${fileStatuses.length})`],
+                  ['duplicates', `Duplicidade (${fileStatuses.filter(status => status.state === 'ignored' && /chave de acesso|número da nf|duplic/i.test(status.message || '')).length})`],
+                  ['errors', `Erros (${fileStatuses.filter(status => status.state === 'error').length})`],
+                  ['ignored', `Ignorados (${fileStatuses.filter(status => status.state === 'ignored').length})`],
+                ] as [FileStatusFilter, string][]).map(([value, label]) => (
+                  <Button key={value} type="button" size="sm" variant={fileStatusFilter === value ? 'secondary' : 'outline'} onClick={() => setFileStatusFilter(value)}>
+                    {label}
+                  </Button>
+                ))}
               </div>
-            ))}
+            </div>
+            <div className="max-h-56 overflow-y-auto divide-y divide-border">
+              {filteredFileStatuses.length === 0 ? (
+                <div className="p-4 text-center text-sm text-muted-foreground">Nenhum arquivo encontrado para o filtro atual.</div>
+              ) : filteredFileStatuses.map(status => (
+                <div key={status.fileName} className="flex items-start justify-between gap-3 p-3 text-sm">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 font-medium text-foreground">
+                      {statusIcon(status.state)}
+                      <span className="truncate">{status.fileName}</span>
+                    </div>
+                    {status.message && <div className="mt-1 text-xs text-muted-foreground">{status.message}</div>}
+                  </div>
+                  <Badge variant={status.state === 'error' ? 'destructive' : 'outline'}>{statusLabel[status.state]}</Badge>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
