@@ -77,21 +77,41 @@ export function useCreateLoad() {
   });
 }
 
+export async function getNextLoadNumberFromExisting(tenantId: string) {
+  const { data, error } = await supabase
+    .from('loads')
+    .select('load_number')
+    .eq('tenant_id', tenantId)
+    .limit(10000);
+  if (error) throw error;
+
+  const maxNumber = (data || []).reduce((max, load: any) => {
+    const match = String(load.load_number || '').match(/\d+/g);
+    const number = match ? Number(match[match.length - 1]) : 0;
+    return Number.isFinite(number) ? Math.max(max, number) : max;
+  }, 1000);
+
+  return String(maxNumber + 1);
+}
+
 export function useCreateLoadWithNextNumber() {
   const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (values: Partial<Load>) => {
       if (!currentTenant) throw new Error('Tenant não selecionado');
-      const { data, error } = await (supabase as any).rpc('create_load_with_next_number', {
-        _tenant_id: currentTenant.id,
-        _origin: values.origin ?? null,
-        _destination: values.destination ?? null,
-        _vehicle_id: values.vehicle_id ?? null,
-        _driver_id: values.driver_id ?? null,
-        _trip_id: values.trip_id ?? null,
-        _notes: values.notes ?? null,
-      });
+      const loadNumber = values.load_number || await getNextLoadNumberFromExisting(currentTenant.id);
+      const { data, error } = await supabase.from('loads').insert({
+        load_number: loadNumber,
+        tenant_id: currentTenant.id,
+        origin: values.origin ?? null,
+        destination: values.destination ?? null,
+        vehicle_id: values.vehicle_id ?? null,
+        driver_id: values.driver_id ?? null,
+        trip_id: values.trip_id ?? null,
+        notes: values.notes ?? null,
+        status: values.status ?? 'planned',
+      } as any).select().single();
       if (error) throw error;
       return data as Load;
     },
