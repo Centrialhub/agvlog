@@ -22,6 +22,8 @@ interface Props {
   onCreated: () => void;
 }
 
+const DOC_PAGE_SIZE = 25;
+
 export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   const createLoad = useCreateLoad();
   const { currentTenant } = useTenant();
@@ -39,6 +41,8 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   const [previewDoc, setPreviewDoc] = useState<any | null>(null);
   const [detailsDoc, setDetailsDoc] = useState<any | null>(null);
   const [docAutofillSnapshots, setDocAutofillSnapshots] = useState<Record<string, Record<string, string>>>({});
+  const [visibleDocCount, setVisibleDocCount] = useState(DOC_PAGE_SIZE);
+  const [visibleRecentDocCount, setVisibleRecentDocCount] = useState(DOC_PAGE_SIZE);
 
   const normalize = (value: string) => value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
@@ -124,13 +128,24 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     });
   }, [docFilters, fiscalDocs]);
 
-  const recentDocs = useMemo(() => fiscalDocs.slice(0, 20), [fiscalDocs]);
+  const recentDocs = useMemo(() => fiscalDocs, [fiscalDocs]);
 
   const selectableFilteredDocs = useMemo(() => filteredDocs, [filteredDocs]);
 
   const linkedFilteredDocs = useMemo(() => filteredDocs.filter((doc: any) => doc.load_id), [filteredDocs]);
 
   const selectedDocs = useMemo(() => fiscalDocs.filter((doc: any) => selectedDocIds.has(doc.id)), [fiscalDocs, selectedDocIds]);
+
+  const visibleFilteredDocs = useMemo(() => filteredDocs.slice(0, visibleDocCount), [filteredDocs, visibleDocCount]);
+  const visibleRecentDocs = useMemo(() => recentDocs.slice(0, visibleRecentDocCount), [recentDocs, visibleRecentDocCount]);
+
+  useEffect(() => {
+    setVisibleDocCount(DOC_PAGE_SIZE);
+  }, [docFilters.invoice, docFilters.client, docFilters.neighborhood, open]);
+
+  useEffect(() => {
+    if (recentDocsOpen) setVisibleRecentDocCount(DOC_PAGE_SIZE);
+  }, [recentDocsOpen]);
 
   const previewValidationIssues = useMemo(() => {
     if (!previewDoc) return [];
@@ -564,7 +579,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                     })}
                   </div>
                 </div>
-              ) : filteredDocs.map((doc: any) => {
+                ) : visibleFilteredDocs.map((doc: any) => {
                 const isSelected = selectedDocIds.has(doc.id);
                 const isLinked = !!doc.load_id;
                 const linkedLoad = getLinkedLoad(doc);
@@ -595,6 +610,11 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                 </div>
                 );
               })}
+              {filteredDocs.length > visibleFilteredDocs.length && (
+                <Button type="button" variant="outline" size="sm" className="mt-2 w-full" onClick={() => setVisibleDocCount(count => count + DOC_PAGE_SIZE)}>
+                  Carregar mais {Math.min(DOC_PAGE_SIZE, filteredDocs.length - visibleFilteredDocs.length)} de {filteredDocs.length - visibleFilteredDocs.length} NF(s)
+                </Button>
+              )}
             </div>
             {previewDoc && (
               <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-3">
@@ -642,7 +662,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
               <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-5 py-4">
                 {recentDocs.length === 0 ? (
                   <div className="text-sm text-muted-foreground py-6 text-center">Nenhuma nota recente disponível</div>
-                ) : recentDocs.map((doc: any) => {
+                ) : visibleRecentDocs.map((doc: any) => {
                   const isSelected = selectedDocIds.has(doc.id);
                   const isLinked = !!doc.load_id;
                   const linkedLoad = getLinkedLoad(doc);
@@ -671,6 +691,11 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                     </button>
                   );
                 })}
+                {recentDocs.length > visibleRecentDocs.length && (
+                  <Button type="button" variant="outline" size="sm" className="w-full" onClick={() => setVisibleRecentDocCount(count => count + DOC_PAGE_SIZE)}>
+                    Carregar mais {Math.min(DOC_PAGE_SIZE, recentDocs.length - visibleRecentDocs.length)} de {recentDocs.length - visibleRecentDocs.length} NF(s)
+                  </Button>
+                )}
               </div>
             </DialogContent>
           </Dialog>

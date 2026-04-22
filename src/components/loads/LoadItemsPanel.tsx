@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useLoadItems, useCreateLoadItem, useDeleteLoadItem, useUpdateLoadItem, ITEM_STATUSES, ITEM_STATUS_LABELS, LoadItem } from '@/hooks/useLoadItems';
@@ -23,6 +23,8 @@ interface LoadItemsPanelProps {
   vehicleMaxWeight?: number | null;
 }
 
+const DOC_PAGE_SIZE = 25;
+
 export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWeight }: LoadItemsPanelProps) {
   const { data: items = [], isLoading } = useLoadItems(loadId);
   const { data: orders = [] } = useOrders();
@@ -36,6 +38,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
   const [mode, setMode] = useState<'note' | 'manual'>('note');
   const [docFilters, setDocFilters] = useState({ invoice: '', client: '', neighborhood: '' });
   const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
+  const [visibleDocCount, setVisibleDocCount] = useState(DOC_PAGE_SIZE);
   const [form, setForm] = useState({
     order_id: '',
     item_description: '',
@@ -80,6 +83,12 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
       return true;
     });
   }, [docFilters, fiscalDocs, items]);
+
+  const visibleFilteredDocs = useMemo(() => filteredDocs.slice(0, visibleDocCount), [filteredDocs, visibleDocCount]);
+
+  useEffect(() => {
+    setVisibleDocCount(DOC_PAGE_SIZE);
+  }, [docFilters.invoice, docFilters.client, docFilters.neighborhood, addOpen]);
 
   const totalPallets = items.reduce((s, i) => s + i.pallet_count, 0);
   const totalWeight = items.reduce((s, i) => s + (i.weight_kg || 0), 0);
@@ -232,7 +241,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
                     <div className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
                       {filteredDocs.length === 0 ? (
                         <div className="rounded-md border border-border py-6 text-center text-sm text-muted-foreground">Nenhuma NF disponível para esses filtros</div>
-                      ) : filteredDocs.map((doc: any) => {
+                      ) : visibleFilteredDocs.map((doc: any) => {
                         const isSelected = selectedDocIds.has(doc.id);
                         return (
                           <button key={doc.id} type="button" onClick={() => setSelectedDocIds(prev => { const next = new Set(prev); next.has(doc.id) ? next.delete(doc.id) : next.add(doc.id); return next; })} className="flex w-full items-start gap-2 rounded-md border border-border px-3 py-1.5 text-left hover:bg-muted/60">
@@ -244,6 +253,11 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
                           </button>
                         );
                       })}
+                      {filteredDocs.length > visibleFilteredDocs.length && (
+                        <Button type="button" variant="outline" size="sm" className="w-full" onClick={() => setVisibleDocCount(count => count + DOC_PAGE_SIZE)}>
+                          Carregar mais {Math.min(DOC_PAGE_SIZE, filteredDocs.length - visibleFilteredDocs.length)} de {filteredDocs.length - visibleFilteredDocs.length} NF(s)
+                        </Button>
+                      )}
                     </div>
                   </div>
                 ) : (
