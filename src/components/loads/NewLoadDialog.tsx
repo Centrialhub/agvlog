@@ -57,6 +57,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   const [visibleDocCount, setVisibleDocCount] = useState(DOC_PAGE_SIZE);
   const [visibleRecentDocCount, setVisibleRecentDocCount] = useState(DOC_PAGE_SIZE);
   const [docsLayoutKey, setDocsLayoutKey] = useState(0);
+  const [modalHeight, setModalHeight] = useState('min(92vh, 860px)');
   const docListRef = useRef<HTMLDivElement | null>(null);
   const recentDocListRef = useRef<HTMLDivElement | null>(null);
   const debouncedDocFilters = useDebouncedValue(docFilters, FILTER_DEBOUNCE_MS);
@@ -175,6 +176,19 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     if (recentDocsOpen) setVisibleRecentDocCount(DOC_PAGE_SIZE);
   }, [recentDocsOpen]);
 
+  const recalculateModalHeight = () => {
+    const viewportHeight = window.innerHeight || 720;
+    const availableHeight = Math.max(360, viewportHeight - 24);
+    setModalHeight(`${Math.min(availableHeight, 860)}px`);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    recalculateModalHeight();
+    window.addEventListener('resize', recalculateModalHeight);
+    return () => window.removeEventListener('resize', recalculateModalHeight);
+  }, [open]);
+
   const handleListScroll = (event: any, total: number, visible: number, setVisible: (updater: (count: number) => number) => void) => {
     const target = event.currentTarget;
     const nearBottom = target.scrollHeight - target.scrollTop - target.clientHeight < 80;
@@ -184,6 +198,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   };
 
   const reorganizeDocsLayout = () => {
+    recalculateModalHeight();
     setVisibleDocCount(DOC_PAGE_SIZE);
     setVisibleRecentDocCount(DOC_PAGE_SIZE);
     setDocsLayoutKey(key => key + 1);
@@ -507,7 +522,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
       <DialogTrigger asChild>
         <Button size="sm"><Plus className="h-4 w-4 mr-1" /> Nova Carga</Button>
       </DialogTrigger>
-      <DialogContent className="flex h-[min(92vh,860px)] max-w-5xl flex-col overflow-hidden p-0">
+      <DialogContent className="flex max-w-5xl flex-col overflow-hidden p-0" style={{ height: modalHeight }}>
         <DialogHeader className="shrink-0 border-b border-border px-5 py-4"><DialogTitle>Nova Carga</DialogTitle></DialogHeader>
         <div className="flex min-h-0 flex-1 flex-col px-5 py-4">
           <div className="flex-1 space-y-3 overflow-y-auto pr-1">
