@@ -259,7 +259,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
                       <Input value={docFilters.client} onChange={e => setDocFilters(f => ({ ...f, client: e.target.value }))} placeholder="Cliente" />
                       <Input value={docFilters.neighborhood} onChange={e => setDocFilters(f => ({ ...f, neighborhood: e.target.value }))} placeholder="Bairro" />
                     </div>
-                    <div className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
+                    <div className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1" onScroll={handleDocListScroll}>
                       {filteredDocs.length === 0 ? (
                         <div className="rounded-md border border-border py-6 text-center text-sm text-muted-foreground">Nenhuma NF disponível para esses filtros</div>
                       ) : visibleFilteredDocs.map((doc: any) => {
@@ -275,9 +275,9 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
                         );
                       })}
                       {filteredDocs.length > visibleFilteredDocs.length && (
-                        <Button type="button" variant="outline" size="sm" className="w-full" onClick={() => setVisibleDocCount(count => count + DOC_PAGE_SIZE)}>
-                          Carregar mais {Math.min(DOC_PAGE_SIZE, filteredDocs.length - visibleFilteredDocs.length)} de {filteredDocs.length - visibleFilteredDocs.length} NF(s)
-                        </Button>
+                        <div className="py-2 text-center text-[11px] text-muted-foreground">
+                          Role para carregar mais {filteredDocs.length - visibleFilteredDocs.length} NF(s)
+                        </div>
                       )}
                     </div>
                   </div>
