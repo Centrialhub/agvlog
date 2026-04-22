@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { RotateCcw, Upload, AlertTriangle, CheckCircle2, FileText, XCircle } from 'lucide-react';
+import { RotateCcw, Upload, AlertTriangle, CheckCircle2, FileText, XCircle, Clock, Loader2 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { parseNFeXml } from '@/lib/documentParsers';
@@ -28,6 +28,15 @@ interface ImportError {
   message: string;
 }
 
+type FileImportState = 'pending' | 'importing' | 'success' | 'error';
+
+interface FileImportStatus {
+  fileName: string;
+  state: FileImportState;
+  invoiceNumber?: string;
+  message?: string;
+}
+
 const EMPTY_FILE_LIST: File[] = [];
 
 export default function BatchReimportDialog() {
@@ -48,6 +57,7 @@ export default function BatchReimportDialog() {
   const [erasePreview, setErasePreview] = useState<Record<string, number> | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [confirmationText, setConfirmationText] = useState('');
+  const [fileStatuses, setFileStatuses] = useState<FileImportStatus[]>([]);
 
   const total = files.length;
   const busy = phase === 'clearing' || phase === 'importing';
@@ -58,9 +68,16 @@ export default function BatchReimportDialog() {
     return Math.round((processed / total) * 100);
   }, [phase, processed, total]);
 
+  const setFileStatus = (fileName: string, updates: Partial<FileImportStatus>) => {
+    setFileStatuses(prev => prev.map(status => (
+      status.fileName === fileName ? { ...status, ...updates } : status
+    )));
+  };
+
   const handleFiles = (fileList: FileList | null) => {
     const xmlFiles = Array.from(fileList || []).filter(file => file.name.toLowerCase().endsWith('.xml'));
     setFiles(xmlFiles);
+    setFileStatuses(xmlFiles.map(file => ({ fileName: file.name, state: 'pending' })));
     setPhase(xmlFiles.length ? 'ready' : 'idle');
     setProcessed(0);
     setImported(0);
@@ -108,6 +125,7 @@ export default function BatchReimportDialog() {
     setErrors([]);
     setClearSummary(null);
     setConfirmationText('');
+    setFileStatuses([]);
     if (inputRef.current) inputRef.current.value = '';
   };
 
@@ -127,6 +145,7 @@ export default function BatchReimportDialog() {
     setImported(0);
     setErrors([]);
     setClearSummary(null);
+    setFileStatuses(files.map(file => ({ fileName: file.name, state: 'pending' })));
 
     try {
       const { data: cleaned, error: cleanError } = await (supabase as any).rpc('clear_reimport_batch_data', {
@@ -142,6 +161,7 @@ export default function BatchReimportDialog() {
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
+        setFileStatus(file.name, { state: 'importing', message: 'Importando...' });
         try {
           const parsed = parseNFeXml(await file.text());
           const validated = validateNFe(parsed, file.name, [], clients, indexes);
@@ -171,9 +191,16 @@ export default function BatchReimportDialog() {
           if (error) throw error;
           successCount++;
           setImported(successCount);
+          setFileStatus(file.name, {
+            state: 'success',
+            invoiceNumber: validated.source.invoiceNumber,
+            message: `NF ${validated.source.invoiceNumber || 'sem número'} importada`,
+          });
         } catch (error: any) {
-          importErrors.push({ fileName: file.name, message: error?.message || 'Erro desconhecido ao importar' });
+          const message = error?.message || 'Erro desconhecido ao importar';
+          importErrors.push({ fileName: file.name, message });
           setErrors([...importErrors]);
+          setFileStatus(file.name, { state: 'error', message });
         } finally {
           setProcessed(i + 1);
           await new Promise(resolve => setTimeout(resolve, 0));
@@ -195,6 +222,19 @@ export default function BatchReimportDialog() {
 
   const cleanedTotal = clearSummary ? Object.values(clearSummary).reduce((sum, value) => sum + Number(value || 0), 0) : 0;
   const previewTotal = erasePreview ? Object.values(erasePreview).reduce((sum, value) => sum + Number(value || 0), 0) : 0;
+  const statusIcon = (state: FileImportState) => {
+    if (state === 'success') return <CheckCircle2 className="h-4 w-4 text-success" />;
+    if (state === 'error') return <XCircle className="h-4 w-4 text-destructive" />;
+    if (state === 'importing') return <Loader2 className="h-4 w-4 animate-spin text-primary" />;
+    return <Clock className="h-4 w-4 text-muted-foreground" />;
+  };
+
+  const statusLabel: Record<FileImportState, string> = {
+    pending: 'Aguardando',
+    importing: 'Importando',
+    success: 'Sucesso',
+    error: 'Erro',
+  };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -279,6 +319,23 @@ export default function BatchReimportDialog() {
             <AlertTitle>Resumo</AlertTitle>
             <AlertDescription>{imported} nota(s) importada(s). {errors.length} arquivo(s) com erro.</AlertDescription>
           </Alert>
+        )}
+
+        {fileStatuses.length > 0 && (
+          <div className="max-h-56 overflow-y-auto rounded-lg border border-border divide-y divide-border">
+            {fileStatuses.map(status => (
+              <div key={status.fileName} className="flex items-start justify-between gap-3 p-3 text-sm">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 font-medium text-foreground">
+                    {statusIcon(status.state)}
+                    <span className="truncate">{status.fileName}</span>
+                  </div>
+                  {status.message && <div className="mt-1 text-xs text-muted-foreground">{status.message}</div>}
+                </div>
+                <Badge variant={status.state === 'error' ? 'destructive' : 'outline'}>{statusLabel[status.state]}</Badge>
+              </div>
+            ))}
+          </div>
         )}
 
         {errors.length > 0 && (
