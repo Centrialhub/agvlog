@@ -212,9 +212,42 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
             <DialogTrigger asChild>
               <Button size="sm"><Plus className="h-3 w-3 mr-1" /> Adicionar Item</Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-3xl">
               <DialogHeader><DialogTitle>Adicionar Item à Carga</DialogTitle></DialogHeader>
               <div className="space-y-4">
+                <div className="flex gap-2 rounded-md bg-muted p-1">
+                  <Button type="button" variant={mode === 'note' ? 'secondary' : 'ghost'} size="sm" className="flex-1" onClick={() => setMode('note')}>Puxar NF</Button>
+                  <Button type="button" variant={mode === 'manual' ? 'secondary' : 'ghost'} size="sm" className="flex-1" onClick={() => setMode('manual')}>Item manual</Button>
+                </div>
+                {mode === 'note' ? (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="relative">
+                        <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input value={docFilters.invoice} onChange={e => setDocFilters(f => ({ ...f, invoice: e.target.value }))} placeholder="Nº NF" className="pl-8" />
+                      </div>
+                      <Input value={docFilters.client} onChange={e => setDocFilters(f => ({ ...f, client: e.target.value }))} placeholder="Cliente" />
+                      <Input value={docFilters.neighborhood} onChange={e => setDocFilters(f => ({ ...f, neighborhood: e.target.value }))} placeholder="Bairro" />
+                    </div>
+                    <div className="space-y-1">
+                      {filteredDocs.length === 0 ? (
+                        <div className="rounded-md border border-border py-6 text-center text-sm text-muted-foreground">Nenhuma NF disponível para esses filtros</div>
+                      ) : filteredDocs.slice(0, 12).map((doc: any) => {
+                        const isSelected = selectedDocIds.has(doc.id);
+                        return (
+                          <button key={doc.id} type="button" onClick={() => setSelectedDocIds(prev => { const next = new Set(prev); next.has(doc.id) ? next.delete(doc.id) : next.add(doc.id); return next; })} className="flex w-full items-start gap-2 rounded-md border border-border px-3 py-2 text-left hover:bg-muted/60">
+                            <Checkbox checked={isSelected} className="mt-0.5" />
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-sm font-medium">NF {doc.invoice_number || '—'} · {doc.clients?.company_name || doc.recipient || 'Sem cliente'}</span>
+                              <span className="block text-xs text-muted-foreground">{doc.recipient_neighborhood || 'Sem bairro'} · {doc.pallet_count || 0} pal · {doc.weight_kg || 0} kg{doc.load_id ? ` · sairá da carga ${doc.loads?.load_number || 'atual'}` : ''}</span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <>
                 <div>
                   <Label>Pedido (opcional)</Label>
                   <Select value={form.order_id || '__none__'} onValueChange={v => setForm(f => ({ ...f, order_id: v === '__none__' ? '' : v }))}>
@@ -235,9 +268,11 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
                   <div><Label>Paletes</Label><Input type="number" value={form.pallet_count} onChange={e => setForm(f => ({ ...f, pallet_count: parseInt(e.target.value) || 0 }))} /></div>
                   <div><Label>Peso (kg)</Label><Input type="number" value={form.weight_kg} onChange={e => setForm(f => ({ ...f, weight_kg: parseFloat(e.target.value) || 0 }))} /></div>
                 </div>
+                  </>
+                )}
                 <div className="flex gap-2 justify-end">
                   <Button variant="outline" onClick={() => setAddOpen(false)}>Cancelar</Button>
-                  <Button onClick={handleAdd} disabled={createItem.isPending}>Adicionar</Button>
+                  <Button onClick={handleAdd} disabled={createItem.isPending}>{mode === 'note' ? 'Puxar NF(s)' : 'Adicionar'}</Button>
                 </div>
               </div>
             </DialogContent>
