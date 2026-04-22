@@ -281,6 +281,26 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     setPreviewDoc(null);
   };
 
+  const refreshLoadTotals = async (loadIds: string[]) => {
+    const uniqueLoadIds = Array.from(new Set(loadIds.filter(Boolean)));
+    await Promise.all(uniqueLoadIds.map(async loadId => {
+      const { data, error } = await (supabase as any).from('load_items').select('pallet_count, weight_kg, volume_m3').eq('load_id', loadId);
+      if (error) throw error;
+      const totals = (data || []).reduce((acc: any, item: any) => ({
+        pallet_count: acc.pallet_count + (Number(item.pallet_count) || 0),
+        weight_kg: acc.weight_kg + (Number(item.weight_kg) || 0),
+        volume_m3: acc.volume_m3 + (Number(item.volume_m3) || 0),
+      }), { pallet_count: 0, weight_kg: 0, volume_m3: 0 });
+      const { error: updateError } = await supabase.from('loads').update({
+        total_pallet_count: totals.pallet_count,
+        total_weight_kg: totals.weight_kg,
+        total_volume_m3: totals.volume_m3,
+        updated_at: new Date().toISOString(),
+      } as any).eq('id', loadId);
+      if (updateError) throw updateError;
+    }));
+  };
+
   const handleSave = async () => {
     try {
       const notes = [
@@ -303,6 +323,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
 
       let manualDocId: string | null = null;
       const selectedDocIdList = Array.from(selectedDocIds);
+      const previousLoadIds = Array.from(new Set(selectedDocIdList.map(docId => fiscalDocs.find((d: any) => d.id === docId)?.load_id).filter(Boolean)));
 
       if (selectedDocIdList.length === 1) {
         const { error: updateDocError } = await supabase.from('fiscal_documents').update({
@@ -340,6 +361,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
           const { error: unlinkItemsError } = await (supabase as any)
             .from('load_items')
             .delete()
+            .eq('tenant_id', currentTenant!.id)
             .in('fiscal_document_id', selectedDocIdList);
           if (unlinkItemsError) throw unlinkItemsError;
 
@@ -400,6 +422,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
         });
         const { error: itemError } = await (supabase as any).from('load_items').insert(items);
         if (itemError) throw itemError;
+        await refreshLoadTotals([...previousLoadIds, load.id]);
       }
 
       toast({ title: 'Carga criada' });
