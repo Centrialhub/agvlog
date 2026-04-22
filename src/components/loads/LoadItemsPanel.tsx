@@ -49,6 +49,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
   const [addOpen, setAddOpen] = useState(false);
   const [mode, setMode] = useState<'note' | 'manual'>('note');
   const [docFilters, setDocFilters] = useState({ invoice: '', client: '', neighborhood: '' });
+  const [docSort, setDocSort] = useState<'recent' | 'alpha'>('recent');
   const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
   const [visibleDocCount, setVisibleDocCount] = useState(DOC_PAGE_SIZE);
   const [docsLayoutKey, setDocsLayoutKey] = useState(0);
@@ -68,7 +69,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
       if (!currentTenant) return [];
       const { data, error } = await supabase
         .from('fiscal_documents')
-        .select('id, invoice_number, remitter, recipient, recipient_neighborhood, recipient_city, recipient_state, pallet_count, weight_kg, product_summary, load_id, loads(id, load_number), clients(company_name)')
+        .select('id, invoice_number, remitter, recipient, recipient_neighborhood, recipient_city, recipient_state, pallet_count, weight_kg, product_summary, load_id, created_at, loads(id, load_number), clients(company_name)')
         .eq('tenant_id', currentTenant.id)
         .eq('document_type', 'inbound')
         .order('created_at', { ascending: false })
@@ -86,7 +87,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
     const client = normalize(debouncedDocFilters.client);
     const neighborhood = normalize(debouncedDocFilters.neighborhood);
     const currentDocIds = new Set(items.map(item => item.fiscal_document_id).filter(Boolean));
-    return fiscalDocs.filter((doc: any) => {
+    const docs = fiscalDocs.filter((doc: any) => {
       if (currentDocIds.has(doc.id)) return false;
       const docInvoice = normalize(doc.invoice_number || '');
       const docInvoiceDigits = String(doc.invoice_number || '').replace(/\D/g, '');
@@ -97,7 +98,10 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
       if (neighborhood && !docNeighborhood.includes(neighborhood)) return false;
       return true;
     });
-  }, [debouncedDocFilters, fiscalDocs, items]);
+    return docs.sort((a: any, b: any) => docSort === 'alpha'
+      ? String(a.clients?.company_name || a.recipient || a.invoice_number || '').localeCompare(String(b.clients?.company_name || b.recipient || b.invoice_number || ''), 'pt-BR')
+      : new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+  }, [debouncedDocFilters, docSort, fiscalDocs, items]);
 
   const visibleFilteredDocs = useMemo(() => filteredDocs.slice(0, visibleDocCount), [filteredDocs, visibleDocCount]);
   const isDocsUpdating = isFetchingFiscalDocs || docFilters.invoice !== debouncedDocFilters.invoice || docFilters.client !== debouncedDocFilters.client || docFilters.neighborhood !== debouncedDocFilters.neighborhood;
@@ -267,6 +271,15 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
                       </div>
                       <Input value={docFilters.client} onChange={e => setDocFilters(f => ({ ...f, client: e.target.value }))} placeholder="Cliente" />
                       <Input value={docFilters.neighborhood} onChange={e => setDocFilters(f => ({ ...f, neighborhood: e.target.value }))} placeholder="Bairro" />
+                    </div>
+                    <div className="flex justify-end">
+                      <Select value={docSort} onValueChange={(value: 'recent' | 'alpha') => setDocSort(value)}>
+                        <SelectTrigger className="h-8 w-48 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="recent">Mais recentes</SelectItem>
+                          <SelectItem value="alpha">Ordem alfabética</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
                       <span className="inline-flex items-center gap-2">
