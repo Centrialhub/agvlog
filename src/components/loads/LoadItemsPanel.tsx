@@ -53,6 +53,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
   const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
   const [visibleDocCount, setVisibleDocCount] = useState(DOC_PAGE_SIZE);
   const [docsLayoutKey, setDocsLayoutKey] = useState(0);
+  const [modalMaxHeight, setModalMaxHeight] = useState('82vh');
   const docListRef = useRef<HTMLDivElement | null>(null);
   const debouncedDocFilters = useDebouncedValue(docFilters, FILTER_DEBOUNCE_MS);
   const [form, setForm] = useState({
@@ -117,6 +118,19 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
     setVisibleDocCount(DOC_PAGE_SIZE);
   }, [debouncedDocFilters.invoice, debouncedDocFilters.client, debouncedDocFilters.neighborhood, addOpen]);
 
+  const recalculateModalHeight = () => {
+    const viewportHeight = window.innerHeight || 720;
+    const availableHeight = Math.max(340, viewportHeight - 24);
+    setModalMaxHeight(`${Math.min(availableHeight, 760)}px`);
+  };
+
+  useEffect(() => {
+    if (!addOpen) return;
+    recalculateModalHeight();
+    window.addEventListener('resize', recalculateModalHeight);
+    return () => window.removeEventListener('resize', recalculateModalHeight);
+  }, [addOpen]);
+
   const handleDocListScroll = (event: any) => {
     const target = event.currentTarget;
     const nearBottom = target.scrollHeight - target.scrollTop - target.clientHeight < 80;
@@ -126,6 +140,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
   };
 
   const reorganizeDocsLayout = () => {
+    recalculateModalHeight();
     setVisibleDocCount(DOC_PAGE_SIZE);
     setDocsLayoutKey(key => key + 1);
     window.requestAnimationFrame(() => docListRef.current?.scrollTo({ top: 0 }));
@@ -262,7 +277,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
             <DialogTrigger asChild>
               <Button size="sm"><Plus className="h-3 w-3 mr-1" /> Adicionar Item</Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[82vh] overflow-hidden">
+            <DialogContent className="max-w-2xl overflow-hidden" style={{ maxHeight: modalMaxHeight }}>
               <DialogHeader><DialogTitle>Adicionar Item à Carga</DialogTitle></DialogHeader>
               <div className="flex max-h-[70vh] flex-col gap-3">
                 <div className="flex gap-2 rounded-md bg-muted p-1">
