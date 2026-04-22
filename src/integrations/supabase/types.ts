@@ -3609,6 +3609,66 @@ export type Database = {
         }
         Relationships: []
       }
+      reimport_batches: {
+        Row: {
+          cleanup_summary: Json
+          created_by: string | null
+          dedup_summary: Json
+          error_count: number
+          errors_summary: Json
+          finished_at: string
+          id: string
+          ignored_count: number
+          imported_count: number
+          new_count: number
+          period_end: string | null
+          period_start: string | null
+          started_at: string
+          tenant_id: string
+          total_files: number
+          unchanged_count: number
+          updated_count: number
+        }
+        Insert: {
+          cleanup_summary?: Json
+          created_by?: string | null
+          dedup_summary?: Json
+          error_count?: number
+          errors_summary?: Json
+          finished_at?: string
+          id?: string
+          ignored_count?: number
+          imported_count?: number
+          new_count?: number
+          period_end?: string | null
+          period_start?: string | null
+          started_at?: string
+          tenant_id: string
+          total_files?: number
+          unchanged_count?: number
+          updated_count?: number
+        }
+        Update: {
+          cleanup_summary?: Json
+          created_by?: string | null
+          dedup_summary?: Json
+          error_count?: number
+          errors_summary?: Json
+          finished_at?: string
+          id?: string
+          ignored_count?: number
+          imported_count?: number
+          new_count?: number
+          period_end?: string | null
+          period_start?: string | null
+          started_at?: string
+          tenant_id?: string
+          total_files?: number
+          unchanged_count?: number
+          updated_count?: number
+        }
+        Relationships: []
+      }
       route_planning_drafts: {
         Row: {
           converted_load_id: string | null
