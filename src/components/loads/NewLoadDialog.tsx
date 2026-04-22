@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCreateLoadWithNextNumber } from '@/hooks/useLoads';
+import { getNextLoadNumberFromExisting, useCreateLoadWithNextNumber } from '@/hooks/useLoads';
 import { useClients } from '@/hooks/useClients';
 import { useTenant } from '@/hooks/useTenant';
 import { useAuth } from '@/hooks/useAuth';
@@ -103,11 +103,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     queryKey: ['next_load_number_preview', currentTenant?.id, open],
     queryFn: async () => {
       if (!currentTenant) return '';
-      const { data, error } = await (supabase as any).rpc('peek_next_load_number', {
-        _tenant_id: currentTenant.id,
-      });
-      if (error) throw error;
-      return String(data || '');
+      return getNextLoadNumberFromExisting(currentTenant.id);
     },
     enabled: !!currentTenant && open,
   });
@@ -414,6 +410,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
       ].filter(Boolean).join('\n');
 
       const load = await createLoad.mutateAsync({
+        load_number: form.load_number.trim() || nextLoadNumber,
         origin: form.origin || null,
         destination: form.destination || form.neighborhood || null,
         notes: notes || null,
