@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { AlertTriangle, Plus, Search } from 'lucide-react';
+import { AlertTriangle, Eye, Plus, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface Props {
@@ -36,6 +36,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   const [docFilters, setDocFilters] = useState({ invoice: '', client: '', neighborhood: '' });
   const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
   const [previewDoc, setPreviewDoc] = useState<any | null>(null);
+  const [detailsDoc, setDetailsDoc] = useState<any | null>(null);
   const [docAutofillSnapshots, setDocAutofillSnapshots] = useState<Record<string, Record<string, string>>>({});
 
   const normalize = (value: string) => value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -383,6 +384,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
       setSelectedDocIds(new Set());
       setDocAutofillSnapshots({});
       setPreviewDoc(null);
+      setDetailsDoc(null);
       queryClient.invalidateQueries({ queryKey: ['fiscal_documents'] });
       queryClient.invalidateQueries({ queryKey: ['load_items'] });
       onCreated();
@@ -497,13 +499,18 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                 const isSelected = selectedDocIds.has(doc.id);
                 const isLinked = !!doc.load_id;
                 return (
-                <button key={doc.id} type="button" onClick={() => isLinked ? undefined : isSelected ? removeDocSelection(doc.id) : setPreviewDoc(doc)} disabled={isLinked} className="w-full flex items-start gap-2 rounded-md border border-border px-2 py-2 text-left hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60">
-                  <Checkbox checked={isSelected} className="mt-0.5" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-xs font-medium">NF {doc.invoice_number || '—'} · {doc.clients?.company_name || doc.recipient || 'Sem cliente'}</span>
-                    <span className="block text-[11px] text-muted-foreground truncate">{doc.remitter || 'Fornecedor não informado'} · {doc.recipient_neighborhood || 'Sem bairro'}{isLinked ? ` · Já vinculada à carga ${doc.loads?.load_number || ''}` : ''}</span>
-                  </span>
-                </button>
+                <div key={doc.id} className="flex items-start gap-2 rounded-md border border-border px-2 py-2 hover:bg-muted/60">
+                  <button type="button" onClick={() => isLinked ? undefined : isSelected ? removeDocSelection(doc.id) : setPreviewDoc(doc)} disabled={isLinked} className="flex min-w-0 flex-1 items-start gap-2 text-left disabled:cursor-not-allowed disabled:opacity-60">
+                    <Checkbox checked={isSelected} className="mt-0.5" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-xs font-medium">NF {doc.invoice_number || '—'} · {doc.clients?.company_name || doc.recipient || 'Sem cliente'}</span>
+                      <span className="block truncate text-[11px] text-muted-foreground">{doc.remitter || 'Fornecedor não informado'} · {doc.recipient_neighborhood || 'Sem bairro'}{isLinked ? ` · Já vinculada à carga ${doc.loads?.load_number || ''}` : ''}</span>
+                    </span>
+                  </button>
+                  <Button type="button" variant="outline" size="sm" className="h-7 shrink-0 gap-1 text-[11px]" onClick={() => setDetailsDoc(doc)}>
+                    <Eye className="h-3.5 w-3.5" /> Ver nota
+                  </Button>
+                </div>
                 );
               })}
             </div>
@@ -560,6 +567,24 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                   );
                 })}
               </div>
+            </DialogContent>
+          </Dialog>
+          <Dialog open={!!detailsDoc} onOpenChange={(isOpen) => !isOpen && setDetailsDoc(null)}>
+            <DialogContent className="max-w-xl">
+              <DialogHeader><DialogTitle>Detalhes da NF {detailsDoc?.invoice_number || '—'}</DialogTitle></DialogHeader>
+              {detailsDoc && (
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div><span className="text-muted-foreground">Carga vinculada:</span><div className="font-medium">{detailsDoc.loads?.load_number || 'Não vinculada'}</div></div>
+                  <div><span className="text-muted-foreground">Status:</span><div className="font-medium">{detailsDoc.status || '—'}</div></div>
+                  <div><span className="text-muted-foreground">Cliente:</span><div className="font-medium">{detailsDoc.clients?.company_name || detailsDoc.recipient || '—'}</div></div>
+                  <div><span className="text-muted-foreground">Fornecedor:</span><div className="font-medium">{detailsDoc.remitter || '—'}</div></div>
+                  <div><span className="text-muted-foreground">Bairro:</span><div className="font-medium">{detailsDoc.recipient_neighborhood || '—'}</div></div>
+                  <div><span className="text-muted-foreground">Cidade/UF:</span><div className="font-medium">{[detailsDoc.recipient_city, detailsDoc.recipient_state].filter(Boolean).join(' / ') || '—'}</div></div>
+                  <div><span className="text-muted-foreground">Paletes:</span><div className="font-medium">{detailsDoc.pallet_count ?? 0}</div></div>
+                  <div><span className="text-muted-foreground">Peso:</span><div className="font-medium">{detailsDoc.weight_kg ?? 0} kg</div></div>
+                  <div className="col-span-2"><span className="text-muted-foreground">Produto:</span><div className="font-medium">{detailsDoc.product_summary || '—'}</div></div>
+                </div>
+              )}
             </DialogContent>
           </Dialog>
           <div><Label className="text-xs">Observações</Label><Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2} /></div>
