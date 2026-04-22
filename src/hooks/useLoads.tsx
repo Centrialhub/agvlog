@@ -77,6 +77,28 @@ export function useCreateLoad() {
   });
 }
 
+export function useCreateLoadWithNextNumber() {
+  const { currentTenant } = useTenant();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (values: Partial<Load>) => {
+      if (!currentTenant) throw new Error('Tenant não selecionado');
+      const { data, error } = await (supabase as any).rpc('create_load_with_next_number', {
+        _tenant_id: currentTenant.id,
+        _origin: values.origin ?? null,
+        _destination: values.destination ?? null,
+        _vehicle_id: values.vehicle_id ?? null,
+        _driver_id: values.driver_id ?? null,
+        _trip_id: values.trip_id ?? null,
+        _notes: values.notes ?? null,
+      });
+      if (error) throw error;
+      return data as Load;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['loads'] }),
+  });
+}
+
 export function useUpdateLoad() {
   const qc = useQueryClient();
   return useMutation({

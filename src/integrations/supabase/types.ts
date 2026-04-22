@@ -5236,6 +5236,41 @@ export type Database = {
         Args: { _geofence_id: string; _points: Json }
         Returns: Json
       }
+      create_load_with_next_number: {
+        Args: {
+          _destination?: string
+          _driver_id?: string
+          _notes?: string
+          _origin?: string
+          _tenant_id: string
+          _trip_id?: string
+          _vehicle_id?: string
+        }
+        Returns: {
+          created_at: string
+          created_by: string | null
+          destination: string | null
+          driver_id: string | null
+          id: string
+          load_number: string
+          notes: string | null
+          origin: string | null
+          status: string
+          tenant_id: string
+          total_pallet_count: number | null
+          total_volume_m3: number | null
+          total_weight_kg: number | null
+          trip_id: string | null
+          updated_at: string
+          vehicle_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "loads"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       create_tenant_with_owner: {
         Args: { _tenant_name: string }
         Returns: string
