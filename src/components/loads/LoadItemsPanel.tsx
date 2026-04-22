@@ -28,6 +28,19 @@ const DOC_PAGE_SIZE = 25;
 const FILTER_DEBOUNCE_MS = 250;
 const emptyDocFilters = { invoice: '', client: '', neighborhood: '' };
 const defaultDocPreference = { filters: emptyDocFilters, sort: 'recent' as 'recent' | 'alpha', visibleDocCount: DOC_PAGE_SIZE, scrollTop: 0 };
+const LOAD_ITEMS_SESSION_ONLY_KEY = 'agvlog:load-items-doc-session-only';
+const LOAD_ITEMS_SESSION_PREF_KEY = 'agvlog:load-items-doc-session-preference';
+
+const loadSessionOnly = () => window.sessionStorage.getItem(LOAD_ITEMS_SESSION_ONLY_KEY) === 'true';
+
+const loadSessionPreference = () => {
+  try {
+    const stored = window.sessionStorage.getItem(LOAD_ITEMS_SESSION_PREF_KEY);
+    return stored ? { ...defaultDocPreference, ...JSON.parse(stored) } : defaultDocPreference;
+  } catch {
+    return defaultDocPreference;
+  }
+};
 
 function useDebouncedValue<T>(value: T, delay: number) {
   const [debouncedValue, setDebouncedValue] = useState(value);
@@ -50,6 +63,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
   const updateItem = useUpdateLoadItem();
   const { toast } = useToast();
   const { preference: docPreference, isLoaded: isDocPreferenceLoaded, savePreference: saveDocPreference } = useUserUiPreference('load_items_doc_filters', defaultDocPreference);
+  const [sessionOnlyPreference, setSessionOnlyPreference] = useState(loadSessionOnly);
   const [addOpen, setAddOpen] = useState(false);
   const [mode, setMode] = useState<'note' | 'manual'>('note');
   const [docFilters, setDocFilters] = useState(emptyDocFilters);
@@ -63,6 +77,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
   const isDocPreferenceHydrated = useRef(false);
   const skipNextFilterReset = useRef(false);
   const debouncedDocFilters = useDebouncedValue(docFilters, FILTER_DEBOUNCE_MS);
+  const currentDocPreference = useMemo(() => ({ filters: docFilters, sort: docSort, visibleDocCount, scrollTop: docScrollTop }), [docFilters, docSort, visibleDocCount, docScrollTop]);
   const [form, setForm] = useState({
     order_id: '',
     item_description: '',
@@ -128,19 +143,26 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
 
   useEffect(() => {
     if (!isDocPreferenceLoaded) return;
-    setDocFilters({ ...emptyDocFilters, ...(docPreference as any).filters });
-    setDocSort((docPreference as any).sort === 'alpha' ? 'alpha' : 'recent');
-    setVisibleDocCount(Math.max(DOC_PAGE_SIZE, Number((docPreference as any).visibleDocCount) || DOC_PAGE_SIZE));
-    setDocScrollTop(Number((docPreference as any).scrollTop) || 0);
+    const sourcePreference = sessionOnlyPreference ? loadSessionPreference() : docPreference;
+    setDocFilters({ ...emptyDocFilters, ...(sourcePreference as any).filters });
+    setDocSort((sourcePreference as any).sort === 'alpha' ? 'alpha' : 'recent');
+    setVisibleDocCount(Math.max(DOC_PAGE_SIZE, Number((sourcePreference as any).visibleDocCount) || DOC_PAGE_SIZE));
+    setDocScrollTop(Number((sourcePreference as any).scrollTop) || 0);
     skipNextFilterReset.current = true;
     isDocPreferenceHydrated.current = true;
-  }, [docPreference, isDocPreferenceLoaded]);
+  }, [docPreference, isDocPreferenceLoaded, sessionOnlyPreference]);
 
   useEffect(() => {
     if (!isDocPreferenceHydrated.current) return;
-    const timeout = window.setTimeout(() => saveDocPreference({ filters: docFilters, sort: docSort, visibleDocCount, scrollTop: docScrollTop }), 300);
+    const timeout = window.setTimeout(() => {
+      if (sessionOnlyPreference) {
+        window.sessionStorage.setItem(LOAD_ITEMS_SESSION_PREF_KEY, JSON.stringify(currentDocPreference));
+      } else {
+        saveDocPreference(currentDocPreference);
+      }
+    }, 300);
     return () => window.clearTimeout(timeout);
-  }, [docFilters, docSort, visibleDocCount, docScrollTop, saveDocPreference]);
+  }, [currentDocPreference, saveDocPreference, sessionOnlyPreference]);
 
   useEffect(() => {
     if (skipNextFilterReset.current) {
@@ -186,6 +208,17 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
     setVisibleDocCount(DOC_PAGE_SIZE);
     setDocScrollTop(0);
     window.requestAnimationFrame(() => docListRef.current?.scrollTo({ top: 0 }));
+  };
+
+  const toggleSessionOnlyPreference = (checked: boolean) => {
+    setSessionOnlyPreference(checked);
+    window.sessionStorage.setItem(LOAD_ITEMS_SESSION_ONLY_KEY, String(checked));
+    if (checked) {
+      window.sessionStorage.setItem(LOAD_ITEMS_SESSION_PREF_KEY, JSON.stringify(currentDocPreference));
+    } else {
+      window.sessionStorage.removeItem(LOAD_ITEMS_SESSION_PREF_KEY);
+      saveDocPreference(currentDocPreference);
+    }
   };
 
   const totalPallets = items.reduce((s, i) => s + i.pallet_count, 0);
@@ -352,7 +385,13 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
                         {isDocsUpdating && <span className="inline-flex items-center gap-1 font-medium"><Loader2 className="h-3 w-3 animate-spin" /> Atualizando...</span>}
                         {selectedDocIds.size} selecionada(s)
                       </span>
-                      <Button type="button" variant="ghost" size="sm" className="h-7 text-[11px]" onClick={reorganizeDocsLayout}>Reorganizar layout</Button>
+                      <span className="inline-flex items-center gap-2">
+                        <label className="inline-flex items-center gap-1">
+                          <Checkbox checked={sessionOnlyPreference} onCheckedChange={checked => toggleSessionOnlyPreference(checked === true)} className="h-3.5 w-3.5" />
+                          Usar apenas nesta sessão
+                        </label>
+                        <Button type="button" variant="ghost" size="sm" className="h-7 text-[11px]" onClick={reorganizeDocsLayout}>Reorganizar layout</Button>
+                      </span>
                     </div>
                     {selectedDocs.length > 0 && (
                       <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs">

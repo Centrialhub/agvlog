@@ -27,6 +27,19 @@ const DOC_PAGE_SIZE = 25;
 const FILTER_DEBOUNCE_MS = 250;
 const emptyDocFilters = { invoice: '', client: '', neighborhood: '' };
 const defaultDocPreference = { filters: emptyDocFilters, sort: 'recent' as 'recent' | 'alpha', visibleDocCount: DOC_PAGE_SIZE, visibleRecentDocCount: DOC_PAGE_SIZE, scrollTop: 0, recentScrollTop: 0 };
+const NEW_LOAD_SESSION_ONLY_KEY = 'agvlog:new-load-doc-session-only';
+const NEW_LOAD_SESSION_PREF_KEY = 'agvlog:new-load-doc-session-preference';
+
+const loadSessionOnly = () => window.sessionStorage.getItem(NEW_LOAD_SESSION_ONLY_KEY) === 'true';
+
+const loadSessionPreference = () => {
+  try {
+    const stored = window.sessionStorage.getItem(NEW_LOAD_SESSION_PREF_KEY);
+    return stored ? { ...defaultDocPreference, ...JSON.parse(stored) } : defaultDocPreference;
+  } catch {
+    return defaultDocPreference;
+  }
+};
 
 function useDebouncedValue<T>(value: T, delay: number) {
   const [debouncedValue, setDebouncedValue] = useState(value);
@@ -46,6 +59,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   const { data: clients = [] } = useClients();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [sessionOnlyPreference, setSessionOnlyPreference] = useState(loadSessionOnly);
   const [open, setOpen] = useState(false);
   const [recentDocsOpen, setRecentDocsOpen] = useState(false);
   const emptyForm = { load_number: '', vehicle_id: '', driver_id: '', origin: '', destination: '', neighborhood: '', invoice_number: '', client_id: '', client_name: '', supplier: '', notes: '' };
@@ -69,6 +83,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   const isDocPreferenceHydrated = useRef(false);
   const skipNextFilterReset = useRef(false);
   const debouncedDocFilters = useDebouncedValue(docFilters, FILTER_DEBOUNCE_MS);
+  const currentDocPreference = useMemo(() => ({ filters: docFilters, sort: docSort, visibleDocCount, visibleRecentDocCount, scrollTop: docScrollTop, recentScrollTop: recentDocScrollTop }), [docFilters, docSort, visibleDocCount, visibleRecentDocCount, docScrollTop, recentDocScrollTop]);
 
   const normalize = (value: string) => value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
@@ -125,21 +140,28 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
 
   useEffect(() => {
     if (!isDocPreferenceLoaded) return;
-    setDocFilters({ ...emptyDocFilters, ...(docPreference as any).filters });
-    setDocSort((docPreference as any).sort === 'alpha' ? 'alpha' : 'recent');
-    setVisibleDocCount(Math.max(DOC_PAGE_SIZE, Number((docPreference as any).visibleDocCount) || DOC_PAGE_SIZE));
-    setVisibleRecentDocCount(Math.max(DOC_PAGE_SIZE, Number((docPreference as any).visibleRecentDocCount) || DOC_PAGE_SIZE));
-    setDocScrollTop(Number((docPreference as any).scrollTop) || 0);
-    setRecentDocScrollTop(Number((docPreference as any).recentScrollTop) || 0);
+    const sourcePreference = sessionOnlyPreference ? loadSessionPreference() : docPreference;
+    setDocFilters({ ...emptyDocFilters, ...(sourcePreference as any).filters });
+    setDocSort((sourcePreference as any).sort === 'alpha' ? 'alpha' : 'recent');
+    setVisibleDocCount(Math.max(DOC_PAGE_SIZE, Number((sourcePreference as any).visibleDocCount) || DOC_PAGE_SIZE));
+    setVisibleRecentDocCount(Math.max(DOC_PAGE_SIZE, Number((sourcePreference as any).visibleRecentDocCount) || DOC_PAGE_SIZE));
+    setDocScrollTop(Number((sourcePreference as any).scrollTop) || 0);
+    setRecentDocScrollTop(Number((sourcePreference as any).recentScrollTop) || 0);
     skipNextFilterReset.current = true;
     isDocPreferenceHydrated.current = true;
-  }, [docPreference, isDocPreferenceLoaded]);
+  }, [docPreference, isDocPreferenceLoaded, sessionOnlyPreference]);
 
   useEffect(() => {
     if (!isDocPreferenceHydrated.current) return;
-    const timeout = window.setTimeout(() => saveDocPreference({ filters: docFilters, sort: docSort, visibleDocCount, visibleRecentDocCount, scrollTop: docScrollTop, recentScrollTop: recentDocScrollTop }), 300);
+    const timeout = window.setTimeout(() => {
+      if (sessionOnlyPreference) {
+        window.sessionStorage.setItem(NEW_LOAD_SESSION_PREF_KEY, JSON.stringify(currentDocPreference));
+      } else {
+        saveDocPreference(currentDocPreference);
+      }
+    }, 300);
     return () => window.clearTimeout(timeout);
-  }, [docFilters, docSort, visibleDocCount, visibleRecentDocCount, docScrollTop, recentDocScrollTop, saveDocPreference]);
+  }, [currentDocPreference, saveDocPreference, sessionOnlyPreference]);
 
   const filteredDocs = useMemo(() => {
     const invoice = normalize(debouncedDocFilters.invoice);
@@ -256,6 +278,17 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
       docListRef.current?.scrollTo({ top: 0 });
       recentDocListRef.current?.scrollTo({ top: 0 });
     });
+  };
+
+  const toggleSessionOnlyPreference = (checked: boolean) => {
+    setSessionOnlyPreference(checked);
+    window.sessionStorage.setItem(NEW_LOAD_SESSION_ONLY_KEY, String(checked));
+    if (checked) {
+      window.sessionStorage.setItem(NEW_LOAD_SESSION_PREF_KEY, JSON.stringify(currentDocPreference));
+    } else {
+      window.sessionStorage.removeItem(NEW_LOAD_SESSION_PREF_KEY);
+      saveDocPreference(currentDocPreference);
+    }
   };
 
   const previewValidationIssues = useMemo(() => {
@@ -672,6 +705,10 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
             <div className="flex items-center justify-between gap-3">
               <Label className="text-xs">Puxar notas</Label>
               <div className="flex items-center gap-2">
+                <label className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                  <Checkbox checked={sessionOnlyPreference} onCheckedChange={checked => toggleSessionOnlyPreference(checked === true)} className="h-3.5 w-3.5" />
+                  Usar apenas nesta sessão
+                </label>
                 {isDocsUpdating && (
                   <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
                     <Loader2 className="h-3 w-3 animate-spin" /> Atualizando...
