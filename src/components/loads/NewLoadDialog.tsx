@@ -615,7 +615,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
             )}
           </div>
           <Dialog open={recentDocsOpen} onOpenChange={setRecentDocsOpen}>
-            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+            <DialogContent className="max-w-4xl max-h-[calc(100vh-2rem)] overflow-visible">
               <DialogHeader><DialogTitle>Notas enviadas recentes</DialogTitle></DialogHeader>
               <div className="space-y-2">
                 {recentDocs.length === 0 ? (
@@ -640,7 +640,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
             </DialogContent>
           </Dialog>
           <Dialog open={!!detailsDoc} onOpenChange={(isOpen) => !isOpen && setDetailsDoc(null)}>
-            <DialogContent className="max-w-xl">
+            <DialogContent className="max-w-3xl max-h-[calc(100vh-2rem)] overflow-visible">
               <DialogHeader><DialogTitle>Detalhes da NF {detailsDoc?.invoice_number || '—'}</DialogTitle></DialogHeader>
               {detailsDoc && (
                 <div className="grid grid-cols-2 gap-3 text-sm">
