@@ -1,16 +1,20 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { useLoadItems, useCreateLoadItem, useDeleteLoadItem, useUpdateLoadItem, ITEM_STATUSES, ITEM_STATUS_LABELS, LoadItem } from '@/hooks/useLoadItems';
 import { useOrders } from '@/hooks/useOrders';
+import { useTenant } from '@/hooks/useTenant';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
-import { Plus, Trash2, AlertTriangle } from 'lucide-react';
+import { Plus, Trash2, AlertTriangle, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface LoadItemsPanelProps {
@@ -22,11 +26,16 @@ interface LoadItemsPanelProps {
 export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWeight }: LoadItemsPanelProps) {
   const { data: items = [], isLoading } = useLoadItems(loadId);
   const { data: orders = [] } = useOrders();
+  const { currentTenant } = useTenant();
+  const qc = useQueryClient();
   const createItem = useCreateLoadItem();
   const deleteItem = useDeleteLoadItem();
   const updateItem = useUpdateLoadItem();
   const { toast } = useToast();
   const [addOpen, setAddOpen] = useState(false);
+  const [mode, setMode] = useState<'note' | 'manual'>('note');
+  const [docFilters, setDocFilters] = useState({ invoice: '', client: '', neighborhood: '' });
+  const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
   const [form, setForm] = useState({
     order_id: '',
     item_description: '',
@@ -34,6 +43,43 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
     pallet_count: 0,
     weight_kg: 0,
   });
+
+  const { data: fiscalDocs = [] } = useQuery({
+    queryKey: ['load_item_pull_fiscal_docs', currentTenant?.id, addOpen],
+    queryFn: async () => {
+      if (!currentTenant) return [];
+      const { data, error } = await supabase
+        .from('fiscal_documents')
+        .select('id, invoice_number, remitter, recipient, recipient_neighborhood, recipient_city, recipient_state, pallet_count, weight_kg, product_summary, load_id, loads(id, load_number), clients(company_name)')
+        .eq('tenant_id', currentTenant.id)
+        .eq('document_type', 'inbound')
+        .order('created_at', { ascending: false })
+        .limit(1000);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentTenant && addOpen,
+  });
+
+  const normalize = (value: string) => value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const filteredDocs = useMemo(() => {
+    const invoice = normalize(docFilters.invoice);
+    const invoiceDigits = docFilters.invoice.replace(/\D/g, '');
+    const client = normalize(docFilters.client);
+    const neighborhood = normalize(docFilters.neighborhood);
+    const currentDocIds = new Set(items.map(item => item.fiscal_document_id).filter(Boolean));
+    return fiscalDocs.filter((doc: any) => {
+      if (currentDocIds.has(doc.id)) return false;
+      const docInvoice = normalize(doc.invoice_number || '');
+      const docInvoiceDigits = String(doc.invoice_number || '').replace(/\D/g, '');
+      const docClient = normalize(doc.clients?.company_name || doc.recipient || '');
+      const docNeighborhood = normalize(doc.recipient_neighborhood || '');
+      if (invoice && !docInvoice.includes(invoice) && (!invoiceDigits || !docInvoiceDigits.includes(invoiceDigits))) return false;
+      if (client && !docClient.includes(client)) return false;
+      if (neighborhood && !docNeighborhood.includes(neighborhood)) return false;
+      return true;
+    });
+  }, [docFilters, fiscalDocs, items]);
 
   const totalPallets = items.reduce((s, i) => s + i.pallet_count, 0);
   const totalWeight = items.reduce((s, i) => s + (i.weight_kg || 0), 0);
@@ -43,6 +89,47 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
   const isOverWeight = weightOccupancy !== null && weightOccupancy > 100;
 
   const handleAdd = async () => {
+    if (mode === 'note') {
+      const docs = fiscalDocs.filter((doc: any) => selectedDocIds.has(doc.id));
+      if (docs.length === 0) {
+        toast({ title: 'Selecione ao menos uma NF', variant: 'destructive' });
+        return;
+      }
+      const newPallets = totalPallets + docs.reduce((sum: number, doc: any) => sum + (Number(doc.pallet_count) || 0), 0);
+      if (vehicleMaxPallets && newPallets > vehicleMaxPallets) {
+        toast({ title: 'Capacidade excedida', description: `Máx: ${vehicleMaxPallets} paletes. Atual + novo: ${newPallets}`, variant: 'destructive' });
+        return;
+      }
+      try {
+        const previousLoadIds = Array.from(new Set(docs.map((doc: any) => doc.load_id).filter(Boolean)));
+        const docIds = docs.map((doc: any) => doc.id);
+        await (supabase as any).from('load_items').delete().eq('tenant_id', currentTenant!.id).in('fiscal_document_id', docIds);
+        await supabase.from('fiscal_documents').update({ load_id: loadId, updated_at: new Date().toISOString() } as any).in('id', docIds);
+        const { error: insertError } = await (supabase as any).from('load_items').insert(docs.map((doc: any) => ({
+          tenant_id: currentTenant!.id,
+          load_id: loadId,
+          fiscal_document_id: doc.id,
+          item_description: doc.product_summary || `NF ${doc.invoice_number || ''}`.trim(),
+          quantity: 1,
+          pallet_count: Number(doc.pallet_count) || 0,
+          weight_kg: Number(doc.weight_kg) || 0,
+          status: 'pending',
+        })));
+        if (insertError) throw insertError;
+        await refreshLoadTotals([...previousLoadIds, loadId]);
+        setAddOpen(false);
+        setSelectedDocIds(new Set());
+        setDocFilters({ invoice: '', client: '', neighborhood: '' });
+        qc.invalidateQueries({ queryKey: ['load_items'] });
+        qc.invalidateQueries({ queryKey: ['load_documents'] });
+        qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
+        toast({ title: 'NF(s) puxada(s) para a carga' });
+      } catch (e: any) {
+        toast({ title: 'Erro', description: e.message, variant: 'destructive' });
+      }
+      return;
+    }
+
     const newPallets = totalPallets + form.pallet_count;
     if (vehicleMaxPallets && newPallets > vehicleMaxPallets) {
       toast({ title: 'Capacidade excedida', description: `Máx: ${vehicleMaxPallets} paletes. Atual + novo: ${newPallets}`, variant: 'destructive' });
@@ -60,6 +147,41 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
       setAddOpen(false);
       setForm({ order_id: '', item_description: '', quantity: 0, pallet_count: 0, weight_kg: 0 });
       toast({ title: 'Item adicionado' });
+    } catch (e: any) {
+      toast({ title: 'Erro', description: e.message, variant: 'destructive' });
+    }
+  };
+
+  const refreshLoadTotals = async (loadIds: string[]) => {
+    const uniqueLoadIds = Array.from(new Set(loadIds.filter(Boolean)));
+    await Promise.all(uniqueLoadIds.map(async id => {
+      const { data, error } = await (supabase as any).from('load_items').select('pallet_count, weight_kg, volume_m3').eq('load_id', id);
+      if (error) throw error;
+      const totals = (data || []).reduce((acc: any, item: any) => ({
+        pallet_count: acc.pallet_count + (Number(item.pallet_count) || 0),
+        weight_kg: acc.weight_kg + (Number(item.weight_kg) || 0),
+        volume_m3: acc.volume_m3 + (Number(item.volume_m3) || 0),
+      }), { pallet_count: 0, weight_kg: 0, volume_m3: 0 });
+      const { error: updateError } = await supabase.from('loads').update({
+        total_pallet_count: totals.pallet_count,
+        total_weight_kg: totals.weight_kg,
+        total_volume_m3: totals.volume_m3,
+        updated_at: new Date().toISOString(),
+      } as any).eq('id', id);
+      if (updateError) throw updateError;
+    }));
+  };
+
+  const handleDelete = async (item: LoadItem) => {
+    try {
+      await deleteItem.mutateAsync(item.id);
+      if (item.fiscal_document_id) {
+        await supabase.from('fiscal_documents').update({ load_id: null, updated_at: new Date().toISOString() } as any).eq('id', item.fiscal_document_id);
+      }
+      await refreshLoadTotals([loadId]);
+      qc.invalidateQueries({ queryKey: ['load_documents'] });
+      qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
+      toast({ title: 'NF removida da carga e da geração de CT-e' });
     } catch (e: any) {
       toast({ title: 'Erro', description: e.message, variant: 'destructive' });
     }
@@ -90,9 +212,42 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
             <DialogTrigger asChild>
               <Button size="sm"><Plus className="h-3 w-3 mr-1" /> Adicionar Item</Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-3xl">
               <DialogHeader><DialogTitle>Adicionar Item à Carga</DialogTitle></DialogHeader>
               <div className="space-y-4">
+                <div className="flex gap-2 rounded-md bg-muted p-1">
+                  <Button type="button" variant={mode === 'note' ? 'secondary' : 'ghost'} size="sm" className="flex-1" onClick={() => setMode('note')}>Puxar NF</Button>
+                  <Button type="button" variant={mode === 'manual' ? 'secondary' : 'ghost'} size="sm" className="flex-1" onClick={() => setMode('manual')}>Item manual</Button>
+                </div>
+                {mode === 'note' ? (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="relative">
+                        <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input value={docFilters.invoice} onChange={e => setDocFilters(f => ({ ...f, invoice: e.target.value }))} placeholder="Nº NF" className="pl-8" />
+                      </div>
+                      <Input value={docFilters.client} onChange={e => setDocFilters(f => ({ ...f, client: e.target.value }))} placeholder="Cliente" />
+                      <Input value={docFilters.neighborhood} onChange={e => setDocFilters(f => ({ ...f, neighborhood: e.target.value }))} placeholder="Bairro" />
+                    </div>
+                    <div className="space-y-1">
+                      {filteredDocs.length === 0 ? (
+                        <div className="rounded-md border border-border py-6 text-center text-sm text-muted-foreground">Nenhuma NF disponível para esses filtros</div>
+                      ) : filteredDocs.slice(0, 12).map((doc: any) => {
+                        const isSelected = selectedDocIds.has(doc.id);
+                        return (
+                          <button key={doc.id} type="button" onClick={() => setSelectedDocIds(prev => { const next = new Set(prev); next.has(doc.id) ? next.delete(doc.id) : next.add(doc.id); return next; })} className="flex w-full items-start gap-2 rounded-md border border-border px-3 py-2 text-left hover:bg-muted/60">
+                            <Checkbox checked={isSelected} className="mt-0.5" />
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-sm font-medium">NF {doc.invoice_number || '—'} · {doc.clients?.company_name || doc.recipient || 'Sem cliente'}</span>
+                              <span className="block text-xs text-muted-foreground">{doc.recipient_neighborhood || 'Sem bairro'} · {doc.pallet_count || 0} pal · {doc.weight_kg || 0} kg{doc.load_id ? ` · sairá da carga ${doc.loads?.load_number || 'atual'}` : ''}</span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <>
                 <div>
                   <Label>Pedido (opcional)</Label>
                   <Select value={form.order_id || '__none__'} onValueChange={v => setForm(f => ({ ...f, order_id: v === '__none__' ? '' : v }))}>
@@ -113,9 +268,11 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
                   <div><Label>Paletes</Label><Input type="number" value={form.pallet_count} onChange={e => setForm(f => ({ ...f, pallet_count: parseInt(e.target.value) || 0 }))} /></div>
                   <div><Label>Peso (kg)</Label><Input type="number" value={form.weight_kg} onChange={e => setForm(f => ({ ...f, weight_kg: parseFloat(e.target.value) || 0 }))} /></div>
                 </div>
+                  </>
+                )}
                 <div className="flex gap-2 justify-end">
                   <Button variant="outline" onClick={() => setAddOpen(false)}>Cancelar</Button>
-                  <Button onClick={handleAdd} disabled={createItem.isPending}>Adicionar</Button>
+                  <Button onClick={handleAdd} disabled={createItem.isPending}>{mode === 'note' ? 'Puxar NF(s)' : 'Adicionar'}</Button>
                 </div>
               </div>
             </DialogContent>
@@ -197,7 +354,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
                   </Select>
                 </TableCell>
                 <TableCell>
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => deleteItem.mutate(item.id)}>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDelete(item)}>
                     <Trash2 className="h-3 w-3 text-destructive" />
                   </Button>
                 </TableCell>

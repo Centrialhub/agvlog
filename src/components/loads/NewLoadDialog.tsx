@@ -447,9 +447,9 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
       <DialogTrigger asChild>
         <Button size="sm"><Plus className="h-4 w-4 mr-1" /> Nova Carga</Button>
       </DialogTrigger>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-5xl max-h-[calc(100vh-2rem)] overflow-visible p-5">
         <DialogHeader><DialogTitle>Nova Carga</DialogTitle></DialogHeader>
-        <div className="space-y-4">
+        <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div><Label className="text-xs">Nº Carga *</Label><Input value={form.load_number} onChange={e => { setLoadNumberTouched(true); setForm(f => ({ ...f, load_number: e.target.value })); }} placeholder="1000" /></div>
             <div>
@@ -541,7 +541,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
               <Input value={docFilters.client} onChange={e => setDocFilters(f => ({ ...f, client: e.target.value }))} placeholder="Cliente" className="h-9" />
               <Input value={docFilters.neighborhood} onChange={e => setDocFilters(f => ({ ...f, neighborhood: e.target.value }))} placeholder="Bairro" className="h-9" />
             </div>
-            <div className="max-h-40 overflow-y-auto space-y-1">
+            <div className="space-y-1">
               {filteredDocs.length === 0 ? (
                 <div className="text-xs text-muted-foreground py-3 text-center">Nenhuma nota encontrada para esses filtros</div>
               ) : selectableFilteredDocs.length === 0 && linkedFilteredDocs.length > 0 ? (
@@ -615,7 +615,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
             )}
           </div>
           <Dialog open={recentDocsOpen} onOpenChange={setRecentDocsOpen}>
-            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+            <DialogContent className="max-w-4xl max-h-[calc(100vh-2rem)] overflow-visible">
               <DialogHeader><DialogTitle>Notas enviadas recentes</DialogTitle></DialogHeader>
               <div className="space-y-2">
                 {recentDocs.length === 0 ? (
@@ -640,7 +640,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
             </DialogContent>
           </Dialog>
           <Dialog open={!!detailsDoc} onOpenChange={(isOpen) => !isOpen && setDetailsDoc(null)}>
-            <DialogContent className="max-w-xl">
+            <DialogContent className="max-w-3xl max-h-[calc(100vh-2rem)] overflow-visible">
               <DialogHeader><DialogTitle>Detalhes da NF {detailsDoc?.invoice_number || '—'}</DialogTitle></DialogHeader>
               {detailsDoc && (
                 <div className="grid grid-cols-2 gap-3 text-sm">
