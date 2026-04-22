@@ -31,7 +31,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   const [open, setOpen] = useState(false);
   const emptyForm = { load_number: '', vehicle_id: '', driver_id: '', origin: '', destination: '', neighborhood: '', invoice_number: '', client_id: '', client_name: '', supplier: '', notes: '' };
   const [form, setForm] = useState(emptyForm);
-  const [docSearch, setDocSearch] = useState('');
+  const [docFilters, setDocFilters] = useState({ invoice: '', client: '', neighborhood: '' });
   const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
   const [previewDoc, setPreviewDoc] = useState<any | null>(null);
 
@@ -54,13 +54,19 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   });
 
   const filteredDocs = useMemo(() => {
-    const q = docSearch.trim().toLowerCase();
+    const invoice = normalize(docFilters.invoice);
+    const client = normalize(docFilters.client);
+    const neighborhood = normalize(docFilters.neighborhood);
     return fiscalDocs.filter((doc: any) => {
-      if (!q) return true;
-      return [doc.invoice_number, doc.recipient, doc.remitter, doc.recipient_neighborhood, doc.clients?.company_name]
-        .some(value => String(value || '').toLowerCase().includes(q));
+      const docInvoice = normalize(doc.invoice_number || '');
+      const docClient = normalize(doc.clients?.company_name || doc.recipient || '');
+      const docNeighborhood = normalize(doc.recipient_neighborhood || '');
+      if (invoice && !docInvoice.includes(invoice)) return false;
+      if (client && !docClient.includes(client)) return false;
+      if (neighborhood && !docNeighborhood.includes(neighborhood)) return false;
+      return true;
     });
-  }, [docSearch, fiscalDocs]);
+  }, [docFilters, fiscalDocs]);
 
   const selectedDocs = useMemo(() => fiscalDocs.filter((doc: any) => selectedDocIds.has(doc.id)), [fiscalDocs, selectedDocIds]);
 
@@ -221,7 +227,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
       toast({ title: 'Carga criada' });
       setOpen(false);
       setForm(emptyForm);
-      setDocSearch('');
+      setDocFilters({ invoice: '', client: '', neighborhood: '' });
       setSelectedDocIds(new Set());
       setPreviewDoc(null);
       queryClient.invalidateQueries({ queryKey: ['fiscal_documents'] });
@@ -304,9 +310,13 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
               <Label className="text-xs">Puxar notas disponíveis</Label>
               <span className="text-[11px] text-muted-foreground">{selectedDocIds.size} selecionada(s)</span>
             </div>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input value={docSearch} onChange={e => setDocSearch(e.target.value)} placeholder="Buscar por NF, cliente, fornecedor ou bairro" className="pl-9 h-9" />
+            <div className="grid grid-cols-3 gap-2">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input value={docFilters.invoice} onChange={e => setDocFilters(f => ({ ...f, invoice: e.target.value }))} placeholder="Nº NF" className="pl-9 h-9" />
+              </div>
+              <Input value={docFilters.client} onChange={e => setDocFilters(f => ({ ...f, client: e.target.value }))} placeholder="Cliente" className="h-9" />
+              <Input value={docFilters.neighborhood} onChange={e => setDocFilters(f => ({ ...f, neighborhood: e.target.value }))} placeholder="Bairro" className="h-9" />
             </div>
             <div className="max-h-40 overflow-y-auto space-y-1">
               {filteredDocs.length === 0 ? (
