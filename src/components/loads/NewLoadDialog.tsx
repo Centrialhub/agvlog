@@ -128,11 +128,6 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     };
   };
 
-  const applyAggregatedSelection = (docIds: Set<string>) => {
-    const docs = fiscalDocs.filter((doc: any) => docIds.has(doc.id));
-    setForm(f => ({ ...f, ...buildAggregatedFields(docs) }));
-  };
-
   const validationSuggestions = useMemo(() => {
     const primaryDoc: any = selectedDocs[0];
     const knownNeighborhoods = new Set(fiscalDocs.map((doc: any) => normalize(doc.recipient_neighborhood || '')).filter(Boolean));
@@ -208,6 +203,22 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
       delete next[docId];
       return next;
     });
+  };
+
+  const selectFilteredDocs = () => {
+    const nextIds = new Set([...Array.from(selectedDocIds), ...filteredDocs.map((doc: any) => doc.id)]);
+    const nextSnapshots = filteredDocs.reduce((acc, doc: any) => ({ ...acc, [doc.id]: getDocAutofillFields(doc) }), docAutofillSnapshots);
+    setSelectedDocIds(nextIds);
+    setDocAutofillSnapshots(nextSnapshots);
+    setForm(f => ({ ...f, ...buildAggregatedFields(fiscalDocs.filter((doc: any) => nextIds.has(doc.id))) }));
+    setPreviewDoc(null);
+  };
+
+  const clearDocSelection = () => {
+    setSelectedDocIds(new Set());
+    setDocAutofillSnapshots({});
+    setForm(f => ({ ...f, invoice_number: '', client_name: '', supplier: '', neighborhood: '', destination: '' }));
+    setPreviewDoc(null);
   };
 
   const handleSave = async () => {
