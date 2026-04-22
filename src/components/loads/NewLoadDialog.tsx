@@ -521,7 +521,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
                     <AlertTriangle className="h-4 w-4" /> NF já vinculada a outra carga
                   </div>
                   <div className="text-center text-muted-foreground">
-                    A nota foi encontrada, mas não aparece como disponível porque já está vinculada.
+                    A nota foi encontrada e pode ser reatribuída para a nova carga. Ela sairá da carga antiga ao criar.
                   </div>
                   <div className="mt-2 flex flex-wrap justify-center gap-2">
                     {linkedFilteredDocs.map((doc: any) => {
@@ -537,13 +537,14 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
               ) : filteredDocs.map((doc: any) => {
                 const isSelected = selectedDocIds.has(doc.id);
                 const isLinked = !!doc.load_id;
+                const linkedLoad = getLinkedLoad(doc);
                 return (
                 <div key={doc.id} className="flex items-start gap-2 rounded-md border border-border px-2 py-2 hover:bg-muted/60">
-                  <button type="button" onClick={() => isLinked ? undefined : isSelected ? removeDocSelection(doc.id) : setPreviewDoc(doc)} disabled={isLinked} className="flex min-w-0 flex-1 items-start gap-2 text-left disabled:cursor-not-allowed disabled:opacity-60">
+                  <button type="button" onClick={() => isSelected ? removeDocSelection(doc.id) : setPreviewDoc(doc)} className="flex min-w-0 flex-1 items-start gap-2 text-left">
                     <Checkbox checked={isSelected} className="mt-0.5" />
                     <span className="min-w-0 flex-1">
                       <span className="block text-xs font-medium">NF {doc.invoice_number || '—'} · {doc.clients?.company_name || doc.recipient || 'Sem cliente'}</span>
-                       <span className="block truncate text-[11px] text-muted-foreground">{doc.remitter || 'Fornecedor não informado'} · {doc.recipient_neighborhood || 'Sem bairro'}{isLinked ? ` · Já vinculada à carga ${getLinkedLoad(doc)?.load_number || ''}` : ''}</span>
+                       <span className="block truncate text-[11px] text-muted-foreground">{doc.remitter || 'Fornecedor não informado'} · {doc.recipient_neighborhood || 'Sem bairro'}{isLinked ? ` · Será reatribuída da carga ${linkedLoad?.load_number || 'atual'}` : ''}</span>
                     </span>
                   </button>
                   <Button type="button" variant="outline" size="sm" className="h-7 shrink-0 gap-1 text-[11px]" onClick={() => setDetailsDoc(doc)}>
