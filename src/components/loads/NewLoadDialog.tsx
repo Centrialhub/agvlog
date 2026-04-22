@@ -446,7 +446,9 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
             </div>
             <div className="grid grid-cols-3 gap-2">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <button type="button" onClick={() => setRecentDocsOpen(true)} className="absolute left-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground" title="Abrir notas recentes">
+                  <Search className="h-4 w-4" />
+                </button>
                 <Input value={docFilters.invoice} onChange={e => setDocFilters(f => ({ ...f, invoice: e.target.value }))} placeholder="Nº NF" className="pl-9 h-9" />
               </div>
               <Input value={docFilters.client} onChange={e => setDocFilters(f => ({ ...f, client: e.target.value }))} placeholder="Cliente" className="h-9" />
@@ -499,6 +501,29 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
               </div>
             )}
           </div>
+          <Dialog open={recentDocsOpen} onOpenChange={setRecentDocsOpen}>
+            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+              <DialogHeader><DialogTitle>Notas enviadas recentes</DialogTitle></DialogHeader>
+              <div className="space-y-2">
+                {recentDocs.length === 0 ? (
+                  <div className="text-sm text-muted-foreground py-6 text-center">Nenhuma nota recente disponível</div>
+                ) : recentDocs.map((doc: any) => {
+                  const isSelected = selectedDocIds.has(doc.id);
+                  return (
+                    <button key={doc.id} type="button" onClick={() => isSelected ? removeDocSelection(doc.id) : applyDocSelection(doc)} className="w-full rounded-md border border-border px-3 py-2 text-left hover:bg-muted/60">
+                      <div className="flex items-start gap-3">
+                        <Checkbox checked={isSelected} className="mt-0.5" />
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-medium">NF {doc.invoice_number || '—'} · {doc.clients?.company_name || doc.recipient || 'Sem cliente'}</div>
+                          <div className="text-xs text-muted-foreground truncate">{doc.remitter || 'Fornecedor não informado'} · {doc.recipient_neighborhood || 'Sem bairro'} · {[doc.recipient_city, doc.recipient_state].filter(Boolean).join(' / ') || 'Sem cidade'}</div>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </DialogContent>
+          </Dialog>
           <div><Label className="text-xs">Observações</Label><Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2} /></div>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
