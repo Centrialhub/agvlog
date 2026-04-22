@@ -337,6 +337,12 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
       const docIds = [...selectedDocIdList, ...(manualDocId ? [manualDocId] : [])];
       if (docIds.length > 0) {
         if (selectedDocIdList.length > 0) {
+          const { error: unlinkItemsError } = await (supabase as any)
+            .from('load_items')
+            .delete()
+            .in('fiscal_document_id', selectedDocIdList);
+          if (unlinkItemsError) throw unlinkItemsError;
+
           const { error: linkError } = await supabase.from('fiscal_documents').update({ load_id: load.id } as any).in('id', selectedDocIdList);
           if (linkError) throw linkError;
           const auditEvents = selectedDocIdList.map(docId => {
@@ -453,7 +459,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
           </div>
           {selectedDocIds.size > 0 && (
             <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-[11px] text-muted-foreground">
-              Nota vinculada: os campos preenchidos automaticamente podem ser editados sem perder o vínculo.
+              Nota vinculada: ao criar, notas já roteirizadas sairão da carga antiga e entrarão nesta nova carga.
             </div>
           )}
           <div className="grid grid-cols-2 gap-3">
@@ -487,7 +493,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
           )}
           <div className="space-y-2 rounded-md border border-border p-3">
             <div className="flex items-center justify-between gap-3">
-              <Label className="text-xs">Puxar notas disponíveis</Label>
+              <Label className="text-xs">Puxar notas</Label>
               <div className="flex items-center gap-2">
                 <span className="text-[11px] text-muted-foreground">{selectedDocIds.size} selecionada(s)</span>
                 {selectableFilteredDocs.length > 0 && (
