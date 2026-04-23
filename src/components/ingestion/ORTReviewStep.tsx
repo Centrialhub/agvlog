@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, Files, History, HelpCircle, Package, ReceiptText, Users } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, Files, History, HelpCircle, MapPin, Package, Phone, ReceiptText, Undo2, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -27,6 +27,16 @@ export interface OrtAuditEntry {
   newValue: string;
   changedAt: string; // ISO
   changedBy: string; // email or user id
+}
+
+export interface OrtApplyHistoryEntry {
+  type: 'contact' | 'address';
+  appliedAt: string;
+  label: string;
+  /** Snapshot of fields BEFORE the application (used to undo) */
+  previousValues: Record<string, string>;
+  /** Snapshot of fields AFTER the application */
+  newValues: Record<string, string>;
 }
 
 export interface OrtReviewDocument {
@@ -63,6 +73,7 @@ export interface OrtReviewDocument {
   mergedFrom?: number;
   unknownFields?: string[];
   auditLog?: OrtAuditEntry[];
+  appliedHistory?: OrtApplyHistoryEntry[];
 }
 
 interface ORTReviewStepProps {
