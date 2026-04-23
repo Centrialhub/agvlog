@@ -208,6 +208,18 @@ export default function ClientContactPicker({
   return (
     <Card className="border-dashed bg-muted/20">
       <CardContent className="space-y-3 p-3">
+        {phoneVsCnpjConflict && (
+          <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 p-2 text-[11px] text-warning">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <div className="flex-1">
+              <p className="font-medium">Conflito CNPJ × telefone</p>
+              <p className="opacity-90">
+                CNPJ aponta para <strong>{cnpjMatch?.company_name}</strong>, mas o telefone {phoneDigits} já está cadastrado em{' '}
+                <strong>{phoneMatches.map(c => c.company_name).join(', ')}</strong>. Escolha qual cliente vincular.
+              </p>
+            </div>
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-2">
           <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
