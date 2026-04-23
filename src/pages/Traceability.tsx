@@ -134,7 +134,7 @@ export default function Traceability() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState({
-    invoice: '', ctrc: '', client: '', plate: '', driver: '', start: '', end: '', status: 'all', pod: 'all', canhoto: 'all', occurrence: '',
+    invoice: '', loadNumber: '', clientRef: '', client: '', supplier: '', plate: '', driver: '', start: '', end: '', deliveryStart: '', deliveryEnd: '', status: 'all', pod: 'all', canhoto: 'all', occurrence: '', payment: '',
   });
   const [selectedRow, setSelectedRow] = useState<TraceRow | null>(null);
   const [eventForm, setEventForm] = useState({ type: 'other', severity: 'medium', status: 'no_change', description: '' });
