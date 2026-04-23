@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { isUnknown, UNKNOWN } from '@/lib/ortFieldFallbacks';
 import ClientContactPicker from './ClientContactPicker';
+import { cn } from '@/lib/utils';
 
 export interface OrtReviewItem {
   description: string;
