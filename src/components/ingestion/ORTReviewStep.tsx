@@ -42,6 +42,14 @@ export interface OrtApplyHistoryEntry {
   newValues: Record<string, string>;
   /** Reference key written into the unified document on apply (for audit/reuse) */
   refKey?: string;
+  /**
+   * For replays: which compatibility rule resolved the live record.
+   * 'exact' means the live refKey still matches; 'snapshot' means no live
+   * record was found and we fell back to the stored values.
+   */
+  matchRule?: 'exact' | 'phone-tail' | 'email-local' | 'name-token' | 'zip' | 'street-city' | 'snapshot';
+  /** Field names that actually differed between snapshot and live record. */
+  changedFields?: string[];
 }
 
 export interface OrtReviewDocument {
@@ -395,12 +403,14 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm, clien
                             const liveContacts: any[] = Array.isArray(liveClient?.contacts) ? liveClient!.contacts : [];
                             const liveAddresses: any[] = Array.isArray(liveClient?.addresses) ? liveClient!.addresses : [];
 
-                            const liveContact = lastContact
+                            const liveContactMatch = lastContact
                               ? findContactByKey(liveContacts, lastContact.refKey)
                               : null;
-                            const liveAddress = lastAddress
+                            const liveAddressMatch = lastAddress
                               ? findAddressByKey(liveAddresses, lastAddress.refKey)
                               : null;
+                            const liveContact = liveContactMatch?.value || null;
+                            const liveAddress = liveAddressMatch?.value || null;
 
                             const contactNew = liveContact
                               ? { recipientPhone: String(liveContact.phone || lastContact!.newValues.recipientPhone || '') }
@@ -419,29 +429,47 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm, clien
                             const merged: Record<string, string> = { ...contactNew, ...addressNew };
                             const replay: OrtApplyHistoryEntry[] = [];
                             const nowIso = new Date().toISOString();
-                            const sourceTag = (live: unknown, exactKey: string | undefined, refKey: string | undefined) =>
-                              live ? (exactKey === refKey ? 'cadastro' : 'compatível') : 'snapshot';
+
+                            const ruleLabel: Record<string, string> = {
+                              'exact': 'cadastro (exato)',
+                              'phone-tail': 'compatível (telefone)',
+                              'email-local': 'compatível (email)',
+                              'name-token': 'compatível (nome)',
+                              'zip': 'compatível (CEP)',
+                              'street-city': 'compatível (rua+cidade)',
+                              'snapshot': 'snapshot (sem cadastro)',
+                            };
+                            const diff = (snap: Record<string, string>, next: Record<string, string>) => {
+                              const keys = new Set([...Object.keys(snap || {}), ...Object.keys(next || {})]);
+                              const out: string[] = [];
+                              keys.forEach(k => {
+                                if (String(snap?.[k] ?? '').trim() !== String(next?.[k] ?? '').trim()) out.push(k);
+                              });
+                              return out;
+                            };
 
                             if (lastContact) {
-                              const exactKey = liveContact ? makeContactKey(liveContact) : undefined;
-                              const tag = sourceTag(liveContact, exactKey, lastContact.refKey);
+                              const matchRule = (liveContactMatch?.rule || 'snapshot') as OrtApplyHistoryEntry['matchRule'];
+                              const changedFields = diff(lastContact.newValues || {}, contactNew);
                               replay.push({
                                 ...lastContact,
                                 appliedAt: nowIso,
-                                label: `↻ ${lastContact.label} · ${tag}`,
+                                label: `↻ ${lastContact.label} · ${ruleLabel[matchRule!] || matchRule}`,
                                 previousValues: { recipientPhone: doc.recipientPhone || '' },
                                 newValues: contactNew,
                                 // Preserve the ORIGINAL refKey for audit even when we matched a partial.
                                 refKey: lastContact.refKey,
+                                matchRule,
+                                changedFields,
                               });
                             }
                             if (lastAddress) {
-                              const exactKey = liveAddress ? makeAddressKey(liveAddress) : undefined;
-                              const tag = sourceTag(liveAddress, exactKey, lastAddress.refKey);
+                              const matchRule = (liveAddressMatch?.rule || 'snapshot') as OrtApplyHistoryEntry['matchRule'];
+                              const changedFields = diff(lastAddress.newValues || {}, addressNew);
                               replay.push({
                                 ...lastAddress,
                                 appliedAt: nowIso,
-                                label: `↻ ${lastAddress.label} · ${tag}`,
+                                label: `↻ ${lastAddress.label} · ${ruleLabel[matchRule!] || matchRule}`,
                                 previousValues: {
                                   recipientAddress: doc.recipientAddress || '',
                                   recipientAddressNumber: doc.recipientAddressNumber || '',
@@ -452,6 +480,8 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm, clien
                                 },
                                 newValues: addressNew,
                                 refKey: lastAddress.refKey,
+                                matchRule,
+                                changedFields,
                               });
                             }
                             onUpdate(index, {
@@ -539,6 +569,27 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm, clien
                                   {doc.linkedClientId && (
                                     <code className="rounded bg-muted px-1 py-px text-[9px] text-foreground/60" title="cliente vinculado">
                                       cliente:{doc.linkedClientId.slice(0, 8)}
+                                    </code>
+                                  )}
+                                  {entry.matchRule && (
+                                    <code
+                                      className={cn(
+                                        'rounded px-1 py-px text-[9px]',
+                                        entry.matchRule === 'exact' ? 'bg-success/15 text-success' :
+                                        entry.matchRule === 'snapshot' ? 'bg-warning/15 text-warning' :
+                                        'bg-info/15 text-info'
+                                      )}
+                                      title="Regra de compatibilidade usada na reaplicação"
+                                    >
+                                      regra:{entry.matchRule}
+                                    </code>
+                                  )}
+                                  {entry.changedFields && entry.changedFields.length > 0 && (
+                                    <code
+                                      className="rounded bg-warning/10 px-1 py-px text-[9px] text-warning"
+                                      title={`Campos diferentes do snapshot:\n${entry.changedFields.join(', ')}`}
+                                    >
+                                      Δ {entry.changedFields.length}: {entry.changedFields.slice(0, 3).join(', ')}{entry.changedFields.length > 3 ? '…' : ''}
                                     </code>
                                   )}
                                 </div>
