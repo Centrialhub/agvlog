@@ -462,6 +462,85 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm, clien
                     </Badge>
                   ))}
                 </div>
+                <Collapsible className="mt-2">
+                  <CollapsibleTrigger asChild>
+                    <Button variant="ghost" size="sm" className="h-6 gap-1.5 px-2 text-[10px] text-muted-foreground hover:text-foreground">
+                      <History className="h-3 w-3" /> Histórico detalhado
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="mt-1.5">
+                    <div className="rounded-md border border-border bg-background/60 p-2">
+                      <div className="max-h-64 space-y-1 overflow-y-auto">
+                        {doc.appliedHistory!.slice().reverse().map((entry, displayIdx) => {
+                          const realIdx = doc.appliedHistory!.length - 1 - displayIdx;
+                          return (
+                            <div
+                              key={`${entry.appliedAt}-${realIdx}`}
+                              className="grid grid-cols-[auto_1fr_auto] items-start gap-2 rounded-sm border border-border/40 bg-muted/30 p-1.5 text-[10px]"
+                            >
+                              <span className={cn(
+                                'mt-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full',
+                                entry.type === 'contact' ? 'bg-primary/15 text-primary' : 'bg-info/15 text-info'
+                              )}>
+                                {entry.type === 'contact' ? <Phone className="h-2.5 w-2.5" /> : <MapPin className="h-2.5 w-2.5" />}
+                              </span>
+                              <div className="min-w-0 space-y-0.5">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <span className="font-medium text-foreground">{entry.label}</span>
+                                  <span className="text-muted-foreground">·</span>
+                                  <span className="text-muted-foreground">{entry.type === 'contact' ? 'Contato' : 'Endereço'}</span>
+                                </div>
+                                <div className="flex flex-wrap gap-1 text-muted-foreground">
+                                  {entry.refKey && (
+                                    <code className="rounded bg-muted px-1 py-px text-[9px] text-foreground/80" title="refKey deduplicada">
+                                      {entry.refKey}
+                                    </code>
+                                  )}
+                                  {doc.linkedClientId && (
+                                    <code className="rounded bg-muted px-1 py-px text-[9px] text-foreground/60" title="cliente vinculado">
+                                      cliente:{doc.linkedClientId.slice(0, 8)}
+                                    </code>
+                                  )}
+                                </div>
+                                <div className="text-muted-foreground" title={entry.appliedAt}>
+                                  {new Date(entry.appliedAt).toLocaleString('pt-BR', {
+                                    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
+                                  })}
+                                </div>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 gap-1 px-1.5 text-[10px]"
+                                title="Desfazer apenas este evento"
+                                onClick={() => {
+                                  const history = doc.appliedHistory || [];
+                                  const target = history[realIdx];
+                                  if (!target) return;
+                                  const remaining = [...history.slice(0, realIdx), ...history.slice(realIdx + 1)];
+                                  // Recalculate the linked keys from whatever events of the same type remain.
+                                  const lastSameType = [...remaining].reverse().find(e => e.type === target.type);
+                                  const updates: Partial<OrtReviewDocument> & Record<string, any> = {
+                                    ...target.previousValues,
+                                    appliedHistory: remaining,
+                                  };
+                                  if (target.type === 'contact') {
+                                    updates.linkedContactKey = lastSameType?.refKey || null;
+                                  } else {
+                                    updates.linkedAddressKey = lastSameType?.refKey || null;
+                                  }
+                                  onUpdate(index, updates);
+                                }}
+                              >
+                                <Undo2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
               </div>
             )}
             <div className="grid grid-cols-1 gap-3 md:grid-cols-[2fr_80px_120px_1fr]">
