@@ -198,7 +198,10 @@ export default function Traceability() {
     return rows.filter(row => {
       const doc = row.doc;
       if (filters.invoice && !q(doc.invoice_number, filters.invoice)) return false;
-      if (filters.ctrc && !q(doc.loads?.load_number || doc.access_key, filters.ctrc)) return false;
+      if (filters.loadNumber && !q(doc.loads?.load_number, filters.loadNumber)) return false;
+      if (filters.clientRef && !q(doc.orders?.order_number, filters.clientRef)) return false;
+      if (filters.supplier && !q(doc.remitter, filters.supplier)) return false;
+      if (filters.payment && !q(doc.orders?.payment_plan, filters.payment)) return false;
       if (filters.client && !q(doc.clients?.company_name || doc.recipient, filters.client)) return false;
       if (filters.plate && !q(doc.loads?.vehicles?.plate, filters.plate)) return false;
       if (filters.driver && !q(doc.loads?.drivers?.name, filters.driver)) return false;
@@ -208,6 +211,12 @@ export default function Traceability() {
       if (filters.canhoto !== 'all' && (filters.canhoto === 'yes') !== (row.siatStatus === 'delivered')) return false;
       if (filters.start && (!doc.issue_date || doc.issue_date < filters.start)) return false;
       if (filters.end && (!doc.issue_date || doc.issue_date > filters.end)) return false;
+      if (filters.deliveryStart || filters.deliveryEnd) {
+        const arr = row.stops.at(-1)?.actual_arrival_at;
+        const arrDate = arr ? arr.slice(0, 10) : '';
+        if (filters.deliveryStart && (!arrDate || arrDate < filters.deliveryStart)) return false;
+        if (filters.deliveryEnd && (!arrDate || arrDate > filters.deliveryEnd)) return false;
+      }
       return true;
     });
   }, [filters, rows]);
