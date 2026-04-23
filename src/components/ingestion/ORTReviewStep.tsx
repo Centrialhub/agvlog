@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, Files } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -50,12 +50,17 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm }: ORT
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold">Revisão da ORT</h2>
-          <p className="text-xs text-muted-foreground">Confira os campos lidos pela IA antes de entrar na validação.</p>
+          <h2 className="text-lg font-semibold">Revisão das ORTs</h2>
+          <p className="text-xs text-muted-foreground">Confira cada documento NF-like lido pela IA antes de entrar na validação.</p>
         </div>
-        <Badge variant="outline" className={lowConfidenceCount > 0 ? 'border-warning/30 bg-warning/10 text-warning' : 'border-success/30 bg-success/10 text-success'}>
-          {lowConfidenceCount > 0 ? `${lowConfidenceCount} para revisar` : 'Leitura confiável'}
-        </Badge>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Badge variant="outline" className="gap-1.5">
+            <Files className="h-3.5 w-3.5" /> {docs.length} documento(s)
+          </Badge>
+          <Badge variant="outline" className={lowConfidenceCount > 0 ? 'border-warning/30 bg-warning/10 text-warning' : 'border-success/30 bg-success/10 text-success'}>
+            {lowConfidenceCount > 0 ? `${lowConfidenceCount} para revisar` : 'Leitura confiável'}
+          </Badge>
+        </div>
       </div>
 
       {docs.map((doc, index) => (
@@ -94,7 +99,7 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm }: ORT
 
       <div className="flex justify-between border-t border-border pt-4">
         <Button variant="outline" onClick={onBack}><ArrowLeft className="mr-2 h-4 w-4" /> Voltar</Button>
-        <Button onClick={onConfirm}>Validar ORT <ArrowRight className="ml-2 h-4 w-4" /></Button>
+        <Button onClick={onConfirm}>Validar ORTs <ArrowRight className="ml-2 h-4 w-4" /></Button>
       </div>
     </div>
   );
