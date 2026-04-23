@@ -793,6 +793,7 @@ export default function Ingestion() {
               freight_breakdown: freightBreakdown,
               freight_table_id: freightTableId,
               status: 'confirmed',
+              client_load_number: doc.source.clientLoadNumber || null,
             });
             createdDocIds.set(doc.source.invoiceNumber, created.id);
 
