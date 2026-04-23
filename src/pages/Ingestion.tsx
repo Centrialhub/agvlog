@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { parseNFeXml, parseCsvOrders, parseExcelOrders, ParsedOrderRow } from '@/lib/documentParsers';
+import { parseNFeXml, parseCsvOrders, parseExcelOrders, ParsedOrderRow, ParsedNFe } from '@/lib/documentParsers';
 import {
   validateNFe, validateOrderRows, generateLoadSuggestions, buildValidationIndexes,
   ValidatedDocument, ValidatedOrder, LoadSuggestion,
@@ -88,7 +88,15 @@ export default function Ingestion() {
   const [routeGroups, setRouteGroups] = useState<RouteGroup[]>([]);
   const [executing, setExecuting] = useState(false);
   const [savingDocsOnly, setSavingDocsOnly] = useState(false);
+  const [ortProcessing, setOrtProcessing] = useState(false);
   const [executionResults, setExecutionResults] = useState<string[]>([]);
+
+  const fileToBase64 = (file: File) => new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || '').split(',')[1] || '');
+    reader.onerror = () => reject(reader.error || new Error('Erro ao ler arquivo'));
+    reader.readAsDataURL(file);
+  });
 
   const handleFiles = useCallback(async (fileList: FileList) => {
     const files = Array.from(fileList);
@@ -161,6 +169,67 @@ export default function Ingestion() {
     console.log(`[Ingestion] processed ${files.length} files in ${elapsed}ms`);
     setStep(1);
   }, [existingDocs, clients]);
+
+  const handleOrtFiles = useCallback(async (fileList: FileList) => {
+    const files = Array.from(fileList);
+    setOrtProcessing(true);
+    try {
+      const payload = await Promise.all(files.map(async file => ({
+        name: file.name,
+        mimeType: file.type || 'application/octet-stream',
+        base64: await fileToBase64(file),
+      })));
+
+      const { data, error } = await supabase.functions.invoke('extract-ort', { body: { files: payload } });
+      if (error) throw error;
+
+      const indexes = buildValidationIndexes(existingDocs, clients);
+      const docs: ValidatedDocument[] = ((data as any)?.documents || []).map((ort: any, idx: number) => {
+        const parsed: ParsedNFe = {
+          invoiceNumber: ort.invoiceNumber || `ORT-${Date.now()}-${idx + 1}`,
+          series: 'ORT',
+          accessKey: `ORT-${Date.now()}-${idx + 1}`,
+          issueDate: ort.issueDate || new Date().toISOString().substring(0, 10),
+          emitterName: ort.emitterName || 'ORT',
+          emitterCnpj: ort.emitterCnpj || '',
+          recipientName: ort.recipientName || '',
+          recipientCnpj: ort.recipientCnpj || '',
+          recipientCity: ort.recipientCity || '',
+          recipientState: ort.recipientState || '',
+          recipientAddress: ort.recipientAddress || '',
+          recipientNeighborhood: ort.recipientNeighborhood || '',
+          items: [{
+            description: ort.productSummary || 'Mercadoria ORT',
+            quantity: 1,
+            unit: 'UN',
+            unitPrice: Number(ort.totalValue) || 0,
+            totalPrice: Number(ort.totalValue) || 0,
+            ncm: '',
+            cfop: '',
+          }],
+          totalValue: Number(ort.totalValue) || 0,
+          totalWeight: Number(ort.totalWeight) || 0,
+          totalVolume: Number(ort.totalVolume) || 0,
+          estimatedPallets: Math.max(1, Number(ort.estimatedPallets) || Math.ceil((Number(ort.totalWeight) || 0) / 800) || 1),
+        };
+        const validated = validateNFe(parsed, `ORT ${files[idx]?.name || idx + 1}`, existingDocs, clients, indexes);
+        if (ort.needsReview || Number(ort.confidence) < 0.82) {
+          validated.validations.push({ field: 'ortConfidence', message: 'ORT lida com confiança baixa — revise antes de avançar', severity: 'warning' });
+          validated.hasWarnings = true;
+        }
+        return validated;
+      });
+
+      setValidatedDocs(docs);
+      setValidatedOrders([]);
+      setStep(1);
+      toast({ title: 'ORT processada', description: `${docs.length} documento(s) enviados para validação.` });
+    } catch (e: any) {
+      toast({ title: 'Erro ao ler ORT', description: e.message, variant: 'destructive' });
+    } finally {
+      setOrtProcessing(false);
+    }
+  }, [existingDocs, clients, toast]);
 
   // Inline editing callbacks
   const handleUpdateDoc = useCallback((index: number, updates: Partial<ValidatedDocument>) => {
@@ -558,7 +627,7 @@ export default function Ingestion() {
 
       {step === 0 && (
         <>
-          <UploadStep onFiles={handleFiles} />
+          <UploadStep onFiles={handleFiles} onOrtFiles={handleOrtFiles} ortProcessing={ortProcessing} />
           {/* Pending NF-es without load */}
           {(() => {
             const pending = existingDocs.filter(d => !d.load_id && d.status !== 'cancelled');
