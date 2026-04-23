@@ -437,10 +437,11 @@ export default function Traceability() {
           <DialogHeader><DialogTitle>Detalhe da rastreabilidade</DialogTitle></DialogHeader>
           {selectedRow && (
             <div className="space-y-4">
-              <div className="grid gap-3 md:grid-cols-4">
+              <div className="grid gap-3 md:grid-cols-5">
                 <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">NF</p><p className="font-semibold">{selectedRow.doc.invoice_number || '—'}</p></CardContent></Card>
                 <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Nº Carga (empresa)</p><p className="font-semibold">{selectedRow.doc.loads?.load_number || '—'}</p></CardContent></Card>
-                <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Ref. Cliente</p><p className="font-semibold">{selectedRow.doc.orders?.order_number || '—'}</p></CardContent></Card>
+                <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Carga Cliente (NF-e)</p><p className="font-semibold text-info">{selectedRow.doc.client_load_number || '—'}</p></CardContent></Card>
+                <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Ref. Pedido</p><p className="font-semibold">{selectedRow.doc.orders?.order_number || '—'}</p></CardContent></Card>
                 <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Situação</p><Badge variant="outline" className={statusBadgeClass(selectedRow.siatStatus)}>{siatLabels[selectedRow.siatStatus]}</Badge></CardContent></Card>
               </div>
 
