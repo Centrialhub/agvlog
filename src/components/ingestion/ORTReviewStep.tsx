@@ -1,10 +1,11 @@
-import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, Files, HelpCircle, Package, ReceiptText, Users } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, Files, History, HelpCircle, Package, ReceiptText, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { isUnknown, UNKNOWN } from '@/lib/ortFieldFallbacks';
 import ClientContactPicker from './ClientContactPicker';
 
@@ -17,6 +18,15 @@ export interface OrtReviewItem {
   weightKg?: number;
   volumeM3?: number;
   confidence?: number;
+}
+
+export interface OrtAuditEntry {
+  field: string;
+  fieldLabel: string;
+  previousValue: string;
+  newValue: string;
+  changedAt: string; // ISO
+  changedBy: string; // email or user id
 }
 
 export interface OrtReviewDocument {
@@ -52,6 +62,7 @@ export interface OrtReviewDocument {
   unifiedDocId?: string;
   mergedFrom?: number;
   unknownFields?: string[];
+  auditLog?: OrtAuditEntry[];
 }
 
 interface ORTReviewStepProps {
