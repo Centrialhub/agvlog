@@ -258,10 +258,81 @@ export default function Traceability() {
   });
 
   const exportCsv = () => {
-    const headers = ['Nº NF', 'Nº Carga', 'Ref. Cliente', 'Forma Pgto', 'Cliente', 'Fornecedor', 'Placa', 'Motorista', 'Situação', 'POD', 'Canhoto', 'Valor Nota', 'Valor Frete', 'Paletes', 'Data Emissão', 'Data Chegada', 'Hora Chegada', 'Ocorrências'];
-    const body = filteredRows.map(({ doc, siatStatus, events, stops }) => [
-      doc.invoice_number || '', doc.loads?.load_number || '', doc.orders?.order_number || '', doc.orders?.payment_plan || '', doc.clients?.company_name || doc.recipient || '', doc.remitter || '', doc.loads?.vehicles?.plate || '', doc.loads?.drivers?.name || '', siatLabels[siatStatus], siatStatus === 'delivered' ? 'Sim' : 'Não', siatStatus === 'delivered' ? 'Sim' : 'Não', doc.value || 0, doc.freight_value || 0, doc.pallet_count || 0, fmtDate(doc.issue_date), fmtDate(stops.at(-1)?.actual_arrival_at), fmtTime(stops.at(-1)?.actual_arrival_at), events.map(e => e.description || e.event_type).join(' | '),
-    ]);
+    const headers = [
+      'Nº NF', 'Chave de Acesso', 'Tipo Documento', 'Status Documento', 'Data Emissão',
+      'Nº Carga', 'Status Carga', 'Trip ID', 'Origem', 'Destino Carga',
+      'Ref. Cliente', 'Forma Pgto',
+      'Cliente', 'Fornecedor / Remetente',
+      'Cidade Destino', 'UF Destino',
+      'Placa', 'Veículo', 'Motorista',
+      'Situação SIAT', 'POD', 'Canhoto',
+      'Valor Nota (R$)', 'Valor Frete (R$)', 'Paletes', 'Peso (kg)',
+      'Itens / Mercadoria',
+      'Início Planejado', 'Início Real', 'Fim Planejado', 'Fim Real',
+      'Total Paradas', 'Paradas Concluídas',
+      '1ª Chegada Prevista', '1ª Chegada Real', '1ª Saída Real',
+      'Última Chegada Prevista', 'Última Chegada Real', 'Última Saída Real',
+      'Detalhe Paradas',
+      'Total Ocorrências', 'Ocorrências Abertas',
+      'Ocorrências (descrição)', 'Tipos Ocorrências', 'Severidades', 'Datas Ocorrências',
+    ];
+    const body = filteredRows.map(({ doc, siatStatus, events, trip, stops }) => {
+      const firstStop = stops[0];
+      const lastStop = stops.at(-1);
+      const completedStops = stops.filter(s => s.actual_arrival_at).length;
+      const openOccurrences = events.filter(e => !e.resolved_at).length;
+      const stopsDetail = stops.map(s =>
+        `#${s.stop_order} ${s.destination || 'Parada'} [${s.status}] prev:${fmtDate(s.planned_arrival_at)} ${fmtTime(s.planned_arrival_at)} chegada:${fmtDate(s.actual_arrival_at)} ${fmtTime(s.actual_arrival_at)} saida:${fmtTime(s.actual_departure_at)}`
+      ).join(' || ');
+      return [
+        doc.invoice_number || '',
+        doc.access_key || '',
+        doc.document_type || '',
+        doc.status || '',
+        fmtDate(doc.issue_date),
+        doc.loads?.load_number || '',
+        doc.loads?.status || '',
+        doc.loads?.trip_id || '',
+        doc.loads?.origin || '',
+        doc.loads?.destination || '',
+        doc.orders?.order_number || '',
+        doc.orders?.payment_plan || '',
+        doc.clients?.company_name || doc.recipient || '',
+        doc.remitter || '',
+        doc.recipient_city || '',
+        doc.recipient_state || '',
+        doc.loads?.vehicles?.plate || '',
+        doc.loads?.vehicles?.nickname || '',
+        doc.loads?.drivers?.name || '',
+        siatLabels[siatStatus],
+        siatStatus === 'delivered' ? 'Sim' : 'Não',
+        siatStatus === 'delivered' ? 'Sim' : 'Não',
+        doc.value ?? 0,
+        doc.freight_value ?? 0,
+        doc.pallet_count ?? 0,
+        doc.weight_kg ?? 0,
+        doc.product_summary || '',
+        `${fmtDate(trip?.planned_start_at)} ${fmtTime(trip?.planned_start_at)}`.trim(),
+        `${fmtDate(trip?.actual_start_at)} ${fmtTime(trip?.actual_start_at)}`.trim(),
+        `${fmtDate(trip?.planned_end_at)} ${fmtTime(trip?.planned_end_at)}`.trim(),
+        `${fmtDate(trip?.actual_end_at)} ${fmtTime(trip?.actual_end_at)}`.trim(),
+        stops.length,
+        completedStops,
+        `${fmtDate(firstStop?.planned_arrival_at)} ${fmtTime(firstStop?.planned_arrival_at)}`.trim(),
+        `${fmtDate(firstStop?.actual_arrival_at)} ${fmtTime(firstStop?.actual_arrival_at)}`.trim(),
+        fmtTime(firstStop?.actual_departure_at),
+        `${fmtDate(lastStop?.planned_arrival_at)} ${fmtTime(lastStop?.planned_arrival_at)}`.trim(),
+        `${fmtDate(lastStop?.actual_arrival_at)} ${fmtTime(lastStop?.actual_arrival_at)}`.trim(),
+        fmtTime(lastStop?.actual_departure_at),
+        stopsDetail,
+        events.length,
+        openOccurrences,
+        events.map(e => e.description || e.event_type).join(' | '),
+        events.map(e => e.event_type).join(' | '),
+        events.map(e => e.severity).join(' | '),
+        events.map(e => `${fmtDate(e.created_at)} ${fmtTime(e.created_at)}${e.resolved_at ? ' (resolvida)' : ' (aberta)'}`).join(' | '),
+      ];
+    });
     const csv = [headers, ...body].map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(';')).join('\n');
     const blob = new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
