@@ -103,6 +103,19 @@ const siatLabels: Record<SiatStatus | 'all', string> = {
   delivered: 'Entregue',
 };
 
+const sourceLabel = (source?: string | null) => {
+  if (source === 'xPed') return 'Campo NF (xPed)';
+  if (source === 'observation') return 'Observação (infCpl)';
+  if (source === 'manual') return 'Manual';
+  return source || '—';
+};
+
+const sourceBadgeClass = (source?: string | null) => {
+  if (source === 'xPed') return 'bg-success/10 text-success border-success/20';
+  if (source === 'observation') return 'bg-warning/10 text-warning border-warning/20';
+  return 'bg-muted/40 text-muted-foreground border-border';
+};
+
 const loadStatusToSiat = (doc: TraceDocument): SiatStatus => {
   const loadStatus = doc.loads?.status;
   if (loadStatus === 'delivered' || doc.status === 'delivered') return 'delivered';
