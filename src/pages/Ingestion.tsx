@@ -424,9 +424,10 @@ export default function Ingestion() {
       setOrtReviewDocs(uniqueDocs);
       setValidatedOrders([]);
       setStep(1);
-      const dedupeText = batchDuplicates || existingDuplicates
-        ? ` ${batchDuplicates + existingDuplicates} duplicada(s) ignorada(s).`
-        : '';
+      const parts: string[] = [];
+      if (batchDuplicates) parts.push(`${batchDuplicates} scan(s) unificado(s) ao mesmo cliente`);
+      if (existingDuplicates) parts.push(`${existingDuplicates} já existente(s) no sistema ignorada(s)`);
+      const dedupeText = parts.length ? ` ${parts.join('; ')}.` : '';
       toast({ title: 'ORTs processadas', description: `${uniqueDocs.length} documento(s) NF-like pronto(s) para revisão.${dedupeText}` });
     } catch (e: any) {
       toast({ title: 'Erro ao ler ORT', description: e.message, variant: 'destructive' });
