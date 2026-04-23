@@ -385,25 +385,63 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm, clien
                             lastAddress && `Endereço: ${lastAddress.label}`,
                           ].filter(Boolean).join(' · ') || 'Sem vínculo anterior'}
                           onClick={() => {
-                            const merged: Record<string, string> = {
-                              ...(lastContact?.newValues || {}),
-                              ...(lastAddress?.newValues || {}),
-                            };
+                            // Resolve against the live client cadastre when possible:
+                            // even if the live IDs/positions changed, we look up the
+                            // most compatible item by the original stable refKey and
+                            // keep that refKey for audit.
+                            const liveClient = doc.linkedClientId
+                              ? allClients.find(c => c.id === doc.linkedClientId)
+                              : undefined;
+                            const liveContacts: any[] = Array.isArray(liveClient?.contacts) ? liveClient!.contacts : [];
+                            const liveAddresses: any[] = Array.isArray(liveClient?.addresses) ? liveClient!.addresses : [];
+
+                            const liveContact = lastContact
+                              ? findContactByKey(liveContacts, lastContact.refKey)
+                              : null;
+                            const liveAddress = lastAddress
+                              ? findAddressByKey(liveAddresses, lastAddress.refKey)
+                              : null;
+
+                            const contactNew = liveContact
+                              ? { recipientPhone: String(liveContact.phone || lastContact!.newValues.recipientPhone || '') }
+                              : (lastContact?.newValues || {} as Record<string, string>);
+                            const addressNew = liveAddress
+                              ? {
+                                  recipientAddress: String(liveAddress.street || lastAddress!.newValues.recipientAddress || ''),
+                                  recipientAddressNumber: String(liveAddress.number || lastAddress!.newValues.recipientAddressNumber || ''),
+                                  recipientNeighborhood: String(liveAddress.neighborhood || lastAddress!.newValues.recipientNeighborhood || ''),
+                                  recipientCity: String(liveAddress.city || lastAddress!.newValues.recipientCity || ''),
+                                  recipientState: String(liveAddress.state || lastAddress!.newValues.recipientState || ''),
+                                  recipientZip: String(liveAddress.zip || lastAddress!.newValues.recipientZip || ''),
+                                }
+                              : (lastAddress?.newValues || {} as Record<string, string>);
+
+                            const merged: Record<string, string> = { ...contactNew, ...addressNew };
                             const replay: OrtApplyHistoryEntry[] = [];
                             const nowIso = new Date().toISOString();
+                            const sourceTag = (live: unknown, exactKey: string | undefined, refKey: string | undefined) =>
+                              live ? (exactKey === refKey ? 'cadastro' : 'compatível') : 'snapshot';
+
                             if (lastContact) {
+                              const exactKey = liveContact ? makeContactKey(liveContact) : undefined;
+                              const tag = sourceTag(liveContact, exactKey, lastContact.refKey);
                               replay.push({
                                 ...lastContact,
                                 appliedAt: nowIso,
-                                label: `↻ ${lastContact.label}`,
+                                label: `↻ ${lastContact.label} · ${tag}`,
                                 previousValues: { recipientPhone: doc.recipientPhone || '' },
+                                newValues: contactNew,
+                                // Preserve the ORIGINAL refKey for audit even when we matched a partial.
+                                refKey: lastContact.refKey,
                               });
                             }
                             if (lastAddress) {
+                              const exactKey = liveAddress ? makeAddressKey(liveAddress) : undefined;
+                              const tag = sourceTag(liveAddress, exactKey, lastAddress.refKey);
                               replay.push({
                                 ...lastAddress,
                                 appliedAt: nowIso,
-                                label: `↻ ${lastAddress.label}`,
+                                label: `↻ ${lastAddress.label} · ${tag}`,
                                 previousValues: {
                                   recipientAddress: doc.recipientAddress || '',
                                   recipientAddressNumber: doc.recipientAddressNumber || '',
@@ -412,6 +450,8 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm, clien
                                   recipientState: doc.recipientState || '',
                                   recipientZip: doc.recipientZip || '',
                                 },
+                                newValues: addressNew,
+                                refKey: lastAddress.refKey,
                               });
                             }
                             onUpdate(index, {
