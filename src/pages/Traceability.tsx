@@ -426,7 +426,22 @@ export default function Traceability() {
                       <TableCell><Badge variant="outline" className={statusBadgeClass(row.siatStatus)}>{siatLabels[row.siatStatus]}</Badge></TableCell>
                       <TableCell className="font-mono text-xs">{row.doc.invoice_number || '—'}</TableCell>
                       <TableCell className="font-mono text-xs text-primary">{row.doc.loads?.load_number || '—'}</TableCell>
-                      <TableCell className="font-mono text-xs text-info">{row.doc.client_load_number || '—'}</TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {row.doc.client_load_number ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-info">{row.doc.client_load_number}</span>
+                            {row.doc.client_load_source?.source && (
+                              <Badge
+                                variant="outline"
+                                className={`text-[9px] px-1 py-0 leading-tight ${sourceBadgeClass(row.doc.client_load_source.source)}`}
+                                title={`Origem: ${sourceLabel(row.doc.client_load_source.source)}${row.doc.client_load_source.ruleLabel ? ' • Regra: ' + row.doc.client_load_source.ruleLabel : ''}`}
+                              >
+                                {row.doc.client_load_source.source === 'xPed' ? 'NF' : row.doc.client_load_source.source === 'observation' ? 'OBS' : '?'}
+                              </Badge>
+                            )}
+                          </div>
+                        ) : '—'}
+                      </TableCell>
                       <TableCell className="font-mono text-xs">{row.doc.orders?.order_number || '—'}</TableCell>
                       <TableCell className="text-xs">{row.doc.orders?.payment_plan || '—'}</TableCell>
                       <TableCell>{row.doc.value ? currency.format(Number(row.doc.value)) : '—'}</TableCell>
