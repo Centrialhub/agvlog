@@ -38,7 +38,10 @@ type TraceDocument = {
   status: string;
   load_id: string | null;
   client_id: string | null;
+  remitter: string | null;
+  order_id: string | null;
   clients?: { company_name: string | null } | null;
+  orders?: { order_number: string | null; payment_plan: string | null } | null;
   loads?: {
     id: string;
     load_number: string;
