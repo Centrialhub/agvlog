@@ -104,6 +104,31 @@ const currency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: '
 const number = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 });
 
 export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm, clientIds, onSelectClient }: ORTReviewStepProps) {
+  const { data: allClients = [] } = useClients();
+
+  /**
+   * For each document, compares the persisted linkedContactKey/linkedAddressKey
+   * against the live deduplicated contacts/addresses on the linked client.
+   * Returns a mismatch descriptor when the keys no longer exist on the client
+   * (e.g. another user edited/removed them after this ORT was reviewed).
+   */
+  const linkageStatus = (doc: OrtReviewDocument) => {
+    const clientId = doc.linkedClientId;
+    if (!clientId || (!doc.linkedContactKey && !doc.linkedAddressKey)) return null;
+    const client = allClients.find(c => c.id === clientId);
+    if (!client) {
+      return { missingClient: true as const, contactMismatch: false, addressMismatch: false };
+    }
+    const contacts: any[] = Array.isArray(client.contacts) ? client.contacts : [];
+    const addresses: any[] = Array.isArray(client.addresses) ? client.addresses : [];
+    const contactKeys = new Set(contacts.map((c) => makeContactKey(c)).filter(Boolean));
+    const addressKeys = new Set(addresses.map((a) => makeAddressKey(a)).filter(Boolean));
+    const contactMismatch = !!doc.linkedContactKey && !contactKeys.has(doc.linkedContactKey);
+    const addressMismatch = !!doc.linkedAddressKey && !addressKeys.has(doc.linkedAddressKey);
+    if (!contactMismatch && !addressMismatch) return null;
+    return { missingClient: false as const, contactMismatch, addressMismatch };
+  };
+
   const fieldClass = (doc: OrtReviewDocument, field: keyof OrtReviewDocument, required = false) => {
     const confidence = doc.fieldConfidences?.[String(field)] ?? doc.confidence;
     const missing = required && !String(doc[field] ?? '').trim();
