@@ -320,12 +320,12 @@ export default function Traceability() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-10"></TableHead><TableHead>Palete</TableHead><TableHead>POD</TableHead><TableHead>Rec.Canhoto</TableHead><TableHead>Situação</TableHead><TableHead>Nº NFS</TableHead><TableHead>Nº Ctrc/Ort</TableHead><TableHead>Valor Frete</TableHead><TableHead>Cliente</TableHead><TableHead>Placa</TableHead><TableHead>Motorista</TableHead><TableHead>Data Chegada</TableHead><TableHead>Hora Chegada</TableHead><TableHead>Ocorrência 01</TableHead><TableHead></TableHead>
+                  <TableHead className="w-10"></TableHead><TableHead>Palete</TableHead><TableHead>POD</TableHead><TableHead>Rec.Canhoto</TableHead><TableHead>Situação</TableHead><TableHead>Nº NF</TableHead><TableHead>Nº Carga</TableHead><TableHead>Ref. Cliente</TableHead><TableHead>Forma pgto</TableHead><TableHead>Valor Frete</TableHead><TableHead>Cliente</TableHead><TableHead>Fornecedor</TableHead><TableHead>Placa</TableHead><TableHead>Motorista</TableHead><TableHead>Data Chegada</TableHead><TableHead>Hora Chegada</TableHead><TableHead>Ocorrência</TableHead><TableHead></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading ? <TableRow><TableCell colSpan={15} className="py-10 text-center text-muted-foreground">Carregando rastreabilidade...</TableCell></TableRow>
-                : filteredRows.length === 0 ? <TableRow><TableCell colSpan={15} className="py-10 text-center text-muted-foreground">Nenhum registro encontrado</TableCell></TableRow>
+                {isLoading ? <TableRow><TableCell colSpan={18} className="py-10 text-center text-muted-foreground">Carregando rastreabilidade...</TableCell></TableRow>
+                : filteredRows.length === 0 ? <TableRow><TableCell colSpan={18} className="py-10 text-center text-muted-foreground">Nenhum registro encontrado</TableCell></TableRow>
                 : filteredRows.map(row => {
                   const lastStop = row.stops.at(-1);
                   return (
@@ -336,9 +336,12 @@ export default function Traceability() {
                       <TableCell><Checkbox checked={row.siatStatus === 'delivered'} aria-label="Canhoto" /></TableCell>
                       <TableCell><Badge variant="outline" className={statusBadgeClass(row.siatStatus)}>{siatLabels[row.siatStatus]}</Badge></TableCell>
                       <TableCell className="font-mono text-xs">{row.doc.invoice_number || '—'}</TableCell>
-                      <TableCell className="font-mono text-xs text-primary">{row.doc.loads?.load_number || row.doc.access_key?.slice(-8) || '—'}</TableCell>
+                      <TableCell className="font-mono text-xs text-primary">{row.doc.loads?.load_number || '—'}</TableCell>
+                      <TableCell className="font-mono text-xs">{row.doc.orders?.order_number || '—'}</TableCell>
+                      <TableCell className="text-xs">{row.doc.orders?.payment_plan || '—'}</TableCell>
                       <TableCell>{currency.format(Number(row.doc.freight_value || row.doc.value || 0))}</TableCell>
                       <TableCell className="min-w-44">{row.doc.clients?.company_name || row.doc.recipient || '—'}</TableCell>
+                      <TableCell className="min-w-40 text-xs">{row.doc.remitter || '—'}</TableCell>
                       <TableCell>{row.doc.loads?.vehicles?.plate || '—'}</TableCell>
                       <TableCell>{row.doc.loads?.drivers?.name || '—'}</TableCell>
                       <TableCell>{fmtDate(lastStop?.actual_arrival_at)}</TableCell>
