@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Check, ChevronsUpDown, MapPin, Phone, Save, UserPlus } from 'lucide-react';
+import { AlertTriangle, Check, ChevronsUpDown, MapPin, Phone, Save, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
@@ -32,6 +32,7 @@ export interface ClientContactPickerProps {
   /** Read from the ORT being reviewed */
   hintName?: string;
   hintCnpj?: string;
+  hintPhone?: string;
   /** Currently linked client (if any) */
   selectedClientId?: string | null;
   /** Current values being edited (so we can save them back to the client) */
@@ -52,7 +53,7 @@ const contactLabel = (c: ContactSnapshot) =>
   [c.name, c.phone, c.email].filter(Boolean).join(' · ');
 
 export default function ClientContactPicker({
-  hintName, hintCnpj, selectedClientId,
+  hintName, hintCnpj, hintPhone, selectedClientId,
   currentContact, currentAddress,
   onSelectClient, onApplyContact, onApplyAddress,
 }: ClientContactPickerProps) {
@@ -64,20 +65,40 @@ export default function ClientContactPicker({
   const [open, setOpen] = useState(false);
   const [autoSaveOnCreate, setAutoSaveOnCreate] = useState(true);
 
-  // Auto-suggest by CNPJ then name
+  // Auto-suggest by CNPJ → phone → name. Phone is also returned as
+  // secondary candidates so the user can review when CNPJ disagrees.
+  const phoneDigits = useMemo(() => onlyDigits(hintPhone || currentContact?.phone || ''), [hintPhone, currentContact?.phone]);
+
+  const phoneMatches = useMemo(() => {
+    if (!phoneDigits || phoneDigits.length < 8) return [] as Client[];
+    return clients.filter(c => {
+      const list: any[] = Array.isArray(c.contacts) ? c.contacts as any[] : [];
+      return list.some(ct => onlyDigits(ct?.phone || '') === phoneDigits);
+    });
+  }, [clients, phoneDigits]);
+
   const suggested = useMemo(() => {
     const cnpj = onlyDigits(hintCnpj || '');
     if (cnpj) {
       const m = clients.find(c => onlyDigits(c.tax_id || '') === cnpj);
       if (m) return m;
     }
+    // Phone fallback (when CNPJ missing or no match)
+    if (phoneMatches.length > 0) return phoneMatches[0];
     if (hintName) {
       const lower = hintName.toLowerCase();
       return clients.find(c => c.company_name.toLowerCase() === lower)
         || clients.find(c => c.company_name.toLowerCase().includes(lower) || lower.includes(c.company_name.toLowerCase()));
     }
     return undefined;
-  }, [clients, hintCnpj, hintName]);
+  }, [clients, hintCnpj, hintName, phoneMatches]);
+
+  // Conflict detection: CNPJ on the ORT points to client A but phone matches client B.
+  const cnpjMatch = useMemo(() => {
+    const cnpj = onlyDigits(hintCnpj || '');
+    return cnpj ? clients.find(c => onlyDigits(c.tax_id || '') === cnpj) : undefined;
+  }, [clients, hintCnpj]);
+  const phoneVsCnpjConflict = !!(cnpjMatch && phoneMatches.length > 0 && !phoneMatches.some(c => c.id === cnpjMatch.id));
 
   const selectedClient = clients.find(c => c.id === selectedClientId) || suggested;
   const contacts: ContactSnapshot[] = Array.isArray(selectedClient?.contacts) ? (selectedClient!.contacts as any[]) : [];
@@ -187,6 +208,18 @@ export default function ClientContactPicker({
   return (
     <Card className="border-dashed bg-muted/20">
       <CardContent className="space-y-3 p-3">
+        {phoneVsCnpjConflict && (
+          <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 p-2 text-[11px] text-warning">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <div className="flex-1">
+              <p className="font-medium">Conflito CNPJ × telefone</p>
+              <p className="opacity-90">
+                CNPJ aponta para <strong>{cnpjMatch?.company_name}</strong>, mas o telefone {phoneDigits} já está cadastrado em{' '}
+                <strong>{phoneMatches.map(c => c.company_name).join(', ')}</strong>. Escolha qual cliente vincular.
+              </p>
+            </div>
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-2">
           <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
@@ -197,9 +230,20 @@ export default function ClientContactPicker({
             </PopoverTrigger>
             <PopoverContent className="w-[360px] p-0" align="start">
               <Command>
-                <CommandInput placeholder="Buscar cliente por nome ou CNPJ..." />
+                <CommandInput placeholder="Buscar por nome, CNPJ ou telefone..." />
                 <CommandList>
                   <CommandEmpty>Nenhum cliente encontrado.</CommandEmpty>
+                  {phoneMatches.length > 0 && (
+                    <CommandGroup heading={`Encontrado(s) por telefone (${phoneDigits})`}>
+                      {phoneMatches.map(c => (
+                        <CommandItem key={`ph-${c.id}`} value={`phone ${c.company_name} ${c.tax_id || ''}`} onSelect={() => handleSelect(c.id)}>
+                          <Phone className="mr-2 h-3.5 w-3.5 text-primary" />
+                          <span className="flex-1 truncate">{c.company_name}</span>
+                          {c.tax_id && <span className="ml-2 text-[11px] text-muted-foreground">{c.tax_id}</span>}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  )}
                   <CommandGroup>
                     {filtered.map(c => (
                       <CommandItem key={c.id} value={`${c.company_name} ${c.tax_id || ''}`} onSelect={() => handleSelect(c.id)}>

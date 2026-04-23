@@ -221,6 +221,7 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm, clien
             <ClientContactPicker
               hintName={doc.recipientName}
               hintCnpj={doc.recipientCnpj}
+              hintPhone={doc.recipientPhone}
               selectedClientId={clientIds?.[index] || null}
               currentContact={{ name: doc.recipientName, phone: doc.recipientPhone }}
               currentAddress={{
