@@ -47,6 +47,8 @@ export interface OrtReviewDocument {
   sourcePages?: string[];
   pageCount?: number;
   extractedPayload?: Record<string, unknown>;
+  unifiedDocId?: string;
+  mergedFrom?: number;
 }
 
 interface ORTReviewStepProps {
