@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, Files, History, HelpCircle, Package, ReceiptText, Users } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, Files, History, HelpCircle, MapPin, Package, Phone, ReceiptText, Undo2, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { isUnknown, UNKNOWN } from '@/lib/ortFieldFallbacks';
 import ClientContactPicker from './ClientContactPicker';
+import { cn } from '@/lib/utils';
 
 export interface OrtReviewItem {
   description: string;
@@ -27,6 +28,16 @@ export interface OrtAuditEntry {
   newValue: string;
   changedAt: string; // ISO
   changedBy: string; // email or user id
+}
+
+export interface OrtApplyHistoryEntry {
+  type: 'contact' | 'address';
+  appliedAt: string;
+  label: string;
+  /** Snapshot of fields BEFORE the application (used to undo) */
+  previousValues: Record<string, string>;
+  /** Snapshot of fields AFTER the application */
+  newValues: Record<string, string>;
 }
 
 export interface OrtReviewDocument {
@@ -63,6 +74,7 @@ export interface OrtReviewDocument {
   mergedFrom?: number;
   unknownFields?: string[];
   auditLog?: OrtAuditEntry[];
+  appliedHistory?: OrtApplyHistoryEntry[];
 }
 
 interface ORTReviewStepProps {
@@ -204,16 +216,93 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm, clien
                   recipientCnpj: doc.recipientCnpj || (client.tax_id || ''),
                 });
               }}
-              onApplyContact={(c) => onUpdate(index, { recipientPhone: c.phone || doc.recipientPhone })}
-              onApplyAddress={(a) => onUpdate(index, {
-                recipientAddress: a.street || doc.recipientAddress,
-                recipientAddressNumber: a.number || doc.recipientAddressNumber,
-                recipientNeighborhood: a.neighborhood || doc.recipientNeighborhood,
-                recipientCity: a.city || doc.recipientCity,
-                recipientState: a.state || doc.recipientState,
-                recipientZip: a.zip || doc.recipientZip,
-              })}
+              onApplyContact={(c) => {
+                const previousValues = { recipientPhone: doc.recipientPhone || '' };
+                const newValues = { recipientPhone: c.phone || doc.recipientPhone || '' };
+                const entry: OrtApplyHistoryEntry = {
+                  type: 'contact',
+                  appliedAt: new Date().toISOString(),
+                  label: [c.name, c.phone].filter(Boolean).join(' · ') || 'Contato',
+                  previousValues,
+                  newValues,
+                };
+                onUpdate(index, {
+                  recipientPhone: newValues.recipientPhone,
+                  appliedHistory: [...(doc.appliedHistory || []), entry],
+                });
+              }}
+              onApplyAddress={(a) => {
+                const previousValues = {
+                  recipientAddress: doc.recipientAddress || '',
+                  recipientAddressNumber: doc.recipientAddressNumber || '',
+                  recipientNeighborhood: doc.recipientNeighborhood || '',
+                  recipientCity: doc.recipientCity || '',
+                  recipientState: doc.recipientState || '',
+                  recipientZip: doc.recipientZip || '',
+                };
+                const newValues = {
+                  recipientAddress: a.street || doc.recipientAddress || '',
+                  recipientAddressNumber: a.number || doc.recipientAddressNumber || '',
+                  recipientNeighborhood: a.neighborhood || doc.recipientNeighborhood || '',
+                  recipientCity: a.city || doc.recipientCity || '',
+                  recipientState: a.state || doc.recipientState || '',
+                  recipientZip: a.zip || doc.recipientZip || '',
+                };
+                const entry: OrtApplyHistoryEntry = {
+                  type: 'address',
+                  appliedAt: new Date().toISOString(),
+                  label: [a.street, a.number, a.city && `${a.city}/${a.state || ''}`].filter(Boolean).join(', ') || 'Endereço',
+                  previousValues,
+                  newValues,
+                };
+                onUpdate(index, {
+                  ...newValues,
+                  appliedHistory: [...(doc.appliedHistory || []), entry],
+                });
+              }}
             />
+            {(doc.appliedHistory?.length || 0) > 0 && (
+              <div className="rounded-md border border-dashed border-border bg-muted/20 p-2">
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+                    <History className="h-3 w-3" /> Aplicações nesta ORT ({doc.appliedHistory!.length})
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 gap-1 px-2 text-[11px]"
+                    onClick={() => {
+                      const history = doc.appliedHistory || [];
+                      const last = history[history.length - 1];
+                      if (!last) return;
+                      onUpdate(index, {
+                        ...last.previousValues,
+                        appliedHistory: history.slice(0, -1),
+                      } as any);
+                    }}
+                  >
+                    <Undo2 className="h-3 w-3" /> Desfazer última
+                  </Button>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {doc.appliedHistory!.slice().reverse().map((entry, i, arr) => (
+                    <Badge
+                      key={i}
+                      variant="outline"
+                      className={cn(
+                        'gap-1 text-[10px] font-normal',
+                        i === 0 ? 'border-primary/30 bg-primary/5 text-primary' : 'text-muted-foreground'
+                      )}
+                      title={`Aplicado às ${new Date(entry.appliedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`}
+                    >
+                      {entry.type === 'contact' ? <Phone className="h-2.5 w-2.5" /> : <MapPin className="h-2.5 w-2.5" />}
+                      {entry.label}
+                      {i === 0 && arr.length > 0 && <span className="ml-0.5 opacity-70">• última</span>}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-1 gap-3 md:grid-cols-[2fr_80px_120px_1fr]">
               <div><Label className="text-xs">Endereço</Label><Input className={fieldClass(doc, 'recipientAddress')} value={doc.recipientAddress} onChange={e => onUpdate(index, { recipientAddress: e.target.value })} /></div>
               <div><Label className="text-xs">Número</Label><Input className={fieldClass(doc, 'recipientAddressNumber')} value={doc.recipientAddressNumber} onChange={e => onUpdate(index, { recipientAddressNumber: e.target.value })} /></div>
