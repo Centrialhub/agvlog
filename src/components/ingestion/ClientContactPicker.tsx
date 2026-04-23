@@ -10,6 +10,8 @@ import { Label } from '@/components/ui/label';
 import { useClients, useUpdateClient, useCreateClient, Client } from '@/hooks/useClients';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
+import { useQueryClient } from '@tanstack/react-query';
 
 export interface ContactSnapshot {
   phone?: string;
@@ -58,6 +60,7 @@ export default function ClientContactPicker({
   const updateClient = useUpdateClient();
   const createClient = useCreateClient();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [autoSaveOnCreate, setAutoSaveOnCreate] = useState(true);
 
@@ -104,9 +107,15 @@ export default function ClientContactPicker({
     );
   };
 
-  const persistToClient = async (patch: Partial<Client>) => {
-    if (!selectedClient) return;
-    await updateClient.mutateAsync({ id: selectedClient.id, ...patch });
+  const mergeOnServer = async (payload: { contacts?: ContactSnapshot[]; addresses?: AddressSnapshot[] }) => {
+    if (!selectedClient) return null;
+    const { data, error } = await supabase.functions.invoke('clients-merge-contacts-addresses', {
+      body: { client_id: selectedClient.id, contacts: payload.contacts || [], addresses: payload.addresses || [] },
+    });
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+    queryClient.invalidateQueries({ queryKey: ['clients'] });
+    return data as { added_contacts: number; added_addresses: number };
   };
 
   const handleSaveContact = async () => {
@@ -118,13 +127,16 @@ export default function ClientContactPicker({
       toast({ title: 'Telefone vazio — nada para salvar', variant: 'destructive' });
       return;
     }
-    if (isContactDuplicate(currentContact)) {
-      toast({ title: 'Contato já cadastrado nesse cliente' });
-      return;
+    try {
+      const result = await mergeOnServer({ contacts: [currentContact] });
+      if ((result?.added_contacts ?? 0) > 0) {
+        toast({ title: 'Contato salvo no cliente', description: contactLabel(currentContact) });
+      } else {
+        toast({ title: 'Contato já cadastrado nesse cliente (validado no servidor)' });
+      }
+    } catch (e: any) {
+      toast({ title: 'Erro ao salvar contato', description: e.message, variant: 'destructive' });
     }
-    const next = [...contacts, currentContact];
-    await persistToClient({ contacts: next as any });
-    toast({ title: 'Contato salvo no cliente', description: contactLabel(currentContact) });
   };
 
   const handleSaveAddress = async () => {
@@ -136,13 +148,16 @@ export default function ClientContactPicker({
       toast({ title: 'Endereço vazio — nada para salvar', variant: 'destructive' });
       return;
     }
-    if (isAddressDuplicate(currentAddress)) {
-      toast({ title: 'Endereço já cadastrado nesse cliente' });
-      return;
+    try {
+      const result = await mergeOnServer({ addresses: [currentAddress] });
+      if ((result?.added_addresses ?? 0) > 0) {
+        toast({ title: 'Endereço salvo no cliente', description: addressLabel(currentAddress) });
+      } else {
+        toast({ title: 'Endereço já cadastrado nesse cliente (validado no servidor)' });
+      }
+    } catch (e: any) {
+      toast({ title: 'Erro ao salvar endereço', description: e.message, variant: 'destructive' });
     }
-    const next = [...addresses, currentAddress];
-    await persistToClient({ addresses: next as any });
-    toast({ title: 'Endereço salvo no cliente', description: addressLabel(currentAddress) });
   };
 
   const handleCreateClient = async () => {
