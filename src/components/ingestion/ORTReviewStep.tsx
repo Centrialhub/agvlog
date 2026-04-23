@@ -9,6 +9,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { isUnknown, UNKNOWN } from '@/lib/ortFieldFallbacks';
 import ClientContactPicker from './ClientContactPicker';
 import { cn } from '@/lib/utils';
+import { contactKey as makeContactKey, addressKey as makeAddressKey } from '@/lib/clientContactKeys';
 
 export interface OrtReviewItem {
   description: string;
@@ -38,6 +39,8 @@ export interface OrtApplyHistoryEntry {
   previousValues: Record<string, string>;
   /** Snapshot of fields AFTER the application */
   newValues: Record<string, string>;
+  /** Reference key written into the unified document on apply (for audit/reuse) */
+  refKey?: string;
 }
 
 export interface OrtReviewDocument {
@@ -75,6 +78,14 @@ export interface OrtReviewDocument {
   unknownFields?: string[];
   auditLog?: OrtAuditEntry[];
   appliedHistory?: OrtApplyHistoryEntry[];
+  /** Audit linkage to client master record (persisted on the unified ORT). */
+  linkedClientId?: string | null;
+  /** Stable contact identity (e.g. "phone:11999998888") */
+  linkedContactKey?: string | null;
+  /** Stable address identity (e.g. "zip:01310100|num:200") */
+  linkedAddressKey?: string | null;
+  /** When the linkage was last set */
+  linkedAt?: string | null;
 }
 
 interface ORTReviewStepProps {
