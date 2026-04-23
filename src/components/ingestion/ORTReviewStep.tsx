@@ -10,6 +10,7 @@ import { isUnknown, UNKNOWN } from '@/lib/ortFieldFallbacks';
 import ClientContactPicker from './ClientContactPicker';
 import { cn } from '@/lib/utils';
 import { contactKey as makeContactKey, addressKey as makeAddressKey } from '@/lib/clientContactKeys';
+import { useClients } from '@/hooks/useClients';
 
 export interface OrtReviewItem {
   description: string;
