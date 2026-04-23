@@ -271,7 +271,7 @@ export default function Traceability() {
       </div>
 
       <div className="grid gap-3 md:grid-cols-4">
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">2 registro(s) / limite 1000</p><p className="text-xl font-semibold">{counts.total}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Total de registros</p><p className="text-xl font-semibold">{counts.total}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Pendente</p><p className="text-xl font-semibold text-warning">{counts.pending}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Em trânsito</p><p className="text-xl font-semibold text-info">{counts.inTransit}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Entregue</p><p className="text-xl font-semibold text-success">{counts.delivered}</p></CardContent></Card>
