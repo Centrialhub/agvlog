@@ -93,6 +93,8 @@ export default function Ingestion() {
   const [ortProcessing, setOrtProcessing] = useState(false);
   const [executionResults, setExecutionResults] = useState<string[]>([]);
 
+  const ortAuditByAccessKey = new Map(ortReviewDocs.map((ort, idx) => [buildOrtAccessKey(ort, `DOC${idx + 1}`), ort]));
+
   const fileToBase64 = (file: File) => new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || '').split(',')[1] || '');
@@ -113,6 +115,55 @@ export default function Ingestion() {
     const value = Math.round((Number(ort.totalValue) || 0) * 100);
     const parts = [normalizeOrtKeyPart(ort.invoiceNumber) || fallback, recipient, city, normalizeOrtKeyPart(ort.issueDate), value || '0'].filter(Boolean);
     return `ORT-${parts.join('-')}`;
+  };
+
+  const toOrtAuditPayload = (ort: OrtReviewDocument) => ({
+    invoiceNumber: ort.invoiceNumber,
+    issueDate: ort.issueDate,
+    emitterName: ort.emitterName,
+    emitterCnpj: ort.emitterCnpj,
+    recipientName: ort.recipientName,
+    recipientCnpj: ort.recipientCnpj,
+    recipientCity: ort.recipientCity,
+    recipientState: ort.recipientState,
+    recipientAddress: ort.recipientAddress,
+    recipientNeighborhood: ort.recipientNeighborhood,
+    totalValue: ort.totalValue,
+    totalWeight: ort.totalWeight,
+    totalVolume: ort.totalVolume,
+    estimatedPallets: ort.estimatedPallets,
+    productSummary: ort.productSummary,
+  });
+
+  const getChangedOrtFields = (ort: OrtReviewDocument) => {
+    const extracted = ort.extractedPayload || {};
+    const reviewed = toOrtAuditPayload(ort);
+    return Object.keys(reviewed).filter(key => String((extracted as any)[key] ?? '') !== String((reviewed as any)[key] ?? ''));
+  };
+
+  const recordOrtAudit = async (doc: ValidatedDocument, fiscalDocumentId: string | null, status = 'saved') => {
+    if (!currentTenant || !user || doc.source.series !== 'ORT') return;
+    const ort = ortAuditByAccessKey.get(doc.source.accessKey);
+    if (!ort) return;
+    const { error } = await supabase.from('ort_extraction_audits' as any).insert({
+      tenant_id: currentTenant.id,
+      fiscal_document_id: fiscalDocumentId,
+      source_file_name: ort.fileName,
+      ort_number: ort.invoiceNumber || null,
+      dedupe_key: doc.source.accessKey,
+      extracted_payload: ort.extractedPayload || toOrtAuditPayload(ort),
+      reviewed_payload: toOrtAuditPayload(ort),
+      field_confidences: ort.fieldConfidences || {},
+      overall_confidence: Math.max(0, Math.min(1, Number(ort.confidence) || 0)),
+      needs_review: Boolean(ort.needsReview) || Number(ort.confidence) < 0.82,
+      reviewed: true,
+      changed_fields: getChangedOrtFields(ort),
+      status,
+      created_by: user.id,
+      reviewed_by: user.id,
+      reviewed_at: new Date().toISOString(),
+    });
+    if (error) throw error;
   };
 
   const dedupeOrtReviewDocs = (docs: OrtReviewDocument[]) => {
