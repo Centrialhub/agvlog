@@ -59,6 +59,7 @@ export default function ClientContactPicker({
   const createClient = useCreateClient();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
+  const [autoSaveOnCreate, setAutoSaveOnCreate] = useState(true);
 
   // Auto-suggest by CNPJ then name
   const suggested = useMemo(() => {
@@ -147,14 +148,22 @@ export default function ClientContactPicker({
   const handleCreateClient = async () => {
     if (!hintName) return;
     try {
+      const includeContact = autoSaveOnCreate && !!currentContact.phone;
+      const includeAddress = autoSaveOnCreate && !!(currentAddress.street || currentAddress.zip);
       const created: any = await createClient.mutateAsync({
         company_name: hintName,
         tax_id: hintCnpj || null,
-        contacts: currentContact.phone ? [currentContact] : [],
-        addresses: (currentAddress.street || currentAddress.zip) ? [currentAddress] : [],
+        contacts: includeContact ? [currentContact] : [],
+        addresses: includeAddress ? [currentAddress] : [],
       } as any);
       if (created?.id) onSelectClient(created.id, created);
-      toast({ title: 'Cliente cadastrado a partir da ORT' });
+      const parts: string[] = [];
+      if (includeContact) parts.push('contato');
+      if (includeAddress) parts.push('endereço');
+      toast({
+        title: 'Cliente cadastrado a partir da ORT',
+        description: parts.length > 0 ? `Salvo automaticamente: ${parts.join(' + ')}` : 'Sem contato/endereço anexado',
+      });
     } catch (e: any) {
       toast({ title: 'Erro ao cadastrar cliente', description: e.message, variant: 'destructive' });
     }
