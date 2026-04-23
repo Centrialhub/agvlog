@@ -225,21 +225,27 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm, clien
                 onUpdate(index, {
                   recipientName: doc.recipientName || client.company_name,
                   recipientCnpj: doc.recipientCnpj || (client.tax_id || ''),
+                  linkedClientId: id,
+                  linkedAt: new Date().toISOString(),
                 });
               }}
               onApplyContact={(c) => {
                 const previousValues = { recipientPhone: doc.recipientPhone || '' };
                 const newValues = { recipientPhone: c.phone || doc.recipientPhone || '' };
+                const refKey = makeContactKey({ phone: newValues.recipientPhone, name: c.name, email: c.email });
                 const entry: OrtApplyHistoryEntry = {
                   type: 'contact',
                   appliedAt: new Date().toISOString(),
                   label: [c.name, c.phone].filter(Boolean).join(' · ') || 'Contato',
                   previousValues,
                   newValues,
+                  refKey,
                 };
                 onUpdate(index, {
                   recipientPhone: newValues.recipientPhone,
                   appliedHistory: [...(doc.appliedHistory || []), entry],
+                  linkedContactKey: refKey || doc.linkedContactKey || null,
+                  linkedAt: new Date().toISOString(),
                 });
               }}
               onApplyAddress={(a) => {
@@ -259,16 +265,25 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm, clien
                   recipientState: a.state || doc.recipientState || '',
                   recipientZip: a.zip || doc.recipientZip || '',
                 };
+                const refKey = makeAddressKey({
+                  street: newValues.recipientAddress,
+                  number: newValues.recipientAddressNumber,
+                  zip: newValues.recipientZip,
+                  city: newValues.recipientCity,
+                });
                 const entry: OrtApplyHistoryEntry = {
                   type: 'address',
                   appliedAt: new Date().toISOString(),
                   label: [a.street, a.number, a.city && `${a.city}/${a.state || ''}`].filter(Boolean).join(', ') || 'Endereço',
                   previousValues,
                   newValues,
+                  refKey,
                 };
                 onUpdate(index, {
                   ...newValues,
                   appliedHistory: [...(doc.appliedHistory || []), entry],
+                  linkedAddressKey: refKey || doc.linkedAddressKey || null,
+                  linkedAt: new Date().toISOString(),
                 });
               }}
             />
