@@ -99,6 +99,11 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm }: ORT
                     <Files className="h-3 w-3" /> {doc.pageCount} páginas unidas
                   </Badge>
                 )}
+                {(doc.mergedFrom || 0) > 1 && (
+                  <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary gap-1">
+                    <Users className="h-3 w-3" /> Unificado de {doc.mergedFrom} scans (mesmo cliente)
+                  </Badge>
+                )}
               </span>
               <span className="flex items-center gap-2 text-[11px] text-muted-foreground">
                 {doc.needsReview || doc.confidence < REVIEW_THRESHOLD ? <AlertTriangle className="h-3.5 w-3.5 text-warning" /> : <CheckCircle className="h-3.5 w-3.5 text-success" />}
