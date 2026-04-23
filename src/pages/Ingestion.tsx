@@ -115,6 +115,55 @@ export default function Ingestion() {
     return `ORT-${parts.join('-')}`;
   };
 
+  const toOrtAuditPayload = (ort: OrtReviewDocument) => ({
+    invoiceNumber: ort.invoiceNumber,
+    issueDate: ort.issueDate,
+    emitterName: ort.emitterName,
+    emitterCnpj: ort.emitterCnpj,
+    recipientName: ort.recipientName,
+    recipientCnpj: ort.recipientCnpj,
+    recipientCity: ort.recipientCity,
+    recipientState: ort.recipientState,
+    recipientAddress: ort.recipientAddress,
+    recipientNeighborhood: ort.recipientNeighborhood,
+    totalValue: ort.totalValue,
+    totalWeight: ort.totalWeight,
+    totalVolume: ort.totalVolume,
+    estimatedPallets: ort.estimatedPallets,
+    productSummary: ort.productSummary,
+  });
+
+  const getChangedOrtFields = (ort: OrtReviewDocument) => {
+    const extracted = ort.extractedPayload || {};
+    const reviewed = toOrtAuditPayload(ort);
+    return Object.keys(reviewed).filter(key => String((extracted as any)[key] ?? '') !== String((reviewed as any)[key] ?? ''));
+  };
+
+  const recordOrtAudit = async (doc: ValidatedDocument, fiscalDocumentId: string | null, status = 'saved') => {
+    if (!currentTenant || !user || doc.source.series !== 'ORT') return;
+    const ort = ortReviewDocs.find((candidate, idx) => buildOrtAccessKey(candidate, `DOC${idx + 1}`) === doc.source.accessKey);
+    if (!ort) return;
+    const { error } = await supabase.from('ort_extraction_audits' as any).insert({
+      tenant_id: currentTenant.id,
+      fiscal_document_id: fiscalDocumentId,
+      source_file_name: ort.fileName,
+      ort_number: ort.invoiceNumber || null,
+      dedupe_key: doc.source.accessKey,
+      extracted_payload: ort.extractedPayload || toOrtAuditPayload(ort),
+      reviewed_payload: toOrtAuditPayload(ort),
+      field_confidences: ort.fieldConfidences || {},
+      overall_confidence: Math.max(0, Math.min(1, Number(ort.confidence) || 0)),
+      needs_review: Boolean(ort.needsReview) || Number(ort.confidence) < 0.82,
+      reviewed: true,
+      changed_fields: getChangedOrtFields(ort),
+      status,
+      created_by: user.id,
+      reviewed_by: user.id,
+      reviewed_at: new Date().toISOString(),
+    });
+    if (error) throw error;
+  };
+
   const dedupeOrtReviewDocs = (docs: OrtReviewDocument[]) => {
     const existingAccessKeys = new Set(existingDocs.map(d => d.access_key).filter(Boolean));
     const existingInvoiceNumbers = new Set(existingDocs.map(d => d.invoice_number).filter(Boolean));
@@ -227,27 +276,30 @@ export default function Ingestion() {
       const { data, error } = await supabase.functions.invoke('extract-ort', { body: { files: payload } });
       if (error) throw error;
 
-      const docs: OrtReviewDocument[] = ((data as any)?.documents || []).map((ort: any, idx: number) => ({
-        invoiceNumber: ort.invoiceNumber || `ORT-${Date.now()}-${idx + 1}`,
-        issueDate: ort.issueDate || new Date().toISOString().substring(0, 10),
-        emitterName: ort.emitterName || 'ORT',
-        emitterCnpj: ort.emitterCnpj || '',
-        recipientName: ort.recipientName || '',
-        recipientCnpj: ort.recipientCnpj || '',
-        recipientCity: ort.recipientCity || '',
-        recipientState: ort.recipientState || '',
-        recipientAddress: ort.recipientAddress || '',
-        recipientNeighborhood: ort.recipientNeighborhood || '',
-        totalValue: Number(ort.totalValue) || 0,
-        totalWeight: Number(ort.totalWeight) || 0,
-        totalVolume: Number(ort.totalVolume) || 0,
-        estimatedPallets: Math.max(1, Number(ort.estimatedPallets) || Math.ceil((Number(ort.totalWeight) || 0) / 800) || 1),
-        productSummary: ort.productSummary || 'Mercadoria ORT',
-        confidence: Number(ort.confidence) || 0,
-        needsReview: Boolean(ort.needsReview) || Number(ort.confidence) < 0.82,
-        fieldConfidences: ort.fieldConfidences || {},
-        fileName: ort.sourceFileName || files[idx]?.name || `ORT ${idx + 1}`,
-      }));
+      const docs: OrtReviewDocument[] = ((data as any)?.documents || []).map((ort: any, idx: number) => {
+        const reviewDoc: OrtReviewDocument = {
+          invoiceNumber: ort.invoiceNumber || `ORT-${Date.now()}-${idx + 1}`,
+          issueDate: ort.issueDate || new Date().toISOString().substring(0, 10),
+          emitterName: ort.emitterName || 'ORT',
+          emitterCnpj: ort.emitterCnpj || '',
+          recipientName: ort.recipientName || '',
+          recipientCnpj: ort.recipientCnpj || '',
+          recipientCity: ort.recipientCity || '',
+          recipientState: ort.recipientState || '',
+          recipientAddress: ort.recipientAddress || '',
+          recipientNeighborhood: ort.recipientNeighborhood || '',
+          totalValue: Number(ort.totalValue) || 0,
+          totalWeight: Number(ort.totalWeight) || 0,
+          totalVolume: Number(ort.totalVolume) || 0,
+          estimatedPallets: Math.max(1, Number(ort.estimatedPallets) || Math.ceil((Number(ort.totalWeight) || 0) / 800) || 1),
+          productSummary: ort.productSummary || 'Mercadoria ORT',
+          confidence: Number(ort.confidence) || 0,
+          needsReview: Boolean(ort.needsReview) || Number(ort.confidence) < 0.82,
+          fieldConfidences: ort.fieldConfidences || {},
+          fileName: ort.sourceFileName || files[idx]?.name || `ORT ${idx + 1}`,
+        };
+        return { ...reviewDoc, extractedPayload: toOrtAuditPayload(reviewDoc) };
+      });
 
       const { uniqueDocs, batchDuplicates, existingDuplicates } = dedupeOrtReviewDocs(docs);
 
@@ -393,6 +445,8 @@ export default function Ingestion() {
               await logFreightCalculation(currentTenant.id, created.id, 'fiscal_document', freightBreakdown, user?.id);
             }
 
+            await recordOrtAudit(doc, created.id, loadId ? 'saved_and_linked' : 'saved');
+
             const freightLabel = freightValue ? ` (frete: R$ ${freightValue.toFixed(2)})` : '';
             results.push(`✅ NF ${doc.source.invoiceNumber} salva${freightLabel}`);
           }
@@ -477,6 +531,8 @@ export default function Ingestion() {
         if (freightValue && freightBreakdown?.tableId && currentTenant) {
           await logFreightCalculation(currentTenant.id, created.id, 'fiscal_document', freightBreakdown, user?.id);
         }
+
+        await recordOrtAudit(doc, created.id, 'auto_saved_for_grouping');
         savedCount++;
       } catch {
         // Will still proceed to grouping
@@ -569,6 +625,8 @@ export default function Ingestion() {
             if (freightValue && freightBreakdown?.tableId && currentTenant) {
               await logFreightCalculation(currentTenant.id, created.id, 'fiscal_document', freightBreakdown, user?.id);
             }
+
+            await recordOrtAudit(doc, created.id, 'imported_on_execute');
 
             const freightLabel = freightValue ? ` (frete: R$ ${freightValue.toFixed(2)})` : ' (sem tabela de frete)';
             results.push(`✅ NF ${doc.source.invoiceNumber} importada${freightLabel}`);
