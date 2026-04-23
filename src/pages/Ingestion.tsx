@@ -697,6 +697,7 @@ export default function Ingestion() {
           freight_breakdown: freightBreakdown,
           freight_table_id: freightTableId,
           status: 'confirmed',
+          client_load_number: doc.source.clientLoadNumber || null,
         });
 
         (doc as any)._savedId = created.id;
