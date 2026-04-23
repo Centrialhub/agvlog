@@ -471,7 +471,22 @@ export default function Traceability() {
               <div className="grid gap-3 md:grid-cols-5">
                 <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">NF</p><p className="font-semibold">{selectedRow.doc.invoice_number || '—'}</p></CardContent></Card>
                 <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Nº Carga (empresa)</p><p className="font-semibold">{selectedRow.doc.loads?.load_number || '—'}</p></CardContent></Card>
-                <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Carga Cliente (NF-e)</p><p className="font-semibold text-info">{selectedRow.doc.client_load_number || '—'}</p></CardContent></Card>
+                <Card><CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground">Carga Cliente (NF-e)</p>
+                  <p className="font-semibold text-info">{selectedRow.doc.client_load_number || '—'}</p>
+                  {selectedRow.doc.client_load_source?.source && selectedRow.doc.client_load_number && (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      <Badge variant="outline" className={`text-[10px] ${sourceBadgeClass(selectedRow.doc.client_load_source.source)}`}>
+                        {sourceLabel(selectedRow.doc.client_load_source.source)}
+                      </Badge>
+                      {selectedRow.doc.client_load_source.ruleLabel && (
+                        <Badge variant="outline" className="text-[10px] bg-muted/40">
+                          Regra: {selectedRow.doc.client_load_source.ruleLabel}
+                        </Badge>
+                      )}
+                    </div>
+                  )}
+                </CardContent></Card>
                 <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Ref. Pedido</p><p className="font-semibold">{selectedRow.doc.orders?.order_number || '—'}</p></CardContent></Card>
                 <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Situação</p><Badge variant="outline" className={statusBadgeClass(selectedRow.siatStatus)}>{siatLabels[selectedRow.siatStatus]}</Badge></CardContent></Card>
               </div>
