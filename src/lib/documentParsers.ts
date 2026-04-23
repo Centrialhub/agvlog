@@ -29,6 +29,8 @@ export interface ParsedNFe {
   totalWeight: number;
   totalVolume: number;
   estimatedPallets: number;
+  clientLoadNumber: string;
+  observation: string;
 }
 
 function getTagText(parent: Element, tagName: string): string {
@@ -86,6 +88,24 @@ export function parseNFeXml(xmlString: string): ParsedNFe {
     });
   }
 
+  // Extract client load number: try xPed first (purchase order on each item), then infCpl (free-text observation)
+  let clientLoadNumber = '';
+  for (let i = 0; i < detElements.length; i++) {
+    const prod = detElements[i].getElementsByTagName('prod')[0];
+    if (!prod) continue;
+    const xPed = getTagText(prod, 'xPed');
+    if (xPed) { clientLoadNumber = xPed; break; }
+  }
+
+  const infAdic = infNFe.getElementsByTagName('infAdic')[0];
+  const observation = getTagText(infAdic || infNFe, 'infCpl') || getTagText(infAdic || infNFe, 'infAdFisco') || '';
+  if (!clientLoadNumber && observation) {
+    // Patterns like "Carga: 12345", "CARGA 12345", "Nº Carga 12345", "Pedido Carga: 12345"
+    const m = observation.match(/(?:n[ºo°.]?\s*)?carga[:\s-]*([A-Za-z0-9\-\/]+)/i)
+      || observation.match(/(?:pedido|ped\.?)\s*(?:de\s*)?carga[:\s-]*([A-Za-z0-9\-\/]+)/i);
+    if (m) clientLoadNumber = m[1];
+  }
+
   const total = infNFe.getElementsByTagName('ICMSTot')[0];
   const totalValue = parseFloat(getTagText(total || infNFe, 'vNF')) || 0;
   const transp = infNFe.getElementsByTagName('transp')[0];
@@ -108,6 +128,7 @@ export function parseNFeXml(xmlString: string): ParsedNFe {
     emitterName, emitterCnpj, recipientName, recipientCnpj,
     recipientCity, recipientState, recipientAddress, recipientNeighborhood,
     items, totalValue, totalWeight, totalVolume, estimatedPallets,
+    clientLoadNumber, observation,
   };
 }
 
