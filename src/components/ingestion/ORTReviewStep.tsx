@@ -42,6 +42,14 @@ export interface OrtApplyHistoryEntry {
   newValues: Record<string, string>;
   /** Reference key written into the unified document on apply (for audit/reuse) */
   refKey?: string;
+  /**
+   * For replays: which compatibility rule resolved the live record.
+   * 'exact' means the live refKey still matches; 'snapshot' means no live
+   * record was found and we fell back to the stored values.
+   */
+  matchRule?: 'exact' | 'phone-tail' | 'email-local' | 'name-token' | 'zip' | 'street-city' | 'snapshot';
+  /** Field names that actually differed between snapshot and live record. */
+  changedFields?: string[];
 }
 
 export interface OrtReviewDocument {
