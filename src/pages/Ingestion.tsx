@@ -93,8 +93,6 @@ export default function Ingestion() {
   const [ortProcessing, setOrtProcessing] = useState(false);
   const [executionResults, setExecutionResults] = useState<string[]>([]);
 
-  const ortAuditByAccessKey = new Map(ortReviewDocs.map((ort, idx) => [buildOrtAccessKey(ort, `DOC${idx + 1}`), ort]));
-
   const fileToBase64 = (file: File) => new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || '').split(',')[1] || '');
@@ -143,7 +141,7 @@ export default function Ingestion() {
 
   const recordOrtAudit = async (doc: ValidatedDocument, fiscalDocumentId: string | null, status = 'saved') => {
     if (!currentTenant || !user || doc.source.series !== 'ORT') return;
-    const ort = ortAuditByAccessKey.get(doc.source.accessKey);
+    const ort = ortReviewDocs.find((candidate, idx) => buildOrtAccessKey(candidate, `DOC${idx + 1}`) === doc.source.accessKey);
     if (!ort) return;
     const { error } = await supabase.from('ort_extraction_audits' as any).insert({
       tenant_id: currentTenant.id,
