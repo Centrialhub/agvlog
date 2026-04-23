@@ -200,7 +200,7 @@ export default function Traceability() {
       const doc = row.doc;
       if (filters.invoice && !q(doc.invoice_number, filters.invoice)) return false;
       if (filters.loadNumber && !q(doc.loads?.load_number, filters.loadNumber)) return false;
-      if (filters.clientRef && !q(doc.orders?.order_number, filters.clientRef)) return false;
+      if (filters.clientRef && !q(doc.client_load_number, filters.clientRef) && !q(doc.orders?.order_number, filters.clientRef)) return false;
       if (filters.supplier && !q(doc.remitter, filters.supplier)) return false;
       if (filters.payment && !q(doc.orders?.payment_plan, filters.payment)) return false;
       if (filters.client && !q(doc.clients?.company_name || doc.recipient, filters.client)) return false;
