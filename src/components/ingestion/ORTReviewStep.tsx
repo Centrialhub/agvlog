@@ -9,6 +9,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { isUnknown, UNKNOWN } from '@/lib/ortFieldFallbacks';
 import ClientContactPicker from './ClientContactPicker';
 import { cn } from '@/lib/utils';
+import { contactKey as makeContactKey, addressKey as makeAddressKey } from '@/lib/clientContactKeys';
 
 export interface OrtReviewItem {
   description: string;
@@ -38,6 +39,8 @@ export interface OrtApplyHistoryEntry {
   previousValues: Record<string, string>;
   /** Snapshot of fields AFTER the application */
   newValues: Record<string, string>;
+  /** Reference key written into the unified document on apply (for audit/reuse) */
+  refKey?: string;
 }
 
 export interface OrtReviewDocument {
@@ -75,6 +78,14 @@ export interface OrtReviewDocument {
   unknownFields?: string[];
   auditLog?: OrtAuditEntry[];
   appliedHistory?: OrtApplyHistoryEntry[];
+  /** Audit linkage to client master record (persisted on the unified ORT). */
+  linkedClientId?: string | null;
+  /** Stable contact identity (e.g. "phone:11999998888") */
+  linkedContactKey?: string | null;
+  /** Stable address identity (e.g. "zip:01310100|num:200") */
+  linkedAddressKey?: string | null;
+  /** When the linkage was last set */
+  linkedAt?: string | null;
 }
 
 interface ORTReviewStepProps {
@@ -138,6 +149,18 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm, clien
                 {(doc.unknownFields?.length || 0) > 0 && (
                   <Badge variant="outline" className="border-destructive/40 bg-destructive/10 text-destructive gap-1">
                     <HelpCircle className="h-3 w-3" /> {doc.unknownFields!.length} campo(s) UNKNOWN — preencha
+                  </Badge>
+                )}
+                {(doc.linkedClientId || doc.linkedContactKey || doc.linkedAddressKey) && (
+                  <Badge variant="outline" className="border-success/30 bg-success/10 text-success gap-1" title={[
+                    doc.linkedClientId && `cliente: ${doc.linkedClientId}`,
+                    doc.linkedContactKey && `contato: ${doc.linkedContactKey}`,
+                    doc.linkedAddressKey && `endereço: ${doc.linkedAddressKey}`,
+                    doc.linkedAt && `às ${new Date(doc.linkedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`,
+                  ].filter(Boolean).join(' · ')}>
+                    <CheckCircle className="h-3 w-3" /> Vinculado
+                    {doc.linkedContactKey ? ' · contato' : ''}
+                    {doc.linkedAddressKey ? ' · endereço' : ''}
                   </Badge>
                 )}
               </span>
@@ -214,21 +237,27 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm, clien
                 onUpdate(index, {
                   recipientName: doc.recipientName || client.company_name,
                   recipientCnpj: doc.recipientCnpj || (client.tax_id || ''),
+                  linkedClientId: id,
+                  linkedAt: new Date().toISOString(),
                 });
               }}
               onApplyContact={(c) => {
                 const previousValues = { recipientPhone: doc.recipientPhone || '' };
                 const newValues = { recipientPhone: c.phone || doc.recipientPhone || '' };
+                const refKey = makeContactKey({ phone: newValues.recipientPhone, name: c.name, email: c.email });
                 const entry: OrtApplyHistoryEntry = {
                   type: 'contact',
                   appliedAt: new Date().toISOString(),
                   label: [c.name, c.phone].filter(Boolean).join(' · ') || 'Contato',
                   previousValues,
                   newValues,
+                  refKey,
                 };
                 onUpdate(index, {
                   recipientPhone: newValues.recipientPhone,
                   appliedHistory: [...(doc.appliedHistory || []), entry],
+                  linkedContactKey: refKey || doc.linkedContactKey || null,
+                  linkedAt: new Date().toISOString(),
                 });
               }}
               onApplyAddress={(a) => {
@@ -248,16 +277,25 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm, clien
                   recipientState: a.state || doc.recipientState || '',
                   recipientZip: a.zip || doc.recipientZip || '',
                 };
+                const refKey = makeAddressKey({
+                  street: newValues.recipientAddress,
+                  number: newValues.recipientAddressNumber,
+                  zip: newValues.recipientZip,
+                  city: newValues.recipientCity,
+                });
                 const entry: OrtApplyHistoryEntry = {
                   type: 'address',
                   appliedAt: new Date().toISOString(),
                   label: [a.street, a.number, a.city && `${a.city}/${a.state || ''}`].filter(Boolean).join(', ') || 'Endereço',
                   previousValues,
                   newValues,
+                  refKey,
                 };
                 onUpdate(index, {
                   ...newValues,
                   appliedHistory: [...(doc.appliedHistory || []), entry],
+                  linkedAddressKey: refKey || doc.linkedAddressKey || null,
+                  linkedAt: new Date().toISOString(),
                 });
               }}
             />
