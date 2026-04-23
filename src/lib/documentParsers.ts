@@ -82,6 +82,9 @@ export interface ParsedNFe {
   estimatedPallets: number;
   clientLoadNumber: string;
   observation: string;
+  clientLoadSource?: 'xPed' | 'observation' | 'none';
+  clientLoadRuleId?: string;
+  clientLoadRuleLabel?: string;
 }
 
 function getTagText(parent: Element, tagName: string): string {
