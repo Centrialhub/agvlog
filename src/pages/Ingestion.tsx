@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import PendingDocsGrouping from '@/components/loads/PendingDocsGrouping';
 import IngestionStepper from '@/components/ingestion/IngestionStepper';
 import UploadStep from '@/components/ingestion/UploadStep';
+import ORTReviewStep, { OrtReviewDocument } from '@/components/ingestion/ORTReviewStep';
 import ValidationStep from '@/components/ingestion/ValidationStep';
 import RoutingStep from '@/components/ingestion/RoutingStep';
 import type { RouteGroup } from '@/components/ingestion/RoutingStep';
@@ -84,6 +85,7 @@ export default function Ingestion() {
   const [resumeOpen, setResumeOpen] = useState(false);
   const [validatedDocs, setValidatedDocs] = useState<ValidatedDocument[]>([]);
   const [validatedOrders, setValidatedOrders] = useState<ValidatedOrder[]>([]);
+  const [ortReviewDocs, setOrtReviewDocs] = useState<OrtReviewDocument[]>([]);
   const [suggestions, setSuggestions] = useState<LoadSuggestion[]>([]);
   const [routeGroups, setRouteGroups] = useState<RouteGroup[]>([]);
   const [executing, setExecuting] = useState(false);
@@ -167,7 +169,7 @@ export default function Ingestion() {
     setValidatedOrders(validateOrderRows(orderRows, clients));
     const elapsed = Math.round(performance.now() - t0);
     console.log(`[Ingestion] processed ${files.length} files in ${elapsed}ms`);
-    setStep(1);
+    setStep(2);
   }, [existingDocs, clients]);
 
   const handleOrtFiles = useCallback(async (fileList: FileList) => {
