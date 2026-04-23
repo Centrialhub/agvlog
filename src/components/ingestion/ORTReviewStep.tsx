@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, Files, History, HelpCircle, MapPin, Package, Phone, ReceiptText, Undo2, Users } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, Files, History, HelpCircle, MapPin, Package, Phone, ReceiptText, RotateCcw, Undo2, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
