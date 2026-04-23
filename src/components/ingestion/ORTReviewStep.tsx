@@ -20,13 +20,19 @@ export interface OrtReviewItem {
 export interface OrtReviewDocument {
   invoiceNumber: string;
   issueDate: string;
+  paymentTerms: string;
+  billing: string;
+  cargoDescription: string;
   emitterName: string;
   emitterCnpj: string;
   recipientName: string;
   recipientCnpj: string;
+  recipientPhone: string;
   recipientCity: string;
   recipientState: string;
   recipientAddress: string;
+  recipientAddressNumber: string;
+  recipientZip: string;
   recipientNeighborhood: string;
   totalValue: number;
   totalWeight: number;
@@ -38,6 +44,8 @@ export interface OrtReviewDocument {
   needsReview: boolean;
   fieldConfidences?: Record<string, number>;
   fileName: string;
+  sourcePages?: string[];
+  pageCount?: number;
   extractedPayload?: Record<string, unknown>;
 }
 
@@ -82,12 +90,22 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm }: ORT
         <Card key={`${doc.fileName}-${index}`} className={doc.needsReview || doc.confidence < REVIEW_THRESHOLD ? 'border-warning/30' : ''}>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center justify-between gap-3 text-sm">
-              <span>ORT {doc.invoiceNumber || index + 1}</span>
+              <span className="flex flex-wrap items-center gap-2">
+                ORT {doc.invoiceNumber || index + 1}
+                {(doc.pageCount || 0) > 1 && (
+                  <Badge variant="outline" className="border-info/30 bg-info/10 text-info gap-1">
+                    <Files className="h-3 w-3" /> {doc.pageCount} páginas unidas
+                  </Badge>
+                )}
+              </span>
               <span className="flex items-center gap-2 text-[11px] text-muted-foreground">
                 {doc.needsReview || doc.confidence < REVIEW_THRESHOLD ? <AlertTriangle className="h-3.5 w-3.5 text-warning" /> : <CheckCircle className="h-3.5 w-3.5 text-success" />}
                 Confiança {Math.round((doc.confidence || 0) * 100)}% · {doc.fileName}
               </span>
             </CardTitle>
+            {doc.sourcePages && doc.sourcePages.length > 1 && (
+              <p className="text-[11px] text-muted-foreground">Páginas/scans: {doc.sourcePages.join(' · ')}</p>
+            )}
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
@@ -97,14 +115,25 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm }: ORT
               <div><Label className="text-xs">Peso kg</Label><Input type="number" className={fieldClass(doc, 'totalWeight')} value={doc.totalWeight} onChange={e => onUpdate(index, { totalWeight: Number(e.target.value) || 0 })} /></div>
             </div>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <div><Label className="text-xs">Prazo de pagamento</Label><Input className={fieldClass(doc, 'paymentTerms')} value={doc.paymentTerms} onChange={e => onUpdate(index, { paymentTerms: e.target.value })} placeholder="Ex.: 30 DIAS" /></div>
+              <div><Label className="text-xs">Cobrança</Label><Input className={fieldClass(doc, 'billing')} value={doc.billing} onChange={e => onUpdate(index, { billing: e.target.value })} placeholder="CIF / FOB / A pagar" /></div>
+              <div><Label className="text-xs">Carga</Label><Input className={fieldClass(doc, 'cargoDescription')} value={doc.cargoDescription} onChange={e => onUpdate(index, { cargoDescription: e.target.value })} placeholder="Tipo / natureza" /></div>
+            </div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
               <div><Label className="text-xs">Destinatário</Label><Input className={fieldClass(doc, 'recipientName', true)} value={doc.recipientName} onChange={e => onUpdate(index, { recipientName: e.target.value })} /></div>
               <div><Label className="text-xs">CNPJ/CPF destinatário</Label><Input className={fieldClass(doc, 'recipientCnpj')} value={doc.recipientCnpj} onChange={e => onUpdate(index, { recipientCnpj: e.target.value })} /></div>
-              <div><Label className="text-xs">Remetente</Label><Input className={fieldClass(doc, 'emitterName')} value={doc.emitterName} onChange={e => onUpdate(index, { emitterName: e.target.value })} /></div>
+              <div><Label className="text-xs">Telefone</Label><Input className={fieldClass(doc, 'recipientPhone')} value={doc.recipientPhone} onChange={e => onUpdate(index, { recipientPhone: e.target.value })} placeholder="(00) 00000-0000" /></div>
+            </div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-[2fr_80px_120px_1fr]">
+              <div><Label className="text-xs">Endereço</Label><Input className={fieldClass(doc, 'recipientAddress')} value={doc.recipientAddress} onChange={e => onUpdate(index, { recipientAddress: e.target.value })} /></div>
+              <div><Label className="text-xs">Número</Label><Input className={fieldClass(doc, 'recipientAddressNumber')} value={doc.recipientAddressNumber} onChange={e => onUpdate(index, { recipientAddressNumber: e.target.value })} /></div>
+              <div><Label className="text-xs">CEP</Label><Input className={fieldClass(doc, 'recipientZip')} value={doc.recipientZip} onChange={e => onUpdate(index, { recipientZip: e.target.value })} /></div>
+              <div><Label className="text-xs">Bairro</Label><Input className={fieldClass(doc, 'recipientNeighborhood')} value={doc.recipientNeighborhood} onChange={e => onUpdate(index, { recipientNeighborhood: e.target.value })} /></div>
             </div>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
               <div><Label className="text-xs">Cidade</Label><Input className={fieldClass(doc, 'recipientCity', true)} value={doc.recipientCity} onChange={e => onUpdate(index, { recipientCity: e.target.value })} /></div>
               <div><Label className="text-xs">UF</Label><Input className={fieldClass(doc, 'recipientState', true)} value={doc.recipientState} onChange={e => onUpdate(index, { recipientState: e.target.value.toUpperCase().slice(0, 2) })} /></div>
-              <div><Label className="text-xs">Bairro</Label><Input className={fieldClass(doc, 'recipientNeighborhood')} value={doc.recipientNeighborhood} onChange={e => onUpdate(index, { recipientNeighborhood: e.target.value })} /></div>
+              <div><Label className="text-xs">Remetente</Label><Input className={fieldClass(doc, 'emitterName')} value={doc.emitterName} onChange={e => onUpdate(index, { emitterName: e.target.value })} /></div>
               <div><Label className="text-xs">Valor</Label><Input type="number" className={fieldClass(doc, 'totalValue')} value={doc.totalValue} onChange={e => onUpdate(index, { totalValue: Number(e.target.value) || 0 })} /></div>
             </div>
             <div><Label className="text-xs">Mercadoria / observações</Label><Textarea className={fieldClass(doc, 'productSummary')} value={doc.productSummary} onChange={e => onUpdate(index, { productSummary: e.target.value })} /></div>

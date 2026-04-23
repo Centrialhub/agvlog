@@ -32,7 +32,15 @@ Deno.serve(async (req) => {
 
     const content: any[] = [{
       type: "text",
-      text: "Extraia dados de ORTs brasileiras para criar documentos compatíveis com NF-e no TMS. Cada imagem/PDF pode conter uma ORT diferente; retorne um documento separado por ORT encontrada. Quando houver tabela/lista de mercadorias, extraia múltiplos itens com descrição, quantidade, unidade, valor unitário, valor total, peso e volume quando legíveis. Não invente itens: se a lista estiver ilegível, retorne items vazio e use productSummary com o melhor resumo possível ou 'Mercadoria ORT'. Deduplicate páginas repetidas ou scans do mesmo documento dentro do envio. Preencha sourceFileName com o arquivo de origem mais provável. Use confidence 0-1 e needsReview=true se algum campo essencial estiver ilegível.",
+      text: [
+        "Extraia dados de ORTs brasileiras para criar documentos compatíveis com NF-e no TMS.",
+        "Os arquivos podem conter scans de várias páginas que pertencem ao mesmo documento/cliente: quando o número da ORT, CNPJ, nome do destinatário ou endereço se repetirem, agrupe as páginas em UM ÚNICO documento, somando itens, peso, volume e paletes (sem duplicar linhas idênticas).",
+        "Quando claramente forem ORTs diferentes (números/clientes distintos), retorne um documento por ORT.",
+        "Em sourcePages liste os nomes dos arquivos que compõem o documento e em pageCount informe quantas páginas foram unidas.",
+        "Extraia também: número da ORT (number), data de emissão (issueDate em YYYY-MM-DD), prazo de pagamento (paymentTerms — ex.: 'À VISTA', '30 DIAS', '30/60/90'), forma/responsável de cobrança (billing — ex.: 'CIF', 'FOB', 'Pago', 'A pagar', cliente faturado), descrição da carga (cargoDescription — natureza/tipo de mercadoria), telefone do cliente/destinatário (recipientPhone), endereço (recipientAddress — logradouro), número do endereço (recipientAddressNumber), bairro, cidade, UF e CEP (recipientZip).",
+        "Quando houver tabela/lista de mercadorias, extraia múltiplos itens com descrição, quantidade, unidade, valor unitário, valor total, peso e volume quando legíveis. Não invente itens: se a lista estiver ilegível, retorne items vazio e use productSummary com o melhor resumo possível ou 'Mercadoria ORT'.",
+        "Preencha sourceFileName com o arquivo principal e sourcePages com todos os arquivos agrupados. Use confidence 0-1 e needsReview=true se algum campo essencial estiver ilegível.",
+      ].join(" "),
     }];
 
     for (const file of files) {
@@ -65,13 +73,19 @@ Deno.serve(async (req) => {
                     properties: {
                       invoiceNumber: { type: "string" },
                       issueDate: { type: "string" },
+                      paymentTerms: { type: "string", description: "Prazo/condição de pagamento (ex.: À VISTA, 30 DIAS, 30/60/90)." },
+                      billing: { type: "string", description: "Tipo/responsável da cobrança (CIF, FOB, A pagar, Pago, cliente faturado)." },
+                      cargoDescription: { type: "string", description: "Descrição/natureza da carga transportada." },
                       emitterName: { type: "string" },
                       emitterCnpj: { type: "string" },
                       recipientName: { type: "string" },
                       recipientCnpj: { type: "string" },
+                      recipientPhone: { type: "string", description: "Telefone do cliente/destinatário com DDD." },
                       recipientCity: { type: "string" },
                       recipientState: { type: "string" },
                       recipientAddress: { type: "string" },
+                      recipientAddressNumber: { type: "string", description: "Número do endereço do destinatário." },
+                      recipientZip: { type: "string", description: "CEP do destinatário." },
                       recipientNeighborhood: { type: "string" },
                       totalValue: { type: "number" },
                       totalWeight: { type: "number" },
@@ -105,6 +119,12 @@ Deno.serve(async (req) => {
                         additionalProperties: { type: "number" },
                       },
                       sourceFileName: { type: "string" },
+                      sourcePages: {
+                        type: "array",
+                        description: "Lista de nomes de arquivos que compõem o documento (multi-página/scan).",
+                        items: { type: "string" },
+                      },
+                      pageCount: { type: "number", description: "Número de páginas/folhas que foram unidas neste documento." },
                     },
                     required: ["invoiceNumber", "recipientName", "recipientCity", "recipientState", "confidence", "needsReview"],
                     additionalProperties: false,

@@ -118,13 +118,19 @@ export default function Ingestion() {
   const toOrtAuditPayload = (ort: OrtReviewDocument) => ({
     invoiceNumber: ort.invoiceNumber,
     issueDate: ort.issueDate,
+    paymentTerms: ort.paymentTerms,
+    billing: ort.billing,
+    cargoDescription: ort.cargoDescription,
     emitterName: ort.emitterName,
     emitterCnpj: ort.emitterCnpj,
     recipientName: ort.recipientName,
     recipientCnpj: ort.recipientCnpj,
+    recipientPhone: ort.recipientPhone,
     recipientCity: ort.recipientCity,
     recipientState: ort.recipientState,
     recipientAddress: ort.recipientAddress,
+    recipientAddressNumber: ort.recipientAddressNumber,
+    recipientZip: ort.recipientZip,
     recipientNeighborhood: ort.recipientNeighborhood,
     totalValue: ort.totalValue,
     totalWeight: ort.totalWeight,
@@ -132,6 +138,8 @@ export default function Ingestion() {
     estimatedPallets: ort.estimatedPallets,
     productSummary: ort.productSummary,
     items: ort.items || [],
+    pageCount: ort.pageCount || 1,
+    sourcePages: ort.sourcePages || [ort.fileName],
   });
 
   const mapOrtItems = (ort: OrtReviewDocument) => {
@@ -299,13 +307,19 @@ export default function Ingestion() {
         const reviewDoc: OrtReviewDocument = {
           invoiceNumber: ort.invoiceNumber || `ORT-${Date.now()}-${idx + 1}`,
           issueDate: ort.issueDate || new Date().toISOString().substring(0, 10),
+          paymentTerms: ort.paymentTerms || '',
+          billing: ort.billing || '',
+          cargoDescription: ort.cargoDescription || '',
           emitterName: ort.emitterName || 'ORT',
           emitterCnpj: ort.emitterCnpj || '',
           recipientName: ort.recipientName || '',
           recipientCnpj: ort.recipientCnpj || '',
+          recipientPhone: ort.recipientPhone || '',
           recipientCity: ort.recipientCity || '',
           recipientState: ort.recipientState || '',
           recipientAddress: ort.recipientAddress || '',
+          recipientAddressNumber: ort.recipientAddressNumber || '',
+          recipientZip: ort.recipientZip || '',
           recipientNeighborhood: ort.recipientNeighborhood || '',
           totalValue: Number(ort.totalValue) || 0,
           totalWeight: Number(ort.totalWeight) || 0,
@@ -326,6 +340,10 @@ export default function Ingestion() {
           needsReview: Boolean(ort.needsReview) || Number(ort.confidence) < 0.82,
           fieldConfidences: ort.fieldConfidences || {},
           fileName: ort.sourceFileName || files[idx]?.name || `ORT ${idx + 1}`,
+          sourcePages: Array.isArray(ort.sourcePages) && ort.sourcePages.length
+            ? ort.sourcePages
+            : [ort.sourceFileName || files[idx]?.name || `ORT ${idx + 1}`],
+          pageCount: Number(ort.pageCount) || (Array.isArray(ort.sourcePages) ? ort.sourcePages.length : 1) || 1,
         };
         return { ...reviewDoc, extractedPayload: toOrtAuditPayload(reviewDoc) };
       });
