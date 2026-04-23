@@ -106,6 +106,37 @@ export function validateNFe(
     validations.push({ field: 'totalWeight', message: 'Peso não informado — estimativa de paletes pode ser imprecisa', severity: 'info' });
   }
 
+  // Auditoria de extração da carga do cliente — ajuda a identificar XMLs com formato fora das regras
+  if (!nfe.clientLoadNumber) {
+    const obsSnippet = (nfe.observation || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+    if (obsSnippet) {
+      validations.push({
+        field: 'clientLoadNumber',
+        message: `Número da carga do cliente não encontrado. Observação (trecho): "${obsSnippet}${nfe.observation.length > 200 ? '…' : ''}" — ajuste as regras em CLIENT_LOAD_OBSERVATION_RULES se necessário.`,
+        severity: 'info',
+      });
+      // eslint-disable-next-line no-console
+      console.warn('[ingestion] Carga do cliente NÃO extraída', {
+        invoiceNumber: nfe.invoiceNumber,
+        accessKey: nfe.accessKey,
+        recipient: nfe.recipientName,
+        observationSnippet: obsSnippet,
+      });
+    } else {
+      validations.push({
+        field: 'clientLoadNumber',
+        message: 'Número da carga do cliente não encontrado (NF-e sem xPed e sem observação).',
+        severity: 'info',
+      });
+    }
+  } else if (nfe.clientLoadSource === 'observation' && nfe.clientLoadRuleLabel) {
+    validations.push({
+      field: 'clientLoadNumber',
+      message: `Carga "${nfe.clientLoadNumber}" extraída da observação via regra "${nfe.clientLoadRuleLabel}".`,
+      severity: 'info',
+    });
+  }
+
   let matchedClientId: string | null = null;
   let matchedClientName: string | null = null;
   const recipientDoc = (nfe.recipientCnpj || '').replace(/\D/g, '');
