@@ -627,7 +627,7 @@ export default function Ingestion() {
 
       {step === 0 && (
         <>
-          <UploadStep onFiles={handleFiles} />
+          <UploadStep onFiles={handleFiles} onOrtFiles={handleOrtFiles} ortProcessing={ortProcessing} />
           {/* Pending NF-es without load */}
           {(() => {
             const pending = existingDocs.filter(d => !d.load_id && d.status !== 'cancelled');
