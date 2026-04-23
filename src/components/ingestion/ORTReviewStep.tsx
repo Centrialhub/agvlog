@@ -1,10 +1,11 @@
-import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, Files, Package, ReceiptText, Users } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, Files, HelpCircle, Package, ReceiptText, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { isUnknown, UNKNOWN } from '@/lib/ortFieldFallbacks';
 
 export interface OrtReviewItem {
   description: string;
@@ -49,6 +50,7 @@ export interface OrtReviewDocument {
   extractedPayload?: Record<string, unknown>;
   unifiedDocId?: string;
   mergedFrom?: number;
+  unknownFields?: string[];
 }
 
 interface ORTReviewStepProps {
@@ -66,6 +68,8 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm }: ORT
   const fieldClass = (doc: OrtReviewDocument, field: keyof OrtReviewDocument, required = false) => {
     const confidence = doc.fieldConfidences?.[String(field)] ?? doc.confidence;
     const missing = required && !String(doc[field] ?? '').trim();
+    const unknown = isUnknown(doc[field]);
+    if (unknown) return 'border-destructive bg-destructive/10 focus-visible:ring-destructive';
     return confidence < REVIEW_THRESHOLD || missing ? 'border-warning bg-warning/10 focus-visible:ring-warning' : '';
   };
 
@@ -102,6 +106,11 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm }: ORT
                 {(doc.mergedFrom || 0) > 1 && (
                   <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary gap-1">
                     <Users className="h-3 w-3" /> Unificado de {doc.mergedFrom} scans (mesmo cliente)
+                  </Badge>
+                )}
+                {(doc.unknownFields?.length || 0) > 0 && (
+                  <Badge variant="outline" className="border-destructive/40 bg-destructive/10 text-destructive gap-1">
+                    <HelpCircle className="h-3 w-3" /> {doc.unknownFields!.length} campo(s) UNKNOWN — preencha
                   </Badge>
                 )}
               </span>
