@@ -1,6 +1,57 @@
 // NF-e XML parser — extracts structured data from Brazilian electronic invoice XML
 import * as XLSX from 'xlsx';
 
+/**
+ * Regras configuráveis para extração do "número da carga do cliente" a partir do
+ * texto livre da observação (infCpl/infAdFisco) da NF-e.
+ *
+ * Cada regra tem:
+ *  - id: identificador estável para auditoria/log
+ *  - label: descrição amigável
+ *  - pattern: regex (case-insensitive) com 1 grupo de captura = o número
+ *
+ * A ordem importa: a primeira regra que casar é usada. Coloque as mais específicas no topo.
+ * Para adicionar/ajustar padrões, basta editar este array.
+ */
+export const CLIENT_LOAD_OBSERVATION_RULES: Array<{ id: string; label: string; pattern: RegExp }> = [
+  // "Pedido de Carga: 12345" / "Ped. Carga 12345"
+  { id: 'pedido_carga',  label: 'Pedido de Carga',     pattern: /(?:pedido|ped\.?)\s*(?:de\s*)?carga[:\s\-#nº°.]*([A-Za-z0-9][A-Za-z0-9\-\/]{0,30})/i },
+  // "Nº Carga 12345" / "Carga: 12345" / "CARGA Nº 12345"
+  { id: 'carga',         label: 'Carga (genérico)',    pattern: /(?:n[ºo°.]?\s*)?carga[:\s\-#nº°.]*([A-Za-z0-9][A-Za-z0-9\-\/]{0,30})/i },
+  // "OC 12345" / "OC: 12345" / "Ordem de Coleta 12345"
+  { id: 'oc',            label: 'Ordem de Coleta (OC)',pattern: /\b(?:oc|ordem\s+de\s+coleta)[:\s\-#nº°.]*([A-Za-z0-9][A-Za-z0-9\-\/]{0,30})/i },
+  // "OS 12345" / "Ordem de Serviço 12345"
+  { id: 'os',            label: 'Ordem de Serviço (OS)', pattern: /\b(?:os|ordem\s+de\s+servi[çc]o)[:\s\-#nº°.]*([A-Za-z0-9][A-Za-z0-9\-\/]{0,30})/i },
+  // "Romaneio: 12345" / "Romaneio Nº 12345"
+  { id: 'romaneio',      label: 'Romaneio',            pattern: /\bromaneio[:\s\-#nº°.]*([A-Za-z0-9][A-Za-z0-9\-\/]{0,30})/i },
+  // "Manifesto: 12345"
+  { id: 'manifesto',     label: 'Manifesto',           pattern: /\bmanifesto[:\s\-#nº°.]*([A-Za-z0-9][A-Za-z0-9\-\/]{0,30})/i },
+  // "Lote 12345" / "Lote: 12345"
+  { id: 'lote',          label: 'Lote',                pattern: /\blote[:\s\-#nº°.]*([A-Za-z0-9][A-Za-z0-9\-\/]{0,30})/i },
+  // "Pedido 12345" (último — só se nada mais casar)
+  { id: 'pedido',        label: 'Pedido (genérico)',   pattern: /\b(?:pedido|ped\.?)[:\s\-#nº°.]*([0-9][A-Za-z0-9\-\/]{0,30})/i },
+];
+
+export type ClientLoadExtraction = {
+  value: string;
+  source: 'xPed' | 'observation' | 'none';
+  ruleId?: string;
+  ruleLabel?: string;
+};
+
+/** Extrai número da carga a partir de um texto livre (infCpl/infAdFisco) usando as regras configuráveis. */
+export function extractClientLoadFromObservation(observation: string): { value: string; ruleId?: string; ruleLabel?: string } {
+  if (!observation) return { value: '' };
+  for (const rule of CLIENT_LOAD_OBSERVATION_RULES) {
+    const m = observation.match(rule.pattern);
+    if (m && m[1]) {
+      const cleaned = m[1].trim().replace(/[.,;:]+$/, '');
+      if (cleaned) return { value: cleaned, ruleId: rule.id, ruleLabel: rule.label };
+    }
+  }
+  return { value: '' };
+}
+
 export interface ParsedNFeItem {
   description: string;
   quantity: number;
