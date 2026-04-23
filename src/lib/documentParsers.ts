@@ -196,6 +196,7 @@ export function parseNFeXml(xmlString: string): ParsedNFe {
     recipientCity, recipientState, recipientAddress, recipientNeighborhood,
     items, totalValue, totalWeight, totalVolume, estimatedPallets,
     clientLoadNumber, observation,
+    clientLoadSource, clientLoadRuleId, clientLoadRuleLabel,
   };
 }
 
