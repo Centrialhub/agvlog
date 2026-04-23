@@ -292,19 +292,24 @@ export default function Traceability() {
       <Card>
         <CardContent className="space-y-3 p-4">
           <div className="grid gap-3 md:grid-cols-4 xl:grid-cols-6">
-            <div><Label>Nº NFS</Label><Input value={filters.invoice} onChange={e => setFilters(f => ({ ...f, invoice: e.target.value }))} /></div>
-            <div><Label>Nº Ctrc/Ort</Label><Input value={filters.ctrc} onChange={e => setFilters(f => ({ ...f, ctrc: e.target.value }))} /></div>
+            <div><Label>Nº NF</Label><Input value={filters.invoice} onChange={e => setFilters(f => ({ ...f, invoice: e.target.value }))} /></div>
+            <div><Label>Nº Carga (empresa)</Label><Input value={filters.loadNumber} onChange={e => setFilters(f => ({ ...f, loadNumber: e.target.value }))} /></div>
+            <div><Label>Nº Ref. Cliente</Label><Input value={filters.clientRef} onChange={e => setFilters(f => ({ ...f, clientRef: e.target.value }))} placeholder="Carga do cliente" /></div>
             <div><Label>Cliente</Label><Input value={filters.client} onChange={e => setFilters(f => ({ ...f, client: e.target.value }))} /></div>
+            <div><Label>Fornecedor / Remetente</Label><Input value={filters.supplier} onChange={e => setFilters(f => ({ ...f, supplier: e.target.value }))} /></div>
+            <div><Label>Forma de pagamento</Label><Input value={filters.payment} onChange={e => setFilters(f => ({ ...f, payment: e.target.value }))} placeholder="Ex: CIF, FOB, à vista" /></div>
             <div><Label>Placa</Label><Input value={filters.plate} onChange={e => setFilters(f => ({ ...f, plate: e.target.value }))} /></div>
             <div><Label>Motorista</Label><Input value={filters.driver} onChange={e => setFilters(f => ({ ...f, driver: e.target.value }))} /></div>
             <div><Label>Ocorrência</Label><Input value={filters.occurrence} onChange={e => setFilters(f => ({ ...f, occurrence: e.target.value }))} /></div>
           </div>
-          <div className="grid gap-3 md:grid-cols-5">
-            <div><Label>Data Emissão</Label><Input type="date" value={filters.start} onChange={e => setFilters(f => ({ ...f, start: e.target.value }))} /></div>
-            <div><Label>Até</Label><Input type="date" value={filters.end} onChange={e => setFilters(f => ({ ...f, end: e.target.value }))} /></div>
-            <div><Label>Situação NFS</Label><Select value={filters.status} onValueChange={value => setFilters(f => ({ ...f, status: value }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Object.entries(siatLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div>
+          <div className="grid gap-3 md:grid-cols-4 xl:grid-cols-7">
+            <div><Label>Emissão de</Label><Input type="date" value={filters.start} onChange={e => setFilters(f => ({ ...f, start: e.target.value }))} /></div>
+            <div><Label>Emissão até</Label><Input type="date" value={filters.end} onChange={e => setFilters(f => ({ ...f, end: e.target.value }))} /></div>
+            <div><Label>Entrega de</Label><Input type="date" value={filters.deliveryStart} onChange={e => setFilters(f => ({ ...f, deliveryStart: e.target.value }))} /></div>
+            <div><Label>Entrega até</Label><Input type="date" value={filters.deliveryEnd} onChange={e => setFilters(f => ({ ...f, deliveryEnd: e.target.value }))} /></div>
+            <div><Label>Situação</Label><Select value={filters.status} onValueChange={value => setFilters(f => ({ ...f, status: value }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Object.entries(siatLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div>
             <div><Label>POD</Label><Select value={filters.pod} onValueChange={value => setFilters(f => ({ ...f, pod: value }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="yes">Sim</SelectItem><SelectItem value="no">Não</SelectItem></SelectContent></Select></div>
-            <div><Label>Recebimento Canhoto</Label><Select value={filters.canhoto} onValueChange={value => setFilters(f => ({ ...f, canhoto: value }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="yes">Sim</SelectItem><SelectItem value="no">Não</SelectItem></SelectContent></Select></div>
+            <div><Label>Canhoto</Label><Select value={filters.canhoto} onValueChange={value => setFilters(f => ({ ...f, canhoto: value }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="yes">Sim</SelectItem><SelectItem value="no">Não</SelectItem></SelectContent></Select></div>
           </div>
         </CardContent>
       </Card>
