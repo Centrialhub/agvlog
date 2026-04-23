@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Check, ChevronsUpDown, MapPin, Phone, Save, UserPlus } from 'lucide-react';
+import { AlertTriangle, Check, ChevronsUpDown, MapPin, Phone, Save, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
@@ -218,9 +218,20 @@ export default function ClientContactPicker({
             </PopoverTrigger>
             <PopoverContent className="w-[360px] p-0" align="start">
               <Command>
-                <CommandInput placeholder="Buscar cliente por nome ou CNPJ..." />
+                <CommandInput placeholder="Buscar por nome, CNPJ ou telefone..." />
                 <CommandList>
                   <CommandEmpty>Nenhum cliente encontrado.</CommandEmpty>
+                  {phoneMatches.length > 0 && (
+                    <CommandGroup heading={`Encontrado(s) por telefone (${phoneDigits})`}>
+                      {phoneMatches.map(c => (
+                        <CommandItem key={`ph-${c.id}`} value={`phone ${c.company_name} ${c.tax_id || ''}`} onSelect={() => handleSelect(c.id)}>
+                          <Phone className="mr-2 h-3.5 w-3.5 text-primary" />
+                          <span className="flex-1 truncate">{c.company_name}</span>
+                          {c.tax_id && <span className="ml-2 text-[11px] text-muted-foreground">{c.tax_id}</span>}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  )}
                   <CommandGroup>
                     {filtered.map(c => (
                       <CommandItem key={c.id} value={`${c.company_name} ${c.tax_id || ''}`} onSelect={() => handleSelect(c.id)}>
