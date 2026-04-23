@@ -41,6 +41,7 @@ type TraceDocument = {
   remitter: string | null;
   order_id: string | null;
   client_load_number: string | null;
+  client_load_source: { source?: string; ruleId?: string | null; ruleLabel?: string | null } | null;
   clients?: { company_name: string | null } | null;
   orders?: { order_number: string | null; payment_plan: string | null } | null;
   loads?: {
@@ -102,6 +103,19 @@ const siatLabels: Record<SiatStatus | 'all', string> = {
   delivered: 'Entregue',
 };
 
+const sourceLabel = (source?: string | null) => {
+  if (source === 'xPed') return 'Campo NF (xPed)';
+  if (source === 'observation') return 'Observação (infCpl)';
+  if (source === 'manual') return 'Manual';
+  return source || '—';
+};
+
+const sourceBadgeClass = (source?: string | null) => {
+  if (source === 'xPed') return 'bg-success/10 text-success border-success/20';
+  if (source === 'observation') return 'bg-warning/10 text-warning border-warning/20';
+  return 'bg-muted/40 text-muted-foreground border-border';
+};
+
 const loadStatusToSiat = (doc: TraceDocument): SiatStatus => {
   const loadStatus = doc.loads?.status;
   if (loadStatus === 'delivered' || doc.status === 'delivered') return 'delivered';
@@ -146,7 +160,7 @@ export default function Traceability() {
       if (!currentTenant) return { docs: [], events: [], trips: [], stops: [] };
       const { data: docs, error: docsError } = await supabase
         .from('fiscal_documents')
-        .select('id, invoice_number, access_key, document_type, issue_date, recipient, remitter, recipient_city, recipient_state, product_summary, pallet_count, weight_kg, value, freight_value, status, load_id, client_id, order_id, client_load_number, clients(company_name), orders(order_number, payment_plan), loads(id, load_number, status, origin, destination, trip_id, vehicles(plate, nickname), drivers(name))')
+        .select('id, invoice_number, access_key, document_type, issue_date, recipient, remitter, recipient_city, recipient_state, product_summary, pallet_count, weight_kg, value, freight_value, status, load_id, client_id, order_id, client_load_number, client_load_source, clients(company_name), orders(order_number, payment_plan), loads(id, load_number, status, origin, destination, trip_id, vehicles(plate, nickname), drivers(name))')
         .eq('tenant_id', currentTenant.id)
         .order('created_at', { ascending: false })
         .limit(1000);
@@ -262,7 +276,7 @@ export default function Traceability() {
     const headers = [
       'Nº NF', 'Chave de Acesso', 'Tipo Documento', 'Status Documento', 'Data Emissão',
       'Nº Carga', 'Status Carga', 'Trip ID', 'Origem', 'Destino Carga',
-      'Carga Cliente (NF-e)', 'Ref. Cliente (Pedido)', 'Forma Pgto',
+      'Carga Cliente (NF-e)', 'Origem Carga Cliente', 'Regra Aplicada', 'Ref. Cliente (Pedido)', 'Forma Pgto',
       'Cliente', 'Fornecedor / Remetente',
       'Cidade Destino', 'UF Destino',
       'Placa', 'Veículo', 'Motorista',
@@ -297,6 +311,8 @@ export default function Traceability() {
         doc.loads?.origin || '',
         doc.loads?.destination || '',
         doc.client_load_number || '',
+        doc.client_load_source?.source ? sourceLabel(doc.client_load_source.source) : '',
+        doc.client_load_source?.ruleLabel || '',
         doc.orders?.order_number || '',
         doc.orders?.payment_plan || '',
         doc.clients?.company_name || doc.recipient || '',
@@ -410,7 +426,22 @@ export default function Traceability() {
                       <TableCell><Badge variant="outline" className={statusBadgeClass(row.siatStatus)}>{siatLabels[row.siatStatus]}</Badge></TableCell>
                       <TableCell className="font-mono text-xs">{row.doc.invoice_number || '—'}</TableCell>
                       <TableCell className="font-mono text-xs text-primary">{row.doc.loads?.load_number || '—'}</TableCell>
-                      <TableCell className="font-mono text-xs text-info">{row.doc.client_load_number || '—'}</TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {row.doc.client_load_number ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-info">{row.doc.client_load_number}</span>
+                            {row.doc.client_load_source?.source && (
+                              <Badge
+                                variant="outline"
+                                className={`text-[9px] px-1 py-0 leading-tight ${sourceBadgeClass(row.doc.client_load_source.source)}`}
+                                title={`Origem: ${sourceLabel(row.doc.client_load_source.source)}${row.doc.client_load_source.ruleLabel ? ' • Regra: ' + row.doc.client_load_source.ruleLabel : ''}`}
+                              >
+                                {row.doc.client_load_source.source === 'xPed' ? 'NF' : row.doc.client_load_source.source === 'observation' ? 'OBS' : '?'}
+                              </Badge>
+                            )}
+                          </div>
+                        ) : '—'}
+                      </TableCell>
                       <TableCell className="font-mono text-xs">{row.doc.orders?.order_number || '—'}</TableCell>
                       <TableCell className="text-xs">{row.doc.orders?.payment_plan || '—'}</TableCell>
                       <TableCell>{row.doc.value ? currency.format(Number(row.doc.value)) : '—'}</TableCell>
@@ -440,7 +471,22 @@ export default function Traceability() {
               <div className="grid gap-3 md:grid-cols-5">
                 <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">NF</p><p className="font-semibold">{selectedRow.doc.invoice_number || '—'}</p></CardContent></Card>
                 <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Nº Carga (empresa)</p><p className="font-semibold">{selectedRow.doc.loads?.load_number || '—'}</p></CardContent></Card>
-                <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Carga Cliente (NF-e)</p><p className="font-semibold text-info">{selectedRow.doc.client_load_number || '—'}</p></CardContent></Card>
+                <Card><CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground">Carga Cliente (NF-e)</p>
+                  <p className="font-semibold text-info">{selectedRow.doc.client_load_number || '—'}</p>
+                  {selectedRow.doc.client_load_source?.source && selectedRow.doc.client_load_number && (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      <Badge variant="outline" className={`text-[10px] ${sourceBadgeClass(selectedRow.doc.client_load_source.source)}`}>
+                        {sourceLabel(selectedRow.doc.client_load_source.source)}
+                      </Badge>
+                      {selectedRow.doc.client_load_source.ruleLabel && (
+                        <Badge variant="outline" className="text-[10px] bg-muted/40">
+                          Regra: {selectedRow.doc.client_load_source.ruleLabel}
+                        </Badge>
+                      )}
+                    </div>
+                  )}
+                </CardContent></Card>
                 <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Ref. Pedido</p><p className="font-semibold">{selectedRow.doc.orders?.order_number || '—'}</p></CardContent></Card>
                 <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Situação</p><Badge variant="outline" className={statusBadgeClass(selectedRow.siatStatus)}>{siatLabels[selectedRow.siatStatus]}</Badge></CardContent></Card>
               </div>
