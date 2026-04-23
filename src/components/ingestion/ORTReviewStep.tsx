@@ -26,6 +26,7 @@ export interface OrtReviewDocument {
   needsReview: boolean;
   fieldConfidences?: Record<string, number>;
   fileName: string;
+  extractedPayload?: Record<string, unknown>;
 }
 
 interface ORTReviewStepProps {
