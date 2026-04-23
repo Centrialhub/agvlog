@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, Files } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, Files, Package, ReceiptText, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -36,6 +36,8 @@ interface ORTReviewStepProps {
 }
 
 const REVIEW_THRESHOLD = 0.82;
+const currency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+const number = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 });
 
 export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm }: ORTReviewStepProps) {
   const fieldClass = (doc: OrtReviewDocument, field: keyof OrtReviewDocument, required = false) => {
@@ -96,6 +98,41 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm }: ORT
           </CardContent>
         </Card>
       ))}
+
+      <Card className="border-primary/20 bg-primary/5">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <ReceiptText className="h-4 w-4 text-primary" /> Resumo para confirmar
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {docs.map((doc, index) => (
+            <div key={`summary-${doc.fileName}-${index}`} className="rounded-md border border-border bg-background/80 p-3">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <span className="font-medium text-sm">ORT {doc.invoiceNumber || index + 1}</span>
+                <Badge variant="outline">{currency.format(doc.totalValue || 0)}</Badge>
+              </div>
+              <div className="grid grid-cols-1 gap-3 text-xs md:grid-cols-3">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5 font-medium text-foreground"><Users className="h-3.5 w-3.5 text-muted-foreground" /> Partes</div>
+                  <p className="text-muted-foreground">Emitente: <span className="text-foreground">{doc.emitterName || '—'}</span></p>
+                  <p className="text-muted-foreground">Destinatário: <span className="text-foreground">{doc.recipientName || '—'}</span></p>
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5 font-medium text-foreground"><ReceiptText className="h-3.5 w-3.5 text-muted-foreground" /> Valores</div>
+                  <p className="text-muted-foreground">Peso: <span className="text-foreground">{number.format(doc.totalWeight || 0)} kg</span></p>
+                  <p className="text-muted-foreground">Paletes: <span className="text-foreground">{number.format(doc.estimatedPallets || 0)}</span></p>
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5 font-medium text-foreground"><Package className="h-3.5 w-3.5 text-muted-foreground" /> Itens</div>
+                  <p className="line-clamp-2 text-foreground">{doc.productSummary || 'Mercadoria ORT'}</p>
+                  <p className="text-muted-foreground">Destino: <span className="text-foreground">{[doc.recipientCity, doc.recipientState].filter(Boolean).join(' - ') || '—'}</span></p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
 
       <div className="flex justify-between border-t border-border pt-4">
         <Button variant="outline" onClick={onBack}><ArrowLeft className="mr-2 h-4 w-4" /> Voltar</Button>
