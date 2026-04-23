@@ -276,27 +276,30 @@ export default function Ingestion() {
       const { data, error } = await supabase.functions.invoke('extract-ort', { body: { files: payload } });
       if (error) throw error;
 
-      const docs: OrtReviewDocument[] = ((data as any)?.documents || []).map((ort: any, idx: number) => ({
-        invoiceNumber: ort.invoiceNumber || `ORT-${Date.now()}-${idx + 1}`,
-        issueDate: ort.issueDate || new Date().toISOString().substring(0, 10),
-        emitterName: ort.emitterName || 'ORT',
-        emitterCnpj: ort.emitterCnpj || '',
-        recipientName: ort.recipientName || '',
-        recipientCnpj: ort.recipientCnpj || '',
-        recipientCity: ort.recipientCity || '',
-        recipientState: ort.recipientState || '',
-        recipientAddress: ort.recipientAddress || '',
-        recipientNeighborhood: ort.recipientNeighborhood || '',
-        totalValue: Number(ort.totalValue) || 0,
-        totalWeight: Number(ort.totalWeight) || 0,
-        totalVolume: Number(ort.totalVolume) || 0,
-        estimatedPallets: Math.max(1, Number(ort.estimatedPallets) || Math.ceil((Number(ort.totalWeight) || 0) / 800) || 1),
-        productSummary: ort.productSummary || 'Mercadoria ORT',
-        confidence: Number(ort.confidence) || 0,
-        needsReview: Boolean(ort.needsReview) || Number(ort.confidence) < 0.82,
-        fieldConfidences: ort.fieldConfidences || {},
-        fileName: ort.sourceFileName || files[idx]?.name || `ORT ${idx + 1}`,
-      }));
+      const docs: OrtReviewDocument[] = ((data as any)?.documents || []).map((ort: any, idx: number) => {
+        const reviewDoc: OrtReviewDocument = {
+          invoiceNumber: ort.invoiceNumber || `ORT-${Date.now()}-${idx + 1}`,
+          issueDate: ort.issueDate || new Date().toISOString().substring(0, 10),
+          emitterName: ort.emitterName || 'ORT',
+          emitterCnpj: ort.emitterCnpj || '',
+          recipientName: ort.recipientName || '',
+          recipientCnpj: ort.recipientCnpj || '',
+          recipientCity: ort.recipientCity || '',
+          recipientState: ort.recipientState || '',
+          recipientAddress: ort.recipientAddress || '',
+          recipientNeighborhood: ort.recipientNeighborhood || '',
+          totalValue: Number(ort.totalValue) || 0,
+          totalWeight: Number(ort.totalWeight) || 0,
+          totalVolume: Number(ort.totalVolume) || 0,
+          estimatedPallets: Math.max(1, Number(ort.estimatedPallets) || Math.ceil((Number(ort.totalWeight) || 0) / 800) || 1),
+          productSummary: ort.productSummary || 'Mercadoria ORT',
+          confidence: Number(ort.confidence) || 0,
+          needsReview: Boolean(ort.needsReview) || Number(ort.confidence) < 0.82,
+          fieldConfidences: ort.fieldConfidences || {},
+          fileName: ort.sourceFileName || files[idx]?.name || `ORT ${idx + 1}`,
+        };
+        return { ...reviewDoc, extractedPayload: toOrtAuditPayload(reviewDoc) };
+      });
 
       const { uniqueDocs, batchDuplicates, existingDuplicates } = dedupeOrtReviewDocs(docs);
 
