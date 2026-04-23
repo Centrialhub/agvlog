@@ -43,6 +43,7 @@ export interface FiscalDocument {
   freight_value: number | null;
   freight_breakdown: any | null;
   freight_table_id: string | null;
+  client_load_number: string | null;
   cbs_base: number | null;
   cbs_rate: number | null;
   cbs_value: number | null;

@@ -1128,6 +1128,7 @@ export type Database = {
           cbs_rate: number | null
           cbs_value: number | null
           client_id: string | null
+          client_load_number: string | null
           created_at: string
           created_by: string | null
           document_type: string
@@ -1161,6 +1162,7 @@ export type Database = {
           cbs_rate?: number | null
           cbs_value?: number | null
           client_id?: string | null
+          client_load_number?: string | null
           created_at?: string
           created_by?: string | null
           document_type?: string
@@ -1194,6 +1196,7 @@ export type Database = {
           cbs_rate?: number | null
           cbs_value?: number | null
           client_id?: string | null
+          client_load_number?: string | null
           created_at?: string
           created_by?: string | null
           document_type?: string

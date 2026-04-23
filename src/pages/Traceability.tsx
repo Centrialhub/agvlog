@@ -40,6 +40,7 @@ type TraceDocument = {
   client_id: string | null;
   remitter: string | null;
   order_id: string | null;
+  client_load_number: string | null;
   clients?: { company_name: string | null } | null;
   orders?: { order_number: string | null; payment_plan: string | null } | null;
   loads?: {
@@ -145,7 +146,7 @@ export default function Traceability() {
       if (!currentTenant) return { docs: [], events: [], trips: [], stops: [] };
       const { data: docs, error: docsError } = await supabase
         .from('fiscal_documents')
-        .select('id, invoice_number, access_key, document_type, issue_date, recipient, remitter, recipient_city, recipient_state, product_summary, pallet_count, weight_kg, value, freight_value, status, load_id, client_id, order_id, clients(company_name), orders(order_number, payment_plan), loads(id, load_number, status, origin, destination, trip_id, vehicles(plate, nickname), drivers(name))')
+        .select('id, invoice_number, access_key, document_type, issue_date, recipient, remitter, recipient_city, recipient_state, product_summary, pallet_count, weight_kg, value, freight_value, status, load_id, client_id, order_id, client_load_number, clients(company_name), orders(order_number, payment_plan), loads(id, load_number, status, origin, destination, trip_id, vehicles(plate, nickname), drivers(name))')
         .eq('tenant_id', currentTenant.id)
         .order('created_at', { ascending: false })
         .limit(1000);
@@ -199,7 +200,7 @@ export default function Traceability() {
       const doc = row.doc;
       if (filters.invoice && !q(doc.invoice_number, filters.invoice)) return false;
       if (filters.loadNumber && !q(doc.loads?.load_number, filters.loadNumber)) return false;
-      if (filters.clientRef && !q(doc.orders?.order_number, filters.clientRef)) return false;
+      if (filters.clientRef && !q(doc.client_load_number, filters.clientRef) && !q(doc.orders?.order_number, filters.clientRef)) return false;
       if (filters.supplier && !q(doc.remitter, filters.supplier)) return false;
       if (filters.payment && !q(doc.orders?.payment_plan, filters.payment)) return false;
       if (filters.client && !q(doc.clients?.company_name || doc.recipient, filters.client)) return false;
@@ -261,7 +262,7 @@ export default function Traceability() {
     const headers = [
       'Nº NF', 'Chave de Acesso', 'Tipo Documento', 'Status Documento', 'Data Emissão',
       'Nº Carga', 'Status Carga', 'Trip ID', 'Origem', 'Destino Carga',
-      'Ref. Cliente', 'Forma Pgto',
+      'Carga Cliente (NF-e)', 'Ref. Cliente (Pedido)', 'Forma Pgto',
       'Cliente', 'Fornecedor / Remetente',
       'Cidade Destino', 'UF Destino',
       'Placa', 'Veículo', 'Motorista',
@@ -295,6 +296,7 @@ export default function Traceability() {
         doc.loads?.trip_id || '',
         doc.loads?.origin || '',
         doc.loads?.destination || '',
+        doc.client_load_number || '',
         doc.orders?.order_number || '',
         doc.orders?.payment_plan || '',
         doc.clients?.company_name || doc.recipient || '',
@@ -365,7 +367,7 @@ export default function Traceability() {
           <div className="grid gap-3 md:grid-cols-4 xl:grid-cols-6">
             <div><Label>Nº NF</Label><Input value={filters.invoice} onChange={e => setFilters(f => ({ ...f, invoice: e.target.value }))} /></div>
             <div><Label>Nº Carga (empresa)</Label><Input value={filters.loadNumber} onChange={e => setFilters(f => ({ ...f, loadNumber: e.target.value }))} /></div>
-            <div><Label>Nº Ref. Cliente</Label><Input value={filters.clientRef} onChange={e => setFilters(f => ({ ...f, clientRef: e.target.value }))} placeholder="Carga do cliente" /></div>
+            <div><Label>Carga Cliente / Ref.</Label><Input value={filters.clientRef} onChange={e => setFilters(f => ({ ...f, clientRef: e.target.value }))} placeholder="Carga do cliente (NF-e) ou ref. pedido" /></div>
             <div><Label>Cliente</Label><Input value={filters.client} onChange={e => setFilters(f => ({ ...f, client: e.target.value }))} /></div>
             <div><Label>Fornecedor / Remetente</Label><Input value={filters.supplier} onChange={e => setFilters(f => ({ ...f, supplier: e.target.value }))} /></div>
             <div><Label>Forma de pagamento</Label><Input value={filters.payment} onChange={e => setFilters(f => ({ ...f, payment: e.target.value }))} placeholder="Ex: CIF, FOB, à vista" /></div>
@@ -391,12 +393,12 @@ export default function Traceability() {
             <Table>
               <TableHeader>
                   <TableRow>
-                    <TableHead className="w-10"></TableHead><TableHead>Palete</TableHead><TableHead>POD</TableHead><TableHead>Rec.Canhoto</TableHead><TableHead>Situação</TableHead><TableHead>Nº NF</TableHead><TableHead>Nº Carga</TableHead><TableHead>Ref. Cliente</TableHead><TableHead>Forma pgto</TableHead><TableHead>Valor Nota</TableHead><TableHead>Valor Frete</TableHead><TableHead>Cliente</TableHead><TableHead>Fornecedor</TableHead><TableHead>Placa</TableHead><TableHead>Motorista</TableHead><TableHead>Data Chegada</TableHead><TableHead>Hora Chegada</TableHead><TableHead>Ocorrência</TableHead><TableHead></TableHead>
+                    <TableHead className="w-10"></TableHead><TableHead>Palete</TableHead><TableHead>POD</TableHead><TableHead>Rec.Canhoto</TableHead><TableHead>Situação</TableHead><TableHead>Nº NF</TableHead><TableHead>Nº Carga (empresa)</TableHead><TableHead>Carga Cliente (NF-e)</TableHead><TableHead>Ref. Pedido</TableHead><TableHead>Forma pgto</TableHead><TableHead>Valor Nota</TableHead><TableHead>Valor Frete</TableHead><TableHead>Cliente</TableHead><TableHead>Fornecedor</TableHead><TableHead>Placa</TableHead><TableHead>Motorista</TableHead><TableHead>Data Chegada</TableHead><TableHead>Hora Chegada</TableHead><TableHead>Ocorrência</TableHead><TableHead></TableHead>
                   </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading ? <TableRow><TableCell colSpan={18} className="py-10 text-center text-muted-foreground">Carregando rastreabilidade...</TableCell></TableRow>
-                : filteredRows.length === 0 ? <TableRow><TableCell colSpan={18} className="py-10 text-center text-muted-foreground">Nenhum registro encontrado</TableCell></TableRow>
+                {isLoading ? <TableRow><TableCell colSpan={20} className="py-10 text-center text-muted-foreground">Carregando rastreabilidade...</TableCell></TableRow>
+                : filteredRows.length === 0 ? <TableRow><TableCell colSpan={20} className="py-10 text-center text-muted-foreground">Nenhum registro encontrado</TableCell></TableRow>
                 : filteredRows.map(row => {
                   const lastStop = row.stops.at(-1);
                   return (
@@ -408,6 +410,7 @@ export default function Traceability() {
                       <TableCell><Badge variant="outline" className={statusBadgeClass(row.siatStatus)}>{siatLabels[row.siatStatus]}</Badge></TableCell>
                       <TableCell className="font-mono text-xs">{row.doc.invoice_number || '—'}</TableCell>
                       <TableCell className="font-mono text-xs text-primary">{row.doc.loads?.load_number || '—'}</TableCell>
+                      <TableCell className="font-mono text-xs text-info">{row.doc.client_load_number || '—'}</TableCell>
                       <TableCell className="font-mono text-xs">{row.doc.orders?.order_number || '—'}</TableCell>
                       <TableCell className="text-xs">{row.doc.orders?.payment_plan || '—'}</TableCell>
                       <TableCell>{row.doc.value ? currency.format(Number(row.doc.value)) : '—'}</TableCell>
@@ -434,10 +437,11 @@ export default function Traceability() {
           <DialogHeader><DialogTitle>Detalhe da rastreabilidade</DialogTitle></DialogHeader>
           {selectedRow && (
             <div className="space-y-4">
-              <div className="grid gap-3 md:grid-cols-4">
+              <div className="grid gap-3 md:grid-cols-5">
                 <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">NF</p><p className="font-semibold">{selectedRow.doc.invoice_number || '—'}</p></CardContent></Card>
                 <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Nº Carga (empresa)</p><p className="font-semibold">{selectedRow.doc.loads?.load_number || '—'}</p></CardContent></Card>
-                <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Ref. Cliente</p><p className="font-semibold">{selectedRow.doc.orders?.order_number || '—'}</p></CardContent></Card>
+                <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Carga Cliente (NF-e)</p><p className="font-semibold text-info">{selectedRow.doc.client_load_number || '—'}</p></CardContent></Card>
+                <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Ref. Pedido</p><p className="font-semibold">{selectedRow.doc.orders?.order_number || '—'}</p></CardContent></Card>
                 <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Situação</p><Badge variant="outline" className={statusBadgeClass(selectedRow.siatStatus)}>{siatLabels[selectedRow.siatStatus]}</Badge></CardContent></Card>
               </div>
 

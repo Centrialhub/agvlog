@@ -519,6 +519,8 @@ export default function Ingestion() {
         totalWeight: ort.totalWeight || 0,
         totalVolume: ort.totalVolume || 0,
         estimatedPallets: Math.max(1, ort.estimatedPallets || 1),
+        clientLoadNumber: '',
+        observation: '',
       };
       const validated = validateNFe(parsed, `ORT ${ort.fileName}`, existingDocs, clients, indexes);
       if (seenReviewKeys.has(accessKey)) {
@@ -609,6 +611,7 @@ export default function Ingestion() {
               freight_table_id: freightTableId,
               status: 'confirmed',
               load_id: loadId || null,
+              client_load_number: doc.source.clientLoadNumber || null,
             });
 
             if (freightValue && freightBreakdown?.tableId && currentTenant) {
@@ -694,6 +697,7 @@ export default function Ingestion() {
           freight_breakdown: freightBreakdown,
           freight_table_id: freightTableId,
           status: 'confirmed',
+          client_load_number: doc.source.clientLoadNumber || null,
         });
 
         (doc as any)._savedId = created.id;
@@ -789,6 +793,7 @@ export default function Ingestion() {
               freight_breakdown: freightBreakdown,
               freight_table_id: freightTableId,
               status: 'confirmed',
+              client_load_number: doc.source.clientLoadNumber || null,
             });
             createdDocIds.set(doc.source.invoiceNumber, created.id);
 
