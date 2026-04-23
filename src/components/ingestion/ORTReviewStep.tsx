@@ -6,6 +6,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 
+export interface OrtReviewItem {
+  description: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  totalPrice: number;
+  weightKg?: number;
+  volumeM3?: number;
+  confidence?: number;
+}
+
 export interface OrtReviewDocument {
   invoiceNumber: string;
   issueDate: string;
@@ -22,6 +33,7 @@ export interface OrtReviewDocument {
   totalVolume: number;
   estimatedPallets: number;
   productSummary: string;
+  items?: OrtReviewItem[];
   confidence: number;
   needsReview: boolean;
   fieldConfidences?: Record<string, number>;
