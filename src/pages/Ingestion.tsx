@@ -194,28 +194,94 @@ export default function Ingestion() {
   const dedupeOrtReviewDocs = (docs: OrtReviewDocument[]) => {
     const existingAccessKeys = new Set(existingDocs.map(d => d.access_key).filter(Boolean));
     const existingInvoiceNumbers = new Set(existingDocs.map(d => d.invoice_number).filter(Boolean));
-    const seen = new Set<string>();
-    let batchDuplicates = 0;
-    let existingDuplicates = 0;
 
-    const uniqueDocs = docs.filter((doc, index) => {
+    // Build a unified-doc key. Priority: ORT number, then CNPJ, then normalized name+address+city.
+    const unifiedKeyFor = (doc: OrtReviewDocument): string => {
+      const ortNum = normalizeOrtKeyPart(doc.invoiceNumber);
+      if (ortNum) return `ORT#${ortNum}`;
+      const cnpj = normalizeOrtKeyPart(doc.recipientCnpj);
+      const addr = normalizeOrtKeyPart(`${doc.recipientAddress}${doc.recipientAddressNumber}`);
+      const city = normalizeOrtKeyPart(doc.recipientCity);
+      const name = normalizeOrtKeyPart(doc.recipientName);
+      if (cnpj && (addr || city)) return `CNPJ#${cnpj}#${city}#${addr}`;
+      if (cnpj) return `CNPJ#${cnpj}`;
+      if (name && addr && city) return `NAME#${name}#${city}#${addr}`;
+      return `RAW#${doc.fileName}#${Math.random()}`;
+    };
+
+    const merged = new Map<string, OrtReviewDocument>();
+    let batchDuplicates = 0;
+    let mergedScans = 0;
+
+    docs.forEach(doc => {
+      const key = unifiedKeyFor(doc);
+      const existing = merged.get(key);
+      if (!existing) {
+        merged.set(key, { ...doc, unifiedDocId: key, mergedFrom: 1 });
+        return;
+      }
+      // Merge: sum totals, dedupe items by description, append source pages
+      mergedScans += 1;
+      type ItemLite = NonNullable<OrtReviewDocument['items']>[number];
+      const itemMap = new Map<string, ItemLite>();
+      const pushItem = (it: ItemLite) => {
+        const k = (it.description || '').trim().toLowerCase();
+        if (!k) return;
+        const cur = itemMap.get(k);
+        if (cur) {
+          cur.quantity = (cur.quantity || 0) + (it.quantity || 0);
+          cur.totalPrice = (cur.totalPrice || 0) + (it.totalPrice || 0);
+          cur.weightKg = (cur.weightKg || 0) + (it.weightKg || 0);
+          cur.volumeM3 = (cur.volumeM3 || 0) + (it.volumeM3 || 0);
+        } else {
+          itemMap.set(k, { ...it });
+        }
+      };
+      (existing.items || []).forEach(pushItem);
+      (doc.items || []).forEach(pushItem);
+
+      const pages = Array.from(new Set([...(existing.sourcePages || []), ...(doc.sourcePages || [])]));
+      merged.set(key, {
+        ...existing,
+        // Prefer non-empty values from either side
+        invoiceNumber: existing.invoiceNumber || doc.invoiceNumber,
+        issueDate: existing.issueDate || doc.issueDate,
+        paymentTerms: existing.paymentTerms || doc.paymentTerms,
+        billing: existing.billing || doc.billing,
+        cargoDescription: existing.cargoDescription || doc.cargoDescription,
+        recipientPhone: existing.recipientPhone || doc.recipientPhone,
+        recipientAddress: existing.recipientAddress || doc.recipientAddress,
+        recipientAddressNumber: existing.recipientAddressNumber || doc.recipientAddressNumber,
+        recipientZip: existing.recipientZip || doc.recipientZip,
+        recipientNeighborhood: existing.recipientNeighborhood || doc.recipientNeighborhood,
+        totalValue: (existing.totalValue || 0) + (doc.totalValue || 0),
+        totalWeight: (existing.totalWeight || 0) + (doc.totalWeight || 0),
+        totalVolume: (existing.totalVolume || 0) + (doc.totalVolume || 0),
+        estimatedPallets: Math.max(1, (existing.estimatedPallets || 0) + (doc.estimatedPallets || 0)),
+        items: Array.from(itemMap.values()),
+        sourcePages: pages,
+        pageCount: pages.length || (existing.pageCount || 1) + (doc.pageCount || 1),
+        confidence: Math.min(existing.confidence || 0, doc.confidence || 0),
+        needsReview: existing.needsReview || doc.needsReview,
+        mergedFrom: (existing.mergedFrom || 1) + 1,
+      });
+    });
+
+    // Filter out documents already saved in DB (by access key or invoice number)
+    let existingDuplicates = 0;
+    const uniqueDocs: OrtReviewDocument[] = [];
+    Array.from(merged.values()).forEach((doc, index) => {
       const key = buildOrtAccessKey(doc, `DOC${index + 1}`);
       const legacyKey = `ORT-${doc.invoiceNumber || index + 1}`;
       const invoiceNumber = doc.invoiceNumber || '';
-      if (seen.has(key) || seen.has(legacyKey)) {
-        batchDuplicates += 1;
-        return false;
-      }
-      seen.add(key);
-      seen.add(legacyKey);
-      if (existingAccessKeys.has(key) || existingAccessKeys.has(legacyKey) || existingInvoiceNumbers.has(invoiceNumber)) {
+      if (existingAccessKeys.has(key) || existingAccessKeys.has(legacyKey) || (invoiceNumber && existingInvoiceNumbers.has(invoiceNumber))) {
         existingDuplicates += 1;
-        return false;
+        return;
       }
-      return true;
+      uniqueDocs.push({ ...doc, extractedPayload: toOrtAuditPayload(doc) });
     });
 
-    return { uniqueDocs, batchDuplicates, existingDuplicates };
+    return { uniqueDocs, batchDuplicates: mergedScans, existingDuplicates };
   };
 
   const handleFiles = useCallback(async (fileList: FileList) => {
@@ -358,9 +424,10 @@ export default function Ingestion() {
       setOrtReviewDocs(uniqueDocs);
       setValidatedOrders([]);
       setStep(1);
-      const dedupeText = batchDuplicates || existingDuplicates
-        ? ` ${batchDuplicates + existingDuplicates} duplicada(s) ignorada(s).`
-        : '';
+      const parts: string[] = [];
+      if (batchDuplicates) parts.push(`${batchDuplicates} scan(s) unificado(s) ao mesmo cliente`);
+      if (existingDuplicates) parts.push(`${existingDuplicates} já existente(s) no sistema ignorada(s)`);
+      const dedupeText = parts.length ? ` ${parts.join('; ')}.` : '';
       toast({ title: 'ORTs processadas', description: `${uniqueDocs.length} documento(s) NF-like pronto(s) para revisão.${dedupeText}` });
     } catch (e: any) {
       toast({ title: 'Erro ao ler ORT', description: e.message, variant: 'destructive' });

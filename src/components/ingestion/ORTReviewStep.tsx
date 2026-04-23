@@ -47,6 +47,8 @@ export interface OrtReviewDocument {
   sourcePages?: string[];
   pageCount?: number;
   extractedPayload?: Record<string, unknown>;
+  unifiedDocId?: string;
+  mergedFrom?: number;
 }
 
 interface ORTReviewStepProps {
@@ -95,6 +97,11 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm }: ORT
                 {(doc.pageCount || 0) > 1 && (
                   <Badge variant="outline" className="border-info/30 bg-info/10 text-info gap-1">
                     <Files className="h-3 w-3" /> {doc.pageCount} páginas unidas
+                  </Badge>
+                )}
+                {(doc.mergedFrom || 0) > 1 && (
+                  <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary gap-1">
+                    <Users className="h-3 w-3" /> Unificado de {doc.mergedFrom} scans (mesmo cliente)
                   </Badge>
                 )}
               </span>
