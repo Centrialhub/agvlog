@@ -5,6 +5,10 @@
 export interface ContactSnapshot { phone?: string; name?: string; email?: string }
 export interface AddressSnapshot { street?: string; number?: string; neighborhood?: string; city?: string; state?: string; zip?: string }
 
+export type ContactMatchRule = 'exact' | 'phone-tail' | 'email-local' | 'name-token';
+export type AddressMatchRule = 'exact' | 'zip' | 'street-city';
+export interface MatchResult<T, R> { value: T; rule: R }
+
 const onlyDigits = (v: string) => (v || '').replace(/\D/g, '');
 const norm = (v: string) => (v || '').trim().toLowerCase();
 
@@ -40,18 +44,18 @@ export function addressKey(a: AddressSnapshot | null | undefined): string {
 export function findContactByKey(
   contacts: ContactSnapshot[] | null | undefined,
   key: string | null | undefined,
-): ContactSnapshot | null {
+): MatchResult<ContactSnapshot, ContactMatchRule> | null {
   if (!contacts || !key) return null;
   // Exact match first
   const exact = contacts.find(c => contactKey(c) === key);
-  if (exact) return exact;
+  if (exact) return { value: exact, rule: 'exact' };
   // Partial: phone with same last 8 digits
   if (key.startsWith('phone:')) {
     const target = key.slice('phone:'.length);
     const tail = target.slice(-8);
     if (tail.length >= 8) {
       const m = contacts.find(c => onlyDigits(c.phone || '').endsWith(tail));
-      if (m) return m;
+      if (m) return { value: m, rule: 'phone-tail' };
     }
   }
   // Partial: email local-part match
@@ -60,7 +64,7 @@ export function findContactByKey(
     const local = target.split('@')[0];
     if (local) {
       const m = contacts.find(c => norm(c.email || '').startsWith(local + '@'));
-      if (m) return m;
+      if (m) return { value: m, rule: 'email-local' };
     }
   }
   // Partial: name token overlap
@@ -70,7 +74,7 @@ export function findContactByKey(
       const n = norm(c.name || '');
       return !!n && (n.includes(target) || target.includes(n));
     });
-    if (m) return m;
+    if (m) return { value: m, rule: 'name-token' };
   }
   return null;
 }
@@ -82,17 +86,17 @@ export function findContactByKey(
 export function findAddressByKey(
   addresses: AddressSnapshot[] | null | undefined,
   key: string | null | undefined,
-): AddressSnapshot | null {
+): MatchResult<AddressSnapshot, AddressMatchRule> | null {
   if (!addresses || !key) return null;
   const exact = addresses.find(a => addressKey(a) === key);
-  if (exact) return exact;
+  if (exact) return { value: exact, rule: 'exact' };
   // Partial: same zip, any number
   if (key.startsWith('zip:')) {
     const rest = key.slice('zip:'.length);
     const zip = rest.split('|')[0];
     if (zip) {
       const m = addresses.find(a => onlyDigits(a.zip || '') === zip);
-      if (m) return m;
+      if (m) return { value: m, rule: 'zip' };
     }
   }
   // Partial: same street + city, ignore number
@@ -105,7 +109,27 @@ export function findAddressByKey(
       const c = norm(a.city || '');
       return !!s && (s === street) && (!city || c === city);
     });
-    if (m) return m;
+    if (m) return { value: m, rule: 'street-city' };
   }
   return null;
+}
+
+/**
+ * Diff helper: returns the list of field names whose values differ between
+ * the snapshot stored in appliedHistory and the live record found via
+ * findContactByKey/findAddressByKey. Empty array means no real divergence.
+ */
+export function diffFields<T extends Record<string, any>>(
+  snapshot: T | null | undefined,
+  live: T | null | undefined,
+  fields: (keyof T)[],
+): string[] {
+  if (!snapshot || !live) return [];
+  const out: string[] = [];
+  for (const f of fields) {
+    const a = (snapshot[f] ?? '').toString().trim();
+    const b = (live[f] ?? '').toString().trim();
+    if (a !== b) out.push(String(f));
+  }
+  return out;
 }
