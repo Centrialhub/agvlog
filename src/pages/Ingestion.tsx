@@ -450,8 +450,51 @@ export default function Ingestion() {
   }, [existingDocs, toast]);
 
   const handleUpdateOrtReviewDoc = useCallback((index: number, updates: Partial<OrtReviewDocument>) => {
-    setOrtReviewDocs(prev => prev.map((doc, i) => i === index ? { ...doc, ...updates, needsReview: false } : doc));
-  }, []);
+    const TRACKED_FIELDS: Record<string, string> = {
+      issueDate: 'Emissão',
+      paymentTerms: 'Prazo de pagamento',
+      billing: 'Cobrança',
+      cargoDescription: 'Carga',
+      recipientName: 'Destinatário',
+      recipientCnpj: 'CNPJ destinatário',
+      recipientPhone: 'Telefone',
+      recipientAddress: 'Endereço',
+      recipientAddressNumber: 'Número',
+      recipientZip: 'CEP',
+      recipientNeighborhood: 'Bairro',
+      recipientCity: 'Cidade',
+      recipientState: 'UF',
+      invoiceNumber: 'Nº ORT',
+      totalValue: 'Valor',
+      totalWeight: 'Peso',
+      estimatedPallets: 'Paletes',
+    };
+    const actor = user?.email || user?.id || 'usuário';
+    const now = new Date().toISOString();
+    setOrtReviewDocs(prev => prev.map((doc, i) => {
+      if (i !== index) return doc;
+      const newEntries: any[] = [];
+      for (const [key, label] of Object.entries(TRACKED_FIELDS)) {
+        if (!(key in updates)) continue;
+        const prevVal = (doc as any)[key];
+        const nextVal = (updates as any)[key];
+        const prevStr = prevVal == null ? '' : String(prevVal);
+        const nextStr = nextVal == null ? '' : String(nextVal);
+        if (prevStr !== nextStr) {
+          newEntries.push({
+            field: key,
+            fieldLabel: label,
+            previousValue: prevStr,
+            newValue: nextStr,
+            changedAt: now,
+            changedBy: actor,
+          });
+        }
+      }
+      const auditLog = newEntries.length > 0 ? [...(doc.auditLog || []), ...newEntries] : doc.auditLog;
+      return { ...doc, ...updates, needsReview: false, auditLog };
+    }));
+  }, [user]);
 
   const handleConfirmOrtReview = useCallback(() => {
     const indexes = buildValidationIndexes(existingDocs, clients);

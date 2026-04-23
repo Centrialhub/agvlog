@@ -1,10 +1,11 @@
-import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, Files, HelpCircle, Package, ReceiptText, Users } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, Files, History, HelpCircle, Package, ReceiptText, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { isUnknown, UNKNOWN } from '@/lib/ortFieldFallbacks';
 import ClientContactPicker from './ClientContactPicker';
 
@@ -17,6 +18,15 @@ export interface OrtReviewItem {
   weightKg?: number;
   volumeM3?: number;
   confidence?: number;
+}
+
+export interface OrtAuditEntry {
+  field: string;
+  fieldLabel: string;
+  previousValue: string;
+  newValue: string;
+  changedAt: string; // ISO
+  changedBy: string; // email or user id
 }
 
 export interface OrtReviewDocument {
@@ -52,6 +62,7 @@ export interface OrtReviewDocument {
   unifiedDocId?: string;
   mergedFrom?: number;
   unknownFields?: string[];
+  auditLog?: OrtAuditEntry[];
 }
 
 interface ORTReviewStepProps {
@@ -128,6 +139,34 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm, clien
             )}
           </CardHeader>
           <CardContent className="space-y-3">
+            {(doc.auditLog?.length || 0) > 0 && (
+              <Collapsible>
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-[11px] text-muted-foreground hover:text-foreground">
+                    <History className="h-3.5 w-3.5" /> Histórico de alterações ({doc.auditLog!.length})
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="mt-2">
+                  <div className="rounded-md border border-border bg-muted/40 p-2">
+                    <div className="max-h-48 space-y-1 overflow-y-auto">
+                      {doc.auditLog!.slice().reverse().map((entry, i) => (
+                        <div key={i} className="grid grid-cols-[120px_1fr_140px] gap-2 border-b border-border/50 pb-1 text-[11px] last:border-0 last:pb-0">
+                          <span className="font-medium text-foreground">{entry.fieldLabel}</span>
+                          <span className="truncate text-muted-foreground">
+                            <span className="line-through opacity-60">{entry.previousValue || '∅'}</span>
+                            <span className="mx-1">→</span>
+                            <span className="text-foreground">{entry.newValue || '∅'}</span>
+                          </span>
+                          <span className="text-right text-muted-foreground" title={entry.changedAt}>
+                            {entry.changedBy} · {new Date(entry.changedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            )}
             <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
               <div><Label className="text-xs">Nº ORT</Label><Input className={fieldClass(doc, 'invoiceNumber', true)} value={doc.invoiceNumber} onChange={e => onUpdate(index, { invoiceNumber: e.target.value })} /></div>
               <div><Label className="text-xs">Data</Label><Input type="date" className={fieldClass(doc, 'issueDate')} value={doc.issueDate} onChange={e => onUpdate(index, { issueDate: e.target.value })} /></div>
