@@ -258,9 +258,9 @@ export default function Traceability() {
   });
 
   const exportCsv = () => {
-    const headers = ['Nº NF', 'Nº Carga', 'Ref. Cliente', 'Forma Pgto', 'Cliente', 'Fornecedor', 'Placa', 'Motorista', 'Situação', 'POD', 'Canhoto', 'Valor Frete', 'Paletes', 'Data Emissão', 'Data Chegada', 'Hora Chegada', 'Ocorrências'];
+    const headers = ['Nº NF', 'Nº Carga', 'Ref. Cliente', 'Forma Pgto', 'Cliente', 'Fornecedor', 'Placa', 'Motorista', 'Situação', 'POD', 'Canhoto', 'Valor Nota', 'Valor Frete', 'Paletes', 'Data Emissão', 'Data Chegada', 'Hora Chegada', 'Ocorrências'];
     const body = filteredRows.map(({ doc, siatStatus, events, stops }) => [
-      doc.invoice_number || '', doc.loads?.load_number || '', doc.orders?.order_number || '', doc.orders?.payment_plan || '', doc.clients?.company_name || doc.recipient || '', doc.remitter || '', doc.loads?.vehicles?.plate || '', doc.loads?.drivers?.name || '', siatLabels[siatStatus], siatStatus === 'delivered' ? 'Sim' : 'Não', siatStatus === 'delivered' ? 'Sim' : 'Não', doc.freight_value || doc.value || 0, doc.pallet_count || 0, fmtDate(doc.issue_date), fmtDate(stops.at(-1)?.actual_arrival_at), fmtTime(stops.at(-1)?.actual_arrival_at), events.map(e => e.description || e.event_type).join(' | '),
+      doc.invoice_number || '', doc.loads?.load_number || '', doc.orders?.order_number || '', doc.orders?.payment_plan || '', doc.clients?.company_name || doc.recipient || '', doc.remitter || '', doc.loads?.vehicles?.plate || '', doc.loads?.drivers?.name || '', siatLabels[siatStatus], siatStatus === 'delivered' ? 'Sim' : 'Não', siatStatus === 'delivered' ? 'Sim' : 'Não', doc.value || 0, doc.freight_value || 0, doc.pallet_count || 0, fmtDate(doc.issue_date), fmtDate(stops.at(-1)?.actual_arrival_at), fmtTime(stops.at(-1)?.actual_arrival_at), events.map(e => e.description || e.event_type).join(' | '),
     ]);
     const csv = [headers, ...body].map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(';')).join('\n');
     const blob = new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8;' });
@@ -319,9 +319,9 @@ export default function Traceability() {
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead className="w-10"></TableHead><TableHead>Palete</TableHead><TableHead>POD</TableHead><TableHead>Rec.Canhoto</TableHead><TableHead>Situação</TableHead><TableHead>Nº NF</TableHead><TableHead>Nº Carga</TableHead><TableHead>Ref. Cliente</TableHead><TableHead>Forma pgto</TableHead><TableHead>Valor Frete</TableHead><TableHead>Cliente</TableHead><TableHead>Fornecedor</TableHead><TableHead>Placa</TableHead><TableHead>Motorista</TableHead><TableHead>Data Chegada</TableHead><TableHead>Hora Chegada</TableHead><TableHead>Ocorrência</TableHead><TableHead></TableHead>
-                </TableRow>
+                  <TableRow>
+                    <TableHead className="w-10"></TableHead><TableHead>Palete</TableHead><TableHead>POD</TableHead><TableHead>Rec.Canhoto</TableHead><TableHead>Situação</TableHead><TableHead>Nº NF</TableHead><TableHead>Nº Carga</TableHead><TableHead>Ref. Cliente</TableHead><TableHead>Forma pgto</TableHead><TableHead>Valor Nota</TableHead><TableHead>Valor Frete</TableHead><TableHead>Cliente</TableHead><TableHead>Fornecedor</TableHead><TableHead>Placa</TableHead><TableHead>Motorista</TableHead><TableHead>Data Chegada</TableHead><TableHead>Hora Chegada</TableHead><TableHead>Ocorrência</TableHead><TableHead></TableHead>
+                  </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? <TableRow><TableCell colSpan={18} className="py-10 text-center text-muted-foreground">Carregando rastreabilidade...</TableCell></TableRow>
@@ -339,7 +339,8 @@ export default function Traceability() {
                       <TableCell className="font-mono text-xs text-primary">{row.doc.loads?.load_number || '—'}</TableCell>
                       <TableCell className="font-mono text-xs">{row.doc.orders?.order_number || '—'}</TableCell>
                       <TableCell className="text-xs">{row.doc.orders?.payment_plan || '—'}</TableCell>
-                      <TableCell>{currency.format(Number(row.doc.freight_value || row.doc.value || 0))}</TableCell>
+                      <TableCell>{row.doc.value ? currency.format(Number(row.doc.value)) : '—'}</TableCell>
+                      <TableCell>{row.doc.freight_value ? currency.format(Number(row.doc.freight_value)) : '—'}</TableCell>
                       <TableCell className="min-w-44">{row.doc.clients?.company_name || row.doc.recipient || '—'}</TableCell>
                       <TableCell className="min-w-40 text-xs">{row.doc.remitter || '—'}</TableCell>
                       <TableCell>{row.doc.loads?.vehicles?.plate || '—'}</TableCell>
@@ -375,7 +376,8 @@ export default function Traceability() {
                   <p className="text-sm"><span className="text-muted-foreground">Cliente:</span> {selectedRow.doc.clients?.company_name || selectedRow.doc.recipient || '—'}</p>
                   <p className="text-sm"><span className="text-muted-foreground">Fornecedor / Remetente:</span> {selectedRow.doc.remitter || '—'}</p>
                   <p className="text-sm"><span className="text-muted-foreground">Forma de pagamento:</span> {selectedRow.doc.orders?.payment_plan || '—'}</p>
-                  <p className="text-sm"><span className="text-muted-foreground">Valor Frete:</span> {currency.format(Number(selectedRow.doc.freight_value || selectedRow.doc.value || 0))}</p>
+                  <p className="text-sm"><span className="text-muted-foreground">Valor da Nota:</span> {selectedRow.doc.value ? currency.format(Number(selectedRow.doc.value)) : '—'}</p>
+                  <p className="text-sm"><span className="text-muted-foreground">Valor Frete:</span> {selectedRow.doc.freight_value ? currency.format(Number(selectedRow.doc.freight_value)) : '—'}</p>
                   <p className="text-sm"><span className="text-muted-foreground">Destino:</span> {[selectedRow.doc.recipient_city, selectedRow.doc.recipient_state].filter(Boolean).join(' - ') || selectedRow.doc.loads?.destination || '—'}</p>
                   <p className="text-sm"><span className="text-muted-foreground">Itens:</span> {selectedRow.doc.product_summary || '—'}</p>
                   <p className="text-sm"><span className="text-muted-foreground">Paletes/Peso:</span> {selectedRow.doc.pallet_count || 0} · {selectedRow.doc.weight_kg || 0} kg</p>
