@@ -108,6 +108,21 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm }: ORT
               <div><Label className="text-xs">Valor</Label><Input type="number" className={fieldClass(doc, 'totalValue')} value={doc.totalValue} onChange={e => onUpdate(index, { totalValue: Number(e.target.value) || 0 })} /></div>
             </div>
             <div><Label className="text-xs">Mercadoria / observações</Label><Textarea className={fieldClass(doc, 'productSummary')} value={doc.productSummary} onChange={e => onUpdate(index, { productSummary: e.target.value })} /></div>
+            {doc.items && doc.items.length > 0 && (
+              <div className="rounded-md border border-border bg-muted/30 p-3">
+                <Label className="text-xs">Itens identificados</Label>
+                <div className="mt-2 space-y-2">
+                  {doc.items.map((item, itemIndex) => (
+                    <div key={`${item.description}-${itemIndex}`} className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_90px_90px_120px]">
+                      <Input value={item.description} onChange={e => onUpdate(index, { items: doc.items?.map((it, i) => i === itemIndex ? { ...it, description: e.target.value } : it) })} />
+                      <Input type="number" value={item.quantity} onChange={e => onUpdate(index, { items: doc.items?.map((it, i) => i === itemIndex ? { ...it, quantity: Number(e.target.value) || 0 } : it) })} />
+                      <Input value={item.unit} onChange={e => onUpdate(index, { items: doc.items?.map((it, i) => i === itemIndex ? { ...it, unit: e.target.value } : it) })} />
+                      <Input type="number" value={item.totalPrice} onChange={e => onUpdate(index, { items: doc.items?.map((it, i) => i === itemIndex ? { ...it, totalPrice: Number(e.target.value) || 0 } : it) })} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       ))}
@@ -138,7 +153,7 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm }: ORT
                 </div>
                 <div className="space-y-1">
                   <div className="flex items-center gap-1.5 font-medium text-foreground"><Package className="h-3.5 w-3.5 text-muted-foreground" /> Itens</div>
-                  <p className="line-clamp-2 text-foreground">{doc.productSummary || 'Mercadoria ORT'}</p>
+                  <p className="line-clamp-2 text-foreground">{doc.items?.length ? `${doc.items.length} item(ns): ${doc.items.map(item => item.description).join(', ')}` : (doc.productSummary || 'Mercadoria ORT')}</p>
                   <p className="text-muted-foreground">Destino: <span className="text-foreground">{[doc.recipientCity, doc.recipientState].filter(Boolean).join(' - ') || '—'}</span></p>
                 </div>
               </div>
