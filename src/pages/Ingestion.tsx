@@ -25,6 +25,7 @@ import type { RouteGroup } from '@/components/ingestion/RoutingStep';
 import GroupingStep from '@/components/ingestion/GroupingStep';
 import ResultsStep from '@/components/ingestion/ResultsStep';
 import { calculateFreight, logFreightCalculation } from '@/hooks/useFreightCalculator';
+import { applyOrtFallbacks, isUnknown, UNKNOWN } from '@/lib/ortFieldFallbacks';
 
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
@@ -411,7 +412,18 @@ export default function Ingestion() {
             : [ort.sourceFileName || files[idx]?.name || `ORT ${idx + 1}`],
           pageCount: Number(ort.pageCount) || (Array.isArray(ort.sourcePages) ? ort.sourcePages.length : 1) || 1,
         };
-        return { ...reviewDoc, extractedPayload: toOrtAuditPayload(reviewDoc) };
+        // Validate + UNKNOWN fallback for partially illegible fields
+        const { patched, report } = applyOrtFallbacks(reviewDoc);
+        const unknownConfidences: Record<string, number> = { ...(reviewDoc.fieldConfidences || {}) };
+        report.unknownFields.forEach(f => { unknownConfidences[f] = 0; });
+        const finalDoc: OrtReviewDocument = {
+          ...reviewDoc,
+          ...patched,
+          fieldConfidences: unknownConfidences,
+          unknownFields: report.unknownFields,
+          needsReview: reviewDoc.needsReview || report.unknownFields.length > 0,
+        };
+        return { ...finalDoc, extractedPayload: toOrtAuditPayload(finalDoc) };
       });
 
       const { uniqueDocs, batchDuplicates, existingDuplicates } = dedupeOrtReviewDocs(docs);

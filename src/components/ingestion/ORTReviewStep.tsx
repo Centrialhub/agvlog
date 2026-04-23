@@ -1,10 +1,11 @@
-import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, Files, Package, ReceiptText, Users } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, Files, HelpCircle, Package, ReceiptText, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { isUnknown, UNKNOWN } from '@/lib/ortFieldFallbacks';
 
 export interface OrtReviewItem {
   description: string;
@@ -49,6 +50,7 @@ export interface OrtReviewDocument {
   extractedPayload?: Record<string, unknown>;
   unifiedDocId?: string;
   mergedFrom?: number;
+  unknownFields?: string[];
 }
 
 interface ORTReviewStepProps {
