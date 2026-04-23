@@ -38,7 +38,10 @@ type TraceDocument = {
   status: string;
   load_id: string | null;
   client_id: string | null;
+  remitter: string | null;
+  order_id: string | null;
   clients?: { company_name: string | null } | null;
+  orders?: { order_number: string | null; payment_plan: string | null } | null;
   loads?: {
     id: string;
     load_number: string;
@@ -131,7 +134,7 @@ export default function Traceability() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState({
-    invoice: '', ctrc: '', client: '', plate: '', driver: '', start: '', end: '', status: 'all', pod: 'all', canhoto: 'all', occurrence: '',
+    invoice: '', loadNumber: '', clientRef: '', client: '', supplier: '', plate: '', driver: '', start: '', end: '', deliveryStart: '', deliveryEnd: '', status: 'all', pod: 'all', canhoto: 'all', occurrence: '', payment: '',
   });
   const [selectedRow, setSelectedRow] = useState<TraceRow | null>(null);
   const [eventForm, setEventForm] = useState({ type: 'other', severity: 'medium', status: 'no_change', description: '' });
@@ -142,7 +145,7 @@ export default function Traceability() {
       if (!currentTenant) return { docs: [], events: [], trips: [], stops: [] };
       const { data: docs, error: docsError } = await supabase
         .from('fiscal_documents')
-        .select('id, invoice_number, access_key, document_type, issue_date, recipient, recipient_city, recipient_state, product_summary, pallet_count, weight_kg, value, freight_value, status, load_id, client_id, clients(company_name), loads(id, load_number, status, origin, destination, trip_id, vehicles(plate, nickname), drivers(name))')
+        .select('id, invoice_number, access_key, document_type, issue_date, recipient, remitter, recipient_city, recipient_state, product_summary, pallet_count, weight_kg, value, freight_value, status, load_id, client_id, order_id, clients(company_name), orders(order_number, payment_plan), loads(id, load_number, status, origin, destination, trip_id, vehicles(plate, nickname), drivers(name))')
         .eq('tenant_id', currentTenant.id)
         .order('created_at', { ascending: false })
         .limit(1000);
@@ -195,7 +198,10 @@ export default function Traceability() {
     return rows.filter(row => {
       const doc = row.doc;
       if (filters.invoice && !q(doc.invoice_number, filters.invoice)) return false;
-      if (filters.ctrc && !q(doc.loads?.load_number || doc.access_key, filters.ctrc)) return false;
+      if (filters.loadNumber && !q(doc.loads?.load_number, filters.loadNumber)) return false;
+      if (filters.clientRef && !q(doc.orders?.order_number, filters.clientRef)) return false;
+      if (filters.supplier && !q(doc.remitter, filters.supplier)) return false;
+      if (filters.payment && !q(doc.orders?.payment_plan, filters.payment)) return false;
       if (filters.client && !q(doc.clients?.company_name || doc.recipient, filters.client)) return false;
       if (filters.plate && !q(doc.loads?.vehicles?.plate, filters.plate)) return false;
       if (filters.driver && !q(doc.loads?.drivers?.name, filters.driver)) return false;
@@ -205,6 +211,12 @@ export default function Traceability() {
       if (filters.canhoto !== 'all' && (filters.canhoto === 'yes') !== (row.siatStatus === 'delivered')) return false;
       if (filters.start && (!doc.issue_date || doc.issue_date < filters.start)) return false;
       if (filters.end && (!doc.issue_date || doc.issue_date > filters.end)) return false;
+      if (filters.deliveryStart || filters.deliveryEnd) {
+        const arr = row.stops.at(-1)?.actual_arrival_at;
+        const arrDate = arr ? arr.slice(0, 10) : '';
+        if (filters.deliveryStart && (!arrDate || arrDate < filters.deliveryStart)) return false;
+        if (filters.deliveryEnd && (!arrDate || arrDate > filters.deliveryEnd)) return false;
+      }
       return true;
     });
   }, [filters, rows]);
@@ -246,9 +258,9 @@ export default function Traceability() {
   });
 
   const exportCsv = () => {
-    const headers = ['Nº NF', 'Nº Ctrc/ORT', 'Cliente', 'Placa', 'Motorista', 'Situação', 'POD', 'Canhoto', 'Valor Frete', 'Paletes', 'Data Emissão', 'Data Chegada', 'Hora Chegada', 'Ocorrências'];
+    const headers = ['Nº NF', 'Nº Carga', 'Ref. Cliente', 'Forma Pgto', 'Cliente', 'Fornecedor', 'Placa', 'Motorista', 'Situação', 'POD', 'Canhoto', 'Valor Frete', 'Paletes', 'Data Emissão', 'Data Chegada', 'Hora Chegada', 'Ocorrências'];
     const body = filteredRows.map(({ doc, siatStatus, events, stops }) => [
-      doc.invoice_number || '', doc.loads?.load_number || doc.access_key || '', doc.clients?.company_name || doc.recipient || '', doc.loads?.vehicles?.plate || '', doc.loads?.drivers?.name || '', siatLabels[siatStatus], siatStatus === 'delivered' ? 'Sim' : 'Não', siatStatus === 'delivered' ? 'Sim' : 'Não', doc.freight_value || doc.value || 0, doc.pallet_count || 0, fmtDate(doc.issue_date), fmtDate(stops.at(-1)?.actual_arrival_at), fmtTime(stops.at(-1)?.actual_arrival_at), events.map(e => e.description || e.event_type).join(' | '),
+      doc.invoice_number || '', doc.loads?.load_number || '', doc.orders?.order_number || '', doc.orders?.payment_plan || '', doc.clients?.company_name || doc.recipient || '', doc.remitter || '', doc.loads?.vehicles?.plate || '', doc.loads?.drivers?.name || '', siatLabels[siatStatus], siatStatus === 'delivered' ? 'Sim' : 'Não', siatStatus === 'delivered' ? 'Sim' : 'Não', doc.freight_value || doc.value || 0, doc.pallet_count || 0, fmtDate(doc.issue_date), fmtDate(stops.at(-1)?.actual_arrival_at), fmtTime(stops.at(-1)?.actual_arrival_at), events.map(e => e.description || e.event_type).join(' | '),
     ]);
     const csv = [headers, ...body].map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(';')).join('\n');
     const blob = new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8;' });
@@ -265,7 +277,7 @@ export default function Traceability() {
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground"><FileSearch className="h-6 w-6 text-primary" /> Rastreabilidade NF</h1>
-          <p className="text-sm text-muted-foreground">Consulta operacional de NF, CT-e/ORT, carga, entrega, POD e ocorrências.</p>
+          <p className="text-sm text-muted-foreground">Consulta operacional de NF, carga, entrega, POD e ocorrências. Nº de CT-e/ORT é gerado apenas após emissão fiscal.</p>
         </div>
         <Button variant="outline" onClick={exportCsv} disabled={!filteredRows.length}><Download className="mr-2 h-4 w-4" /> Exportar CSV</Button>
       </div>
@@ -280,19 +292,24 @@ export default function Traceability() {
       <Card>
         <CardContent className="space-y-3 p-4">
           <div className="grid gap-3 md:grid-cols-4 xl:grid-cols-6">
-            <div><Label>Nº NFS</Label><Input value={filters.invoice} onChange={e => setFilters(f => ({ ...f, invoice: e.target.value }))} /></div>
-            <div><Label>Nº Ctrc/Ort</Label><Input value={filters.ctrc} onChange={e => setFilters(f => ({ ...f, ctrc: e.target.value }))} /></div>
+            <div><Label>Nº NF</Label><Input value={filters.invoice} onChange={e => setFilters(f => ({ ...f, invoice: e.target.value }))} /></div>
+            <div><Label>Nº Carga (empresa)</Label><Input value={filters.loadNumber} onChange={e => setFilters(f => ({ ...f, loadNumber: e.target.value }))} /></div>
+            <div><Label>Nº Ref. Cliente</Label><Input value={filters.clientRef} onChange={e => setFilters(f => ({ ...f, clientRef: e.target.value }))} placeholder="Carga do cliente" /></div>
             <div><Label>Cliente</Label><Input value={filters.client} onChange={e => setFilters(f => ({ ...f, client: e.target.value }))} /></div>
+            <div><Label>Fornecedor / Remetente</Label><Input value={filters.supplier} onChange={e => setFilters(f => ({ ...f, supplier: e.target.value }))} /></div>
+            <div><Label>Forma de pagamento</Label><Input value={filters.payment} onChange={e => setFilters(f => ({ ...f, payment: e.target.value }))} placeholder="Ex: CIF, FOB, à vista" /></div>
             <div><Label>Placa</Label><Input value={filters.plate} onChange={e => setFilters(f => ({ ...f, plate: e.target.value }))} /></div>
             <div><Label>Motorista</Label><Input value={filters.driver} onChange={e => setFilters(f => ({ ...f, driver: e.target.value }))} /></div>
             <div><Label>Ocorrência</Label><Input value={filters.occurrence} onChange={e => setFilters(f => ({ ...f, occurrence: e.target.value }))} /></div>
           </div>
-          <div className="grid gap-3 md:grid-cols-5">
-            <div><Label>Data Emissão</Label><Input type="date" value={filters.start} onChange={e => setFilters(f => ({ ...f, start: e.target.value }))} /></div>
-            <div><Label>Até</Label><Input type="date" value={filters.end} onChange={e => setFilters(f => ({ ...f, end: e.target.value }))} /></div>
-            <div><Label>Situação NFS</Label><Select value={filters.status} onValueChange={value => setFilters(f => ({ ...f, status: value }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Object.entries(siatLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div>
+          <div className="grid gap-3 md:grid-cols-4 xl:grid-cols-7">
+            <div><Label>Emissão de</Label><Input type="date" value={filters.start} onChange={e => setFilters(f => ({ ...f, start: e.target.value }))} /></div>
+            <div><Label>Emissão até</Label><Input type="date" value={filters.end} onChange={e => setFilters(f => ({ ...f, end: e.target.value }))} /></div>
+            <div><Label>Entrega de</Label><Input type="date" value={filters.deliveryStart} onChange={e => setFilters(f => ({ ...f, deliveryStart: e.target.value }))} /></div>
+            <div><Label>Entrega até</Label><Input type="date" value={filters.deliveryEnd} onChange={e => setFilters(f => ({ ...f, deliveryEnd: e.target.value }))} /></div>
+            <div><Label>Situação</Label><Select value={filters.status} onValueChange={value => setFilters(f => ({ ...f, status: value }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Object.entries(siatLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div>
             <div><Label>POD</Label><Select value={filters.pod} onValueChange={value => setFilters(f => ({ ...f, pod: value }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="yes">Sim</SelectItem><SelectItem value="no">Não</SelectItem></SelectContent></Select></div>
-            <div><Label>Recebimento Canhoto</Label><Select value={filters.canhoto} onValueChange={value => setFilters(f => ({ ...f, canhoto: value }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="yes">Sim</SelectItem><SelectItem value="no">Não</SelectItem></SelectContent></Select></div>
+            <div><Label>Canhoto</Label><Select value={filters.canhoto} onValueChange={value => setFilters(f => ({ ...f, canhoto: value }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="yes">Sim</SelectItem><SelectItem value="no">Não</SelectItem></SelectContent></Select></div>
           </div>
         </CardContent>
       </Card>
@@ -303,12 +320,12 @@ export default function Traceability() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-10"></TableHead><TableHead>Palete</TableHead><TableHead>POD</TableHead><TableHead>Rec.Canhoto</TableHead><TableHead>Situação</TableHead><TableHead>Nº NFS</TableHead><TableHead>Nº Ctrc/Ort</TableHead><TableHead>Valor Frete</TableHead><TableHead>Cliente</TableHead><TableHead>Placa</TableHead><TableHead>Motorista</TableHead><TableHead>Data Chegada</TableHead><TableHead>Hora Chegada</TableHead><TableHead>Ocorrência 01</TableHead><TableHead></TableHead>
+                  <TableHead className="w-10"></TableHead><TableHead>Palete</TableHead><TableHead>POD</TableHead><TableHead>Rec.Canhoto</TableHead><TableHead>Situação</TableHead><TableHead>Nº NF</TableHead><TableHead>Nº Carga</TableHead><TableHead>Ref. Cliente</TableHead><TableHead>Forma pgto</TableHead><TableHead>Valor Frete</TableHead><TableHead>Cliente</TableHead><TableHead>Fornecedor</TableHead><TableHead>Placa</TableHead><TableHead>Motorista</TableHead><TableHead>Data Chegada</TableHead><TableHead>Hora Chegada</TableHead><TableHead>Ocorrência</TableHead><TableHead></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading ? <TableRow><TableCell colSpan={15} className="py-10 text-center text-muted-foreground">Carregando rastreabilidade...</TableCell></TableRow>
-                : filteredRows.length === 0 ? <TableRow><TableCell colSpan={15} className="py-10 text-center text-muted-foreground">Nenhum registro encontrado</TableCell></TableRow>
+                {isLoading ? <TableRow><TableCell colSpan={18} className="py-10 text-center text-muted-foreground">Carregando rastreabilidade...</TableCell></TableRow>
+                : filteredRows.length === 0 ? <TableRow><TableCell colSpan={18} className="py-10 text-center text-muted-foreground">Nenhum registro encontrado</TableCell></TableRow>
                 : filteredRows.map(row => {
                   const lastStop = row.stops.at(-1);
                   return (
@@ -319,9 +336,12 @@ export default function Traceability() {
                       <TableCell><Checkbox checked={row.siatStatus === 'delivered'} aria-label="Canhoto" /></TableCell>
                       <TableCell><Badge variant="outline" className={statusBadgeClass(row.siatStatus)}>{siatLabels[row.siatStatus]}</Badge></TableCell>
                       <TableCell className="font-mono text-xs">{row.doc.invoice_number || '—'}</TableCell>
-                      <TableCell className="font-mono text-xs text-primary">{row.doc.loads?.load_number || row.doc.access_key?.slice(-8) || '—'}</TableCell>
+                      <TableCell className="font-mono text-xs text-primary">{row.doc.loads?.load_number || '—'}</TableCell>
+                      <TableCell className="font-mono text-xs">{row.doc.orders?.order_number || '—'}</TableCell>
+                      <TableCell className="text-xs">{row.doc.orders?.payment_plan || '—'}</TableCell>
                       <TableCell>{currency.format(Number(row.doc.freight_value || row.doc.value || 0))}</TableCell>
                       <TableCell className="min-w-44">{row.doc.clients?.company_name || row.doc.recipient || '—'}</TableCell>
+                      <TableCell className="min-w-40 text-xs">{row.doc.remitter || '—'}</TableCell>
                       <TableCell>{row.doc.loads?.vehicles?.plate || '—'}</TableCell>
                       <TableCell>{row.doc.loads?.drivers?.name || '—'}</TableCell>
                       <TableCell>{fmtDate(lastStop?.actual_arrival_at)}</TableCell>
@@ -344,15 +364,18 @@ export default function Traceability() {
             <div className="space-y-4">
               <div className="grid gap-3 md:grid-cols-4">
                 <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">NF</p><p className="font-semibold">{selectedRow.doc.invoice_number || '—'}</p></CardContent></Card>
-                <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Carga / ORT</p><p className="font-semibold">{selectedRow.doc.loads?.load_number || selectedRow.doc.access_key?.slice(-8) || '—'}</p></CardContent></Card>
+                <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Nº Carga (empresa)</p><p className="font-semibold">{selectedRow.doc.loads?.load_number || '—'}</p></CardContent></Card>
+                <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Ref. Cliente</p><p className="font-semibold">{selectedRow.doc.orders?.order_number || '—'}</p></CardContent></Card>
                 <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Situação</p><Badge variant="outline" className={statusBadgeClass(selectedRow.siatStatus)}>{siatLabels[selectedRow.siatStatus]}</Badge></CardContent></Card>
-                <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Valor</p><p className="font-semibold">{currency.format(Number(selectedRow.doc.freight_value || selectedRow.doc.value || 0))}</p></CardContent></Card>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2 rounded-md border border-border p-4">
                   <h3 className="flex items-center gap-2 font-semibold"><PackageCheck className="h-4 w-4" /> Documento e mercadoria</h3>
                   <p className="text-sm"><span className="text-muted-foreground">Cliente:</span> {selectedRow.doc.clients?.company_name || selectedRow.doc.recipient || '—'}</p>
+                  <p className="text-sm"><span className="text-muted-foreground">Fornecedor / Remetente:</span> {selectedRow.doc.remitter || '—'}</p>
+                  <p className="text-sm"><span className="text-muted-foreground">Forma de pagamento:</span> {selectedRow.doc.orders?.payment_plan || '—'}</p>
+                  <p className="text-sm"><span className="text-muted-foreground">Valor Frete:</span> {currency.format(Number(selectedRow.doc.freight_value || selectedRow.doc.value || 0))}</p>
                   <p className="text-sm"><span className="text-muted-foreground">Destino:</span> {[selectedRow.doc.recipient_city, selectedRow.doc.recipient_state].filter(Boolean).join(' - ') || selectedRow.doc.loads?.destination || '—'}</p>
                   <p className="text-sm"><span className="text-muted-foreground">Itens:</span> {selectedRow.doc.product_summary || '—'}</p>
                   <p className="text-sm"><span className="text-muted-foreground">Paletes/Peso:</span> {selectedRow.doc.pallet_count || 0} · {selectedRow.doc.weight_kg || 0} kg</p>
