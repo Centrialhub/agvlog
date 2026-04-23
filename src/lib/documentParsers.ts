@@ -152,18 +152,26 @@ export function parseNFeXml(xmlString: string): ParsedNFe {
     if (xPed) { xPedCandidate = xPed.trim(); break; }
   }
 
-  // Source 2: <infCpl>/<infAdFisco> (free-text observation)
+  // Source 2: <infCpl>/<infAdFisco> (free-text observation) using configurable rules
   const infAdic = infNFe.getElementsByTagName('infAdic')[0];
   const observation = getTagText(infAdic || infNFe, 'infCpl') || getTagText(infAdic || infNFe, 'infAdFisco') || '';
-  let obsCandidate = '';
-  if (observation) {
-    const m = observation.match(/(?:n[ºo°.]?\s*)?carga[:\s-]*([A-Za-z0-9\-\/]+)/i)
-      || observation.match(/(?:pedido|ped\.?)\s*(?:de\s*)?carga[:\s-]*([A-Za-z0-9\-\/]+)/i);
-    if (m) obsCandidate = m[1].trim();
-  }
+  const obsExtraction = extractClientLoadFromObservation(observation);
+  const obsCandidate = obsExtraction.value;
 
-  // Prefer the longer/more specific value; if equal length, observation wins (often the official client number)
-  const clientLoadNumber = obsCandidate.length >= xPedCandidate.length ? obsCandidate : xPedCandidate;
+  // Prefer the longer/more specific value; tie goes to observation (usually the official client number)
+  let clientLoadNumber = '';
+  let clientLoadSource: 'xPed' | 'observation' | 'none' = 'none';
+  let clientLoadRuleId: string | undefined;
+  let clientLoadRuleLabel: string | undefined;
+  if (obsCandidate && obsCandidate.length >= xPedCandidate.length) {
+    clientLoadNumber = obsCandidate;
+    clientLoadSource = 'observation';
+    clientLoadRuleId = obsExtraction.ruleId;
+    clientLoadRuleLabel = obsExtraction.ruleLabel;
+  } else if (xPedCandidate) {
+    clientLoadNumber = xPedCandidate;
+    clientLoadSource = 'xPed';
+  }
 
   const total = infNFe.getElementsByTagName('ICMSTot')[0];
   const totalValue = parseFloat(getTagText(total || infNFe, 'vNF')) || 0;
