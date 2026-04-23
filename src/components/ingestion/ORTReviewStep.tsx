@@ -571,6 +571,27 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm, clien
                                       cliente:{doc.linkedClientId.slice(0, 8)}
                                     </code>
                                   )}
+                                  {entry.matchRule && (
+                                    <code
+                                      className={cn(
+                                        'rounded px-1 py-px text-[9px]',
+                                        entry.matchRule === 'exact' ? 'bg-success/15 text-success' :
+                                        entry.matchRule === 'snapshot' ? 'bg-warning/15 text-warning' :
+                                        'bg-info/15 text-info'
+                                      )}
+                                      title="Regra de compatibilidade usada na reaplicação"
+                                    >
+                                      regra:{entry.matchRule}
+                                    </code>
+                                  )}
+                                  {entry.changedFields && entry.changedFields.length > 0 && (
+                                    <code
+                                      className="rounded bg-warning/10 px-1 py-px text-[9px] text-warning"
+                                      title={`Campos diferentes do snapshot:\n${entry.changedFields.join(', ')}`}
+                                    >
+                                      Δ {entry.changedFields.length}: {entry.changedFields.slice(0, 3).join(', ')}{entry.changedFields.length > 3 ? '…' : ''}
+                                    </code>
+                                  )}
                                 </div>
                                 <div className="text-muted-foreground" title={entry.appliedAt}>
                                   {new Date(entry.appliedAt).toLocaleString('pt-BR', {
