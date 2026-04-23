@@ -131,7 +131,26 @@ export default function Ingestion() {
     totalVolume: ort.totalVolume,
     estimatedPallets: ort.estimatedPallets,
     productSummary: ort.productSummary,
+    items: ort.items || [],
   });
+
+  const mapOrtItems = (ort: OrtReviewDocument) => {
+    const extractedItems = (ort.items || [])
+      .filter(item => item.description?.trim())
+      .map(item => ({
+        description: item.description.trim(),
+        quantity: Number(item.quantity) || 1,
+        unit: item.unit || 'UN',
+        unitPrice: Number(item.unitPrice) || (Number(item.totalPrice) || 0),
+        totalPrice: Number(item.totalPrice) || Number(item.unitPrice) || 0,
+        ncm: '',
+        cfop: '',
+      }));
+
+    return extractedItems.length > 0
+      ? extractedItems
+      : [{ description: ort.productSummary || 'Mercadoria ORT', quantity: 1, unit: 'UN', unitPrice: ort.totalValue || 0, totalPrice: ort.totalValue || 0, ncm: '', cfop: '' }];
+  };
 
   const getChangedOrtFields = (ort: OrtReviewDocument) => {
     const extracted = ort.extractedPayload || {};
@@ -293,6 +312,16 @@ export default function Ingestion() {
           totalVolume: Number(ort.totalVolume) || 0,
           estimatedPallets: Math.max(1, Number(ort.estimatedPallets) || Math.ceil((Number(ort.totalWeight) || 0) / 800) || 1),
           productSummary: ort.productSummary || 'Mercadoria ORT',
+          items: Array.isArray(ort.items) ? ort.items.map((item: any) => ({
+            description: item.description || '',
+            quantity: Number(item.quantity) || 1,
+            unit: item.unit || 'UN',
+            unitPrice: Number(item.unitPrice) || 0,
+            totalPrice: Number(item.totalPrice) || 0,
+            weightKg: Number(item.weightKg) || 0,
+            volumeM3: Number(item.volumeM3) || 0,
+            confidence: Number(item.confidence) || Number(ort.confidence) || 0,
+          })).filter((item: any) => item.description) : [],
           confidence: Number(ort.confidence) || 0,
           needsReview: Boolean(ort.needsReview) || Number(ort.confidence) < 0.82,
           fieldConfidences: ort.fieldConfidences || {},
@@ -344,7 +373,7 @@ export default function Ingestion() {
         recipientState: ort.recipientState,
         recipientAddress: ort.recipientAddress,
         recipientNeighborhood: ort.recipientNeighborhood,
-        items: [{ description: ort.productSummary || 'Mercadoria ORT', quantity: 1, unit: 'UN', unitPrice: ort.totalValue || 0, totalPrice: ort.totalValue || 0, ncm: '', cfop: '' }],
+        items: mapOrtItems(ort),
         totalValue: ort.totalValue || 0,
         totalWeight: ort.totalWeight || 0,
         totalVolume: ort.totalVolume || 0,

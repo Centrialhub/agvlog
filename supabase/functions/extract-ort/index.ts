@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
 
     const content: any[] = [{
       type: "text",
-      text: "Extraia dados de ORTs brasileiras para criar documentos compatíveis com NF-e no TMS. Cada imagem/PDF pode conter uma ORT diferente; retorne um item separado por ORT/documento encontrado. Deduplicate páginas repetidas ou scans do mesmo documento dentro do envio. Preencha sourceFileName com o arquivo de origem mais provável. Use confidence 0-1 e needsReview=true se algum campo essencial estiver ilegível.",
+      text: "Extraia dados de ORTs brasileiras para criar documentos compatíveis com NF-e no TMS. Cada imagem/PDF pode conter uma ORT diferente; retorne um documento separado por ORT encontrada. Quando houver tabela/lista de mercadorias, extraia múltiplos itens com descrição, quantidade, unidade, valor unitário, valor total, peso e volume quando legíveis. Não invente itens: se a lista estiver ilegível, retorne items vazio e use productSummary com o melhor resumo possível ou 'Mercadoria ORT'. Deduplicate páginas repetidas ou scans do mesmo documento dentro do envio. Preencha sourceFileName com o arquivo de origem mais provável. Use confidence 0-1 e needsReview=true se algum campo essencial estiver ilegível.",
     }];
 
     for (const file of files) {
@@ -78,6 +78,25 @@ Deno.serve(async (req) => {
                       totalVolume: { type: "number" },
                       estimatedPallets: { type: "number" },
                       productSummary: { type: "string" },
+                      items: {
+                        type: "array",
+                        description: "Mercadorias/produtos identificados na ORT; vazio quando a imagem não permitir leitura confiável.",
+                        items: {
+                          type: "object",
+                          properties: {
+                            description: { type: "string" },
+                            quantity: { type: "number" },
+                            unit: { type: "string" },
+                            unitPrice: { type: "number" },
+                            totalPrice: { type: "number" },
+                            weightKg: { type: "number" },
+                            volumeM3: { type: "number" },
+                            confidence: { type: "number" },
+                          },
+                          required: ["description"],
+                          additionalProperties: false,
+                        },
+                      },
                       confidence: { type: "number" },
                       needsReview: { type: "boolean" },
                       fieldConfidences: {
