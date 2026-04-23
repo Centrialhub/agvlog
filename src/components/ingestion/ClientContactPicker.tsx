@@ -200,9 +200,22 @@ export default function ClientContactPicker({
           </Popover>
 
           {!selectedClient && hintName && (
-            <Button size="sm" variant="outline" className="h-8 text-xs" onClick={handleCreateClient}>
-              <UserPlus className="mr-1 h-3.5 w-3.5" /> Cadastrar "{hintName}"
-            </Button>
+            <>
+              <Button size="sm" variant="outline" className="h-8 text-xs" onClick={handleCreateClient}>
+                <UserPlus className="mr-1 h-3.5 w-3.5" /> Cadastrar "{hintName}"
+              </Button>
+              <div className="flex items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1">
+                <Switch
+                  id={`auto-save-${hintName}`}
+                  checked={autoSaveOnCreate}
+                  onCheckedChange={setAutoSaveOnCreate}
+                  className="scale-75"
+                />
+                <Label htmlFor={`auto-save-${hintName}`} className="cursor-pointer text-[11px] text-muted-foreground">
+                  Salvar contato + endereço da ORT
+                </Label>
+              </div>
+            </>
           )}
 
           <div className="ml-auto flex flex-wrap gap-2">
