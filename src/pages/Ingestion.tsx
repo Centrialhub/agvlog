@@ -218,6 +218,43 @@ export default function Ingestion() {
     }
   }, [existingDocs, clients, toast]);
 
+  const handleUpdateOrtReviewDoc = useCallback((index: number, updates: Partial<OrtReviewDocument>) => {
+    setOrtReviewDocs(prev => prev.map((doc, i) => i === index ? { ...doc, ...updates, needsReview: false } : doc));
+  }, []);
+
+  const handleConfirmOrtReview = useCallback(() => {
+    const indexes = buildValidationIndexes(existingDocs, clients);
+    const docs = ortReviewDocs.map((ort, idx) => {
+      const parsed: ParsedNFe = {
+        invoiceNumber: ort.invoiceNumber,
+        series: 'ORT',
+        accessKey: `ORT-${ort.invoiceNumber || idx + 1}`,
+        issueDate: ort.issueDate,
+        emitterName: ort.emitterName,
+        emitterCnpj: ort.emitterCnpj,
+        recipientName: ort.recipientName,
+        recipientCnpj: ort.recipientCnpj,
+        recipientCity: ort.recipientCity,
+        recipientState: ort.recipientState,
+        recipientAddress: ort.recipientAddress,
+        recipientNeighborhood: ort.recipientNeighborhood,
+        items: [{ description: ort.productSummary || 'Mercadoria ORT', quantity: 1, unit: 'UN', unitPrice: ort.totalValue || 0, totalPrice: ort.totalValue || 0, ncm: '', cfop: '' }],
+        totalValue: ort.totalValue || 0,
+        totalWeight: ort.totalWeight || 0,
+        totalVolume: ort.totalVolume || 0,
+        estimatedPallets: Math.max(1, ort.estimatedPallets || 1),
+      };
+      const validated = validateNFe(parsed, `ORT ${ort.fileName}`, existingDocs, clients, indexes);
+      if (ort.needsReview || ort.confidence < 0.82) {
+        validated.validations.push({ field: 'ortConfidence', message: 'ORT tinha campos de baixa confiança — revisão manual realizada', severity: 'info' });
+      }
+      return validated;
+    });
+    setValidatedDocs(docs);
+    setValidatedOrders([]);
+    setStep(2);
+  }, [clients, existingDocs, ortReviewDocs]);
+
   // Inline editing callbacks
   const handleUpdateDoc = useCallback((index: number, updates: Partial<ValidatedDocument>) => {
     setValidatedDocs(prev => prev.map((d, i) => i === index ? { ...d, ...updates } : d));
