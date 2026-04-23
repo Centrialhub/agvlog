@@ -3377,6 +3377,87 @@ export type Database = {
           },
         ]
       }
+      ort_extraction_audits: {
+        Row: {
+          changed_fields: string[]
+          created_at: string
+          created_by: string | null
+          dedupe_key: string
+          extracted_payload: Json
+          field_confidences: Json
+          fiscal_document_id: string | null
+          id: string
+          needs_review: boolean
+          ort_number: string | null
+          overall_confidence: number
+          reviewed: boolean
+          reviewed_at: string | null
+          reviewed_by: string | null
+          reviewed_payload: Json
+          source_file_name: string
+          status: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          changed_fields?: string[]
+          created_at?: string
+          created_by?: string | null
+          dedupe_key: string
+          extracted_payload?: Json
+          field_confidences?: Json
+          fiscal_document_id?: string | null
+          id?: string
+          needs_review?: boolean
+          ort_number?: string | null
+          overall_confidence?: number
+          reviewed?: boolean
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          reviewed_payload?: Json
+          source_file_name: string
+          status?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          changed_fields?: string[]
+          created_at?: string
+          created_by?: string | null
+          dedupe_key?: string
+          extracted_payload?: Json
+          field_confidences?: Json
+          fiscal_document_id?: string | null
+          id?: string
+          needs_review?: boolean
+          ort_number?: string | null
+          overall_confidence?: number
+          reviewed?: boolean
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          reviewed_payload?: Json
+          source_file_name?: string
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ort_extraction_audits_fiscal_document_id_fkey"
+            columns: ["fiscal_document_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ort_extraction_audits_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pois: {
         Row: {
           category: string | null
