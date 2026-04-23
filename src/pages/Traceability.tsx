@@ -258,9 +258,9 @@ export default function Traceability() {
   });
 
   const exportCsv = () => {
-    const headers = ['Nº NF', 'Nº Ctrc/ORT', 'Cliente', 'Placa', 'Motorista', 'Situação', 'POD', 'Canhoto', 'Valor Frete', 'Paletes', 'Data Emissão', 'Data Chegada', 'Hora Chegada', 'Ocorrências'];
+    const headers = ['Nº NF', 'Nº Carga', 'Ref. Cliente', 'Forma Pgto', 'Cliente', 'Fornecedor', 'Placa', 'Motorista', 'Situação', 'POD', 'Canhoto', 'Valor Frete', 'Paletes', 'Data Emissão', 'Data Chegada', 'Hora Chegada', 'Ocorrências'];
     const body = filteredRows.map(({ doc, siatStatus, events, stops }) => [
-      doc.invoice_number || '', doc.loads?.load_number || doc.access_key || '', doc.clients?.company_name || doc.recipient || '', doc.loads?.vehicles?.plate || '', doc.loads?.drivers?.name || '', siatLabels[siatStatus], siatStatus === 'delivered' ? 'Sim' : 'Não', siatStatus === 'delivered' ? 'Sim' : 'Não', doc.freight_value || doc.value || 0, doc.pallet_count || 0, fmtDate(doc.issue_date), fmtDate(stops.at(-1)?.actual_arrival_at), fmtTime(stops.at(-1)?.actual_arrival_at), events.map(e => e.description || e.event_type).join(' | '),
+      doc.invoice_number || '', doc.loads?.load_number || '', doc.orders?.order_number || '', doc.orders?.payment_plan || '', doc.clients?.company_name || doc.recipient || '', doc.remitter || '', doc.loads?.vehicles?.plate || '', doc.loads?.drivers?.name || '', siatLabels[siatStatus], siatStatus === 'delivered' ? 'Sim' : 'Não', siatStatus === 'delivered' ? 'Sim' : 'Não', doc.freight_value || doc.value || 0, doc.pallet_count || 0, fmtDate(doc.issue_date), fmtDate(stops.at(-1)?.actual_arrival_at), fmtTime(stops.at(-1)?.actual_arrival_at), events.map(e => e.description || e.event_type).join(' | '),
     ]);
     const csv = [headers, ...body].map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(';')).join('\n');
     const blob = new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8;' });
