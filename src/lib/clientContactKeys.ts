@@ -127,8 +127,8 @@ export function diffFields<T extends Record<string, any>>(
   if (!snapshot || !live) return [];
   const out: string[] = [];
   for (const f of fields) {
-    const a = (snapshot[f] ?? '').toString().trim();
-    const b = (live[f] ?? '').toString().trim();
+    const a = String(snapshot[f] ?? '').trim();
+    const b = String(live[f] ?? '').trim();
     if (a !== b) out.push(String(f));
   }
   return out;
