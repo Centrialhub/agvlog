@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
 
     const content: any[] = [{
       type: "text",
-      text: "Extraia dados da ORT brasileira para criar documentos compatíveis com NF-e no TMS. Retorne via ferramenta uma lista de documentos. Use confidence 0-1 e needsReview=true se algum campo essencial estiver ilegível.",
+      text: "Extraia dados de ORTs brasileiras para criar documentos compatíveis com NF-e no TMS. Cada imagem/PDF pode conter uma ORT diferente; retorne um item separado por ORT/documento encontrado. Deduplicate páginas repetidas ou scans do mesmo documento dentro do envio. Preencha sourceFileName com o arquivo de origem mais provável. Use confidence 0-1 e needsReview=true se algum campo essencial estiver ilegível.",
     }];
 
     for (const file of files) {
@@ -85,6 +85,7 @@ Deno.serve(async (req) => {
                         description: "Confiança por campo, de 0 a 1, usando os nomes dos campos retornados.",
                         additionalProperties: { type: "number" },
                       },
+                      sourceFileName: { type: "string" },
                     },
                     required: ["invoiceNumber", "recipientName", "recipientCity", "recipientState", "confidence", "needsReview"],
                     additionalProperties: false,
