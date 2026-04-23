@@ -360,7 +360,7 @@ export default function Ingestion() {
   };
 
   const handleGoToRouting = () => {
-    setStep(2);
+    setStep(3);
   };
 
   const handleRoutingNext = async (groups: RouteGroup[]) => {
@@ -443,7 +443,7 @@ export default function Ingestion() {
       stopCount: g.documents.length + g.orders.length,
     }));
     setSuggestions(loadSuggestions);
-    setStep(3);
+    setStep(4);
   };
 
   const handleExecute = async (assignments: Map<number, { vehicleId: string | null; driverId: string | null }>) => {
@@ -612,7 +612,7 @@ export default function Ingestion() {
       }
 
       setExecutionResults(results);
-      setStep(4);
+      setStep(5);
 
       const successCount = results.filter(r => r.startsWith('✅')).length;
       const errorCount = results.filter(r => r.startsWith('❌')).length;
@@ -633,6 +633,7 @@ export default function Ingestion() {
     setStep(0);
     setValidatedDocs([]);
     setValidatedOrders([]);
+    setOrtReviewDocs([]);
     setSuggestions([]);
     setRouteGroups([]);
     setExecutionResults([]);
