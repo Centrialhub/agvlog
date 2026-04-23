@@ -232,10 +232,6 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     window.requestAnimationFrame(() => docListRef.current?.scrollTo({ top: 0 }));
   }, [debouncedDocFilters.invoice, debouncedDocFilters.client, debouncedDocFilters.neighborhood]);
 
-  useEffect(() => {
-    if (recentDocsOpen) setVisibleRecentDocCount(DOC_PAGE_SIZE);
-  }, [recentDocsOpen]);
-
   const recalculateModalHeight = () => {
     const viewportHeight = window.innerHeight || 720;
     const availableHeight = Math.max(360, viewportHeight - 24);
