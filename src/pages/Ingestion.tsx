@@ -100,6 +100,48 @@ export default function Ingestion() {
     reader.readAsDataURL(file);
   });
 
+  const normalizeOrtKeyPart = (value: unknown) => String(value || '')
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, 48);
+
+  const buildOrtAccessKey = (ort: Pick<OrtReviewDocument, 'invoiceNumber' | 'recipientCnpj' | 'recipientName' | 'recipientCity' | 'issueDate' | 'totalValue'>, fallback: string) => {
+    const recipient = normalizeOrtKeyPart(ort.recipientCnpj) || normalizeOrtKeyPart(ort.recipientName);
+    const city = normalizeOrtKeyPart(ort.recipientCity);
+    const value = Math.round((Number(ort.totalValue) || 0) * 100);
+    const parts = [normalizeOrtKeyPart(ort.invoiceNumber) || fallback, recipient, city, normalizeOrtKeyPart(ort.issueDate), value || '0'].filter(Boolean);
+    return `ORT-${parts.join('-')}`;
+  };
+
+  const dedupeOrtReviewDocs = (docs: OrtReviewDocument[]) => {
+    const existingAccessKeys = new Set(existingDocs.map(d => d.access_key).filter(Boolean));
+    const existingInvoiceNumbers = new Set(existingDocs.map(d => d.invoice_number).filter(Boolean));
+    const seen = new Set<string>();
+    let batchDuplicates = 0;
+    let existingDuplicates = 0;
+
+    const uniqueDocs = docs.filter((doc, index) => {
+      const key = buildOrtAccessKey(doc, `DOC${index + 1}`);
+      const legacyKey = `ORT-${doc.invoiceNumber || index + 1}`;
+      const invoiceNumber = doc.invoiceNumber || '';
+      if (seen.has(key) || seen.has(legacyKey)) {
+        batchDuplicates += 1;
+        return false;
+      }
+      seen.add(key);
+      seen.add(legacyKey);
+      if (existingAccessKeys.has(key) || existingAccessKeys.has(legacyKey) || existingInvoiceNumbers.has(invoiceNumber)) {
+        existingDuplicates += 1;
+        return false;
+      }
+      return true;
+    });
+
+    return { uniqueDocs, batchDuplicates, existingDuplicates };
+  };
+
   const handleFiles = useCallback(async (fileList: FileList) => {
     const files = Array.from(fileList);
     const t0 = performance.now();
@@ -204,19 +246,29 @@ export default function Ingestion() {
         confidence: Number(ort.confidence) || 0,
         needsReview: Boolean(ort.needsReview) || Number(ort.confidence) < 0.82,
         fieldConfidences: ort.fieldConfidences || {},
-        fileName: files[idx]?.name || `ORT ${idx + 1}`,
+        fileName: ort.sourceFileName || files[idx]?.name || `ORT ${idx + 1}`,
       }));
 
-      setOrtReviewDocs(docs);
+      const { uniqueDocs, batchDuplicates, existingDuplicates } = dedupeOrtReviewDocs(docs);
+
+      if (uniqueDocs.length === 0) {
+        toast({ title: 'Nenhuma ORT nova encontrada', description: 'Todas as ORTs enviadas já estavam duplicadas.', variant: 'destructive' });
+        return;
+      }
+
+      setOrtReviewDocs(uniqueDocs);
       setValidatedOrders([]);
       setStep(1);
-      toast({ title: 'ORT processada', description: `${docs.length} documento(s) pronto(s) para revisão.` });
+      const dedupeText = batchDuplicates || existingDuplicates
+        ? ` ${batchDuplicates + existingDuplicates} duplicada(s) ignorada(s).`
+        : '';
+      toast({ title: 'ORTs processadas', description: `${uniqueDocs.length} documento(s) NF-like pronto(s) para revisão.${dedupeText}` });
     } catch (e: any) {
       toast({ title: 'Erro ao ler ORT', description: e.message, variant: 'destructive' });
     } finally {
       setOrtProcessing(false);
     }
-  }, [existingDocs, clients, toast]);
+  }, [existingDocs, toast]);
 
   const handleUpdateOrtReviewDoc = useCallback((index: number, updates: Partial<OrtReviewDocument>) => {
     setOrtReviewDocs(prev => prev.map((doc, i) => i === index ? { ...doc, ...updates, needsReview: false } : doc));
@@ -224,11 +276,13 @@ export default function Ingestion() {
 
   const handleConfirmOrtReview = useCallback(() => {
     const indexes = buildValidationIndexes(existingDocs, clients);
+    const seenReviewKeys = new Set<string>();
     const docs = ortReviewDocs.map((ort, idx) => {
+      const accessKey = buildOrtAccessKey(ort, `DOC${idx + 1}`);
       const parsed: ParsedNFe = {
         invoiceNumber: ort.invoiceNumber,
         series: 'ORT',
-        accessKey: `ORT-${ort.invoiceNumber || idx + 1}`,
+        accessKey,
         issueDate: ort.issueDate,
         emitterName: ort.emitterName,
         emitterCnpj: ort.emitterCnpj,
@@ -245,6 +299,12 @@ export default function Ingestion() {
         estimatedPallets: Math.max(1, ort.estimatedPallets || 1),
       };
       const validated = validateNFe(parsed, `ORT ${ort.fileName}`, existingDocs, clients, indexes);
+      if (seenReviewKeys.has(accessKey)) {
+        validated.validations.push({ field: 'accessKey', message: 'ORT duplicada neste lote de importação', severity: 'error' });
+        validated.hasErrors = true;
+        validated.isDuplicate = true;
+      }
+      seenReviewKeys.add(accessKey);
       if (ort.needsReview || ort.confidence < 0.82) {
         validated.validations.push({ field: 'ortConfidence', message: 'ORT tinha campos de baixa confiança — revisão manual realizada', severity: 'info' });
       }
