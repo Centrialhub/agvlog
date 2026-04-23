@@ -342,7 +342,7 @@ export default function Ingestion() {
       }
 
       setExecutionResults(results);
-      setStep(4);
+      setStep(5);
 
       const successCount = results.filter(r => r.startsWith('✅')).length;
       const loadLabel = loadId ? loads.find(l => l.id === loadId)?.load_number : null;
@@ -704,6 +704,14 @@ export default function Ingestion() {
         onCreated={() => setResumeOpen(false)}
       />
       {step === 1 && (
+        <ORTReviewStep
+          docs={ortReviewDocs}
+          onBack={reset}
+          onUpdate={handleUpdateOrtReviewDoc}
+          onConfirm={handleConfirmOrtReview}
+        />
+      )}
+      {step === 2 && (
         <ValidationStep
           docs={validatedDocs}
           orders={validatedOrders}
@@ -719,7 +727,7 @@ export default function Ingestion() {
           onRemoveOrder={handleRemoveOrder}
         />
       )}
-      {step === 2 && (
+      {step === 3 && (
         <RoutingStep
           docs={validatedDocs}
           orders={validatedOrders}
@@ -734,12 +742,12 @@ export default function Ingestion() {
                 destinations: Array.isArray(r.destinations) ? r.destinations.map((d: any) => ({ name: typeof d === 'string' ? d : d.name || '' })) : [],
               }));
           })()}
-          onBack={() => setStep(1)}
+          onBack={() => setStep(2)}
           onNext={handleRoutingNext}
           onLearnCity={handleLearnCity}
         />
       )}
-      {step === 3 && (
+      {step === 4 && (
         <GroupingStep
           suggestions={suggestions}
           vehicles={vehicles as any}
@@ -756,11 +764,11 @@ export default function Ingestion() {
               }));
           })()}
           executing={executing}
-          onBack={() => setStep(2)}
+          onBack={() => setStep(3)}
           onExecute={handleExecute}
         />
       )}
-      {step === 4 && <ResultsStep results={executionResults} onReset={reset} />}
+      {step === 5 && <ResultsStep results={executionResults} onReset={reset} />}
     </div>
   );
 }
