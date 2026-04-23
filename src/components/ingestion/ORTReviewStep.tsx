@@ -215,15 +215,50 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm, clien
                   recipientCnpj: doc.recipientCnpj || (client.tax_id || ''),
                 });
               }}
-              onApplyContact={(c) => onUpdate(index, { recipientPhone: c.phone || doc.recipientPhone })}
-              onApplyAddress={(a) => onUpdate(index, {
-                recipientAddress: a.street || doc.recipientAddress,
-                recipientAddressNumber: a.number || doc.recipientAddressNumber,
-                recipientNeighborhood: a.neighborhood || doc.recipientNeighborhood,
-                recipientCity: a.city || doc.recipientCity,
-                recipientState: a.state || doc.recipientState,
-                recipientZip: a.zip || doc.recipientZip,
-              })}
+              onApplyContact={(c) => {
+                const previousValues = { recipientPhone: doc.recipientPhone || '' };
+                const newValues = { recipientPhone: c.phone || doc.recipientPhone || '' };
+                const entry: OrtApplyHistoryEntry = {
+                  type: 'contact',
+                  appliedAt: new Date().toISOString(),
+                  label: [c.name, c.phone].filter(Boolean).join(' · ') || 'Contato',
+                  previousValues,
+                  newValues,
+                };
+                onUpdate(index, {
+                  recipientPhone: newValues.recipientPhone,
+                  appliedHistory: [...(doc.appliedHistory || []), entry],
+                });
+              }}
+              onApplyAddress={(a) => {
+                const previousValues = {
+                  recipientAddress: doc.recipientAddress || '',
+                  recipientAddressNumber: doc.recipientAddressNumber || '',
+                  recipientNeighborhood: doc.recipientNeighborhood || '',
+                  recipientCity: doc.recipientCity || '',
+                  recipientState: doc.recipientState || '',
+                  recipientZip: doc.recipientZip || '',
+                };
+                const newValues = {
+                  recipientAddress: a.street || doc.recipientAddress || '',
+                  recipientAddressNumber: a.number || doc.recipientAddressNumber || '',
+                  recipientNeighborhood: a.neighborhood || doc.recipientNeighborhood || '',
+                  recipientCity: a.city || doc.recipientCity || '',
+                  recipientState: a.state || doc.recipientState || '',
+                  recipientZip: a.zip || doc.recipientZip || '',
+                };
+                const entry: OrtApplyHistoryEntry = {
+                  type: 'address',
+                  appliedAt: new Date().toISOString(),
+                  label: [a.street, a.number, a.city && `${a.city}/${a.state || ''}`].filter(Boolean).join(', ') || 'Endereço',
+                  previousValues,
+                  newValues,
+                };
+                onUpdate(index, {
+                  ...newValues,
+                  appliedHistory: [...(doc.appliedHistory || []), entry],
+                });
+              }}
             />
             <div className="grid grid-cols-1 gap-3 md:grid-cols-[2fr_80px_120px_1fr]">
               <div><Label className="text-xs">Endereço</Label><Input className={fieldClass(doc, 'recipientAddress')} value={doc.recipientAddress} onChange={e => onUpdate(index, { recipientAddress: e.target.value })} /></div>
