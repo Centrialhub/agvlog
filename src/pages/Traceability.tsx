@@ -263,7 +263,7 @@ export default function Traceability() {
     const headers = [
       'Nº NF', 'Chave de Acesso', 'Tipo Documento', 'Status Documento', 'Data Emissão',
       'Nº Carga', 'Status Carga', 'Trip ID', 'Origem', 'Destino Carga',
-      'Carga Cliente (NF-e)', 'Ref. Cliente (Pedido)', 'Forma Pgto',
+      'Carga Cliente (NF-e)', 'Origem Carga Cliente', 'Regra Aplicada', 'Ref. Cliente (Pedido)', 'Forma Pgto',
       'Cliente', 'Fornecedor / Remetente',
       'Cidade Destino', 'UF Destino',
       'Placa', 'Veículo', 'Motorista',
@@ -298,6 +298,8 @@ export default function Traceability() {
         doc.loads?.origin || '',
         doc.loads?.destination || '',
         doc.client_load_number || '',
+        doc.client_load_source?.source ? sourceLabel(doc.client_load_source.source) : '',
+        doc.client_load_source?.ruleLabel || '',
         doc.orders?.order_number || '',
         doc.orders?.payment_plan || '',
         doc.clients?.company_name || doc.recipient || '',
