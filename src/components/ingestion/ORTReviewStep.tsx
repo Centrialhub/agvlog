@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, Files, History, HelpCircle, MapPin, Package, Phone, ReceiptText, Undo2, Users } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle, Files, History, HelpCircle, MapPin, Package, Phone, ReceiptText, RotateCcw, Undo2, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -306,22 +306,87 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm, clien
                   <span className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
                     <History className="h-3 w-3" /> Aplicações nesta ORT ({doc.appliedHistory!.length})
                   </span>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-6 gap-1 px-2 text-[11px]"
-                    onClick={() => {
+                  <div className="flex items-center gap-1">
+                    {(() => {
                       const history = doc.appliedHistory || [];
-                      const last = history[history.length - 1];
-                      if (!last) return;
-                      onUpdate(index, {
-                        ...last.previousValues,
-                        appliedHistory: history.slice(0, -1),
-                      } as any);
-                    }}
-                  >
-                    <Undo2 className="h-3 w-3" /> Desfazer última
-                  </Button>
+                      // Prefer entries matching the persisted linkedContactKey/linkedAddressKey
+                      const lastContact = [...history].reverse().find(
+                        e => e.type === 'contact' && (!doc.linkedContactKey || e.refKey === doc.linkedContactKey),
+                      ) || [...history].reverse().find(e => e.type === 'contact');
+                      const lastAddress = [...history].reverse().find(
+                        e => e.type === 'address' && (!doc.linkedAddressKey || e.refKey === doc.linkedAddressKey),
+                      ) || [...history].reverse().find(e => e.type === 'address');
+                      const canReapply = !!(lastContact || lastAddress);
+                      return (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 gap-1 px-2 text-[11px]"
+                          disabled={!canReapply}
+                          title={[
+                            lastContact && `Contato: ${lastContact.label}`,
+                            lastAddress && `Endereço: ${lastAddress.label}`,
+                          ].filter(Boolean).join(' · ') || 'Sem vínculo anterior'}
+                          onClick={() => {
+                            const merged: Record<string, string> = {
+                              ...(lastContact?.newValues || {}),
+                              ...(lastAddress?.newValues || {}),
+                            };
+                            const replay: OrtApplyHistoryEntry[] = [];
+                            const nowIso = new Date().toISOString();
+                            if (lastContact) {
+                              replay.push({
+                                ...lastContact,
+                                appliedAt: nowIso,
+                                label: `↻ ${lastContact.label}`,
+                                previousValues: { recipientPhone: doc.recipientPhone || '' },
+                              });
+                            }
+                            if (lastAddress) {
+                              replay.push({
+                                ...lastAddress,
+                                appliedAt: nowIso,
+                                label: `↻ ${lastAddress.label}`,
+                                previousValues: {
+                                  recipientAddress: doc.recipientAddress || '',
+                                  recipientAddressNumber: doc.recipientAddressNumber || '',
+                                  recipientNeighborhood: doc.recipientNeighborhood || '',
+                                  recipientCity: doc.recipientCity || '',
+                                  recipientState: doc.recipientState || '',
+                                  recipientZip: doc.recipientZip || '',
+                                },
+                              });
+                            }
+                            onUpdate(index, {
+                              ...merged,
+                              appliedHistory: [...history, ...replay],
+                              linkedContactKey: lastContact?.refKey || doc.linkedContactKey || null,
+                              linkedAddressKey: lastAddress?.refKey || doc.linkedAddressKey || null,
+                              linkedAt: nowIso,
+                            } as any);
+                          }}
+                        >
+                          <RotateCcw className="h-3 w-3" /> Reaplicar último vínculo
+                        </Button>
+                      );
+                    })()}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 gap-1 px-2 text-[11px]"
+                      onClick={() => {
+                        const history = doc.appliedHistory || [];
+                        const last = history[history.length - 1];
+                        if (!last) return;
+                        onUpdate(index, {
+                          ...last.previousValues,
+                          appliedHistory: history.slice(0, -1),
+                        } as any);
+                      }}
+                    >
+                      <Undo2 className="h-3 w-3" /> Desfazer última
+                    </Button>
+                  </div>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {doc.appliedHistory!.slice().reverse().map((entry, i, arr) => (
