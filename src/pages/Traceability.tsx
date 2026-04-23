@@ -145,7 +145,7 @@ export default function Traceability() {
       if (!currentTenant) return { docs: [], events: [], trips: [], stops: [] };
       const { data: docs, error: docsError } = await supabase
         .from('fiscal_documents')
-        .select('id, invoice_number, access_key, document_type, issue_date, recipient, recipient_city, recipient_state, product_summary, pallet_count, weight_kg, value, freight_value, status, load_id, client_id, clients(company_name), loads(id, load_number, status, origin, destination, trip_id, vehicles(plate, nickname), drivers(name))')
+        .select('id, invoice_number, access_key, document_type, issue_date, recipient, remitter, recipient_city, recipient_state, product_summary, pallet_count, weight_kg, value, freight_value, status, load_id, client_id, order_id, clients(company_name), orders(order_number, payment_plan), loads(id, load_number, status, origin, destination, trip_id, vehicles(plate, nickname), drivers(name))')
         .eq('tenant_id', currentTenant.id)
         .order('created_at', { ascending: false })
         .limit(1000);
