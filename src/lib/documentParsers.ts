@@ -88,23 +88,28 @@ export function parseNFeXml(xmlString: string): ParsedNFe {
     });
   }
 
-  // Extract client load number: try xPed first (purchase order on each item), then infCpl (free-text observation)
-  let clientLoadNumber = '';
+  // Extract client load number from BOTH sources, then pick the most specific (longest) one.
+  // Source 1: <xPed> (structured purchase order field on each item)
+  let xPedCandidate = '';
   for (let i = 0; i < detElements.length; i++) {
     const prod = detElements[i].getElementsByTagName('prod')[0];
     if (!prod) continue;
     const xPed = getTagText(prod, 'xPed');
-    if (xPed) { clientLoadNumber = xPed; break; }
+    if (xPed) { xPedCandidate = xPed.trim(); break; }
   }
 
+  // Source 2: <infCpl>/<infAdFisco> (free-text observation)
   const infAdic = infNFe.getElementsByTagName('infAdic')[0];
   const observation = getTagText(infAdic || infNFe, 'infCpl') || getTagText(infAdic || infNFe, 'infAdFisco') || '';
-  if (!clientLoadNumber && observation) {
-    // Patterns like "Carga: 12345", "CARGA 12345", "Nº Carga 12345", "Pedido Carga: 12345"
+  let obsCandidate = '';
+  if (observation) {
     const m = observation.match(/(?:n[ºo°.]?\s*)?carga[:\s-]*([A-Za-z0-9\-\/]+)/i)
       || observation.match(/(?:pedido|ped\.?)\s*(?:de\s*)?carga[:\s-]*([A-Za-z0-9\-\/]+)/i);
-    if (m) clientLoadNumber = m[1];
+    if (m) obsCandidate = m[1].trim();
   }
+
+  // Prefer the longer/more specific value; if equal length, observation wins (often the official client number)
+  const clientLoadNumber = obsCandidate.length >= xPedCandidate.length ? obsCandidate : xPedCandidate;
 
   const total = infNFe.getElementsByTagName('ICMSTot')[0];
   const totalValue = parseFloat(getTagText(total || infNFe, 'vNF')) || 0;
