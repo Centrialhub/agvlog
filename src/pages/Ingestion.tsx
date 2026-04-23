@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import PendingDocsGrouping from '@/components/loads/PendingDocsGrouping';
 import IngestionStepper from '@/components/ingestion/IngestionStepper';
 import UploadStep from '@/components/ingestion/UploadStep';
+import ORTReviewStep, { OrtReviewDocument } from '@/components/ingestion/ORTReviewStep';
 import ValidationStep from '@/components/ingestion/ValidationStep';
 import RoutingStep from '@/components/ingestion/RoutingStep';
 import type { RouteGroup } from '@/components/ingestion/RoutingStep';
@@ -84,6 +85,7 @@ export default function Ingestion() {
   const [resumeOpen, setResumeOpen] = useState(false);
   const [validatedDocs, setValidatedDocs] = useState<ValidatedDocument[]>([]);
   const [validatedOrders, setValidatedOrders] = useState<ValidatedOrder[]>([]);
+  const [ortReviewDocs, setOrtReviewDocs] = useState<OrtReviewDocument[]>([]);
   const [suggestions, setSuggestions] = useState<LoadSuggestion[]>([]);
   const [routeGroups, setRouteGroups] = useState<RouteGroup[]>([]);
   const [executing, setExecuting] = useState(false);
@@ -167,7 +169,7 @@ export default function Ingestion() {
     setValidatedOrders(validateOrderRows(orderRows, clients));
     const elapsed = Math.round(performance.now() - t0);
     console.log(`[Ingestion] processed ${files.length} files in ${elapsed}ms`);
-    setStep(1);
+    setStep(2);
   }, [existingDocs, clients]);
 
   const handleOrtFiles = useCallback(async (fileList: FileList) => {
@@ -183,53 +185,75 @@ export default function Ingestion() {
       const { data, error } = await supabase.functions.invoke('extract-ort', { body: { files: payload } });
       if (error) throw error;
 
-      const indexes = buildValidationIndexes(existingDocs, clients);
-      const docs: ValidatedDocument[] = ((data as any)?.documents || []).map((ort: any, idx: number) => {
-        const parsed: ParsedNFe = {
-          invoiceNumber: ort.invoiceNumber || `ORT-${Date.now()}-${idx + 1}`,
-          series: 'ORT',
-          accessKey: `ORT-${Date.now()}-${idx + 1}`,
-          issueDate: ort.issueDate || new Date().toISOString().substring(0, 10),
-          emitterName: ort.emitterName || 'ORT',
-          emitterCnpj: ort.emitterCnpj || '',
-          recipientName: ort.recipientName || '',
-          recipientCnpj: ort.recipientCnpj || '',
-          recipientCity: ort.recipientCity || '',
-          recipientState: ort.recipientState || '',
-          recipientAddress: ort.recipientAddress || '',
-          recipientNeighborhood: ort.recipientNeighborhood || '',
-          items: [{
-            description: ort.productSummary || 'Mercadoria ORT',
-            quantity: 1,
-            unit: 'UN',
-            unitPrice: Number(ort.totalValue) || 0,
-            totalPrice: Number(ort.totalValue) || 0,
-            ncm: '',
-            cfop: '',
-          }],
-          totalValue: Number(ort.totalValue) || 0,
-          totalWeight: Number(ort.totalWeight) || 0,
-          totalVolume: Number(ort.totalVolume) || 0,
-          estimatedPallets: Math.max(1, Number(ort.estimatedPallets) || Math.ceil((Number(ort.totalWeight) || 0) / 800) || 1),
-        };
-        const validated = validateNFe(parsed, `ORT ${files[idx]?.name || idx + 1}`, existingDocs, clients, indexes);
-        if (ort.needsReview || Number(ort.confidence) < 0.82) {
-          validated.validations.push({ field: 'ortConfidence', message: 'ORT lida com confiança baixa — revise antes de avançar', severity: 'warning' });
-          validated.hasWarnings = true;
-        }
-        return validated;
-      });
+      const docs: OrtReviewDocument[] = ((data as any)?.documents || []).map((ort: any, idx: number) => ({
+        invoiceNumber: ort.invoiceNumber || `ORT-${Date.now()}-${idx + 1}`,
+        issueDate: ort.issueDate || new Date().toISOString().substring(0, 10),
+        emitterName: ort.emitterName || 'ORT',
+        emitterCnpj: ort.emitterCnpj || '',
+        recipientName: ort.recipientName || '',
+        recipientCnpj: ort.recipientCnpj || '',
+        recipientCity: ort.recipientCity || '',
+        recipientState: ort.recipientState || '',
+        recipientAddress: ort.recipientAddress || '',
+        recipientNeighborhood: ort.recipientNeighborhood || '',
+        totalValue: Number(ort.totalValue) || 0,
+        totalWeight: Number(ort.totalWeight) || 0,
+        totalVolume: Number(ort.totalVolume) || 0,
+        estimatedPallets: Math.max(1, Number(ort.estimatedPallets) || Math.ceil((Number(ort.totalWeight) || 0) / 800) || 1),
+        productSummary: ort.productSummary || 'Mercadoria ORT',
+        confidence: Number(ort.confidence) || 0,
+        needsReview: Boolean(ort.needsReview) || Number(ort.confidence) < 0.82,
+        fieldConfidences: ort.fieldConfidences || {},
+        fileName: files[idx]?.name || `ORT ${idx + 1}`,
+      }));
 
-      setValidatedDocs(docs);
+      setOrtReviewDocs(docs);
       setValidatedOrders([]);
       setStep(1);
-      toast({ title: 'ORT processada', description: `${docs.length} documento(s) enviados para validação.` });
+      toast({ title: 'ORT processada', description: `${docs.length} documento(s) pronto(s) para revisão.` });
     } catch (e: any) {
       toast({ title: 'Erro ao ler ORT', description: e.message, variant: 'destructive' });
     } finally {
       setOrtProcessing(false);
     }
   }, [existingDocs, clients, toast]);
+
+  const handleUpdateOrtReviewDoc = useCallback((index: number, updates: Partial<OrtReviewDocument>) => {
+    setOrtReviewDocs(prev => prev.map((doc, i) => i === index ? { ...doc, ...updates, needsReview: false } : doc));
+  }, []);
+
+  const handleConfirmOrtReview = useCallback(() => {
+    const indexes = buildValidationIndexes(existingDocs, clients);
+    const docs = ortReviewDocs.map((ort, idx) => {
+      const parsed: ParsedNFe = {
+        invoiceNumber: ort.invoiceNumber,
+        series: 'ORT',
+        accessKey: `ORT-${ort.invoiceNumber || idx + 1}`,
+        issueDate: ort.issueDate,
+        emitterName: ort.emitterName,
+        emitterCnpj: ort.emitterCnpj,
+        recipientName: ort.recipientName,
+        recipientCnpj: ort.recipientCnpj,
+        recipientCity: ort.recipientCity,
+        recipientState: ort.recipientState,
+        recipientAddress: ort.recipientAddress,
+        recipientNeighborhood: ort.recipientNeighborhood,
+        items: [{ description: ort.productSummary || 'Mercadoria ORT', quantity: 1, unit: 'UN', unitPrice: ort.totalValue || 0, totalPrice: ort.totalValue || 0, ncm: '', cfop: '' }],
+        totalValue: ort.totalValue || 0,
+        totalWeight: ort.totalWeight || 0,
+        totalVolume: ort.totalVolume || 0,
+        estimatedPallets: Math.max(1, ort.estimatedPallets || 1),
+      };
+      const validated = validateNFe(parsed, `ORT ${ort.fileName}`, existingDocs, clients, indexes);
+      if (ort.needsReview || ort.confidence < 0.82) {
+        validated.validations.push({ field: 'ortConfidence', message: 'ORT tinha campos de baixa confiança — revisão manual realizada', severity: 'info' });
+      }
+      return validated;
+    });
+    setValidatedDocs(docs);
+    setValidatedOrders([]);
+    setStep(2);
+  }, [clients, existingDocs, ortReviewDocs]);
 
   // Inline editing callbacks
   const handleUpdateDoc = useCallback((index: number, updates: Partial<ValidatedDocument>) => {
@@ -318,7 +342,7 @@ export default function Ingestion() {
       }
 
       setExecutionResults(results);
-      setStep(4);
+      setStep(5);
 
       const successCount = results.filter(r => r.startsWith('✅')).length;
       const loadLabel = loadId ? loads.find(l => l.id === loadId)?.load_number : null;
@@ -336,7 +360,7 @@ export default function Ingestion() {
   };
 
   const handleGoToRouting = () => {
-    setStep(2);
+    setStep(3);
   };
 
   const handleRoutingNext = async (groups: RouteGroup[]) => {
@@ -419,7 +443,7 @@ export default function Ingestion() {
       stopCount: g.documents.length + g.orders.length,
     }));
     setSuggestions(loadSuggestions);
-    setStep(3);
+    setStep(4);
   };
 
   const handleExecute = async (assignments: Map<number, { vehicleId: string | null; driverId: string | null }>) => {
@@ -588,7 +612,7 @@ export default function Ingestion() {
       }
 
       setExecutionResults(results);
-      setStep(4);
+      setStep(5);
 
       const successCount = results.filter(r => r.startsWith('✅')).length;
       const errorCount = results.filter(r => r.startsWith('❌')).length;
@@ -609,6 +633,7 @@ export default function Ingestion() {
     setStep(0);
     setValidatedDocs([]);
     setValidatedOrders([]);
+    setOrtReviewDocs([]);
     setSuggestions([]);
     setRouteGroups([]);
     setExecutionResults([]);
@@ -679,6 +704,14 @@ export default function Ingestion() {
         onCreated={() => setResumeOpen(false)}
       />
       {step === 1 && (
+        <ORTReviewStep
+          docs={ortReviewDocs}
+          onBack={reset}
+          onUpdate={handleUpdateOrtReviewDoc}
+          onConfirm={handleConfirmOrtReview}
+        />
+      )}
+      {step === 2 && (
         <ValidationStep
           docs={validatedDocs}
           orders={validatedOrders}
@@ -694,7 +727,7 @@ export default function Ingestion() {
           onRemoveOrder={handleRemoveOrder}
         />
       )}
-      {step === 2 && (
+      {step === 3 && (
         <RoutingStep
           docs={validatedDocs}
           orders={validatedOrders}
@@ -709,12 +742,12 @@ export default function Ingestion() {
                 destinations: Array.isArray(r.destinations) ? r.destinations.map((d: any) => ({ name: typeof d === 'string' ? d : d.name || '' })) : [],
               }));
           })()}
-          onBack={() => setStep(1)}
+          onBack={() => setStep(2)}
           onNext={handleRoutingNext}
           onLearnCity={handleLearnCity}
         />
       )}
-      {step === 3 && (
+      {step === 4 && (
         <GroupingStep
           suggestions={suggestions}
           vehicles={vehicles as any}
@@ -731,11 +764,11 @@ export default function Ingestion() {
               }));
           })()}
           executing={executing}
-          onBack={() => setStep(2)}
+          onBack={() => setStep(3)}
           onExecute={handleExecute}
         />
       )}
-      {step === 4 && <ResultsStep results={executionResults} onReset={reset} />}
+      {step === 5 && <ResultsStep results={executionResults} onReset={reset} />}
     </div>
   );
 }

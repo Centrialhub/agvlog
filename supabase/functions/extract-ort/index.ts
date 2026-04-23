@@ -80,6 +80,11 @@ Deno.serve(async (req) => {
                       productSummary: { type: "string" },
                       confidence: { type: "number" },
                       needsReview: { type: "boolean" },
+                      fieldConfidences: {
+                        type: "object",
+                        description: "Confiança por campo, de 0 a 1, usando os nomes dos campos retornados.",
+                        additionalProperties: { type: "number" },
+                      },
                     },
                     required: ["invoiceNumber", "recipientName", "recipientCity", "recipientState", "confidence", "needsReview"],
                     additionalProperties: false,
