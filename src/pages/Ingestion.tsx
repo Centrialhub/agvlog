@@ -93,6 +93,7 @@ export default function Ingestion() {
   const [savingDocsOnly, setSavingDocsOnly] = useState(false);
   const [ortProcessing, setOrtProcessing] = useState(false);
   const [executionResults, setExecutionResults] = useState<string[]>([]);
+  const [ortClientIds, setOrtClientIds] = useState<Array<string | null>>([]);
 
   const fileToBase64 = (file: File) => new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -953,6 +954,13 @@ export default function Ingestion() {
           onBack={reset}
           onUpdate={handleUpdateOrtReviewDoc}
           onConfirm={handleConfirmOrtReview}
+          clientIds={ortClientIds}
+          onSelectClient={(index, clientId) => setOrtClientIds(prev => {
+            const next = [...prev];
+            while (next.length <= index) next.push(null);
+            next[index] = clientId;
+            return next;
+          })}
         />
       )}
       {step === 2 && (
