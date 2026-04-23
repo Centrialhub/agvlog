@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { parseNFeXml, parseCsvOrders, parseExcelOrders, ParsedOrderRow } from '@/lib/documentParsers';
+import { parseNFeXml, parseCsvOrders, parseExcelOrders, ParsedOrderRow, ParsedNFe } from '@/lib/documentParsers';
 import {
   validateNFe, validateOrderRows, generateLoadSuggestions, buildValidationIndexes,
   ValidatedDocument, ValidatedOrder, LoadSuggestion,
@@ -88,7 +88,15 @@ export default function Ingestion() {
   const [routeGroups, setRouteGroups] = useState<RouteGroup[]>([]);
   const [executing, setExecuting] = useState(false);
   const [savingDocsOnly, setSavingDocsOnly] = useState(false);
+  const [ortProcessing, setOrtProcessing] = useState(false);
   const [executionResults, setExecutionResults] = useState<string[]>([]);
+
+  const fileToBase64 = (file: File) => new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || '').split(',')[1] || '');
+    reader.onerror = () => reject(reader.error || new Error('Erro ao ler arquivo'));
+    reader.readAsDataURL(file);
+  });
 
   const handleFiles = useCallback(async (fileList: FileList) => {
     const files = Array.from(fileList);
