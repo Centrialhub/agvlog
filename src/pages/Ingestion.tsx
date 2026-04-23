@@ -131,7 +131,26 @@ export default function Ingestion() {
     totalVolume: ort.totalVolume,
     estimatedPallets: ort.estimatedPallets,
     productSummary: ort.productSummary,
+    items: ort.items || [],
   });
+
+  const mapOrtItems = (ort: OrtReviewDocument) => {
+    const extractedItems = (ort.items || [])
+      .filter(item => item.description?.trim())
+      .map(item => ({
+        description: item.description.trim(),
+        quantity: Number(item.quantity) || 1,
+        unit: item.unit || 'UN',
+        unitPrice: Number(item.unitPrice) || (Number(item.totalPrice) || 0),
+        totalPrice: Number(item.totalPrice) || Number(item.unitPrice) || 0,
+        ncm: '',
+        cfop: '',
+      }));
+
+    return extractedItems.length > 0
+      ? extractedItems
+      : [{ description: ort.productSummary || 'Mercadoria ORT', quantity: 1, unit: 'UN', unitPrice: ort.totalValue || 0, totalPrice: ort.totalValue || 0, ncm: '', cfop: '' }];
+  };
 
   const getChangedOrtFields = (ort: OrtReviewDocument) => {
     const extracted = ort.extractedPayload || {};
