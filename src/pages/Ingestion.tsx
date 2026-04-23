@@ -703,6 +703,11 @@ export default function Ingestion() {
           freight_table_id: freightTableId,
           status: 'confirmed',
           client_load_number: doc.source.clientLoadNumber || null,
+          client_load_source: doc.source.clientLoadNumber ? {
+            source: doc.source.clientLoadSource || 'none',
+            ruleId: doc.source.clientLoadRuleId || null,
+            ruleLabel: doc.source.clientLoadRuleLabel || null,
+          } : null,
         });
 
         (doc as any)._savedId = created.id;
