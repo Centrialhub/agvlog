@@ -222,8 +222,9 @@ export default function Ingestion() {
       }
       // Merge: sum totals, dedupe items by description, append source pages
       mergedScans += 1;
-      const itemMap = new Map<string, OrtReviewItemLite>();
-      const pushItem = (it: OrtReviewItemLite) => {
+      type ItemLite = NonNullable<OrtReviewDocument['items']>[number];
+      const itemMap = new Map<string, ItemLite>();
+      const pushItem = (it: ItemLite) => {
         const k = (it.description || '').trim().toLowerCase();
         if (!k) return;
         const cur = itemMap.get(k);
