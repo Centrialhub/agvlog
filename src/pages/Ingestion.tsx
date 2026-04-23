@@ -445,6 +445,8 @@ export default function Ingestion() {
               await logFreightCalculation(currentTenant.id, created.id, 'fiscal_document', freightBreakdown, user?.id);
             }
 
+            await recordOrtAudit(doc, created.id, loadId ? 'saved_and_linked' : 'saved');
+
             const freightLabel = freightValue ? ` (frete: R$ ${freightValue.toFixed(2)})` : '';
             results.push(`✅ NF ${doc.source.invoiceNumber} salva${freightLabel}`);
           }
@@ -529,6 +531,8 @@ export default function Ingestion() {
         if (freightValue && freightBreakdown?.tableId && currentTenant) {
           await logFreightCalculation(currentTenant.id, created.id, 'fiscal_document', freightBreakdown, user?.id);
         }
+
+        await recordOrtAudit(doc, created.id, 'auto_saved_for_grouping');
         savedCount++;
       } catch {
         // Will still proceed to grouping
@@ -621,6 +625,8 @@ export default function Ingestion() {
             if (freightValue && freightBreakdown?.tableId && currentTenant) {
               await logFreightCalculation(currentTenant.id, created.id, 'fiscal_document', freightBreakdown, user?.id);
             }
+
+            await recordOrtAudit(doc, created.id, 'imported_on_execute');
 
             const freightLabel = freightValue ? ` (frete: R$ ${freightValue.toFixed(2)})` : ' (sem tabela de frete)';
             results.push(`✅ NF ${doc.source.invoiceNumber} importada${freightLabel}`);
