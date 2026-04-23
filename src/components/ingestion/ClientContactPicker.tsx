@@ -53,7 +53,7 @@ const contactLabel = (c: ContactSnapshot) =>
   [c.name, c.phone, c.email].filter(Boolean).join(' · ');
 
 export default function ClientContactPicker({
-  hintName, hintCnpj, selectedClientId,
+  hintName, hintCnpj, hintPhone, selectedClientId,
   currentContact, currentAddress,
   onSelectClient, onApplyContact, onApplyAddress,
 }: ClientContactPickerProps) {
@@ -65,20 +65,40 @@ export default function ClientContactPicker({
   const [open, setOpen] = useState(false);
   const [autoSaveOnCreate, setAutoSaveOnCreate] = useState(true);
 
-  // Auto-suggest by CNPJ then name
+  // Auto-suggest by CNPJ → phone → name. Phone is also returned as
+  // secondary candidates so the user can review when CNPJ disagrees.
+  const phoneDigits = useMemo(() => onlyDigits(hintPhone || currentContact?.phone || ''), [hintPhone, currentContact?.phone]);
+
+  const phoneMatches = useMemo(() => {
+    if (!phoneDigits || phoneDigits.length < 8) return [] as Client[];
+    return clients.filter(c => {
+      const list: any[] = Array.isArray(c.contacts) ? c.contacts as any[] : [];
+      return list.some(ct => onlyDigits(ct?.phone || '') === phoneDigits);
+    });
+  }, [clients, phoneDigits]);
+
   const suggested = useMemo(() => {
     const cnpj = onlyDigits(hintCnpj || '');
     if (cnpj) {
       const m = clients.find(c => onlyDigits(c.tax_id || '') === cnpj);
       if (m) return m;
     }
+    // Phone fallback (when CNPJ missing or no match)
+    if (phoneMatches.length > 0) return phoneMatches[0];
     if (hintName) {
       const lower = hintName.toLowerCase();
       return clients.find(c => c.company_name.toLowerCase() === lower)
         || clients.find(c => c.company_name.toLowerCase().includes(lower) || lower.includes(c.company_name.toLowerCase()));
     }
     return undefined;
-  }, [clients, hintCnpj, hintName]);
+  }, [clients, hintCnpj, hintName, phoneMatches]);
+
+  // Conflict detection: CNPJ on the ORT points to client A but phone matches client B.
+  const cnpjMatch = useMemo(() => {
+    const cnpj = onlyDigits(hintCnpj || '');
+    return cnpj ? clients.find(c => onlyDigits(c.tax_id || '') === cnpj) : undefined;
+  }, [clients, hintCnpj]);
+  const phoneVsCnpjConflict = !!(cnpjMatch && phoneMatches.length > 0 && !phoneMatches.some(c => c.id === cnpjMatch.id));
 
   const selectedClient = clients.find(c => c.id === selectedClientId) || suggested;
   const contacts: ContactSnapshot[] = Array.isArray(selectedClient?.contacts) ? (selectedClient!.contacts as any[]) : [];
