@@ -32,6 +32,7 @@ export interface ClientContactPickerProps {
   /** Read from the ORT being reviewed */
   hintName?: string;
   hintCnpj?: string;
+  hintPhone?: string;
   /** Currently linked client (if any) */
   selectedClientId?: string | null;
   /** Current values being edited (so we can save them back to the client) */
