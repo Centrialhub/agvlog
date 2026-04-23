@@ -68,7 +68,7 @@ const REVIEW_THRESHOLD = 0.82;
 const currency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 const number = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 });
 
-export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm }: ORTReviewStepProps) {
+export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm, clientIds, onSelectClient }: ORTReviewStepProps) {
   const fieldClass = (doc: OrtReviewDocument, field: keyof OrtReviewDocument, required = false) => {
     const confidence = doc.fieldConfidences?.[String(field)] ?? doc.confidence;
     const missing = required && !String(doc[field] ?? '').trim();
