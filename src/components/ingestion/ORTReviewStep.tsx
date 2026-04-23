@@ -68,6 +68,8 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm }: ORT
   const fieldClass = (doc: OrtReviewDocument, field: keyof OrtReviewDocument, required = false) => {
     const confidence = doc.fieldConfidences?.[String(field)] ?? doc.confidence;
     const missing = required && !String(doc[field] ?? '').trim();
+    const unknown = isUnknown(doc[field]);
+    if (unknown) return 'border-destructive bg-destructive/10 focus-visible:ring-destructive';
     return confidence < REVIEW_THRESHOLD || missing ? 'border-warning bg-warning/10 focus-visible:ring-warning' : '';
   };
 
@@ -104,6 +106,11 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm }: ORT
                 {(doc.mergedFrom || 0) > 1 && (
                   <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary gap-1">
                     <Users className="h-3 w-3" /> Unificado de {doc.mergedFrom} scans (mesmo cliente)
+                  </Badge>
+                )}
+                {(doc.unknownFields?.length || 0) > 0 && (
+                  <Badge variant="outline" className="border-destructive/40 bg-destructive/10 text-destructive gap-1">
+                    <HelpCircle className="h-3 w-3" /> {doc.unknownFields!.length} campo(s) UNKNOWN — preencha
                   </Badge>
                 )}
               </span>
