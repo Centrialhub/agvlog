@@ -144,6 +144,37 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm, clien
               <div><Label className="text-xs">CNPJ/CPF destinatário</Label><Input className={fieldClass(doc, 'recipientCnpj')} value={doc.recipientCnpj} onChange={e => onUpdate(index, { recipientCnpj: e.target.value })} /></div>
               <div><Label className="text-xs">Telefone</Label><Input className={fieldClass(doc, 'recipientPhone')} value={doc.recipientPhone} onChange={e => onUpdate(index, { recipientPhone: e.target.value })} placeholder="(00) 00000-0000" /></div>
             </div>
+            <ClientContactPicker
+              hintName={doc.recipientName}
+              hintCnpj={doc.recipientCnpj}
+              selectedClientId={clientIds?.[index] || null}
+              currentContact={{ name: doc.recipientName, phone: doc.recipientPhone }}
+              currentAddress={{
+                street: doc.recipientAddress,
+                number: doc.recipientAddressNumber,
+                neighborhood: doc.recipientNeighborhood,
+                city: doc.recipientCity,
+                state: doc.recipientState,
+                zip: doc.recipientZip,
+              }}
+              onSelectClient={(id, client) => {
+                onSelectClient?.(index, id);
+                // If user picks a client, also adopt its CNPJ/name when ours is missing
+                onUpdate(index, {
+                  recipientName: doc.recipientName || client.company_name,
+                  recipientCnpj: doc.recipientCnpj || (client.tax_id || ''),
+                });
+              }}
+              onApplyContact={(c) => onUpdate(index, { recipientPhone: c.phone || doc.recipientPhone })}
+              onApplyAddress={(a) => onUpdate(index, {
+                recipientAddress: a.street || doc.recipientAddress,
+                recipientAddressNumber: a.number || doc.recipientAddressNumber,
+                recipientNeighborhood: a.neighborhood || doc.recipientNeighborhood,
+                recipientCity: a.city || doc.recipientCity,
+                recipientState: a.state || doc.recipientState,
+                recipientZip: a.zip || doc.recipientZip,
+              })}
+            />
             <div className="grid grid-cols-1 gap-3 md:grid-cols-[2fr_80px_120px_1fr]">
               <div><Label className="text-xs">Endereço</Label><Input className={fieldClass(doc, 'recipientAddress')} value={doc.recipientAddress} onChange={e => onUpdate(index, { recipientAddress: e.target.value })} /></div>
               <div><Label className="text-xs">Número</Label><Input className={fieldClass(doc, 'recipientAddressNumber')} value={doc.recipientAddressNumber} onChange={e => onUpdate(index, { recipientAddressNumber: e.target.value })} /></div>
