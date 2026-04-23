@@ -244,6 +244,37 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm, clien
               <div><Label className="text-xs">CNPJ/CPF destinatário</Label><Input className={fieldClass(doc, 'recipientCnpj')} value={doc.recipientCnpj} onChange={e => onUpdate(index, { recipientCnpj: e.target.value })} /></div>
               <div><Label className="text-xs">Telefone</Label><Input className={fieldClass(doc, 'recipientPhone')} value={doc.recipientPhone} onChange={e => onUpdate(index, { recipientPhone: e.target.value })} placeholder="(00) 00000-0000" /></div>
             </div>
+            {(() => {
+              const status = linkageStatus(doc);
+              if (!status) return null;
+              return (
+                <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 p-2 text-[11px] text-warning">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <div className="flex-1 space-y-0.5">
+                    <p className="font-medium">Vínculo divergente do cadastro do cliente</p>
+                    {status.missingClient ? (
+                      <p className="opacity-90">
+                        O cliente vinculado (<code className="text-[10px]">{doc.linkedClientId}</code>) não está mais acessível neste tenant. Reaplique a vinculação.
+                      </p>
+                    ) : (
+                      <ul className="list-disc pl-4 opacity-90">
+                        {status.contactMismatch && (
+                          <li>
+                            Contato <code className="text-[10px]">{doc.linkedContactKey}</code> não existe mais no cliente (pode ter sido removido ou deduplicado em outro telefone).
+                          </li>
+                        )}
+                        {status.addressMismatch && (
+                          <li>
+                            Endereço <code className="text-[10px]">{doc.linkedAddressKey}</code> não existe mais no cliente (pode ter sido removido ou normalizado por outro CEP).
+                          </li>
+                        )}
+                        <li className="opacity-80">Use o seletor abaixo para revisar e reaplicar antes de enviar.</li>
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
             <ClientContactPicker
               hintName={doc.recipientName}
               hintCnpj={doc.recipientCnpj}
