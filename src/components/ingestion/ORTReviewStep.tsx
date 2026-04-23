@@ -151,6 +151,18 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm, clien
                     <HelpCircle className="h-3 w-3" /> {doc.unknownFields!.length} campo(s) UNKNOWN — preencha
                   </Badge>
                 )}
+                {(doc.linkedClientId || doc.linkedContactKey || doc.linkedAddressKey) && (
+                  <Badge variant="outline" className="border-success/30 bg-success/10 text-success gap-1" title={[
+                    doc.linkedClientId && `cliente: ${doc.linkedClientId}`,
+                    doc.linkedContactKey && `contato: ${doc.linkedContactKey}`,
+                    doc.linkedAddressKey && `endereço: ${doc.linkedAddressKey}`,
+                    doc.linkedAt && `às ${new Date(doc.linkedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`,
+                  ].filter(Boolean).join(' · ')}>
+                    <CheckCircle className="h-3 w-3" /> Vinculado
+                    {doc.linkedContactKey ? ' · contato' : ''}
+                    {doc.linkedAddressKey ? ' · endereço' : ''}
+                  </Badge>
+                )}
               </span>
               <span className="flex items-center gap-2 text-[11px] text-muted-foreground">
                 {doc.needsReview || doc.confidence < REVIEW_THRESHOLD ? <AlertTriangle className="h-3.5 w-3.5 text-warning" /> : <CheckCircle className="h-3.5 w-3.5 text-success" />}
