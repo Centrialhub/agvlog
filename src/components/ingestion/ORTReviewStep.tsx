@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { isUnknown, UNKNOWN } from '@/lib/ortFieldFallbacks';
+import ClientContactPicker from './ClientContactPicker';
 
 export interface OrtReviewItem {
   description: string;
@@ -58,6 +59,9 @@ interface ORTReviewStepProps {
   onBack: () => void;
   onUpdate: (index: number, updates: Partial<OrtReviewDocument>) => void;
   onConfirm: () => void;
+  /** Optional: pre-resolved client id per doc (by index) */
+  clientIds?: Array<string | null>;
+  onSelectClient?: (index: number, clientId: string) => void;
 }
 
 const REVIEW_THRESHOLD = 0.82;
