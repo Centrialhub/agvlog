@@ -28,3 +28,84 @@ export function addressKey(a: AddressSnapshot | null | undefined): string {
   if (street) return `street:${street}|num:${num}|city:${city}`;
   return '';
 }
+
+/**
+ * Best-effort lookup of a contact in a client's contact list by stable refKey.
+ * Strategy:
+ *  1) Exact key match (e.g. phone digits or normalized email/name).
+ *  2) Partial fallback (e.g. last 8 digits of phone, fuzzy email/name prefix).
+ * Returns the matched contact or null. The caller is responsible for keeping
+ * the original refKey for audit traceability when reapplying.
+ */
+export function findContactByKey(
+  contacts: ContactSnapshot[] | null | undefined,
+  key: string | null | undefined,
+): ContactSnapshot | null {
+  if (!contacts || !key) return null;
+  // Exact match first
+  const exact = contacts.find(c => contactKey(c) === key);
+  if (exact) return exact;
+  // Partial: phone with same last 8 digits
+  if (key.startsWith('phone:')) {
+    const target = key.slice('phone:'.length);
+    const tail = target.slice(-8);
+    if (tail.length >= 8) {
+      const m = contacts.find(c => onlyDigits(c.phone || '').endsWith(tail));
+      if (m) return m;
+    }
+  }
+  // Partial: email local-part match
+  if (key.startsWith('email:')) {
+    const target = key.slice('email:'.length);
+    const local = target.split('@')[0];
+    if (local) {
+      const m = contacts.find(c => norm(c.email || '').startsWith(local + '@'));
+      if (m) return m;
+    }
+  }
+  // Partial: name token overlap
+  if (key.startsWith('name:')) {
+    const target = key.slice('name:'.length);
+    const m = contacts.find(c => {
+      const n = norm(c.name || '');
+      return !!n && (n.includes(target) || target.includes(n));
+    });
+    if (m) return m;
+  }
+  return null;
+}
+
+/**
+ * Best-effort lookup of an address in a client's address list by stable refKey.
+ * Falls back to street+city or zip-only matches when the full key drifts.
+ */
+export function findAddressByKey(
+  addresses: AddressSnapshot[] | null | undefined,
+  key: string | null | undefined,
+): AddressSnapshot | null {
+  if (!addresses || !key) return null;
+  const exact = addresses.find(a => addressKey(a) === key);
+  if (exact) return exact;
+  // Partial: same zip, any number
+  if (key.startsWith('zip:')) {
+    const rest = key.slice('zip:'.length);
+    const zip = rest.split('|')[0];
+    if (zip) {
+      const m = addresses.find(a => onlyDigits(a.zip || '') === zip);
+      if (m) return m;
+    }
+  }
+  // Partial: same street + city, ignore number
+  if (key.startsWith('street:')) {
+    const rest = key.slice('street:'.length);
+    const [street, _num, cityPart] = rest.split('|');
+    const city = cityPart?.replace(/^city:/, '') || '';
+    const m = addresses.find(a => {
+      const s = norm(a.street || '');
+      const c = norm(a.city || '');
+      return !!s && (s === street) && (!city || c === city);
+    });
+    if (m) return m;
+  }
+  return null;
+}
