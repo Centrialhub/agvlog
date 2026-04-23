@@ -277,7 +277,7 @@ export default function Traceability() {
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground"><FileSearch className="h-6 w-6 text-primary" /> Rastreabilidade NF</h1>
-          <p className="text-sm text-muted-foreground">Consulta operacional de NF, CT-e/ORT, carga, entrega, POD e ocorrências.</p>
+          <p className="text-sm text-muted-foreground">Consulta operacional de NF, carga, entrega, POD e ocorrências. Nº de CT-e/ORT é gerado apenas após emissão fiscal.</p>
         </div>
         <Button variant="outline" onClick={exportCsv} disabled={!filteredRows.length}><Download className="mr-2 h-4 w-4" /> Exportar CSV</Button>
       </div>
@@ -364,15 +364,18 @@ export default function Traceability() {
             <div className="space-y-4">
               <div className="grid gap-3 md:grid-cols-4">
                 <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">NF</p><p className="font-semibold">{selectedRow.doc.invoice_number || '—'}</p></CardContent></Card>
-                <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Carga / ORT</p><p className="font-semibold">{selectedRow.doc.loads?.load_number || selectedRow.doc.access_key?.slice(-8) || '—'}</p></CardContent></Card>
+                <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Nº Carga (empresa)</p><p className="font-semibold">{selectedRow.doc.loads?.load_number || '—'}</p></CardContent></Card>
+                <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Ref. Cliente</p><p className="font-semibold">{selectedRow.doc.orders?.order_number || '—'}</p></CardContent></Card>
                 <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Situação</p><Badge variant="outline" className={statusBadgeClass(selectedRow.siatStatus)}>{siatLabels[selectedRow.siatStatus]}</Badge></CardContent></Card>
-                <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Valor</p><p className="font-semibold">{currency.format(Number(selectedRow.doc.freight_value || selectedRow.doc.value || 0))}</p></CardContent></Card>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2 rounded-md border border-border p-4">
                   <h3 className="flex items-center gap-2 font-semibold"><PackageCheck className="h-4 w-4" /> Documento e mercadoria</h3>
                   <p className="text-sm"><span className="text-muted-foreground">Cliente:</span> {selectedRow.doc.clients?.company_name || selectedRow.doc.recipient || '—'}</p>
+                  <p className="text-sm"><span className="text-muted-foreground">Fornecedor / Remetente:</span> {selectedRow.doc.remitter || '—'}</p>
+                  <p className="text-sm"><span className="text-muted-foreground">Forma de pagamento:</span> {selectedRow.doc.orders?.payment_plan || '—'}</p>
+                  <p className="text-sm"><span className="text-muted-foreground">Valor Frete:</span> {currency.format(Number(selectedRow.doc.freight_value || selectedRow.doc.value || 0))}</p>
                   <p className="text-sm"><span className="text-muted-foreground">Destino:</span> {[selectedRow.doc.recipient_city, selectedRow.doc.recipient_state].filter(Boolean).join(' - ') || selectedRow.doc.loads?.destination || '—'}</p>
                   <p className="text-sm"><span className="text-muted-foreground">Itens:</span> {selectedRow.doc.product_summary || '—'}</p>
                   <p className="text-sm"><span className="text-muted-foreground">Paletes/Peso:</span> {selectedRow.doc.pallet_count || 0} · {selectedRow.doc.weight_kg || 0} kg</p>
