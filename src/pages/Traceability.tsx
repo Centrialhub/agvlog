@@ -899,12 +899,14 @@ export default function Traceability() {
                   </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading ? <TableRow><TableCell colSpan={21} className="py-10 text-center text-muted-foreground">Carregando rastreabilidade...</TableCell></TableRow>
-                : filteredRows.length === 0 ? <TableRow><TableCell colSpan={21} className="py-10 text-center text-muted-foreground">Nenhum registro encontrado</TableCell></TableRow>
+                {isLoading ? <TableRow><TableCell colSpan={22} className="py-10 text-center text-muted-foreground">Carregando rastreabilidade...</TableCell></TableRow>
+                : filteredRows.length === 0 ? <TableRow><TableCell colSpan={22} className="py-10 text-center text-muted-foreground">Nenhum registro encontrado</TableCell></TableRow>
                 : filteredRows.map(row => {
                   const lastStop = row.stops.at(-1);
                   const extr = extractionStatus(row.doc);
                   const delivered = row.siatStatus === 'delivered';
+                  const slaHours = delivered ? computeSlaHours(row.doc.created_at, lastStop?.actual_arrival_at) : null;
+                  const slaBreached = slaHours !== null && slaHours > slaThresholdH;
                   return (
                     <TableRow key={row.doc.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedRow(row)}>
                       <TableCell><Search className="h-4 w-4 text-muted-foreground" /></TableCell>
@@ -976,6 +978,35 @@ export default function Traceability() {
                           </div>
                         ) : (
                           <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {slaHours !== null ? (
+                          <Badge
+                            variant="outline"
+                            className={`text-[11px] ${slaBreached ? 'bg-destructive/10 text-destructive border-destructive/30' : 'bg-success/10 text-success border-success/20'}`}
+                            title={`Importada em ${fmtDate(row.doc.created_at)} ${fmtTime(row.doc.created_at)} → Entrega em ${fmtDate(lastStop?.actual_arrival_at)} ${fmtTime(lastStop?.actual_arrival_at)} (${slaHours.toFixed(2)}h, limite ${slaThresholdH}h)`}
+                          >
+                            {formatSla(slaHours)}
+                          </Badge>
+                        ) : delivered ? (
+                          <span className="text-[11px] text-muted-foreground" title="NF marcada como entregue, mas falta data de importação ou de chegada">—</span>
+                        ) : row.doc.created_at ? (
+                          (() => {
+                            const elapsed = (Date.now() - new Date(row.doc.created_at).getTime()) / 3_600_000;
+                            const overdue = elapsed > slaThresholdH;
+                            return (
+                              <Badge
+                                variant="outline"
+                                className={`text-[11px] ${overdue ? 'bg-destructive/10 text-destructive border-destructive/30' : 'bg-warning/10 text-warning border-warning/20'}`}
+                                title={`Em aberto há ${elapsed.toFixed(1)}h desde a importação (limite ${slaThresholdH}h)`}
+                              >
+                                {overdue ? 'Vencido' : 'Em aberto'} · {formatSla(elapsed)}
+                              </Badge>
+                            );
+                          })()
+                        ) : (
+                          <span className="text-[11px] text-muted-foreground">—</span>
                         )}
                       </TableCell>
                       <TableCell className="min-w-56">{row.events[0]?.description || row.events[0]?.event_type || '—'}</TableCell>
