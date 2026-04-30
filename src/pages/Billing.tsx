@@ -1,9 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFiscalDocuments } from '@/hooks/useFiscalDocuments';
 import { useClients } from '@/hooks/useClients';
 import { useLoads, LOAD_STATUSES, LOAD_STATUS_LABELS } from '@/hooks/useLoads';
 import { useCteBatches, useCreateCteBatch, useCancelCteBatch } from '@/hooks/useBilling';
 import { GROUPING_MODES, buildGroups, getGroupingMode, type CteGroupPreview } from '@/lib/cteGroupingModes';
+import { useUserUiPreference } from '@/hooks/useUserUiPreference';
+import { useTenant } from '@/hooks/useTenant';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,7 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { FileSpreadsheet, Calculator, CheckCircle2, Layers, FileText, Info, XCircle, RotateCw, Filter, Eraser } from 'lucide-react';
+import { FileSpreadsheet, Calculator, CheckCircle2, Layers, FileText, Info, XCircle, RotateCw, Filter, Eraser, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import {
@@ -30,6 +32,70 @@ type SourceTab = 'period' | 'loads';
 const OPERATION_TYPES = OPERATION_TYPE_OPTIONS;
 type OpType = OperationType;
 
+// ============================================================================
+// Preferências do usuário — persistência por tenant
+// ============================================================================
+interface BillingPreferences {
+  tab: SourceTab;
+  clientId: string;
+  periodStart: string;
+  periodEnd: string;
+  modeId: number;
+  // Filtros SIAT
+  osNumber: string;
+  collectOrder: string;
+  referenceNumber: string;
+  cnpj: string;
+  invoiceNumber: string;
+  issueDateStart: string;
+  issueDateEnd: string;
+  supplierManifest: string;
+  distributionManifest: string;
+  shipmentManifest: string;
+  originManifest: string;
+  loadStatus: string;
+  plate: string;
+  scheduledLoadStart: string;
+  scheduledLoadEnd: string;
+  actualLoadStart: string;
+  actualLoadEnd: string;
+  supplier: string;
+  supplierCnpj: string;
+  accessKey: string;
+  opTypes: OpType[];
+  allOps: boolean;
+}
+
+const DEFAULT_BILLING_PREFS: BillingPreferences = {
+  tab: 'period',
+  clientId: SENTINEL_NONE,
+  periodStart: '',
+  periodEnd: '',
+  modeId: 1,
+  osNumber: '',
+  collectOrder: '',
+  referenceNumber: '',
+  cnpj: '',
+  invoiceNumber: '',
+  issueDateStart: '',
+  issueDateEnd: '',
+  supplierManifest: '',
+  distributionManifest: '',
+  shipmentManifest: '',
+  originManifest: '',
+  loadStatus: SENTINEL_NONE,
+  plate: '',
+  scheduledLoadStart: '',
+  scheduledLoadEnd: '',
+  actualLoadStart: '',
+  actualLoadEnd: '',
+  supplier: '',
+  supplierCnpj: '',
+  accessKey: '',
+  opTypes: [],
+  allOps: true,
+};
+
 export default function Billing() {
   const { data: docs = [], isLoading: docsLoading } = useFiscalDocuments();
   const { data: clients = [] } = useClients();
@@ -37,6 +103,14 @@ export default function Billing() {
   const { data: batches = [] } = useCteBatches();
   const createBatch = useCreateCteBatch();
   const cancelBatch = useCancelCteBatch();
+  const { currentTenant } = useTenant();
+
+  // Preferência por tenant (chave isolada por workspace)
+  const prefKey = `billing:filters:${currentTenant?.id ?? 'none'}`;
+  const { preference, isLoaded, savePreference } = useUserUiPreference<BillingPreferences>(
+    prefKey,
+    DEFAULT_BILLING_PREFS,
+  );
 
   const [tab, setTab] = useState<SourceTab>('period');
   const [clientId, setClientId] = useState<string>(SENTINEL_NONE);
@@ -70,6 +144,88 @@ export default function Billing() {
   const [accessKey, setAccessKey] = useState('');
   const [opTypes, setOpTypes] = useState<Set<OpType>>(new Set());
   const [allOps, setAllOps] = useState(true);
+
+  // ===== Hidrata estado a partir da preferência salva (uma única vez) =====
+  const hydratedRef = useRef(false);
+  useEffect(() => {
+    if (!isLoaded || hydratedRef.current || !preference) return;
+    hydratedRef.current = true;
+    const p = preference;
+    setTab(p.tab ?? 'period');
+    setClientId(p.clientId ?? SENTINEL_NONE);
+    setPeriodStart(p.periodStart ?? '');
+    setPeriodEnd(p.periodEnd ?? '');
+    setModeId(p.modeId ?? 1);
+    setOsNumber(p.osNumber ?? '');
+    setCollectOrder(p.collectOrder ?? '');
+    setReferenceNumber(p.referenceNumber ?? '');
+    setCnpj(p.cnpj ?? '');
+    setInvoiceNumber(p.invoiceNumber ?? '');
+    setIssueDateStart(p.issueDateStart ?? '');
+    setIssueDateEnd(p.issueDateEnd ?? '');
+    setSupplierManifest(p.supplierManifest ?? '');
+    setDistributionManifest(p.distributionManifest ?? '');
+    setShipmentManifest(p.shipmentManifest ?? '');
+    setOriginManifest(p.originManifest ?? '');
+    setLoadStatus(p.loadStatus ?? SENTINEL_NONE);
+    setPlate(p.plate ?? '');
+    setScheduledLoadStart(p.scheduledLoadStart ?? '');
+    setScheduledLoadEnd(p.scheduledLoadEnd ?? '');
+    setActualLoadStart(p.actualLoadStart ?? '');
+    setActualLoadEnd(p.actualLoadEnd ?? '');
+    setSupplier(p.supplier ?? '');
+    setSupplierCnpj(p.supplierCnpj ?? '');
+    setAccessKey(p.accessKey ?? '');
+    setOpTypes(new Set(p.opTypes ?? []));
+    setAllOps(p.allOps ?? true);
+  }, [isLoaded, preference]);
+
+  // ===== Auto-save (debounced) sempre que estado muda =====
+  useEffect(() => {
+    if (!isLoaded || !hydratedRef.current) return;
+    const t = setTimeout(() => {
+      savePreference({
+        tab,
+        clientId,
+        periodStart,
+        periodEnd,
+        modeId,
+        osNumber,
+        collectOrder,
+        referenceNumber,
+        cnpj,
+        invoiceNumber,
+        issueDateStart,
+        issueDateEnd,
+        supplierManifest,
+        distributionManifest,
+        shipmentManifest,
+        originManifest,
+        loadStatus,
+        plate,
+        scheduledLoadStart,
+        scheduledLoadEnd,
+        actualLoadStart,
+        actualLoadEnd,
+        supplier,
+        supplierCnpj,
+        accessKey,
+        opTypes: Array.from(opTypes),
+        allOps,
+      });
+    }, 600);
+    return () => clearTimeout(t);
+  }, [
+    isLoaded, savePreference,
+    tab, clientId, periodStart, periodEnd, modeId,
+    osNumber, collectOrder, referenceNumber, cnpj, invoiceNumber,
+    issueDateStart, issueDateEnd,
+    supplierManifest, distributionManifest, shipmentManifest, originManifest,
+    loadStatus, plate,
+    scheduledLoadStart, scheduledLoadEnd, actualLoadStart, actualLoadEnd,
+    supplier, supplierCnpj, accessKey,
+    opTypes, allOps,
+  ]);
 
   const toggleOp = (op: OpType) => {
     setAllOps(false);
