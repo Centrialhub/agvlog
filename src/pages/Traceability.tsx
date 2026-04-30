@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { AlertCircle, CheckCircle2, ChevronDown, Copy, Download, ExternalLink, FileSearch, History, Lightbulb, PackageCheck, Search, Truck } from 'lucide-react';
+import { AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, Copy, Download, ExternalLink, FileSearch, FileText, Hand, History, Lightbulb, MessageSquareText, PackageCheck, Search, Truck } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useAuth } from '@/hooks/useAuth';
@@ -148,7 +148,7 @@ const extractionBadgeClass = (status: ExtractionStatus) => {
   if (status === 'xPed') return 'bg-success/10 text-success border-success/20';
   if (status === 'observation') return 'bg-warning/10 text-warning border-warning/20';
   if (status === 'manual') return 'bg-info/10 text-info border-info/20';
-  return 'bg-destructive/10 text-destructive border-destructive/20';
+  return 'bg-destructive/10 text-destructive border-destructive/30 ring-1 ring-destructive/20';
 };
 
 const loadStatusToSiat = (doc: TraceDocument): SiatStatus => {
