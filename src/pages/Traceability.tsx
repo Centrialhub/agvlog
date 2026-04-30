@@ -42,6 +42,7 @@ type TraceDocument = {
   order_id: string | null;
   client_load_number: string | null;
   client_load_source: { source?: string; ruleId?: string | null; ruleLabel?: string | null } | null;
+  metadata?: { observationSnippet?: string | null; observation?: string | null } | null;
   clients?: { company_name: string | null } | null;
   orders?: { order_number: string | null; payment_plan: string | null } | null;
   loads?: {
@@ -114,6 +115,29 @@ const sourceBadgeClass = (source?: string | null) => {
   if (source === 'xPed') return 'bg-success/10 text-success border-success/20';
   if (source === 'observation') return 'bg-warning/10 text-warning border-warning/20';
   return 'bg-muted/40 text-muted-foreground border-border';
+};
+
+type ExtractionStatus = 'xPed' | 'observation' | 'manual' | 'missing';
+
+const extractionStatus = (doc: TraceDocument): ExtractionStatus => {
+  if (!doc.client_load_number) return 'missing';
+  const src = doc.client_load_source?.source;
+  if (src === 'xPed' || src === 'observation' || src === 'manual') return src;
+  return 'xPed';
+};
+
+const extractionLabel: Record<ExtractionStatus, string> = {
+  xPed: 'Campo NF (xPed)',
+  observation: 'Observação (infCpl)',
+  manual: 'Manual',
+  missing: 'Não encontrado',
+};
+
+const extractionBadgeClass = (status: ExtractionStatus) => {
+  if (status === 'xPed') return 'bg-success/10 text-success border-success/20';
+  if (status === 'observation') return 'bg-warning/10 text-warning border-warning/20';
+  if (status === 'manual') return 'bg-info/10 text-info border-info/20';
+  return 'bg-destructive/10 text-destructive border-destructive/20';
 };
 
 const loadStatusToSiat = (doc: TraceDocument): SiatStatus => {
