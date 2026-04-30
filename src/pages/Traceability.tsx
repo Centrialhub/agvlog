@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { AlertCircle, CheckCircle2, Download, ExternalLink, FileSearch, History, PackageCheck, Search, Truck } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Copy, Download, ExternalLink, FileSearch, History, Lightbulb, PackageCheck, Search, Truck } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useAuth } from '@/hooks/useAuth';
@@ -18,6 +18,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
+import { analyzeObservations, type AnalyzerResult } from '@/lib/observationPatternAnalyzer';
 
 type SiatStatus = 'pending' | 'in_transit' | 'delivered';
 
@@ -41,7 +42,13 @@ type TraceDocument = {
   remitter: string | null;
   order_id: string | null;
   client_load_number: string | null;
-  client_load_source: { source?: string; ruleId?: string | null; ruleLabel?: string | null } | null;
+  client_load_source: {
+    source?: string;
+    ruleId?: string | null;
+    ruleLabel?: string | null;
+    /** Snippet da observação salvo quando NENHUMA regra casou (ingestões pós-fix). */
+    observationSnippet?: string | null;
+  } | null;
   clients?: { company_name: string | null } | null;
   orders?: { order_number: string | null; payment_plan: string | null } | null;
   loads?: {
@@ -176,6 +183,8 @@ export default function Traceability() {
   });
   const [selectedRow, setSelectedRow] = useState<TraceRow | null>(null);
   const [eventForm, setEventForm] = useState({ type: 'other', severity: 'medium', status: 'no_change', description: '' });
+  const [analyzerOpen, setAnalyzerOpen] = useState(false);
+  const [analyzerResult, setAnalyzerResult] = useState<AnalyzerResult | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['traceability', currentTenant?.id],
@@ -430,6 +439,43 @@ export default function Traceability() {
     toast({ title: 'CSV exportado', description: `${missing.length} NF(s) sem número da carga do cliente.` });
   };
 
+  /**
+   * Coleta as observações das NFs sem carga extraída e roda o analisador de
+   * padrões para sugerir novas regras a serem adicionadas em
+   * `CLIENT_LOAD_OBSERVATION_RULES` (ver src/lib/documentParsers.ts).
+   */
+  const runAnalyzer = () => {
+    const samples = filteredRows
+      .filter(r => !r.doc.client_load_number)
+      .map(r => ({
+        observation: r.doc.client_load_source?.observationSnippet || '',
+        reference: r.doc.invoice_number || r.doc.access_key || r.doc.id,
+      }))
+      .filter(s => s.observation.trim().length > 0);
+
+    if (!samples.length) {
+      toast({
+        title: 'Sem amostras para analisar',
+        description: 'As NFs sem carga foram ingeridas antes do registro de snippet, ou não têm observação. Reimporte XMLs recentes para popular as amostras.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const result = analyzeObservations(samples, { minOccurrences: 2, topKeywords: 12, topSignatures: 8 });
+    setAnalyzerResult(result);
+    setAnalyzerOpen(true);
+  };
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({ title: 'Copiado', description: 'Cole no array CLIENT_LOAD_OBSERVATION_RULES.' });
+    } catch {
+      toast({ title: 'Não foi possível copiar', variant: 'destructive' });
+    }
+  };
+
   return (
     <div className="space-y-4 animate-fade-in">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -447,6 +493,15 @@ export default function Traceability() {
             title="Exporta apenas as NFs cujo número da carga do cliente não foi extraído (xPed nem observação) — use o CSV para ajustar as regras."
           >
             <AlertCircle className="mr-2 h-4 w-4" /> Exportar NFs sem carga ({counts.missingLoad})
+          </Button>
+          <Button
+            variant="outline"
+            onClick={runAnalyzer}
+            disabled={!counts.missingLoad}
+            className="border-info/30 text-info hover:bg-info/10 hover:text-info"
+            title="Agrupa observações similares das NFs sem extração e sugere novas regras de regex."
+          >
+            <Lightbulb className="mr-2 h-4 w-4" /> Analisar padrões
           </Button>
         </div>
       </div>
@@ -635,6 +690,91 @@ export default function Traceability() {
                 <div className="mt-3"><Label>Descrição</Label><Textarea value={eventForm.description} onChange={e => setEventForm(f => ({ ...f, description: e.target.value }))} placeholder="Ex.: Entrega realizada normalmente, canhoto recebido, divergência encontrada..." /></div>
               </div>
             </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={analyzerOpen} onOpenChange={setAnalyzerOpen}>
+        <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Lightbulb className="h-5 w-5 text-info" /> Análise de padrões — Observações sem carga extraída
+            </DialogTitle>
+          </DialogHeader>
+          {analyzerResult ? (
+            <div className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-3">
+                <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Amostras analisadas</p><p className="text-lg font-semibold">{analyzerResult.usableSamples} <span className="text-xs text-muted-foreground">/ {analyzerResult.totalSamples}</span></p></CardContent></Card>
+                <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Palavras-chave recorrentes</p><p className="text-lg font-semibold text-info">{analyzerResult.keywordClusters.length}</p></CardContent></Card>
+                <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Formatos estruturais</p><p className="text-lg font-semibold">{analyzerResult.signatureClusters.length}</p></CardContent></Card>
+              </div>
+
+              <div className="rounded-md border border-border p-4">
+                <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold"><Lightbulb className="h-4 w-4 text-warning" /> Regras sugeridas</h3>
+                <p className="mb-3 text-xs text-muted-foreground">
+                  Cada bloco abaixo é uma palavra-chave que apareceu antes de um valor numérico em ≥ 2 observações. Copie a regra e cole em <code className="rounded bg-muted px-1">CLIENT_LOAD_OBSERVATION_RULES</code> em <code className="rounded bg-muted px-1">src/lib/documentParsers.ts</code> (mantenha as mais específicas no topo).
+                </p>
+                {analyzerResult.keywordClusters.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Nenhum padrão recorrente encontrado nas observações disponíveis. Tente reduzir o filtro ou reimportar mais XMLs.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {analyzerResult.keywordClusters.map(c => (
+                      <div key={c.keyword} className="rounded-md border border-border bg-muted/20 p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="bg-info/10 text-info border-info/20">{c.suggestedLabel}</Badge>
+                            <Badge variant="outline">{c.count} ocorrência(s)</Badge>
+                            {c.alreadyCovered && <Badge variant="outline" className="bg-warning/10 text-warning border-warning/20">já coberto?</Badge>}
+                          </div>
+                          <Button size="sm" variant="outline" onClick={() => copyToClipboard(c.suggestedRuleSnippet)}>
+                            <Copy className="mr-1 h-3 w-3" /> Copiar regra
+                          </Button>
+                        </div>
+                        <pre className="mt-2 overflow-x-auto rounded bg-background p-2 text-[11px] font-mono">{c.suggestedRuleSnippet}</pre>
+                        <div className="mt-2 grid gap-2 text-xs md:grid-cols-2">
+                          <div>
+                            <p className="font-semibold text-muted-foreground">Valores capturados (exemplos):</p>
+                            <p className="font-mono">{c.capturedExamples.map(e => `"${e}"`).join(', ') || '—'}</p>
+                          </div>
+                          <div>
+                            <p className="font-semibold text-muted-foreground">Trechos de contexto:</p>
+                            <ul className="space-y-0.5">
+                              {c.contextExamples.map((ex, i) => <li key={i} className="font-mono text-muted-foreground">…{ex}…</li>)}
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-md border border-border p-4">
+                <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold"><History className="h-4 w-4" /> Formatos estruturais recorrentes</h3>
+                <p className="mb-3 text-xs text-muted-foreground">
+                  Mostra o "esqueleto" do texto (dígitos viram <code>#</code>, letras viram <code>a</code>). Útil para identificar layouts repetidos em diferentes clientes.
+                </p>
+                {analyzerResult.signatureClusters.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Nenhuma assinatura estrutural recorrente.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {analyzerResult.signatureClusters.map(s => (
+                      <div key={s.signature} className="rounded bg-muted/30 p-2 text-xs">
+                        <div className="flex items-center justify-between">
+                          <code className="font-mono">{s.signature.slice(0, 80)}{s.signature.length > 80 ? '…' : ''}</code>
+                          <Badge variant="outline">{s.count}</Badge>
+                        </div>
+                        <ul className="mt-1 space-y-0.5 pl-2 text-muted-foreground">
+                          {s.examples.map((ex, i) => <li key={i}>↳ {ex.slice(0, 140)}</li>)}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Nenhuma análise gerada ainda.</p>
           )}
         </DialogContent>
       </Dialog>
