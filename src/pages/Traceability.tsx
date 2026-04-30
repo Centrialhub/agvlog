@@ -907,9 +907,29 @@ export default function Traceability() {
         </CardContent>
       </Card>
 
-      <Card>
+      <div
+        id="trace-top-scroll"
+        className="overflow-x-auto overflow-y-hidden h-3 rounded-t-md border border-b-0 bg-muted/30"
+      >
+        <div id="trace-top-scroll-inner" className="h-px" />
+      </div>
+      <Card className="rounded-t-none">
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
+          <div
+            className="overflow-x-auto"
+            ref={(el) => {
+              if (!el) return;
+              const top = document.getElementById('trace-top-scroll');
+              const topInner = document.getElementById('trace-top-scroll-inner');
+              if (top && topInner) {
+                topInner.style.width = el.scrollWidth + 'px';
+                const syncTop = () => { top.scrollLeft = el.scrollLeft; };
+                const syncBottom = () => { el.scrollLeft = top.scrollLeft; };
+                el.onscroll = syncTop;
+                top.onscroll = syncBottom;
+              }
+            }}
+          >
             <Table>
               <TableHeader>
                   <TableRow>
