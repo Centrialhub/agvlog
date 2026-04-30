@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { AlertCircle, CheckCircle2, Download, ExternalLink, FileSearch, History, PackageCheck, Search, Truck } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Copy, Download, ExternalLink, FileSearch, History, Lightbulb, PackageCheck, Search, Truck } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useAuth } from '@/hooks/useAuth';
@@ -18,6 +18,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
+import { analyzeObservations, type AnalyzerResult } from '@/lib/observationPatternAnalyzer';
 
 type SiatStatus = 'pending' | 'in_transit' | 'delivered';
 
@@ -42,6 +43,8 @@ type TraceDocument = {
   order_id: string | null;
   client_load_number: string | null;
   client_load_source: { source?: string; ruleId?: string | null; ruleLabel?: string | null } | null;
+  // ↓ Snippet salvo quando NENHUMA regra casou (ver Ingestion.tsx)
+  // Não vem em todas as linhas (apenas em ingestões posteriores ao fix).
   clients?: { company_name: string | null } | null;
   orders?: { order_number: string | null; payment_plan: string | null } | null;
   loads?: {
