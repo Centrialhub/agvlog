@@ -977,26 +977,6 @@ export default function Traceability() {
                           </div>
                         ) : '—'}
                       </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="outline"
-                          className={`gap-1 text-[10px] ${extractionBadgeClass(extr)} ${extr === 'missing' ? 'cursor-help' : ''}`}
-                          title={
-                            extr === 'missing'
-                              ? 'Pedido do cliente não identificado.\n\nNenhuma regra de extração casou com a observação (infCpl) e o XML não trouxe o campo xPed.\n\nClique na linha para preencher manualmente.'
-                              : extr === 'observation' && row.doc.client_load_source?.ruleLabel
-                                ? `Extraído da observação via regra: ${row.doc.client_load_source.ruleLabel}`
-                                : extr === 'xPed'
-                                  ? 'Extraído do campo xPed do XML da NF-e'
-                                  : extractionLabel[extr]
-                          }
-                        >
-                          {extr === 'xPed' && (<><FileText className="h-3 w-3" />NF (xPed)</>)}
-                          {extr === 'observation' && (<><MessageSquareText className="h-3 w-3" />{row.doc.client_load_source?.ruleLabel || 'Observação'}</>)}
-                          {extr === 'manual' && (<><Hand className="h-3 w-3" />Manual</>)}
-                          {extr === 'missing' && (<><AlertTriangle className="h-3 w-3" />Pedido ausente</>)}
-                        </Badge>
-                      </TableCell>
                       <TableCell className="font-mono text-xs">{row.doc.orders?.order_number || '—'}</TableCell>
                       <TableCell className="text-xs">{row.doc.orders?.payment_plan || '—'}</TableCell>
                       <TableCell>{row.doc.value ? currency.format(Number(row.doc.value)) : '—'}</TableCell>
