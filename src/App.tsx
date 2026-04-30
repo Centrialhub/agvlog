@@ -29,6 +29,7 @@ const Inventory = lazy(() => import("@/pages/Inventory"));
 const Loads = lazy(() => import("@/pages/Loads"));
 const LoadDetail = lazy(() => import("@/pages/LoadDetail"));
 const Traceability = lazy(() => import("@/pages/Traceability"));
+const LoadExtractionAudit = lazy(() => import("@/pages/LoadExtractionAudit"));
 const OperationsDashboard = lazy(() => import("@/pages/OperationsDashboard"));
 const OperationalEvents = lazy(() => import("@/pages/OperationalEvents"));
 const Ingestion = lazy(() => import("@/pages/Ingestion"));
@@ -165,6 +166,7 @@ const App = () => (
             <Route path="/loads" element={<ProtectedRoute><Loads /></ProtectedRoute>} />
             <Route path="/loads/:id" element={<ProtectedRoute><LoadDetail /></ProtectedRoute>} />
             <Route path="/traceability" element={<ProtectedRoute><Traceability /></ProtectedRoute>} />
+            <Route path="/load-extraction-audit" element={<ProtectedRoute><LoadExtractionAudit /></ProtectedRoute>} />
             <Route path="/operations" element={<ProtectedRoute><OperationsDashboard /></ProtectedRoute>} />
             <Route path="/events" element={<ProtectedRoute><OperationalEvents /></ProtectedRoute>} />
             <Route path="/ingestion" element={<ProtectedRoute><Ingestion /></ProtectedRoute>} />
