@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { AlertCircle, CheckCircle2, ChevronDown, Copy, Download, ExternalLink, FileSearch, History, Lightbulb, PackageCheck, Search, Truck } from 'lucide-react';
+import { AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, Copy, Download, ExternalLink, FileSearch, FileText, Hand, History, Lightbulb, MessageSquareText, PackageCheck, Search, Truck } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useAuth } from '@/hooks/useAuth';
@@ -148,7 +148,7 @@ const extractionBadgeClass = (status: ExtractionStatus) => {
   if (status === 'xPed') return 'bg-success/10 text-success border-success/20';
   if (status === 'observation') return 'bg-warning/10 text-warning border-warning/20';
   if (status === 'manual') return 'bg-info/10 text-info border-info/20';
-  return 'bg-destructive/10 text-destructive border-destructive/20';
+  return 'bg-destructive/10 text-destructive border-destructive/30 ring-1 ring-destructive/20';
 };
 
 const loadStatusToSiat = (doc: TraceDocument): SiatStatus => {
@@ -980,17 +980,21 @@ export default function Traceability() {
                       <TableCell>
                         <Badge
                           variant="outline"
-                          className={`text-[10px] ${extractionBadgeClass(extr)}`}
-                          title={extr === 'observation' && row.doc.client_load_source?.ruleLabel
-                            ? `Regra aplicada: ${row.doc.client_load_source.ruleLabel}`
-                            : extr === 'missing'
-                              ? 'Nenhuma regra casou com a observação e o XML não trouxe xPed.'
-                              : extractionLabel[extr]}
+                          className={`gap-1 text-[10px] ${extractionBadgeClass(extr)} ${extr === 'missing' ? 'cursor-help' : ''}`}
+                          title={
+                            extr === 'missing'
+                              ? 'Pedido do cliente não identificado.\n\nNenhuma regra de extração casou com a observação (infCpl) e o XML não trouxe o campo xPed.\n\nClique na linha para preencher manualmente.'
+                              : extr === 'observation' && row.doc.client_load_source?.ruleLabel
+                                ? `Extraído da observação via regra: ${row.doc.client_load_source.ruleLabel}`
+                                : extr === 'xPed'
+                                  ? 'Extraído do campo xPed do XML da NF-e'
+                                  : extractionLabel[extr]
+                          }
                         >
-                          {extr === 'xPed' && 'NF (xPed)'}
-                          {extr === 'observation' && (row.doc.client_load_source?.ruleLabel || 'Observação')}
-                          {extr === 'manual' && 'Manual'}
-                          {extr === 'missing' && 'Não encontrado'}
+                          {extr === 'xPed' && (<><FileText className="h-3 w-3" />NF (xPed)</>)}
+                          {extr === 'observation' && (<><MessageSquareText className="h-3 w-3" />{row.doc.client_load_source?.ruleLabel || 'Observação'}</>)}
+                          {extr === 'manual' && (<><Hand className="h-3 w-3" />Manual</>)}
+                          {extr === 'missing' && (<><AlertTriangle className="h-3 w-3" />Pedido ausente</>)}
                         </Badge>
                       </TableCell>
                       <TableCell className="font-mono text-xs">{row.doc.orders?.order_number || '—'}</TableCell>
