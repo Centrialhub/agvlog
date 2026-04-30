@@ -460,9 +460,14 @@ export default function Billing() {
               </Badge>
             )}
           </CardTitle>
-          <Button variant="ghost" size="sm" onClick={clearAdvanced} disabled={activeFilterCount === 0}>
-            <Eraser className="h-4 w-4 mr-1" /> Limpar
-          </Button>
+          <div className="flex items-center gap-2">
+            <span className="hidden md:inline-flex items-center gap-1 text-xs text-muted-foreground">
+              <Save className="h-3 w-3" /> Preferências salvas automaticamente
+            </span>
+            <Button variant="ghost" size="sm" onClick={clearAdvanced} disabled={activeFilterCount === 0}>
+              <Eraser className="h-4 w-4 mr-1" /> Limpar
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3">
