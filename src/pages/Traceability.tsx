@@ -116,6 +116,29 @@ const sourceBadgeClass = (source?: string | null) => {
   return 'bg-muted/40 text-muted-foreground border-border';
 };
 
+type ExtractionStatus = 'xPed' | 'observation' | 'manual' | 'missing';
+
+const extractionStatus = (doc: TraceDocument): ExtractionStatus => {
+  if (!doc.client_load_number) return 'missing';
+  const src = doc.client_load_source?.source;
+  if (src === 'xPed' || src === 'observation' || src === 'manual') return src;
+  return 'xPed';
+};
+
+const extractionLabel: Record<ExtractionStatus, string> = {
+  xPed: 'Campo NF (xPed)',
+  observation: 'Observação (infCpl)',
+  manual: 'Manual',
+  missing: 'Não encontrado',
+};
+
+const extractionBadgeClass = (status: ExtractionStatus) => {
+  if (status === 'xPed') return 'bg-success/10 text-success border-success/20';
+  if (status === 'observation') return 'bg-warning/10 text-warning border-warning/20';
+  if (status === 'manual') return 'bg-info/10 text-info border-info/20';
+  return 'bg-destructive/10 text-destructive border-destructive/20';
+};
+
 const loadStatusToSiat = (doc: TraceDocument): SiatStatus => {
   const loadStatus = doc.loads?.status;
   if (loadStatus === 'delivered' || doc.status === 'delivered') return 'delivered';
@@ -241,6 +264,9 @@ export default function Traceability() {
     pending: filteredRows.filter(r => r.siatStatus === 'pending').length,
     inTransit: filteredRows.filter(r => r.siatStatus === 'in_transit').length,
     delivered: filteredRows.filter(r => r.siatStatus === 'delivered').length,
+    missingLoad: filteredRows.filter(r => !r.doc.client_load_number).length,
+    fromXPed: filteredRows.filter(r => r.doc.client_load_number && r.doc.client_load_source?.source === 'xPed').length,
+    fromObservation: filteredRows.filter(r => r.doc.client_load_number && r.doc.client_load_source?.source === 'observation').length,
   }), [filteredRows]);
 
   const registerEvent = useMutation({
@@ -276,7 +302,7 @@ export default function Traceability() {
     const headers = [
       'Nº NF', 'Chave de Acesso', 'Tipo Documento', 'Status Documento', 'Data Emissão',
       'Nº Carga', 'Status Carga', 'Trip ID', 'Origem', 'Destino Carga',
-      'Carga Cliente (NF-e)', 'Origem Carga Cliente', 'Regra Aplicada', 'Ref. Cliente (Pedido)', 'Forma Pgto',
+      'Carga Cliente (NF-e)', 'Status Extração', 'Origem Carga Cliente', 'Regra Aplicada', 'Ref. Cliente (Pedido)', 'Forma Pgto',
       'Cliente', 'Fornecedor / Remetente',
       'Cidade Destino', 'UF Destino',
       'Placa', 'Veículo', 'Motorista',
@@ -311,6 +337,7 @@ export default function Traceability() {
         doc.loads?.origin || '',
         doc.loads?.destination || '',
         doc.client_load_number || '',
+        extractionLabel[extractionStatus(doc)],
         doc.client_load_source?.source ? sourceLabel(doc.client_load_source.source) : '',
         doc.client_load_source?.ruleLabel || '',
         doc.orders?.order_number || '',
@@ -361,6 +388,48 @@ export default function Traceability() {
     URL.revokeObjectURL(url);
   };
 
+  // Diagnostic export: only NFs missing the client load number, with the data the user
+  // needs to tune the regex rules in CLIENT_LOAD_OBSERVATION_RULES.
+  const exportMissingLoadCsv = () => {
+    const missing = filteredRows.filter(r => !r.doc.client_load_number);
+    if (!missing.length) {
+      toast({ title: 'Nada a exportar', description: 'Todas as NFs filtradas já têm número de carga extraído.' });
+      return;
+    }
+    const headers = [
+      'Nº NF', 'Série/Chave', 'Data Emissão',
+      'Cliente', 'Fornecedor / Remetente',
+      'Cidade Destino', 'UF Destino',
+      'Status Extração', 'Origem Tentada', 'Regra Aplicada',
+      'Ref. Pedido (orders)', 'Nº Carga (empresa)',
+      'Observação registrada (client_load_source)',
+    ];
+    const body = missing.map(({ doc }) => [
+      doc.invoice_number || '',
+      doc.access_key || '',
+      fmtDate(doc.issue_date),
+      doc.clients?.company_name || doc.recipient || '',
+      doc.remitter || '',
+      doc.recipient_city || '',
+      doc.recipient_state || '',
+      extractionLabel.missing,
+      doc.client_load_source?.source ? sourceLabel(doc.client_load_source.source) : '—',
+      doc.client_load_source?.ruleLabel || '',
+      doc.orders?.order_number || '',
+      doc.loads?.load_number || '',
+      doc.client_load_source ? JSON.stringify(doc.client_load_source) : '',
+    ]);
+    const csv = [headers, ...body].map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(';')).join('\n');
+    const blob = new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `nfs-sem-carga-cliente-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast({ title: 'CSV exportado', description: `${missing.length} NF(s) sem número da carga do cliente.` });
+  };
+
   return (
     <div className="space-y-4 animate-fade-in">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -368,7 +437,18 @@ export default function Traceability() {
           <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground"><FileSearch className="h-6 w-6 text-primary" /> Rastreabilidade NF</h1>
           <p className="text-sm text-muted-foreground">Consulta operacional de NF, carga, entrega, POD e ocorrências. Nº de CT-e/ORT é gerado apenas após emissão fiscal.</p>
         </div>
-        <Button variant="outline" onClick={exportCsv} disabled={!filteredRows.length}><Download className="mr-2 h-4 w-4" /> Exportar CSV</Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={exportCsv} disabled={!filteredRows.length}><Download className="mr-2 h-4 w-4" /> Exportar CSV</Button>
+          <Button
+            variant="outline"
+            onClick={exportMissingLoadCsv}
+            disabled={!counts.missingLoad}
+            className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+            title="Exporta apenas as NFs cujo número da carga do cliente não foi extraído (xPed nem observação) — use o CSV para ajustar as regras."
+          >
+            <AlertCircle className="mr-2 h-4 w-4" /> Exportar NFs sem carga ({counts.missingLoad})
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-3 md:grid-cols-4">
@@ -376,6 +456,12 @@ export default function Traceability() {
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Pendente</p><p className="text-xl font-semibold text-warning">{counts.pending}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Em trânsito</p><p className="text-xl font-semibold text-info">{counts.inTransit}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Entregue</p><p className="text-xl font-semibold text-success">{counts.delivered}</p></CardContent></Card>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-3">
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Extraído de xPed (NF)</p><p className="text-xl font-semibold text-success">{counts.fromXPed}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Extraído da observação</p><p className="text-xl font-semibold text-warning">{counts.fromObservation}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Carga cliente NÃO encontrada</p><p className="text-xl font-semibold text-destructive">{counts.missingLoad}</p></CardContent></Card>
       </div>
 
       <Card>
@@ -409,14 +495,15 @@ export default function Traceability() {
             <Table>
               <TableHeader>
                   <TableRow>
-                    <TableHead className="w-10"></TableHead><TableHead>Palete</TableHead><TableHead>POD</TableHead><TableHead>Rec.Canhoto</TableHead><TableHead>Situação</TableHead><TableHead>Nº NF</TableHead><TableHead>Nº Carga (empresa)</TableHead><TableHead>Carga Cliente (NF-e)</TableHead><TableHead>Ref. Pedido</TableHead><TableHead>Forma pgto</TableHead><TableHead>Valor Nota</TableHead><TableHead>Valor Frete</TableHead><TableHead>Cliente</TableHead><TableHead>Fornecedor</TableHead><TableHead>Placa</TableHead><TableHead>Motorista</TableHead><TableHead>Data Chegada</TableHead><TableHead>Hora Chegada</TableHead><TableHead>Ocorrência</TableHead><TableHead></TableHead>
+                    <TableHead className="w-10"></TableHead><TableHead>Palete</TableHead><TableHead>POD</TableHead><TableHead>Rec.Canhoto</TableHead><TableHead>Situação</TableHead><TableHead>Nº NF</TableHead><TableHead>Nº Carga (empresa)</TableHead><TableHead>Carga Cliente (NF-e)</TableHead><TableHead>Status Extração</TableHead><TableHead>Ref. Pedido</TableHead><TableHead>Forma pgto</TableHead><TableHead>Valor Nota</TableHead><TableHead>Valor Frete</TableHead><TableHead>Cliente</TableHead><TableHead>Fornecedor</TableHead><TableHead>Placa</TableHead><TableHead>Motorista</TableHead><TableHead>Data Chegada</TableHead><TableHead>Hora Chegada</TableHead><TableHead>Ocorrência</TableHead><TableHead></TableHead>
                   </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading ? <TableRow><TableCell colSpan={20} className="py-10 text-center text-muted-foreground">Carregando rastreabilidade...</TableCell></TableRow>
-                : filteredRows.length === 0 ? <TableRow><TableCell colSpan={20} className="py-10 text-center text-muted-foreground">Nenhum registro encontrado</TableCell></TableRow>
+                {isLoading ? <TableRow><TableCell colSpan={21} className="py-10 text-center text-muted-foreground">Carregando rastreabilidade...</TableCell></TableRow>
+                : filteredRows.length === 0 ? <TableRow><TableCell colSpan={21} className="py-10 text-center text-muted-foreground">Nenhum registro encontrado</TableCell></TableRow>
                 : filteredRows.map(row => {
                   const lastStop = row.stops.at(-1);
+                  const extr = extractionStatus(row.doc);
                   return (
                     <TableRow key={row.doc.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedRow(row)}>
                       <TableCell><Search className="h-4 w-4 text-muted-foreground" /></TableCell>
@@ -441,6 +528,22 @@ export default function Traceability() {
                             )}
                           </div>
                         ) : '—'}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] ${extractionBadgeClass(extr)}`}
+                          title={extr === 'observation' && row.doc.client_load_source?.ruleLabel
+                            ? `Regra aplicada: ${row.doc.client_load_source.ruleLabel}`
+                            : extr === 'missing'
+                              ? 'Nenhuma regra casou com a observação e o XML não trouxe xPed.'
+                              : extractionLabel[extr]}
+                        >
+                          {extr === 'xPed' && 'NF (xPed)'}
+                          {extr === 'observation' && (row.doc.client_load_source?.ruleLabel || 'Observação')}
+                          {extr === 'manual' && 'Manual'}
+                          {extr === 'missing' && 'Não encontrado'}
+                        </Badge>
                       </TableCell>
                       <TableCell className="font-mono text-xs">{row.doc.orders?.order_number || '—'}</TableCell>
                       <TableCell className="text-xs">{row.doc.orders?.payment_plan || '—'}</TableCell>
