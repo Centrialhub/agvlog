@@ -867,6 +867,8 @@ export default function Traceability() {
                   <h3 className="flex items-center gap-2 font-semibold"><PackageCheck className="h-4 w-4" /> Documento e mercadoria</h3>
                   <p className="text-sm"><span className="text-muted-foreground">Cliente:</span> {selectedRow.doc.clients?.company_name || selectedRow.doc.recipient || '—'}</p>
                   <p className="text-sm"><span className="text-muted-foreground">Fornecedor / Remetente:</span> {selectedRow.doc.remitter || '—'}</p>
+                  <p className="text-sm"><span className="text-muted-foreground">Data Emissão:</span> {fmtDate(selectedRow.doc.issue_date)}</p>
+                  <p className="text-sm"><span className="text-muted-foreground">Importada em:</span> <span className="font-medium">{fmtDate(selectedRow.doc.created_at)} {fmtTime(selectedRow.doc.created_at)}</span> <span className="text-xs text-muted-foreground">(base do prazo de romaneio)</span></p>
                   <p className="text-sm"><span className="text-muted-foreground">Forma de pagamento:</span> {selectedRow.doc.orders?.payment_plan || '—'}</p>
                   <p className="text-sm"><span className="text-muted-foreground">Valor da Nota:</span> {selectedRow.doc.value ? currency.format(Number(selectedRow.doc.value)) : '—'}</p>
                   <p className="text-sm"><span className="text-muted-foreground">Valor Frete:</span> {selectedRow.doc.freight_value ? currency.format(Number(selectedRow.doc.freight_value)) : '—'}</p>
@@ -880,6 +882,16 @@ export default function Traceability() {
                   <p className="text-sm"><span className="text-muted-foreground">Motorista:</span> {selectedRow.doc.loads?.drivers?.name || '—'}</p>
                   <p className="text-sm"><span className="text-muted-foreground">Início:</span> {fmtDate(selectedRow.trip?.actual_start_at || selectedRow.trip?.planned_start_at)} {fmtTime(selectedRow.trip?.actual_start_at || selectedRow.trip?.planned_start_at)}</p>
                   <p className="text-sm"><span className="text-muted-foreground">Fim:</span> {fmtDate(selectedRow.trip?.actual_end_at || selectedRow.trip?.planned_end_at)} {fmtTime(selectedRow.trip?.actual_end_at || selectedRow.trip?.planned_end_at)}</p>
+                  {(() => {
+                    const last = selectedRow.stops.at(-1);
+                    const delivered = selectedRow.siatStatus === 'delivered';
+                    return (
+                      <>
+                        <p className="text-sm"><span className="text-muted-foreground">Entrega (última parada):</span> {last?.actual_arrival_at ? <span className="font-medium text-success">{fmtDate(last.actual_arrival_at)} {fmtTime(last.actual_arrival_at)}</span> : '—'}</p>
+                        <p className="text-sm"><span className="text-muted-foreground">Canhoto:</span> {delivered ? <Badge variant="outline" className="bg-success/10 text-success border-success/20 gap-1"><CheckCircle2 className="h-3 w-3" /> Recebido {last?.actual_arrival_at ? `em ${fmtDate(last.actual_arrival_at)} ${fmtTime(last.actual_arrival_at)}` : ''}</Badge> : <Badge variant="outline" className="bg-muted/40 text-muted-foreground">Pendente</Badge>}</p>
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
 
