@@ -930,7 +930,7 @@ export default function Traceability() {
               }
             }}
           >
-            <Table>
+            <table className="min-w-max w-full caption-bottom text-sm">
               <TableHeader>
                   <TableRow>
                     <TableHead className="w-10"></TableHead><TableHead>Palete</TableHead><TableHead title="Comprovante de entrega (POD)">POD</TableHead><TableHead title="Canhoto recebido — clique para ver histórico">Canhoto</TableHead><TableHead>Situação</TableHead><TableHead>Nº NF</TableHead><TableHead title="Data/hora em que a NF foi importada — base do prazo de romaneio">Importada em</TableHead><TableHead>Nº Carga (empresa)</TableHead><TableHead>Carga Cliente (NF-e)</TableHead><TableHead>Ref. Pedido</TableHead><TableHead>Forma pgto</TableHead><TableHead>Valor Nota</TableHead><TableHead>Valor Frete</TableHead><TableHead>Cliente</TableHead><TableHead>Fornecedor</TableHead><TableHead>Placa</TableHead><TableHead>Motorista</TableHead><TableHead title="Data/hora da entrega (última parada concluída)">Entrega</TableHead><TableHead title={`Lead-time da importação até a entrega. Vermelho se > ${slaThresholdH}h.`}>SLA Entrega</TableHead><TableHead>Ocorrência</TableHead><TableHead></TableHead>
@@ -1050,7 +1050,7 @@ export default function Traceability() {
                   );
                 })}
               </TableBody>
-            </Table>
+            </table>
           </div>
         </CardContent>
       </Card>
