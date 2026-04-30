@@ -612,11 +612,18 @@ export default function Ingestion() {
               status: 'confirmed',
               load_id: loadId || null,
               client_load_number: doc.source.clientLoadNumber || null,
-              client_load_source: doc.source.clientLoadNumber ? {
-                source: doc.source.clientLoadSource || 'none',
-                ruleId: doc.source.clientLoadRuleId || null,
-                ruleLabel: doc.source.clientLoadRuleLabel || null,
-              } : null,
+              client_load_source: doc.source.clientLoadNumber
+                ? {
+                    source: doc.source.clientLoadSource || 'none',
+                    ruleId: doc.source.clientLoadRuleId || null,
+                    ruleLabel: doc.source.clientLoadRuleLabel || null,
+                  }
+                : (doc.source.observation
+                    ? {
+                        source: 'none',
+                        observationSnippet: String(doc.source.observation).replace(/\s+/g, ' ').trim().slice(0, 400),
+                      }
+                    : null),
             });
 
             if (freightValue && freightBreakdown?.tableId && currentTenant) {
