@@ -279,6 +279,87 @@ export default function Traceability() {
     fromObservation: filteredRows.filter(r => r.doc.client_load_number && r.doc.client_load_source?.source === 'observation').length,
   }), [filteredRows]);
 
+  /**
+   * Métricas por regra de CLIENT_LOAD_OBSERVATION_RULES.
+   *
+   * - hits   = NFs em que a regra foi a aplicada (source === 'observation' && ruleId === r.id)
+   * - xPed/manual/missing são contadas globalmente (não por regra) e mostradas como contexto
+   * - "cobertura" de uma regra = hits / (hits + missing) — quanto de potencial ela cobriu
+   *   considerando que TODAS as misses são candidatas a serem cobertas por alguma regra.
+   *
+   * Como `client_load_source` é apenas auditoria do que casou primeiro, regras posteriores
+   * que TAMBÉM casariam não aparecem aqui — isso é intencional: queremos saber qual regra
+   * está efetivamente disparando em produção.
+   */
+  type RuleStat = {
+    id: string;
+    label: string;
+    hits: number;
+    sharePct: number;       // % das observações resolvidas que foram por esta regra
+    coveragePct: number;    // hits / (hits + missing)
+    samples: string[];      // até 3 amostras de NF para inspeção rápida
+    sampleValues: string[]; // valores capturados (até 3) para sanidade
+  };
+
+  const ruleStats = useMemo(() => {
+    const byRule = new Map<string, RuleStat>();
+    for (const r of CLIENT_LOAD_OBSERVATION_RULES) {
+      byRule.set(r.id, {
+        id: r.id,
+        label: r.label,
+        hits: 0,
+        sharePct: 0,
+        coveragePct: 0,
+        samples: [],
+        sampleValues: [],
+      });
+    }
+    let unknownRuleHits = 0;
+    const unknownRule: RuleStat = { id: '__unknown__', label: 'Regra não identificada (legado)', hits: 0, sharePct: 0, coveragePct: 0, samples: [], sampleValues: [] };
+
+    for (const row of filteredRows) {
+      const doc = row.doc;
+      if (!doc.client_load_number) continue;
+      if (doc.client_load_source?.source !== 'observation') continue;
+      const rid = doc.client_load_source?.ruleId || '';
+      const stat = byRule.get(rid);
+      if (stat) {
+        stat.hits++;
+        if (stat.samples.length < 3 && doc.invoice_number) stat.samples.push(doc.invoice_number);
+        if (stat.sampleValues.length < 3) stat.sampleValues.push(doc.client_load_number);
+      } else {
+        unknownRule.hits++;
+        unknownRuleHits++;
+        if (unknownRule.samples.length < 3 && doc.invoice_number) unknownRule.samples.push(doc.invoice_number);
+        if (unknownRule.sampleValues.length < 3) unknownRule.sampleValues.push(doc.client_load_number);
+      }
+    }
+
+    const totalObsResolved = counts.fromObservation || 1;
+    const allRules = Array.from(byRule.values());
+    if (unknownRuleHits > 0) allRules.push(unknownRule);
+
+    for (const s of allRules) {
+      s.sharePct = (s.hits / totalObsResolved) * 100;
+      s.coveragePct = s.hits + counts.missingLoad === 0
+        ? 0
+        : (s.hits / (s.hits + counts.missingLoad)) * 100;
+    }
+
+    // Ordena por hits desc; regras zeradas vão para o fim
+    allRules.sort((a, b) => b.hits - a.hits);
+
+    const usedRules = allRules.filter(s => s.hits > 0).length;
+    const unusedRules = allRules.filter(s => s.hits === 0 && s.id !== '__unknown__').length;
+
+    return {
+      rules: allRules,
+      usedRules,
+      unusedRules,
+      hasUnknown: unknownRuleHits > 0,
+    };
+  }, [filteredRows, counts.fromObservation, counts.missingLoad]);
+
   const registerEvent = useMutation({
     mutationFn: async () => {
       if (!currentTenant || !selectedRow) return;
