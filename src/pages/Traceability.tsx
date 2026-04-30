@@ -183,6 +183,8 @@ export default function Traceability() {
   });
   const [selectedRow, setSelectedRow] = useState<TraceRow | null>(null);
   const [eventForm, setEventForm] = useState({ type: 'other', severity: 'medium', status: 'no_change', description: '' });
+  const [analyzerOpen, setAnalyzerOpen] = useState(false);
+  const [analyzerResult, setAnalyzerResult] = useState<AnalyzerResult | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['traceability', currentTenant?.id],
