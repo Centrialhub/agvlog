@@ -133,11 +133,11 @@ export default function Billing() {
       if (collectOrder && !ciIncludes(load?.load_number, collectOrder)) return false;
       if (loadStatus !== SENTINEL_NONE && load?.status !== loadStatus) return false;
       if (plate && !ciIncludes(load?.vehicles?.plate, plate)) return false;
-      if (supplierManifest && !ciIncludes((load as any)?.supplier_manifest, supplierManifest)) return false;
-      if (distributionManifest && !ciIncludes((load as any)?.distribution_manifest, distributionManifest)) return false;
-      if (shipmentManifest && !ciIncludes((load as any)?.shipment_manifest, shipmentManifest)) return false;
-      if (originManifest && !ciIncludes((load as any)?.origin_manifest, originManifest)) return false;
-      if (!matchesOp((load as any)?.operation_type ?? (d as any).operation_type)) return false;
+      if (supplierManifest && !ciIncludes(load?.supplier_manifest, supplierManifest)) return false;
+      if (distributionManifest && !ciIncludes(load?.distribution_manifest, distributionManifest)) return false;
+      if (shipmentManifest && !ciIncludes(load?.shipment_manifest, shipmentManifest)) return false;
+      if (originManifest && !ciIncludes(load?.origin_manifest, originManifest)) return false;
+      if (!matchesOp(load?.operation_type ?? (d as any).operation_type)) return false;
 
       return true;
     });
