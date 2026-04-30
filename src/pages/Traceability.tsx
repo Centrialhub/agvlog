@@ -931,13 +931,26 @@ export default function Traceability() {
                       <TableCell><Checkbox checked={(row.doc.pallet_count || 0) > 0} aria-label="Palete" /></TableCell>
                       <TableCell><Checkbox checked={delivered} aria-label="POD" /></TableCell>
                       <TableCell>
-                        {delivered ? (
-                          <Badge variant="outline" className="bg-success/10 text-success border-success/20 text-[10px] gap-1" title={`Canhoto recebido em ${fmtDate(lastStop?.actual_arrival_at)} ${fmtTime(lastStop?.actual_arrival_at)}`}>
-                            <CheckCircle2 className="h-3 w-3" /> {fmtDate(lastStop?.actual_arrival_at)}
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="bg-muted/40 text-muted-foreground text-[10px]">Pendente</Badge>
-                        )}
+                        <Link
+                          to={`/traceability/${row.doc.id}/pod`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={e => e.stopPropagation()}
+                          title="Abrir histórico completo do POD em nova aba"
+                          className="inline-block hover:opacity-80 transition-opacity"
+                        >
+                          {delivered ? (
+                            <Badge variant="outline" className="bg-success/10 text-success border-success/20 text-[10px] gap-1 cursor-pointer">
+                              <CheckCircle2 className="h-3 w-3" /> {fmtDate(lastStop?.actual_arrival_at)}
+                              <ExternalLink className="h-2.5 w-2.5 ml-0.5 opacity-70" />
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="bg-muted/40 text-muted-foreground text-[10px] gap-1 cursor-pointer">
+                              Pendente
+                              <ExternalLink className="h-2.5 w-2.5 ml-0.5 opacity-70" />
+                            </Badge>
+                          )}
+                        </Link>
                       </TableCell>
                       <TableCell><Badge variant="outline" className={statusBadgeClass(row.siatStatus)}>{siatLabels[row.siatStatus]}</Badge></TableCell>
                       <TableCell className="font-mono text-xs">{row.doc.invoice_number || '—'}</TableCell>
