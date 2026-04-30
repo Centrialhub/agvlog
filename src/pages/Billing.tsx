@@ -18,24 +18,17 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { FileSpreadsheet, Calculator, CheckCircle2, Layers, FileText, Info, XCircle, RotateCw, Filter, Eraser } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import {
+  OPERATION_TYPE_OPTIONS,
+  type OperationType,
+} from '@/lib/operationTypeMapping';
 
 const SENTINEL_NONE = '__none__';
 
 type SourceTab = 'period' | 'loads';
 
-// Tipos de operação espelhando o SIAT
-const OPERATION_TYPES = [
-  { value: 'filial', label: 'Filial' },
-  { value: 'armazenagem', label: 'Armazenagem' },
-  { value: 'frota', label: 'Frota' },
-  { value: 'viagem_direta', label: 'Viagem Direta' },
-  { value: 'retira', label: 'Retira' },
-  { value: 'transferencia', label: 'Transferência' },
-  { value: 'devolucao', label: 'Devolução' },
-  { value: 'redespacho', label: 'Redespacho/Sub' },
-] as const;
-
-type OpType = typeof OPERATION_TYPES[number]['value'];
+const OPERATION_TYPES = OPERATION_TYPE_OPTIONS;
+type OpType = OperationType;
 
 export default function Billing() {
   const { data: docs = [], isLoading: docsLoading } = useFiscalDocuments();
