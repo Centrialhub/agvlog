@@ -822,6 +822,18 @@ export default function Traceability() {
             <div><Label>Emissão até</Label><Input type="date" value={filters.end} onChange={e => setFilters(f => ({ ...f, end: e.target.value }))} /></div>
             <div><Label title="Filtra pela data em que a NF foi importada para o sistema">Importada de</Label><Input type="date" value={filters.importStart} onChange={e => setFilters(f => ({ ...f, importStart: e.target.value }))} /></div>
             <div><Label>Importada até</Label><Input type="date" value={filters.importEnd} onChange={e => setFilters(f => ({ ...f, importEnd: e.target.value }))} /></div>
+            <div>
+              <Label title="Agrupa NFs importadas no mesmo upload (mesmo usuário em janela de 60s)">Lote de importação</Label>
+              <Select value={filters.importBatch} onValueChange={value => setFilters(f => ({ ...f, importBatch: value }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent className="max-h-80">
+                  <SelectItem value="all">Todos os lotes ({importBatches.length})</SelectItem>
+                  {importBatches.map(b => (
+                    <SelectItem key={b.key} value={b.key}>{batchLabel(b)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div><Label>Entrega de</Label><Input type="date" value={filters.deliveryStart} onChange={e => setFilters(f => ({ ...f, deliveryStart: e.target.value }))} /></div>
             <div><Label>Entrega até</Label><Input type="date" value={filters.deliveryEnd} onChange={e => setFilters(f => ({ ...f, deliveryEnd: e.target.value }))} /></div>
             <div><Label>Situação</Label><Select value={filters.status} onValueChange={value => setFilters(f => ({ ...f, status: value }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Object.entries(siatLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div>
