@@ -298,6 +298,14 @@ export default function Billing() {
       if (issueDateStart && (!d.issue_date || d.issue_date < issueDateStart)) return false;
       if (issueDateEnd && (!d.issue_date || d.issue_date > issueDateEnd)) return false;
 
+      // Janela de data de importação (created_at do documento fiscal)
+      if (importDateStart || importDateEnd) {
+        const imp = d.created_at ? d.created_at.slice(0, 10) : null;
+        if (!imp) return false;
+        if (importDateStart && imp < importDateStart) return false;
+        if (importDateEnd && imp > importDateEnd) return false;
+      }
+
       // Filtros que dependem da carga associada
       const load = d.load_id ? loadsById.get(d.load_id) : null;
       if (osNumber && !ciIncludes(load?.os_number, osNumber)) return false;
