@@ -730,6 +730,8 @@ export default function Traceability() {
           <div className="grid gap-3 md:grid-cols-4 xl:grid-cols-7">
             <div><Label>Emissão de</Label><Input type="date" value={filters.start} onChange={e => setFilters(f => ({ ...f, start: e.target.value }))} /></div>
             <div><Label>Emissão até</Label><Input type="date" value={filters.end} onChange={e => setFilters(f => ({ ...f, end: e.target.value }))} /></div>
+            <div><Label title="Filtra pela data em que a NF foi importada para o sistema">Importada de</Label><Input type="date" value={filters.importStart} onChange={e => setFilters(f => ({ ...f, importStart: e.target.value }))} /></div>
+            <div><Label>Importada até</Label><Input type="date" value={filters.importEnd} onChange={e => setFilters(f => ({ ...f, importEnd: e.target.value }))} /></div>
             <div><Label>Entrega de</Label><Input type="date" value={filters.deliveryStart} onChange={e => setFilters(f => ({ ...f, deliveryStart: e.target.value }))} /></div>
             <div><Label>Entrega até</Label><Input type="date" value={filters.deliveryEnd} onChange={e => setFilters(f => ({ ...f, deliveryEnd: e.target.value }))} /></div>
             <div><Label>Situação</Label><Select value={filters.status} onValueChange={value => setFilters(f => ({ ...f, status: value }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Object.entries(siatLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div>
