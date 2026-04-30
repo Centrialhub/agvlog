@@ -439,6 +439,43 @@ export default function Traceability() {
     toast({ title: 'CSV exportado', description: `${missing.length} NF(s) sem número da carga do cliente.` });
   };
 
+  /**
+   * Coleta as observações das NFs sem carga extraída e roda o analisador de
+   * padrões para sugerir novas regras a serem adicionadas em
+   * `CLIENT_LOAD_OBSERVATION_RULES` (ver src/lib/documentParsers.ts).
+   */
+  const runAnalyzer = () => {
+    const samples = filteredRows
+      .filter(r => !r.doc.client_load_number)
+      .map(r => ({
+        observation: r.doc.client_load_source?.observationSnippet || '',
+        reference: r.doc.invoice_number || r.doc.access_key || r.doc.id,
+      }))
+      .filter(s => s.observation.trim().length > 0);
+
+    if (!samples.length) {
+      toast({
+        title: 'Sem amostras para analisar',
+        description: 'As NFs sem carga foram ingeridas antes do registro de snippet, ou não têm observação. Reimporte XMLs recentes para popular as amostras.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const result = analyzeObservations(samples, { minOccurrences: 2, topKeywords: 12, topSignatures: 8 });
+    setAnalyzerResult(result);
+    setAnalyzerOpen(true);
+  };
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({ title: 'Copiado', description: 'Cole no array CLIENT_LOAD_OBSERVATION_RULES.' });
+    } catch {
+      toast({ title: 'Não foi possível copiar', variant: 'destructive' });
+    }
+  };
+
   return (
     <div className="space-y-4 animate-fade-in">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
