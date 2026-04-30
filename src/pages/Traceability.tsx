@@ -245,6 +245,45 @@ export default function Traceability() {
     });
   }, [data]);
 
+  // Lote de importação derivado: como o schema atual não persiste um batch_id em
+  // fiscal_documents, usamos a heurística "mesmo created_by + created_at no mesmo
+  // bucket de 60s" — isso reflete bem um upload em massa (lote XML/CSV) que insere
+  // várias NFs quase simultaneamente. Ordenamos cronologicamente desc para o select.
+  const BATCH_BUCKET_MS = 60_000;
+  const batchKeyOf = (doc: TraceDocument): string | null => {
+    if (!doc.created_at) return null;
+    const t = new Date(doc.created_at).getTime();
+    if (!Number.isFinite(t)) return null;
+    const bucket = Math.floor(t / BATCH_BUCKET_MS);
+    return `${doc.created_by || 'anon'}|${bucket}`;
+  };
+
+  const importBatches = useMemo(() => {
+    const map = new Map<string, { key: string; firstAt: string; lastAt: string; count: number; createdBy: string | null }>();
+    for (const r of rows) {
+      const key = batchKeyOf(r.doc);
+      if (!key || !r.doc.created_at) continue;
+      const cur = map.get(key);
+      if (!cur) {
+        map.set(key, {
+          key,
+          firstAt: r.doc.created_at,
+          lastAt: r.doc.created_at,
+          count: 1,
+          createdBy: r.doc.created_by,
+        });
+      } else {
+        cur.count++;
+        if (r.doc.created_at < cur.firstAt) cur.firstAt = r.doc.created_at;
+        if (r.doc.created_at > cur.lastAt) cur.lastAt = r.doc.created_at;
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => b.firstAt.localeCompare(a.firstAt));
+  }, [rows]);
+
+  const batchLabel = (b: { firstAt: string; count: number; createdBy: string | null }) =>
+    `${fmtDate(b.firstAt)} ${fmtTime(b.firstAt)} · ${b.count} NF${b.count > 1 ? 's' : ''}${b.createdBy ? ` · ${b.createdBy.slice(0, 8)}` : ''}`;
+
   const filteredRows = useMemo(() => {
     const q = (value: string | null | undefined, needle: string) => String(value || '').toLowerCase().includes(needle.toLowerCase());
     return rows.filter(row => {
@@ -268,6 +307,7 @@ export default function Traceability() {
         if (filters.importStart && (!imp || imp < filters.importStart)) return false;
         if (filters.importEnd && (!imp || imp > filters.importEnd)) return false;
       }
+      if (filters.importBatch !== 'all' && batchKeyOf(doc) !== filters.importBatch) return false;
       if (filters.deliveryStart || filters.deliveryEnd) {
         const arr = row.stops.at(-1)?.actual_arrival_at;
         const arrDate = arr ? arr.slice(0, 10) : '';
