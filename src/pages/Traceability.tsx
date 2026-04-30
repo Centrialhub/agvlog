@@ -178,6 +178,31 @@ const fmtTime = (value?: string | null) => {
 
 const currency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 
+/**
+ * Calcula o SLA (lead-time) entre a importação da NF (created_at) e a entrega
+ * efetiva (última parada com chegada real). Retorna null quando ainda não
+ * entregue ou se faltar uma das pontas — assim a coluna sabe distinguir
+ * "em aberto" de "entregue sem dado".
+ */
+const computeSlaHours = (importedAt?: string | null, deliveredAt?: string | null): number | null => {
+  if (!importedAt || !deliveredAt) return null;
+  const a = new Date(importedAt).getTime();
+  const b = new Date(deliveredAt).getTime();
+  if (!Number.isFinite(a) || !Number.isFinite(b) || b < a) return null;
+  return (b - a) / 3_600_000;
+};
+
+const formatSla = (hours: number): string => {
+  if (hours < 1) return `${Math.round(hours * 60)}min`;
+  if (hours < 24) return `${hours.toFixed(1)}h`;
+  const days = Math.floor(hours / 24);
+  const rest = Math.round(hours - days * 24);
+  return rest === 0 ? `${days}d` : `${days}d ${rest}h`;
+};
+
+const SLA_THRESHOLD_KEY = 'traceability.slaThresholdHours';
+const DEFAULT_SLA_THRESHOLD_H = 72;
+
 export default function Traceability() {
   const { currentTenant } = useTenant();
   const { user } = useAuth();
