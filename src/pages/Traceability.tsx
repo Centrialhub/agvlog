@@ -494,6 +494,15 @@ export default function Traceability() {
           >
             <AlertCircle className="mr-2 h-4 w-4" /> Exportar NFs sem carga ({counts.missingLoad})
           </Button>
+          <Button
+            variant="outline"
+            onClick={runAnalyzer}
+            disabled={!counts.missingLoad}
+            className="border-info/30 text-info hover:bg-info/10 hover:text-info"
+            title="Agrupa observações similares das NFs sem extração e sugere novas regras de regex."
+          >
+            <Lightbulb className="mr-2 h-4 w-4" /> Analisar padrões
+          </Button>
         </div>
       </div>
 
