@@ -42,9 +42,13 @@ type TraceDocument = {
   remitter: string | null;
   order_id: string | null;
   client_load_number: string | null;
-  client_load_source: { source?: string; ruleId?: string | null; ruleLabel?: string | null } | null;
-  // ↓ Snippet salvo quando NENHUMA regra casou (ver Ingestion.tsx)
-  // Não vem em todas as linhas (apenas em ingestões posteriores ao fix).
+  client_load_source: {
+    source?: string;
+    ruleId?: string | null;
+    ruleLabel?: string | null;
+    /** Snippet da observação salvo quando NENHUMA regra casou (ingestões pós-fix). */
+    observationSnippet?: string | null;
+  } | null;
   clients?: { company_name: string | null } | null;
   orders?: { order_number: string | null; payment_plan: string | null } | null;
   loads?: {
