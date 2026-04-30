@@ -18,6 +18,9 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Progress } from '@/components/ui/progress';
+import { ChevronDown } from 'lucide-react';
 import { analyzeObservations, type AnalyzerResult } from '@/lib/observationPatternAnalyzer';
 import { CLIENT_LOAD_OBSERVATION_RULES } from '@/lib/documentParsers';
 
