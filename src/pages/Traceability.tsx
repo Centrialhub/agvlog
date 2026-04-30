@@ -916,7 +916,7 @@ export default function Traceability() {
       <Card className="rounded-t-none">
         <CardContent className="p-0">
           <div
-            className="overflow-x-auto"
+            className="overflow-x-auto [&::-webkit-scrollbar]:hidden [scrollbar-width:none]"
             ref={(el) => {
               if (!el) return;
               const top = document.getElementById('trace-top-scroll');
