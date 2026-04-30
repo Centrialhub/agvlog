@@ -907,7 +907,13 @@ export default function Traceability() {
         </CardContent>
       </Card>
 
-      <Card>
+      <div
+        id="trace-top-scroll"
+        className="overflow-x-auto overflow-y-hidden h-3 rounded-t-md border border-b-0 bg-muted/30"
+      >
+        <div id="trace-top-scroll-inner" className="h-px" />
+      </div>
+      <Card className="rounded-t-none">
         <CardContent className="p-0">
           <div
             className="overflow-x-auto"
