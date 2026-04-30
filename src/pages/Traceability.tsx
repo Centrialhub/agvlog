@@ -497,6 +497,7 @@ export default function Traceability() {
       // ─── Detalhe completo (canhoto / POD) ───
       'Canhoto Status', 'Canhoto Data (ISO)', 'Canhoto Última Parada', 'Canhoto Stop ID',
       'Lead-time Importação→Entrega (h)', 'Lead-time Emissão→Entrega (h)', 'Atraso vs Previsto (h)',
+      'SLA Entrega (formatado)', 'SLA Status', `SLA Limite (h)`,
     ];
     const body = filteredRows.map(({ doc, siatStatus, events, trip, stops }) => {
       const firstStop = stops[0];
@@ -600,6 +601,23 @@ export default function Traceability() {
         hoursBetween(doc.created_at, deliveredAt),
         hoursBetween(doc.issue_date, deliveredAt),
         hoursBetween(lastStop?.planned_arrival_at, lastStop?.actual_arrival_at),
+        // ─── SLA Entrega (Importada → Entrega) ───
+        (() => {
+          const h = computeSlaHours(doc.created_at, deliveredAt);
+          if (h !== null) return formatSla(h);
+          if (!doc.created_at) return '';
+          const elapsed = (Date.now() - new Date(doc.created_at).getTime()) / 3_600_000;
+          return Number.isFinite(elapsed) ? formatSla(elapsed) : '';
+        })(),
+        (() => {
+          const h = computeSlaHours(doc.created_at, deliveredAt);
+          if (h !== null) return h <= slaThresholdH ? 'No prazo' : 'Vencido';
+          if (siatStatus === 'delivered') return 'Sem dados';
+          if (!doc.created_at) return 'Sem dados';
+          const elapsed = (Date.now() - new Date(doc.created_at).getTime()) / 3_600_000;
+          return elapsed > slaThresholdH ? 'Em aberto · vencido' : 'Em aberto';
+        })(),
+        slaThresholdH,
       ];
     });
     const csv = [headers, ...body].map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(';')).join('\n');
