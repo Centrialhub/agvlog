@@ -32,6 +32,7 @@ type TraceDocument = {
   document_type: string;
   issue_date: string | null;
   created_at: string | null;
+  created_by: string | null;
   recipient: string | null;
   recipient_city: string | null;
   recipient_state: string | null;
@@ -183,7 +184,7 @@ export default function Traceability() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState({
-    invoice: '', loadNumber: '', clientRef: '', client: '', supplier: '', plate: '', driver: '', start: '', end: '', deliveryStart: '', deliveryEnd: '', importStart: '', importEnd: '', status: 'all', pod: 'all', canhoto: 'all', occurrence: '', payment: '',
+    invoice: '', loadNumber: '', clientRef: '', client: '', supplier: '', plate: '', driver: '', start: '', end: '', deliveryStart: '', deliveryEnd: '', importStart: '', importEnd: '', status: 'all', pod: 'all', canhoto: 'all', occurrence: '', payment: '', importBatch: 'all',
   });
   const [selectedRow, setSelectedRow] = useState<TraceRow | null>(null);
   const [eventForm, setEventForm] = useState({ type: 'other', severity: 'medium', status: 'no_change', description: '' });
@@ -196,7 +197,7 @@ export default function Traceability() {
       if (!currentTenant) return { docs: [], events: [], trips: [], stops: [] };
       const { data: docs, error: docsError } = await supabase
         .from('fiscal_documents')
-        .select('id, invoice_number, access_key, document_type, issue_date, created_at, recipient, remitter, recipient_city, recipient_state, product_summary, pallet_count, weight_kg, value, freight_value, status, load_id, client_id, order_id, client_load_number, client_load_source, clients(company_name), orders(order_number, payment_plan), loads(id, load_number, status, origin, destination, trip_id, vehicles(plate, nickname), drivers(name))')
+        .select('id, invoice_number, access_key, document_type, issue_date, created_at, created_by, recipient, remitter, recipient_city, recipient_state, product_summary, pallet_count, weight_kg, value, freight_value, status, load_id, client_id, order_id, client_load_number, client_load_source, clients(company_name), orders(order_number, payment_plan), loads(id, load_number, status, origin, destination, trip_id, vehicles(plate, nickname), drivers(name))')
         .eq('tenant_id', currentTenant.id)
         .order('created_at', { ascending: false })
         .limit(1000);
@@ -244,6 +245,45 @@ export default function Traceability() {
     });
   }, [data]);
 
+  // Lote de importação derivado: como o schema atual não persiste um batch_id em
+  // fiscal_documents, usamos a heurística "mesmo created_by + created_at no mesmo
+  // bucket de 60s" — isso reflete bem um upload em massa (lote XML/CSV) que insere
+  // várias NFs quase simultaneamente. Ordenamos cronologicamente desc para o select.
+  const BATCH_BUCKET_MS = 60_000;
+  const batchKeyOf = (doc: TraceDocument): string | null => {
+    if (!doc.created_at) return null;
+    const t = new Date(doc.created_at).getTime();
+    if (!Number.isFinite(t)) return null;
+    const bucket = Math.floor(t / BATCH_BUCKET_MS);
+    return `${doc.created_by || 'anon'}|${bucket}`;
+  };
+
+  const importBatches = useMemo(() => {
+    const map = new Map<string, { key: string; firstAt: string; lastAt: string; count: number; createdBy: string | null }>();
+    for (const r of rows) {
+      const key = batchKeyOf(r.doc);
+      if (!key || !r.doc.created_at) continue;
+      const cur = map.get(key);
+      if (!cur) {
+        map.set(key, {
+          key,
+          firstAt: r.doc.created_at,
+          lastAt: r.doc.created_at,
+          count: 1,
+          createdBy: r.doc.created_by,
+        });
+      } else {
+        cur.count++;
+        if (r.doc.created_at < cur.firstAt) cur.firstAt = r.doc.created_at;
+        if (r.doc.created_at > cur.lastAt) cur.lastAt = r.doc.created_at;
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => b.firstAt.localeCompare(a.firstAt));
+  }, [rows]);
+
+  const batchLabel = (b: { firstAt: string; count: number; createdBy: string | null }) =>
+    `${fmtDate(b.firstAt)} ${fmtTime(b.firstAt)} · ${b.count} NF${b.count > 1 ? 's' : ''}${b.createdBy ? ` · ${b.createdBy.slice(0, 8)}` : ''}`;
+
   const filteredRows = useMemo(() => {
     const q = (value: string | null | undefined, needle: string) => String(value || '').toLowerCase().includes(needle.toLowerCase());
     return rows.filter(row => {
@@ -267,6 +307,7 @@ export default function Traceability() {
         if (filters.importStart && (!imp || imp < filters.importStart)) return false;
         if (filters.importEnd && (!imp || imp > filters.importEnd)) return false;
       }
+      if (filters.importBatch !== 'all' && batchKeyOf(doc) !== filters.importBatch) return false;
       if (filters.deliveryStart || filters.deliveryEnd) {
         const arr = row.stops.at(-1)?.actual_arrival_at;
         const arrDate = arr ? arr.slice(0, 10) : '';
@@ -781,6 +822,18 @@ export default function Traceability() {
             <div><Label>Emissão até</Label><Input type="date" value={filters.end} onChange={e => setFilters(f => ({ ...f, end: e.target.value }))} /></div>
             <div><Label title="Filtra pela data em que a NF foi importada para o sistema">Importada de</Label><Input type="date" value={filters.importStart} onChange={e => setFilters(f => ({ ...f, importStart: e.target.value }))} /></div>
             <div><Label>Importada até</Label><Input type="date" value={filters.importEnd} onChange={e => setFilters(f => ({ ...f, importEnd: e.target.value }))} /></div>
+            <div>
+              <Label title="Agrupa NFs importadas no mesmo upload (mesmo usuário em janela de 60s)">Lote de importação</Label>
+              <Select value={filters.importBatch} onValueChange={value => setFilters(f => ({ ...f, importBatch: value }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent className="max-h-80">
+                  <SelectItem value="all">Todos os lotes ({importBatches.length})</SelectItem>
+                  {importBatches.map(b => (
+                    <SelectItem key={b.key} value={b.key}>{batchLabel(b)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div><Label>Entrega de</Label><Input type="date" value={filters.deliveryStart} onChange={e => setFilters(f => ({ ...f, deliveryStart: e.target.value }))} /></div>
             <div><Label>Entrega até</Label><Input type="date" value={filters.deliveryEnd} onChange={e => setFilters(f => ({ ...f, deliveryEnd: e.target.value }))} /></div>
             <div><Label>Situação</Label><Select value={filters.status} onValueChange={value => setFilters(f => ({ ...f, status: value }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Object.entries(siatLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div>
