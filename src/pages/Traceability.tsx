@@ -740,7 +740,7 @@ export default function Traceability() {
             <Table>
               <TableHeader>
                   <TableRow>
-                    <TableHead className="w-10"></TableHead><TableHead>Palete</TableHead><TableHead>POD</TableHead><TableHead>Rec.Canhoto</TableHead><TableHead>Situação</TableHead><TableHead>Nº NF</TableHead><TableHead>Nº Carga (empresa)</TableHead><TableHead>Carga Cliente (NF-e)</TableHead><TableHead>Status Extração</TableHead><TableHead>Ref. Pedido</TableHead><TableHead>Forma pgto</TableHead><TableHead>Valor Nota</TableHead><TableHead>Valor Frete</TableHead><TableHead>Cliente</TableHead><TableHead>Fornecedor</TableHead><TableHead>Placa</TableHead><TableHead>Motorista</TableHead><TableHead>Data Chegada</TableHead><TableHead>Hora Chegada</TableHead><TableHead>Ocorrência</TableHead><TableHead></TableHead>
+                    <TableHead className="w-10"></TableHead><TableHead>Palete</TableHead><TableHead title="Comprovante de entrega (POD)">POD</TableHead><TableHead title="Canhoto recebido — clique para ver histórico">Canhoto</TableHead><TableHead>Situação</TableHead><TableHead>Nº NF</TableHead><TableHead title="Data/hora em que a NF foi importada — base do prazo de romaneio">Importada em</TableHead><TableHead>Nº Carga (empresa)</TableHead><TableHead>Carga Cliente (NF-e)</TableHead><TableHead>Status Extração</TableHead><TableHead>Ref. Pedido</TableHead><TableHead>Forma pgto</TableHead><TableHead>Valor Nota</TableHead><TableHead>Valor Frete</TableHead><TableHead>Cliente</TableHead><TableHead>Fornecedor</TableHead><TableHead>Placa</TableHead><TableHead>Motorista</TableHead><TableHead title="Data/hora da entrega (última parada concluída)">Entrega</TableHead><TableHead>Ocorrência</TableHead><TableHead></TableHead>
                   </TableRow>
               </TableHeader>
               <TableBody>
@@ -749,14 +749,29 @@ export default function Traceability() {
                 : filteredRows.map(row => {
                   const lastStop = row.stops.at(-1);
                   const extr = extractionStatus(row.doc);
+                  const delivered = row.siatStatus === 'delivered';
                   return (
                     <TableRow key={row.doc.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedRow(row)}>
                       <TableCell><Search className="h-4 w-4 text-muted-foreground" /></TableCell>
                       <TableCell><Checkbox checked={(row.doc.pallet_count || 0) > 0} aria-label="Palete" /></TableCell>
-                      <TableCell><Checkbox checked={row.siatStatus === 'delivered'} aria-label="POD" /></TableCell>
-                      <TableCell><Checkbox checked={row.siatStatus === 'delivered'} aria-label="Canhoto" /></TableCell>
+                      <TableCell><Checkbox checked={delivered} aria-label="POD" /></TableCell>
+                      <TableCell>
+                        {delivered ? (
+                          <Badge variant="outline" className="bg-success/10 text-success border-success/20 text-[10px] gap-1" title={`Canhoto recebido em ${fmtDate(lastStop?.actual_arrival_at)} ${fmtTime(lastStop?.actual_arrival_at)}`}>
+                            <CheckCircle2 className="h-3 w-3" /> {fmtDate(lastStop?.actual_arrival_at)}
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="bg-muted/40 text-muted-foreground text-[10px]">Pendente</Badge>
+                        )}
+                      </TableCell>
                       <TableCell><Badge variant="outline" className={statusBadgeClass(row.siatStatus)}>{siatLabels[row.siatStatus]}</Badge></TableCell>
                       <TableCell className="font-mono text-xs">{row.doc.invoice_number || '—'}</TableCell>
+                      <TableCell className="text-xs whitespace-nowrap" title="Base de cálculo do prazo de romaneio/entrega">
+                        <div className="flex flex-col leading-tight">
+                          <span className="font-medium">{fmtDate(row.doc.created_at)}</span>
+                          <span className="text-[10px] text-muted-foreground">{fmtTime(row.doc.created_at)}</span>
+                        </div>
+                      </TableCell>
                       <TableCell className="font-mono text-xs text-primary">{row.doc.loads?.load_number || '—'}</TableCell>
                       <TableCell className="font-mono text-xs">
                         {row.doc.client_load_number ? (
@@ -798,8 +813,16 @@ export default function Traceability() {
                       <TableCell className="min-w-40 text-xs">{row.doc.remitter || '—'}</TableCell>
                       <TableCell>{row.doc.loads?.vehicles?.plate || '—'}</TableCell>
                       <TableCell>{row.doc.loads?.drivers?.name || '—'}</TableCell>
-                      <TableCell>{fmtDate(lastStop?.actual_arrival_at)}</TableCell>
-                      <TableCell>{fmtTime(lastStop?.actual_arrival_at)}</TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {lastStop?.actual_arrival_at ? (
+                          <div className="flex flex-col leading-tight">
+                            <span className="font-medium text-success">{fmtDate(lastStop.actual_arrival_at)}</span>
+                            <span className="text-[10px] text-muted-foreground">{fmtTime(lastStop.actual_arrival_at)}</span>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
                       <TableCell className="min-w-56">{row.events[0]?.description || row.events[0]?.event_type || '—'}</TableCell>
                       <TableCell>{row.doc.load_id && <Link to={`/loads/${row.doc.load_id}`} onClick={e => e.stopPropagation()}><ExternalLink className="h-4 w-4 text-primary" /></Link>}</TableCell>
                     </TableRow>
