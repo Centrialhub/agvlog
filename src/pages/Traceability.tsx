@@ -494,14 +494,15 @@ export default function Traceability() {
             <Table>
               <TableHeader>
                   <TableRow>
-                    <TableHead className="w-10"></TableHead><TableHead>Palete</TableHead><TableHead>POD</TableHead><TableHead>Rec.Canhoto</TableHead><TableHead>Situação</TableHead><TableHead>Nº NF</TableHead><TableHead>Nº Carga (empresa)</TableHead><TableHead>Carga Cliente (NF-e)</TableHead><TableHead>Ref. Pedido</TableHead><TableHead>Forma pgto</TableHead><TableHead>Valor Nota</TableHead><TableHead>Valor Frete</TableHead><TableHead>Cliente</TableHead><TableHead>Fornecedor</TableHead><TableHead>Placa</TableHead><TableHead>Motorista</TableHead><TableHead>Data Chegada</TableHead><TableHead>Hora Chegada</TableHead><TableHead>Ocorrência</TableHead><TableHead></TableHead>
+                    <TableHead className="w-10"></TableHead><TableHead>Palete</TableHead><TableHead>POD</TableHead><TableHead>Rec.Canhoto</TableHead><TableHead>Situação</TableHead><TableHead>Nº NF</TableHead><TableHead>Nº Carga (empresa)</TableHead><TableHead>Carga Cliente (NF-e)</TableHead><TableHead>Status Extração</TableHead><TableHead>Ref. Pedido</TableHead><TableHead>Forma pgto</TableHead><TableHead>Valor Nota</TableHead><TableHead>Valor Frete</TableHead><TableHead>Cliente</TableHead><TableHead>Fornecedor</TableHead><TableHead>Placa</TableHead><TableHead>Motorista</TableHead><TableHead>Data Chegada</TableHead><TableHead>Hora Chegada</TableHead><TableHead>Ocorrência</TableHead><TableHead></TableHead>
                   </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading ? <TableRow><TableCell colSpan={20} className="py-10 text-center text-muted-foreground">Carregando rastreabilidade...</TableCell></TableRow>
-                : filteredRows.length === 0 ? <TableRow><TableCell colSpan={20} className="py-10 text-center text-muted-foreground">Nenhum registro encontrado</TableCell></TableRow>
+                {isLoading ? <TableRow><TableCell colSpan={21} className="py-10 text-center text-muted-foreground">Carregando rastreabilidade...</TableCell></TableRow>
+                : filteredRows.length === 0 ? <TableRow><TableCell colSpan={21} className="py-10 text-center text-muted-foreground">Nenhum registro encontrado</TableCell></TableRow>
                 : filteredRows.map(row => {
                   const lastStop = row.stops.at(-1);
+                  const extr = extractionStatus(row.doc);
                   return (
                     <TableRow key={row.doc.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedRow(row)}>
                       <TableCell><Search className="h-4 w-4 text-muted-foreground" /></TableCell>
@@ -526,6 +527,22 @@ export default function Traceability() {
                             )}
                           </div>
                         ) : '—'}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] ${extractionBadgeClass(extr)}`}
+                          title={extr === 'observation' && row.doc.client_load_source?.ruleLabel
+                            ? `Regra aplicada: ${row.doc.client_load_source.ruleLabel}`
+                            : extr === 'missing'
+                              ? 'Nenhuma regra casou com a observação e o XML não trouxe xPed.'
+                              : extractionLabel[extr]}
+                        >
+                          {extr === 'xPed' && 'NF (xPed)'}
+                          {extr === 'observation' && (row.doc.client_load_source?.ruleLabel || 'Observação')}
+                          {extr === 'manual' && 'Manual'}
+                          {extr === 'missing' && 'Não encontrado'}
+                        </Badge>
                       </TableCell>
                       <TableCell className="font-mono text-xs">{row.doc.orders?.order_number || '—'}</TableCell>
                       <TableCell className="text-xs">{row.doc.orders?.payment_plan || '—'}</TableCell>
