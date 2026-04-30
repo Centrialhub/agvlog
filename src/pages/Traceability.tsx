@@ -437,6 +437,15 @@ export default function Traceability() {
           <p className="text-sm text-muted-foreground">Consulta operacional de NF, carga, entrega, POD e ocorrências. Nº de CT-e/ORT é gerado apenas após emissão fiscal.</p>
         </div>
         <Button variant="outline" onClick={exportCsv} disabled={!filteredRows.length}><Download className="mr-2 h-4 w-4" /> Exportar CSV</Button>
+        <Button
+          variant="outline"
+          onClick={exportMissingLoadCsv}
+          disabled={!counts.missingLoad}
+          className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+          title="Exporta apenas as NFs cujo número da carga do cliente não foi extraído (xPed nem observação) — use o CSV para ajustar as regras."
+        >
+          <AlertCircle className="mr-2 h-4 w-4" /> Exportar NFs sem carga ({counts.missingLoad})
+        </Button>
       </div>
 
       <div className="grid gap-3 md:grid-cols-4">
