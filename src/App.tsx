@@ -168,6 +168,7 @@ const App = () => (
             <Route path="/loads/:id" element={<ProtectedRoute><LoadDetail /></ProtectedRoute>} />
             <Route path="/traceability" element={<ProtectedRoute><Traceability /></ProtectedRoute>} />
             <Route path="/load-extraction-audit" element={<ProtectedRoute><LoadExtractionAudit /></ProtectedRoute>} />
+            <Route path="/traceability/:docId/pod" element={<ProtectedRoute><PodHistory /></ProtectedRoute>} />
             <Route path="/operations" element={<ProtectedRoute><OperationsDashboard /></ProtectedRoute>} />
             <Route path="/events" element={<ProtectedRoute><OperationalEvents /></ProtectedRoute>} />
             <Route path="/ingestion" element={<ProtectedRoute><Ingestion /></ProtectedRoute>} />
