@@ -556,6 +556,200 @@ export type Database = {
         }
         Relationships: []
       }
+      cte_batches: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          created_by: string | null
+          fiscal_document_ids: string[] | null
+          grouping_mode: number
+          grouping_mode_label: string | null
+          id: string
+          load_ids: string[] | null
+          notes: string | null
+          period_end: string | null
+          period_start: string | null
+          source_type: string
+          status: string
+          tenant_id: string
+          total_documents: number
+          total_freight: number
+          total_value: number
+          updated_at: string
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          fiscal_document_ids?: string[] | null
+          grouping_mode: number
+          grouping_mode_label?: string | null
+          id?: string
+          load_ids?: string[] | null
+          notes?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          source_type?: string
+          status?: string
+          tenant_id: string
+          total_documents?: number
+          total_freight?: number
+          total_value?: number
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          fiscal_document_ids?: string[] | null
+          grouping_mode?: number
+          grouping_mode_label?: string | null
+          id?: string
+          load_ids?: string[] | null
+          notes?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          source_type?: string
+          status?: string
+          tenant_id?: string
+          total_documents?: number
+          total_freight?: number
+          total_value?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cte_batches_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cte_documents: {
+        Row: {
+          batch_id: string
+          cargo_value: number
+          cbs_base: number | null
+          cbs_rate: number | null
+          cbs_value: number | null
+          cfop: string | null
+          client_id: string | null
+          created_at: string
+          created_by: string | null
+          cte_number: string | null
+          cte_series: string | null
+          fiscal_document_ids: string[] | null
+          freight_value: number
+          grouping_keys: Json | null
+          ibs_base: number | null
+          ibs_rate: number | null
+          ibs_value: number | null
+          id: string
+          invoice_count: number
+          issued_at: string | null
+          load_ids: string[] | null
+          net_value: number | null
+          notes: string | null
+          pallet_count: number
+          receivable_id: string | null
+          recipient: string | null
+          recipient_city: string | null
+          recipient_state: string | null
+          remitter: string | null
+          status: string
+          tenant_id: string
+          updated_at: string
+          weight_kg: number
+        }
+        Insert: {
+          batch_id: string
+          cargo_value?: number
+          cbs_base?: number | null
+          cbs_rate?: number | null
+          cbs_value?: number | null
+          cfop?: string | null
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          cte_number?: string | null
+          cte_series?: string | null
+          fiscal_document_ids?: string[] | null
+          freight_value?: number
+          grouping_keys?: Json | null
+          ibs_base?: number | null
+          ibs_rate?: number | null
+          ibs_value?: number | null
+          id?: string
+          invoice_count?: number
+          issued_at?: string | null
+          load_ids?: string[] | null
+          net_value?: number | null
+          notes?: string | null
+          pallet_count?: number
+          receivable_id?: string | null
+          recipient?: string | null
+          recipient_city?: string | null
+          recipient_state?: string | null
+          remitter?: string | null
+          status?: string
+          tenant_id: string
+          updated_at?: string
+          weight_kg?: number
+        }
+        Update: {
+          batch_id?: string
+          cargo_value?: number
+          cbs_base?: number | null
+          cbs_rate?: number | null
+          cbs_value?: number | null
+          cfop?: string | null
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          cte_number?: string | null
+          cte_series?: string | null
+          fiscal_document_ids?: string[] | null
+          freight_value?: number
+          grouping_keys?: Json | null
+          ibs_base?: number | null
+          ibs_rate?: number | null
+          ibs_value?: number | null
+          id?: string
+          invoice_count?: number
+          issued_at?: string | null
+          load_ids?: string[] | null
+          net_value?: number | null
+          notes?: string | null
+          pallet_count?: number
+          receivable_id?: string | null
+          recipient?: string | null
+          recipient_city?: string | null
+          recipient_state?: string | null
+          remitter?: string | null
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+          weight_kg?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cte_documents_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "cte_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cte_documents_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dispatch_events: {
         Row: {
           created_at: string
