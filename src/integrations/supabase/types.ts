@@ -1343,9 +1343,12 @@ export type Database = {
           product_summary: string | null
           recipient: string | null
           recipient_city: string | null
+          recipient_cnpj: string | null
           recipient_neighborhood: string | null
           recipient_state: string | null
+          reference_number: string | null
           remitter: string | null
+          remitter_cnpj: string | null
           status: string
           tenant_id: string
           updated_at: string
@@ -1379,9 +1382,12 @@ export type Database = {
           product_summary?: string | null
           recipient?: string | null
           recipient_city?: string | null
+          recipient_cnpj?: string | null
           recipient_neighborhood?: string | null
           recipient_state?: string | null
+          reference_number?: string | null
           remitter?: string | null
+          remitter_cnpj?: string | null
           status?: string
           tenant_id: string
           updated_at?: string
@@ -1415,9 +1421,12 @@ export type Database = {
           product_summary?: string | null
           recipient?: string | null
           recipient_city?: string | null
+          recipient_cnpj?: string | null
           recipient_neighborhood?: string | null
           recipient_state?: string | null
+          reference_number?: string | null
           remitter?: string | null
+          remitter_cnpj?: string | null
           status?: string
           tenant_id?: string
           updated_at?: string
@@ -2746,6 +2755,7 @@ export type Database = {
       }
       loads: {
         Row: {
+          actual_load_at: string | null
           created_at: string
           created_by: string | null
           destination: string | null
@@ -2757,6 +2767,8 @@ export type Database = {
           operation_type: Database["public"]["Enums"]["operation_type"] | null
           origin: string | null
           origin_manifest: string | null
+          os_number: string | null
+          scheduled_load_at: string | null
           shipment_manifest: string | null
           status: string
           supplier_manifest: string | null
@@ -2769,6 +2781,7 @@ export type Database = {
           vehicle_id: string | null
         }
         Insert: {
+          actual_load_at?: string | null
           created_at?: string
           created_by?: string | null
           destination?: string | null
@@ -2780,6 +2793,8 @@ export type Database = {
           operation_type?: Database["public"]["Enums"]["operation_type"] | null
           origin?: string | null
           origin_manifest?: string | null
+          os_number?: string | null
+          scheduled_load_at?: string | null
           shipment_manifest?: string | null
           status?: string
           supplier_manifest?: string | null
@@ -2792,6 +2807,7 @@ export type Database = {
           vehicle_id?: string | null
         }
         Update: {
+          actual_load_at?: string | null
           created_at?: string
           created_by?: string | null
           destination?: string | null
@@ -2803,6 +2819,8 @@ export type Database = {
           operation_type?: Database["public"]["Enums"]["operation_type"] | null
           origin?: string | null
           origin_manifest?: string | null
+          os_number?: string | null
+          scheduled_load_at?: string | null
           shipment_manifest?: string | null
           status?: string
           supplier_manifest?: string | null
@@ -5573,6 +5591,7 @@ export type Database = {
           _vehicle_id?: string
         }
         Returns: {
+          actual_load_at: string | null
           created_at: string
           created_by: string | null
           destination: string | null
@@ -5584,6 +5603,8 @@ export type Database = {
           operation_type: Database["public"]["Enums"]["operation_type"] | null
           origin: string | null
           origin_manifest: string | null
+          os_number: string | null
+          scheduled_load_at: string | null
           shipment_manifest: string | null
           status: string
           supplier_manifest: string | null
