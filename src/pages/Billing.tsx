@@ -49,6 +49,8 @@ interface BillingPreferences {
   invoiceNumber: string;
   issueDateStart: string;
   issueDateEnd: string;
+  importDateStart: string;
+  importDateEnd: string;
   supplierManifest: string;
   distributionManifest: string;
   shipmentManifest: string;
