@@ -178,6 +178,31 @@ const fmtTime = (value?: string | null) => {
 
 const currency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 
+/**
+ * Calcula o SLA (lead-time) entre a importação da NF (created_at) e a entrega
+ * efetiva (última parada com chegada real). Retorna null quando ainda não
+ * entregue ou se faltar uma das pontas — assim a coluna sabe distinguir
+ * "em aberto" de "entregue sem dado".
+ */
+const computeSlaHours = (importedAt?: string | null, deliveredAt?: string | null): number | null => {
+  if (!importedAt || !deliveredAt) return null;
+  const a = new Date(importedAt).getTime();
+  const b = new Date(deliveredAt).getTime();
+  if (!Number.isFinite(a) || !Number.isFinite(b) || b < a) return null;
+  return (b - a) / 3_600_000;
+};
+
+const formatSla = (hours: number): string => {
+  if (hours < 1) return `${Math.round(hours * 60)}min`;
+  if (hours < 24) return `${hours.toFixed(1)}h`;
+  const days = Math.floor(hours / 24);
+  const rest = Math.round(hours - days * 24);
+  return rest === 0 ? `${days}d` : `${days}d ${rest}h`;
+};
+
+const SLA_THRESHOLD_KEY = 'traceability.slaThresholdHours';
+const DEFAULT_SLA_THRESHOLD_H = 72;
+
 export default function Traceability() {
   const { currentTenant } = useTenant();
   const { user } = useAuth();
@@ -188,6 +213,12 @@ export default function Traceability() {
   });
   const [selectedRow, setSelectedRow] = useState<TraceRow | null>(null);
   const [eventForm, setEventForm] = useState({ type: 'other', severity: 'medium', status: 'no_change', description: '' });
+  const [slaThresholdH, setSlaThresholdH] = useState<number>(() => {
+    if (typeof window === 'undefined') return DEFAULT_SLA_THRESHOLD_H;
+    const raw = window.localStorage.getItem(SLA_THRESHOLD_KEY);
+    const n = raw ? Number(raw) : NaN;
+    return Number.isFinite(n) && n > 0 ? n : DEFAULT_SLA_THRESHOLD_H;
+  });
   const [analyzerOpen, setAnalyzerOpen] = useState(false);
   const [analyzerResult, setAnalyzerResult] = useState<AnalyzerResult | null>(null);
 
@@ -466,6 +497,7 @@ export default function Traceability() {
       // ─── Detalhe completo (canhoto / POD) ───
       'Canhoto Status', 'Canhoto Data (ISO)', 'Canhoto Última Parada', 'Canhoto Stop ID',
       'Lead-time Importação→Entrega (h)', 'Lead-time Emissão→Entrega (h)', 'Atraso vs Previsto (h)',
+      'SLA Entrega (formatado)', 'SLA Status', `SLA Limite (h)`,
     ];
     const body = filteredRows.map(({ doc, siatStatus, events, trip, stops }) => {
       const firstStop = stops[0];
@@ -569,6 +601,23 @@ export default function Traceability() {
         hoursBetween(doc.created_at, deliveredAt),
         hoursBetween(doc.issue_date, deliveredAt),
         hoursBetween(lastStop?.planned_arrival_at, lastStop?.actual_arrival_at),
+        // ─── SLA Entrega (Importada → Entrega) ───
+        (() => {
+          const h = computeSlaHours(doc.created_at, deliveredAt);
+          if (h !== null) return formatSla(h);
+          if (!doc.created_at) return '';
+          const elapsed = (Date.now() - new Date(doc.created_at).getTime()) / 3_600_000;
+          return Number.isFinite(elapsed) ? formatSla(elapsed) : '';
+        })(),
+        (() => {
+          const h = computeSlaHours(doc.created_at, deliveredAt);
+          if (h !== null) return h <= slaThresholdH ? 'No prazo' : 'Vencido';
+          if (siatStatus === 'delivered') return 'Sem dados';
+          if (!doc.created_at) return 'Sem dados';
+          const elapsed = (Date.now() - new Date(doc.created_at).getTime()) / 3_600_000;
+          return elapsed > slaThresholdH ? 'Em aberto · vencido' : 'Em aberto';
+        })(),
+        slaThresholdH,
       ];
     });
     const csv = [headers, ...body].map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(';')).join('\n');
@@ -839,6 +888,21 @@ export default function Traceability() {
             <div><Label>Situação</Label><Select value={filters.status} onValueChange={value => setFilters(f => ({ ...f, status: value }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Object.entries(siatLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div>
             <div><Label>POD</Label><Select value={filters.pod} onValueChange={value => setFilters(f => ({ ...f, pod: value }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="yes">Sim</SelectItem><SelectItem value="no">Não</SelectItem></SelectContent></Select></div>
             <div><Label>Canhoto</Label><Select value={filters.canhoto} onValueChange={value => setFilters(f => ({ ...f, canhoto: value }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="yes">Sim</SelectItem><SelectItem value="no">Não</SelectItem></SelectContent></Select></div>
+            <div>
+              <Label title="Limite (em horas) acima do qual o SLA fica destacado em vermelho">SLA-limite (h)</Label>
+              <Input
+                type="number"
+                min={1}
+                value={slaThresholdH}
+                onChange={e => {
+                  const n = Number(e.target.value);
+                  if (Number.isFinite(n) && n > 0) {
+                    setSlaThresholdH(n);
+                    try { window.localStorage.setItem(SLA_THRESHOLD_KEY, String(n)); } catch {}
+                  }
+                }}
+              />
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -849,16 +913,18 @@ export default function Traceability() {
             <Table>
               <TableHeader>
                   <TableRow>
-                    <TableHead className="w-10"></TableHead><TableHead>Palete</TableHead><TableHead title="Comprovante de entrega (POD)">POD</TableHead><TableHead title="Canhoto recebido — clique para ver histórico">Canhoto</TableHead><TableHead>Situação</TableHead><TableHead>Nº NF</TableHead><TableHead title="Data/hora em que a NF foi importada — base do prazo de romaneio">Importada em</TableHead><TableHead>Nº Carga (empresa)</TableHead><TableHead>Carga Cliente (NF-e)</TableHead><TableHead>Status Extração</TableHead><TableHead>Ref. Pedido</TableHead><TableHead>Forma pgto</TableHead><TableHead>Valor Nota</TableHead><TableHead>Valor Frete</TableHead><TableHead>Cliente</TableHead><TableHead>Fornecedor</TableHead><TableHead>Placa</TableHead><TableHead>Motorista</TableHead><TableHead title="Data/hora da entrega (última parada concluída)">Entrega</TableHead><TableHead>Ocorrência</TableHead><TableHead></TableHead>
+                    <TableHead className="w-10"></TableHead><TableHead>Palete</TableHead><TableHead title="Comprovante de entrega (POD)">POD</TableHead><TableHead title="Canhoto recebido — clique para ver histórico">Canhoto</TableHead><TableHead>Situação</TableHead><TableHead>Nº NF</TableHead><TableHead title="Data/hora em que a NF foi importada — base do prazo de romaneio">Importada em</TableHead><TableHead>Nº Carga (empresa)</TableHead><TableHead>Carga Cliente (NF-e)</TableHead><TableHead>Status Extração</TableHead><TableHead>Ref. Pedido</TableHead><TableHead>Forma pgto</TableHead><TableHead>Valor Nota</TableHead><TableHead>Valor Frete</TableHead><TableHead>Cliente</TableHead><TableHead>Fornecedor</TableHead><TableHead>Placa</TableHead><TableHead>Motorista</TableHead><TableHead title="Data/hora da entrega (última parada concluída)">Entrega</TableHead><TableHead title={`Lead-time da importação até a entrega. Vermelho se > ${slaThresholdH}h.`}>SLA Entrega</TableHead><TableHead>Ocorrência</TableHead><TableHead></TableHead>
                   </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading ? <TableRow><TableCell colSpan={21} className="py-10 text-center text-muted-foreground">Carregando rastreabilidade...</TableCell></TableRow>
-                : filteredRows.length === 0 ? <TableRow><TableCell colSpan={21} className="py-10 text-center text-muted-foreground">Nenhum registro encontrado</TableCell></TableRow>
+                {isLoading ? <TableRow><TableCell colSpan={22} className="py-10 text-center text-muted-foreground">Carregando rastreabilidade...</TableCell></TableRow>
+                : filteredRows.length === 0 ? <TableRow><TableCell colSpan={22} className="py-10 text-center text-muted-foreground">Nenhum registro encontrado</TableCell></TableRow>
                 : filteredRows.map(row => {
                   const lastStop = row.stops.at(-1);
                   const extr = extractionStatus(row.doc);
                   const delivered = row.siatStatus === 'delivered';
+                  const slaHours = delivered ? computeSlaHours(row.doc.created_at, lastStop?.actual_arrival_at) : null;
+                  const slaBreached = slaHours !== null && slaHours > slaThresholdH;
                   return (
                     <TableRow key={row.doc.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedRow(row)}>
                       <TableCell><Search className="h-4 w-4 text-muted-foreground" /></TableCell>
@@ -930,6 +996,35 @@ export default function Traceability() {
                           </div>
                         ) : (
                           <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {slaHours !== null ? (
+                          <Badge
+                            variant="outline"
+                            className={`text-[11px] ${slaBreached ? 'bg-destructive/10 text-destructive border-destructive/30' : 'bg-success/10 text-success border-success/20'}`}
+                            title={`Importada em ${fmtDate(row.doc.created_at)} ${fmtTime(row.doc.created_at)} → Entrega em ${fmtDate(lastStop?.actual_arrival_at)} ${fmtTime(lastStop?.actual_arrival_at)} (${slaHours.toFixed(2)}h, limite ${slaThresholdH}h)`}
+                          >
+                            {formatSla(slaHours)}
+                          </Badge>
+                        ) : delivered ? (
+                          <span className="text-[11px] text-muted-foreground" title="NF marcada como entregue, mas falta data de importação ou de chegada">—</span>
+                        ) : row.doc.created_at ? (
+                          (() => {
+                            const elapsed = (Date.now() - new Date(row.doc.created_at).getTime()) / 3_600_000;
+                            const overdue = elapsed > slaThresholdH;
+                            return (
+                              <Badge
+                                variant="outline"
+                                className={`text-[11px] ${overdue ? 'bg-destructive/10 text-destructive border-destructive/30' : 'bg-warning/10 text-warning border-warning/20'}`}
+                                title={`Em aberto há ${elapsed.toFixed(1)}h desde a importação (limite ${slaThresholdH}h)`}
+                              >
+                                {overdue ? 'Vencido' : 'Em aberto'} · {formatSla(elapsed)}
+                              </Badge>
+                            );
+                          })()
+                        ) : (
+                          <span className="text-[11px] text-muted-foreground">—</span>
                         )}
                       </TableCell>
                       <TableCell className="min-w-56">{row.events[0]?.description || row.events[0]?.event_type || '—'}</TableCell>
