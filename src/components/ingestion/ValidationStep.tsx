@@ -9,9 +9,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   FileText, CheckCircle, AlertTriangle, XCircle, ArrowRight, ArrowLeft, Package, Info, Trash2, Pencil,
-  Weight, DollarSign, Boxes, LayoutGrid, Link2,
+  Weight, DollarSign, Boxes, LayoutGrid, Link2, Settings2,
 } from 'lucide-react';
 import { Client } from '@/hooks/useClients';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Label } from '@/components/ui/label';
 
 interface LoadOption {
   id: string;
