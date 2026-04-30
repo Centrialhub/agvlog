@@ -81,6 +81,8 @@ const DEFAULT_BILLING_PREFS: BillingPreferences = {
   invoiceNumber: '',
   issueDateStart: '',
   issueDateEnd: '',
+  importDateStart: '',
+  importDateEnd: '',
   supplierManifest: '',
   distributionManifest: '',
   shipmentManifest: '',
@@ -130,6 +132,8 @@ export default function Billing() {
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [issueDateStart, setIssueDateStart] = useState('');
   const [issueDateEnd, setIssueDateEnd] = useState('');
+  const [importDateStart, setImportDateStart] = useState('');
+  const [importDateEnd, setImportDateEnd] = useState('');
   const [supplierManifest, setSupplierManifest] = useState('');
   const [distributionManifest, setDistributionManifest] = useState('');
   const [shipmentManifest, setShipmentManifest] = useState('');
@@ -177,6 +181,8 @@ export default function Billing() {
     setInvoiceNumber(p.invoiceNumber ?? '');
     setIssueDateStart(p.issueDateStart ?? '');
     setIssueDateEnd(p.issueDateEnd ?? '');
+    setImportDateStart(p.importDateStart ?? '');
+    setImportDateEnd(p.importDateEnd ?? '');
     setSupplierManifest(p.supplierManifest ?? '');
     setDistributionManifest(p.distributionManifest ?? '');
     setShipmentManifest(p.shipmentManifest ?? '');
@@ -211,6 +217,8 @@ export default function Billing() {
         invoiceNumber,
         issueDateStart,
         issueDateEnd,
+        importDateStart,
+        importDateEnd,
         supplierManifest,
         distributionManifest,
         shipmentManifest,
@@ -234,6 +242,7 @@ export default function Billing() {
     tab, clientId, periodStart, periodEnd, modeId,
     osNumber, collectOrder, referenceNumber, cnpj, invoiceNumber,
     issueDateStart, issueDateEnd,
+    importDateStart, importDateEnd,
     supplierManifest, distributionManifest, shipmentManifest, originManifest,
     loadStatus, plate,
     scheduledLoadStart, scheduledLoadEnd, actualLoadStart, actualLoadEnd,
@@ -253,6 +262,7 @@ export default function Billing() {
   const clearAdvanced = () => {
     setOsNumber(''); setCollectOrder(''); setReferenceNumber(''); setCnpj('');
     setInvoiceNumber(''); setIssueDateStart(''); setIssueDateEnd('');
+    setImportDateStart(''); setImportDateEnd('');
     setSupplierManifest(''); setDistributionManifest(''); setShipmentManifest(''); setOriginManifest('');
     setLoadStatus(SENTINEL_NONE); setPlate('');
     setScheduledLoadStart(''); setScheduledLoadEnd(''); setActualLoadStart(''); setActualLoadEnd('');
