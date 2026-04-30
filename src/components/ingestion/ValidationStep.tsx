@@ -48,6 +48,58 @@ export default function ValidationStep({
   const [editingOrderIdx, setEditingOrderIdx] = useState<number | null>(null);
   const [selectedLoadId, setSelectedLoadId] = useState<string | null>(null);
 
+  // ── Missing client-load alert (configurable threshold) ──
+  const MISSING_THRESHOLD_KEY = 'ingestion.missingLoadThresholdPct';
+  const [missingThreshold, setMissingThreshold] = useState<number>(() => {
+    if (typeof window === 'undefined') return 20;
+    const raw = window.localStorage.getItem(MISSING_THRESHOLD_KEY);
+    const n = raw ? Number(raw) : NaN;
+    return Number.isFinite(n) && n >= 0 && n <= 100 ? n : 20;
+  });
+  const updateThreshold = (v: number) => {
+    const clamped = Math.max(0, Math.min(100, Math.round(v)));
+    setMissingThreshold(clamped);
+    try { window.localStorage.setItem(MISSING_THRESHOLD_KEY, String(clamped)); } catch {}
+  };
+
+  const missingStats = useMemo(() => {
+    const considered = docs.filter(d => !d.hasErrors && !d.isDuplicate);
+    const total = considered.length;
+    const missing = considered.filter(d => !d.source.clientLoadNumber);
+    const missingCount = missing.length;
+    const ratePct = total > 0 ? (missingCount / total) * 100 : 0;
+
+    const byDate = new Map<string, { total: number; missing: number }>();
+    const byCarrier = new Map<string, { total: number; missing: number }>();
+    for (const d of considered) {
+      const dateKey = (d.source.issueDate || '—').slice(0, 10);
+      const carrierKey = (d.source.emitterName || '—').trim() || '—';
+      const dateBucket = byDate.get(dateKey) || { total: 0, missing: 0 };
+      dateBucket.total += 1;
+      if (!d.source.clientLoadNumber) dateBucket.missing += 1;
+      byDate.set(dateKey, dateBucket);
+      const carrierBucket = byCarrier.get(carrierKey) || { total: 0, missing: 0 };
+      carrierBucket.total += 1;
+      if (!d.source.clientLoadNumber) carrierBucket.missing += 1;
+      byCarrier.set(carrierKey, carrierBucket);
+    }
+    const toRanked = (m: Map<string, { total: number; missing: number }>) =>
+      Array.from(m.entries())
+        .filter(([, v]) => v.missing > 0)
+        .map(([key, v]) => ({ key, ...v, pct: v.total ? (v.missing / v.total) * 100 : 0 }))
+        .sort((a, b) => b.missing - a.missing || b.pct - a.pct)
+        .slice(0, 5);
+    return {
+      total,
+      missingCount,
+      ratePct,
+      byDate: toRanked(byDate),
+      byCarrier: toRanked(byCarrier),
+    };
+  }, [docs]);
+
+  const missingExceeds = missingStats.total > 0 && missingStats.ratePct >= missingThreshold;
+
   const validDocs = docs.filter(d => !d.hasErrors && !d.isDuplicate);
 
   const totalErrors = docs.filter(d => d.hasErrors).length + orders.filter(o => o.hasErrors).length;
