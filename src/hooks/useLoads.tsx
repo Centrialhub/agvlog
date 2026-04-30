@@ -35,6 +35,11 @@ export interface Load {
   status: LoadStatus;
   trip_id: string | null;
   notes: string | null;
+  operation_type: string | null;
+  supplier_manifest: string | null;
+  distribution_manifest: string | null;
+  shipment_manifest: string | null;
+  origin_manifest: string | null;
   created_at: string;
   updated_at: string;
   vehicles?: { plate: string; nickname: string | null } | null;

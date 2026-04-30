@@ -2749,13 +2749,17 @@ export type Database = {
           created_at: string
           created_by: string | null
           destination: string | null
+          distribution_manifest: string | null
           driver_id: string | null
           id: string
           load_number: string
           notes: string | null
           operation_type: Database["public"]["Enums"]["operation_type"] | null
           origin: string | null
+          origin_manifest: string | null
+          shipment_manifest: string | null
           status: string
+          supplier_manifest: string | null
           tenant_id: string
           total_pallet_count: number | null
           total_volume_m3: number | null
@@ -2768,13 +2772,17 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           destination?: string | null
+          distribution_manifest?: string | null
           driver_id?: string | null
           id?: string
           load_number: string
           notes?: string | null
           operation_type?: Database["public"]["Enums"]["operation_type"] | null
           origin?: string | null
+          origin_manifest?: string | null
+          shipment_manifest?: string | null
           status?: string
+          supplier_manifest?: string | null
           tenant_id: string
           total_pallet_count?: number | null
           total_volume_m3?: number | null
@@ -2787,13 +2795,17 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           destination?: string | null
+          distribution_manifest?: string | null
           driver_id?: string | null
           id?: string
           load_number?: string
           notes?: string | null
           operation_type?: Database["public"]["Enums"]["operation_type"] | null
           origin?: string | null
+          origin_manifest?: string | null
+          shipment_manifest?: string | null
           status?: string
+          supplier_manifest?: string | null
           tenant_id?: string
           total_pallet_count?: number | null
           total_volume_m3?: number | null
@@ -5564,13 +5576,17 @@ export type Database = {
           created_at: string
           created_by: string | null
           destination: string | null
+          distribution_manifest: string | null
           driver_id: string | null
           id: string
           load_number: string
           notes: string | null
           operation_type: Database["public"]["Enums"]["operation_type"] | null
           origin: string | null
+          origin_manifest: string | null
+          shipment_manifest: string | null
           status: string
+          supplier_manifest: string | null
           tenant_id: string
           total_pallet_count: number | null
           total_volume_m3: number | null
