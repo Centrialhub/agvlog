@@ -980,17 +980,21 @@ export default function Traceability() {
                       <TableCell>
                         <Badge
                           variant="outline"
-                          className={`text-[10px] ${extractionBadgeClass(extr)}`}
-                          title={extr === 'observation' && row.doc.client_load_source?.ruleLabel
-                            ? `Regra aplicada: ${row.doc.client_load_source.ruleLabel}`
-                            : extr === 'missing'
-                              ? 'Nenhuma regra casou com a observação e o XML não trouxe xPed.'
-                              : extractionLabel[extr]}
+                          className={`gap-1 text-[10px] ${extractionBadgeClass(extr)} ${extr === 'missing' ? 'cursor-help' : ''}`}
+                          title={
+                            extr === 'missing'
+                              ? 'Pedido do cliente não identificado.\n\nNenhuma regra de extração casou com a observação (infCpl) e o XML não trouxe o campo xPed.\n\nClique na linha para preencher manualmente.'
+                              : extr === 'observation' && row.doc.client_load_source?.ruleLabel
+                                ? `Extraído da observação via regra: ${row.doc.client_load_source.ruleLabel}`
+                                : extr === 'xPed'
+                                  ? 'Extraído do campo xPed do XML da NF-e'
+                                  : extractionLabel[extr]
+                          }
                         >
-                          {extr === 'xPed' && 'NF (xPed)'}
-                          {extr === 'observation' && (row.doc.client_load_source?.ruleLabel || 'Observação')}
-                          {extr === 'manual' && 'Manual'}
-                          {extr === 'missing' && 'Não encontrado'}
+                          {extr === 'xPed' && (<><FileText className="h-3 w-3" />NF (xPed)</>)}
+                          {extr === 'observation' && (<><MessageSquareText className="h-3 w-3" />{row.doc.client_load_source?.ruleLabel || 'Observação'}</>)}
+                          {extr === 'manual' && (<><Hand className="h-3 w-3" />Manual</>)}
+                          {extr === 'missing' && (<><AlertTriangle className="h-3 w-3" />Pedido ausente</>)}
                         </Badge>
                       </TableCell>
                       <TableCell className="font-mono text-xs">{row.doc.orders?.order_number || '—'}</TableCell>
