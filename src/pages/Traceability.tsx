@@ -909,14 +909,14 @@ export default function Traceability() {
 
       <div
         id="trace-top-scroll"
-        className="overflow-x-scroll overflow-y-hidden h-4 rounded-t-md border border-b-0 bg-muted/30 [scrollbar-width:auto] [&::-webkit-scrollbar]:h-3 [&::-webkit-scrollbar]:block [&::-webkit-scrollbar-thumb]:bg-muted-foreground/40 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-muted/40"
+        className="overflow-x-scroll overflow-y-hidden h-5 rounded-t-md border border-b-0 bg-muted/40 [scrollbar-width:auto] [&::-webkit-scrollbar]:h-4 [&::-webkit-scrollbar]:block [&::-webkit-scrollbar-thumb]:bg-primary/60 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb:hover]:bg-primary [&::-webkit-scrollbar-track]:bg-muted/60 [&::-webkit-scrollbar-track]:rounded-full"
       >
         <div id="trace-top-scroll-inner" className="h-px" />
       </div>
       <Card className="rounded-t-none">
         <CardContent className="p-0">
           <div
-            className="overflow-x-auto [&::-webkit-scrollbar]:hidden [scrollbar-width:none]"
+            className="overflow-x-scroll [scrollbar-width:auto] [&::-webkit-scrollbar]:h-4 [&::-webkit-scrollbar]:block [&::-webkit-scrollbar-thumb]:bg-primary/60 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb:hover]:bg-primary [&::-webkit-scrollbar-track]:bg-muted/60 [&::-webkit-scrollbar-track]:rounded-full"
             ref={(el) => {
               if (!el) return;
               const top = document.getElementById('trace-top-scroll');
