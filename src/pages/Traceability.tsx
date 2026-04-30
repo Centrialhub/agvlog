@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { AlertCircle, CheckCircle2, Copy, Download, ExternalLink, FileSearch, History, Lightbulb, PackageCheck, Search, Truck } from 'lucide-react';
+import { AlertCircle, CheckCircle2, ChevronDown, Copy, Download, ExternalLink, FileSearch, History, Lightbulb, PackageCheck, Search, Truck } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useAuth } from '@/hooks/useAuth';
@@ -18,7 +18,10 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Progress } from '@/components/ui/progress';
 import { analyzeObservations, type AnalyzerResult } from '@/lib/observationPatternAnalyzer';
+import { CLIENT_LOAD_OBSERVATION_RULES } from '@/lib/documentParsers';
 
 type SiatStatus = 'pending' | 'in_transit' | 'delivered';
 
@@ -278,6 +281,87 @@ export default function Traceability() {
     fromObservation: filteredRows.filter(r => r.doc.client_load_number && r.doc.client_load_source?.source === 'observation').length,
   }), [filteredRows]);
 
+  /**
+   * Métricas por regra de CLIENT_LOAD_OBSERVATION_RULES.
+   *
+   * - hits   = NFs em que a regra foi a aplicada (source === 'observation' && ruleId === r.id)
+   * - xPed/manual/missing são contadas globalmente (não por regra) e mostradas como contexto
+   * - "cobertura" de uma regra = hits / (hits + missing) — quanto de potencial ela cobriu
+   *   considerando que TODAS as misses são candidatas a serem cobertas por alguma regra.
+   *
+   * Como `client_load_source` é apenas auditoria do que casou primeiro, regras posteriores
+   * que TAMBÉM casariam não aparecem aqui — isso é intencional: queremos saber qual regra
+   * está efetivamente disparando em produção.
+   */
+  type RuleStat = {
+    id: string;
+    label: string;
+    hits: number;
+    sharePct: number;       // % das observações resolvidas que foram por esta regra
+    coveragePct: number;    // hits / (hits + missing)
+    samples: string[];      // até 3 amostras de NF para inspeção rápida
+    sampleValues: string[]; // valores capturados (até 3) para sanidade
+  };
+
+  const ruleStats = useMemo(() => {
+    const byRule = new Map<string, RuleStat>();
+    for (const r of CLIENT_LOAD_OBSERVATION_RULES) {
+      byRule.set(r.id, {
+        id: r.id,
+        label: r.label,
+        hits: 0,
+        sharePct: 0,
+        coveragePct: 0,
+        samples: [],
+        sampleValues: [],
+      });
+    }
+    let unknownRuleHits = 0;
+    const unknownRule: RuleStat = { id: '__unknown__', label: 'Regra não identificada (legado)', hits: 0, sharePct: 0, coveragePct: 0, samples: [], sampleValues: [] };
+
+    for (const row of filteredRows) {
+      const doc = row.doc;
+      if (!doc.client_load_number) continue;
+      if (doc.client_load_source?.source !== 'observation') continue;
+      const rid = doc.client_load_source?.ruleId || '';
+      const stat = byRule.get(rid);
+      if (stat) {
+        stat.hits++;
+        if (stat.samples.length < 3 && doc.invoice_number) stat.samples.push(doc.invoice_number);
+        if (stat.sampleValues.length < 3) stat.sampleValues.push(doc.client_load_number);
+      } else {
+        unknownRule.hits++;
+        unknownRuleHits++;
+        if (unknownRule.samples.length < 3 && doc.invoice_number) unknownRule.samples.push(doc.invoice_number);
+        if (unknownRule.sampleValues.length < 3) unknownRule.sampleValues.push(doc.client_load_number);
+      }
+    }
+
+    const totalObsResolved = counts.fromObservation || 1;
+    const allRules = Array.from(byRule.values());
+    if (unknownRuleHits > 0) allRules.push(unknownRule);
+
+    for (const s of allRules) {
+      s.sharePct = (s.hits / totalObsResolved) * 100;
+      s.coveragePct = s.hits + counts.missingLoad === 0
+        ? 0
+        : (s.hits / (s.hits + counts.missingLoad)) * 100;
+    }
+
+    // Ordena por hits desc; regras zeradas vão para o fim
+    allRules.sort((a, b) => b.hits - a.hits);
+
+    const usedRules = allRules.filter(s => s.hits > 0).length;
+    const unusedRules = allRules.filter(s => s.hits === 0 && s.id !== '__unknown__').length;
+
+    return {
+      rules: allRules,
+      usedRules,
+      unusedRules,
+      hasUnknown: unknownRuleHits > 0,
+    };
+  }, [filteredRows, counts.fromObservation, counts.missingLoad]);
+
   const registerEvent = useMutation({
     mutationFn: async () => {
       if (!currentTenant || !selectedRow) return;
@@ -518,6 +602,107 @@ export default function Traceability() {
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Extraído da observação</p><p className="text-xl font-semibold text-warning">{counts.fromObservation}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Carga cliente NÃO encontrada</p><p className="text-xl font-semibold text-destructive">{counts.missingLoad}</p></CardContent></Card>
       </div>
+
+      <Collapsible defaultOpen={counts.missingLoad > 0 || ruleStats.unusedRules > 0}>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <button type="button" className="flex w-full items-center justify-between p-4 text-left hover:bg-muted/30 transition-colors">
+              <div className="flex items-center gap-2">
+                <Lightbulb className="h-4 w-4 text-info" />
+                <span className="text-sm font-semibold">Métricas das regras de extração (CLIENT_LOAD_OBSERVATION_RULES)</span>
+                <Badge variant="outline" className="text-[10px]">{ruleStats.usedRules} ativas</Badge>
+                {ruleStats.unusedRules > 0 && (
+                  <Badge variant="outline" className="bg-muted/40 text-[10px]">{ruleStats.unusedRules} sem hits</Badge>
+                )}
+                {counts.missingLoad > 0 && (
+                  <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20 text-[10px]">{counts.missingLoad} falhas</Badge>
+                )}
+                {ruleStats.hasUnknown && (
+                  <Badge variant="outline" className="bg-warning/10 text-warning border-warning/20 text-[10px]">regras legadas</Badge>
+                )}
+              </div>
+              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform [&[data-state=open]]:rotate-180" />
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent className="space-y-3 p-4 pt-0">
+              <p className="text-xs text-muted-foreground">
+                <strong className="text-foreground">Hits</strong> = quantas NFs foram resolvidas por cada regra (a regex que casou primeiro).
+                <strong className="text-foreground"> Cobertura</strong> = hits / (hits + falhas) — indica o quanto a regra ajudou frente ao que ainda falta extrair.
+                Regras sem hits podem estar com regex incorreta, ordem ruim no array, ou simplesmente não aparecerem nas amostras filtradas.
+              </p>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Regra</TableHead>
+                      <TableHead className="text-right">Hits</TableHead>
+                      <TableHead className="w-44">% das obs.</TableHead>
+                      <TableHead className="w-44">Cobertura</TableHead>
+                      <TableHead>Valores capturados</TableHead>
+                      <TableHead>NFs (amostra)</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {ruleStats.rules.length === 0 ? (
+                      <TableRow><TableCell colSpan={7} className="py-6 text-center text-muted-foreground">Nenhuma regra registrada.</TableCell></TableRow>
+                    ) : ruleStats.rules.map(s => {
+                      const isUnknown = s.id === '__unknown__';
+                      const isUnused = !isUnknown && s.hits === 0;
+                      return (
+                        <TableRow key={s.id} className={isUnused ? 'opacity-70' : ''}>
+                          <TableCell>
+                            <div className="flex flex-col">
+                              <span className="text-sm font-medium">{s.label}</span>
+                              <code className="text-[10px] text-muted-foreground">{s.id}</code>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-sm">{s.hits}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Progress value={s.sharePct} className="h-1.5" />
+                              <span className="w-10 text-right text-xs text-muted-foreground">{s.sharePct.toFixed(0)}%</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Progress value={s.coveragePct} className="h-1.5" />
+                              <span className="w-10 text-right text-xs text-muted-foreground">{s.coveragePct.toFixed(0)}%</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="font-mono text-[11px] text-muted-foreground">
+                            {s.sampleValues.length > 0 ? s.sampleValues.map(v => `"${v}"`).join(', ') : '—'}
+                          </TableCell>
+                          <TableCell className="font-mono text-[11px] text-muted-foreground">
+                            {s.samples.length > 0 ? s.samples.join(', ') : '—'}
+                          </TableCell>
+                          <TableCell>
+                            {isUnknown && <Badge variant="outline" className="bg-warning/10 text-warning border-warning/20">Regra legada</Badge>}
+                            {!isUnknown && s.hits === 0 && <Badge variant="outline" className="bg-muted/40">Sem hits</Badge>}
+                            {!isUnknown && s.hits > 0 && s.coveragePct < 30 && counts.missingLoad > 0 && <Badge variant="outline" className="bg-warning/10 text-warning border-warning/20">Baixa cobertura</Badge>}
+                            {!isUnknown && s.hits > 0 && s.coveragePct >= 30 && <Badge variant="outline" className="bg-success/10 text-success border-success/20">OK</Badge>}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+              {ruleStats.hasUnknown && (
+                <p className="text-xs text-warning">
+                  ⚠ Existem NFs com <code>ruleId</code> que não corresponde a nenhuma regra atual. Isso geralmente significa que uma regra foi renomeada ou removida do código — reimportar essas NFs alinhará o histórico.
+                </p>
+              )}
+              {counts.missingLoad > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  💡 Use <strong>"Analisar padrões"</strong> acima para gerar sugestões de novas regras a partir das {counts.missingLoad} observação(ões) sem extração.
+                </p>
+              )}
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
       <Card>
         <CardContent className="space-y-3 p-4">
