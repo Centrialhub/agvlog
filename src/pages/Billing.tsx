@@ -264,30 +264,28 @@ export default function Billing() {
   const ciIncludes = (haystack: string | null | undefined, needle: string) =>
     !needle || (haystack || '').toLowerCase().includes(needle.toLowerCase());
 
-  // Filtra documentos elegíveis ao faturamento.
+  // Index loads by id (O(1) lookup vs O(n) com Array.find a cada documento)
+  const loadsById = useMemo(() => {
+    const m = new Map<string, typeof loads[number]>();
+    for (const l of loads) m.set(l.id, l);
+    return m;
+  }, [loads]);
+
+  // Filtra documentos. Filtros de alta seletividade (cliente, período, NF, chave, remitente,
+  // referência) já foram aplicados server-side pelo useBillingDocuments. Aqui só restam
+  // filtros que dependem de tabelas relacionadas (loads/vehicles).
   const eligibleDocs = useMemo(() => {
-    const realClient = clientId !== SENTINEL_NONE ? clientId : null;
     return docs.filter(d => {
-      if (d.status === 'cancelled') return false;
-      if (d.document_type !== 'inbound') return false; // Faturamos sobre entradas/notas do cliente
-      if (realClient && d.client_id !== realClient) return false;
-      if (tab === 'period') {
-        if (periodStart && (!d.issue_date || d.issue_date < periodStart)) return false;
-        if (periodEnd && (!d.issue_date || d.issue_date > periodEnd)) return false;
-      } else {
+      if (tab === 'loads') {
         if (!d.load_id || !selectedLoadIds.has(d.load_id)) return false;
       }
 
-      // Filtros SIAT (documento)
+      // Janela secundária de emissão (independente do tab)
       if (issueDateStart && (!d.issue_date || d.issue_date < issueDateStart)) return false;
       if (issueDateEnd && (!d.issue_date || d.issue_date > issueDateEnd)) return false;
-      if (!ciIncludes(d.invoice_number, invoiceNumber)) return false;
-      if (!ciIncludes(d.access_key, accessKey)) return false;
-      if (!ciIncludes(d.remitter, supplier)) return false;
-      if (!ciIncludes((d as any).client_load_number, referenceNumber)) return false;
 
       // Filtros que dependem da carga associada
-      const load = d.load_id ? loads.find(l => l.id === d.load_id) : null;
+      const load = d.load_id ? loadsById.get(d.load_id) : null;
       if (osNumber && !ciIncludes(load?.trip_id, osNumber)) return false;
       if (collectOrder && !ciIncludes(load?.load_number, collectOrder)) return false;
       if (loadStatus !== SENTINEL_NONE && load?.status !== loadStatus) return false;
@@ -301,9 +299,10 @@ export default function Billing() {
       return true;
     });
   }, [
-    docs, loads, clientId, periodStart, periodEnd, tab, selectedLoadIds,
-    osNumber, collectOrder, referenceNumber, invoiceNumber, accessKey, supplier,
-    issueDateStart, issueDateEnd, supplierManifest, distributionManifest,
+    docs, loadsById, tab, selectedLoadIds,
+    osNumber, collectOrder,
+    issueDateStart, issueDateEnd,
+    supplierManifest, distributionManifest,
     shipmentManifest, originManifest, loadStatus, plate, opTypes, allOps,
   ]);
 
