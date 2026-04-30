@@ -457,6 +457,12 @@ export default function Traceability() {
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Entregue</p><p className="text-xl font-semibold text-success">{counts.delivered}</p></CardContent></Card>
       </div>
 
+      <div className="grid gap-3 md:grid-cols-3">
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Extraído de xPed (NF)</p><p className="text-xl font-semibold text-success">{counts.fromXPed}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Extraído da observação</p><p className="text-xl font-semibold text-warning">{counts.fromObservation}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Carga cliente NÃO encontrada</p><p className="text-xl font-semibold text-destructive">{counts.missingLoad}</p></CardContent></Card>
+      </div>
+
       <Card>
         <CardContent className="space-y-3 p-4">
           <div className="grid gap-3 md:grid-cols-4 xl:grid-cols-6">
