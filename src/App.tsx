@@ -30,6 +30,7 @@ const Loads = lazy(() => import("@/pages/Loads"));
 const LoadDetail = lazy(() => import("@/pages/LoadDetail"));
 const Traceability = lazy(() => import("@/pages/Traceability"));
 const LoadExtractionAudit = lazy(() => import("@/pages/LoadExtractionAudit"));
+const PodHistory = lazy(() => import("@/pages/PodHistory"));
 const OperationsDashboard = lazy(() => import("@/pages/OperationsDashboard"));
 const OperationalEvents = lazy(() => import("@/pages/OperationalEvents"));
 const Ingestion = lazy(() => import("@/pages/Ingestion"));
