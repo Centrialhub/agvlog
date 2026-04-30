@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFiscalDocuments } from '@/hooks/useFiscalDocuments';
+import { useBillingDocuments } from '@/hooks/useBillingDocuments';
 import { useClients } from '@/hooks/useClients';
 import { useLoads, LOAD_STATUSES, LOAD_STATUS_LABELS } from '@/hooks/useLoads';
 import { useCteBatches, useCreateCteBatch, useCancelCteBatch } from '@/hooks/useBilling';
@@ -97,7 +98,6 @@ const DEFAULT_BILLING_PREFS: BillingPreferences = {
 };
 
 export default function Billing() {
-  const { data: docs = [], isLoading: docsLoading } = useFiscalDocuments();
   const { data: clients = [] } = useClients();
   const { data: loads = [] } = useLoads();
   const { data: batches = [] } = useCteBatches();
@@ -144,6 +144,17 @@ export default function Billing() {
   const [accessKey, setAccessKey] = useState('');
   const [opTypes, setOpTypes] = useState<Set<OpType>>(new Set());
   const [allOps, setAllOps] = useState(true);
+
+  // ===== Pré-filtragem server-side (usa índices criados) =====
+  const { data: docs = [], isLoading: docsLoading } = useBillingDocuments({
+    clientId: clientId !== SENTINEL_NONE ? clientId : null,
+    periodStart: tab === 'period' ? periodStart : null,
+    periodEnd: tab === 'period' ? periodEnd : null,
+    invoiceNumber,
+    accessKey,
+    remitter: supplier,
+    referenceNumber,
+  });
 
   // ===== Hidrata estado a partir da preferência salva (uma única vez) =====
   const hydratedRef = useRef(false);
