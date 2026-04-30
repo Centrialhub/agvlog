@@ -38,6 +38,7 @@ export default function Billing() {
   const [selectedLoadIds, setSelectedLoadIds] = useState<Set<string>>(new Set());
   const [modeId, setModeId] = useState<number>(1);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [modeDialogOpen, setModeDialogOpen] = useState(false);
 
   // Filtra documentos elegíveis ao faturamento.
   const eligibleDocs = useMemo(() => {
@@ -203,43 +204,22 @@ export default function Billing() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
-            <Layers className="h-4 w-4 text-primary" /> 2. Escolha o modo de geração do conhecimento
+            <Layers className="h-4 w-4 text-primary" /> 2. Modo de geração do conhecimento
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <TooltipProvider>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-              {GROUPING_MODES.map(m => (
-                <Tooltip key={m.id}>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      onClick={() => setModeId(m.id)}
-                      className={`text-left rounded-md border px-3 py-2 transition-colors ${
-                        modeId === m.id
-                          ? 'border-primary bg-primary/10 text-foreground'
-                          : 'border-border hover:bg-muted/50'
-                      }`}
-                    >
-                      <div className="flex items-start gap-2">
-                        <span className={`font-mono text-xs shrink-0 mt-0.5 ${modeId === m.id ? 'text-primary' : 'text-muted-foreground'}`}>
-                          {String(m.id).padStart(2, '0')}
-                        </span>
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium truncate">{m.shortLabel}</p>
-                          <p className="text-xs text-muted-foreground line-clamp-1">{m.keys.join(' • ')}</p>
-                        </div>
-                      </div>
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent className="max-w-xs">
-                    <p className="font-medium">{m.label}</p>
-                    <p className="text-xs mt-1 opacity-80">{m.description}</p>
-                  </TooltipContent>
-                </Tooltip>
-              ))}
+          <div className="flex items-center justify-between gap-3 rounded-md border border-primary/40 bg-primary/5 p-3">
+            <div className="flex items-start gap-3 min-w-0">
+              <Badge variant="outline" className="font-mono shrink-0">#{String(mode.id).padStart(2, '0')}</Badge>
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-foreground">{mode.label}</p>
+                <p className="text-xs text-muted-foreground line-clamp-1">{mode.description}</p>
+              </div>
             </div>
-          </TooltipProvider>
+            <Button variant="outline" size="sm" onClick={() => setModeDialogOpen(true)}>
+              Alterar modo
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -372,6 +352,53 @@ export default function Billing() {
               <RotateCw className={`h-4 w-4 mr-2 ${createBatch.isPending ? 'animate-spin' : ''}`} />
               Confirmar geração
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Mode selection dialog */}
+      <Dialog open={modeDialogOpen} onOpenChange={setModeDialogOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Layers className="h-4 w-4 text-primary" /> Escolha o modo de geração do conhecimento
+            </DialogTitle>
+          </DialogHeader>
+          <TooltipProvider>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 max-h-[60vh] overflow-y-auto p-1">
+              {GROUPING_MODES.map(m => (
+                <Tooltip key={m.id}>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => { setModeId(m.id); setModeDialogOpen(false); }}
+                      className={`text-left rounded-md border px-3 py-2 transition-colors ${
+                        modeId === m.id
+                          ? 'border-primary bg-primary/10 text-foreground'
+                          : 'border-border hover:bg-muted/50'
+                      }`}
+                    >
+                      <div className="flex items-start gap-2">
+                        <span className={`font-mono text-xs shrink-0 mt-0.5 ${modeId === m.id ? 'text-primary' : 'text-muted-foreground'}`}>
+                          {String(m.id).padStart(2, '0')}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{m.shortLabel}</p>
+                          <p className="text-xs text-muted-foreground line-clamp-1">{m.keys.join(' • ')}</p>
+                        </div>
+                      </div>
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs">
+                    <p className="font-medium">{m.label}</p>
+                    <p className="text-xs mt-1 opacity-80">{m.description}</p>
+                  </TooltipContent>
+                </Tooltip>
+              ))}
+            </div>
+          </TooltipProvider>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setModeDialogOpen(false)}>Fechar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
