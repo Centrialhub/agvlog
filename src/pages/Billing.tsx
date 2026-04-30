@@ -337,6 +337,7 @@ export default function Billing() {
     docs, loadsById, tab, selectedLoadIds,
     osNumber, collectOrder,
     issueDateStart, issueDateEnd,
+    importDateStart, importDateEnd,
     supplierManifest, distributionManifest,
     shipmentManifest, originManifest, loadStatus, plate,
     scheduledLoadStart, scheduledLoadEnd, actualLoadStart, actualLoadEnd,
@@ -399,6 +400,7 @@ export default function Billing() {
     issueDateStart, issueDateEnd, supplierManifest, distributionManifest,
     shipmentManifest, originManifest, plate, scheduledLoadStart, scheduledLoadEnd,
     actualLoadStart, actualLoadEnd, supplier, supplierCnpj, accessKey,
+    importDateStart, importDateEnd,
   ].filter(Boolean).length
     + (loadStatus !== SENTINEL_NONE ? 1 : 0)
     + (!allOps && opTypes.size > 0 ? 1 : 0);
