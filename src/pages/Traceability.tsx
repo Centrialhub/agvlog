@@ -913,7 +913,7 @@ export default function Traceability() {
             <Table>
               <TableHeader>
                   <TableRow>
-                    <TableHead className="w-10"></TableHead><TableHead>Palete</TableHead><TableHead title="Comprovante de entrega (POD)">POD</TableHead><TableHead title="Canhoto recebido — clique para ver histórico">Canhoto</TableHead><TableHead>Situação</TableHead><TableHead>Nº NF</TableHead><TableHead title="Data/hora em que a NF foi importada — base do prazo de romaneio">Importada em</TableHead><TableHead>Nº Carga (empresa)</TableHead><TableHead>Carga Cliente (NF-e)</TableHead><TableHead>Status Extração</TableHead><TableHead>Ref. Pedido</TableHead><TableHead>Forma pgto</TableHead><TableHead>Valor Nota</TableHead><TableHead>Valor Frete</TableHead><TableHead>Cliente</TableHead><TableHead>Fornecedor</TableHead><TableHead>Placa</TableHead><TableHead>Motorista</TableHead><TableHead title="Data/hora da entrega (última parada concluída)">Entrega</TableHead><TableHead title={`Lead-time da importação até a entrega. Vermelho se > ${slaThresholdH}h.`}>SLA Entrega</TableHead><TableHead>Ocorrência</TableHead><TableHead></TableHead>
+                    <TableHead className="w-10"></TableHead><TableHead>Palete</TableHead><TableHead title="Comprovante de entrega (POD)">POD</TableHead><TableHead title="Canhoto recebido — clique para ver histórico">Canhoto</TableHead><TableHead>Situação</TableHead><TableHead>Nº NF</TableHead><TableHead title="Data/hora em que a NF foi importada — base do prazo de romaneio">Importada em</TableHead><TableHead>Nº Carga (empresa)</TableHead><TableHead>Carga Cliente (NF-e)</TableHead><TableHead>Ref. Pedido</TableHead><TableHead>Forma pgto</TableHead><TableHead>Valor Nota</TableHead><TableHead>Valor Frete</TableHead><TableHead>Cliente</TableHead><TableHead>Fornecedor</TableHead><TableHead>Placa</TableHead><TableHead>Motorista</TableHead><TableHead title="Data/hora da entrega (última parada concluída)">Entrega</TableHead><TableHead title={`Lead-time da importação até a entrega. Vermelho se > ${slaThresholdH}h.`}>SLA Entrega</TableHead><TableHead>Ocorrência</TableHead><TableHead></TableHead>
                   </TableRow>
               </TableHeader>
               <TableBody>
@@ -976,26 +976,6 @@ export default function Traceability() {
                             )}
                           </div>
                         ) : '—'}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="outline"
-                          className={`gap-1 text-[10px] ${extractionBadgeClass(extr)} ${extr === 'missing' ? 'cursor-help' : ''}`}
-                          title={
-                            extr === 'missing'
-                              ? 'Pedido do cliente não identificado.\n\nNenhuma regra de extração casou com a observação (infCpl) e o XML não trouxe o campo xPed.\n\nClique na linha para preencher manualmente.'
-                              : extr === 'observation' && row.doc.client_load_source?.ruleLabel
-                                ? `Extraído da observação via regra: ${row.doc.client_load_source.ruleLabel}`
-                                : extr === 'xPed'
-                                  ? 'Extraído do campo xPed do XML da NF-e'
-                                  : extractionLabel[extr]
-                          }
-                        >
-                          {extr === 'xPed' && (<><FileText className="h-3 w-3" />NF (xPed)</>)}
-                          {extr === 'observation' && (<><MessageSquareText className="h-3 w-3" />{row.doc.client_load_source?.ruleLabel || 'Observação'}</>)}
-                          {extr === 'manual' && (<><Hand className="h-3 w-3" />Manual</>)}
-                          {extr === 'missing' && (<><AlertTriangle className="h-3 w-3" />Pedido ausente</>)}
-                        </Badge>
                       </TableCell>
                       <TableCell className="font-mono text-xs">{row.doc.orders?.order_number || '—'}</TableCell>
                       <TableCell className="text-xs">{row.doc.orders?.payment_plan || '—'}</TableCell>
