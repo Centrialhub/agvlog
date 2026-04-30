@@ -172,6 +172,135 @@ export default function ValidationStep({
         )}
       </div>
 
+      {/* Missing client-load alert */}
+      {missingStats.total > 0 && (
+        <Card
+          className={
+            missingExceeds
+              ? 'border-destructive/40 bg-destructive/5'
+              : missingStats.missingCount > 0
+                ? 'border-warning/30 bg-warning/5'
+                : 'border-success/30 bg-success/5'
+          }
+        >
+          <CardContent className="py-3 px-4 space-y-2">
+            <div className="flex items-start gap-3 flex-wrap">
+              <div
+                className={`p-2 rounded-lg shrink-0 ${
+                  missingExceeds ? 'bg-destructive/15' : missingStats.missingCount > 0 ? 'bg-warning/15' : 'bg-success/15'
+                }`}
+              >
+                <AlertTriangle
+                  className={`h-4 w-4 ${
+                    missingExceeds ? 'text-destructive' : missingStats.missingCount > 0 ? 'text-warning' : 'text-success'
+                  }`}
+                />
+              </div>
+              <div className="flex-1 min-w-[220px]">
+                <div className="text-sm font-semibold text-foreground">
+                  {missingExceeds
+                    ? 'Taxa de NFs sem número de carga acima do limite'
+                    : missingStats.missingCount > 0
+                      ? 'Algumas NFs estão sem número de carga'
+                      : 'Todas as NFs deste lote possuem número de carga'}
+                </div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  {missingStats.missingCount} de {missingStats.total} NFs sem carga ({missingStats.ratePct.toFixed(1)}%) · limite atual {missingThreshold}%
+                </div>
+              </div>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-8 text-xs">
+                    <Settings2 className="h-3.5 w-3.5 mr-1" /> Limite
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-64" align="end">
+                  <div className="space-y-2">
+                    <Label htmlFor="missing-threshold" className="text-xs">
+                      Alerta quando % sem carga ≥
+                    </Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="missing-threshold"
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={missingThreshold}
+                        onChange={e => updateThreshold(Number(e.target.value))}
+                        className="h-8 text-xs"
+                      />
+                      <span className="text-xs text-muted-foreground">%</span>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">
+                      Configuração salva localmente neste navegador.
+                    </p>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {missingStats.missingCount > 0 && (missingStats.byDate.length > 0 || missingStats.byCarrier.length > 0) && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                {missingStats.byDate.length > 0 && (
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+                      Dias mais afetados
+                    </div>
+                    <div className="space-y-1">
+                      {missingStats.byDate.map(b => (
+                        <div key={`d-${b.key}`} className="flex items-center justify-between text-xs">
+                          <span className="font-mono">{b.key}</span>
+                          <span className="text-muted-foreground">
+                            {b.missing}/{b.total}{' '}
+                            <Badge
+                              variant="outline"
+                              className={`ml-1 text-[10px] ${
+                                b.pct >= missingThreshold
+                                  ? 'bg-destructive/10 text-destructive border-destructive/30'
+                                  : 'bg-warning/10 text-warning border-warning/30'
+                              }`}
+                            >
+                              {b.pct.toFixed(0)}%
+                            </Badge>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {missingStats.byCarrier.length > 0 && (
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+                      Emissores/Transportadoras mais afetados
+                    </div>
+                    <div className="space-y-1">
+                      {missingStats.byCarrier.map(b => (
+                        <div key={`c-${b.key}`} className="flex items-center justify-between text-xs gap-2">
+                          <span className="truncate" title={b.key}>{b.key}</span>
+                          <span className="text-muted-foreground shrink-0">
+                            {b.missing}/{b.total}{' '}
+                            <Badge
+                              variant="outline"
+                              className={`ml-1 text-[10px] ${
+                                b.pct >= missingThreshold
+                                  ? 'bg-destructive/10 text-destructive border-destructive/30'
+                                  : 'bg-warning/10 text-warning border-warning/30'
+                              }`}
+                            >
+                              {b.pct.toFixed(0)}%
+                            </Badge>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Summary KPI cards */}
       {validDocs.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
