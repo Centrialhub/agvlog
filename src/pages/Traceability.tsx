@@ -909,7 +909,7 @@ export default function Traceability() {
 
       <div
         id="trace-top-scroll"
-        className="overflow-x-auto overflow-y-hidden h-3 rounded-t-md border border-b-0 bg-muted/30"
+        className="overflow-x-scroll overflow-y-hidden h-4 rounded-t-md border border-b-0 bg-muted/30 [scrollbar-width:auto] [&::-webkit-scrollbar]:h-3 [&::-webkit-scrollbar]:block [&::-webkit-scrollbar-thumb]:bg-muted-foreground/40 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-muted/40"
       >
         <div id="trace-top-scroll-inner" className="h-px" />
       </div>
