@@ -394,7 +394,7 @@ export default function Traceability() {
 
   const exportCsv = () => {
     const headers = [
-      'Nº NF', 'Chave de Acesso', 'Tipo Documento', 'Status Documento', 'Data Emissão',
+      'Nº NF', 'Chave de Acesso', 'Tipo Documento', 'Status Documento', 'Data Emissão', 'Importada em', 'Data Entrega', 'Canhoto Recebido', 'Canhoto Recebido em',
       'Nº Carga', 'Status Carga', 'Trip ID', 'Origem', 'Destino Carga',
       'Carga Cliente (NF-e)', 'Status Extração', 'Origem Carga Cliente', 'Regra Aplicada', 'Ref. Cliente (Pedido)', 'Forma Pgto',
       'Cliente', 'Fornecedor / Remetente',
