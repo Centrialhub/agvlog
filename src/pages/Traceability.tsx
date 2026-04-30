@@ -32,6 +32,7 @@ type TraceDocument = {
   document_type: string;
   issue_date: string | null;
   created_at: string | null;
+  created_by: string | null;
   recipient: string | null;
   recipient_city: string | null;
   recipient_state: string | null;
