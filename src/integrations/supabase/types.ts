@@ -5625,6 +5625,8 @@ export type Database = {
         Args: { _end_date?: string; _start_date?: string; _tenant_id: string }
         Returns: Json
       }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
       upsert_geofence: {
         Args: {
           _category: string
