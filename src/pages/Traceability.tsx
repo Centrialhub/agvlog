@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { analyzeObservations, type AnalyzerResult } from '@/lib/observationPatternAnalyzer';
+import { CLIENT_LOAD_OBSERVATION_RULES } from '@/lib/documentParsers';
 
 type SiatStatus = 'pending' | 'in_transit' | 'delivered';
 
