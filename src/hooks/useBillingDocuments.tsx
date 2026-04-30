@@ -22,6 +22,8 @@ export interface BillingDocumentFilters {
   accessKey?: string | null;
   remitter?: string | null;
   referenceNumber?: string | null; // client_load_number
+  recipientCnpj?: string | null;
+  remitterCnpj?: string | null;
 }
 
 function nz(v: string | null | undefined): string | null {
@@ -41,6 +43,8 @@ export function useBillingDocuments(filters: BillingDocumentFilters) {
     accessKey: nz(filters.accessKey),
     remitter: nz(filters.remitter),
     referenceNumber: nz(filters.referenceNumber),
+    recipientCnpj: nz(filters.recipientCnpj),
+    remitterCnpj: nz(filters.remitterCnpj),
   };
 
   return useQuery({
@@ -62,7 +66,19 @@ export function useBillingDocuments(filters: BillingDocumentFilters) {
       if (f.invoiceNumber) q = q.ilike('invoice_number', `%${f.invoiceNumber}%`);
       if (f.accessKey) q = q.ilike('access_key', `%${f.accessKey}%`);
       if (f.remitter) q = q.ilike('remitter', `%${f.remitter}%`);
-      if (f.referenceNumber) q = q.ilike('client_load_number', `%${f.referenceNumber}%`);
+      if (f.referenceNumber) {
+        // Busca em ambas as colunas: reference_number (interno) e client_load_number (cliente)
+        const ref = f.referenceNumber.replace(/[,()]/g, '');
+        q = q.or(`reference_number.ilike.%${ref}%,client_load_number.ilike.%${ref}%`);
+      }
+      if (f.recipientCnpj) {
+        const digits = f.recipientCnpj.replace(/\D/g, '');
+        if (digits) q = q.ilike('recipient_cnpj', `%${digits}%`);
+      }
+      if (f.remitterCnpj) {
+        const digits = f.remitterCnpj.replace(/\D/g, '');
+        if (digits) q = q.ilike('remitter_cnpj', `%${digits}%`);
+      }
 
       // Limit alto pra não estourar o default de 1000 do Supabase em tenants grandes
       q = q.order('issue_date', { ascending: false }).limit(5000);

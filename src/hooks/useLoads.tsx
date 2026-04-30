@@ -40,6 +40,9 @@ export interface Load {
   distribution_manifest: string | null;
   shipment_manifest: string | null;
   origin_manifest: string | null;
+  os_number: string | null;
+  scheduled_load_at: string | null;
+  actual_load_at: string | null;
   created_at: string;
   updated_at: string;
   vehicles?: { plate: string; nickname: string | null } | null;
