@@ -9,9 +9,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   FileText, CheckCircle, AlertTriangle, XCircle, ArrowRight, ArrowLeft, Package, Info, Trash2, Pencil,
-  Weight, DollarSign, Boxes, LayoutGrid, Link2,
+  Weight, DollarSign, Boxes, LayoutGrid, Link2, Settings2,
 } from 'lucide-react';
 import { Client } from '@/hooks/useClients';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Label } from '@/components/ui/label';
 
 interface LoadOption {
   id: string;
@@ -45,6 +47,58 @@ export default function ValidationStep({
   const [editingDocIdx, setEditingDocIdx] = useState<number | null>(null);
   const [editingOrderIdx, setEditingOrderIdx] = useState<number | null>(null);
   const [selectedLoadId, setSelectedLoadId] = useState<string | null>(null);
+
+  // ── Missing client-load alert (configurable threshold) ──
+  const MISSING_THRESHOLD_KEY = 'ingestion.missingLoadThresholdPct';
+  const [missingThreshold, setMissingThreshold] = useState<number>(() => {
+    if (typeof window === 'undefined') return 20;
+    const raw = window.localStorage.getItem(MISSING_THRESHOLD_KEY);
+    const n = raw ? Number(raw) : NaN;
+    return Number.isFinite(n) && n >= 0 && n <= 100 ? n : 20;
+  });
+  const updateThreshold = (v: number) => {
+    const clamped = Math.max(0, Math.min(100, Math.round(v)));
+    setMissingThreshold(clamped);
+    try { window.localStorage.setItem(MISSING_THRESHOLD_KEY, String(clamped)); } catch {}
+  };
+
+  const missingStats = useMemo(() => {
+    const considered = docs.filter(d => !d.hasErrors && !d.isDuplicate);
+    const total = considered.length;
+    const missing = considered.filter(d => !d.source.clientLoadNumber);
+    const missingCount = missing.length;
+    const ratePct = total > 0 ? (missingCount / total) * 100 : 0;
+
+    const byDate = new Map<string, { total: number; missing: number }>();
+    const byCarrier = new Map<string, { total: number; missing: number }>();
+    for (const d of considered) {
+      const dateKey = (d.source.issueDate || '—').slice(0, 10);
+      const carrierKey = (d.source.emitterName || '—').trim() || '—';
+      const dateBucket = byDate.get(dateKey) || { total: 0, missing: 0 };
+      dateBucket.total += 1;
+      if (!d.source.clientLoadNumber) dateBucket.missing += 1;
+      byDate.set(dateKey, dateBucket);
+      const carrierBucket = byCarrier.get(carrierKey) || { total: 0, missing: 0 };
+      carrierBucket.total += 1;
+      if (!d.source.clientLoadNumber) carrierBucket.missing += 1;
+      byCarrier.set(carrierKey, carrierBucket);
+    }
+    const toRanked = (m: Map<string, { total: number; missing: number }>) =>
+      Array.from(m.entries())
+        .filter(([, v]) => v.missing > 0)
+        .map(([key, v]) => ({ key, ...v, pct: v.total ? (v.missing / v.total) * 100 : 0 }))
+        .sort((a, b) => b.missing - a.missing || b.pct - a.pct)
+        .slice(0, 5);
+    return {
+      total,
+      missingCount,
+      ratePct,
+      byDate: toRanked(byDate),
+      byCarrier: toRanked(byCarrier),
+    };
+  }, [docs]);
+
+  const missingExceeds = missingStats.total > 0 && missingStats.ratePct >= missingThreshold;
 
   const validDocs = docs.filter(d => !d.hasErrors && !d.isDuplicate);
 
@@ -117,6 +171,135 @@ export default function ValidationStep({
           </span>
         )}
       </div>
+
+      {/* Missing client-load alert */}
+      {missingStats.total > 0 && (
+        <Card
+          className={
+            missingExceeds
+              ? 'border-destructive/40 bg-destructive/5'
+              : missingStats.missingCount > 0
+                ? 'border-warning/30 bg-warning/5'
+                : 'border-success/30 bg-success/5'
+          }
+        >
+          <CardContent className="py-3 px-4 space-y-2">
+            <div className="flex items-start gap-3 flex-wrap">
+              <div
+                className={`p-2 rounded-lg shrink-0 ${
+                  missingExceeds ? 'bg-destructive/15' : missingStats.missingCount > 0 ? 'bg-warning/15' : 'bg-success/15'
+                }`}
+              >
+                <AlertTriangle
+                  className={`h-4 w-4 ${
+                    missingExceeds ? 'text-destructive' : missingStats.missingCount > 0 ? 'text-warning' : 'text-success'
+                  }`}
+                />
+              </div>
+              <div className="flex-1 min-w-[220px]">
+                <div className="text-sm font-semibold text-foreground">
+                  {missingExceeds
+                    ? 'Taxa de NFs sem número de carga acima do limite'
+                    : missingStats.missingCount > 0
+                      ? 'Algumas NFs estão sem número de carga'
+                      : 'Todas as NFs deste lote possuem número de carga'}
+                </div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  {missingStats.missingCount} de {missingStats.total} NFs sem carga ({missingStats.ratePct.toFixed(1)}%) · limite atual {missingThreshold}%
+                </div>
+              </div>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-8 text-xs">
+                    <Settings2 className="h-3.5 w-3.5 mr-1" /> Limite
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-64" align="end">
+                  <div className="space-y-2">
+                    <Label htmlFor="missing-threshold" className="text-xs">
+                      Alerta quando % sem carga ≥
+                    </Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="missing-threshold"
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={missingThreshold}
+                        onChange={e => updateThreshold(Number(e.target.value))}
+                        className="h-8 text-xs"
+                      />
+                      <span className="text-xs text-muted-foreground">%</span>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">
+                      Configuração salva localmente neste navegador.
+                    </p>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {missingStats.missingCount > 0 && (missingStats.byDate.length > 0 || missingStats.byCarrier.length > 0) && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                {missingStats.byDate.length > 0 && (
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+                      Dias mais afetados
+                    </div>
+                    <div className="space-y-1">
+                      {missingStats.byDate.map(b => (
+                        <div key={`d-${b.key}`} className="flex items-center justify-between text-xs">
+                          <span className="font-mono">{b.key}</span>
+                          <span className="text-muted-foreground">
+                            {b.missing}/{b.total}{' '}
+                            <Badge
+                              variant="outline"
+                              className={`ml-1 text-[10px] ${
+                                b.pct >= missingThreshold
+                                  ? 'bg-destructive/10 text-destructive border-destructive/30'
+                                  : 'bg-warning/10 text-warning border-warning/30'
+                              }`}
+                            >
+                              {b.pct.toFixed(0)}%
+                            </Badge>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {missingStats.byCarrier.length > 0 && (
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+                      Emissores/Transportadoras mais afetados
+                    </div>
+                    <div className="space-y-1">
+                      {missingStats.byCarrier.map(b => (
+                        <div key={`c-${b.key}`} className="flex items-center justify-between text-xs gap-2">
+                          <span className="truncate" title={b.key}>{b.key}</span>
+                          <span className="text-muted-foreground shrink-0">
+                            {b.missing}/{b.total}{' '}
+                            <Badge
+                              variant="outline"
+                              className={`ml-1 text-[10px] ${
+                                b.pct >= missingThreshold
+                                  ? 'bg-destructive/10 text-destructive border-destructive/30'
+                                  : 'bg-warning/10 text-warning border-warning/30'
+                              }`}
+                            >
+                              {b.pct.toFixed(0)}%
+                            </Badge>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Summary KPI cards */}
       {validDocs.length > 0 && (
