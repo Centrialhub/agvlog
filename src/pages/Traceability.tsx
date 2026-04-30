@@ -870,6 +870,21 @@ export default function Traceability() {
             <div><Label>Situação</Label><Select value={filters.status} onValueChange={value => setFilters(f => ({ ...f, status: value }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Object.entries(siatLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div>
             <div><Label>POD</Label><Select value={filters.pod} onValueChange={value => setFilters(f => ({ ...f, pod: value }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="yes">Sim</SelectItem><SelectItem value="no">Não</SelectItem></SelectContent></Select></div>
             <div><Label>Canhoto</Label><Select value={filters.canhoto} onValueChange={value => setFilters(f => ({ ...f, canhoto: value }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="yes">Sim</SelectItem><SelectItem value="no">Não</SelectItem></SelectContent></Select></div>
+            <div>
+              <Label title="Limite (em horas) acima do qual o SLA fica destacado em vermelho">SLA-limite (h)</Label>
+              <Input
+                type="number"
+                min={1}
+                value={slaThresholdH}
+                onChange={e => {
+                  const n = Number(e.target.value);
+                  if (Number.isFinite(n) && n > 0) {
+                    setSlaThresholdH(n);
+                    try { window.localStorage.setItem(SLA_THRESHOLD_KEY, String(n)); } catch {}
+                  }
+                }}
+              />
+            </div>
           </div>
         </CardContent>
       </Card>
