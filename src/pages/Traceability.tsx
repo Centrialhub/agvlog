@@ -415,6 +415,16 @@ export default function Traceability() {
       'Detalhe Paradas',
       'Total Ocorrências', 'Ocorrências Abertas',
       'Ocorrências (descrição)', 'Tipos Ocorrências', 'Severidades', 'Datas Ocorrências',
+      // ─── Detalhe completo (documento) ───
+      'Doc ID', 'Doc Emissão (ISO)', 'Doc Importada em (ISO)', 'Doc Order ID', 'Doc Client ID', 'Doc Load ID',
+      'Observação Capturada (snippet)', 'Regra ID', 'Origem Diagnóstico (raw)',
+      // ─── Detalhe completo (carga) ───
+      'Carga ID', 'Carga Status (raw)', 'Carga Origem', 'Carga Destino', 'Trip Status',
+      'Trip Início Planejado (ISO)', 'Trip Início Real (ISO)', 'Trip Fim Planejado (ISO)', 'Trip Fim Real (ISO)',
+      'Veículo Apelido', 'Veículo Placa', 'Motorista (nome)',
+      // ─── Detalhe completo (canhoto / POD) ───
+      'Canhoto Status', 'Canhoto Data (ISO)', 'Canhoto Última Parada', 'Canhoto Stop ID',
+      'Lead-time Importação→Entrega (h)', 'Lead-time Emissão→Entrega (h)', 'Atraso vs Previsto (h)',
     ];
     const body = filteredRows.map(({ doc, siatStatus, events, trip, stops }) => {
       const firstStop = stops[0];
@@ -424,6 +434,14 @@ export default function Traceability() {
       const stopsDetail = stops.map(s =>
         `#${s.stop_order} ${s.destination || 'Parada'} [${s.status}] prev:${fmtDate(s.planned_arrival_at)} ${fmtTime(s.planned_arrival_at)} chegada:${fmtDate(s.actual_arrival_at)} ${fmtTime(s.actual_arrival_at)} saida:${fmtTime(s.actual_departure_at)}`
       ).join(' || ');
+      const deliveredAt = siatStatus === 'delivered' ? lastStop?.actual_arrival_at : null;
+      const hoursBetween = (a?: string | null, b?: string | null) => {
+        if (!a || !b) return '';
+        const ms = new Date(b).getTime() - new Date(a).getTime();
+        if (!Number.isFinite(ms)) return '';
+        return (ms / 3_600_000).toFixed(2);
+      };
+      const obsSnippet = (doc.client_load_source?.observationSnippet || '').replace(/\s+/g, ' ').slice(0, 600);
       return [
         doc.invoice_number || '',
         doc.access_key || '',
@@ -479,6 +497,37 @@ export default function Traceability() {
         events.map(e => e.event_type).join(' | '),
         events.map(e => e.severity).join(' | '),
         events.map(e => `${fmtDate(e.created_at)} ${fmtTime(e.created_at)}${e.resolved_at ? ' (resolvida)' : ' (aberta)'}`).join(' | '),
+        // ─── Detalhe completo (documento) ───
+        doc.id || '',
+        doc.issue_date || '',
+        doc.created_at || '',
+        doc.order_id || '',
+        doc.client_id || '',
+        doc.load_id || '',
+        obsSnippet,
+        doc.client_load_source?.ruleId || '',
+        doc.client_load_source?.source || '',
+        // ─── Detalhe completo (carga) ───
+        doc.loads?.id || '',
+        doc.loads?.status || '',
+        doc.loads?.origin || '',
+        doc.loads?.destination || '',
+        trip?.status || '',
+        trip?.planned_start_at || '',
+        trip?.actual_start_at || '',
+        trip?.planned_end_at || '',
+        trip?.actual_end_at || '',
+        doc.loads?.vehicles?.nickname || '',
+        doc.loads?.vehicles?.plate || '',
+        doc.loads?.drivers?.name || '',
+        // ─── Detalhe completo (canhoto / POD) ───
+        siatStatus === 'delivered' ? 'Recebido' : 'Pendente',
+        deliveredAt || '',
+        lastStop?.destination || '',
+        lastStop?.id || '',
+        hoursBetween(doc.created_at, deliveredAt),
+        hoursBetween(doc.issue_date, deliveredAt),
+        hoursBetween(lastStop?.planned_arrival_at, lastStop?.actual_arrival_at),
       ];
     });
     const csv = [headers, ...body].map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(';')).join('\n');
