@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useFiscalDocuments } from '@/hooks/useFiscalDocuments';
 import { useClients } from '@/hooks/useClients';
-import { useLoads } from '@/hooks/useLoads';
+import { useLoads, LOAD_STATUSES, LOAD_STATUS_LABELS } from '@/hooks/useLoads';
 import { useCteBatches, useCreateCteBatch, useCancelCteBatch } from '@/hooks/useBilling';
 import { GROUPING_MODES, buildGroups, getGroupingMode, type CteGroupPreview } from '@/lib/cteGroupingModes';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,13 +15,27 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { FileSpreadsheet, Calculator, CheckCircle2, Layers, FileText, Info, XCircle, RotateCw } from 'lucide-react';
+import { FileSpreadsheet, Calculator, CheckCircle2, Layers, FileText, Info, XCircle, RotateCw, Filter, Eraser } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 
 const SENTINEL_NONE = '__none__';
 
 type SourceTab = 'period' | 'loads';
+
+// Tipos de operação espelhando o SIAT
+const OPERATION_TYPES = [
+  { value: 'filial', label: 'Filial' },
+  { value: 'armazenagem', label: 'Armazenagem' },
+  { value: 'frota', label: 'Frota' },
+  { value: 'viagem_direta', label: 'Viagem Direta' },
+  { value: 'retira', label: 'Retira' },
+  { value: 'transferencia', label: 'Transferência' },
+  { value: 'devolucao', label: 'Devolução' },
+  { value: 'redespacho', label: 'Redespacho/Sub' },
+] as const;
+
+type OpType = typeof OPERATION_TYPES[number]['value'];
 
 export default function Billing() {
   const { data: docs = [], isLoading: docsLoading } = useFiscalDocuments();
@@ -40,6 +54,57 @@ export default function Billing() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [modeDialogOpen, setModeDialogOpen] = useState(false);
 
+  // ===== Filtros avançados (SIAT) =====
+  const [osNumber, setOsNumber] = useState('');
+  const [collectOrder, setCollectOrder] = useState('');
+  const [referenceNumber, setReferenceNumber] = useState('');
+  const [cnpj, setCnpj] = useState('');
+  const [invoiceNumber, setInvoiceNumber] = useState('');
+  const [issueDateStart, setIssueDateStart] = useState('');
+  const [issueDateEnd, setIssueDateEnd] = useState('');
+  const [supplierManifest, setSupplierManifest] = useState('');
+  const [distributionManifest, setDistributionManifest] = useState('');
+  const [shipmentManifest, setShipmentManifest] = useState('');
+  const [originManifest, setOriginManifest] = useState('');
+  const [loadStatus, setLoadStatus] = useState<string>(SENTINEL_NONE);
+  const [plate, setPlate] = useState('');
+  const [scheduledLoadStart, setScheduledLoadStart] = useState('');
+  const [scheduledLoadEnd, setScheduledLoadEnd] = useState('');
+  const [actualLoadStart, setActualLoadStart] = useState('');
+  const [actualLoadEnd, setActualLoadEnd] = useState('');
+  const [supplier, setSupplier] = useState('');
+  const [supplierCnpj, setSupplierCnpj] = useState('');
+  const [accessKey, setAccessKey] = useState('');
+  const [opTypes, setOpTypes] = useState<Set<OpType>>(new Set());
+  const [allOps, setAllOps] = useState(true);
+
+  const toggleOp = (op: OpType) => {
+    setAllOps(false);
+    setOpTypes(prev => {
+      const next = new Set(prev);
+      next.has(op) ? next.delete(op) : next.add(op);
+      return next;
+    });
+  };
+
+  const clearAdvanced = () => {
+    setOsNumber(''); setCollectOrder(''); setReferenceNumber(''); setCnpj('');
+    setInvoiceNumber(''); setIssueDateStart(''); setIssueDateEnd('');
+    setSupplierManifest(''); setDistributionManifest(''); setShipmentManifest(''); setOriginManifest('');
+    setLoadStatus(SENTINEL_NONE); setPlate('');
+    setScheduledLoadStart(''); setScheduledLoadEnd(''); setActualLoadStart(''); setActualLoadEnd('');
+    setSupplier(''); setSupplierCnpj(''); setAccessKey('');
+    setOpTypes(new Set()); setAllOps(true);
+  };
+
+  const matchesOp = (opType: string | null | undefined) => {
+    if (allOps || opTypes.size === 0) return true;
+    return opType ? opTypes.has(opType as OpType) : false;
+  };
+
+  const ciIncludes = (haystack: string | null | undefined, needle: string) =>
+    !needle || (haystack || '').toLowerCase().includes(needle.toLowerCase());
+
   // Filtra documentos elegíveis ao faturamento.
   const eligibleDocs = useMemo(() => {
     const realClient = clientId !== SENTINEL_NONE ? clientId : null;
@@ -53,9 +118,35 @@ export default function Billing() {
       } else {
         if (!d.load_id || !selectedLoadIds.has(d.load_id)) return false;
       }
+
+      // Filtros SIAT (documento)
+      if (issueDateStart && (!d.issue_date || d.issue_date < issueDateStart)) return false;
+      if (issueDateEnd && (!d.issue_date || d.issue_date > issueDateEnd)) return false;
+      if (!ciIncludes(d.invoice_number, invoiceNumber)) return false;
+      if (!ciIncludes(d.access_key, accessKey)) return false;
+      if (!ciIncludes(d.remitter, supplier)) return false;
+      if (!ciIncludes((d as any).client_load_number, referenceNumber)) return false;
+
+      // Filtros que dependem da carga associada
+      const load = d.load_id ? loads.find(l => l.id === d.load_id) : null;
+      if (osNumber && !ciIncludes(load?.trip_id, osNumber)) return false;
+      if (collectOrder && !ciIncludes(load?.load_number, collectOrder)) return false;
+      if (loadStatus !== SENTINEL_NONE && load?.status !== loadStatus) return false;
+      if (plate && !ciIncludes(load?.vehicles?.plate, plate)) return false;
+      if (supplierManifest && !ciIncludes((load as any)?.supplier_manifest, supplierManifest)) return false;
+      if (distributionManifest && !ciIncludes((load as any)?.distribution_manifest, distributionManifest)) return false;
+      if (shipmentManifest && !ciIncludes((load as any)?.shipment_manifest, shipmentManifest)) return false;
+      if (originManifest && !ciIncludes((load as any)?.origin_manifest, originManifest)) return false;
+      if (!matchesOp((load as any)?.operation_type ?? (d as any).operation_type)) return false;
+
       return true;
     });
-  }, [docs, clientId, periodStart, periodEnd, tab, selectedLoadIds]);
+  }, [
+    docs, loads, clientId, periodStart, periodEnd, tab, selectedLoadIds,
+    osNumber, collectOrder, referenceNumber, invoiceNumber, accessKey, supplier,
+    issueDateStart, issueDateEnd, supplierManifest, distributionManifest,
+    shipmentManifest, originManifest, loadStatus, plate, opTypes, allOps,
+  ]);
 
   const groups: CteGroupPreview[] = useMemo(
     () => buildGroups(eligibleDocs, modeId),
@@ -107,6 +198,15 @@ export default function Billing() {
   };
 
   const mode = getGroupingMode(modeId);
+
+  const activeFilterCount = [
+    osNumber, collectOrder, referenceNumber, cnpj, invoiceNumber,
+    issueDateStart, issueDateEnd, supplierManifest, distributionManifest,
+    shipmentManifest, originManifest, plate, scheduledLoadStart, scheduledLoadEnd,
+    actualLoadStart, actualLoadEnd, supplier, supplierCnpj, accessKey,
+  ].filter(Boolean).length
+    + (loadStatus !== SENTINEL_NONE ? 1 : 0)
+    + (!allOps && opTypes.size > 0 ? 1 : 0);
 
   return (
     <div className="animate-fade-in space-y-6">
@@ -197,6 +297,83 @@ export default function Billing() {
               </div>
             </TabsContent>
           </Tabs>
+        </CardContent>
+      </Card>
+
+      {/* Filtros avançados (SIAT) */}
+      <Card>
+        <CardHeader className="flex-row items-center justify-between space-y-0">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Filter className="h-4 w-4 text-primary" /> Filtros avançados (geração automática)
+            {activeFilterCount > 0 && (
+              <Badge variant="outline" className="ml-2 bg-primary/10 text-primary border-primary/30">
+                {activeFilterCount} ativo{activeFilterCount > 1 ? 's' : ''}
+              </Badge>
+            )}
+          </CardTitle>
+          <Button variant="ghost" size="sm" onClick={clearAdvanced} disabled={activeFilterCount === 0}>
+            <Eraser className="h-4 w-4 mr-1" /> Limpar
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            <Field label="Nº OS"><Input value={osNumber} onChange={e => setOsNumber(e.target.value)} /></Field>
+            <Field label="Ordem de Coleta"><Input value={collectOrder} onChange={e => setCollectOrder(e.target.value)} /></Field>
+            <Field label="Nº Referência"><Input value={referenceNumber} onChange={e => setReferenceNumber(e.target.value)} /></Field>
+            <Field label="CNPJ Cliente"><Input value={cnpj} onChange={e => setCnpj(e.target.value)} placeholder="00.000.000/0000-00" /></Field>
+
+            <Field label="Nota Fiscal"><Input value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)} /></Field>
+            <Field label="Emissão NF — Início"><Input type="date" value={issueDateStart} onChange={e => setIssueDateStart(e.target.value)} /></Field>
+            <Field label="Emissão NF — Fim"><Input type="date" value={issueDateEnd} onChange={e => setIssueDateEnd(e.target.value)} /></Field>
+            <Field label="Chave Acesso CT-e"><Input value={accessKey} onChange={e => setAccessKey(e.target.value)} placeholder="44 dígitos" /></Field>
+
+            <Field label="Romaneio do Fornecedor"><Input value={supplierManifest} onChange={e => setSupplierManifest(e.target.value)} /></Field>
+            <Field label="Romaneio de Distribuição"><Input value={distributionManifest} onChange={e => setDistributionManifest(e.target.value)} /></Field>
+            <Field label="Romaneio de Expedição"><Input value={shipmentManifest} onChange={e => setShipmentManifest(e.target.value)} /></Field>
+            <Field label="Romaneio Origem"><Input value={originManifest} onChange={e => setOriginManifest(e.target.value)} /></Field>
+
+            <Field label="Status da Carga">
+              <Select value={loadStatus} onValueChange={setLoadStatus}>
+                <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={SENTINEL_NONE}>Todos</SelectItem>
+                  {LOAD_STATUSES.map(s => (
+                    <SelectItem key={s} value={s}>{LOAD_STATUS_LABELS[s]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Placa"><Input value={plate} onChange={e => setPlate(e.target.value.toUpperCase())} placeholder="ABC1D23" /></Field>
+            <Field label="Fornecedor"><Input value={supplier} onChange={e => setSupplier(e.target.value)} /></Field>
+            <Field label="CNPJ Fornecedor"><Input value={supplierCnpj} onChange={e => setSupplierCnpj(e.target.value)} /></Field>
+
+            <Field label="Carregamento Previsto — Início"><Input type="date" value={scheduledLoadStart} onChange={e => setScheduledLoadStart(e.target.value)} /></Field>
+            <Field label="Carregamento Previsto — Fim"><Input type="date" value={scheduledLoadEnd} onChange={e => setScheduledLoadEnd(e.target.value)} /></Field>
+            <Field label="Carregamento Real — Início"><Input type="date" value={actualLoadStart} onChange={e => setActualLoadStart(e.target.value)} /></Field>
+            <Field label="Carregamento Real — Fim"><Input type="date" value={actualLoadEnd} onChange={e => setActualLoadEnd(e.target.value)} /></Field>
+          </div>
+
+          <div>
+            <Label className="text-xs text-muted-foreground">Tipos de operação</Label>
+            <div className="mt-2 flex flex-wrap gap-3">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <Checkbox
+                  checked={allOps}
+                  onCheckedChange={(v) => { setAllOps(!!v); if (v) setOpTypes(new Set()); }}
+                />
+                <span className="font-medium">Todos</span>
+              </label>
+              {OPERATION_TYPES.map(op => (
+                <label key={op.value} className="flex items-center gap-2 text-sm cursor-pointer">
+                  <Checkbox
+                    checked={!allOps && opTypes.has(op.value)}
+                    onCheckedChange={() => toggleOp(op.value)}
+                  />
+                  <span>{op.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -411,6 +588,15 @@ function Stat({ label, value, highlight }: { label: string; value: string | numb
     <div className={`rounded-md border p-3 ${highlight ? 'border-primary/40 bg-primary/5' : 'border-border'}`}>
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className={`text-lg font-semibold ${highlight ? 'text-primary' : 'text-foreground'}`}>{value}</p>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1">
+      <Label className="text-xs text-muted-foreground">{label}</Label>
+      {children}
     </div>
   );
 }

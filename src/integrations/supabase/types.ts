@@ -1337,6 +1337,7 @@ export type Database = {
           invoice_number: string | null
           issue_date: string | null
           load_id: string | null
+          operation_type: Database["public"]["Enums"]["operation_type"] | null
           order_id: string | null
           pallet_count: number | null
           product_summary: string | null
@@ -1372,6 +1373,7 @@ export type Database = {
           invoice_number?: string | null
           issue_date?: string | null
           load_id?: string | null
+          operation_type?: Database["public"]["Enums"]["operation_type"] | null
           order_id?: string | null
           pallet_count?: number | null
           product_summary?: string | null
@@ -1407,6 +1409,7 @@ export type Database = {
           invoice_number?: string | null
           issue_date?: string | null
           load_id?: string | null
+          operation_type?: Database["public"]["Enums"]["operation_type"] | null
           order_id?: string | null
           pallet_count?: number | null
           product_summary?: string | null
@@ -2750,6 +2753,7 @@ export type Database = {
           id: string
           load_number: string
           notes: string | null
+          operation_type: Database["public"]["Enums"]["operation_type"] | null
           origin: string | null
           status: string
           tenant_id: string
@@ -2768,6 +2772,7 @@ export type Database = {
           id?: string
           load_number: string
           notes?: string | null
+          operation_type?: Database["public"]["Enums"]["operation_type"] | null
           origin?: string | null
           status?: string
           tenant_id: string
@@ -2786,6 +2791,7 @@ export type Database = {
           id?: string
           load_number?: string
           notes?: string | null
+          operation_type?: Database["public"]["Enums"]["operation_type"] | null
           origin?: string | null
           status?: string
           tenant_id?: string
@@ -5562,6 +5568,7 @@ export type Database = {
           id: string
           load_number: string
           notes: string | null
+          operation_type: Database["public"]["Enums"]["operation_type"] | null
           origin: string | null
           status: string
           tenant_id: string
@@ -5616,6 +5623,15 @@ export type Database = {
     }
     Enums: {
       app_role: "owner" | "admin" | "operator" | "client" | "driver"
+      operation_type:
+        | "filial"
+        | "armazenagem"
+        | "frota"
+        | "viagem_direta"
+        | "retira"
+        | "transferencia"
+        | "devolucao"
+        | "redespacho"
       waypoint_type:
         | "origin"
         | "destination"
@@ -5753,6 +5769,16 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["owner", "admin", "operator", "client", "driver"],
+      operation_type: [
+        "filial",
+        "armazenagem",
+        "frota",
+        "viagem_direta",
+        "retira",
+        "transferencia",
+        "devolucao",
+        "redespacho",
+      ],
       waypoint_type: [
         "origin",
         "destination",
