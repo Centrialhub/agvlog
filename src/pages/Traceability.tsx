@@ -183,7 +183,7 @@ export default function Traceability() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState({
-    invoice: '', loadNumber: '', clientRef: '', client: '', supplier: '', plate: '', driver: '', start: '', end: '', deliveryStart: '', deliveryEnd: '', status: 'all', pod: 'all', canhoto: 'all', occurrence: '', payment: '',
+    invoice: '', loadNumber: '', clientRef: '', client: '', supplier: '', plate: '', driver: '', start: '', end: '', deliveryStart: '', deliveryEnd: '', importStart: '', importEnd: '', status: 'all', pod: 'all', canhoto: 'all', occurrence: '', payment: '',
   });
   const [selectedRow, setSelectedRow] = useState<TraceRow | null>(null);
   const [eventForm, setEventForm] = useState({ type: 'other', severity: 'medium', status: 'no_change', description: '' });
@@ -262,6 +262,11 @@ export default function Traceability() {
       if (filters.canhoto !== 'all' && (filters.canhoto === 'yes') !== (row.siatStatus === 'delivered')) return false;
       if (filters.start && (!doc.issue_date || doc.issue_date < filters.start)) return false;
       if (filters.end && (!doc.issue_date || doc.issue_date > filters.end)) return false;
+      if (filters.importStart || filters.importEnd) {
+        const imp = doc.created_at ? doc.created_at.slice(0, 10) : '';
+        if (filters.importStart && (!imp || imp < filters.importStart)) return false;
+        if (filters.importEnd && (!imp || imp > filters.importEnd)) return false;
+      }
       if (filters.deliveryStart || filters.deliveryEnd) {
         const arr = row.stops.at(-1)?.actual_arrival_at;
         const arrDate = arr ? arr.slice(0, 10) : '';
