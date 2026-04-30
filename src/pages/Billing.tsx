@@ -529,6 +529,9 @@ export default function Billing() {
             <Field label="Emissão NF — Fim"><Input type="date" value={issueDateEnd} onChange={e => setIssueDateEnd(e.target.value)} /></Field>
             <Field label="Chave Acesso CT-e"><Input value={accessKey} onChange={e => setAccessKey(e.target.value)} placeholder="44 dígitos" /></Field>
 
+            <Field label="Importação — Início"><Input type="date" value={importDateStart} onChange={e => setImportDateStart(e.target.value)} /></Field>
+            <Field label="Importação — Fim"><Input type="date" value={importDateEnd} onChange={e => setImportDateEnd(e.target.value)} /></Field>
+
             <Field label="Romaneio do Fornecedor"><Input value={supplierManifest} onChange={e => setSupplierManifest(e.target.value)} /></Field>
             <Field label="Romaneio de Distribuição"><Input value={distributionManifest} onChange={e => setDistributionManifest(e.target.value)} /></Field>
             <Field label="Romaneio de Expedição"><Input value={shipmentManifest} onChange={e => setShipmentManifest(e.target.value)} /></Field>
