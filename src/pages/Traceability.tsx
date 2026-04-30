@@ -916,7 +916,7 @@ export default function Traceability() {
       <Card className="rounded-t-none">
         <CardContent className="p-0">
           <div
-            className="overflow-x-scroll [scrollbar-width:auto] [&::-webkit-scrollbar]:h-4 [&::-webkit-scrollbar]:block [&::-webkit-scrollbar-thumb]:bg-primary/60 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb:hover]:bg-primary [&::-webkit-scrollbar-track]:bg-muted/60 [&::-webkit-scrollbar-track]:rounded-full"
+            className="overflow-auto max-h-[70vh] [scrollbar-width:auto] [&::-webkit-scrollbar]:h-4 [&::-webkit-scrollbar]:w-3 [&::-webkit-scrollbar]:block [&::-webkit-scrollbar-thumb]:bg-primary/60 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb:hover]:bg-primary [&::-webkit-scrollbar-track]:bg-muted/60 [&::-webkit-scrollbar-track]:rounded-full"
             ref={(el) => {
               if (!el) return;
               const top = document.getElementById('trace-top-scroll');
@@ -931,7 +931,7 @@ export default function Traceability() {
             }}
           >
             <table className="min-w-max w-full caption-bottom text-sm">
-              <TableHeader>
+              <TableHeader className="sticky top-0 z-10 bg-background shadow-[0_1px_0_0_hsl(var(--border))]">
                   <TableRow>
                     <TableHead className="w-10"></TableHead><TableHead>Palete</TableHead><TableHead title="Comprovante de entrega (POD)">POD</TableHead><TableHead title="Canhoto recebido — clique para ver histórico">Canhoto</TableHead><TableHead>Situação</TableHead><TableHead>Nº NF</TableHead><TableHead title="Data/hora em que a NF foi importada — base do prazo de romaneio">Importada em</TableHead><TableHead>Nº Carga (empresa)</TableHead><TableHead>Carga Cliente (NF-e)</TableHead><TableHead>Ref. Pedido</TableHead><TableHead>Forma pgto</TableHead><TableHead>Valor Nota</TableHead><TableHead>Valor Frete</TableHead><TableHead>Cliente</TableHead><TableHead>Fornecedor</TableHead><TableHead>Placa</TableHead><TableHead>Motorista</TableHead><TableHead title="Data/hora da entrega (última parada concluída)">Entrega</TableHead><TableHead title={`Lead-time da importação até a entrega. Vermelho se > ${slaThresholdH}h.`}>SLA Entrega</TableHead><TableHead>Ocorrência</TableHead><TableHead></TableHead>
                   </TableRow>
