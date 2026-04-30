@@ -264,6 +264,9 @@ export default function Traceability() {
     pending: filteredRows.filter(r => r.siatStatus === 'pending').length,
     inTransit: filteredRows.filter(r => r.siatStatus === 'in_transit').length,
     delivered: filteredRows.filter(r => r.siatStatus === 'delivered').length,
+    missingLoad: filteredRows.filter(r => !r.doc.client_load_number).length,
+    fromXPed: filteredRows.filter(r => r.doc.client_load_number && r.doc.client_load_source?.source === 'xPed').length,
+    fromObservation: filteredRows.filter(r => r.doc.client_load_number && r.doc.client_load_source?.source === 'observation').length,
   }), [filteredRows]);
 
   const registerEvent = useMutation({
@@ -382,6 +385,48 @@ export default function Traceability() {
     a.download = `rastreabilidade-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  // Diagnostic export: only NFs missing the client load number, with the data the user
+  // needs to tune the regex rules in CLIENT_LOAD_OBSERVATION_RULES.
+  const exportMissingLoadCsv = () => {
+    const missing = filteredRows.filter(r => !r.doc.client_load_number);
+    if (!missing.length) {
+      toast({ title: 'Nada a exportar', description: 'Todas as NFs filtradas já têm número de carga extraído.' });
+      return;
+    }
+    const headers = [
+      'Nº NF', 'Série/Chave', 'Data Emissão',
+      'Cliente', 'Fornecedor / Remetente',
+      'Cidade Destino', 'UF Destino',
+      'Status Extração', 'Origem Tentada', 'Regra Aplicada',
+      'Ref. Pedido (orders)', 'Nº Carga (empresa)',
+      'Observação registrada (client_load_source)',
+    ];
+    const body = missing.map(({ doc }) => [
+      doc.invoice_number || '',
+      doc.access_key || '',
+      fmtDate(doc.issue_date),
+      doc.clients?.company_name || doc.recipient || '',
+      doc.remitter || '',
+      doc.recipient_city || '',
+      doc.recipient_state || '',
+      extractionLabel.missing,
+      doc.client_load_source?.source ? sourceLabel(doc.client_load_source.source) : '—',
+      doc.client_load_source?.ruleLabel || '',
+      doc.orders?.order_number || '',
+      doc.loads?.load_number || '',
+      doc.client_load_source ? JSON.stringify(doc.client_load_source) : '',
+    ]);
+    const csv = [headers, ...body].map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(';')).join('\n');
+    const blob = new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `nfs-sem-carga-cliente-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast({ title: 'CSV exportado', description: `${missing.length} NF(s) sem número da carga do cliente.` });
   };
 
   return (
