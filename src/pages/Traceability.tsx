@@ -693,6 +693,91 @@ export default function Traceability() {
           )}
         </DialogContent>
       </Dialog>
+
+      <Dialog open={analyzerOpen} onOpenChange={setAnalyzerOpen}>
+        <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Lightbulb className="h-5 w-5 text-info" /> Análise de padrões — Observações sem carga extraída
+            </DialogTitle>
+          </DialogHeader>
+          {analyzerResult ? (
+            <div className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-3">
+                <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Amostras analisadas</p><p className="text-lg font-semibold">{analyzerResult.usableSamples} <span className="text-xs text-muted-foreground">/ {analyzerResult.totalSamples}</span></p></CardContent></Card>
+                <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Palavras-chave recorrentes</p><p className="text-lg font-semibold text-info">{analyzerResult.keywordClusters.length}</p></CardContent></Card>
+                <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Formatos estruturais</p><p className="text-lg font-semibold">{analyzerResult.signatureClusters.length}</p></CardContent></Card>
+              </div>
+
+              <div className="rounded-md border border-border p-4">
+                <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold"><Lightbulb className="h-4 w-4 text-warning" /> Regras sugeridas</h3>
+                <p className="mb-3 text-xs text-muted-foreground">
+                  Cada bloco abaixo é uma palavra-chave que apareceu antes de um valor numérico em ≥ 2 observações. Copie a regra e cole em <code className="rounded bg-muted px-1">CLIENT_LOAD_OBSERVATION_RULES</code> em <code className="rounded bg-muted px-1">src/lib/documentParsers.ts</code> (mantenha as mais específicas no topo).
+                </p>
+                {analyzerResult.keywordClusters.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Nenhum padrão recorrente encontrado nas observações disponíveis. Tente reduzir o filtro ou reimportar mais XMLs.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {analyzerResult.keywordClusters.map(c => (
+                      <div key={c.keyword} className="rounded-md border border-border bg-muted/20 p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="bg-info/10 text-info border-info/20">{c.suggestedLabel}</Badge>
+                            <Badge variant="outline">{c.count} ocorrência(s)</Badge>
+                            {c.alreadyCovered && <Badge variant="outline" className="bg-warning/10 text-warning border-warning/20">já coberto?</Badge>}
+                          </div>
+                          <Button size="sm" variant="outline" onClick={() => copyToClipboard(c.suggestedRuleSnippet)}>
+                            <Copy className="mr-1 h-3 w-3" /> Copiar regra
+                          </Button>
+                        </div>
+                        <pre className="mt-2 overflow-x-auto rounded bg-background p-2 text-[11px] font-mono">{c.suggestedRuleSnippet}</pre>
+                        <div className="mt-2 grid gap-2 text-xs md:grid-cols-2">
+                          <div>
+                            <p className="font-semibold text-muted-foreground">Valores capturados (exemplos):</p>
+                            <p className="font-mono">{c.capturedExamples.map(e => `"${e}"`).join(', ') || '—'}</p>
+                          </div>
+                          <div>
+                            <p className="font-semibold text-muted-foreground">Trechos de contexto:</p>
+                            <ul className="space-y-0.5">
+                              {c.contextExamples.map((ex, i) => <li key={i} className="font-mono text-muted-foreground">…{ex}…</li>)}
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-md border border-border p-4">
+                <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold"><History className="h-4 w-4" /> Formatos estruturais recorrentes</h3>
+                <p className="mb-3 text-xs text-muted-foreground">
+                  Mostra o "esqueleto" do texto (dígitos viram <code>#</code>, letras viram <code>a</code>). Útil para identificar layouts repetidos em diferentes clientes.
+                </p>
+                {analyzerResult.signatureClusters.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Nenhuma assinatura estrutural recorrente.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {analyzerResult.signatureClusters.map(s => (
+                      <div key={s.signature} className="rounded bg-muted/30 p-2 text-xs">
+                        <div className="flex items-center justify-between">
+                          <code className="font-mono">{s.signature.slice(0, 80)}{s.signature.length > 80 ? '…' : ''}</code>
+                          <Badge variant="outline">{s.count}</Badge>
+                        </div>
+                        <ul className="mt-1 space-y-0.5 pl-2 text-muted-foreground">
+                          {s.examples.map((ex, i) => <li key={i}>↳ {ex.slice(0, 140)}</li>)}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Nenhuma análise gerada ainda.</p>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
