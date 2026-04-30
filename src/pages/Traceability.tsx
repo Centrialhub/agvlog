@@ -213,6 +213,12 @@ export default function Traceability() {
   });
   const [selectedRow, setSelectedRow] = useState<TraceRow | null>(null);
   const [eventForm, setEventForm] = useState({ type: 'other', severity: 'medium', status: 'no_change', description: '' });
+  const [slaThresholdH, setSlaThresholdH] = useState<number>(() => {
+    if (typeof window === 'undefined') return DEFAULT_SLA_THRESHOLD_H;
+    const raw = window.localStorage.getItem(SLA_THRESHOLD_KEY);
+    const n = raw ? Number(raw) : NaN;
+    return Number.isFinite(n) && n > 0 ? n : DEFAULT_SLA_THRESHOLD_H;
+  });
   const [analyzerOpen, setAnalyzerOpen] = useState(false);
   const [analyzerResult, setAnalyzerResult] = useState<AnalyzerResult | null>(null);
 
