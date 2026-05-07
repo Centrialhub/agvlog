@@ -1647,6 +1647,112 @@ export type Database = {
           },
         ]
       }
+      freight_auto_rules: {
+        Row: {
+          active: boolean
+          calculation_basis: string
+          cargo_type: string | null
+          client_id: string | null
+          created_at: string
+          created_by: string | null
+          fixed_value: number | null
+          id: string
+          min_value: number | null
+          notes: string | null
+          pallet_max: number | null
+          pallet_min: number | null
+          payer_group: string | null
+          percent_value: number | null
+          priority: number
+          region_id: string | null
+          region_name: string | null
+          tenant_id: string
+          unit_value: number | null
+          updated_at: string
+          valid_from: string | null
+          valid_until: string | null
+          vehicle_type: string | null
+          weight_max: number | null
+          weight_min: number | null
+        }
+        Insert: {
+          active?: boolean
+          calculation_basis?: string
+          cargo_type?: string | null
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          fixed_value?: number | null
+          id?: string
+          min_value?: number | null
+          notes?: string | null
+          pallet_max?: number | null
+          pallet_min?: number | null
+          payer_group?: string | null
+          percent_value?: number | null
+          priority?: number
+          region_id?: string | null
+          region_name?: string | null
+          tenant_id: string
+          unit_value?: number | null
+          updated_at?: string
+          valid_from?: string | null
+          valid_until?: string | null
+          vehicle_type?: string | null
+          weight_max?: number | null
+          weight_min?: number | null
+        }
+        Update: {
+          active?: boolean
+          calculation_basis?: string
+          cargo_type?: string | null
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          fixed_value?: number | null
+          id?: string
+          min_value?: number | null
+          notes?: string | null
+          pallet_max?: number | null
+          pallet_min?: number | null
+          payer_group?: string | null
+          percent_value?: number | null
+          priority?: number
+          region_id?: string | null
+          region_name?: string | null
+          tenant_id?: string
+          unit_value?: number | null
+          updated_at?: string
+          valid_from?: string | null
+          valid_until?: string | null
+          vehicle_type?: string | null
+          weight_max?: number | null
+          weight_min?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "freight_auto_rules_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "freight_auto_rules_region_id_fkey"
+            columns: ["region_id"]
+            isOneToOne: false
+            referencedRelation: "client_regions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "freight_auto_rules_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       freight_calculation_log: {
         Row: {
           base_value: number | null
