@@ -97,7 +97,7 @@ export default function NewPickupOrderDialog({ open, onOpenChange, onCreated, pi
     const payload: Partial<PickupOrder> = {
       remitter_client_id: remitter?.id || null,
       remitter_name: remitter?.company_name || null,
-      remitter_cnpj: (remitter as any)?.document || (remitter as any)?.cnpj || null,
+      remitter_cnpj: remitter?.tax_id || null,
       recipient_name: recipientName.trim(),
       driver_id: driver.id,
       driver_name_snapshot: (driver as any).name,
