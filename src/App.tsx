@@ -38,8 +38,7 @@ const ProductivityReports = lazy(() => import("@/pages/ProductivityReports"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const ExpenseApproval = lazy(() => import("@/pages/ExpenseApproval"));
 const TeamManagement = lazy(() => import("@/pages/TeamManagement"));
-const ClientRegions = lazy(() => import("@/pages/ClientRegions"));
-const FreightTables = lazy(() => import("@/pages/FreightTables"));
+const FreightHub = lazy(() => import("@/pages/FreightHub"));
 const ClientPortal = lazy(() => import("@/pages/ClientPortal"));
 const RoutePlanning = lazy(() => import("@/pages/RoutePlanning"));
 const Receivables = lazy(() => import("@/pages/Receivables"));
@@ -183,8 +182,8 @@ const App = () => (
             <Route path="/expense-approval" element={<ProtectedRoute><ExpenseApproval /></ProtectedRoute>} />
             <Route path="/integration-health" element={<ProtectedRoute><IntegrationHealth /></ProtectedRoute>} />
             <Route path="/team" element={<ProtectedRoute><TeamManagement /></ProtectedRoute>} />
-            <Route path="/regions" element={<ProtectedRoute><ClientRegions /></ProtectedRoute>} />
-            <Route path="/freight" element={<ProtectedRoute><FreightTables /></ProtectedRoute>} />
+            <Route path="/regions" element={<ProtectedRoute><FreightHub /></ProtectedRoute>} />
+            <Route path="/freight" element={<ProtectedRoute><FreightHub /></ProtectedRoute>} />
             <Route path="/route-planning" element={<ProtectedRoute><RoutePlanning /></ProtectedRoute>} />
             <Route path="/receivables" element={<ProtectedRoute><Receivables /></ProtectedRoute>} />
             <Route path="/financial" element={<ProtectedRoute><Financial /></ProtectedRoute>} />
