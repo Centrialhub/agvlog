@@ -30,8 +30,8 @@ const navSections: NavSection[] = [
     label: 'Operações',
     items: [
       { label: 'Centro de Operações', href: '/', icon: <LayoutDashboard className="h-4 w-4" /> },
-      { label: 'Importação', href: '/ingestion', icon: <Upload className="h-4 w-4" /> },
       { label: 'Coletas', href: '/pickup-orders', icon: <PackageOpen className="h-4 w-4" /> },
+      { label: 'Importação', href: '/ingestion', icon: <Upload className="h-4 w-4" /> },
       { label: 'Faturamento (CT-e)', href: '/billing', icon: <FileSpreadsheet className="h-4 w-4" /> },
       { label: 'Monitor DOC-e', href: '/cte-monitor', icon: <ShieldCheck className="h-4 w-4" /> },
       { label: 'Consulta CT-e', href: '/cte-search', icon: <FileSearch className="h-4 w-4" /> },
