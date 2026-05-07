@@ -57,6 +57,7 @@ const CteMonitor = lazy(() => import("@/pages/CteMonitor"));
 const CteSearch = lazy(() => import("@/pages/CteSearch"));
 const PickupOrders = lazy(() => import("@/pages/PickupOrders"));
 const ProductTraceability = lazy(() => import("@/pages/ProductTraceability"));
+const ProductHistory = lazy(() => import("@/pages/ProductHistory"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
 // Driver pages
@@ -200,6 +201,7 @@ const App = () => (
             <Route path="/cte-search" element={<ProtectedRoute><CteSearch /></ProtectedRoute>} />
             <Route path="/pickup-orders" element={<ProtectedRoute><PickupOrders /></ProtectedRoute>} />
             <Route path="/product-traceability" element={<ProtectedRoute><ProductTraceability /></ProtectedRoute>} />
+            <Route path="/product-history" element={<ProtectedRoute><ProductHistory /></ProtectedRoute>} />
 
             {/* Driver routes */}
             <Route path="/driver" element={<DriverRoute><DriverHome /></DriverRoute>} />
