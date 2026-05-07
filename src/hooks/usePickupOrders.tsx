@@ -65,11 +65,11 @@ export function usePickupOrderCounts(pickupIds: string[]) {
     queryKey: ['pickup_orders_counts', currentTenant?.id, pickupIds.sort().join(',')],
     queryFn: async () => {
       if (!currentTenant || pickupIds.length === 0) return {} as Record<string, number>;
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('fiscal_documents')
         .select('pickup_order_id')
         .eq('tenant_id', currentTenant.id)
-        .in('pickup_order_id' as any, pickupIds);
+        .in('pickup_order_id', pickupIds);
       if (error) throw error;
       const map: Record<string, number> = {};
       (data || []).forEach((row: any) => {
