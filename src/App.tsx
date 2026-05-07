@@ -56,6 +56,7 @@ const Billing = lazy(() => import("@/pages/Billing"));
 const CteMonitor = lazy(() => import("@/pages/CteMonitor"));
 const CteSearch = lazy(() => import("@/pages/CteSearch"));
 const PickupOrders = lazy(() => import("@/pages/PickupOrders"));
+const ProductTraceability = lazy(() => import("@/pages/ProductTraceability"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
 // Driver pages
