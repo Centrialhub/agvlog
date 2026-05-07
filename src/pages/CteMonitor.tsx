@@ -17,6 +17,7 @@ import {
   FileText, FileDown, RefreshCw, Search, Filter as FilterIcon, X, AlertCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { PendingInvoicesBanner } from '@/components/billing/PendingInvoicesBanner';
 
 const TONE_CLASS: Record<string, string> = {
   default: 'bg-secondary text-secondary-foreground',
@@ -102,6 +103,7 @@ export default function CteMonitor() {
   return (
     <AppLayout>
       <div className="flex flex-col gap-4 p-4">
+        <PendingInvoicesBanner from="monitor" />
         <header className="flex items-center justify-between flex-wrap gap-2">
           <div>
             <h1 className="text-2xl font-semibold">Monitor DOC-e (CT-e)</h1>
