@@ -3,52 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
 import type { Load } from './useLoads';
-
-async function lookupFreightValue(
-  tenantId: string,
-  destination: string | null,
-  totalValue: number,
-  totalWeight: number,
-  totalPallets: number
-): Promise<number> {
-  const today = new Date().toISOString().slice(0, 10);
-  const { data: tables } = await supabase
-    .from('freight_tables')
-    .select('*')
-    .eq('tenant_id', tenantId)
-    .eq('blocked', false)
-    .lte('valid_from', today)
-    .order('table_code', { ascending: false });
-
-  if (!tables || tables.length === 0) return 0;
-
-  const valid = tables.filter((t: any) => !t.valid_until || t.valid_until >= today);
-  if (valid.length === 0) return 0;
-
-  let match = valid[0];
-  if (destination) {
-    const destLower = destination.toLowerCase();
-    const regionMatch = valid.find((t: any) =>
-      (t.destination_region && destLower.includes(t.destination_region.toLowerCase())) ||
-      (t.destination_municipality && destLower.includes(t.destination_municipality.toLowerCase()))
-    );
-    if (regionMatch) match = regionMatch;
-  }
-
-  let freight = 0;
-  const ratePercent = Number(match.rate_percent) || 0;
-  const fixedVal = Number(match.fixed_value) || 0;
-  const minVal = Number(match.min_value) || 0;
-  const perKg = Number(match.per_kg_value) || 0;
-  const perPallet = Number(match.per_pallet_value) || 0;
-
-  if (ratePercent > 0) freight += totalValue * (ratePercent / 100);
-  if (fixedVal > 0) freight += fixedVal;
-  if (perKg > 0) freight += totalWeight * perKg;
-  if (perPallet > 0) freight += totalPallets * perPallet;
-
-  return Math.max(freight, minVal);
-}
+import { calculateFreight, logFreightCalculation } from './useFreightCalculator';
 
 export function useGenerateCTe() {
   const { currentTenant } = useTenant();
@@ -120,14 +75,46 @@ export function useGenerateCTe() {
 
       const nfeTotalValue = (nfeDocs || []).reduce((s: number, d: any) => s + (Number(d.value) || 0), 0);
 
-      // Lookup freight value from freight_tables
-      const freightValue = await lookupFreightValue(
-        currentTenant.id,
-        load.destination,
-        nfeTotalValue,
-        totalWeight || load.total_weight_kg || 0,
-        totalPallets || load.total_pallet_count || 0
-      );
+      // Resolve client / payer group / destination context from NF-e docs
+      const { data: refDocs } = await supabase
+        .from('fiscal_documents')
+        .select('client_id, recipient_state, recipient_city, recipient_neighborhood, recipient')
+        .eq('load_id', load.id)
+        .eq('tenant_id', currentTenant.id)
+        .eq('document_type', 'inbound')
+        .limit(50);
+
+      const refDoc = (refDocs || []).find((d: any) => d.client_id) || (refDocs || [])[0] || {};
+      const clientId: string | null = (refDoc as any).client_id || null;
+
+      let payerGroup: string | null = null;
+      if (clientId) {
+        const { data: cli } = await supabase
+          .from('clients')
+          .select('payer_group')
+          .eq('id', clientId)
+          .maybeSingle();
+        payerGroup = (cli as any)?.payer_group || null;
+      }
+
+      const destState = (refDoc as any).recipient_state || null;
+      const destMunicipality = (refDoc as any).recipient_city || null;
+
+      // Calculate freight using the full rule engine (region + payer group + client)
+      const freightResult = await calculateFreight({
+        tenantId: currentTenant.id,
+        clientId,
+        payerGroup,
+        destination: load.destination || destMunicipality,
+        destinationState: destState,
+        destinationMunicipality: destMunicipality,
+        totalValue: nfeTotalValue,
+        totalWeight: totalWeight || load.total_weight_kg || 0,
+        totalPallets: totalPallets || load.total_pallet_count || 0,
+      });
+
+      const freightValue = freightResult.success ? freightResult.value : 0;
+      const breakdown = freightResult.breakdown;
 
       const cteNumber = `CTE-${load.load_number}`;
 
@@ -143,12 +130,17 @@ export function useGenerateCTe() {
         document_type: 'outbound',
         invoice_number: cteNumber,
         load_id: load.id,
+        client_id: clientId,
         remitter: currentTenant.name || 'Transportadora',
         recipient: load.destination || 'Destino não informado',
+        recipient_state: destState,
+        recipient_city: destMunicipality,
         pallet_count: totalPallets || load.total_pallet_count || 0,
         weight_kg: totalWeight || load.total_weight_kg || 0,
         value: freightValue > 0 ? freightValue : null,
         freight_value: freightValue > 0 ? freightValue : null,
+        freight_table_id: breakdown?.tableId || null,
+        freight_breakdown: breakdown ? (breakdown as any) : null,
         product_summary: itemSummary,
         status: 'confirmed',
         issue_date: new Date().toISOString().slice(0, 10),
@@ -161,6 +153,16 @@ export function useGenerateCTe() {
       } as any).select().single();
 
       if (error) throw error;
+
+      // Audit trail of the freight rule selection
+      if (breakdown && data?.id) {
+        try {
+          await logFreightCalculation(currentTenant.id, data.id, 'cte', breakdown, user?.id);
+        } catch (e) {
+          console.warn('Falha ao registrar log de cálculo de frete', e);
+        }
+      }
+
       return data;
     },
     onSuccess: () => {
