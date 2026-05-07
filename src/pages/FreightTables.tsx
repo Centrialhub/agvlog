@@ -27,6 +27,7 @@ const UF_OPTIONS = [
 
 const emptyForm = {
   table_name: '',
+  client_id: '',
   payer_group: '',
   payer: '',
   valid_from: new Date().toISOString().slice(0, 10),
@@ -64,6 +65,8 @@ export default function FreightTables() {
   // Filters
   const [fGroup, setFGroup] = useState('');
   const [fName, setFName] = useState('');
+  const [fClient, setFClient] = useState('');
+  const [fRegion, setFRegion] = useState('');
   const [fUfO, setFUfO] = useState('');
   const [fUfD, setFUfD] = useState('');
   const [fBlocked, setFBlocked] = useState<'all' | 'yes' | 'no'>('no');
@@ -78,7 +81,7 @@ export default function FreightTables() {
       if (!currentTenant) return [];
       const { data, error } = await supabase
         .from('freight_tables')
-        .select('*')
+        .select('*, clients(company_name)')
         .eq('tenant_id', currentTenant.id)
         .order('table_code', { ascending: false });
       if (error) throw error;
@@ -87,12 +90,44 @@ export default function FreightTables() {
     enabled: !!currentTenant,
   });
 
+  const { data: clientsList = [] } = useQuery({
+    queryKey: ['clients_for_freight', currentTenant?.id],
+    queryFn: async () => {
+      if (!currentTenant) return [];
+      const { data } = await supabase
+        .from('clients')
+        .select('id, company_name')
+        .eq('tenant_id', currentTenant.id)
+        .eq('active', true)
+        .order('company_name');
+      return data || [];
+    },
+    enabled: !!currentTenant,
+  });
+
+  const { data: regionsCatalog = [] } = useQuery({
+    queryKey: ['client_regions_catalog', currentTenant?.id],
+    queryFn: async () => {
+      if (!currentTenant) return [];
+      const { data } = await supabase
+        .from('client_regions')
+        .select('region_name, payer_group, state_code')
+        .eq('tenant_id', currentTenant.id);
+      return data || [];
+    },
+    enabled: !!currentTenant,
+  });
+
+  const uniqueRegions = Array.from(new Set(regionsCatalog.map((r: any) => r.region_name).filter(Boolean))).sort();
+  const uniquePayerGroups = Array.from(new Set(regionsCatalog.map((r: any) => r.payer_group).filter(Boolean))).sort();
+
   const upsertMutation = useMutation({
     mutationFn: async (values: typeof form & { id?: string }) => {
       if (!currentTenant) throw new Error('Sem tenant');
       const record: any = {
         tenant_id: currentTenant.id,
         table_name: values.table_name,
+        client_id: values.client_id || null,
         payer_group: values.payer_group || null,
         payer: values.payer || null,
         valid_from: values.valid_from,
@@ -160,6 +195,7 @@ export default function FreightTables() {
     setEditingId(r.id);
     setForm({
       table_name: r.table_name || '',
+      client_id: r.client_id || '',
       payer_group: r.payer_group || '',
       payer: r.payer || '',
       valid_from: r.valid_from || '',
@@ -195,6 +231,8 @@ export default function FreightTables() {
   const filtered = rows.filter((r: any) => {
     if (fGroup && !(r.payer_group || '').toLowerCase().includes(fGroup.toLowerCase())) return false;
     if (fName && !r.table_name.toLowerCase().includes(fName.toLowerCase())) return false;
+    if (fClient && r.client_id !== fClient) return false;
+    if (fRegion && r.destination_region !== fRegion) return false;
     if (fUfO && r.origin_state !== fUfO) return false;
     if (fUfD && r.destination_state !== fUfD) return false;
     if (fBlocked === 'yes' && !r.blocked) return false;
@@ -229,9 +267,51 @@ export default function FreightTables() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
+                  <Label>Cliente</Label>
+                  <Select
+                    value={form.client_id || '__none__'}
+                    onValueChange={(v) => setForm({ ...form, client_id: v === '__none__' ? '' : v })}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Nenhum (genérica)" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">— Nenhum (todos os clientes)</SelectItem>
+                      {clientsList.map((c: any) => (
+                        <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Região Destino (catálogo)</Label>
+                  <Select
+                    value={form.destination_region || '__none__'}
+                    onValueChange={(v) => setForm({ ...form, destination_region: v === '__none__' ? '' : v })}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Selecione a região" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">— Nenhuma</SelectItem>
+                      {uniqueRegions.map((rg) => (
+                        <SelectItem key={rg} value={rg}>{rg}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
                   <Label>Grupo Pagador</Label>
-                  <Input value={form.payer_group} onChange={(e) => setForm({ ...form, payer_group: e.target.value })}
-                    placeholder="Ex: TABELA TOZZI" />
+                  <Select
+                    value={form.payer_group || '__none__'}
+                    onValueChange={(v) => setForm({ ...form, payer_group: v === '__none__' ? '' : v })}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Selecione ou digite" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">— Nenhum</SelectItem>
+                      {uniquePayerGroups.map((g) => (
+                        <SelectItem key={g} value={g}>{g}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
                   <Label>Pagador</Label>
