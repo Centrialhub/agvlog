@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
@@ -34,6 +34,7 @@ export default function FreightSimulator() {
   const [destMunicipality, setDestMunicipality] = useState<string>('');
   const [result, setResult] = useState<FreightResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [autoCalc, setAutoCalc] = useState(true);
 
   const { data: clients = [] } = useQuery({
     queryKey: ['clients-min', tenantId],
@@ -108,7 +109,7 @@ export default function FreightSimulator() {
     setResult(null);
   }
 
-  async function handleSimulate() {
+  const handleSimulate = useCallback(async (silent = false) => {
     if (!tenantId) return;
     setLoading(true);
     try {
@@ -126,13 +127,24 @@ export default function FreightSimulator() {
         totalPallets: Number(totalPallets) || 0,
       });
       setResult(r);
-      if (!r.success) toast.error(r.error || 'Falha no cálculo');
+      if (!silent && !r.success) toast.error(r.error || 'Falha no cálculo');
     } catch (e: any) {
-      toast.error(e.message || 'Erro inesperado');
+      if (!silent) toast.error(e.message || 'Erro inesperado');
     } finally {
       setLoading(false);
     }
-  }
+  }, [tenantId, regions, regionId, clientId, payerGroup, destMunicipality, destState, vehicleType, totalValue, totalWeight, totalPallets]);
+
+  // Auto-recalculate (debounced) when inputs change
+  useEffect(() => {
+    if (!autoCalc || !tenantId) return;
+    const hasMinInput =
+      regionId !== NONE || payerGroup !== NONE || clientId !== NONE ||
+      Number(totalValue) > 0 || Number(totalWeight) > 0 || Number(totalPallets) > 0;
+    if (!hasMinInput) return;
+    const t = setTimeout(() => { handleSimulate(true); }, 400);
+    return () => clearTimeout(t);
+  }, [autoCalc, tenantId, regionId, payerGroup, clientId, totalValue, totalWeight, totalPallets, destState, destMunicipality, vehicleType, handleSimulate]);
 
   return (
     <div className="space-y-4">
@@ -227,10 +239,19 @@ export default function FreightSimulator() {
             </div>
           </div>
 
-          <div className="flex justify-end">
-            <Button onClick={handleSimulate} disabled={loading || !tenantId}>
+          <div className="flex justify-between items-center">
+            <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
+              <input
+                type="checkbox"
+                checked={autoCalc}
+                onChange={(e) => setAutoCalc(e.target.checked)}
+                className="h-4 w-4"
+              />
+              Recalcular automaticamente ao alterar filtros
+            </label>
+            <Button onClick={() => handleSimulate(false)} disabled={loading || !tenantId}>
               <Calculator className="h-4 w-4 mr-2" />
-              {loading ? 'Calculando...' : 'Calcular Prévia'}
+              {loading ? 'Calculando...' : 'Recalcular agora'}
             </Button>
           </div>
         </CardContent>
