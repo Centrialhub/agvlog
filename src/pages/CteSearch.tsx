@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react';
-import AppLayout from '@/components/layout/AppLayout';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -92,7 +91,7 @@ export default function CteSearch() {
   }, [rows]);
 
   return (
-    <AppLayout>
+    <>
       <div className="flex flex-col gap-4 p-4">
         <PendingInvoicesBanner from="search" />
 
@@ -232,6 +231,6 @@ export default function CteSearch() {
           </div>
         </Card>
       </div>
-    </AppLayout>
+    </>
   );
 }

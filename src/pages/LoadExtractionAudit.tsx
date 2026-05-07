@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
-import AppLayout from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -153,7 +152,7 @@ export default function LoadExtractionAudit() {
   };
 
   return (
-    <AppLayout>
+    <>
       <div className="space-y-4">
         <div className="flex items-start justify-between flex-wrap gap-3">
           <div>
@@ -324,6 +323,6 @@ export default function LoadExtractionAudit() {
           </DialogContent>
         </Dialog>
       </div>
-    </AppLayout>
+    </>
   );
 }

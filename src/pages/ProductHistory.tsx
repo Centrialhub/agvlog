@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Search, History, Package, Truck, FileText, MapPin, PackageOpen, ArrowDownToLine, ArrowUpFromLine } from 'lucide-react';
-import AppLayout from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -231,7 +230,7 @@ export default function ProductHistory() {
   };
 
   return (
-    <AppLayout>
+    <>
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -367,6 +366,6 @@ export default function ProductHistory() {
           </>
         )}
       </div>
-    </AppLayout>
+    </>
   );
 }
