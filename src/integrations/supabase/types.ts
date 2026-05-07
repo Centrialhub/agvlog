@@ -1721,6 +1721,7 @@ export type Database = {
           blocked: boolean
           body_type: string | null
           cargo_type: string | null
+          client_id: string | null
           created_at: string
           ctrc_type: string | null
           destination_municipality: string | null
@@ -1759,6 +1760,7 @@ export type Database = {
           blocked?: boolean
           body_type?: string | null
           cargo_type?: string | null
+          client_id?: string | null
           created_at?: string
           ctrc_type?: string | null
           destination_municipality?: string | null
@@ -1797,6 +1799,7 @@ export type Database = {
           blocked?: boolean
           body_type?: string | null
           cargo_type?: string | null
+          client_id?: string | null
           created_at?: string
           ctrc_type?: string | null
           destination_municipality?: string | null
@@ -1832,6 +1835,13 @@ export type Database = {
           vehicle_type?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "freight_tables_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "freight_tables_tenant_id_fkey"
             columns: ["tenant_id"]
