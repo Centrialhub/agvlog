@@ -267,7 +267,8 @@ export async function logFreightCalculation(
   breakdown: FreightBreakdown,
   userId?: string,
 ): Promise<void> {
-  await supabase.from('freight_calculation_log').insert({
+  // Upsert by (tenant_id, entity_type, entity_id) — keeps a single current row per CT-e
+  await supabase.from('freight_calculation_log').upsert({
     tenant_id: tenantId,
     entity_id: entityId,
     entity_type: entityType,
@@ -286,5 +287,5 @@ export async function logFreightCalculation(
     fallback_used: breakdown.fallbackUsed,
     fallback_reason: breakdown.fallbackReason || null,
     created_by: userId || null,
-  } as any);
+  } as any, { onConflict: 'tenant_id,entity_type,entity_id' });
 }
