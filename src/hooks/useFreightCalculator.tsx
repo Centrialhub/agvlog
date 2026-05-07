@@ -51,6 +51,8 @@ export interface FreightBreakdown {
   finalValue: number;
   fallbackUsed: boolean;
   fallbackReason?: string;
+  missingFields?: string[];
+  unknownSubstitutions?: Record<string, string>;
 }
 
 export interface FreightResult {
@@ -133,6 +135,34 @@ function computeFreightValue(table: any, input: FreightInput): FreightBreakdown[
 export async function calculateFreight(input: FreightInput): Promise<FreightResult> {
   const today = new Date().toISOString().slice(0, 10);
 
+  // ===== Auto-fallback: detect missing critical fields and substitute with UNKNOWN =====
+  const missingFields: string[] = [];
+  const unknownSubstitutions: Record<string, string> = {};
+  const UNKNOWN = 'UNKNOWN';
+
+  const normalizedInput: FreightInput = { ...input };
+  if (!normalizedInput.clientId) {
+    missingFields.push('client_id');
+    unknownSubstitutions['client_id'] = UNKNOWN;
+  }
+  if (!normalizedInput.payerGroup) {
+    missingFields.push('payer_group');
+    unknownSubstitutions['payer_group'] = UNKNOWN;
+    normalizedInput.payerGroup = null;
+  }
+  if (!normalizedInput.destinationState) {
+    missingFields.push('destination_state');
+    unknownSubstitutions['destination_state'] = UNKNOWN;
+  }
+  if (!normalizedInput.destinationMunicipality) {
+    missingFields.push('destination_municipality');
+    unknownSubstitutions['destination_municipality'] = UNKNOWN;
+  }
+  if (!normalizedInput.destination) {
+    missingFields.push('destination');
+    unknownSubstitutions['destination'] = UNKNOWN;
+  }
+
   const { data: tables, error } = await supabase
     .from('freight_tables')
     .select('*')
@@ -152,9 +182,9 @@ export async function calculateFreight(input: FreightInput): Promise<FreightResu
     return { success: false, value: 0, breakdown: null, error: 'Nenhuma tabela de frete vigente' };
   }
 
-  // Score each table
+  // Score each table — using normalized input (missing fields treated as wildcards / null)
   const scored = valid.map((t: any) => {
-    const { score, matched, ignored } = computeSpecificity(t, input);
+    const { score, matched, ignored } = computeSpecificity(t, normalizedInput);
     return { table: t, score, matched, ignored };
   });
 
@@ -169,14 +199,20 @@ export async function calculateFreight(input: FreightInput): Promise<FreightResu
     // Pick highest specificity
     qualified.sort((a, b) => b.score - a.score);
     chosen = qualified[0];
+    if (missingFields.length > 0) {
+      fallbackUsed = true;
+      fallbackReason = `Campos ausentes substituídos por UNKNOWN: ${missingFields.join(', ')}`;
+    }
   } else {
     // Fallback: use first table (least specific / generic)
     fallbackUsed = true;
-    fallbackReason = 'Nenhuma tabela compatível — usando tabela genérica';
+    fallbackReason = missingFields.length > 0
+      ? `Nenhuma tabela compatível — usando tabela genérica. Campos ausentes: ${missingFields.join(', ')}`
+      : 'Nenhuma tabela compatível — usando tabela genérica';
     chosen = scored.sort((a, b) => (a.table.specificity_score || 0) - (b.table.specificity_score || 0))[0];
   }
 
-  const components = computeFreightValue(chosen.table, input);
+  const components = computeFreightValue(chosen.table, normalizedInput);
   const baseValue = components.rateValue + components.fixedValue + components.perKgTotal + components.perPalletTotal
     + components.dispatchValue + components.trackingValue + components.tollValue
     + components.loadingValue + components.grisValue + components.insuranceValue;
@@ -186,17 +222,20 @@ export async function calculateFreight(input: FreightInput): Promise<FreightResu
   // Resolve region name
   let regionName: string | null = null;
   let regionId: string | null = null;
-  if (input.destination) {
+  if (normalizedInput.destination) {
     const { data: regions } = await supabase
       .from('client_regions')
       .select('id, region_name')
-      .eq('tenant_id', input.tenantId)
-      .or(`municipality.ilike.%${input.destinationMunicipality || input.destination}%`)
+      .eq('tenant_id', normalizedInput.tenantId)
+      .or(`municipality.ilike.%${normalizedInput.destinationMunicipality || normalizedInput.destination}%`)
       .limit(1);
     if (regions && regions.length > 0) {
       regionId = regions[0].id;
       regionName = regions[0].region_name;
     }
+  }
+  if (!regionName && missingFields.includes('destination_municipality')) {
+    regionName = UNKNOWN;
   }
 
   const breakdown: FreightBreakdown = {
@@ -214,6 +253,8 @@ export async function calculateFreight(input: FreightInput): Promise<FreightResu
     finalValue,
     fallbackUsed,
     fallbackReason,
+    missingFields: missingFields.length > 0 ? missingFields : undefined,
+    unknownSubstitutions: Object.keys(unknownSubstitutions).length > 0 ? unknownSubstitutions : undefined,
   };
 
   return { success: true, value: finalValue, breakdown };
@@ -235,7 +276,10 @@ export async function logFreightCalculation(
     region_id: breakdown.regionId,
     region_name: breakdown.regionName,
     matched_criteria: breakdown.matchedCriteria,
-    ignored_criteria: breakdown.ignoredCriteria,
+    ignored_criteria: [
+      ...breakdown.ignoredCriteria,
+      ...(breakdown.missingFields?.map(f => `missing:${f}=UNKNOWN`) || []),
+    ],
     components: breakdown.components as any,
     base_value: breakdown.baseValue,
     final_value: breakdown.finalValue,

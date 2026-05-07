@@ -46,6 +46,15 @@ export default function FreightBreakdownPanel({ breakdown, finalValue, success =
           {breakdown.fallbackReason && (
             <div className="text-xs text-amber-600 mt-1">⚠ {breakdown.fallbackReason}</div>
           )}
+          {breakdown.missingFields && breakdown.missingFields.length > 0 && (
+            <div className="mt-1 flex flex-wrap gap-1">
+              {breakdown.missingFields.map((f) => (
+                <Badge key={f} variant="outline" className="text-xs text-amber-700 border-amber-400">
+                  {f}: UNKNOWN
+                </Badge>
+              ))}
+            </div>
+          )}
         </div>
         <div className="text-right shrink-0">
           <div className="text-xs text-muted-foreground">Valor final</div>
