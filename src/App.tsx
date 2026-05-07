@@ -55,6 +55,7 @@ const LoadReallocation = lazy(() => import("@/pages/LoadReallocation"));
 const Billing = lazy(() => import("@/pages/Billing"));
 const CteMonitor = lazy(() => import("@/pages/CteMonitor"));
 const CteSearch = lazy(() => import("@/pages/CteSearch"));
+const PickupOrders = lazy(() => import("@/pages/PickupOrders"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
 // Driver pages
