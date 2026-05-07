@@ -1011,6 +1011,29 @@ export default function Ingestion() {
 
       <IngestionStepper currentStep={step} />
 
+      {step >= 0 && step <= 4 && (
+        <>
+          <PickupOrderPicker
+            value={pickupOrderId}
+            noPickup={noPickup}
+            onChange={(id, p) => { setPickupOrderId(id); setPickupOrder(p); if (id) setNoPickup(false); }}
+            onNoPickupChange={setNoPickup}
+          />
+          {pickupOrderId && remitterMismatchDocs.length > 0 && (
+            <Card className="border-destructive/50 bg-destructive/5">
+              <CardContent className="py-3 text-sm">
+                <strong className="text-destructive">⚠ {remitterMismatchDocs.length} XML(s) com remetente diferente do cadastrado na coleta nº {pickupOrder?.pickup_number}</strong>
+                <div className="text-xs text-muted-foreground mt-1">
+                  Esperado: <strong>{pickupOrder?.remitter_name}</strong>
+                  {pickupOrder?.remitter_cnpj ? ` (${pickupOrder.remitter_cnpj})` : ''}.
+                  Esses XMLs serão bloqueados ao salvar.
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </>
+      )}
+
       {step === 0 && (
         <>
           <UploadStep onFiles={handleFiles} onOrtFiles={handleOrtFiles} ortProcessing={ortProcessing} />
