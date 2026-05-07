@@ -154,81 +154,147 @@ export default function ClientRegions() {
       // Normalize headers (case/accent insensitive)
       const norm = (s: string) =>
         s.toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+      const cleanCell = (v: any) => (v ?? '').toString().replace(/\s+/g, ' ').trim();
+      const cleanUpper = (v: any) => cleanCell(v).toUpperCase();
       const pick = (row: any, keys: string[]) => {
         for (const k of Object.keys(row)) {
-          if (keys.includes(norm(k))) return (row[k] ?? '').toString().trim();
+          if (keys.includes(norm(k))) return cleanCell(row[k]);
         }
         return '';
       };
 
+      const issues: string[] = [];
+      const missingClients = new Set<string>();
+      let invalidUf = 0;
+      let missingFields = 0;
+
       const parsed = rowsRaw
-        .map((r) => ({
-          client: pick(r, ['cliente', 'client']),
-          payer_group: pick(r, ['grupo pagador', 'payer_group', 'grupo']),
-          municipality: pick(r, ['municipio', 'município', 'municipality', 'cidade']),
-          state_code: pick(r, ['uf', 'estado', 'state']),
-          region_name: pick(r, ['regiao', 'região', 'region', 'region_name']),
-        }))
-        .filter((r) => r.municipality && r.state_code && r.region_name)
+        .map((r, idx) => {
+          const rowNum = idx + 2; // header on row 1
+          const client = pick(r, ['cliente', 'client']);
+          const payer_group = pick(r, ['grupo pagador', 'payer_group', 'grupo']);
+          const municipality = pick(r, ['municipio', 'município', 'municipality', 'cidade']);
+          const state_code = pick(r, ['uf', 'estado', 'state']).toUpperCase().slice(0, 2);
+          const region_name = pick(r, ['regiao', 'região', 'region', 'region_name']);
+          return { rowNum, client, payer_group, municipality, state_code, region_name };
+        })
+        .filter((r) => {
+          if (!r.municipality || !r.state_code || !r.region_name) {
+            missingFields++;
+            return false;
+          }
+          if (!UF_OPTIONS.includes(r.state_code)) {
+            invalidUf++;
+            issues.push(`Linha ${r.rowNum}: UF inválida "${r.state_code}"`);
+            return false;
+          }
+          return true;
+        })
         .map((r) => ({
           ...r,
+          municipality: cleanUpper(r.municipality),
+          region_name: cleanCell(r.region_name),
           client: r.client === '*' ? '' : r.client,
-          payer_group: r.payer_group === '*' ? '' : r.payer_group,
+          payer_group: r.payer_group === '*' ? '' : cleanUpper(r.payer_group),
         }));
 
       if (parsed.length === 0) {
-        toast.error('Nenhuma linha válida. Esperado: Cliente, Grupo Pagador, Município, UF, Região');
+        toast.error(`Nenhuma linha válida. ${missingFields} sem campos obrigatórios, ${invalidUf} com UF inválida.`);
         return;
       }
 
-      if (!confirm(`Importar ${parsed.length} regiões da planilha "${file.name}"? Duplicadas serão ignoradas.`)) return;
-
-      // Build client name -> id map
+      // Build client name -> id map (case-insensitive, trimmed)
       const clientMap = new Map<string, string>();
-      clients.forEach((c: any) => clientMap.set(c.company_name.toUpperCase(), c.id));
+      clients.forEach((c: any) => clientMap.set(cleanUpper(c.company_name), c.id));
 
-      // Existing keys to dedupe
+      // Existing keys to dedupe (against DB)
+      const keyOf = (cli: string | null, payer: string | null, muni: string, uf: string) =>
+        `${muni}|${uf}|${payer || ''}|${cli || ''}`.toUpperCase();
       const existing = new Set(
         regions.map((r: any) =>
-          `${r.municipality}|${r.state_code}|${r.payer_group || ''}|${r.client_id || ''}`.toUpperCase()
-        )
+          keyOf(r.client_id, r.payer_group, r.municipality, r.state_code),
+        ),
       );
 
-      const records = parsed
-        .map((r: any) => {
-          const clientId = r.client
-            ? clientMap.get(r.client.toUpperCase()) || null
-            : null;
-          return {
-            tenant_id: currentTenant.id,
-            client_id: clientId,
-            payer_group: r.payer_group || null,
-            municipality: r.municipality,
-            state_code: r.state_code,
-            region_name: r.region_name,
-          };
-        })
-        .filter((r: any) => {
-          const key = `${r.municipality}|${r.state_code}|${r.payer_group || ''}|${r.client_id || ''}`.toUpperCase();
-          if (existing.has(key)) return false;
-          existing.add(key);
-          return true;
+      // In-file dedupe + conflict detection (same key, different region_name)
+      const seenInFile = new Map<string, string>(); // key -> region_name
+      let dupInFile = 0;
+      let dupExisting = 0;
+      let conflicts = 0;
+
+      const records: any[] = [];
+      for (const r of parsed) {
+        let clientId: string | null = null;
+        if (r.client) {
+          clientId = clientMap.get(cleanUpper(r.client)) || null;
+          if (!clientId) {
+            missingClients.add(r.client);
+            continue;
+          }
+        }
+        const key = keyOf(clientId, r.payer_group || null, r.municipality, r.state_code);
+
+        if (seenInFile.has(key)) {
+          if (seenInFile.get(key) !== r.region_name) {
+            conflicts++;
+            issues.push(`Linha ${r.rowNum}: ${r.municipality}/${r.state_code} já mapeada para "${seenInFile.get(key)}", ignorando "${r.region_name}"`);
+          } else {
+            dupInFile++;
+          }
+          continue;
+        }
+        seenInFile.set(key, r.region_name);
+
+        if (existing.has(key)) {
+          dupExisting++;
+          continue;
+        }
+        records.push({
+          tenant_id: currentTenant.id,
+          client_id: clientId,
+          payer_group: r.payer_group || null,
+          municipality: r.municipality,
+          state_code: r.state_code,
+          region_name: r.region_name,
         });
+      }
+
+      const summary =
+        `Pré-validação: ${parsed.length} válidas | ${dupInFile} duplicadas no arquivo | ${dupExisting} já no banco | ` +
+        `${conflicts} conflitos | ${missingClients.size} clientes não encontrados | ${invalidUf} UFs inválidas | ${missingFields} sem campos obrigatórios.\n\n` +
+        `Importar ${records.length} novas regiões?`;
+      if (!confirm(summary)) return;
 
       if (records.length === 0) {
-        toast.info('Nada para importar — todas já cadastradas');
+        toast.info('Nada para importar — todas já cadastradas ou inválidas');
+        if (missingClients.size > 0) {
+          console.warn('[Import Regiões] Clientes não encontrados:', Array.from(missingClients));
+        }
         return;
       }
 
-      // Insert in chunks of 100
+      // Insert in chunks of 100 — tolerate per-chunk failures (e.g. unique index)
       let inserted = 0;
+      const chunkErrors: string[] = [];
       for (let i = 0; i < records.length; i += 100) {
         const chunk = records.slice(i, i + 100);
         const { error } = await supabase.from('client_regions').insert(chunk);
-        if (error) throw error;
-        inserted += chunk.length;
+        if (error) {
+          chunkErrors.push(`Lote ${Math.floor(i / 100) + 1}: ${error.message}`);
+        } else {
+          inserted += chunk.length;
+        }
       }
-      toast.success(`${inserted} regiões importadas`);
+
+      if (inserted > 0) toast.success(`${inserted} regiões importadas`);
+      if (chunkErrors.length > 0) toast.error(`Falhas em ${chunkErrors.length} lote(s) — verifique o console`);
+      if (missingClients.size > 0) {
+        toast.warning(`${missingClients.size} cliente(s) não encontrado(s): ${Array.from(missingClients).slice(0, 3).join(', ')}${missingClients.size > 3 ? '…' : ''}`);
+      }
+      if (issues.length > 0) {
+        console.warn('[Import Regiões] Issues:', issues);
+        if (chunkErrors.length > 0) console.warn('[Import Regiões] Chunk errors:', chunkErrors);
+      }
       qc.invalidateQueries({ queryKey: ['client_regions'] });
     } catch (e: any) {
       toast.error(`Erro ao importar: ${e.message}`);
