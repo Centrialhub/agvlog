@@ -102,6 +102,19 @@ export default function Ingestion() {
 
   const onlyDigits = (s: string | null | undefined) => String(s || '').replace(/\D/g, '');
 
+  const remitterMismatchDocs = useMemo(() => {
+    if (!pickupOrder || noPickup) return [] as ValidatedDocument[];
+    const expectedCnpj = onlyDigits(pickupOrder.remitter_cnpj);
+    const expectedName = (pickupOrder.remitter_name || '').trim().toLowerCase();
+    return validatedDocs.filter(d => {
+      const docCnpj = onlyDigits((d.source as any)?.emitterCnpj);
+      const docName = ((d.source as any)?.emitterName || '').trim().toLowerCase();
+      if (expectedCnpj && docCnpj) return docCnpj !== expectedCnpj;
+      if (expectedName && docName) return !docName.includes(expectedName) && !expectedName.includes(docName);
+      return false;
+    });
+  }, [validatedDocs, pickupOrder, noPickup]);
+
   const fileToBase64 = (file: File) => new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || '').split(',')[1] || '');
