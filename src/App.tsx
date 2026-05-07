@@ -197,6 +197,7 @@ const App = () => (
             <Route path="/billing" element={<ProtectedRoute><Billing /></ProtectedRoute>} />
             <Route path="/cte-monitor" element={<ProtectedRoute><CteMonitor /></ProtectedRoute>} />
             <Route path="/cte-search" element={<ProtectedRoute><CteSearch /></ProtectedRoute>} />
+            <Route path="/pickup-orders" element={<ProtectedRoute><PickupOrders /></ProtectedRoute>} />
 
             {/* Driver routes */}
             <Route path="/driver" element={<DriverRoute><DriverHome /></DriverRoute>} />
