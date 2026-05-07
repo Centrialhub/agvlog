@@ -2,6 +2,16 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
+import { calculateFreight, logFreightCalculation } from './useFreightCalculator';
+
+const FREIGHT_TRIGGER_FIELDS = [
+  'recipient',
+  'recipient_state',
+  'recipient_city',
+  'recipient_neighborhood',
+  'weight_kg',
+  'pallet_count',
+];
 
 export const DOC_TYPES = ['inbound', 'outbound', 'transfer'] as const;
 export type DocType = typeof DOC_TYPES[number];
@@ -96,6 +106,8 @@ export function useCreateFiscalDocument() {
 }
 
 export function useUpdateFiscalDocument() {
+  const { currentTenant } = useTenant();
+  const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...values }: Partial<FiscalDocument> & { id: string }) => {
@@ -104,8 +116,80 @@ export function useUpdateFiscalDocument() {
         updated_at: new Date().toISOString(),
       } as any).eq('id', id).select().single();
       if (error) throw error;
+
+      // Auto-recalc freight when destination/weight/pallets change on a CT-e (outbound)
+      // and the freight isn't manually overridden
+      try {
+        const triggered = FREIGHT_TRIGGER_FIELDS.some((f) => f in values);
+        const doc: any = data;
+        if (
+          triggered &&
+          currentTenant &&
+          doc &&
+          doc.document_type === 'outbound' &&
+          !doc.freight_overridden
+        ) {
+          // Pull NF-e context from the same load
+          let clientId: string | null = doc.client_id || null;
+          let nfeTotalValue = 0;
+          if (doc.load_id) {
+            const { data: nfeDocs } = await supabase
+              .from('fiscal_documents')
+              .select('client_id, value')
+              .eq('load_id', doc.load_id)
+              .eq('tenant_id', currentTenant.id)
+              .eq('document_type', 'inbound');
+            nfeTotalValue = (nfeDocs || []).reduce((s: number, d: any) => s + (Number(d.value) || 0), 0);
+            if (!clientId) {
+              const ref = (nfeDocs || []).find((d: any) => d.client_id);
+              clientId = ref ? (ref as any).client_id : null;
+            }
+          }
+          let payerGroup: string | null = null;
+          if (clientId) {
+            const { data: cli } = await supabase
+              .from('clients').select('payer_group').eq('id', clientId).maybeSingle();
+            payerGroup = (cli as any)?.payer_group || null;
+          }
+
+          const result = await calculateFreight({
+            tenantId: currentTenant.id,
+            clientId,
+            payerGroup,
+            destination: doc.recipient || doc.recipient_city,
+            destinationState: doc.recipient_state,
+            destinationMunicipality: doc.recipient_city,
+            totalValue: nfeTotalValue,
+            totalWeight: Number(doc.weight_kg) || 0,
+            totalPallets: Number(doc.pallet_count) || 0,
+          });
+
+          if (result.success && result.breakdown) {
+            const v = result.value;
+            const cbsRate = 0.90, ibsRate = 0.10;
+            await supabase.from('fiscal_documents').update({
+              freight_value: v,
+              freight_value_original: v,
+              value: v,
+              freight_table_id: result.breakdown.tableId || null,
+              freight_breakdown: result.breakdown as any,
+              cbs_base: v, cbs_rate: cbsRate, cbs_value: v * cbsRate / 100,
+              ibs_base: v, ibs_rate: ibsRate, ibs_value: v * ibsRate / 100,
+              updated_at: new Date().toISOString(),
+            } as any).eq('id', id);
+
+            await logFreightCalculation(currentTenant.id, id, 'cte', result.breakdown, user?.id);
+          }
+        }
+      } catch (e) {
+        console.warn('[useUpdateFiscalDocument] auto-recalc falhou', e);
+      }
+
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['fiscal_documents'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
+      qc.invalidateQueries({ queryKey: ['load_documents'] });
+    },
   });
 }
