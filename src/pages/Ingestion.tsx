@@ -102,8 +102,6 @@ export default function Ingestion() {
 
   const onlyDigits = (s: string | null | undefined) => String(s || '').replace(/\D/g, '');
 
-  const remitterMismatchDocs = useMemoMismatch(validatedDocs, pickupOrder);
-
   const fileToBase64 = (file: File) => new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || '').split(',')[1] || '');
