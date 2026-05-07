@@ -309,6 +309,15 @@ export default function FreightSimulator() {
                   </button>
                 ))}
                 </div>
+                <label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    className="h-3.5 w-3.5"
+                    checked={onlyValid}
+                    onChange={(e) => setOnlyValid(e.target.checked)}
+                  />
+                  Excluir cancelados/duplicados
+                </label>
               </div>
             </div>
             {periodFilter === 'custom' && (
