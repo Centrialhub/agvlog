@@ -578,6 +578,15 @@ export default function Ingestion() {
 
   const handleSaveDocsOnly = async (loadId?: string | null) => {
     setSavingDocsOnly(true);
+    if (pickupOrderId && remitterMismatchDocs.length > 0) {
+      setSavingDocsOnly(false);
+      toast({
+        title: 'Vínculo de coleta bloqueado',
+        description: `${remitterMismatchDocs.length} XML(s) com remetente diferente do cadastrado na coleta. Remova-os ou troque a coleta.`,
+        variant: 'destructive',
+      });
+      return;
+    }
     const results: string[] = [];
     try {
       for (const doc of validatedDocs.filter(d => !d.hasErrors && !d.isDuplicate)) {
