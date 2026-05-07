@@ -1,5 +1,4 @@
 import { useState, useMemo } from 'react';
-import AppLayout from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -58,7 +57,7 @@ export default function PickupOrders() {
   };
 
   return (
-    <AppLayout>
+    <>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
@@ -174,12 +173,11 @@ export default function PickupOrders() {
           </CardContent>
         </Card>
       </div>
-
       <NewPickupOrderDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         pickup={editing}
       />
-    </AppLayout>
+    </>
   );
 }
