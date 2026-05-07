@@ -505,6 +505,42 @@ export default function LoadDetail() {
         destination={load.destination}
         documents={documents as any}
       />
+
+      {/* CT-e Freight Preview Dialog */}
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-4 w-4" /> Prévia do CT-e — Carga {load.load_number}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Confira a regra/tabela aplicada e o valor do frete calculado antes de gerar o CT-e.
+            </p>
+            {previewLoading ? (
+              <div className="text-sm text-muted-foreground py-8 text-center">Calculando frete...</div>
+            ) : previewResult ? (
+              <FreightBreakdownPanel
+                breakdown={previewResult.breakdown}
+                finalValue={previewResult.value}
+                success={previewResult.success}
+                error={previewResult.error}
+              />
+            ) : null}
+            <div className="flex gap-2 justify-end pt-2 border-t">
+              <Button variant="ghost" onClick={() => setPreviewOpen(false)}>Cancelar</Button>
+              <Button
+                onClick={handleGenerateCTe}
+                disabled={generateCTe.isPending || previewLoading}
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                {generateCTe.isPending ? 'Gerando...' : 'Confirmar e Gerar CT-e'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
