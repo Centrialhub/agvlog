@@ -14,8 +14,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
-import { FileText, Calculator, AlertTriangle, CheckCircle, Eye } from 'lucide-react';
+import { FileText, Calculator, AlertTriangle, CheckCircle, Eye, Edit3 } from 'lucide-react';
 import { toast } from 'sonner';
+import FreightReviewDialog from '@/components/freight/FreightReviewDialog';
 
 interface Doc {
   id: string;
@@ -27,6 +28,12 @@ interface Doc {
   weight_kg: number | null;
   value: number | null;
   status: string;
+  freight_value?: number | null;
+  freight_value_original?: number | null;
+  freight_breakdown?: any;
+  freight_overridden?: boolean | null;
+  freight_override_reason?: string | null;
+  freight_confirmed_at?: string | null;
 }
 
 interface Props {
@@ -48,6 +55,7 @@ export default function CTeWorkbench({ loadId, loadNumber, destination, document
   const [previewOpen, setPreviewOpen] = useState(false);
   const [overrideValue, setOverrideValue] = useState('');
   const [overrideReason, setOverrideReason] = useState('');
+  const [reviewDoc, setReviewDoc] = useState<Doc | null>(null);
   const [calculatedFreight, setCalculatedFreight] = useState<number | null>(null);
 
   const toggleDoc = (id: string) => {
