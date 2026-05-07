@@ -172,6 +172,7 @@ export default function PickupOrders() {
             </Table>
           </CardContent>
         </Card>
+      </div>
       <NewPickupOrderDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
