@@ -234,8 +234,17 @@ export default function LoadDetail() {
 
       if (nextStatus === 'loaded') {
         try {
-          await generateCTe.mutateAsync(load);
-          toast({ title: 'CT-e gerado automaticamente' });
+          const result: any = await generateCTe.mutateAsync(load);
+          const diag = result?._diagnostics;
+          if (diag?.warnings?.length) {
+            toast({
+              title: 'CT-e gerado com alertas',
+              description: diag.warnings.join(' • '),
+              variant: 'destructive',
+            });
+          } else {
+            toast({ title: 'CT-e gerado automaticamente' });
+          }
         } catch (e: any) {
           if (!e.message.includes('já existe')) {
             toast({ title: 'Erro CT-e', description: e.message, variant: 'destructive' });
@@ -250,8 +259,17 @@ export default function LoadDetail() {
 
   const handleGenerateCTe = async () => {
     try {
-      await generateCTe.mutateAsync(load);
-      toast({ title: 'CT-e gerado com sucesso' });
+      const result: any = await generateCTe.mutateAsync(load);
+      const diag = result?._diagnostics;
+      if (diag?.warnings?.length) {
+        toast({
+          title: 'CT-e gerado com alertas',
+          description: diag.warnings.join(' • '),
+          variant: 'destructive',
+        });
+      } else {
+        toast({ title: 'CT-e gerado com sucesso' });
+      }
       setPreviewOpen(false);
       setPreviewResult(null);
     } catch (e: any) {
