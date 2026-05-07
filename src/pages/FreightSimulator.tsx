@@ -1,4 +1,8 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Check, ChevronsUpDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
@@ -69,7 +73,7 @@ export default function FreightSimulator() {
     queryFn: async () => {
       const { data } = await supabase
         .from('fiscal_documents')
-        .select('id, invoice_number, access_key, recipient, recipient_city, recipient_state, value, weight_kg, pallet_count, client_id, document_type')
+        .select('id, invoice_number, access_key, remitter, recipient, recipient_city, recipient_state, value, weight_kg, pallet_count, client_id, document_type')
         .eq('tenant_id', tenantId!)
         .order('created_at', { ascending: false })
         .limit(200);
