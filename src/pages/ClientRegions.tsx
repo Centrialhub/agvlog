@@ -29,9 +29,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Plus, Search, Pencil, Trash2, MapPin } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, MapPin, Upload } from 'lucide-react';
 import { toast } from 'sonner';
-import regioesSeed from '@/data/regioesSeed.json';
+import * as XLSX from 'xlsx';
+import { useRef } from 'react';
 
 const UF_OPTIONS = [
   'AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT',
@@ -50,6 +51,7 @@ export default function ClientRegions() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({
     client_id: '',
@@ -134,11 +136,53 @@ export default function ClientRegions() {
     onError: (e: any) => toast.error(e.message),
   });
 
-  async function importSeed() {
-    if (!currentTenant) return;
-    if (!confirm(`Importar ${regioesSeed.length} regiões da planilha? Duplicadas (mesmo município + grupo pagador) serão ignoradas.`)) return;
+  async function handleFileImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !currentTenant) return;
     setImporting(true);
     try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rowsRaw: any[] = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      if (rowsRaw.length === 0) {
+        toast.error('Planilha vazia');
+        return;
+      }
+
+      // Normalize headers (case/accent insensitive)
+      const norm = (s: string) =>
+        s.toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+      const pick = (row: any, keys: string[]) => {
+        for (const k of Object.keys(row)) {
+          if (keys.includes(norm(k))) return (row[k] ?? '').toString().trim();
+        }
+        return '';
+      };
+
+      const parsed = rowsRaw
+        .map((r) => ({
+          client: pick(r, ['cliente', 'client']),
+          payer_group: pick(r, ['grupo pagador', 'payer_group', 'grupo']),
+          municipality: pick(r, ['municipio', 'município', 'municipality', 'cidade']),
+          state_code: pick(r, ['uf', 'estado', 'state']),
+          region_name: pick(r, ['regiao', 'região', 'region', 'region_name']),
+        }))
+        .filter((r) => r.municipality && r.state_code && r.region_name)
+        .map((r) => ({
+          ...r,
+          client: r.client === '*' ? '' : r.client,
+          payer_group: r.payer_group === '*' ? '' : r.payer_group,
+        }));
+
+      if (parsed.length === 0) {
+        toast.error('Nenhuma linha válida. Esperado: Cliente, Grupo Pagador, Município, UF, Região');
+        return;
+      }
+
+      if (!confirm(`Importar ${parsed.length} regiões da planilha "${file.name}"? Duplicadas serão ignoradas.`)) return;
+
       // Build client name -> id map
       const clientMap = new Map<string, string>();
       clients.forEach((c: any) => clientMap.set(c.company_name.toUpperCase(), c.id));
@@ -150,7 +194,7 @@ export default function ClientRegions() {
         )
       );
 
-      const records = regioesSeed
+      const records = parsed
         .map((r: any) => {
           const clientId = r.client
             ? clientMap.get(r.client.toUpperCase()) || null
@@ -231,8 +275,20 @@ export default function ClientRegions() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={importSeed} disabled={importing}>
-            {importing ? 'Importando...' : 'Importar planilha (244)'}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            className="hidden"
+            onChange={handleFileImport}
+          />
+          <Button
+            variant="outline"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importing}
+          >
+            <Upload className="h-4 w-4 mr-2" />
+            {importing ? 'Importando...' : 'Importar planilha'}
           </Button>
           <Dialog open={dialogOpen} onOpenChange={(o) => { if (!o) resetForm(); setDialogOpen(o); }}>
             <DialogTrigger asChild>
