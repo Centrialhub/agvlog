@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { parseNFeXml, parseCsvOrders, parseExcelOrders, ParsedOrderRow, ParsedNFe } from '@/lib/documentParsers';
 import {
   validateNFe, validateOrderRows, generateLoadSuggestions, buildValidationIndexes,
@@ -26,6 +26,8 @@ import GroupingStep from '@/components/ingestion/GroupingStep';
 import ResultsStep from '@/components/ingestion/ResultsStep';
 import { calculateFreight, logFreightCalculation } from '@/hooks/useFreightCalculator';
 import { applyOrtFallbacks, isUnknown, UNKNOWN } from '@/lib/ortFieldFallbacks';
+import PickupOrderPicker from '@/components/pickup/PickupOrderPicker';
+import type { PickupOrder } from '@/hooks/usePickupOrders';
 
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
@@ -94,6 +96,24 @@ export default function Ingestion() {
   const [ortProcessing, setOrtProcessing] = useState(false);
   const [executionResults, setExecutionResults] = useState<string[]>([]);
   const [ortClientIds, setOrtClientIds] = useState<Array<string | null>>([]);
+  const [pickupOrderId, setPickupOrderId] = useState<string | null>(null);
+  const [pickupOrder, setPickupOrder] = useState<PickupOrder | null>(null);
+  const [noPickup, setNoPickup] = useState(false);
+
+  const onlyDigits = (s: string | null | undefined) => String(s || '').replace(/\D/g, '');
+
+  const remitterMismatchDocs = useMemo(() => {
+    if (!pickupOrder || noPickup) return [] as ValidatedDocument[];
+    const expectedCnpj = onlyDigits(pickupOrder.remitter_cnpj);
+    const expectedName = (pickupOrder.remitter_name || '').trim().toLowerCase();
+    return validatedDocs.filter(d => {
+      const docCnpj = onlyDigits((d.source as any)?.emitterCnpj);
+      const docName = ((d.source as any)?.emitterName || '').trim().toLowerCase();
+      if (expectedCnpj && docCnpj) return docCnpj !== expectedCnpj;
+      if (expectedName && docName) return !docName.includes(expectedName) && !expectedName.includes(docName);
+      return false;
+    });
+  }, [validatedDocs, pickupOrder, noPickup]);
 
   const fileToBase64 = (file: File) => new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -558,6 +578,15 @@ export default function Ingestion() {
 
   const handleSaveDocsOnly = async (loadId?: string | null) => {
     setSavingDocsOnly(true);
+    if (pickupOrderId && remitterMismatchDocs.length > 0) {
+      setSavingDocsOnly(false);
+      toast({
+        title: 'Vínculo de coleta bloqueado',
+        description: `${remitterMismatchDocs.length} XML(s) com remetente diferente do cadastrado na coleta. Remova-os ou troque a coleta.`,
+        variant: 'destructive',
+      });
+      return;
+    }
     const results: string[] = [];
     try {
       for (const doc of validatedDocs.filter(d => !d.hasErrors && !d.isDuplicate)) {
@@ -611,6 +640,7 @@ export default function Ingestion() {
               freight_table_id: freightTableId,
               status: 'confirmed',
               load_id: loadId || null,
+              pickup_order_id: pickupOrderId || null,
               client_load_number: doc.source.clientLoadNumber || null,
               client_load_source: doc.source.clientLoadNumber
                 ? {
@@ -709,6 +739,7 @@ export default function Ingestion() {
           freight_breakdown: freightBreakdown,
           freight_table_id: freightTableId,
           status: 'confirmed',
+          pickup_order_id: pickupOrderId || null,
           client_load_number: doc.source.clientLoadNumber || null,
           client_load_source: doc.source.clientLoadNumber
             ? {
@@ -817,6 +848,7 @@ export default function Ingestion() {
               freight_breakdown: freightBreakdown,
               freight_table_id: freightTableId,
               status: 'confirmed',
+              pickup_order_id: pickupOrderId || null,
               client_load_number: doc.source.clientLoadNumber || null,
               client_load_source: doc.source.clientLoadNumber
                 ? {
@@ -978,6 +1010,29 @@ export default function Ingestion() {
       </div>
 
       <IngestionStepper currentStep={step} />
+
+      {step >= 0 && step <= 4 && (
+        <>
+          <PickupOrderPicker
+            value={pickupOrderId}
+            noPickup={noPickup}
+            onChange={(id, p) => { setPickupOrderId(id); setPickupOrder(p); if (id) setNoPickup(false); }}
+            onNoPickupChange={setNoPickup}
+          />
+          {pickupOrderId && remitterMismatchDocs.length > 0 && (
+            <Card className="border-destructive/50 bg-destructive/5">
+              <CardContent className="py-3 text-sm">
+                <strong className="text-destructive">⚠ {remitterMismatchDocs.length} XML(s) com remetente diferente do cadastrado na coleta nº {pickupOrder?.pickup_number}</strong>
+                <div className="text-xs text-muted-foreground mt-1">
+                  Esperado: <strong>{pickupOrder?.remitter_name}</strong>
+                  {pickupOrder?.remitter_cnpj ? ` (${pickupOrder.remitter_cnpj})` : ''}.
+                  Esses XMLs serão bloqueados ao salvar.
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </>
+      )}
 
       {step === 0 && (
         <>

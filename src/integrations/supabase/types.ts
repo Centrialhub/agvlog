@@ -1513,6 +1513,7 @@ export type Database = {
           operation_type: Database["public"]["Enums"]["operation_type"] | null
           order_id: string | null
           pallet_count: number | null
+          pickup_order_id: string | null
           product_summary: string | null
           recipient: string | null
           recipient_city: string | null
@@ -1552,6 +1553,7 @@ export type Database = {
           operation_type?: Database["public"]["Enums"]["operation_type"] | null
           order_id?: string | null
           pallet_count?: number | null
+          pickup_order_id?: string | null
           product_summary?: string | null
           recipient?: string | null
           recipient_city?: string | null
@@ -1591,6 +1593,7 @@ export type Database = {
           operation_type?: Database["public"]["Enums"]["operation_type"] | null
           order_id?: string | null
           pallet_count?: number | null
+          pickup_order_id?: string | null
           product_summary?: string | null
           recipient?: string | null
           recipient_city?: string | null
@@ -1626,6 +1629,13 @@ export type Database = {
             columns: ["order_id"]
             isOneToOne: false
             referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fiscal_documents_pickup_order_id_fkey"
+            columns: ["pickup_order_id"]
+            isOneToOne: false
+            referencedRelation: "pickup_orders"
             referencedColumns: ["id"]
           },
           {
@@ -3867,6 +3877,95 @@ export type Database = {
           },
         ]
       }
+      pickup_orders: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          driver_id: string | null
+          driver_name_snapshot: string | null
+          id: string
+          notes: string | null
+          pickup_at: string
+          pickup_number: string
+          recipient_name: string | null
+          remitter_client_id: string | null
+          remitter_cnpj: string | null
+          remitter_name: string | null
+          status: string
+          tenant_id: string
+          updated_at: string
+          vehicle_id: string | null
+          vehicle_plate_snapshot: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          driver_id?: string | null
+          driver_name_snapshot?: string | null
+          id?: string
+          notes?: string | null
+          pickup_at?: string
+          pickup_number: string
+          recipient_name?: string | null
+          remitter_client_id?: string | null
+          remitter_cnpj?: string | null
+          remitter_name?: string | null
+          status?: string
+          tenant_id: string
+          updated_at?: string
+          vehicle_id?: string | null
+          vehicle_plate_snapshot?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          driver_id?: string | null
+          driver_name_snapshot?: string | null
+          id?: string
+          notes?: string | null
+          pickup_at?: string
+          pickup_number?: string
+          recipient_name?: string | null
+          remitter_client_id?: string | null
+          remitter_cnpj?: string | null
+          remitter_name?: string | null
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+          vehicle_id?: string | null
+          vehicle_plate_snapshot?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pickup_orders_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pickup_orders_remitter_client_id_fkey"
+            columns: ["remitter_client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pickup_orders_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pickup_orders_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pois: {
         Row: {
           category: string | null
@@ -5815,6 +5914,7 @@ export type Database = {
       is_tenant_admin: { Args: { _tenant_id: string }; Returns: boolean }
       is_tenant_member: { Args: { _tenant_id: string }; Returns: boolean }
       peek_next_load_number: { Args: { _tenant_id: string }; Returns: string }
+      peek_next_pickup_number: { Args: { _tenant_id: string }; Returns: string }
       preview_reimport_cleanup_counts: {
         Args: { _end_date?: string; _start_date?: string; _tenant_id: string }
         Returns: Json
