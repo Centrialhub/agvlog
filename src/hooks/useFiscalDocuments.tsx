@@ -36,6 +36,7 @@ export interface FiscalDocument {
   issue_date: string | null;
   order_id: string | null;
   load_id: string | null;
+  pickup_order_id: string | null;
   product_summary: string | null;
   pallet_count: number;
   weight_kg: number | null;
