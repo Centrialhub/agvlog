@@ -839,6 +839,7 @@ export default function Ingestion() {
               freight_breakdown: freightBreakdown,
               freight_table_id: freightTableId,
               status: 'confirmed',
+              pickup_order_id: pickupOrderId || null,
               client_load_number: doc.source.clientLoadNumber || null,
               client_load_source: doc.source.clientLoadNumber
                 ? {
