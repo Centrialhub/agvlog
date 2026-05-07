@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/select';
 import { Plus, Search, Pencil, Trash2, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
+import regioesSeed from '@/data/regioesSeed.json';
 
 const UF_OPTIONS = [
   'AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT',
@@ -48,6 +49,7 @@ export default function ClientRegions() {
   const [filterUf, setFilterUf] = useState('');
 
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({
     client_id: '',
@@ -132,6 +134,65 @@ export default function ClientRegions() {
     onError: (e: any) => toast.error(e.message),
   });
 
+  async function importSeed() {
+    if (!currentTenant) return;
+    if (!confirm(`Importar ${regioesSeed.length} regiões da planilha? Duplicadas (mesmo município + grupo pagador) serão ignoradas.`)) return;
+    setImporting(true);
+    try {
+      // Build client name -> id map
+      const clientMap = new Map<string, string>();
+      clients.forEach((c: any) => clientMap.set(c.company_name.toUpperCase(), c.id));
+
+      // Existing keys to dedupe
+      const existing = new Set(
+        regions.map((r: any) =>
+          `${r.municipality}|${r.state_code}|${r.payer_group || ''}|${r.client_id || ''}`.toUpperCase()
+        )
+      );
+
+      const records = regioesSeed
+        .map((r: any) => {
+          const clientId = r.client
+            ? clientMap.get(r.client.toUpperCase()) || null
+            : null;
+          return {
+            tenant_id: currentTenant.id,
+            client_id: clientId,
+            payer_group: r.payer_group || null,
+            municipality: r.municipality,
+            state_code: r.state_code,
+            region_name: r.region_name,
+          };
+        })
+        .filter((r: any) => {
+          const key = `${r.municipality}|${r.state_code}|${r.payer_group || ''}|${r.client_id || ''}`.toUpperCase();
+          if (existing.has(key)) return false;
+          existing.add(key);
+          return true;
+        });
+
+      if (records.length === 0) {
+        toast.info('Nada para importar — todas já cadastradas');
+        return;
+      }
+
+      // Insert in chunks of 100
+      let inserted = 0;
+      for (let i = 0; i < records.length; i += 100) {
+        const chunk = records.slice(i, i + 100);
+        const { error } = await supabase.from('client_regions').insert(chunk);
+        if (error) throw error;
+        inserted += chunk.length;
+      }
+      toast.success(`${inserted} regiões importadas`);
+      qc.invalidateQueries({ queryKey: ['client_regions'] });
+    } catch (e: any) {
+      toast.error(`Erro ao importar: ${e.message}`);
+    } finally {
+      setImporting(false);
+    }
+  }
+
   function resetForm() {
     setForm({ client_id: '', payer_group: '', municipality: '', state_code: '', region_name: '' });
     setEditingId(null);
@@ -169,10 +230,14 @@ export default function ClientRegions() {
             Cadastro de regiões para cálculo de frete. Não interfere na roteirização.
           </p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={(o) => { if (!o) resetForm(); setDialogOpen(o); }}>
-          <DialogTrigger asChild>
-            <Button><Plus className="h-4 w-4 mr-2" />Nova Região</Button>
-          </DialogTrigger>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={importSeed} disabled={importing}>
+            {importing ? 'Importando...' : 'Importar planilha (244)'}
+          </Button>
+          <Dialog open={dialogOpen} onOpenChange={(o) => { if (!o) resetForm(); setDialogOpen(o); }}>
+            <DialogTrigger asChild>
+              <Button><Plus className="h-4 w-4 mr-2" />Nova Região</Button>
+            </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>{editingId ? 'Editar Região' : 'Cadastrar Região'}</DialogTitle>
@@ -236,6 +301,7 @@ export default function ClientRegions() {
             </div>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {/* Filters */}
