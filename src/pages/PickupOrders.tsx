@@ -57,7 +57,7 @@ export default function PickupOrders() {
   };
 
   return (
-    <AppLayout>
+    <>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
@@ -174,11 +174,14 @@ export default function PickupOrders() {
         </Card>
       </div>
 
+      </>
+  );
+}
+
+function _unused() { return (<>
       <NewPickupOrderDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         pickup={editing}
       />
-    </AppLayout>
-  );
-}
+    </>);}
