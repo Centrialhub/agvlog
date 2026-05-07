@@ -20,6 +20,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { FileSpreadsheet, Calculator, CheckCircle2, Layers, FileText, Info, XCircle, RotateCw, Filter, Eraser, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { PendingInvoicesBanner } from '@/components/billing/PendingInvoicesBanner';
 import {
   OPERATION_TYPE_OPTIONS,
   type OperationType,
@@ -407,6 +408,7 @@ export default function Billing() {
 
   return (
     <div className="animate-fade-in space-y-6">
+      <PendingInvoicesBanner from="billing" />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
