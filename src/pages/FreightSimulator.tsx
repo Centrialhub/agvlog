@@ -42,6 +42,22 @@ export default function FreightSimulator() {
   const [autoCalc, setAutoCalc] = useState(true);
   const [docTypeFilter, setDocTypeFilter] = useState<'cte' | 'nfe' | 'all'>('cte');
   const [docPickerOpen, setDocPickerOpen] = useState(false);
+  const [periodFilter, setPeriodFilter] = useState<'30' | '60' | '90' | 'custom' | 'all'>('30');
+  const [customStart, setCustomStart] = useState<string>('');
+  const [customEnd, setCustomEnd] = useState<string>('');
+
+  const { startDate, endDate } = useMemo(() => {
+    const today = new Date();
+    const toISO = (d: Date) => d.toISOString().slice(0, 10);
+    if (periodFilter === 'all') return { startDate: null as string | null, endDate: null as string | null };
+    if (periodFilter === 'custom') {
+      return { startDate: customStart || null, endDate: customEnd || null };
+    }
+    const days = Number(periodFilter);
+    const start = new Date(today);
+    start.setDate(start.getDate() - days);
+    return { startDate: toISO(start), endDate: toISO(today) };
+  }, [periodFilter, customStart, customEnd]);
 
   const { data: clients = [] } = useQuery({
     queryKey: ['clients-min', tenantId],
@@ -70,14 +86,17 @@ export default function FreightSimulator() {
   });
 
   const { data: docs = [] } = useQuery({
-    queryKey: ['fiscal-docs-recent', tenantId],
+    queryKey: ['fiscal-docs-recent', tenantId, startDate, endDate],
     queryFn: async () => {
-      const { data } = await supabase
+      let q = supabase
         .from('fiscal_documents')
-        .select('id, invoice_number, access_key, remitter, recipient, recipient_city, recipient_state, value, weight_kg, pallet_count, client_id, document_type')
+        .select('id, invoice_number, access_key, remitter, recipient, recipient_city, recipient_state, value, weight_kg, pallet_count, client_id, document_type, issue_date')
         .eq('tenant_id', tenantId!)
-        .order('created_at', { ascending: false })
-        .limit(200);
+        .order('issue_date', { ascending: false, nullsFirst: false })
+        .limit(500);
+      if (startDate) q = q.gte('issue_date', startDate);
+      if (endDate) q = q.lte('issue_date', endDate);
+      const { data } = await q;
       return data || [];
     },
     enabled: !!tenantId,
@@ -174,7 +193,30 @@ export default function FreightSimulator() {
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <Label>Carregar de um Documento Fiscal (opcional)</Label>
-              <div className="inline-flex rounded-md border bg-muted/30 p-0.5 text-xs">
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="inline-flex rounded-md border bg-muted/30 p-0.5 text-xs">
+                  {([
+                    { v: '30', label: '30d' },
+                    { v: '60', label: '60d' },
+                    { v: '90', label: '90d' },
+                    { v: 'custom', label: 'Custom' },
+                    { v: 'all', label: 'Tudo' },
+                  ] as const).map((opt) => (
+                    <button
+                      key={opt.v}
+                      type="button"
+                      onClick={() => setPeriodFilter(opt.v)}
+                      className={`px-2.5 py-1 rounded-sm transition-colors ${
+                        periodFilter === opt.v
+                          ? 'bg-background shadow-sm font-medium'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="inline-flex rounded-md border bg-muted/30 p-0.5 text-xs">
                 {([
                   { v: 'cte', label: 'CT-e' },
                   { v: 'nfe', label: 'NF-e' },
@@ -193,8 +235,17 @@ export default function FreightSimulator() {
                     {opt.label}
                   </button>
                 ))}
+                </div>
               </div>
             </div>
+            {periodFilter === 'custom' && (
+              <div className="flex items-center gap-2 text-xs">
+                <Label className="text-xs">De</Label>
+                <Input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} className="h-8 w-auto" />
+                <Label className="text-xs">Até</Label>
+                <Input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} className="h-8 w-auto" />
+              </div>
+            )}
             <Popover open={docPickerOpen} onOpenChange={setDocPickerOpen}>
               <PopoverTrigger asChild>
                 <Button
