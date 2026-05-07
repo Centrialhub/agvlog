@@ -26,6 +26,8 @@ import GroupingStep from '@/components/ingestion/GroupingStep';
 import ResultsStep from '@/components/ingestion/ResultsStep';
 import { calculateFreight, logFreightCalculation } from '@/hooks/useFreightCalculator';
 import { applyOrtFallbacks, isUnknown, UNKNOWN } from '@/lib/ortFieldFallbacks';
+import PickupOrderPicker from '@/components/pickup/PickupOrderPicker';
+import type { PickupOrder } from '@/hooks/usePickupOrders';
 
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
@@ -94,6 +96,13 @@ export default function Ingestion() {
   const [ortProcessing, setOrtProcessing] = useState(false);
   const [executionResults, setExecutionResults] = useState<string[]>([]);
   const [ortClientIds, setOrtClientIds] = useState<Array<string | null>>([]);
+  const [pickupOrderId, setPickupOrderId] = useState<string | null>(null);
+  const [pickupOrder, setPickupOrder] = useState<PickupOrder | null>(null);
+  const [noPickup, setNoPickup] = useState(false);
+
+  const onlyDigits = (s: string | null | undefined) => String(s || '').replace(/\D/g, '');
+
+  const remitterMismatchDocs = useMemoMismatch(validatedDocs, pickupOrder);
 
   const fileToBase64 = (file: File) => new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
