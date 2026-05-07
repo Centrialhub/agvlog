@@ -275,8 +275,20 @@ export default function ClientRegions() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={importSeed} disabled={importing}>
-            {importing ? 'Importando...' : 'Importar planilha (244)'}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            className="hidden"
+            onChange={handleFileImport}
+          />
+          <Button
+            variant="outline"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importing}
+          >
+            <Upload className="h-4 w-4 mr-2" />
+            {importing ? 'Importando...' : 'Importar planilha'}
           </Button>
           <Dialog open={dialogOpen} onOpenChange={(o) => { if (!o) resetForm(); setDialogOpen(o); }}>
             <DialogTrigger asChild>
