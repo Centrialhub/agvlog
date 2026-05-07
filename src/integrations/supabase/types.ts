@@ -630,6 +630,7 @@ export type Database = {
       cte_documents: {
         Row: {
           access_key: string | null
+          autonomous_freight: boolean
           batch_id: string
           cancellation_reason: string | null
           cancelled_at: string | null
@@ -641,12 +642,16 @@ export type Database = {
           client_id: string | null
           company_branch: string | null
           company_group: string | null
+          complementary_doc: boolean
+          consignee: string | null
+          contract_number: string | null
           correction_letter: boolean
           correction_letter_payload: Json | null
           created_at: string
           created_by: string | null
           cte_number: string | null
           cte_series: string | null
+          cte_type: string
           driver_name: string | null
           fiscal_document_ids: string[] | null
           freight_value: number
@@ -655,8 +660,13 @@ export type Database = {
           ibs_rate: number | null
           ibs_value: number | null
           id: string
+          insurance_company: string | null
           internal_number: string | null
           invoice_count: number
+          invoice_numbers: string | null
+          is_closed: boolean
+          is_compensated: boolean
+          is_voided: boolean
           issued_at: string | null
           last_sefaz_event: Json | null
           load_ids: string[] | null
@@ -675,6 +685,7 @@ export type Database = {
           recipient_state: string | null
           reference_number: string | null
           remitter: string | null
+          romexp_number: string | null
           sefaz_environment: string | null
           sefaz_status: string
           sefaz_status_at: string | null
@@ -684,6 +695,8 @@ export type Database = {
           sent_at: string | null
           status: string
           tenant_id: string
+          trailer_plate: string | null
+          trip_number: string | null
           updated_at: string
           vehicle_plate: string | null
           weight_kg: number
@@ -692,6 +705,7 @@ export type Database = {
         }
         Insert: {
           access_key?: string | null
+          autonomous_freight?: boolean
           batch_id: string
           cancellation_reason?: string | null
           cancelled_at?: string | null
@@ -703,12 +717,16 @@ export type Database = {
           client_id?: string | null
           company_branch?: string | null
           company_group?: string | null
+          complementary_doc?: boolean
+          consignee?: string | null
+          contract_number?: string | null
           correction_letter?: boolean
           correction_letter_payload?: Json | null
           created_at?: string
           created_by?: string | null
           cte_number?: string | null
           cte_series?: string | null
+          cte_type?: string
           driver_name?: string | null
           fiscal_document_ids?: string[] | null
           freight_value?: number
@@ -717,8 +735,13 @@ export type Database = {
           ibs_rate?: number | null
           ibs_value?: number | null
           id?: string
+          insurance_company?: string | null
           internal_number?: string | null
           invoice_count?: number
+          invoice_numbers?: string | null
+          is_closed?: boolean
+          is_compensated?: boolean
+          is_voided?: boolean
           issued_at?: string | null
           last_sefaz_event?: Json | null
           load_ids?: string[] | null
@@ -737,6 +760,7 @@ export type Database = {
           recipient_state?: string | null
           reference_number?: string | null
           remitter?: string | null
+          romexp_number?: string | null
           sefaz_environment?: string | null
           sefaz_status?: string
           sefaz_status_at?: string | null
@@ -746,6 +770,8 @@ export type Database = {
           sent_at?: string | null
           status?: string
           tenant_id: string
+          trailer_plate?: string | null
+          trip_number?: string | null
           updated_at?: string
           vehicle_plate?: string | null
           weight_kg?: number
@@ -754,6 +780,7 @@ export type Database = {
         }
         Update: {
           access_key?: string | null
+          autonomous_freight?: boolean
           batch_id?: string
           cancellation_reason?: string | null
           cancelled_at?: string | null
@@ -765,12 +792,16 @@ export type Database = {
           client_id?: string | null
           company_branch?: string | null
           company_group?: string | null
+          complementary_doc?: boolean
+          consignee?: string | null
+          contract_number?: string | null
           correction_letter?: boolean
           correction_letter_payload?: Json | null
           created_at?: string
           created_by?: string | null
           cte_number?: string | null
           cte_series?: string | null
+          cte_type?: string
           driver_name?: string | null
           fiscal_document_ids?: string[] | null
           freight_value?: number
@@ -779,8 +810,13 @@ export type Database = {
           ibs_rate?: number | null
           ibs_value?: number | null
           id?: string
+          insurance_company?: string | null
           internal_number?: string | null
           invoice_count?: number
+          invoice_numbers?: string | null
+          is_closed?: boolean
+          is_compensated?: boolean
+          is_voided?: boolean
           issued_at?: string | null
           last_sefaz_event?: Json | null
           load_ids?: string[] | null
@@ -799,6 +835,7 @@ export type Database = {
           recipient_state?: string | null
           reference_number?: string | null
           remitter?: string | null
+          romexp_number?: string | null
           sefaz_environment?: string | null
           sefaz_status?: string
           sefaz_status_at?: string | null
@@ -808,6 +845,8 @@ export type Database = {
           sent_at?: string | null
           status?: string
           tenant_id?: string
+          trailer_plate?: string | null
+          trip_number?: string | null
           updated_at?: string
           vehicle_plate?: string | null
           weight_kg?: number
