@@ -116,6 +116,31 @@ export function useGenerateCTe() {
       const freightValue = freightResult.success ? freightResult.value : 0;
       const breakdown = freightResult.breakdown;
 
+      // ===== Diagnostic warnings to surface to the user =====
+      const warnings: string[] = [];
+      const missingContext: string[] = [];
+      if (!clientId) missingContext.push('cliente (NF-e sem client_id vinculado)');
+      if (!payerGroup) missingContext.push('payer_group (cliente sem grupo pagador definido)');
+      if (!destState) missingContext.push('UF de destino');
+      if (!destMunicipality) missingContext.push('município de destino');
+      if (!load.destination && !destMunicipality) missingContext.push('destino da carga');
+
+      if (!freightResult.success) {
+        warnings.push(freightResult.error || 'Falha ao calcular frete');
+      }
+      if (breakdown?.fallbackUsed) {
+        warnings.push(breakdown.fallbackReason || 'Tabela genérica utilizada (fallback)');
+      }
+      if (breakdown?.missingFields?.length) {
+        warnings.push(`Campos substituídos por UNKNOWN: ${breakdown.missingFields.join(', ')}`);
+      }
+      if (missingContext.length > 0) {
+        warnings.push(`Contexto incompleto: ${missingContext.join('; ')}`);
+      }
+      if (freightValue === 0 && !breakdown) {
+        warnings.push('Nenhuma tabela de frete ativa encontrada para este tenant — verifique cadastro em /freight');
+      }
+
       const cteNumber = `CTE-${load.load_number}`;
 
       // Calculate IBS/CBS based on freight value (reform tributária)
@@ -164,7 +189,18 @@ export function useGenerateCTe() {
         }
       }
 
-      return data;
+      return {
+        ...data,
+        _diagnostics: {
+          warnings,
+          missingContext,
+          freightSuccess: freightResult.success,
+          freightError: freightResult.error || null,
+          fallbackUsed: !!breakdown?.fallbackUsed,
+          fallbackReason: breakdown?.fallbackReason || null,
+          missingFields: breakdown?.missingFields || [],
+        },
+      } as any;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
