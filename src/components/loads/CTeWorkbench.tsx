@@ -323,6 +323,11 @@ export default function CTeWorkbench({ loadId, loadNumber, destination, document
             </div>
           </DialogContent>
         </Dialog>
+        <FreightReviewDialog
+          open={!!reviewDoc}
+          onOpenChange={(v) => { if (!v) setReviewDoc(null); }}
+          doc={reviewDoc as any}
+        />
       </CardContent>
     </Card>
   );
