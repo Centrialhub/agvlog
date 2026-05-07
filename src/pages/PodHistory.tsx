@@ -6,7 +6,6 @@ import { ptBR } from 'date-fns/locale';
 import { ArrowLeft, CheckCircle2, Clock, FileSearch, MapPin, PackageCheck, Truck, Hourglass, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
-import AppLayout from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -256,7 +255,7 @@ export default function PodHistory() {
   const delivered = data?.doc?.status === 'delivered' || data?.doc?.loads?.status === 'delivered' || !!lastStop?.actual_arrival_at;
 
   return (
-    <AppLayout>
+    <>
       <div className="space-y-4">
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
@@ -376,6 +375,6 @@ export default function PodHistory() {
           </Card>
         )}
       </div>
-    </AppLayout>
+    </>
   );
 }

@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react';
-import AppLayout from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -101,7 +100,7 @@ export default function CteMonitor() {
   }
 
   return (
-    <AppLayout>
+    <>
       <div className="flex flex-col gap-4 p-4">
         <PendingInvoicesBanner from="monitor" />
         <header className="flex items-center justify-between flex-wrap gap-2">
@@ -323,7 +322,7 @@ export default function CteMonitor() {
           </DialogContent>
         </Dialog>
       </div>
-    </AppLayout>
+    </>
   );
 }
 
