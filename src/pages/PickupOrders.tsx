@@ -172,16 +172,11 @@ export default function PickupOrders() {
             </Table>
           </CardContent>
         </Card>
-      </div>
-
-      </>
-  );
-}
-
-function _unused() { return (<>
       <NewPickupOrderDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         pickup={editing}
       />
-    </>);}
+    </div>
+  );
+}
