@@ -1501,8 +1501,15 @@ export type Database = {
           created_by: string | null
           document_type: string
           freight_breakdown: Json | null
+          freight_confirmed_at: string | null
+          freight_confirmed_by: string | null
+          freight_overridden: boolean
+          freight_overridden_at: string | null
+          freight_overridden_by: string | null
+          freight_override_reason: string | null
           freight_table_id: string | null
           freight_value: number | null
+          freight_value_original: number | null
           ibs_base: number | null
           ibs_rate: number | null
           ibs_value: number | null
@@ -1541,8 +1548,15 @@ export type Database = {
           created_by?: string | null
           document_type?: string
           freight_breakdown?: Json | null
+          freight_confirmed_at?: string | null
+          freight_confirmed_by?: string | null
+          freight_overridden?: boolean
+          freight_overridden_at?: string | null
+          freight_overridden_by?: string | null
+          freight_override_reason?: string | null
           freight_table_id?: string | null
           freight_value?: number | null
+          freight_value_original?: number | null
           ibs_base?: number | null
           ibs_rate?: number | null
           ibs_value?: number | null
@@ -1581,8 +1595,15 @@ export type Database = {
           created_by?: string | null
           document_type?: string
           freight_breakdown?: Json | null
+          freight_confirmed_at?: string | null
+          freight_confirmed_by?: string | null
+          freight_overridden?: boolean
+          freight_overridden_at?: string | null
+          freight_overridden_by?: string | null
+          freight_override_reason?: string | null
           freight_table_id?: string | null
           freight_value?: number | null
+          freight_value_original?: number | null
           ibs_base?: number | null
           ibs_rate?: number | null
           ibs_value?: number | null
@@ -1821,6 +1842,50 @@ export type Database = {
           tenant_id?: string
         }
         Relationships: []
+      }
+      freight_override_log: {
+        Row: {
+          changed_by: string | null
+          created_at: string
+          fiscal_document_id: string
+          freight_breakdown_snapshot: Json | null
+          id: string
+          new_value: number
+          previous_value: number | null
+          reason: string
+          tenant_id: string
+        }
+        Insert: {
+          changed_by?: string | null
+          created_at?: string
+          fiscal_document_id: string
+          freight_breakdown_snapshot?: Json | null
+          id?: string
+          new_value: number
+          previous_value?: number | null
+          reason: string
+          tenant_id: string
+        }
+        Update: {
+          changed_by?: string | null
+          created_at?: string
+          fiscal_document_id?: string
+          freight_breakdown_snapshot?: Json | null
+          id?: string
+          new_value?: number
+          previous_value?: number | null
+          reason?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "freight_override_log_fiscal_document_id_fkey"
+            columns: ["fiscal_document_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_documents"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       freight_tables: {
         Row: {

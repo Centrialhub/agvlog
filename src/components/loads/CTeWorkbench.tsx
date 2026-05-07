@@ -14,8 +14,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
-import { FileText, Calculator, AlertTriangle, CheckCircle, Eye } from 'lucide-react';
+import { FileText, Calculator, AlertTriangle, CheckCircle, Eye, Edit3 } from 'lucide-react';
 import { toast } from 'sonner';
+import FreightReviewDialog from '@/components/freight/FreightReviewDialog';
 
 interface Doc {
   id: string;
@@ -27,6 +28,12 @@ interface Doc {
   weight_kg: number | null;
   value: number | null;
   status: string;
+  freight_value?: number | null;
+  freight_value_original?: number | null;
+  freight_breakdown?: any;
+  freight_overridden?: boolean | null;
+  freight_override_reason?: string | null;
+  freight_confirmed_at?: string | null;
 }
 
 interface Props {
@@ -48,6 +55,7 @@ export default function CTeWorkbench({ loadId, loadNumber, destination, document
   const [previewOpen, setPreviewOpen] = useState(false);
   const [overrideValue, setOverrideValue] = useState('');
   const [overrideReason, setOverrideReason] = useState('');
+  const [reviewDoc, setReviewDoc] = useState<Doc | null>(null);
   const [calculatedFreight, setCalculatedFreight] = useState<number | null>(null);
 
   const toggleDoc = (id: string) => {
@@ -184,12 +192,25 @@ export default function CTeWorkbench({ loadId, loadNumber, destination, document
           <div className="space-y-2">
             <p className="text-xs text-muted-foreground font-medium">CT-es Emitidos ({outboundDocs.length})</p>
             {outboundDocs.map(d => (
-              <div key={d.id} className="flex items-center justify-between p-2 rounded-md bg-muted/50 text-sm">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="h-3.5 w-3.5 text-green-600" />
-                  <span className="font-medium">{d.invoice_number}</span>
+              <div key={d.id} className="flex items-center justify-between p-2 rounded-md bg-muted/50 text-sm gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <CheckCircle className="h-3.5 w-3.5 text-green-600 shrink-0" />
+                  <span className="font-medium truncate">{d.invoice_number}</span>
+                  {d.freight_overridden && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-300">Alterado</span>
+                  )}
+                  {d.freight_confirmed_at && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700 border border-green-300">Confirmado</span>
+                  )}
                 </div>
-                <span className="text-muted-foreground">{d.recipient} | {d.pallet_count} pl | {d.weight_kg} kg</span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-muted-foreground text-xs">
+                    {d.freight_value ? fmt(Number(d.freight_value)) : '—'} | {d.pallet_count} pl
+                  </span>
+                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setReviewDoc(d)}>
+                    <Edit3 className="h-3 w-3 mr-1" /> Revisar
+                  </Button>
+                </div>
               </div>
             ))}
           </div>
@@ -302,6 +323,11 @@ export default function CTeWorkbench({ loadId, loadNumber, destination, document
             </div>
           </DialogContent>
         </Dialog>
+        <FreightReviewDialog
+          open={!!reviewDoc}
+          onOpenChange={(v) => { if (!v) setReviewDoc(null); }}
+          doc={reviewDoc as any}
+        />
       </CardContent>
     </Card>
   );

@@ -139,6 +139,7 @@ export function useGenerateCTe() {
         weight_kg: totalWeight || load.total_weight_kg || 0,
         value: freightValue > 0 ? freightValue : null,
         freight_value: freightValue > 0 ? freightValue : null,
+        freight_value_original: freightValue > 0 ? freightValue : null,
         freight_table_id: breakdown?.tableId || null,
         freight_breakdown: breakdown ? (breakdown as any) : null,
         product_summary: itemSummary,
