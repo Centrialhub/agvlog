@@ -41,6 +41,7 @@ export default function FreightSimulator() {
   const [loading, setLoading] = useState(false);
   const [autoCalc, setAutoCalc] = useState(true);
   const [docTypeFilter, setDocTypeFilter] = useState<'cte' | 'nfe' | 'all'>('cte');
+  const [docPickerOpen, setDocPickerOpen] = useState(false);
 
   const { data: clients = [] } = useQuery({
     queryKey: ['clients-min', tenantId],
@@ -194,24 +195,77 @@ export default function FreightSimulator() {
                 ))}
               </div>
             </div>
-            <Select value={docId || NONE} onValueChange={(v) => loadFromDoc(v === NONE ? '' : v)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione um documento para preencher os dados" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NONE}>— Manual —</SelectItem>
-                {filteredDocs.length === 0 && (
-                  <div className="px-2 py-3 text-xs text-muted-foreground">
-                    Nenhum documento {docTypeFilter === 'cte' ? 'CT-e' : docTypeFilter === 'nfe' ? 'NF-e' : ''} encontrado
-                  </div>
-                )}
-                {filteredDocs.map((d: any) => (
-                  <SelectItem key={d.id} value={d.id}>
-                    {d.document_type?.toUpperCase()} {d.invoice_number || d.access_key?.slice(-8)} · {d.recipient || '—'} · {d.recipient_city}/{d.recipient_state}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Popover open={docPickerOpen} onOpenChange={setDocPickerOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={docPickerOpen}
+                  className="w-full justify-between font-normal"
+                >
+                  <span className="truncate text-left">
+                    {(() => {
+                      const sel = docs.find((x: any) => x.id === docId);
+                      if (!sel) return <span className="text-muted-foreground">Buscar por nº, emitente, destinatário ou cidade…</span>;
+                      return `${sel.document_type?.toUpperCase()} ${sel.invoice_number || sel.access_key?.slice(-8) || ''} · ${sel.recipient || sel.remitter || '—'}`;
+                    })()}
+                  </span>
+                  <ChevronsUpDown className="h-4 w-4 opacity-50 shrink-0" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="p-0 w-[--radix-popover-trigger-width] min-w-[420px]" align="start">
+                <Command
+                  filter={(value, search) => {
+                    if (!search) return 1;
+                    return value.toLowerCase().includes(search.toLowerCase()) ? 1 : 0;
+                  }}
+                >
+                  <CommandInput placeholder="Buscar nº, emitente, destinatário, cidade…" autoFocus />
+                  <CommandList>
+                    <CommandEmpty>Nenhum documento encontrado</CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem
+                        value="manual --"
+                        onSelect={() => { loadFromDoc(''); setDocPickerOpen(false); }}
+                      >
+                        <Check className={cn('mr-2 h-4 w-4', !docId ? 'opacity-100' : 'opacity-0')} />
+                        — Manual —
+                      </CommandItem>
+                      {filteredDocs.map((d: any) => {
+                        const num = d.invoice_number || d.access_key?.slice(-8) || '';
+                        const haystack = [
+                          d.document_type,
+                          num,
+                          d.remitter,
+                          d.recipient,
+                          d.recipient_city,
+                          d.recipient_state,
+                        ].filter(Boolean).join(' ');
+                        return (
+                          <CommandItem
+                            key={d.id}
+                            value={`${haystack} ${d.id}`}
+                            onSelect={() => { loadFromDoc(d.id); setDocPickerOpen(false); }}
+                          >
+                            <Check className={cn('mr-2 h-4 w-4', docId === d.id ? 'opacity-100' : 'opacity-0')} />
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm truncate">
+                                <span className="font-medium">{d.document_type?.toUpperCase()}</span> {num}
+                                {d.remitter && <span className="text-muted-foreground"> · {d.remitter}</span>}
+                              </div>
+                              <div className="text-xs text-muted-foreground truncate">
+                                {d.recipient || '—'} · {d.recipient_city || '—'}/{d.recipient_state || '—'}
+                              </div>
+                            </div>
+                          </CommandItem>
+                        );
+                      })}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
             <p className="text-[11px] text-muted-foreground">
               {filteredDocs.length} documento(s) listado(s) — total carregado: {docs.length}
             </p>
