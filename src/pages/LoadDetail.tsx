@@ -54,7 +54,7 @@ function useLoadDocuments(loadId: string | undefined) {
       if (!loadId) return [];
       const { data, error } = await supabase
         .from('fiscal_documents')
-        .select('id, invoice_number, document_type, status, remitter, recipient, pallet_count, weight_kg, value, issue_date')
+        .select('id, invoice_number, document_type, status, remitter, recipient, pallet_count, weight_kg, value, issue_date, freight_value, freight_value_original, freight_breakdown, freight_overridden, freight_override_reason, freight_confirmed_at')
         .eq('load_id', loadId)
         .order('created_at', { ascending: false });
       if (error) throw error;
