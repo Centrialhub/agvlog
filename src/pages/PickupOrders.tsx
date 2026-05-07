@@ -177,6 +177,6 @@ export default function PickupOrders() {
         onOpenChange={setDialogOpen}
         pickup={editing}
       />
-    </div>
+    </>
   );
 }
