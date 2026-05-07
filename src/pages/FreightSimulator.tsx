@@ -10,9 +10,10 @@ import { Badge } from '@/components/ui/badge';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { Calculator, FileText, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Calculator, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { calculateFreight, type FreightResult } from '@/hooks/useFreightCalculator';
 import { toast } from 'sonner';
+import FreightBreakdownPanel from '@/components/freight/FreightBreakdownPanel';
 
 const NONE = '__none__';
 const formatBRL = (n: number) =>
@@ -269,86 +270,16 @@ export default function FreightSimulator() {
               Resultado da Simulação
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {!result.success && (
-              <div className="text-destructive text-sm">{result.error}</div>
-            )}
-            {result.breakdown && (
-              <>
-                <div className="flex items-center justify-between border-b pb-3">
-                  <div>
-                    <div className="text-xs text-muted-foreground">Tabela aplicada</div>
-                    <div className="font-medium flex items-center gap-2">
-                      <FileText className="h-4 w-4" />
-                      #{result.breakdown.tableCode} — {result.breakdown.tableName}
-                      {result.breakdown.fallbackUsed && (
-                        <Badge variant="outline" className="text-amber-600 border-amber-600">Fallback</Badge>
-                      )}
-                    </div>
-                    {result.breakdown.regionName && (
-                      <div className="text-xs text-muted-foreground mt-1">Região: {result.breakdown.regionName}</div>
-                    )}
-                  </div>
-                  <div className="text-right">
-                    <div className="text-xs text-muted-foreground">Valor final do frete</div>
-                    <div className="text-2xl font-bold">{formatBRL(result.value)}</div>
-                  </div>
-                </div>
-
-                {result.breakdown.fallbackReason && (
-                  <div className="text-xs text-amber-600">⚠ {result.breakdown.fallbackReason}</div>
-                )}
-
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-                  <Item label="% sobre NF" value={`${result.breakdown.components.ratePercent}%`} sub={formatBRL(result.breakdown.components.rateValue)} />
-                  <Item label="Valor fixo" value={formatBRL(result.breakdown.components.fixedValue)} />
-                  <Item label="Por kg" value={formatBRL(result.breakdown.components.perKgValue)} sub={formatBRL(result.breakdown.components.perKgTotal)} />
-                  <Item label="Por pallet" value={formatBRL(result.breakdown.components.perPalletValue)} sub={formatBRL(result.breakdown.components.perPalletTotal)} />
-                  <Item label="Despacho" value={formatBRL(result.breakdown.components.dispatchValue)} />
-                  <Item label="Rastreamento" value={formatBRL(result.breakdown.components.trackingValue)} />
-                  <Item label="Pedágio" value={formatBRL(result.breakdown.components.tollValue)} />
-                  <Item label="Carregamento" value={formatBRL(result.breakdown.components.loadingValue)} />
-                  <Item label="GRIS" value={formatBRL(result.breakdown.components.grisValue)} />
-                  <Item label="Seguro" value={`${result.breakdown.components.insurancePercent}%`} sub={formatBRL(result.breakdown.components.insuranceValue)} />
-                  <Item label="Base calculada" value={formatBRL(result.breakdown.baseValue)} />
-                  <Item label="Mínimo da tabela" value={formatBRL(result.breakdown.minValue)} />
-                </div>
-
-                <div>
-                  <div className="text-xs font-medium text-muted-foreground mb-1">Critérios atendidos</div>
-                  <div className="flex flex-wrap gap-1">
-                    {Object.entries(result.breakdown.matchedCriteria).map(([k, v]) => (
-                      <Badge key={k} variant="secondary">{k}: {v}</Badge>
-                    ))}
-                    {Object.keys(result.breakdown.matchedCriteria).length === 0 && (
-                      <span className="text-xs text-muted-foreground">Nenhum critério específico — tabela genérica</span>
-                    )}
-                  </div>
-                </div>
-
-                {result.breakdown.ignoredCriteria.length > 0 && (
-                  <div>
-                    <div className="text-xs font-medium text-muted-foreground mb-1">Critérios ignorados / divergentes</div>
-                    <ul className="text-xs text-muted-foreground list-disc pl-5 space-y-0.5">
-                      {result.breakdown.ignoredCriteria.map((c, i) => <li key={i}>{c}</li>)}
-                    </ul>
-                  </div>
-                )}
-              </>
-            )}
+          <CardContent>
+            <FreightBreakdownPanel
+              breakdown={result.breakdown}
+              finalValue={result.value}
+              success={result.success}
+              error={result.error}
+            />
           </CardContent>
         </Card>
       )}
-    </div>
-  );
-}
-
-function Item({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div className="border rounded-md p-2">
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="font-medium">{value}</div>
-      {sub && <div className="text-xs text-muted-foreground">= {sub}</div>}
     </div>
   );
 }
