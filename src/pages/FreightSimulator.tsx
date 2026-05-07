@@ -300,6 +300,24 @@ export default function FreightSimulator() {
                 <Input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} className="h-8 w-auto" />
               </div>
             )}
+            <div className="flex items-center gap-2">
+              <Input
+                value={quickSearch}
+                onChange={(e) => setQuickSearch(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleQuickSearch(); } }}
+                placeholder="Busca rápida por nº ou chave de acesso (Enter)…"
+                className="h-9"
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleQuickSearch}
+                disabled={quickSearching || !quickSearch.trim()}
+                className="shrink-0"
+              >
+                {quickSearching ? 'Buscando…' : 'Localizar'}
+              </Button>
+            </div>
             <Popover open={docPickerOpen} onOpenChange={setDocPickerOpen}>
               <PopoverTrigger asChild>
                 <Button
