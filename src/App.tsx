@@ -54,6 +54,7 @@ const Checklists = lazy(() => import("@/pages/Checklists"));
 const LoadReallocation = lazy(() => import("@/pages/LoadReallocation"));
 const Billing = lazy(() => import("@/pages/Billing"));
 const CteMonitor = lazy(() => import("@/pages/CteMonitor"));
+const CteSearch = lazy(() => import("@/pages/CteSearch"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
 // Driver pages
@@ -194,6 +195,7 @@ const App = () => (
             <Route path="/reallocation" element={<ProtectedRoute><LoadReallocation /></ProtectedRoute>} />
             <Route path="/billing" element={<ProtectedRoute><Billing /></ProtectedRoute>} />
             <Route path="/cte-monitor" element={<ProtectedRoute><CteMonitor /></ProtectedRoute>} />
+            <Route path="/cte-search" element={<ProtectedRoute><CteSearch /></ProtectedRoute>} />
 
             {/* Driver routes */}
             <Route path="/driver" element={<DriverRoute><DriverHome /></DriverRoute>} />
