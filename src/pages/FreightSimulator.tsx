@@ -90,6 +90,12 @@ export default function FreightSimulator() {
     return regions.filter((r: any) => !r.client_id || r.client_id === clientId);
   }, [regions, clientId]);
 
+  const filteredDocs = useMemo(() => {
+    if (docTypeFilter === 'all') return docs;
+    if (docTypeFilter === 'cte') return docs.filter((d: any) => d.document_type === 'outbound');
+    return docs.filter((d: any) => d.document_type === 'inbound');
+  }, [docs, docTypeFilter]);
+
   function loadFromDoc(id: string) {
     setDocId(id);
     if (!id || id === NONE) return;
