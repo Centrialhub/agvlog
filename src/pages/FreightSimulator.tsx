@@ -45,6 +45,8 @@ export default function FreightSimulator() {
   const [periodFilter, setPeriodFilter] = useState<'30' | '60' | '90' | 'custom' | 'all'>('30');
   const [customStart, setCustomStart] = useState<string>('');
   const [customEnd, setCustomEnd] = useState<string>('');
+  const [quickSearch, setQuickSearch] = useState<string>('');
+  const [quickSearching, setQuickSearching] = useState(false);
 
   const { startDate, endDate } = useMemo(() => {
     const today = new Date();
@@ -139,6 +141,58 @@ export default function FreightSimulator() {
     );
     if (match) setRegionId(match.id);
     setResult(null);
+  }
+
+  async function handleQuickSearch() {
+    const term = quickSearch.trim();
+    if (!term || !tenantId) return;
+    // Try local first
+    const local = filteredDocs.find((d: any) => {
+      const num = String(d.invoice_number || '');
+      const key = String(d.access_key || '');
+      return num === term || num.endsWith(term) || key.endsWith(term);
+    });
+    if (local) {
+      loadFromDoc(local.id);
+      toast.success(`Documento ${local.invoice_number || term} carregado`);
+      return;
+    }
+    // Fallback: query DB ignoring period filter
+    setQuickSearching(true);
+    try {
+      const { data, error } = await supabase
+        .from('fiscal_documents')
+        .select('id, invoice_number, access_key, remitter, recipient, recipient_city, recipient_state, value, weight_kg, pallet_count, client_id, document_type, issue_date')
+        .eq('tenant_id', tenantId)
+        .or(`invoice_number.eq.${term},access_key.ilike.%${term}%`)
+        .limit(5);
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        toast.error('Nenhum documento encontrado com esse número/chave');
+        return;
+      }
+      // Inject into local docs cache by reusing loadFromDoc-like flow
+      const d: any = data[0];
+      setDocId(d.id);
+      if (d.client_id) setClientId(d.client_id);
+      setTotalValue(String(d.value || 0));
+      setTotalWeight(String(d.weight_kg || 0));
+      setTotalPallets(String(d.pallet_count || 0));
+      setDestState(d.recipient_state || '');
+      setDestMunicipality(d.recipient_city || '');
+      const match = regions.find(
+        (r: any) =>
+          r.municipality?.toLowerCase() === (d.recipient_city || '').toLowerCase() &&
+          (!d.recipient_state || r.state_code === d.recipient_state),
+      );
+      if (match) setRegionId(match.id);
+      setResult(null);
+      toast.success(`Documento ${d.invoice_number || term} carregado (fora do período atual)`);
+    } catch (e: any) {
+      toast.error(e.message || 'Falha na busca');
+    } finally {
+      setQuickSearching(false);
+    }
   }
 
   const handleSimulate = useCallback(async (silent = false) => {
