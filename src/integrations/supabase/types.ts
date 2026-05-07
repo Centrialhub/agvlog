@@ -629,17 +629,25 @@ export type Database = {
       }
       cte_documents: {
         Row: {
+          access_key: string | null
           batch_id: string
+          cancellation_reason: string | null
+          cancelled_at: string | null
           cargo_value: number
           cbs_base: number | null
           cbs_rate: number | null
           cbs_value: number | null
           cfop: string | null
           client_id: string | null
+          company_branch: string | null
+          company_group: string | null
+          correction_letter: boolean
+          correction_letter_payload: Json | null
           created_at: string
           created_by: string | null
           cte_number: string | null
           cte_series: string | null
+          driver_name: string | null
           fiscal_document_ids: string[] | null
           freight_value: number
           grouping_keys: Json | null
@@ -647,34 +655,61 @@ export type Database = {
           ibs_rate: number | null
           ibs_value: number | null
           id: string
+          internal_number: string | null
           invoice_count: number
           issued_at: string | null
+          last_sefaz_event: Json | null
           load_ids: string[] | null
           net_value: number | null
           notes: string | null
           pallet_count: number
+          payer_cnpj: string | null
+          payer_group: string | null
+          payer_name: string | null
+          pdf_url: string | null
+          processed_at: string | null
+          protocol_number: string | null
           receivable_id: string | null
           recipient: string | null
           recipient_city: string | null
           recipient_state: string | null
+          reference_number: string | null
           remitter: string | null
+          sefaz_environment: string | null
+          sefaz_status: string
+          sefaz_status_at: string | null
+          sefaz_status_code: string | null
+          sefaz_status_reason: string | null
+          sefaz_user: string | null
+          sent_at: string | null
           status: string
           tenant_id: string
           updated_at: string
+          vehicle_plate: string | null
           weight_kg: number
+          xml_content: string | null
+          xml_url: string | null
         }
         Insert: {
+          access_key?: string | null
           batch_id: string
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
           cargo_value?: number
           cbs_base?: number | null
           cbs_rate?: number | null
           cbs_value?: number | null
           cfop?: string | null
           client_id?: string | null
+          company_branch?: string | null
+          company_group?: string | null
+          correction_letter?: boolean
+          correction_letter_payload?: Json | null
           created_at?: string
           created_by?: string | null
           cte_number?: string | null
           cte_series?: string | null
+          driver_name?: string | null
           fiscal_document_ids?: string[] | null
           freight_value?: number
           grouping_keys?: Json | null
@@ -682,34 +717,61 @@ export type Database = {
           ibs_rate?: number | null
           ibs_value?: number | null
           id?: string
+          internal_number?: string | null
           invoice_count?: number
           issued_at?: string | null
+          last_sefaz_event?: Json | null
           load_ids?: string[] | null
           net_value?: number | null
           notes?: string | null
           pallet_count?: number
+          payer_cnpj?: string | null
+          payer_group?: string | null
+          payer_name?: string | null
+          pdf_url?: string | null
+          processed_at?: string | null
+          protocol_number?: string | null
           receivable_id?: string | null
           recipient?: string | null
           recipient_city?: string | null
           recipient_state?: string | null
+          reference_number?: string | null
           remitter?: string | null
+          sefaz_environment?: string | null
+          sefaz_status?: string
+          sefaz_status_at?: string | null
+          sefaz_status_code?: string | null
+          sefaz_status_reason?: string | null
+          sefaz_user?: string | null
+          sent_at?: string | null
           status?: string
           tenant_id: string
           updated_at?: string
+          vehicle_plate?: string | null
           weight_kg?: number
+          xml_content?: string | null
+          xml_url?: string | null
         }
         Update: {
+          access_key?: string | null
           batch_id?: string
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
           cargo_value?: number
           cbs_base?: number | null
           cbs_rate?: number | null
           cbs_value?: number | null
           cfop?: string | null
           client_id?: string | null
+          company_branch?: string | null
+          company_group?: string | null
+          correction_letter?: boolean
+          correction_letter_payload?: Json | null
           created_at?: string
           created_by?: string | null
           cte_number?: string | null
           cte_series?: string | null
+          driver_name?: string | null
           fiscal_document_ids?: string[] | null
           freight_value?: number
           grouping_keys?: Json | null
@@ -717,21 +779,40 @@ export type Database = {
           ibs_rate?: number | null
           ibs_value?: number | null
           id?: string
+          internal_number?: string | null
           invoice_count?: number
           issued_at?: string | null
+          last_sefaz_event?: Json | null
           load_ids?: string[] | null
           net_value?: number | null
           notes?: string | null
           pallet_count?: number
+          payer_cnpj?: string | null
+          payer_group?: string | null
+          payer_name?: string | null
+          pdf_url?: string | null
+          processed_at?: string | null
+          protocol_number?: string | null
           receivable_id?: string | null
           recipient?: string | null
           recipient_city?: string | null
           recipient_state?: string | null
+          reference_number?: string | null
           remitter?: string | null
+          sefaz_environment?: string | null
+          sefaz_status?: string
+          sefaz_status_at?: string | null
+          sefaz_status_code?: string | null
+          sefaz_status_reason?: string | null
+          sefaz_user?: string | null
+          sent_at?: string | null
           status?: string
           tenant_id?: string
           updated_at?: string
+          vehicle_plate?: string | null
           weight_kg?: number
+          xml_content?: string | null
+          xml_url?: string | null
         }
         Relationships: [
           {
@@ -746,6 +827,59 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cte_sefaz_events: {
+        Row: {
+          created_at: string
+          cte_document_id: string
+          event_type: string
+          id: string
+          occurred_at: string
+          payload: Json | null
+          protocol_number: string | null
+          reason: string | null
+          source: string | null
+          status: string | null
+          status_code: string | null
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          cte_document_id: string
+          event_type: string
+          id?: string
+          occurred_at?: string
+          payload?: Json | null
+          protocol_number?: string | null
+          reason?: string | null
+          source?: string | null
+          status?: string | null
+          status_code?: string | null
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          cte_document_id?: string
+          event_type?: string
+          id?: string
+          occurred_at?: string
+          payload?: Json | null
+          protocol_number?: string | null
+          reason?: string | null
+          source?: string | null
+          status?: string | null
+          status_code?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cte_sefaz_events_cte_document_id_fkey"
+            columns: ["cte_document_id"]
+            isOneToOne: false
+            referencedRelation: "cte_documents"
             referencedColumns: ["id"]
           },
         ]
