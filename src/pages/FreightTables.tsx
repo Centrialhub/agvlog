@@ -494,7 +494,31 @@ export default function FreightTables() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-7 gap-3">
+            <div>
+              <Label className="text-xs">Cliente</Label>
+              <Select value={fClient || 'all'} onValueChange={(v) => setFClient(v === 'all' ? '' : v)}>
+                <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Todos" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  {clientsList.map((c: any) => (
+                    <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Região Destino</Label>
+              <Select value={fRegion || 'all'} onValueChange={(v) => setFRegion(v === 'all' ? '' : v)}>
+                <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Todas" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas</SelectItem>
+                  {uniqueRegions.map((rg) => (
+                    <SelectItem key={rg} value={rg}>{rg}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div>
               <Label className="text-xs">Grupo Pagador</Label>
               <Input placeholder="Filtrar" value={fGroup} onChange={(e) => setFGroup(e.target.value)} className="h-8 text-sm" />
@@ -554,6 +578,7 @@ export default function FreightTables() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-16">Cód.</TableHead>
+                  <TableHead>Cliente</TableHead>
                   <TableHead>Início</TableHead>
                   <TableHead>Fim</TableHead>
                   <TableHead>Grupo Pagador</TableHead>
@@ -585,6 +610,7 @@ export default function FreightTables() {
                   filtered.map((r: any) => (
                     <TableRow key={r.id} className={r.blocked ? 'opacity-50' : ''}>
                       <TableCell className="text-xs font-mono">{r.table_code}</TableCell>
+                      <TableCell className="text-xs">{r.clients?.company_name || '*'}</TableCell>
                       <TableCell className="text-xs">{fmtDate(r.valid_from)}</TableCell>
                       <TableCell className="text-xs">{fmtDate(r.valid_until)}</TableCell>
                       <TableCell className="text-xs">{r.payer_group || '*'}</TableCell>
