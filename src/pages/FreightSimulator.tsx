@@ -36,6 +36,7 @@ export default function FreightSimulator() {
   const [result, setResult] = useState<FreightResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [autoCalc, setAutoCalc] = useState(true);
+  const [docTypeFilter, setDocTypeFilter] = useState<'cte' | 'nfe' | 'all'>('cte');
 
   const { data: clients = [] } = useQuery({
     queryKey: ['clients-min', tenantId],
@@ -159,21 +160,51 @@ export default function FreightSimulator() {
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div>
-            <Label>Carregar de um Documento Fiscal (opcional)</Label>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <Label>Carregar de um Documento Fiscal (opcional)</Label>
+              <div className="inline-flex rounded-md border bg-muted/30 p-0.5 text-xs">
+                {([
+                  { v: 'cte', label: 'CT-e' },
+                  { v: 'nfe', label: 'NF-e' },
+                  { v: 'all', label: 'Ambos' },
+                ] as const).map((opt) => (
+                  <button
+                    key={opt.v}
+                    type="button"
+                    onClick={() => setDocTypeFilter(opt.v)}
+                    className={`px-2.5 py-1 rounded-sm transition-colors ${
+                      docTypeFilter === opt.v
+                        ? 'bg-background shadow-sm font-medium'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <Select value={docId || NONE} onValueChange={(v) => loadFromDoc(v === NONE ? '' : v)}>
               <SelectTrigger>
-                <SelectValue placeholder="Selecione um NF/CT-e para preencher os dados" />
+                <SelectValue placeholder="Selecione um documento para preencher os dados" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={NONE}>— Manual —</SelectItem>
-                {docs.map((d: any) => (
+                {filteredDocs.length === 0 && (
+                  <div className="px-2 py-3 text-xs text-muted-foreground">
+                    Nenhum documento {docTypeFilter === 'cte' ? 'CT-e' : docTypeFilter === 'nfe' ? 'NF-e' : ''} encontrado
+                  </div>
+                )}
+                {filteredDocs.map((d: any) => (
                   <SelectItem key={d.id} value={d.id}>
                     {d.document_type?.toUpperCase()} {d.invoice_number || d.access_key?.slice(-8)} · {d.recipient || '—'} · {d.recipient_city}/{d.recipient_state}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            <p className="text-[11px] text-muted-foreground">
+              {filteredDocs.length} documento(s) listado(s) — total carregado: {docs.length}
+            </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
