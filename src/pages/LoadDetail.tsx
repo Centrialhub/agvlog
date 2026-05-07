@@ -7,6 +7,8 @@ import { useUpdateLoad, LOAD_STATUS_LABELS, Load } from '@/hooks/useLoads';
 import { useLoadItems } from '@/hooks/useLoadItems';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useGenerateCTe } from '@/hooks/useGenerateCTe';
+import { calculateFreight, type FreightResult } from '@/hooks/useFreightCalculator';
+import FreightBreakdownPanel from '@/components/freight/FreightBreakdownPanel';
 import { getNextStatuses } from '@/lib/statusPipeline';
 import { useToast } from '@/hooks/use-toast';
 import LoadItemsPanel from '@/components/loads/LoadItemsPanel';
@@ -86,6 +88,9 @@ export default function LoadDetail() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [dispatchOpen, setDispatchOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewResult, setPreviewResult] = useState<FreightResult | null>(null);
 
   // Fetch drivers for dispatch
   const { data: drivers = [] } = useQuery({
@@ -247,8 +252,62 @@ export default function LoadDetail() {
     try {
       await generateCTe.mutateAsync(load);
       toast({ title: 'CT-e gerado com sucesso' });
+      setPreviewOpen(false);
+      setPreviewResult(null);
     } catch (e: any) {
       toast({ title: 'Erro', description: e.message, variant: 'destructive' });
+    }
+  };
+
+  const openCTePreview = async () => {
+    if (!load || !currentTenant) return;
+    setPreviewOpen(true);
+    setPreviewLoading(true);
+    setPreviewResult(null);
+    try {
+      // Gather NF context (client / payer / destination)
+      const { data: nfeDocs } = await supabase
+        .from('fiscal_documents')
+        .select('value, client_id, recipient_state, recipient_city')
+        .eq('load_id', load.id)
+        .eq('tenant_id', currentTenant.id)
+        .eq('document_type', 'inbound');
+
+      const nfeTotalValue = (nfeDocs || []).reduce((s: number, d: any) => s + (Number(d.value) || 0), 0);
+      const refDoc: any = (nfeDocs || []).find((d: any) => d.client_id) || (nfeDocs || [])[0] || {};
+      const clientId: string | null = refDoc.client_id || null;
+
+      let payerGroup: string | null = null;
+      if (clientId) {
+        const { data: cli } = await supabase
+          .from('clients')
+          .select('payer_group')
+          .eq('id', clientId)
+          .maybeSingle();
+        payerGroup = (cli as any)?.payer_group || null;
+      }
+
+      const totalPallets = items.reduce((s: number, li: any) => s + (li.pallet_count || 0), 0)
+        || load.total_pallet_count || 0;
+      const totalWeight = items.reduce((s: number, li: any) => s + (Number(li.weight_kg) || 0), 0)
+        || load.total_weight_kg || 0;
+
+      const r = await calculateFreight({
+        tenantId: currentTenant.id,
+        clientId,
+        payerGroup,
+        destination: load.destination || refDoc.recipient_city || null,
+        destinationState: refDoc.recipient_state || null,
+        destinationMunicipality: refDoc.recipient_city || null,
+        totalValue: nfeTotalValue,
+        totalWeight,
+        totalPallets,
+      });
+      setPreviewResult(r);
+    } catch (e: any) {
+      toast({ title: 'Erro na prévia', description: e.message, variant: 'destructive' });
+    } finally {
+      setPreviewLoading(false);
     }
   };
 
@@ -294,7 +353,7 @@ export default function LoadDetail() {
             </Button>
           ))}
           {['loaded', 'in_transit', 'delivered'].includes(load.status) && (
-            <Button size="sm" variant="outline" onClick={handleGenerateCTe} disabled={generateCTe.isPending}>
+            <Button size="sm" variant="outline" onClick={openCTePreview} disabled={generateCTe.isPending}>
               <FileText className="h-3 w-3 mr-1" /> CT-e
             </Button>
           )}
