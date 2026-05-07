@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { DollarSign, Map } from 'lucide-react';
+import { DollarSign, Map, Calculator } from 'lucide-react';
 import FreightTables from './FreightTables';
 import ClientRegions from './ClientRegions';
+import FreightSimulator from './FreightSimulator';
 import { useSearchParams } from 'react-router-dom';
 
 export default function FreightHub() {
   const [params, setParams] = useSearchParams();
-  const initial = params.get('tab') === 'regions' ? 'regions' : 'tables';
+  const tabParam = params.get('tab');
+  const initial = tabParam === 'regions' ? 'regions' : tabParam === 'simulator' ? 'simulator' : 'tables';
   const [tab, setTab] = useState(initial);
 
   return (
@@ -24,8 +26,8 @@ export default function FreightHub() {
         onValueChange={(v) => {
           setTab(v);
           const next = new URLSearchParams(params);
-          if (v === 'regions') next.set('tab', 'regions');
-          else next.delete('tab');
+          if (v === 'tables') next.delete('tab');
+          else next.set('tab', v);
           setParams(next, { replace: true });
         }}
       >
@@ -36,12 +38,18 @@ export default function FreightHub() {
           <TabsTrigger value="regions" className="gap-2">
             <Map className="h-4 w-4" /> Regiões
           </TabsTrigger>
+          <TabsTrigger value="simulator" className="gap-2">
+            <Calculator className="h-4 w-4" /> Prévia / Simulador
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="tables" className="mt-4">
           <FreightTables />
         </TabsContent>
         <TabsContent value="regions" className="mt-4">
           <ClientRegions />
+        </TabsContent>
+        <TabsContent value="simulator" className="mt-4">
+          <FreightSimulator />
         </TabsContent>
       </Tabs>
     </div>
