@@ -47,6 +47,7 @@ export default function FreightSimulator() {
   const [customEnd, setCustomEnd] = useState<string>('');
   const [quickSearch, setQuickSearch] = useState<string>('');
   const [quickSearching, setQuickSearching] = useState(false);
+  const [onlyValid, setOnlyValid] = useState(true);
 
   const { startDate, endDate } = useMemo(() => {
     const today = new Date();
@@ -88,18 +89,36 @@ export default function FreightSimulator() {
   });
 
   const { data: docs = [] } = useQuery({
-    queryKey: ['fiscal-docs-recent', tenantId, startDate, endDate],
+    queryKey: ['fiscal-docs-recent', tenantId, startDate, endDate, onlyValid],
     queryFn: async () => {
       let q = supabase
         .from('fiscal_documents')
-        .select('id, invoice_number, access_key, remitter, recipient, recipient_city, recipient_state, value, weight_kg, pallet_count, client_id, document_type, issue_date')
+        .select('id, invoice_number, access_key, remitter, recipient, recipient_city, recipient_state, value, weight_kg, pallet_count, client_id, document_type, issue_date, status, created_at')
         .eq('tenant_id', tenantId!)
         .order('issue_date', { ascending: false, nullsFirst: false })
         .limit(500);
       if (startDate) q = q.gte('issue_date', startDate);
       if (endDate) q = q.lte('issue_date', endDate);
+      if (onlyValid) {
+        // Excluir status indesejados (cancelados/rejeitados/rascunhos)
+        q = q.not('status', 'in', '(cancelled,canceled,rejected,denied,draft)');
+      }
       const { data } = await q;
-      return data || [];
+      const rows = data || [];
+      if (!onlyValid) return rows;
+      // Deduplicar por chave de acesso (ou nº+emitente quando faltar) — mantém o mais recente
+      const seen = new Map<string, any>();
+      for (const r of rows) {
+        const key = (r as any).access_key
+          || `${(r as any).invoice_number || ''}|${(r as any).remitter || ''}|${(r as any).document_type || ''}`;
+        if (!key) continue;
+        const existing = seen.get(key);
+        if (!existing) { seen.set(key, r); continue; }
+        const a = new Date((r as any).created_at || (r as any).issue_date || 0).getTime();
+        const b = new Date(existing.created_at || existing.issue_date || 0).getTime();
+        if (a > b) seen.set(key, r);
+      }
+      return Array.from(seen.values());
     },
     enabled: !!tenantId,
   });
