@@ -38,6 +38,7 @@ const navSections: NavSection[] = [
       { label: 'Roteirização', href: '/route-planning', icon: <Radio className="h-4 w-4" /> },
       { label: 'Cargas', href: '/loads', icon: <PackageCheck className="h-4 w-4" /> },
       { label: 'Rastreabilidade', href: '/traceability', icon: <FileSearch className="h-4 w-4" /> },
+      { label: 'Rastreab. Produto', href: '/product-traceability', icon: <Package className="h-4 w-4" /> },
       { label: 'Auditoria de Carga', href: '/load-extraction-audit', icon: <FileSearch className="h-4 w-4" /> },
       { label: 'Mover Cargas', href: '/reallocation', icon: <ArrowRightLeft className="h-4 w-4" /> },
       { label: 'Ocorrências', href: '/incidents', icon: <AlertOctagon className="h-4 w-4" /> },
