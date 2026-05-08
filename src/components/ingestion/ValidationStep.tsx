@@ -529,7 +529,15 @@ export default function ValidationStep({
                   </SelectContent>
                 </Select>
               </div>
-              <Button variant="secondary" onClick={() => onSaveDocsOnly(selectedLoadId)} disabled={totalValid === 0 || savingDocs}>
+              <Button
+                variant="outline"
+                onClick={() => setPreviewOpen(true)}
+                disabled={totalValid === 0 || savingDocs}
+                title="Pré-visualizar campos extraídos antes de gravar no banco"
+              >
+                <Eye className="h-4 w-4 mr-1.5" /> Pré-visualizar
+              </Button>
+              <Button variant="secondary" onClick={() => setPreviewOpen(true)} disabled={totalValid === 0 || savingDocs}>
                 {savingDocs ? 'Salvando...' : selectedLoadId ? 'Salvar e Vincular' : 'Salvar NF-es apenas'}
               </Button>
             </div>
@@ -539,6 +547,19 @@ export default function ValidationStep({
           </Button>
         </div>
       </div>
+
+      <IngestionPreviewDialog
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        docs={docs}
+        orders={orders}
+        confirming={savingDocs}
+        confirmLabel={selectedLoadId ? 'Confirmar e vincular à carga' : 'Confirmar e persistir NF-es'}
+        onConfirm={() => {
+          onSaveDocsOnly?.(selectedLoadId);
+          setPreviewOpen(false);
+        }}
+      />
     </div>
   );
 }
