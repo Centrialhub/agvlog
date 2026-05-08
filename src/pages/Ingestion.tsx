@@ -225,6 +225,32 @@ export default function Ingestion() {
     };
   }, [ortReviewDocs]);
 
+  // Persists the report snapshot to ingestion_reports for historical browsing.
+  const persistIngestionReport = useCallback(async (report: IngestionReport, sourceLabel: string) => {
+    if (!currentTenant || report.totalDocs === 0) return;
+    const batchId = `ING-${new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14)}`;
+    try {
+      await supabase.from('ingestion_reports' as any).insert({
+        tenant_id: currentTenant.id,
+        batch_id: batchId,
+        source_label: sourceLabel,
+        total_docs: report.totalDocs,
+        saved_docs: report.savedDocs,
+        error_docs: report.errorDocs,
+        needs_review_docs: report.needsReviewDocs,
+        clients_auto_created: report.clientsAutoCreated,
+        clients_matched: report.clientsMatched,
+        clients_unresolved: report.clientsUnresolved,
+        field_coverage: report.fieldCoverage as any,
+        review_items: (report.reviewItems || []) as any,
+        report: report as any,
+        created_by: user?.id || null,
+      });
+    } catch (e) {
+      console.error('persistIngestionReport failed', e);
+    }
+  }, [currentTenant, user?.id]);
+
   const remitterMismatchDocs = useMemo(() => {
     if (!pickupOrder || noPickup) return [] as ValidatedDocument[];
     const expectedCnpj = onlyDigits(pickupOrder.remitter_cnpj);
@@ -995,13 +1021,15 @@ export default function Ingestion() {
       const matchedExisting = validDocsForReport.filter(d =>
         d.matchedClientId && !clientsToSyncSsx.has(d.matchedClientId)
       ).length;
-      setIngestionReport(buildIngestionReport({
+      const reportSaveDocs = buildIngestionReport({
         docs: validDocsForReport,
         savedCount: successCount,
         errorCount,
         autoCreatedCount: autoCreatedCount,
         matchedCount: matchedExisting,
-      }));
+      });
+      setIngestionReport(reportSaveDocs);
+      void persistIngestionReport(reportSaveDocs, loadId ? `Vinculado à carga ${loads.find(l => l.id === loadId)?.load_number || ''}` : 'Salvar documentos');
       const loadLabel = loadId ? loads.find(l => l.id === loadId)?.load_number : null;
       if (autoCreatedCount > 0) {
         queryClient.invalidateQueries({ queryKey: ['clients'] });
@@ -1337,13 +1365,15 @@ export default function Ingestion() {
       const errorCount = results.filter(r => r.startsWith('❌')).length;
       const validDocsForReport = validatedDocs.filter(d => !d.hasErrors && !d.isDuplicate);
       const matchedExisting = validDocsForReport.filter(d => !!d.matchedClientId).length;
-      setIngestionReport(buildIngestionReport({
+      const reportExec = buildIngestionReport({
         docs: validDocsForReport,
         savedCount: successCount,
         errorCount,
         autoCreatedCount: 0,
         matchedCount: matchedExisting,
-      }));
+      });
+      setIngestionReport(reportExec);
+      void persistIngestionReport(reportExec, 'Execução completa de cargas');
 
       toast({
         title: 'Importação concluída',

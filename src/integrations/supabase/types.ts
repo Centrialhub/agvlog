@@ -2707,6 +2707,71 @@ export type Database = {
           },
         ]
       }
+      ingestion_reports: {
+        Row: {
+          batch_id: string
+          clients_auto_created: number
+          clients_matched: number
+          clients_unresolved: number
+          created_at: string
+          created_by: string | null
+          error_docs: number
+          field_coverage: Json
+          id: string
+          needs_review_docs: number
+          report: Json
+          review_items: Json
+          saved_docs: number
+          source_label: string | null
+          tenant_id: string
+          total_docs: number
+        }
+        Insert: {
+          batch_id: string
+          clients_auto_created?: number
+          clients_matched?: number
+          clients_unresolved?: number
+          created_at?: string
+          created_by?: string | null
+          error_docs?: number
+          field_coverage?: Json
+          id?: string
+          needs_review_docs?: number
+          report?: Json
+          review_items?: Json
+          saved_docs?: number
+          source_label?: string | null
+          tenant_id: string
+          total_docs?: number
+        }
+        Update: {
+          batch_id?: string
+          clients_auto_created?: number
+          clients_matched?: number
+          clients_unresolved?: number
+          created_at?: string
+          created_by?: string | null
+          error_docs?: number
+          field_coverage?: Json
+          id?: string
+          needs_review_docs?: number
+          report?: Json
+          review_items?: Json
+          saved_docs?: number
+          source_label?: string | null
+          tenant_id?: string
+          total_docs?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ingestion_reports_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       integration_accounts: {
         Row: {
           base_url: string

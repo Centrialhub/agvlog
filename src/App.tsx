@@ -34,6 +34,7 @@ const PodHistory = lazy(() => import("@/pages/PodHistory"));
 const OperationsDashboard = lazy(() => import("@/pages/OperationsDashboard"));
 const OperationalEvents = lazy(() => import("@/pages/OperationalEvents"));
 const Ingestion = lazy(() => import("@/pages/Ingestion"));
+const IngestionReports = lazy(() => import("@/pages/IngestionReports"));
 const ProductivityReports = lazy(() => import("@/pages/ProductivityReports"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const ExpenseApproval = lazy(() => import("@/pages/ExpenseApproval"));
@@ -178,6 +179,7 @@ const App = () => (
             <Route path="/operations" element={<ProtectedRoute><OperationsDashboard /></ProtectedRoute>} />
             <Route path="/events" element={<ProtectedRoute><OperationalEvents /></ProtectedRoute>} />
             <Route path="/ingestion" element={<ProtectedRoute><Ingestion /></ProtectedRoute>} />
+            <Route path="/ingestion-reports" element={<ProtectedRoute><IngestionReports /></ProtectedRoute>} />
             <Route path="/productivity" element={<ProtectedRoute><ProductivityReports /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="/expense-approval" element={<ProtectedRoute><ExpenseApproval /></ProtectedRoute>} />
