@@ -636,6 +636,7 @@ export default function Ingestion() {
     const autoCreatedByIe = new Map<string, string>(); // chave: UF|IE digits
     const autoCreatedByIm = new Map<string, string>(); // chave: município|IM digits
     let autoCreatedCount = 0;
+    const clientsToSyncSsx = new Set<string>(); // client_ids para sincronizar com SSX
 
     const ensureClient = async (src: any, ortFields?: any): Promise<string | null> => {
       if (!currentTenant) return null;
@@ -787,6 +788,7 @@ export default function Ingestion() {
         if (ieKey) autoCreatedByIe.set(ieKey, data.id);
         if (imKey) autoCreatedByIm.set(imKey, data.id);
         if (nameKey) autoCreatedByName.set(nameKey, data.id);
+        clientsToSyncSsx.add(data.id);
         return data.id;
       } catch {
         return null;
