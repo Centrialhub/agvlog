@@ -522,6 +522,25 @@ export default function Loads() {
 
       <LoadAdvancedFilters value={advFilters} onChange={setAdvFilters} drivers={drivers as any} />
 
+      <AppliedFiltersChips
+        chips={buildAppliedChips({
+          search, setSearch,
+          statusFilter, setStatusFilter,
+          datePreset, setDatePreset,
+          customStart, customEnd, setCustomStart, setCustomEnd,
+          adv: advFilters, setAdv: setAdvFilters,
+          drivers: drivers as any,
+        })}
+        onClearAll={() => {
+          setSearch('');
+          setStatusFilter('all');
+          setDatePreset('all');
+          setCustomStart('');
+          setCustomEnd('');
+          setAdvFilters(EMPTY_LOAD_ADVANCED_FILTERS);
+        }}
+      />
+
       {/* Load cards */}
       {isLoading ? (
         <div className="text-center text-muted-foreground py-12">Carregando...</div>
