@@ -614,18 +614,48 @@ export default function Ingestion() {
     const onlyDigits = (s: string) => (s || '').replace(/\D/g, '');
     const autoCreatedByCnpj = new Map<string, string>(); // chave: CNPJ digits, valor: client_id
     const autoCreatedByName = new Map<string, string>();
+    const autoCreatedByIe = new Map<string, string>(); // chave: UF|IE digits
+    const autoCreatedByIm = new Map<string, string>(); // chave: município|IM digits
     let autoCreatedCount = 0;
 
     const ensureClient = async (src: any, ortFields?: any): Promise<string | null> => {
       if (!currentTenant) return null;
       const cnpjDigits = onlyDigits(src.recipientCnpj || ortFields?.recipientCnpj);
       const nameKey = (src.recipientName || ortFields?.recipientName || '').trim().toLowerCase();
+      const ieDigits = onlyDigits(src.recipientStateRegistration || ortFields?.recipientStateRegistration);
+      const imDigits = onlyDigits(src.recipientMunicipalRegistration || ortFields?.recipientMunicipalRegistration);
+      const uf = (src.recipientState || ortFields?.recipientState || '').trim().toUpperCase();
+      const cityKey = (src.recipientCity || ortFields?.recipientCity || '').trim().toLowerCase();
+      const ieKey = ieDigits ? `${uf}|${ieDigits}` : '';
+      const imKey = imDigits ? `${cityKey}|${imDigits}` : '';
 
       // Já existe no cadastro? (match por CNPJ → nome)
       if (cnpjDigits) {
         const existing = clients.find(c => onlyDigits(c.tax_id || '') === cnpjDigits);
         if (existing) return existing.id;
         if (autoCreatedByCnpj.has(cnpjDigits)) return autoCreatedByCnpj.get(cnpjDigits)!;
+      }
+      // Match por IE (com mesma UF quando disponível) — evita duplicar quando CNPJ não foi extraído
+      if (ieDigits) {
+        const existingByIe = clients.find(c => {
+          const cIe = onlyDigits((c as any).state_registration || '');
+          if (!cIe || cIe !== ieDigits) return false;
+          const cUf = ((c as any).address_state || '').trim().toUpperCase();
+          return !uf || !cUf || cUf === uf;
+        });
+        if (existingByIe) return existingByIe.id;
+        if (autoCreatedByIe.has(ieKey)) return autoCreatedByIe.get(ieKey)!;
+      }
+      // Match por IM (com mesma cidade quando disponível)
+      if (imDigits) {
+        const existingByIm = clients.find(c => {
+          const cIm = onlyDigits((c as any).municipal_registration || '');
+          if (!cIm || cIm !== imDigits) return false;
+          const cCity = ((c as any).address_city || '').trim().toLowerCase();
+          return !cityKey || !cCity || cCity === cityKey;
+        });
+        if (existingByIm) return existingByIm.id;
+        if (autoCreatedByIm.has(imKey)) return autoCreatedByIm.get(imKey)!;
       }
       if (nameKey) {
         const existingByName = clients.find(c => (c.company_name || '').trim().toLowerCase() === nameKey);
@@ -706,6 +736,8 @@ export default function Ingestion() {
         if (error || !data) return null;
         autoCreatedCount++;
         if (cnpjDigits) autoCreatedByCnpj.set(cnpjDigits, data.id);
+        if (ieKey) autoCreatedByIe.set(ieKey, data.id);
+        if (imKey) autoCreatedByIm.set(imKey, data.id);
         if (nameKey) autoCreatedByName.set(nameKey, data.id);
         return data.id;
       } catch {
