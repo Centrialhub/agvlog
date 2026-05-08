@@ -492,10 +492,31 @@ export default function ResultsStep({ results, onReset, report }: ResultsStepPro
               <Button size="sm" variant="outline" className="h-7" onClick={handleExportCsvSummary}>
                 <Download className="h-3.5 w-3.5 mr-1.5" /> CSV resumido
               </Button>
-              <Button size="sm" variant="outline" className="h-7" onClick={handleExportPdf}>
-                <FileDown className="h-3.5 w-3.5 mr-1.5" /> Exportar PDF
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7"
+                onClick={handleExportPdf}
+                disabled={pdfJob.status === 'running'}
+              >
+                {pdfJob.status === 'running' ? (
+                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                ) : (
+                  <FileDown className="h-3.5 w-3.5 mr-1.5" />
+                )}
+                {pdfJob.status === 'running' ? `Gerando… ${pdfJob.pct}%` : 'Exportar PDF'}
               </Button>
             </div>
+
+            {pdfJob.status === 'running' && (
+              <div className="rounded-md border bg-muted/40 px-3 py-2 space-y-1.5">
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                  <span>PDF em segundo plano · {pdfJob.stage}</span>
+                  <span className="font-mono">{pdfJob.pct}%</span>
+                </div>
+                <Progress value={pdfJob.pct} className="h-1.5" />
+              </div>
+            )}
 
             {report.auditMeta && (
               <div className="rounded-md border bg-muted/30 px-3 py-2 text-[11px] grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1">
