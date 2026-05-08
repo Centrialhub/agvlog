@@ -1,11 +1,14 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { CheckCircle, XCircle, Upload, ArrowRight, UserPlus, AlertTriangle, ListChecks, Download, FileSearch, ExternalLink, FileDown } from 'lucide-react';
+import { CheckCircle, XCircle, Upload, ArrowRight, UserPlus, AlertTriangle, ListChecks, Download, FileSearch, ExternalLink, FileDown, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Progress } from '@/components/ui/progress';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import QRCode from 'qrcode';
+import { useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
+import type { PdfWorkerRequest, PdfWorkerResponse } from './pdfReportWorker';
 
 export interface IngestionReport {
   totalDocs: number;
@@ -53,6 +56,14 @@ export default function ResultsStep({ results, onReset, report }: ResultsStepPro
   const navigate = useNavigate();
   const successes = results.filter(r => r.startsWith('✅'));
   const errors = results.filter(r => r.startsWith('❌'));
+
+  // Async PDF job state — used when the report is large enough that running
+  // jsPDF on the main thread would freeze the UI for several seconds.
+  const [pdfJob, setPdfJob] = useState<{ status: 'idle' | 'running' | 'done' | 'error'; pct: number; stage: string }>(
+    { status: 'idle', pct: 0, stage: '' }
+  );
+  const workerRef = useRef<Worker | null>(null);
+  useEffect(() => () => { workerRef.current?.terminate(); }, []);
 
   const clientCreationRate = report && report.totalDocs > 0
     ? Math.round((report.clientsAutoCreated / report.totalDocs) * 100)
