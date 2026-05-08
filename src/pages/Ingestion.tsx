@@ -105,6 +105,21 @@ export default function Ingestion() {
   const [noPickup, setNoPickup] = useState(false);
   const [syncSsxClients, setSyncSsxClients] = useState(false);
 
+  // Configurable confidence threshold for needsReview (calibrates OCR/extraction quality).
+  const REVIEW_THRESHOLD_KEY = 'ingestion.reviewThreshold';
+  const [reviewThreshold, setReviewThreshold] = useState<number>(() => {
+    try {
+      const v = Number(localStorage.getItem(REVIEW_THRESHOLD_KEY));
+      if (Number.isFinite(v) && v > 0 && v <= 1) return v;
+    } catch {}
+    return 0.82;
+  });
+  const updateReviewThreshold = useCallback((v: number) => {
+    const clamped = Math.max(0.5, Math.min(0.99, Number(v) || 0.82));
+    setReviewThreshold(clamped);
+    try { localStorage.setItem(REVIEW_THRESHOLD_KEY, String(clamped)); } catch {}
+  }, []);
+
   // Conta SSX ativa do tenant (1ª disponível) para sincronizar clientes recém-criados
   const { data: ssxAccountForClients } = useQuery({
     queryKey: ['ssx_account_for_client_sync', currentTenant?.id],
@@ -156,14 +171,14 @@ export default function Ingestion() {
 
     const needsReviewDocs =
       ortReviewDocs.filter(d => d.needsReview).length +
-      docs.filter(d => Number((d.source as any)?.confidence ?? 1) < 0.82).length;
+      docs.filter(d => Number((d.source as any)?.confidence ?? 1) < reviewThreshold).length;
 
     const unresolved = docs.filter(d => !d.matchedClientId).length;
 
     // Build per-document review list with reasons (ORT/OCR + low-confidence XML).
     const reviewItems: ReviewItem[] = [];
     const seenInvoices = new Set<string>();
-    const REVIEW_THRESHOLD = 0.82;
+    const REVIEW_THRESHOLD = reviewThreshold;
 
     for (const ort of ortReviewDocs) {
       const reasons: string[] = [];
@@ -222,8 +237,9 @@ export default function Ingestion() {
       clientsUnresolved: Math.max(0, unresolved - autoCreatedCount),
       fieldCoverage,
       reviewItems,
+      reviewThreshold,
     };
-  }, [ortReviewDocs]);
+  }, [ortReviewDocs, reviewThreshold]);
 
   // Persists the report snapshot to ingestion_reports for historical browsing.
   const persistIngestionReport = useCallback(async (report: IngestionReport, sourceLabel: string) => {
@@ -351,7 +367,7 @@ export default function Ingestion() {
       reviewed_payload: toOrtAuditPayload(ort),
       field_confidences: ort.fieldConfidences || {},
       overall_confidence: Math.max(0, Math.min(1, Number(ort.confidence) || 0)),
-      needs_review: Boolean(ort.needsReview) || Number(ort.confidence) < 0.82,
+      needs_review: Boolean(ort.needsReview) || Number(ort.confidence) < reviewThreshold,
       reviewed: true,
       changed_fields: getChangedOrtFields(ort),
       status,
@@ -583,7 +599,7 @@ export default function Ingestion() {
             confidence: Number(item.confidence) || Number(ort.confidence) || 0,
           })).filter((item: any) => item.description) : [],
           confidence: Number(ort.confidence) || 0,
-          needsReview: Boolean(ort.needsReview) || Number(ort.confidence) < 0.82,
+          needsReview: Boolean(ort.needsReview) || Number(ort.confidence) < reviewThreshold,
           fieldConfidences: ort.fieldConfidences || {},
           fileName: ort.sourceFileName || files[idx]?.name || `ORT ${idx + 1}`,
           sourcePages: Array.isArray(ort.sourcePages) && ort.sourcePages.length
@@ -719,7 +735,7 @@ export default function Ingestion() {
         validated.isDuplicate = true;
       }
       seenReviewKeys.add(accessKey);
-      if (ort.needsReview || ort.confidence < 0.82) {
+      if (ort.needsReview || ort.confidence < reviewThreshold) {
         validated.validations.push({ field: 'ortConfidence', message: 'ORT tinha campos de baixa confiança — revisão manual realizada', severity: 'info' });
       }
       return validated;
@@ -1405,6 +1421,42 @@ export default function Ingestion() {
           <Upload className="h-5 w-5 text-primary" /> Importação
         </h1>
         <p className="text-xs text-muted-foreground mt-0.5">Upload → Validação → Roteirização → Agrupamento → Execução</p>
+      </div>
+
+      {/* Confidence threshold calibrator for needsReview */}
+      <div className="flex flex-wrap items-center gap-3 rounded-md border bg-muted/30 px-3 py-2 text-xs">
+        <label className="font-medium text-muted-foreground" htmlFor="review-threshold">
+          Threshold de revisão (OCR/extração)
+        </label>
+        <input
+          id="review-threshold"
+          type="range"
+          min={0.5}
+          max={0.99}
+          step={0.01}
+          value={reviewThreshold}
+          onChange={(e) => updateReviewThreshold(Number(e.target.value))}
+          className="w-40 accent-primary"
+        />
+        <input
+          type="number"
+          min={0.5}
+          max={0.99}
+          step={0.01}
+          value={reviewThreshold}
+          onChange={(e) => updateReviewThreshold(Number(e.target.value))}
+          className="w-20 rounded border bg-background px-2 py-1"
+        />
+        <span className="text-muted-foreground">
+          Documentos com confiança abaixo de <strong>{Math.round(reviewThreshold * 100)}%</strong> serão marcados como <em>needsReview</em>.
+        </span>
+        <button
+          type="button"
+          onClick={() => updateReviewThreshold(0.82)}
+          className="ml-auto rounded border px-2 py-1 hover:bg-muted"
+        >
+          Restaurar padrão (82%)
+        </button>
       </div>
 
       <IngestionStepper currentStep={step} />

@@ -19,6 +19,7 @@ export interface IngestionReport {
     total: number;
   }[];
   reviewItems?: ReviewItem[];
+  reviewThreshold?: number;
 }
 
 export interface ReviewItem {
@@ -155,7 +156,9 @@ export default function ResultsStep({ results, onReset, report }: ResultsStepPro
                   <AlertTriangle className="h-3.5 w-3.5 text-warning" /> Revisar
                 </div>
                 <div className="mt-1 text-lg font-bold">{report.needsReviewDocs}</div>
-                <div className="text-[11px] text-muted-foreground">marcados needsReview</div>
+                <div className="text-[11px] text-muted-foreground">
+                  needsReview {report.reviewThreshold != null ? `(< ${Math.round(report.reviewThreshold * 100)}%)` : ''}
+                </div>
               </div>
             </div>
 
