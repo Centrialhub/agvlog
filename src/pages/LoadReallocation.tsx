@@ -305,6 +305,19 @@ export default function LoadReallocation() {
       }
     }
 
+    // Merge source destination tokens into target so the consolidated load
+    // shows the combined route (e.g. "PAI PEDRO - PIRAPORA - JAIBA").
+    if (moved > 0 && targetLoad && sourceLoad) {
+      const merged = mergeDestinations(targetLoad.destination, sourceLoad.destination);
+      if (merged && merged !== targetLoad.destination) {
+        try {
+          await updateLoad.mutateAsync({ id: targetLoad.id, destination: merged } as any);
+        } catch {
+          // non-critical
+        }
+      }
+    }
+
     setHistory(prev => [{
       id: crypto.randomUUID(),
       at: new Date(),
