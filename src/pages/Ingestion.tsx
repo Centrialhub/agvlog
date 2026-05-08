@@ -106,6 +106,16 @@ export default function Ingestion() {
   const [noPickup, setNoPickup] = useState(false);
   const [syncSsxClients, setSyncSsxClients] = useState(false);
 
+  // Reprocess flag: when set via ?reprocess=BATCH_ID query param, the page acts
+  // as a re-run of an existing ingestion batch. Deduplication against existing
+  // fiscal_documents (by access_key / invoice_number) is already enforced by the
+  // validator and ORT dedupe — so re-uploading the same files will NOT create
+  // duplicates. Only new docs are persisted; the resulting report is tagged
+  // with "Reprocessamento de <batch_id>" for audit traceability.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const reprocessBatchId = searchParams.get('reprocess');
+  const reprocessSuffix = reprocessBatchId ? ` · Reprocessamento de ${reprocessBatchId}` : '';
+
   // Configurable confidence threshold for needsReview (calibrates OCR/extraction quality).
   const REVIEW_THRESHOLD_KEY = 'ingestion.reviewThreshold';
   const [reviewThreshold, setReviewThreshold] = useState<number>(() => {
