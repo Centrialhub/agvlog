@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { parseNFeXml, parseCsvOrders, parseExcelOrders, ParsedOrderRow, ParsedNFe } from '@/lib/documentParsers';
 import {
   validateNFe, validateOrderRows, generateLoadSuggestions, buildValidationIndexes,
@@ -104,6 +105,16 @@ export default function Ingestion() {
   const [pickupOrder, setPickupOrder] = useState<PickupOrder | null>(null);
   const [noPickup, setNoPickup] = useState(false);
   const [syncSsxClients, setSyncSsxClients] = useState(false);
+
+  // Reprocess flag: when set via ?reprocess=BATCH_ID query param, the page acts
+  // as a re-run of an existing ingestion batch. Deduplication against existing
+  // fiscal_documents (by access_key / invoice_number) is already enforced by the
+  // validator and ORT dedupe — so re-uploading the same files will NOT create
+  // duplicates. Only new docs are persisted; the resulting report is tagged
+  // with "Reprocessamento de <batch_id>" for audit traceability.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const reprocessBatchId = searchParams.get('reprocess');
+  const reprocessSuffix = reprocessBatchId ? ` · Reprocessamento de ${reprocessBatchId}` : '';
 
   // Configurable confidence threshold for needsReview (calibrates OCR/extraction quality).
   const REVIEW_THRESHOLD_KEY = 'ingestion.reviewThreshold';
@@ -1061,18 +1072,20 @@ export default function Ingestion() {
       const matchedExisting = validDocsForReport.filter(d =>
         d.matchedClientId && !clientsToSyncSsx.has(d.matchedClientId)
       ).length;
+      const baseSaveLabel = loadId
+        ? `Vinculado à carga ${loads.find(l => l.id === loadId)?.load_number || ''}`
+        : 'Salvar documentos';
+      const saveLabel = `${baseSaveLabel}${reprocessSuffix}`;
       const reportSaveDocs = buildIngestionReport({
         docs: validDocsForReport,
         savedCount: successCount,
         errorCount,
         autoCreatedCount: autoCreatedCount,
         matchedCount: matchedExisting,
-        sourceLabel: loadId
-          ? `Vinculado à carga ${loads.find(l => l.id === loadId)?.load_number || ''}`
-          : 'Salvar documentos',
+        sourceLabel: saveLabel,
       });
       setIngestionReport(reportSaveDocs);
-      void persistIngestionReport(reportSaveDocs, loadId ? `Vinculado à carga ${loads.find(l => l.id === loadId)?.load_number || ''}` : 'Salvar documentos');
+      void persistIngestionReport(reportSaveDocs, saveLabel);
       const loadLabel = loadId ? loads.find(l => l.id === loadId)?.load_number : null;
       if (autoCreatedCount > 0) {
         queryClient.invalidateQueries({ queryKey: ['clients'] });
@@ -1408,16 +1421,17 @@ export default function Ingestion() {
       const errorCount = results.filter(r => r.startsWith('❌')).length;
       const validDocsForReport = validatedDocs.filter(d => !d.hasErrors && !d.isDuplicate);
       const matchedExisting = validDocsForReport.filter(d => !!d.matchedClientId).length;
+      const execLabel = `Execução completa de cargas${reprocessSuffix}`;
       const reportExec = buildIngestionReport({
         docs: validDocsForReport,
         savedCount: successCount,
         errorCount,
         autoCreatedCount: 0,
         matchedCount: matchedExisting,
-        sourceLabel: 'Execução completa de cargas',
+        sourceLabel: execLabel,
       });
       setIngestionReport(reportExec);
-      void persistIngestionReport(reportExec, 'Execução completa de cargas');
+      void persistIngestionReport(reportExec, execLabel);
 
       toast({
         title: 'Importação concluída',
@@ -1450,6 +1464,34 @@ export default function Ingestion() {
         </h1>
         <p className="text-xs text-muted-foreground mt-0.5">Upload → Validação → Roteirização → Agrupamento → Execução</p>
       </div>
+
+      {reprocessBatchId && (
+        <div className="rounded-md border border-primary/40 bg-primary/5 px-3 py-2.5 text-xs flex items-start gap-3">
+          <FileStack className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+          <div className="flex-1 space-y-0.5">
+            <div className="font-semibold text-foreground">
+              Reprocessando lote <span className="font-mono">{reprocessBatchId}</span>
+            </div>
+            <div className="text-muted-foreground">
+              Reenvie os mesmos arquivos do lote original. Documentos já cadastrados (mesma chave NF-e
+              ou número) serão detectados e <strong>ignorados sem duplicar</strong> no banco. Apenas
+              registros novos serão criados e o relatório final será marcado como reprocessamento.
+            </div>
+          </div>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7"
+            onClick={() => {
+              const next = new URLSearchParams(searchParams);
+              next.delete('reprocess');
+              setSearchParams(next, { replace: true });
+            }}
+          >
+            Sair do modo reprocessamento
+          </Button>
+        </div>
+      )}
 
       {/* Confidence threshold calibrator for needsReview */}
       <div className="flex flex-wrap items-center gap-3 rounded-md border bg-muted/30 px-3 py-2 text-xs">
