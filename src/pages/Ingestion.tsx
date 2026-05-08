@@ -26,6 +26,7 @@ import GroupingStep from '@/components/ingestion/GroupingStep';
 import ResultsStep from '@/components/ingestion/ResultsStep';
 import { calculateFreight, logFreightCalculation } from '@/hooks/useFreightCalculator';
 import { applyOrtFallbacks, isUnknown, UNKNOWN } from '@/lib/ortFieldFallbacks';
+import { normalizeStateRegistration, normalizeIeIndicator, FISCAL_UNKNOWN } from '@/lib/fiscalNormalization';
 import PickupOrderPicker from '@/components/pickup/PickupOrderPicker';
 import type { PickupOrder } from '@/hooks/usePickupOrders';
 
@@ -622,7 +623,9 @@ export default function Ingestion() {
       if (!currentTenant) return null;
       const cnpjDigits = onlyDigits(src.recipientCnpj || ortFields?.recipientCnpj);
       const nameKey = (src.recipientName || ortFields?.recipientName || '').trim().toLowerCase();
-      const ieDigits = onlyDigits(src.recipientStateRegistration || ortFields?.recipientStateRegistration);
+      const ieRawForKey = src.recipientStateRegistration || ortFields?.recipientStateRegistration || '';
+      const ieIsUnknownOrIsento = /^(UNKNOWN|ISENTO|ISENTA|IS|EX)$/i.test(String(ieRawForKey).trim());
+      const ieDigits = ieIsUnknownOrIsento ? '' : onlyDigits(ieRawForKey);
       const imDigits = onlyDigits(src.recipientMunicipalRegistration || ortFields?.recipientMunicipalRegistration);
       const uf = (src.recipientState || ortFields?.recipientState || '').trim().toUpperCase();
       const cityKey = (src.recipientCity || ortFields?.recipientCity || '').trim().toLowerCase();
@@ -680,12 +683,16 @@ export default function Ingestion() {
 
       // Derivações fiscais a partir da nota
       const isCpf = cnpjDigits.length === 11;
-      const indIE = src.recipientIeIndicator || '';
-      const taxCode = indIE === '1' ? 'C' : indIE === '2' ? 'I0' : indIE === '9' ? 'NC' : null;
-      const taxDescription = indIE === '1' ? 'Contribuinte ICMS'
-        : indIE === '2' ? 'Isento'
-        : indIE === '9' ? 'Não Contribuinte'
+      const ieRaw = src.recipientStateRegistration || ortFields?.recipientStateRegistration || '';
+      const ieConfidence = (src.fieldConfidences || ortFields?.fieldConfidences || {}).recipientStateRegistration;
+      const ieNorm = normalizeStateRegistration(ieRaw, src.recipientState || ortFields?.recipientState, ieConfidence);
+      const indIeNorm = normalizeIeIndicator(src.recipientIeIndicator || ortFields?.recipientIeIndicator, ieNorm);
+      const taxCode = indIeNorm.code === '1' ? 'C'
+        : indIeNorm.code === '2' ? 'I0'
+        : indIeNorm.code === '9' ? 'NC'
+        : indIeNorm.code === FISCAL_UNKNOWN ? FISCAL_UNKNOWN
         : null;
+      const taxDescription = indIeNorm.description;
       // CFOP do primeiro item indica natureza (5xxx/6xxx = venda → Comércio; 1xxx/2xxx = entrada)
       const firstCfop = String(((src.items || ortFields?.items || [])[0] || {}).cfop || '').replace(/\D/g, '');
       const cfopFirst = firstCfop ? firstCfop.charAt(0) : '';
@@ -701,12 +708,12 @@ export default function Ingestion() {
         tax_id: taxId,
         person_type: isCpf ? 'CPF' : 'CNPJ',
         client_type: isCpf ? 'PF' : 'PJ',
-        state_registration: src.recipientStateRegistration || null,
+        state_registration: ieNorm.value,
         municipal_registration: src.recipientMunicipalRegistration || null,
         ie_indicator: taxDescription,
         tax_code: taxCode,
         tax_description: taxDescription,
-        taxes_enabled: indIE !== '2',
+        taxes_enabled: indIeNorm.taxesEnabled,
         cfop_client_type: cfopClientType,
         freight_calc_type: 'PESO',
         address_street: src.recipientAddress || ortFields?.recipientAddress || null,
