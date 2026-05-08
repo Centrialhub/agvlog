@@ -588,6 +588,77 @@ export default function Ingestion() {
       });
       return;
     }
+    // Auto-cadastro de cliente: se XML/ORT trouxe destinatário não vinculado,
+    // cria o cliente uma vez por CNPJ (ou nome) preenchendo todos os dados disponíveis.
+    const onlyDigits = (s: string) => (s || '').replace(/\D/g, '');
+    const autoCreatedByCnpj = new Map<string, string>(); // chave: CNPJ digits, valor: client_id
+    const autoCreatedByName = new Map<string, string>();
+    let autoCreatedCount = 0;
+
+    const ensureClient = async (src: any, ortFields?: any): Promise<string | null> => {
+      if (!currentTenant) return null;
+      const cnpjDigits = onlyDigits(src.recipientCnpj || ortFields?.recipientCnpj);
+      const nameKey = (src.recipientName || ortFields?.recipientName || '').trim().toLowerCase();
+
+      // Já existe no cadastro? (match por CNPJ → nome)
+      if (cnpjDigits) {
+        const existing = clients.find(c => onlyDigits(c.tax_id || '') === cnpjDigits);
+        if (existing) return existing.id;
+        if (autoCreatedByCnpj.has(cnpjDigits)) return autoCreatedByCnpj.get(cnpjDigits)!;
+      }
+      if (nameKey) {
+        const existingByName = clients.find(c => (c.company_name || '').trim().toLowerCase() === nameKey);
+        if (existingByName) return existingByName.id;
+        if (!cnpjDigits && autoCreatedByName.has(nameKey)) return autoCreatedByName.get(nameKey)!;
+      }
+
+      // Sem dado mínimo, não cria
+      const recipientName = src.recipientName || ortFields?.recipientName;
+      if (!recipientName && !cnpjDigits) return null;
+
+      const taxId = cnpjDigits
+        ? (cnpjDigits.length === 14
+            ? `${cnpjDigits.slice(0,2)}.${cnpjDigits.slice(2,5)}.${cnpjDigits.slice(5,8)}/${cnpjDigits.slice(8,12)}-${cnpjDigits.slice(12)}`
+            : cnpjDigits.length === 11
+              ? `${cnpjDigits.slice(0,3)}.${cnpjDigits.slice(3,6)}.${cnpjDigits.slice(6,9)}-${cnpjDigits.slice(9)}`
+              : cnpjDigits)
+        : null;
+
+      const zipDigits = onlyDigits(src.recipientZip || ortFields?.recipientZip);
+      const zip = zipDigits.length === 8 ? `${zipDigits.slice(0,5)}-${zipDigits.slice(5)}` : null;
+
+      const payload: any = {
+        tenant_id: currentTenant.id,
+        company_name: recipientName || taxId || 'Sem nome',
+        legal_name: recipientName || null,
+        tax_id: taxId,
+        person_type: cnpjDigits.length === 11 ? 'CPF' : 'CNPJ',
+        address_street: src.recipientAddress || ortFields?.recipientAddress || null,
+        address_number: src.recipientAddressNumber || ortFields?.recipientAddressNumber || null,
+        address_neighborhood: src.recipientNeighborhood || ortFields?.recipientNeighborhood || null,
+        address_city: src.recipientCity || ortFields?.recipientCity || null,
+        address_state: src.recipientState || ortFields?.recipientState || null,
+        address_zip: zip,
+        phone: ortFields?.recipientPhone || null,
+        active: true,
+        notes: 'Cadastrado automaticamente via importação de XML/ORT',
+        created_by: user?.id,
+      };
+      // Limpa strings vazias
+      Object.keys(payload).forEach(k => { if (payload[k] === '') payload[k] = null; });
+
+      try {
+        const { data, error } = await supabase.from('clients').insert(payload).select('id').single();
+        if (error || !data) return null;
+        autoCreatedCount++;
+        if (cnpjDigits) autoCreatedByCnpj.set(cnpjDigits, data.id);
+        if (nameKey) autoCreatedByName.set(nameKey, data.id);
+        return data.id;
+      } catch {
+        return null;
+      }
+    };
+
     const results: string[] = [];
     try {
       for (const doc of validatedDocs.filter(d => !d.hasErrors && !d.isDuplicate)) {
@@ -600,6 +671,11 @@ export default function Ingestion() {
             }
             results.push(`✅ NF ${doc.source.invoiceNumber} ${loadId ? 'vinculada à carga' : '(já salva)'}`);
           } else {
+            // Auto-vincula/cria cliente se ainda não houver
+            if (!doc.matchedClientId) {
+              const newId = await ensureClient(doc.source);
+              if (newId) doc.matchedClientId = newId;
+            }
             let freightValue: number | null = null;
             let freightBreakdown: any = {};
             let freightTableId: string | null = null;
