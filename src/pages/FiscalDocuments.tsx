@@ -280,7 +280,8 @@ export default function FiscalDocuments() {
   const { data: orders = [] } = useOrders();
   const createDoc = useCreateFiscalDocument();
   const updateDoc = useUpdateFiscalDocument();
-  const [search, setSearch] = useState('');
+  const initialQ = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('q') || '' : '';
+  const [search, setSearch] = useState(initialQ);
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [loadFilter, setLoadFilter] = useState<string>('all');
