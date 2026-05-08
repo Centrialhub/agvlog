@@ -1067,6 +1067,9 @@ export default function Ingestion() {
         errorCount,
         autoCreatedCount: autoCreatedCount,
         matchedCount: matchedExisting,
+        sourceLabel: loadId
+          ? `Vinculado à carga ${loads.find(l => l.id === loadId)?.load_number || ''}`
+          : 'Salvar documentos',
       });
       setIngestionReport(reportSaveDocs);
       void persistIngestionReport(reportSaveDocs, loadId ? `Vinculado à carga ${loads.find(l => l.id === loadId)?.load_number || ''}` : 'Salvar documentos');
@@ -1411,6 +1414,7 @@ export default function Ingestion() {
         errorCount,
         autoCreatedCount: 0,
         matchedCount: matchedExisting,
+        sourceLabel: 'Execução completa de cargas',
       });
       setIngestionReport(reportExec);
       void persistIngestionReport(reportExec, 'Execução completa de cargas');
