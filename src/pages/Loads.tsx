@@ -20,6 +20,7 @@ import PendingDocsGrouping from '@/components/loads/PendingDocsGrouping';
 import NewLoadDialog from '@/components/loads/NewLoadDialog';
 import BatchReimportDialog from '@/components/loads/BatchReimportDialog';
 import LoadAdvancedFilters, { EMPTY_LOAD_ADVANCED_FILTERS, LoadAdvancedFiltersValue } from '@/components/loads/LoadAdvancedFilters';
+import AppliedFiltersChips, { buildAppliedChips } from '@/components/loads/AppliedFiltersChips';
 import { exportLoadsCSV, exportLoadsPDF } from '@/lib/loadsExport';
 
 const STATUS_COLORS: Record<string, string> = {
