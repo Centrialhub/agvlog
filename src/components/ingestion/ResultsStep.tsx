@@ -1,11 +1,14 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { CheckCircle, XCircle, Upload, ArrowRight, UserPlus, AlertTriangle, ListChecks, Download, FileSearch, ExternalLink, FileDown } from 'lucide-react';
+import { CheckCircle, XCircle, Upload, ArrowRight, UserPlus, AlertTriangle, ListChecks, Download, FileSearch, ExternalLink, FileDown, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Progress } from '@/components/ui/progress';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import QRCode from 'qrcode';
+import { useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
+import type { PdfWorkerRequest, PdfWorkerResponse } from './pdfReportWorker';
 
 export interface IngestionReport {
   totalDocs: number;
@@ -53,6 +56,14 @@ export default function ResultsStep({ results, onReset, report }: ResultsStepPro
   const navigate = useNavigate();
   const successes = results.filter(r => r.startsWith('✅'));
   const errors = results.filter(r => r.startsWith('❌'));
+
+  // Async PDF job state — used when the report is large enough that running
+  // jsPDF on the main thread would freeze the UI for several seconds.
+  const [pdfJob, setPdfJob] = useState<{ status: 'idle' | 'running' | 'done' | 'error'; pct: number; stage: string }>(
+    { status: 'idle', pct: 0, stage: '' }
+  );
+  const workerRef = useRef<Worker | null>(null);
+  useEffect(() => () => { workerRef.current?.terminate(); }, []);
 
   const clientCreationRate = report && report.totalDocs > 0
     ? Math.round((report.clientsAutoCreated / report.totalDocs) * 100)
@@ -181,6 +192,68 @@ export default function ResultsStep({ results, onReset, report }: ResultsStepPro
 
   const handleExportPdf = async () => {
     if (!report) return;
+
+    // Heuristic: when the report is large, render in a Web Worker so the UI
+    // stays responsive. Threshold tuned for ~hundreds of items where jsPDF
+    // can block the main thread for >1s.
+    const isLarge =
+      (report.reviewItems?.length ?? 0) > 100 ||
+      report.totalDocs > 300 ||
+      (report.fieldCoverage?.length ?? 0) > 40;
+
+    if (isLarge && typeof Worker !== 'undefined') {
+      try {
+        workerRef.current?.terminate();
+        const worker = new Worker(new URL('./pdfReportWorker.ts', import.meta.url), { type: 'module' });
+        workerRef.current = worker;
+        setPdfJob({ status: 'running', pct: 5, stage: 'Iniciando geração em segundo plano' });
+        const toastId = toast.loading('Gerando PDF em segundo plano…', {
+          description: 'A interface continua disponível enquanto o relatório é montado.',
+        });
+        worker.onmessage = (ev: MessageEvent<PdfWorkerResponse>) => {
+          const msg = ev.data;
+          if (msg.type === 'progress') {
+            setPdfJob({ status: 'running', pct: msg.pct, stage: msg.stage });
+            toast.loading(`Gerando PDF — ${msg.stage} (${msg.pct}%)`, { id: toastId });
+          } else if (msg.type === 'done') {
+            const url = URL.createObjectURL(msg.blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = msg.filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            setPdfJob({ status: 'done', pct: 100, stage: 'Concluído' });
+            toast.success('PDF gerado', { id: toastId, description: msg.filename });
+            worker.terminate();
+            workerRef.current = null;
+          } else if (msg.type === 'error') {
+            setPdfJob({ status: 'error', pct: 0, stage: msg.message });
+            toast.error('Falha ao gerar PDF', { id: toastId, description: msg.message });
+            worker.terminate();
+            workerRef.current = null;
+          }
+        };
+        worker.onerror = (e) => {
+          setPdfJob({ status: 'error', pct: 0, stage: e.message || 'Erro no worker' });
+          toast.error('Falha ao gerar PDF', { id: toastId, description: e.message });
+          worker.terminate();
+          workerRef.current = null;
+        };
+        const req: PdfWorkerRequest = {
+          type: 'generate',
+          report,
+          generatedAtIso: new Date().toISOString(),
+        };
+        worker.postMessage(req);
+        return;
+      } catch (err) {
+        // Fall through to inline generation if worker setup failed.
+        console.warn('[pdf] worker indisponível, usando geração inline', err);
+      }
+    }
+
     const doc = new jsPDF({ unit: 'pt', format: 'a4' });
     const pageWidth = doc.internal.pageSize.getWidth();
     const margin = 40;
@@ -419,10 +492,31 @@ export default function ResultsStep({ results, onReset, report }: ResultsStepPro
               <Button size="sm" variant="outline" className="h-7" onClick={handleExportCsvSummary}>
                 <Download className="h-3.5 w-3.5 mr-1.5" /> CSV resumido
               </Button>
-              <Button size="sm" variant="outline" className="h-7" onClick={handleExportPdf}>
-                <FileDown className="h-3.5 w-3.5 mr-1.5" /> Exportar PDF
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7"
+                onClick={handleExportPdf}
+                disabled={pdfJob.status === 'running'}
+              >
+                {pdfJob.status === 'running' ? (
+                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                ) : (
+                  <FileDown className="h-3.5 w-3.5 mr-1.5" />
+                )}
+                {pdfJob.status === 'running' ? `Gerando… ${pdfJob.pct}%` : 'Exportar PDF'}
               </Button>
             </div>
+
+            {pdfJob.status === 'running' && (
+              <div className="rounded-md border bg-muted/40 px-3 py-2 space-y-1.5">
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                  <span>PDF em segundo plano · {pdfJob.stage}</span>
+                  <span className="font-mono">{pdfJob.pct}%</span>
+                </div>
+                <Progress value={pdfJob.pct} className="h-1.5" />
+              </div>
+            )}
 
             {report.auditMeta && (
               <div className="rounded-md border bg-muted/30 px-3 py-2 text-[11px] grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1">
