@@ -350,6 +350,26 @@ export default function ResultsStep({ results, onReset, report }: ResultsStepPro
               </Button>
             </div>
 
+            {report.auditMeta && (
+              <div className="rounded-md border bg-muted/30 px-3 py-2 text-[11px] grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1">
+                <div><span className="text-muted-foreground">Empresa: </span><strong>{report.auditMeta.tenantName || '-'}</strong></div>
+                <div><span className="text-muted-foreground">Lote: </span><strong className="font-mono">{report.auditMeta.batchId || '-'}</strong></div>
+                <div className="col-span-2">
+                  <span className="text-muted-foreground">Período: </span>
+                  <strong>
+                    {report.auditMeta.periodFrom ? new Date(report.auditMeta.periodFrom).toLocaleDateString('pt-BR') : '-'}
+                    {' → '}
+                    {report.auditMeta.periodTo ? new Date(report.auditMeta.periodTo).toLocaleDateString('pt-BR') : '-'}
+                  </strong>
+                </div>
+                {report.auditMeta.sourceLabel && (
+                  <div className="col-span-2 md:col-span-4">
+                    <span className="text-muted-foreground">Origem: </span>{report.auditMeta.sourceLabel}
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="rounded-md border p-3">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
