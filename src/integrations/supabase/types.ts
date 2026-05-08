@@ -3330,13 +3330,22 @@ export type Database = {
       loads: {
         Row: {
           actual_load_at: string | null
+          arrival_at: string | null
+          ciot: string | null
           created_at: string
           created_by: string | null
+          dedicated_vehicle: boolean
           destination: string | null
           distribution_manifest: string | null
           driver_id: string | null
+          driver_type: string | null
+          estimated_arrival_at: string | null
+          gate_departure_at: string | null
           id: string
           load_number: string
+          merchandise_value: number | null
+          monitor_responsible: string | null
+          monitored: boolean
           notes: string | null
           operation_type: Database["public"]["Enums"]["operation_type"] | null
           origin: string | null
@@ -3344,25 +3353,37 @@ export type Database = {
           os_number: string | null
           scheduled_load_at: string | null
           shipment_manifest: string | null
+          sm_manager: string | null
+          sm_release: string | null
           status: string
           supplier_manifest: string | null
           tenant_id: string
           total_pallet_count: number | null
           total_volume_m3: number | null
           total_weight_kg: number | null
+          trailer_plate: string | null
           trip_id: string | null
           updated_at: string
           vehicle_id: string | null
         }
         Insert: {
           actual_load_at?: string | null
+          arrival_at?: string | null
+          ciot?: string | null
           created_at?: string
           created_by?: string | null
+          dedicated_vehicle?: boolean
           destination?: string | null
           distribution_manifest?: string | null
           driver_id?: string | null
+          driver_type?: string | null
+          estimated_arrival_at?: string | null
+          gate_departure_at?: string | null
           id?: string
           load_number: string
+          merchandise_value?: number | null
+          monitor_responsible?: string | null
+          monitored?: boolean
           notes?: string | null
           operation_type?: Database["public"]["Enums"]["operation_type"] | null
           origin?: string | null
@@ -3370,25 +3391,37 @@ export type Database = {
           os_number?: string | null
           scheduled_load_at?: string | null
           shipment_manifest?: string | null
+          sm_manager?: string | null
+          sm_release?: string | null
           status?: string
           supplier_manifest?: string | null
           tenant_id: string
           total_pallet_count?: number | null
           total_volume_m3?: number | null
           total_weight_kg?: number | null
+          trailer_plate?: string | null
           trip_id?: string | null
           updated_at?: string
           vehicle_id?: string | null
         }
         Update: {
           actual_load_at?: string | null
+          arrival_at?: string | null
+          ciot?: string | null
           created_at?: string
           created_by?: string | null
+          dedicated_vehicle?: boolean
           destination?: string | null
           distribution_manifest?: string | null
           driver_id?: string | null
+          driver_type?: string | null
+          estimated_arrival_at?: string | null
+          gate_departure_at?: string | null
           id?: string
           load_number?: string
+          merchandise_value?: number | null
+          monitor_responsible?: string | null
+          monitored?: boolean
           notes?: string | null
           operation_type?: Database["public"]["Enums"]["operation_type"] | null
           origin?: string | null
@@ -3396,12 +3429,15 @@ export type Database = {
           os_number?: string | null
           scheduled_load_at?: string | null
           shipment_manifest?: string | null
+          sm_manager?: string | null
+          sm_release?: string | null
           status?: string
           supplier_manifest?: string | null
           tenant_id?: string
           total_pallet_count?: number | null
           total_volume_m3?: number | null
           total_weight_kg?: number | null
+          trailer_plate?: string | null
           trip_id?: string | null
           updated_at?: string
           vehicle_id?: string | null
@@ -6644,13 +6680,22 @@ export type Database = {
         }
         Returns: {
           actual_load_at: string | null
+          arrival_at: string | null
+          ciot: string | null
           created_at: string
           created_by: string | null
+          dedicated_vehicle: boolean
           destination: string | null
           distribution_manifest: string | null
           driver_id: string | null
+          driver_type: string | null
+          estimated_arrival_at: string | null
+          gate_departure_at: string | null
           id: string
           load_number: string
+          merchandise_value: number | null
+          monitor_responsible: string | null
+          monitored: boolean
           notes: string | null
           operation_type: Database["public"]["Enums"]["operation_type"] | null
           origin: string | null
@@ -6658,12 +6703,15 @@ export type Database = {
           os_number: string | null
           scheduled_load_at: string | null
           shipment_manifest: string | null
+          sm_manager: string | null
+          sm_release: string | null
           status: string
           supplier_manifest: string | null
           tenant_id: string
           total_pallet_count: number | null
           total_volume_m3: number | null
           total_weight_kg: number | null
+          trailer_plate: string | null
           trip_id: string | null
           updated_at: string
           vehicle_id: string | null
