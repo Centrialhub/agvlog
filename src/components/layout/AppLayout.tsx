@@ -20,10 +20,16 @@ import {
   PackageOpen,
 } from 'lucide-react';
 
+type NavLeaf = { label: string; href: string; icon: ReactNode };
+type NavGroup = { label: string; icon: ReactNode; items: NavLeaf[] };
+type NavEntry = NavLeaf | NavGroup;
+
 interface NavSection {
   label: string;
-  items: { label: string; href: string; icon: ReactNode }[];
+  items: NavEntry[];
 }
+
+const isGroup = (e: NavEntry): e is NavGroup => 'items' in e;
 
 const navSections: NavSection[] = [
   {
@@ -32,17 +38,35 @@ const navSections: NavSection[] = [
       { label: 'Centro de Operações', href: '/', icon: <LayoutDashboard className="h-4 w-4" /> },
       { label: 'Coletas', href: '/pickup-orders', icon: <PackageOpen className="h-4 w-4" /> },
       { label: 'Importação', href: '/ingestion', icon: <Upload className="h-4 w-4" /> },
-      { label: 'Faturamento (CT-e)', href: '/billing', icon: <FileSpreadsheet className="h-4 w-4" /> },
-      { label: 'NFS-e (Serviços)', href: '/nfse', icon: <FileSpreadsheet className="h-4 w-4" /> },
-      { label: 'Monitor DOC-e', href: '/cte-monitor', icon: <ShieldCheck className="h-4 w-4" /> },
-      { label: 'Consulta CT-e', href: '/cte-search', icon: <FileSearch className="h-4 w-4" /> },
-      { label: 'Roteirização', href: '/route-planning', icon: <Radio className="h-4 w-4" /> },
-      { label: 'Cargas', href: '/loads', icon: <PackageCheck className="h-4 w-4" /> },
-      { label: 'Rastreabilidade', href: '/traceability', icon: <FileSearch className="h-4 w-4" /> },
-      { label: 'Rastreab. Produto', href: '/product-traceability', icon: <Package className="h-4 w-4" /> },
-      { label: 'Histórico do Produto', href: '/product-history', icon: <FileSearch className="h-4 w-4" /> },
-      { label: 'Auditoria de Carga', href: '/load-extraction-audit', icon: <FileSearch className="h-4 w-4" /> },
-      { label: 'Mover Cargas', href: '/reallocation', icon: <ArrowRightLeft className="h-4 w-4" /> },
+      {
+        label: 'Documentos Fiscais',
+        icon: <FileSpreadsheet className="h-4 w-4" />,
+        items: [
+          { label: 'Faturamento (CT-e)', href: '/billing', icon: <FileSpreadsheet className="h-4 w-4" /> },
+          { label: 'Monitor DOC-e', href: '/cte-monitor', icon: <ShieldCheck className="h-4 w-4" /> },
+          { label: 'Consulta CT-e', href: '/cte-search', icon: <FileSearch className="h-4 w-4" /> },
+          { label: 'NFS-e (Serviços)', href: '/nfse', icon: <FileSpreadsheet className="h-4 w-4" /> },
+        ],
+      },
+      {
+        label: 'Cargas & Roteirização',
+        icon: <PackageCheck className="h-4 w-4" />,
+        items: [
+          { label: 'Roteirização', href: '/route-planning', icon: <Radio className="h-4 w-4" /> },
+          { label: 'Cargas', href: '/loads', icon: <PackageCheck className="h-4 w-4" /> },
+          { label: 'Mover Cargas', href: '/reallocation', icon: <ArrowRightLeft className="h-4 w-4" /> },
+        ],
+      },
+      {
+        label: 'Rastreabilidade',
+        icon: <FileSearch className="h-4 w-4" />,
+        items: [
+          { label: 'Rastreabilidade', href: '/traceability', icon: <FileSearch className="h-4 w-4" /> },
+          { label: 'Rastreab. Produto', href: '/product-traceability', icon: <Package className="h-4 w-4" /> },
+          { label: 'Histórico do Produto', href: '/product-history', icon: <FileSearch className="h-4 w-4" /> },
+          { label: 'Auditoria de Carga', href: '/load-extraction-audit', icon: <FileSearch className="h-4 w-4" /> },
+        ],
+      },
       { label: 'Ocorrências', href: '/incidents', icon: <AlertOctagon className="h-4 w-4" /> },
       { label: 'Checklists', href: '/checklists', icon: <ClipboardCheck className="h-4 w-4" /> },
       { label: 'Produtividade', href: '/productivity', icon: <TrendingUp className="h-4 w-4" /> },
@@ -103,6 +127,28 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => {
+    // Start collapsed, but auto-open the group containing the active route
+    const path = window.location.pathname;
+    const all = new Set<string>();
+    for (const s of navSections) {
+      for (const e of s.items) {
+        if ('items' in e) {
+          const hasActive = e.items.some(i => i.href === '/' ? path === '/' : path.startsWith(i.href));
+          if (!hasActive) all.add(e.label);
+        }
+      }
+    }
+    return all;
+  });
+
+  const toggleGroup = (label: string) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label); else next.add(label);
+      return next;
+    });
+  };
 
   const toggleSection = (label: string) => {
     setCollapsedSections(prev => {
@@ -185,23 +231,91 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 )}
                 {(!sectionCollapsed || collapsed) && (
                   <div className="space-y-0.5 px-1.5">
-                    {section.items.map(item => {
-                      const active = isActive(item.href);
+                    {section.items.map(entry => {
+                      if (!isGroup(entry)) {
+                        const active = isActive(entry.href);
+                        return (
+                          <Link
+                            key={entry.href}
+                            to={entry.href}
+                            className={cn(
+                              "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-xs transition-colors",
+                              active
+                                ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                                : "text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                            )}
+                            title={collapsed ? entry.label : undefined}
+                          >
+                            {entry.icon}
+                            {!collapsed && <span>{entry.label}</span>}
+                          </Link>
+                        );
+                      }
+                      const groupCollapsed = collapsedGroups.has(entry.label);
+                      const hasActive = entry.items.some(i => isActive(i.href));
+                      if (collapsed) {
+                        // Mini mode: render children flat with icons only
+                        return (
+                          <div key={entry.label} className="space-y-0.5">
+                            {entry.items.map(item => {
+                              const active = isActive(item.href);
+                              return (
+                                <Link
+                                  key={item.href}
+                                  to={item.href}
+                                  title={`${entry.label} • ${item.label}`}
+                                  className={cn(
+                                    "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-xs transition-colors",
+                                    active
+                                      ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                                      : "text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                                  )}
+                                >
+                                  {item.icon}
+                                </Link>
+                              );
+                            })}
+                          </div>
+                        );
+                      }
                       return (
-                        <Link
-                          key={item.href}
-                          to={item.href}
-                          className={cn(
-                            "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-xs transition-colors",
-                            active
-                              ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                              : "text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                        <div key={entry.label}>
+                          <button
+                            onClick={() => toggleGroup(entry.label)}
+                            className={cn(
+                              "flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-xs transition-colors",
+                              hasActive
+                                ? "text-sidebar-foreground font-medium"
+                                : "text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                            )}
+                          >
+                            {entry.icon}
+                            <span className="flex-1 text-left">{entry.label}</span>
+                            <ChevronDown className={cn("h-3 w-3 transition-transform", groupCollapsed && "-rotate-90")} />
+                          </button>
+                          {!groupCollapsed && (
+                            <div className="ml-3 mt-0.5 space-y-0.5 border-l border-sidebar-border/60 pl-2">
+                              {entry.items.map(item => {
+                                const active = isActive(item.href);
+                                return (
+                                  <Link
+                                    key={item.href}
+                                    to={item.href}
+                                    className={cn(
+                                      "flex items-center gap-2.5 rounded-md px-2 py-1 text-xs transition-colors",
+                                      active
+                                        ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                                        : "text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                                    )}
+                                  >
+                                    {item.icon}
+                                    <span>{item.label}</span>
+                                  </Link>
+                                );
+                              })}
+                            </div>
                           )}
-                          title={collapsed ? item.label : undefined}
-                        >
-                          {item.icon}
-                          {!collapsed && <span>{item.label}</span>}
-                        </Link>
+                        </div>
                       );
                     })}
                   </div>
