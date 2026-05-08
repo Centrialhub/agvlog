@@ -101,6 +101,24 @@ export default function Ingestion() {
   const [pickupOrderId, setPickupOrderId] = useState<string | null>(null);
   const [pickupOrder, setPickupOrder] = useState<PickupOrder | null>(null);
   const [noPickup, setNoPickup] = useState(false);
+  const [syncSsxClients, setSyncSsxClients] = useState(false);
+
+  // Conta SSX ativa do tenant (1ª disponível) para sincronizar clientes recém-criados
+  const { data: ssxAccountForClients } = useQuery({
+    queryKey: ['ssx_account_for_client_sync', currentTenant?.id],
+    queryFn: async () => {
+      if (!currentTenant) return null;
+      const { data } = await supabase
+        .from('integration_accounts')
+        .select('id, username, status')
+        .eq('tenant_id', currentTenant.id)
+        .eq('status', 'ok')
+        .limit(1)
+        .maybeSingle();
+      return data || null;
+    },
+    enabled: !!currentTenant,
+  });
 
   const onlyDigits = (s: string | null | undefined) => String(s || '').replace(/\D/g, '');
 
@@ -618,6 +636,7 @@ export default function Ingestion() {
     const autoCreatedByIe = new Map<string, string>(); // chave: UF|IE digits
     const autoCreatedByIm = new Map<string, string>(); // chave: município|IM digits
     let autoCreatedCount = 0;
+    const clientsToSyncSsx = new Set<string>(); // client_ids para sincronizar com SSX
 
     const ensureClient = async (src: any, ortFields?: any): Promise<string | null> => {
       if (!currentTenant) return null;
@@ -769,6 +788,7 @@ export default function Ingestion() {
         if (ieKey) autoCreatedByIe.set(ieKey, data.id);
         if (imKey) autoCreatedByIm.set(imKey, data.id);
         if (nameKey) autoCreatedByName.set(nameKey, data.id);
+        clientsToSyncSsx.add(data.id);
         return data.id;
       } catch {
         return null;
@@ -875,6 +895,29 @@ export default function Ingestion() {
           description: 'Dados extraídos do XML/ORT foram salvos na ficha do cliente.',
         });
       }
+
+      // Sincronização opcional com SSX (InsertPerson) para os clientes recém-criados
+      if (syncSsxClients && ssxAccountForClients?.id && currentTenant && clientsToSyncSsx.size > 0) {
+        let okCount = 0;
+        let errCount = 0;
+        for (const cId of clientsToSyncSsx) {
+          try {
+            const { data, error } = await supabase.functions.invoke('ssx-insert-person-client', {
+              body: { tenant_id: currentTenant.id, client_id: cId, integration_account_id: ssxAccountForClients.id },
+            });
+            if (error || (data as any)?.error) errCount++;
+            else okCount++;
+          } catch {
+            errCount++;
+          }
+        }
+        toast({
+          title: 'Sincronização SSX concluída',
+          description: `${okCount} cliente(s) sincronizados${errCount ? `, ${errCount} com erro` : ''}.`,
+          variant: errCount && !okCount ? 'destructive' : 'default',
+        });
+      }
+
       toast({
         title: 'NF-es salvas',
         description: loadLabel
@@ -1303,6 +1346,24 @@ export default function Ingestion() {
         />
       )}
       {step === 2 && (
+        <>
+        {ssxAccountForClients?.id && (
+          <div className="mb-3 flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2 text-sm">
+            <div className="flex items-center gap-2">
+              <input
+                id="sync-ssx-clients"
+                type="checkbox"
+                className="h-4 w-4 accent-primary"
+                checked={syncSsxClients}
+                onChange={(e) => setSyncSsxClients(e.target.checked)}
+              />
+              <label htmlFor="sync-ssx-clients" className="cursor-pointer">
+                Sincronizar clientes recém-criados com a SSX (InsertPerson)
+              </label>
+            </div>
+            <span className="text-xs text-muted-foreground">conta: {ssxAccountForClients.username || 'SSX'}</span>
+          </div>
+        )}
         <ValidationStep
           docs={validatedDocs}
           orders={validatedOrders}
@@ -1317,6 +1378,7 @@ export default function Ingestion() {
           onRemoveDoc={handleRemoveDoc}
           onRemoveOrder={handleRemoveOrder}
         />
+        </>
       )}
       {step === 3 && (
         <RoutingStep

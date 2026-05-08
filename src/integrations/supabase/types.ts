@@ -492,6 +492,10 @@ export type Database = {
           payment_notes: string | null
           person_type: string | null
           phone: string | null
+          provider_person_id: string | null
+          provider_person_integration_account_id: string | null
+          provider_person_sync_status: string | null
+          provider_person_synced_at: string | null
           service_notes: string | null
           sigla: string | null
           state_registration: string | null
@@ -550,6 +554,10 @@ export type Database = {
           payment_notes?: string | null
           person_type?: string | null
           phone?: string | null
+          provider_person_id?: string | null
+          provider_person_integration_account_id?: string | null
+          provider_person_sync_status?: string | null
+          provider_person_synced_at?: string | null
           service_notes?: string | null
           sigla?: string | null
           state_registration?: string | null
@@ -608,6 +616,10 @@ export type Database = {
           payment_notes?: string | null
           person_type?: string | null
           phone?: string | null
+          provider_person_id?: string | null
+          provider_person_integration_account_id?: string | null
+          provider_person_sync_status?: string | null
+          provider_person_synced_at?: string | null
           service_notes?: string | null
           sigla?: string | null
           state_registration?: string | null
@@ -622,6 +634,13 @@ export type Database = {
           updated_by?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "clients_provider_person_integration_account_id_fkey"
+            columns: ["provider_person_integration_account_id"]
+            isOneToOne: false
+            referencedRelation: "integration_accounts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "clients_tenant_id_fkey"
             columns: ["tenant_id"]
