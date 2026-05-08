@@ -24,7 +24,7 @@ import RoutingStep from '@/components/ingestion/RoutingStep';
 import type { RouteGroup } from '@/components/ingestion/RoutingStep';
 import GroupingStep from '@/components/ingestion/GroupingStep';
 import ResultsStep from '@/components/ingestion/ResultsStep';
-import type { IngestionReport } from '@/components/ingestion/ResultsStep';
+import type { IngestionReport, ReviewItem } from '@/components/ingestion/ResultsStep';
 import { calculateFreight, logFreightCalculation } from '@/hooks/useFreightCalculator';
 import { applyOrtFallbacks, isUnknown, UNKNOWN } from '@/lib/ortFieldFallbacks';
 import { normalizeStateRegistration, normalizeIeIndicator, FISCAL_UNKNOWN } from '@/lib/fiscalNormalization';
@@ -160,6 +160,58 @@ export default function Ingestion() {
 
     const unresolved = docs.filter(d => !d.matchedClientId).length;
 
+    // Build per-document review list with reasons (ORT/OCR + low-confidence XML).
+    const reviewItems: ReviewItem[] = [];
+    const seenInvoices = new Set<string>();
+    const REVIEW_THRESHOLD = 0.82;
+
+    for (const ort of ortReviewDocs) {
+      const reasons: string[] = [];
+      if (ort.confidence < REVIEW_THRESHOLD) {
+        reasons.push(`Baixa confiança OCR (${Math.round((ort.confidence || 0) * 100)}%)`);
+      }
+      if (ort.unknownFields && ort.unknownFields.length > 0) {
+        const sample = ort.unknownFields.slice(0, 4).join(', ');
+        const more = ort.unknownFields.length > 4 ? ` (+${ort.unknownFields.length - 4})` : '';
+        reasons.push(`Campos não mapeados: ${sample}${more}`);
+      }
+      if (ort.needsReview && reasons.length === 0) {
+        reasons.push('Marcado para revisão manual');
+      }
+      if (reasons.length === 0) continue;
+      seenInvoices.add(ort.invoiceNumber);
+      reviewItems.push({
+        invoiceNumber: ort.invoiceNumber,
+        fileName: (ort as any).fileName,
+        recipientName: ort.recipientName,
+        confidence: ort.confidence,
+        reasons,
+      });
+    }
+
+    for (const d of docs) {
+      const src: any = d.source;
+      const conf = Number(src?.confidence ?? 1);
+      const reasons: string[] = [];
+      if (conf < REVIEW_THRESHOLD) reasons.push(`Baixa confiança (${Math.round(conf * 100)}%)`);
+      const missing: string[] = [];
+      if (!isFilled(src.recipientCnpj)) missing.push('CNPJ');
+      if (!isFilled(src.recipientStateRegistration)) missing.push('IE');
+      if (!isFilled(src.recipientAddress) || !isFilled(src.recipientCity) || !isFilled(src.recipientZip)) missing.push('endereço');
+      if (!d.matchedClientId) missing.push('cliente');
+      if (missing.length > 0 && conf < REVIEW_THRESHOLD) {
+        reasons.push(`Mapeamento incompleto: ${missing.join(', ')}`);
+      }
+      if (reasons.length === 0) continue;
+      if (seenInvoices.has(src.invoiceNumber)) continue;
+      reviewItems.push({
+        invoiceNumber: src.invoiceNumber,
+        recipientName: src.recipientName,
+        confidence: conf,
+        reasons,
+      });
+    }
+
     return {
       totalDocs: total,
       savedDocs: savedCount,
@@ -169,6 +221,7 @@ export default function Ingestion() {
       clientsMatched: matchedCount,
       clientsUnresolved: Math.max(0, unresolved - autoCreatedCount),
       fieldCoverage,
+      reviewItems,
     };
   }, [ortReviewDocs]);
 
