@@ -192,11 +192,11 @@ export default function LoadAdvancedFilters({ value, onChange, drivers, vehicles
           </div>
           <div className="space-y-1">
             <Label className="text-[11px] text-muted-foreground">Placa</Label>
-            <Input value={value.plate} onChange={e => set('plate', e.target.value)} className="h-8 text-xs" placeholder="Placa cavalo" />
+            <PlateInput value={value.plate} onChange={v => set('plate', v)} placeholder="Placa cavalo" suggestions={plateOptions} />
           </div>
           <div className="space-y-1">
             <Label className="text-[11px] text-muted-foreground">Placa Carreta</Label>
-            <Input value={value.trailerPlate} onChange={e => set('trailerPlate', e.target.value)} className="h-8 text-xs" placeholder="Placa carreta" />
+            <PlateInput value={value.trailerPlate} onChange={v => set('trailerPlate', v)} placeholder="Placa carreta" suggestions={trailerOptions} />
           </div>
           <div className="space-y-1">
             <Label className="text-[11px] text-muted-foreground">Motorista</Label>
@@ -210,7 +210,16 @@ export default function LoadAdvancedFilters({ value, onChange, drivers, vehicles
           </div>
           <div className="space-y-1">
             <Label className="text-[11px] text-muted-foreground">Tipo de Carga</Label>
-            <Input value={value.cargoType} onChange={e => set('cargoType', e.target.value)} className="h-8 text-xs" placeholder="Ex.: Seca, Refrigerada" />
+            <Select value={value.cargoType || 'all'} onValueChange={v => set('cargoType', v === 'all' ? '' : v)}>
+              <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Todos" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                {OPERATION_TYPE_OPTIONS.map(o => (
+                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           </div>
           <div className="space-y-1">
             <Label className="text-[11px] text-muted-foreground">Resp. Monitoramento</Label>
