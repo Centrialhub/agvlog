@@ -995,13 +995,15 @@ export default function Ingestion() {
       const matchedExisting = validDocsForReport.filter(d =>
         d.matchedClientId && !clientsToSyncSsx.has(d.matchedClientId)
       ).length;
-      setIngestionReport(buildIngestionReport({
+      const reportSaveDocs = buildIngestionReport({
         docs: validDocsForReport,
         savedCount: successCount,
         errorCount,
         autoCreatedCount: autoCreatedCount,
         matchedCount: matchedExisting,
-      }));
+      });
+      setIngestionReport(reportSaveDocs);
+      void persistIngestionReport(reportSaveDocs, loadId ? `Vinculado à carga ${loads.find(l => l.id === loadId)?.load_number || ''}` : 'Salvar documentos');
       const loadLabel = loadId ? loads.find(l => l.id === loadId)?.load_number : null;
       if (autoCreatedCount > 0) {
         queryClient.invalidateQueries({ queryKey: ['clients'] });
