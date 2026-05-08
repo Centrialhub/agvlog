@@ -895,6 +895,29 @@ export default function Ingestion() {
           description: 'Dados extraídos do XML/ORT foram salvos na ficha do cliente.',
         });
       }
+
+      // Sincronização opcional com SSX (InsertPerson) para os clientes recém-criados
+      if (syncSsxClients && ssxAccountForClients?.id && currentTenant && clientsToSyncSsx.size > 0) {
+        let okCount = 0;
+        let errCount = 0;
+        for (const cId of clientsToSyncSsx) {
+          try {
+            const { data, error } = await supabase.functions.invoke('ssx-insert-person-client', {
+              body: { tenant_id: currentTenant.id, client_id: cId, integration_account_id: ssxAccountForClients.id },
+            });
+            if (error || (data as any)?.error) errCount++;
+            else okCount++;
+          } catch {
+            errCount++;
+          }
+        }
+        toast({
+          title: 'Sincronização SSX concluída',
+          description: `${okCount} cliente(s) sincronizados${errCount ? `, ${errCount} com erro` : ''}.`,
+          variant: errCount && !okCount ? 'destructive' : 'default',
+        });
+      }
+
       toast({
         title: 'NF-es salvas',
         description: loadLabel
