@@ -9,6 +9,7 @@ import { useFiscalDocuments, useCreateFiscalDocument } from '@/hooks/useFiscalDo
 import { useClients } from '@/hooks/useClients';
 import { useCreateOrder } from '@/hooks/useOrders';
 import { useCreateLoad, useLoads } from '@/hooks/useLoads';
+import { getNextLoadNumberFromExisting } from '@/hooks/useLoads';
 import { useCreateLoadItem } from '@/hooks/useLoadItems';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useOperationalRoutes, useUpdateOperationalRoute } from '@/hooks/useOperationalRoutes';
@@ -1342,12 +1343,17 @@ export default function Ingestion() {
       }
 
       // 3. Create loads WITH load_items linked to documents/orders
+      // Compute next sequential load number once, then increment locally per suggestion
+      let nextLoadSeq = currentTenant
+        ? Number(await getNextLoadNumberFromExisting(currentTenant.id))
+        : 1001;
       for (let idx = 0; idx < suggestions.length; idx++) {
         const suggestion = suggestions[idx];
         if (suggestion.totalPallets <= 0) continue;
         const assignment = assignments.get(idx);
         try {
-          const loadNumber = `ING-${Date.now().toString(36).toUpperCase()}-${suggestion.region.substring(0, 5).toUpperCase()}`;
+          const loadNumber = String(nextLoadSeq);
+          nextLoadSeq += 1;
           const createdLoad = await createLoad.mutateAsync({
             load_number: loadNumber,
             destination: suggestion.region,
