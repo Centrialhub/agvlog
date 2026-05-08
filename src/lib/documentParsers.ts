@@ -71,10 +71,22 @@ export interface ParsedNFe {
   emitterCnpj: string;
   recipientName: string;
   recipientCnpj: string;
+  recipientFantasyName: string;
+  recipientStateRegistration: string;
+  recipientMunicipalRegistration: string;
+  recipientIeIndicator: string; // '1' Contribuinte, '2' Isento, '9' Não contribuinte
+  recipientPhone: string;
+  recipientEmail: string;
   recipientCity: string;
+  recipientCityCode: string;
   recipientState: string;
   recipientAddress: string;
+  recipientAddressNumber: string;
+  recipientAddressComplement: string;
   recipientNeighborhood: string;
+  recipientZip: string;
+  recipientCountry: string;
+  recipientCountryCode: string;
   items: ParsedNFeItem[];
   totalValue: number;
   totalWeight: number;
@@ -115,16 +127,24 @@ export function parseNFeXml(xmlString: string): ParsedNFe {
   const dest = infNFe.getElementsByTagName('dest')[0];
   const recipientName = getTagText(dest || infNFe, 'xNome');
   const recipientCnpj = getTagText(dest || infNFe, 'CNPJ') || getTagText(dest || infNFe, 'CPF');
-  
+  const recipientFantasyName = getTagText(dest || infNFe, 'xFant');
+  const recipientStateRegistration = getTagText(dest || infNFe, 'IE');
+  const recipientMunicipalRegistration = getTagText(dest || infNFe, 'IM');
+  const recipientIeIndicator = getTagText(dest || infNFe, 'indIEDest');
+  const recipientEmail = getTagText(dest || infNFe, 'email');
+
   const enderDest = dest?.getElementsByTagName('enderDest')[0];
   const recipientCity = getTagText(enderDest || infNFe, 'xMun');
+  const recipientCityCode = getTagText(enderDest || infNFe, 'cMun');
   const recipientState = getTagText(enderDest || infNFe, 'UF');
   const recipientNeighborhood = getTagText(enderDest || infNFe, 'xBairro');
-  const recipientAddress = [
-    getTagText(enderDest || infNFe, 'xLgr'),
-    getTagText(enderDest || infNFe, 'nro'),
-    recipientNeighborhood,
-  ].filter(Boolean).join(', ');
+  const recipientAddress = getTagText(enderDest || infNFe, 'xLgr');
+  const recipientAddressNumber = getTagText(enderDest || infNFe, 'nro');
+  const recipientAddressComplement = getTagText(enderDest || infNFe, 'xCpl');
+  const recipientZip = getTagText(enderDest || infNFe, 'CEP');
+  const recipientCountry = getTagText(enderDest || infNFe, 'xPais') || 'BRASIL';
+  const recipientCountryCode = getTagText(enderDest || infNFe, 'cPais') || '1058';
+  const recipientPhone = getTagText(enderDest || infNFe, 'fone') || getTagText(dest || infNFe, 'fone');
 
   const detElements = infNFe.getElementsByTagName('det');
   const items: ParsedNFeItem[] = [];
@@ -193,7 +213,11 @@ export function parseNFeXml(xmlString: string): ParsedNFe {
   return {
     invoiceNumber, series, accessKey, issueDate,
     emitterName, emitterCnpj, recipientName, recipientCnpj,
-    recipientCity, recipientState, recipientAddress, recipientNeighborhood,
+    recipientFantasyName, recipientStateRegistration, recipientMunicipalRegistration,
+    recipientIeIndicator, recipientPhone, recipientEmail,
+    recipientCity, recipientCityCode, recipientState,
+    recipientAddress, recipientAddressNumber, recipientAddressComplement,
+    recipientNeighborhood, recipientZip, recipientCountry, recipientCountryCode,
     items, totalValue, totalWeight, totalVolume, estimatedPallets,
     clientLoadNumber, observation,
     clientLoadSource, clientLoadRuleId, clientLoadRuleLabel,
