@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { Card, CardContent } from '@/components/ui/card';
@@ -8,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
-import { FileSearch, Download, AlertTriangle, ListChecks } from 'lucide-react';
+import { FileSearch, Download, AlertTriangle, ListChecks, RefreshCw } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface IngestionReportRow {
@@ -32,6 +33,7 @@ interface IngestionReportRow {
 
 export default function IngestionReports() {
   const { currentTenant } = useTenant();
+  const navigate = useNavigate();
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [batch, setBatch] = useState('');
@@ -203,9 +205,23 @@ export default function IngestionReports() {
                 </div>
               )}
 
-              <Button variant="outline" size="sm" onClick={() => downloadReportCsv(selected)}>
-                <Download className="h-3.5 w-3.5 mr-1.5" /> Exportar CSV
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={() => downloadReportCsv(selected)}>
+                  <Download className="h-3.5 w-3.5 mr-1.5" /> Exportar CSV
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => navigate(`/ingestion?reprocess=${encodeURIComponent(selected.batch_id)}`)}
+                >
+                  <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Reprocessar lote
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                O reprocessamento abre o fluxo de ingestão pré-configurado. Reenvie os mesmos arquivos:
+                documentos já cadastrados (mesma chave NF-e ou número) são detectados e ignorados,
+                evitando duplicação. Apenas registros novos são criados e um novo relatório é gerado
+                com a origem "Reprocessamento de {selected.batch_id}".
+              </p>
             </div>
           )}
         </DialogContent>
