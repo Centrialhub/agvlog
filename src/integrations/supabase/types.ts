@@ -448,50 +448,167 @@ export type Database = {
       }
       clients: {
         Row: {
+          accounting_code_client: string | null
+          accounting_code_supplier: string | null
           active: boolean
+          address_city: string | null
+          address_complement: string | null
+          address_neighborhood: string | null
+          address_number: string | null
+          address_state: string | null
+          address_street: string | null
+          address_zip: string | null
           addresses: Json | null
+          billed: boolean | null
+          blocked: boolean
+          budget_group_client: string | null
+          budget_group_supplier: string | null
+          category: string | null
+          cfop_client_type: string | null
+          client_type: string | null
           company_name: string
+          contact_name: string | null
           contacts: Json | null
+          country_code: string | null
+          country_name: string | null
           created_at: string
           created_by: string | null
+          cubage_factor: number | null
+          email: string | null
+          fax: string | null
+          freight_calc_type: string | null
           id: string
+          ie_indicator: string | null
+          internal_code: string | null
           legal_name: string | null
+          mobile: string | null
+          municipal_registration: string | null
+          notes: string | null
+          payer: string | null
+          payer_group: string | null
           payment_notes: string | null
+          person_type: string | null
+          phone: string | null
           service_notes: string | null
+          sigla: string | null
+          state_registration: string | null
+          tax_code: string | null
+          tax_description: string | null
           tax_id: string | null
+          tax_regime: string | null
+          taxes_enabled: boolean | null
           tenant_id: string
+          trade_name: string | null
           updated_at: string
           updated_by: string | null
         }
         Insert: {
+          accounting_code_client?: string | null
+          accounting_code_supplier?: string | null
           active?: boolean
+          address_city?: string | null
+          address_complement?: string | null
+          address_neighborhood?: string | null
+          address_number?: string | null
+          address_state?: string | null
+          address_street?: string | null
+          address_zip?: string | null
           addresses?: Json | null
+          billed?: boolean | null
+          blocked?: boolean
+          budget_group_client?: string | null
+          budget_group_supplier?: string | null
+          category?: string | null
+          cfop_client_type?: string | null
+          client_type?: string | null
           company_name: string
+          contact_name?: string | null
           contacts?: Json | null
+          country_code?: string | null
+          country_name?: string | null
           created_at?: string
           created_by?: string | null
+          cubage_factor?: number | null
+          email?: string | null
+          fax?: string | null
+          freight_calc_type?: string | null
           id?: string
+          ie_indicator?: string | null
+          internal_code?: string | null
           legal_name?: string | null
+          mobile?: string | null
+          municipal_registration?: string | null
+          notes?: string | null
+          payer?: string | null
+          payer_group?: string | null
           payment_notes?: string | null
+          person_type?: string | null
+          phone?: string | null
           service_notes?: string | null
+          sigla?: string | null
+          state_registration?: string | null
+          tax_code?: string | null
+          tax_description?: string | null
           tax_id?: string | null
+          tax_regime?: string | null
+          taxes_enabled?: boolean | null
           tenant_id: string
+          trade_name?: string | null
           updated_at?: string
           updated_by?: string | null
         }
         Update: {
+          accounting_code_client?: string | null
+          accounting_code_supplier?: string | null
           active?: boolean
+          address_city?: string | null
+          address_complement?: string | null
+          address_neighborhood?: string | null
+          address_number?: string | null
+          address_state?: string | null
+          address_street?: string | null
+          address_zip?: string | null
           addresses?: Json | null
+          billed?: boolean | null
+          blocked?: boolean
+          budget_group_client?: string | null
+          budget_group_supplier?: string | null
+          category?: string | null
+          cfop_client_type?: string | null
+          client_type?: string | null
           company_name?: string
+          contact_name?: string | null
           contacts?: Json | null
+          country_code?: string | null
+          country_name?: string | null
           created_at?: string
           created_by?: string | null
+          cubage_factor?: number | null
+          email?: string | null
+          fax?: string | null
+          freight_calc_type?: string | null
           id?: string
+          ie_indicator?: string | null
+          internal_code?: string | null
           legal_name?: string | null
+          mobile?: string | null
+          municipal_registration?: string | null
+          notes?: string | null
+          payer?: string | null
+          payer_group?: string | null
           payment_notes?: string | null
+          person_type?: string | null
+          phone?: string | null
           service_notes?: string | null
+          sigla?: string | null
+          state_registration?: string | null
+          tax_code?: string | null
+          tax_description?: string | null
           tax_id?: string | null
+          tax_regime?: string | null
+          taxes_enabled?: boolean | null
           tenant_id?: string
+          trade_name?: string | null
           updated_at?: string
           updated_by?: string | null
         }

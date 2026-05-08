@@ -1,54 +1,13 @@
 import { useState, useMemo } from 'react';
 import { useClients, useCreateClient, useUpdateClient, Client } from '@/hooks/useClients';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Search, Plus, Building2, Edit, Check, X } from 'lucide-react';
+import { Search, Plus, Building2, Edit, Check, X, Lock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-
-function ClientForm({ client, onSave, onCancel }: { client?: Client; onSave: (v: any) => void; onCancel: () => void }) {
-  const [form, setForm] = useState({
-    company_name: client?.company_name || '',
-    legal_name: client?.legal_name || '',
-    tax_id: client?.tax_id || '',
-    service_notes: client?.service_notes || '',
-    payment_notes: client?.payment_notes || '',
-  });
-
-  return (
-    <div className="space-y-4">
-      <div>
-        <Label>Nome Fantasia *</Label>
-        <Input value={form.company_name} onChange={e => setForm(f => ({ ...f, company_name: e.target.value }))} />
-      </div>
-      <div>
-        <Label>Razão Social</Label>
-        <Input value={form.legal_name} onChange={e => setForm(f => ({ ...f, legal_name: e.target.value }))} />
-      </div>
-      <div>
-        <Label>CNPJ / CPF</Label>
-        <Input value={form.tax_id} onChange={e => setForm(f => ({ ...f, tax_id: e.target.value }))} />
-      </div>
-      <div>
-        <Label>Notas de Serviço</Label>
-        <Textarea value={form.service_notes} onChange={e => setForm(f => ({ ...f, service_notes: e.target.value }))} />
-      </div>
-      <div>
-        <Label>Notas de Pagamento / Prazo</Label>
-        <Textarea value={form.payment_notes} onChange={e => setForm(f => ({ ...f, payment_notes: e.target.value }))} />
-      </div>
-      <div className="flex gap-2 justify-end">
-        <Button variant="outline" onClick={onCancel}>Cancelar</Button>
-        <Button onClick={() => onSave(form)} disabled={!form.company_name.trim()}>Salvar</Button>
-      </div>
-    </div>
-  );
-}
+import { ClientFormDialog } from '@/components/clients/ClientFormDialog';
 
 export default function Clients() {
   const { data: clients = [], isLoading } = useClients();
@@ -56,12 +15,22 @@ export default function Clients() {
   const updateClient = useUpdateClient();
   const [search, setSearch] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingClient, setEditingClient] = useState<Client | undefined>();
+  const [editingClient, setEditingClient] = useState<Client | null>(null);
   const { toast } = useToast();
 
   const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    return clients.filter(c => c.company_name.toLowerCase().includes(q) || (c.tax_id || '').includes(q));
+    const q = search.trim().toLowerCase();
+    if (!q) return clients;
+    return clients.filter(c =>
+      c.company_name.toLowerCase().includes(q) ||
+      (c.legal_name || '').toLowerCase().includes(q) ||
+      (c.trade_name || '').toLowerCase().includes(q) ||
+      (c.tax_id || '').toLowerCase().includes(q) ||
+      (c.internal_code || '').toLowerCase().includes(q) ||
+      (c.sigla || '').toLowerCase().includes(q) ||
+      (c.payer_group || '').toLowerCase().includes(q) ||
+      (c.address_city || '').toLowerCase().includes(q)
+    );
   }, [clients, search]);
 
   const handleSave = async (values: any) => {
@@ -74,7 +43,7 @@ export default function Clients() {
         toast({ title: 'Cliente criado' });
       }
       setDialogOpen(false);
-      setEditingClient(undefined);
+      setEditingClient(null);
     } catch (e: any) {
       toast({ title: 'Erro', description: e.message, variant: 'destructive' });
     }
@@ -94,22 +63,19 @@ export default function Clients() {
           </h1>
           <p className="text-sm text-muted-foreground">{clients.length} clientes cadastrados</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={v => { setDialogOpen(v); if (!v) setEditingClient(undefined); }}>
-          <DialogTrigger asChild>
-            <Button><Plus className="h-4 w-4 mr-2" /> Novo Cliente</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{editingClient ? 'Editar Cliente' : 'Novo Cliente'}</DialogTitle>
-            </DialogHeader>
-            <ClientForm client={editingClient} onSave={handleSave} onCancel={() => { setDialogOpen(false); setEditingClient(undefined); }} />
-          </DialogContent>
-        </Dialog>
+        <Button onClick={() => { setEditingClient(null); setDialogOpen(true); }}>
+          <Plus className="h-4 w-4 mr-2" /> Novo Cliente
+        </Button>
       </div>
 
-      <div className="relative max-w-sm">
+      <div className="relative max-w-md">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input placeholder="Buscar por nome ou CNPJ..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+        <Input
+          placeholder="Buscar por nome, CNPJ, código, sigla, grupo pagador, cidade..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="pl-9"
+        />
       </div>
 
       <Card>
@@ -117,30 +83,47 @@ export default function Clients() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-[80px]">Código</TableHead>
                 <TableHead>Nome</TableHead>
-                <TableHead>CNPJ/CPF</TableHead>
                 <TableHead>Razão Social</TableHead>
+                <TableHead>CNPJ/CPF</TableHead>
+                <TableHead>IE</TableHead>
+                <TableHead>Cidade/UF</TableHead>
+                <TableHead>Grupo Pagador</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="w-[100px]">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">Carregando...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Carregando...</TableCell></TableRow>
               ) : filtered.length === 0 ? (
-                <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">Nenhum cliente encontrado</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Nenhum cliente encontrado</TableCell></TableRow>
               ) : filtered.map(c => (
-                <TableRow key={c.id}>
-                  <TableCell className="font-medium">{c.company_name}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{c.tax_id || '—'}</TableCell>
+                <TableRow key={c.id} className="cursor-pointer" onClick={() => { setEditingClient(c); setDialogOpen(true); }}>
+                  <TableCell className="text-xs text-muted-foreground">{c.internal_code || '—'}</TableCell>
+                  <TableCell className="font-medium">
+                    {c.blocked ? <Lock className="inline h-3 w-3 mr-1 text-destructive" /> : null}
+                    {c.company_name}
+                  </TableCell>
                   <TableCell className="text-sm text-muted-foreground">{c.legal_name || '—'}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{c.tax_id || '—'}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{c.state_registration || '—'}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {[c.address_city, c.address_state].filter(Boolean).join('/') || '—'}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{c.payer_group || '—'}</TableCell>
                   <TableCell>
-                    <Badge variant={c.active ? 'default' : 'secondary'} className="cursor-pointer" onClick={() => handleToggleActive(c)}>
+                    <Badge
+                      variant={c.active ? 'default' : 'secondary'}
+                      className="cursor-pointer"
+                      onClick={(e) => { e.stopPropagation(); handleToggleActive(c); }}
+                    >
                       {c.active ? <><Check className="h-3 w-3 mr-1" /> Ativo</> : <><X className="h-3 w-3 mr-1" /> Inativo</>}
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Button variant="ghost" size="icon" onClick={() => { setEditingClient(c); setDialogOpen(true); }}>
+                    <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setEditingClient(c); setDialogOpen(true); }}>
                       <Edit className="h-4 w-4" />
                     </Button>
                   </TableCell>
@@ -150,6 +133,13 @@ export default function Clients() {
           </Table>
         </CardContent>
       </Card>
+
+      <ClientFormDialog
+        open={dialogOpen}
+        onOpenChange={(v) => { setDialogOpen(v); if (!v) setEditingClient(null); }}
+        client={editingClient}
+        onSave={handleSave}
+      />
     </div>
   );
 }

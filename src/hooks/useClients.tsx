@@ -16,6 +16,45 @@ export interface Client {
   active: boolean;
   created_at: string;
   updated_at: string;
+  trade_name?: string | null;
+  person_type?: string | null;
+  state_registration?: string | null;
+  municipal_registration?: string | null;
+  ie_indicator?: string | null;
+  internal_code?: string | null;
+  sigla?: string | null;
+  category?: string | null;
+  cfop_client_type?: string | null;
+  tax_regime?: string | null;
+  payer_group?: string | null;
+  payer?: string | null;
+  freight_calc_type?: string | null;
+  cubage_factor?: number | null;
+  accounting_code_client?: string | null;
+  accounting_code_supplier?: string | null;
+  budget_group_client?: string | null;
+  budget_group_supplier?: string | null;
+  client_type?: string | null;
+  country_code?: string | null;
+  country_name?: string | null;
+  address_street?: string | null;
+  address_number?: string | null;
+  address_complement?: string | null;
+  address_neighborhood?: string | null;
+  address_city?: string | null;
+  address_state?: string | null;
+  address_zip?: string | null;
+  contact_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  mobile?: string | null;
+  fax?: string | null;
+  blocked?: boolean | null;
+  billed?: boolean | null;
+  taxes_enabled?: boolean | null;
+  tax_code?: string | null;
+  tax_description?: string | null;
+  notes?: string | null;
 }
 
 export function useClients() {
