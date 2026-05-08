@@ -24,6 +24,7 @@ import RoutingStep from '@/components/ingestion/RoutingStep';
 import type { RouteGroup } from '@/components/ingestion/RoutingStep';
 import GroupingStep from '@/components/ingestion/GroupingStep';
 import ResultsStep from '@/components/ingestion/ResultsStep';
+import type { IngestionReport } from '@/components/ingestion/ResultsStep';
 import { calculateFreight, logFreightCalculation } from '@/hooks/useFreightCalculator';
 import { applyOrtFallbacks, isUnknown, UNKNOWN } from '@/lib/ortFieldFallbacks';
 import { normalizeStateRegistration, normalizeIeIndicator, FISCAL_UNKNOWN } from '@/lib/fiscalNormalization';
@@ -97,6 +98,7 @@ export default function Ingestion() {
   const [savingDocsOnly, setSavingDocsOnly] = useState(false);
   const [ortProcessing, setOrtProcessing] = useState(false);
   const [executionResults, setExecutionResults] = useState<string[]>([]);
+  const [ingestionReport, setIngestionReport] = useState<IngestionReport | null>(null);
   const [ortClientIds, setOrtClientIds] = useState<Array<string | null>>([]);
   const [pickupOrderId, setPickupOrderId] = useState<string | null>(null);
   const [pickupOrder, setPickupOrder] = useState<PickupOrder | null>(null);
