@@ -5,7 +5,7 @@ import { useTenant } from '@/hooks/useTenant';
 import { useAuth } from '@/hooks/useAuth';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useOperationalRoutes } from '@/hooks/useOperationalRoutes';
-import { useCreateLoad } from '@/hooks/useLoads';
+import { useCreateLoad, getNextLoadNumberFromExisting } from '@/hooks/useLoads';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -186,10 +186,15 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
     let errors = 0;
 
     try {
+      // Sequential numbering starting from current max+1 (e.g., 1001, 1002...)
+      let nextSeq = currentTenant
+        ? Number(await getNextLoadNumberFromExisting(currentTenant.id))
+        : Date.now();
       // Create all loads in parallel
       const loadPromises = selected.map(async (group) => {
         try {
-          const loadNumber = `CG-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 5).toUpperCase()}-${group.routeName.substring(0, 6).toUpperCase().replace(/\s/g, '')}`;
+          const loadNumber = String(nextSeq);
+          nextSeq += 1;
           const vehicleId = vehicleAssignments.get(group.routeName) || null;
 
           const createdLoad = await createLoad.mutateAsync({
