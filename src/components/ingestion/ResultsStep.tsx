@@ -416,6 +416,9 @@ export default function ResultsStep({ results, onReset, report }: ResultsStepPro
               <Button size="sm" variant="outline" className="ml-auto h-7" onClick={handleExportCsv}>
                 <Download className="h-3.5 w-3.5 mr-1.5" /> Exportar CSV
               </Button>
+              <Button size="sm" variant="outline" className="h-7" onClick={handleExportCsvSummary}>
+                <Download className="h-3.5 w-3.5 mr-1.5" /> CSV resumido
+              </Button>
               <Button size="sm" variant="outline" className="h-7" onClick={handleExportPdf}>
                 <FileDown className="h-3.5 w-3.5 mr-1.5" /> Exportar PDF
               </Button>
