@@ -148,11 +148,22 @@ const CheckboxList = ({ options, value, onChange }: { options: string[]; value: 
   </div>
 );
 
-export default function LoadAdvancedFilters({ value, onChange, drivers }: Props) {
+export default function LoadAdvancedFilters({ value, onChange, drivers, vehicles = [], trailerPlateSuggestions = [] }: Props) {
   const [open, setOpen] = useState(false);
   const applied = useMemo(() => countApplied(value), [value]);
   const set = <K extends keyof LoadAdvancedFiltersValue>(k: K, v: LoadAdvancedFiltersValue[K]) =>
     onChange({ ...value, [k]: v });
+  const plateOptions = useMemo(
+    () => Array.from(new Set(vehicles.map(v => v.plate || '').filter(Boolean))),
+    [vehicles],
+  );
+  const trailerOptions = useMemo(
+    () => Array.from(new Set([
+      ...vehicles.map(v => v.trailer_plate || '').filter(Boolean),
+      ...trailerPlateSuggestions,
+    ])),
+    [vehicles, trailerPlateSuggestions],
+  );
 
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="rounded-lg border border-border bg-card">
