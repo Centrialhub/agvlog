@@ -23,6 +23,16 @@ export interface IngestionReport {
   }[];
   reviewItems?: ReviewItem[];
   reviewThreshold?: number;
+  auditMeta?: {
+    tenantId?: string | null;
+    tenantName?: string | null;
+    batchId?: string | null;
+    sourceLabel?: string | null;
+    generatedAt?: string | null;
+    periodFrom?: string | null;
+    periodTo?: string | null;
+    generatedByUserId?: string | null;
+  };
 }
 
 export interface ReviewItem {
@@ -56,6 +66,19 @@ export default function ResultsStep({ results, onReset, report }: ResultsStepPro
     };
     const pct = (n: number, d: number) => (d > 0 ? ((n / d) * 100).toFixed(1) : '0.0');
     const lines: string[] = [];
+    if (report.auditMeta) {
+      const m = report.auditMeta;
+      const fmt = (iso?: string | null) => iso ? new Date(iso).toLocaleString('pt-BR') : '-';
+      lines.push('Auditoria;Campo;Valor');
+      lines.push(`Auditoria;Empresa;${esc(m.tenantName || '-')}`);
+      lines.push(`Auditoria;Tenant ID;${esc(m.tenantId || '-')}`);
+      lines.push(`Auditoria;Batch ID;${esc(m.batchId || '-')}`);
+      lines.push(`Auditoria;Origem;${esc(m.sourceLabel || '-')}`);
+      lines.push(`Auditoria;Período (de);${esc(fmt(m.periodFrom))}`);
+      lines.push(`Auditoria;Período (até);${esc(fmt(m.periodTo))}`);
+      lines.push(`Auditoria;Gerado em;${esc(fmt(m.generatedAt))}`);
+      lines.push('');
+    }
     lines.push('Seção;Métrica;Valor;Total;Percentual');
     lines.push(`Resumo;Documentos totais;${report.totalDocs};${report.totalDocs};100.0`);
     lines.push(`Resumo;Documentos salvos;${report.savedDocs};${report.totalDocs};${pct(report.savedDocs, report.totalDocs)}`);
@@ -118,6 +141,7 @@ export default function ResultsStep({ results, onReset, report }: ResultsStepPro
       reviewThreshold: report.reviewThreshold,
       fieldCoverage: report.fieldCoverage,
       reviewItems: report.reviewItems,
+      auditMeta: report.auditMeta,
       generatedAt: now.toISOString(),
     });
     const hashBuf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonical));
@@ -141,6 +165,13 @@ export default function ResultsStep({ results, onReset, report }: ResultsStepPro
       width: 220,
     });
 
+    const meta = report.auditMeta || {};
+    const fmtDate = (iso?: string | null) => {
+      if (!iso) return '-';
+      const d = new Date(iso);
+      return isNaN(d.getTime()) ? '-' : d.toLocaleDateString('pt-BR');
+    };
+
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(16);
     doc.text('Relatório de qualidade da ingestão', margin, 50);
@@ -153,8 +184,25 @@ export default function ResultsStep({ results, onReset, report }: ResultsStepPro
     }
     doc.setTextColor(0);
 
+    // Audit metadata table (tenant, batch, period).
     autoTable(doc, {
       startY: 84,
+      head: [['Auditoria', 'Detalhe']],
+      body: [
+        ['Empresa (tenant)', meta.tenantName || '-'],
+        ['ID do tenant', meta.tenantId || '-'],
+        ['Lote (batch_id)', meta.batchId || '-'],
+        ['Origem do lote', meta.sourceLabel || '-'],
+        ['Período de emissão dos documentos', `${fmtDate(meta.periodFrom)} → ${fmtDate(meta.periodTo)}`],
+        ['Gerado em', meta.generatedAt ? new Date(meta.generatedAt).toLocaleString('pt-BR') : now.toLocaleString('pt-BR')],
+      ],
+      theme: 'plain',
+      styles: { fontSize: 9, cellPadding: 4 },
+      columnStyles: { 0: { fontStyle: 'bold', cellWidth: 180, textColor: [80, 80, 80] } },
+      margin: { left: margin, right: margin },
+    });
+
+    autoTable(doc, {
       head: [['Resumo', 'Valor', 'Total', '%']],
       body: [
         ['Documentos totais', String(report.totalDocs), String(report.totalDocs), '100.0%'],
@@ -314,6 +362,26 @@ export default function ResultsStep({ results, onReset, report }: ResultsStepPro
                 <FileDown className="h-3.5 w-3.5 mr-1.5" /> Exportar PDF
               </Button>
             </div>
+
+            {report.auditMeta && (
+              <div className="rounded-md border bg-muted/30 px-3 py-2 text-[11px] grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1">
+                <div><span className="text-muted-foreground">Empresa: </span><strong>{report.auditMeta.tenantName || '-'}</strong></div>
+                <div><span className="text-muted-foreground">Lote: </span><strong className="font-mono">{report.auditMeta.batchId || '-'}</strong></div>
+                <div className="col-span-2">
+                  <span className="text-muted-foreground">Período: </span>
+                  <strong>
+                    {report.auditMeta.periodFrom ? new Date(report.auditMeta.periodFrom).toLocaleDateString('pt-BR') : '-'}
+                    {' → '}
+                    {report.auditMeta.periodTo ? new Date(report.auditMeta.periodTo).toLocaleDateString('pt-BR') : '-'}
+                  </strong>
+                </div>
+                {report.auditMeta.sourceLabel && (
+                  <div className="col-span-2 md:col-span-4">
+                    <span className="text-muted-foreground">Origem: </span>{report.auditMeta.sourceLabel}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="rounded-md border p-3">
