@@ -3592,6 +3592,395 @@ export type Database = {
           },
         ]
       }
+      nfse_documents: {
+        Row: {
+          aliquota_iss: number
+          authorization_date: string | null
+          base_calculo: number
+          branch_code: string
+          cancellation_date: string | null
+          cancellation_reason: string | null
+          cancelled: boolean
+          classe: string | null
+          cliente_bairro: string | null
+          cliente_cep: string | null
+          cliente_cnpj: string | null
+          cliente_email: string | null
+          cliente_endereco: string | null
+          cliente_id: string | null
+          cliente_ie: string | null
+          cliente_municipio: string | null
+          cliente_nome: string | null
+          cliente_uf: string | null
+          cnae: string | null
+          cod_municipio_prestacao: string | null
+          cod_servico: string | null
+          cod_trib_municipal: string | null
+          comissao_para: string | null
+          cond_pagamento: string | null
+          created_at: string
+          created_by: string | null
+          ctrc_complemento: string | null
+          description: string | null
+          doc_substituido: string | null
+          doc_type: string
+          fiscal_document_ids: string[] | null
+          id: string
+          internal_number: string | null
+          invoice_number: string | null
+          is_preview: boolean
+          iss_retido: boolean
+          issue_date: string
+          items: Json
+          load_id: string | null
+          nat_operacao: string | null
+          nfse_number: string | null
+          notes: string | null
+          outras_retencoes: number
+          pagador_bairro: string | null
+          pagador_cnpj: string | null
+          pagador_endereco: string | null
+          pagador_ie: string | null
+          pagador_municipio: string | null
+          pagador_nome: string | null
+          pagador_uf: string | null
+          pdf_url: string | null
+          pedido: string | null
+          prestador_cnpj: string | null
+          prestador_inscricao_municipal: string | null
+          prestador_municipio: string | null
+          protocol_number: string | null
+          provider: string | null
+          provider_request_id: string | null
+          quantity: number | null
+          raw_response: Json | null
+          reference_number: string | null
+          rejection_messages: Json | null
+          related_cte_ids: string[] | null
+          rps_number: string | null
+          series: string | null
+          situacao_doc: string | null
+          status: string
+          tenant_id: string
+          tipo_ctrc: string | null
+          trip_id: string | null
+          updated_at: string
+          valor_cofins: number
+          valor_csll: number
+          valor_deducoes: number
+          valor_inss: number
+          valor_ir: number
+          valor_iss: number
+          valor_liquido: number
+          valor_pis: number
+          valor_servicos: number
+          valor_total: number
+          verification_code: string | null
+          xml_url: string | null
+        }
+        Insert: {
+          aliquota_iss?: number
+          authorization_date?: string | null
+          base_calculo?: number
+          branch_code?: string
+          cancellation_date?: string | null
+          cancellation_reason?: string | null
+          cancelled?: boolean
+          classe?: string | null
+          cliente_bairro?: string | null
+          cliente_cep?: string | null
+          cliente_cnpj?: string | null
+          cliente_email?: string | null
+          cliente_endereco?: string | null
+          cliente_id?: string | null
+          cliente_ie?: string | null
+          cliente_municipio?: string | null
+          cliente_nome?: string | null
+          cliente_uf?: string | null
+          cnae?: string | null
+          cod_municipio_prestacao?: string | null
+          cod_servico?: string | null
+          cod_trib_municipal?: string | null
+          comissao_para?: string | null
+          cond_pagamento?: string | null
+          created_at?: string
+          created_by?: string | null
+          ctrc_complemento?: string | null
+          description?: string | null
+          doc_substituido?: string | null
+          doc_type?: string
+          fiscal_document_ids?: string[] | null
+          id?: string
+          internal_number?: string | null
+          invoice_number?: string | null
+          is_preview?: boolean
+          iss_retido?: boolean
+          issue_date?: string
+          items?: Json
+          load_id?: string | null
+          nat_operacao?: string | null
+          nfse_number?: string | null
+          notes?: string | null
+          outras_retencoes?: number
+          pagador_bairro?: string | null
+          pagador_cnpj?: string | null
+          pagador_endereco?: string | null
+          pagador_ie?: string | null
+          pagador_municipio?: string | null
+          pagador_nome?: string | null
+          pagador_uf?: string | null
+          pdf_url?: string | null
+          pedido?: string | null
+          prestador_cnpj?: string | null
+          prestador_inscricao_municipal?: string | null
+          prestador_municipio?: string | null
+          protocol_number?: string | null
+          provider?: string | null
+          provider_request_id?: string | null
+          quantity?: number | null
+          raw_response?: Json | null
+          reference_number?: string | null
+          rejection_messages?: Json | null
+          related_cte_ids?: string[] | null
+          rps_number?: string | null
+          series?: string | null
+          situacao_doc?: string | null
+          status?: string
+          tenant_id: string
+          tipo_ctrc?: string | null
+          trip_id?: string | null
+          updated_at?: string
+          valor_cofins?: number
+          valor_csll?: number
+          valor_deducoes?: number
+          valor_inss?: number
+          valor_ir?: number
+          valor_iss?: number
+          valor_liquido?: number
+          valor_pis?: number
+          valor_servicos?: number
+          valor_total?: number
+          verification_code?: string | null
+          xml_url?: string | null
+        }
+        Update: {
+          aliquota_iss?: number
+          authorization_date?: string | null
+          base_calculo?: number
+          branch_code?: string
+          cancellation_date?: string | null
+          cancellation_reason?: string | null
+          cancelled?: boolean
+          classe?: string | null
+          cliente_bairro?: string | null
+          cliente_cep?: string | null
+          cliente_cnpj?: string | null
+          cliente_email?: string | null
+          cliente_endereco?: string | null
+          cliente_id?: string | null
+          cliente_ie?: string | null
+          cliente_municipio?: string | null
+          cliente_nome?: string | null
+          cliente_uf?: string | null
+          cnae?: string | null
+          cod_municipio_prestacao?: string | null
+          cod_servico?: string | null
+          cod_trib_municipal?: string | null
+          comissao_para?: string | null
+          cond_pagamento?: string | null
+          created_at?: string
+          created_by?: string | null
+          ctrc_complemento?: string | null
+          description?: string | null
+          doc_substituido?: string | null
+          doc_type?: string
+          fiscal_document_ids?: string[] | null
+          id?: string
+          internal_number?: string | null
+          invoice_number?: string | null
+          is_preview?: boolean
+          iss_retido?: boolean
+          issue_date?: string
+          items?: Json
+          load_id?: string | null
+          nat_operacao?: string | null
+          nfse_number?: string | null
+          notes?: string | null
+          outras_retencoes?: number
+          pagador_bairro?: string | null
+          pagador_cnpj?: string | null
+          pagador_endereco?: string | null
+          pagador_ie?: string | null
+          pagador_municipio?: string | null
+          pagador_nome?: string | null
+          pagador_uf?: string | null
+          pdf_url?: string | null
+          pedido?: string | null
+          prestador_cnpj?: string | null
+          prestador_inscricao_municipal?: string | null
+          prestador_municipio?: string | null
+          protocol_number?: string | null
+          provider?: string | null
+          provider_request_id?: string | null
+          quantity?: number | null
+          raw_response?: Json | null
+          reference_number?: string | null
+          rejection_messages?: Json | null
+          related_cte_ids?: string[] | null
+          rps_number?: string | null
+          series?: string | null
+          situacao_doc?: string | null
+          status?: string
+          tenant_id?: string
+          tipo_ctrc?: string | null
+          trip_id?: string | null
+          updated_at?: string
+          valor_cofins?: number
+          valor_csll?: number
+          valor_deducoes?: number
+          valor_inss?: number
+          valor_ir?: number
+          valor_iss?: number
+          valor_liquido?: number
+          valor_pis?: number
+          valor_servicos?: number
+          valor_total?: number
+          verification_code?: string | null
+          xml_url?: string | null
+        }
+        Relationships: []
+      }
+      nfse_events: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          event_type: string
+          id: string
+          message: string | null
+          nfse_id: string
+          payload: Json | null
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          event_type: string
+          id?: string
+          message?: string | null
+          nfse_id: string
+          payload?: Json | null
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          event_type?: string
+          id?: string
+          message?: string | null
+          nfse_id?: string
+          payload?: Json | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nfse_events_nfse_id_fkey"
+            columns: ["nfse_id"]
+            isOneToOne: false
+            referencedRelation: "nfse_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nfse_provider_configs: {
+        Row: {
+          branch_code: string
+          city_code: string | null
+          cnpj: string | null
+          created_at: string
+          credentials_encrypted: string | null
+          credentials_iv: string | null
+          enabled: boolean
+          environment: string
+          extra_settings: Json
+          id: string
+          inscricao_municipal: string | null
+          provider: string
+          regime_tributario: string | null
+          rps_serie: string | null
+          tenant_id: string
+          updated_at: string
+          webhook_url: string | null
+        }
+        Insert: {
+          branch_code?: string
+          city_code?: string | null
+          cnpj?: string | null
+          created_at?: string
+          credentials_encrypted?: string | null
+          credentials_iv?: string | null
+          enabled?: boolean
+          environment?: string
+          extra_settings?: Json
+          id?: string
+          inscricao_municipal?: string | null
+          provider?: string
+          regime_tributario?: string | null
+          rps_serie?: string | null
+          tenant_id: string
+          updated_at?: string
+          webhook_url?: string | null
+        }
+        Update: {
+          branch_code?: string
+          city_code?: string | null
+          cnpj?: string | null
+          created_at?: string
+          credentials_encrypted?: string | null
+          credentials_iv?: string | null
+          enabled?: boolean
+          environment?: string
+          extra_settings?: Json
+          id?: string
+          inscricao_municipal?: string | null
+          provider?: string
+          regime_tributario?: string | null
+          rps_serie?: string | null
+          tenant_id?: string
+          updated_at?: string
+          webhook_url?: string | null
+        }
+        Relationships: []
+      }
+      nfse_sequences: {
+        Row: {
+          branch_code: string
+          created_at: string
+          id: string
+          next_number: number
+          series: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          branch_code?: string
+          created_at?: string
+          id?: string
+          next_number?: number
+          series?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          branch_code?: string
+          created_at?: string
+          id?: string
+          next_number?: number
+          series?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       operational_checklists: {
         Row: {
           active: boolean | null
@@ -6094,6 +6483,10 @@ export type Database = {
       }
       is_tenant_admin: { Args: { _tenant_id: string }; Returns: boolean }
       is_tenant_member: { Args: { _tenant_id: string }; Returns: boolean }
+      next_nfse_number: {
+        Args: { _branch_code?: string; _series?: string; _tenant_id: string }
+        Returns: number
+      }
       peek_next_load_number: { Args: { _tenant_id: string }; Returns: string }
       peek_next_pickup_number: { Args: { _tenant_id: string }; Returns: string }
       preview_reimport_cleanup_counts: {
