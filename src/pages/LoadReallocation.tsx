@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useLoads, Load } from '@/hooks/useLoads';
 import { useLoadItems, LoadItem, useUpdateLoadItem } from '@/hooks/useLoadItems';
 import { useVehicles } from '@/hooks/useVehicles';
-import { useUpdateLoad } from '@/hooks/useLoads';
+import { useUpdateLoad, useDeleteLoad } from '@/hooks/useLoads';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -201,6 +201,7 @@ export default function LoadReallocation() {
   const { data: loads = [], isLoading } = useLoads();
   const { data: vehicles = [] } = useVehicles();
   const updateLoad = useUpdateLoad();
+  const deleteLoad = useDeleteLoad();
   const qc = useQueryClient();
 
   const [sourceLoadId, setSourceLoadId] = useState<string>('');
@@ -265,6 +266,25 @@ export default function LoadReallocation() {
     const fromLabel = sourceLoad?.load_number || '—';
     const toLabel = targetLoad?.load_number || '—';
 
+    // If all items were moved out of the source load, remove the empty load so it
+    // doesn't keep showing in /loads with the same content.
+    let sourceRemoved = false;
+    if (errors === 0 && sourceLoadId) {
+      try {
+        const { count } = await (supabase as any)
+          .from('load_items')
+          .select('id', { count: 'exact', head: true })
+          .eq('load_id', sourceLoadId);
+        if ((count ?? 0) === 0) {
+          await deleteLoad.mutateAsync(sourceLoadId);
+          sourceRemoved = true;
+          setSourceLoadId('');
+        }
+      } catch {
+        // non-critical; load just stays empty
+      }
+    }
+
     setHistory(prev => [{
       id: crypto.randomUUID(),
       at: new Date(),
@@ -283,7 +303,11 @@ export default function LoadReallocation() {
     if (errors > 0) {
       toast.error(`${moved} movidos, ${errors} erros`);
     } else {
-      toast.success(`${moved} item(ns) realocado(s) para ${toLabel}`);
+      toast.success(
+        sourceRemoved
+          ? `${moved} item(ns) realocado(s) para ${toLabel}. Carga ${fromLabel} ficou vazia e foi removida.`
+          : `${moved} item(ns) realocado(s) para ${toLabel}`,
+      );
     }
   };
 
