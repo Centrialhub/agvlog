@@ -18,6 +18,7 @@ import { useTenant } from '@/hooks/useTenant';
 import PendingDocsGrouping from '@/components/loads/PendingDocsGrouping';
 import NewLoadDialog from '@/components/loads/NewLoadDialog';
 import BatchReimportDialog from '@/components/loads/BatchReimportDialog';
+import LoadAdvancedFilters, { EMPTY_LOAD_ADVANCED_FILTERS, LoadAdvancedFiltersValue } from '@/components/loads/LoadAdvancedFilters';
 
 const STATUS_COLORS: Record<string, string> = {
   delivered: 'bg-success/10 text-success',
@@ -68,6 +69,7 @@ export default function Loads() {
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
   const [groupingOpen, setGroupingOpen] = useState(false);
+  const [advFilters, setAdvFilters] = useState<LoadAdvancedFiltersValue>(EMPTY_LOAD_ADVANCED_FILTERS);
 
   // Selection state
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -115,15 +117,38 @@ export default function Loads() {
           ? startOfDay(new Date(`${customStart}T12:00:00`))
           : null;
     const end = datePreset === 'custom' && customEnd ? endOfDay(new Date(`${customEnd}T12:00:00`)) : endOfDay(now);
+    const f = advFilters;
+    const dateInRange = (raw: string | null | undefined, from: string, to: string) => {
+      if (!from && !to) return true;
+      if (!raw) return false;
+      const d = new Date(raw).getTime();
+      if (from && d < startOfDay(new Date(`${from}T12:00:00`)).getTime()) return false;
+      if (to && d > endOfDay(new Date(`${to}T12:00:00`)).getTime()) return false;
+      return true;
+    };
+    const opNorm = (s: string | null | undefined) =>
+      String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     return loads.filter(l => {
       if (q && !l.load_number.toLowerCase().includes(q) && !(l.vehicles?.plate || '').toLowerCase().includes(q) && !(l.destination || '').toLowerCase().includes(q)) return false;
       if (statusFilter !== 'all' && l.status !== statusFilter) return false;
       const createdAt = new Date(l.created_at);
       if (datePreset !== 'all' && start && createdAt < start) return false;
       if (datePreset !== 'all' && createdAt > end) return false;
+      if (f.loadNumber && !l.load_number.toLowerCase().includes(f.loadNumber.toLowerCase())) return false;
+      if (f.plate && !(l.vehicles?.plate || '').toLowerCase().includes(f.plate.toLowerCase())) return false;
+      if (f.driverId && f.driverId !== 'all' && l.driver_id !== f.driverId) return false;
+      if (f.statuses.length && !f.statuses.includes(l.status)) return false;
+      if (f.cargoType && !opNorm(l.operation_type).includes(opNorm(f.cargoType))) return false;
+      if (f.romexpTypes.length && !f.romexpTypes.some(t => opNorm(l.operation_type).includes(opNorm(t)))) return false;
+      if (f.romaneioTypes.length && !f.romaneioTypes.some(t => opNorm(l.operation_type).includes(opNorm(t)))) return false;
+      const hasManifest = !!(l.supplier_manifest || l.distribution_manifest || l.shipment_manifest || l.origin_manifest);
+      if (f.manifest === 'yes' && !hasManifest) return false;
+      if (f.manifest === 'no' && hasManifest) return false;
+      if (!dateInRange(l.created_at, f.emissionFrom, f.emissionTo)) return false;
+      if (!dateInRange(l.actual_load_at, f.loadingFrom, f.loadingTo)) return false;
       return true;
     });
-  }, [customEnd, customStart, datePreset, loads, search, statusFilter]);
+  }, [customEnd, customStart, datePreset, loads, search, statusFilter, advFilters]);
 
   const groupedByDay = useMemo(() => {
     return filtered.reduce((groups, load) => {
@@ -425,6 +450,8 @@ export default function Loads() {
           <Input placeholder="Buscar carga, placa ou destino..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-9" />
         </div>
       </div>
+
+      <LoadAdvancedFilters value={advFilters} onChange={setAdvFilters} drivers={drivers as any} />
 
       {/* Load cards */}
       {isLoading ? (
