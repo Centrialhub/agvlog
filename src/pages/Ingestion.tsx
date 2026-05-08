@@ -101,6 +101,24 @@ export default function Ingestion() {
   const [pickupOrderId, setPickupOrderId] = useState<string | null>(null);
   const [pickupOrder, setPickupOrder] = useState<PickupOrder | null>(null);
   const [noPickup, setNoPickup] = useState(false);
+  const [syncSsxClients, setSyncSsxClients] = useState(false);
+
+  // Conta SSX ativa do tenant (1ª disponível) para sincronizar clientes recém-criados
+  const { data: ssxAccountForClients } = useQuery({
+    queryKey: ['ssx_account_for_client_sync', currentTenant?.id],
+    queryFn: async () => {
+      if (!currentTenant) return null;
+      const { data } = await supabase
+        .from('integration_accounts')
+        .select('id, username, status')
+        .eq('tenant_id', currentTenant.id)
+        .eq('status', 'ok')
+        .limit(1)
+        .maybeSingle();
+      return data || null;
+    },
+    enabled: !!currentTenant,
+  });
 
   const onlyDigits = (s: string | null | undefined) => String(s || '').replace(/\D/g, '');
 
