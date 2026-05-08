@@ -192,6 +192,68 @@ export default function ResultsStep({ results, onReset, report }: ResultsStepPro
 
   const handleExportPdf = async () => {
     if (!report) return;
+
+    // Heuristic: when the report is large, render in a Web Worker so the UI
+    // stays responsive. Threshold tuned for ~hundreds of items where jsPDF
+    // can block the main thread for >1s.
+    const isLarge =
+      (report.reviewItems?.length ?? 0) > 100 ||
+      report.totalDocs > 300 ||
+      (report.fieldCoverage?.length ?? 0) > 40;
+
+    if (isLarge && typeof Worker !== 'undefined') {
+      try {
+        workerRef.current?.terminate();
+        const worker = new Worker(new URL('./pdfReportWorker.ts', import.meta.url), { type: 'module' });
+        workerRef.current = worker;
+        setPdfJob({ status: 'running', pct: 5, stage: 'Iniciando geração em segundo plano' });
+        const toastId = toast.loading('Gerando PDF em segundo plano…', {
+          description: 'A interface continua disponível enquanto o relatório é montado.',
+        });
+        worker.onmessage = (ev: MessageEvent<PdfWorkerResponse>) => {
+          const msg = ev.data;
+          if (msg.type === 'progress') {
+            setPdfJob({ status: 'running', pct: msg.pct, stage: msg.stage });
+            toast.loading(`Gerando PDF — ${msg.stage} (${msg.pct}%)`, { id: toastId });
+          } else if (msg.type === 'done') {
+            const url = URL.createObjectURL(msg.blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = msg.filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            setPdfJob({ status: 'done', pct: 100, stage: 'Concluído' });
+            toast.success('PDF gerado', { id: toastId, description: msg.filename });
+            worker.terminate();
+            workerRef.current = null;
+          } else if (msg.type === 'error') {
+            setPdfJob({ status: 'error', pct: 0, stage: msg.message });
+            toast.error('Falha ao gerar PDF', { id: toastId, description: msg.message });
+            worker.terminate();
+            workerRef.current = null;
+          }
+        };
+        worker.onerror = (e) => {
+          setPdfJob({ status: 'error', pct: 0, stage: e.message || 'Erro no worker' });
+          toast.error('Falha ao gerar PDF', { id: toastId, description: e.message });
+          worker.terminate();
+          workerRef.current = null;
+        };
+        const req: PdfWorkerRequest = {
+          type: 'generate',
+          report,
+          generatedAtIso: new Date().toISOString(),
+        };
+        worker.postMessage(req);
+        return;
+      } catch (err) {
+        // Fall through to inline generation if worker setup failed.
+        console.warn('[pdf] worker indisponível, usando geração inline', err);
+      }
+    }
+
     const doc = new jsPDF({ unit: 'pt', format: 'a4' });
     const pageWidth = doc.internal.pageSize.getWidth();
     const margin = 40;
