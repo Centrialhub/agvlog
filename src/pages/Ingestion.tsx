@@ -105,6 +105,21 @@ export default function Ingestion() {
   const [noPickup, setNoPickup] = useState(false);
   const [syncSsxClients, setSyncSsxClients] = useState(false);
 
+  // Configurable confidence threshold for needsReview (calibrates OCR/extraction quality).
+  const REVIEW_THRESHOLD_KEY = 'ingestion.reviewThreshold';
+  const [reviewThreshold, setReviewThreshold] = useState<number>(() => {
+    try {
+      const v = Number(localStorage.getItem(REVIEW_THRESHOLD_KEY));
+      if (Number.isFinite(v) && v > 0 && v <= 1) return v;
+    } catch {}
+    return 0.82;
+  });
+  const updateReviewThreshold = useCallback((v: number) => {
+    const clamped = Math.max(0.5, Math.min(0.99, Number(v) || 0.82));
+    setReviewThreshold(clamped);
+    try { localStorage.setItem(REVIEW_THRESHOLD_KEY, String(clamped)); } catch {}
+  }, []);
+
   // Conta SSX ativa do tenant (1ª disponível) para sincronizar clientes recém-criados
   const { data: ssxAccountForClients } = useQuery({
     queryKey: ['ssx_account_for_client_sync', currentTenant?.id],
@@ -156,14 +171,14 @@ export default function Ingestion() {
 
     const needsReviewDocs =
       ortReviewDocs.filter(d => d.needsReview).length +
-      docs.filter(d => Number((d.source as any)?.confidence ?? 1) < 0.82).length;
+      docs.filter(d => Number((d.source as any)?.confidence ?? 1) < reviewThreshold).length;
 
     const unresolved = docs.filter(d => !d.matchedClientId).length;
 
     // Build per-document review list with reasons (ORT/OCR + low-confidence XML).
     const reviewItems: ReviewItem[] = [];
     const seenInvoices = new Set<string>();
-    const REVIEW_THRESHOLD = 0.82;
+    const REVIEW_THRESHOLD = reviewThreshold;
 
     for (const ort of ortReviewDocs) {
       const reasons: string[] = [];
@@ -222,8 +237,9 @@ export default function Ingestion() {
       clientsUnresolved: Math.max(0, unresolved - autoCreatedCount),
       fieldCoverage,
       reviewItems,
+      reviewThreshold,
     };
-  }, [ortReviewDocs]);
+  }, [ortReviewDocs, reviewThreshold]);
 
   // Persists the report snapshot to ingestion_reports for historical browsing.
   const persistIngestionReport = useCallback(async (report: IngestionReport, sourceLabel: string) => {
