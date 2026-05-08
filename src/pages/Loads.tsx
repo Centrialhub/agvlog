@@ -136,6 +136,7 @@ export default function Loads() {
       if (datePreset !== 'all' && createdAt > end) return false;
       if (f.loadNumber && !l.load_number.toLowerCase().includes(f.loadNumber.toLowerCase())) return false;
       if (f.plate && !(l.vehicles?.plate || '').toLowerCase().includes(f.plate.toLowerCase())) return false;
+      if (f.trailerPlate && !((l as any).trailer_plate || '').toLowerCase().includes(f.trailerPlate.toLowerCase())) return false;
       if (f.driverId && f.driverId !== 'all' && l.driver_id !== f.driverId) return false;
       if (f.statuses.length && !f.statuses.includes(l.status)) return false;
       if (f.cargoType && !opNorm(l.operation_type).includes(opNorm(f.cargoType))) return false;
@@ -144,8 +145,28 @@ export default function Loads() {
       const hasManifest = !!(l.supplier_manifest || l.distribution_manifest || l.shipment_manifest || l.origin_manifest);
       if (f.manifest === 'yes' && !hasManifest) return false;
       if (f.manifest === 'no' && hasManifest) return false;
+      const monitored = !!(l as any).monitored;
+      if (f.monitored === 'yes' && !monitored) return false;
+      if (f.monitored === 'no' && monitored) return false;
+      const dedicated = !!(l as any).dedicated_vehicle;
+      if (f.dedicated === 'yes' && !dedicated) return false;
+      if (f.dedicated === 'no' && dedicated) return false;
+      const ciotVal = String((l as any).ciot || '').trim();
+      if (f.ciot === 'yes' && !ciotVal) return false;
+      if (f.ciot === 'no' && ciotVal) return false;
+      if (f.monitorResponsible && !opNorm((l as any).monitor_responsible).includes(opNorm(f.monitorResponsible))) return false;
+      if (f.driverType && !opNorm((l as any).driver_type).includes(opNorm(f.driverType))) return false;
+      if (f.smManager && !opNorm((l as any).sm_manager).includes(opNorm(f.smManager))) return false;
+      if (f.smRelease && !opNorm((l as any).sm_release).includes(opNorm(f.smRelease))) return false;
+      const mv = (l as any).merchandise_value;
+      const mvNum = mv == null ? null : Number(mv);
+      if (f.valueMin) { if (mvNum == null || mvNum < Number(f.valueMin)) return false; }
+      if (f.valueMax) { if (mvNum == null || mvNum > Number(f.valueMax)) return false; }
       if (!dateInRange(l.created_at, f.emissionFrom, f.emissionTo)) return false;
       if (!dateInRange(l.actual_load_at, f.loadingFrom, f.loadingTo)) return false;
+      if (!dateInRange((l as any).estimated_arrival_at, f.arrivalEstFrom, f.arrivalEstTo)) return false;
+      if (!dateInRange((l as any).gate_departure_at, f.departureFrom, f.departureTo)) return false;
+      if (!dateInRange((l as any).arrival_at, f.arrivalFrom, f.arrivalTo)) return false;
       return true;
     });
   }, [customEnd, customStart, datePreset, loads, search, statusFilter, advFilters]);
