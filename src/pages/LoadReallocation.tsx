@@ -17,6 +17,26 @@ import { Link } from 'react-router-dom';
 
 type FilterField = 'all' | 'remitter' | 'recipient' | 'city' | 'invoice';
 
+// Merge destination strings preserving uniqueness, e.g.
+// "PAI PEDRO" + "PIRAPORA - JAIBA" -> "PAI PEDRO - PIRAPORA - JAIBA"
+function mergeDestinations(target?: string | null, source?: string | null): string | null {
+  const split = (s?: string | null) =>
+    (s || '')
+      .split(/[-,/|]+/)
+      .map(t => t.trim())
+      .filter(Boolean);
+  const tokens: string[] = [];
+  const seen = new Set<string>();
+  for (const t of [...split(target), ...split(source)]) {
+    const key = t.toUpperCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      tokens.push(t);
+    }
+  }
+  return tokens.length ? tokens.join(' - ') : (target || null);
+}
+
 function LoadColumn({ load, items, vehicles, selectedItems, onToggleItem, onSelectMany, isTarget }: {
   load: Load;
   items: LoadItem[];
@@ -282,6 +302,19 @@ export default function LoadReallocation() {
         }
       } catch {
         // non-critical; load just stays empty
+      }
+    }
+
+    // Merge source destination tokens into target so the consolidated load
+    // shows the combined route (e.g. "PAI PEDRO - PIRAPORA - JAIBA").
+    if (moved > 0 && targetLoad && sourceLoad) {
+      const merged = mergeDestinations(targetLoad.destination, sourceLoad.destination);
+      if (merged && merged !== targetLoad.destination) {
+        try {
+          await updateLoad.mutateAsync({ id: targetLoad.id, destination: merged } as any);
+        } catch {
+          // non-critical
+        }
       }
     }
 
