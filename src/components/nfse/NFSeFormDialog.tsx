@@ -1,0 +1,260 @@
+import { useEffect, useState } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Plus, Trash2 } from 'lucide-react';
+import { useCreateNFSe, useUpdateNFSe, type NFSeDoc } from '@/hooks/useNFSe';
+import { toast } from 'sonner';
+
+interface NFSeItem {
+  description: string;
+  quantity: number;
+  unit_value: number;
+  total: number;
+}
+
+interface Props {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  initial?: Partial<NFSeDoc> | null;
+  loadId?: string | null;
+  onSaved?: (doc: NFSeDoc) => void;
+}
+
+function num(v: any) { return Number(v ?? 0) || 0; }
+
+export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, onSaved }: Props) {
+  const create = useCreateNFSe();
+  const update = useUpdateNFSe();
+  const editing = !!initial?.id;
+
+  const [form, setForm] = useState<any>({});
+  const [items, setItems] = useState<NFSeItem[]>([]);
+
+  useEffect(() => {
+    if (!open) return;
+    setForm({
+      branch_code: initial?.branch_code || 'MATRIZ',
+      series: initial?.series || '1',
+      doc_type: initial?.doc_type || 'NFS',
+      situacao_doc: initial?.situacao_doc || '00',
+      is_preview: initial?.is_preview ?? false,
+      issue_date: initial?.issue_date || new Date().toISOString().slice(0, 10),
+      cond_pagamento: initial?.cond_pagamento || '',
+      tipo_ctrc: initial?.tipo_ctrc || '',
+      reference_number: initial?.reference_number || '',
+      pedido: initial?.pedido || '',
+      cnae: (initial as any)?.cnae || '',
+      cod_servico: (initial as any)?.cod_servico || '',
+      nat_operacao: (initial as any)?.nat_operacao || '',
+      cod_trib_municipal: (initial as any)?.cod_trib_municipal || '',
+      cod_municipio_prestacao: (initial as any)?.cod_municipio_prestacao || '',
+      cliente_nome: initial?.cliente_nome || '',
+      cliente_cnpj: initial?.cliente_cnpj || '',
+      cliente_ie: (initial as any)?.cliente_ie || '',
+      cliente_endereco: (initial as any)?.cliente_endereco || '',
+      cliente_bairro: (initial as any)?.cliente_bairro || '',
+      cliente_municipio: (initial as any)?.cliente_municipio || '',
+      cliente_uf: (initial as any)?.cliente_uf || '',
+      pagador_nome: initial?.pagador_nome || '',
+      pagador_cnpj: initial?.pagador_cnpj || '',
+      description: initial?.description || '',
+      aliquota_iss: num(initial?.aliquota_iss) || 5,
+      iss_retido: (initial as any)?.iss_retido ?? false,
+      valor_servicos: num(initial?.valor_servicos),
+      valor_deducoes: num((initial as any)?.valor_deducoes),
+      valor_pis: num((initial as any)?.valor_pis),
+      valor_cofins: num((initial as any)?.valor_cofins),
+      valor_inss: num((initial as any)?.valor_inss),
+      valor_ir: num((initial as any)?.valor_ir),
+      valor_csll: num((initial as any)?.valor_csll),
+      outras_retencoes: num((initial as any)?.outras_retencoes),
+      notes: initial?.notes || '',
+      load_id: loadId ?? initial?.load_id ?? null,
+      related_cte_ids: initial?.related_cte_ids || [],
+    });
+    setItems(Array.isArray(initial?.items) && initial!.items!.length ? initial!.items! as any : []);
+  }, [open, initial, loadId]);
+
+  const totalServicos = items.length > 0
+    ? items.reduce((a, it) => a + num(it.total), 0)
+    : num(form.valor_servicos);
+  const baseCalculo = Math.max(0, totalServicos - num(form.valor_deducoes));
+  const valorIss = +(baseCalculo * num(form.aliquota_iss) / 100).toFixed(2);
+  const valorLiquido = +(totalServicos
+    - (form.iss_retido ? valorIss : 0)
+    - num(form.valor_pis) - num(form.valor_cofins) - num(form.valor_inss)
+    - num(form.valor_ir) - num(form.valor_csll) - num(form.outras_retencoes)).toFixed(2);
+
+  const setField = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
+
+  const addItem = () => setItems(arr => [...arr, { description: '', quantity: 1, unit_value: 0, total: 0 }]);
+  const updateItem = (i: number, patch: Partial<NFSeItem>) => {
+    setItems(arr => arr.map((it, idx) => {
+      if (idx !== i) return it;
+      const merged = { ...it, ...patch };
+      merged.total = +(num(merged.quantity) * num(merged.unit_value)).toFixed(2);
+      return merged;
+    }));
+  };
+  const removeItem = (i: number) => setItems(arr => arr.filter((_, idx) => idx !== i));
+
+  const handleSave = async () => {
+    if (!form.cliente_nome) { toast.error('Informe o tomador (cliente)'); return; }
+    if (totalServicos <= 0) { toast.error('Valor de serviços deve ser maior que zero'); return; }
+    const payload: any = {
+      ...form,
+      items,
+      valor_servicos: totalServicos,
+      base_calculo: baseCalculo,
+      valor_iss: valorIss,
+      valor_liquido: valorLiquido,
+      valor_total: totalServicos,
+    };
+    try {
+      const saved = editing
+        ? await update.mutateAsync({ id: initial!.id!, patch: payload })
+        : await create.mutateAsync(payload);
+      toast.success(editing ? 'NFS-e atualizada' : `RPS ${saved.rps_number} criado`);
+      onSaved?.(saved as any);
+      onOpenChange(false);
+    } catch (e: any) {
+      toast.error(e?.message || 'Falha ao salvar');
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-5xl max-h-[92vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{editing ? 'Editar NFS-e (RPS)' : 'Nova NFS-e (RPS)'}</DialogTitle>
+        </DialogHeader>
+
+        <Tabs defaultValue="gerais">
+          <TabsList>
+            <TabsTrigger value="gerais">Dados Gerais</TabsTrigger>
+            <TabsTrigger value="comp">Dados Comp.</TabsTrigger>
+            <TabsTrigger value="itens">Itens / Valores</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="gerais" className="space-y-4 pt-4">
+            <div className="grid grid-cols-6 gap-3">
+              <div><Label>Tipo Doc</Label><Input value={form.doc_type || ''} onChange={e => setField('doc_type', e.target.value)} /></div>
+              <div><Label>Série</Label><Input value={form.series || ''} onChange={e => setField('series', e.target.value)} /></div>
+              <div><Label>Filial</Label><Input value={form.branch_code || ''} onChange={e => setField('branch_code', e.target.value)} /></div>
+              <div><Label>Situação Doc</Label><Input value={form.situacao_doc || ''} onChange={e => setField('situacao_doc', e.target.value)} /></div>
+              <div><Label>Data Emissão</Label><Input type="date" value={form.issue_date || ''} onChange={e => setField('issue_date', e.target.value)} /></div>
+              <div className="flex items-end gap-2"><Checkbox checked={!!form.is_preview} onCheckedChange={v => setField('is_preview', !!v)} /><Label>Previsão</Label></div>
+
+              <div className="col-span-2"><Label>Nº Ref</Label><Input value={form.reference_number || ''} onChange={e => setField('reference_number', e.target.value)} /></div>
+              <div className="col-span-2"><Label>Pedido</Label><Input value={form.pedido || ''} onChange={e => setField('pedido', e.target.value)} /></div>
+              <div className="col-span-2"><Label>Cond. Pagto</Label><Input value={form.cond_pagamento || ''} onChange={e => setField('cond_pagamento', e.target.value)} /></div>
+
+              <div className="col-span-2"><Label>Cód. Serviço</Label><Input value={form.cod_servico || ''} onChange={e => setField('cod_servico', e.target.value)} /></div>
+              <div className="col-span-2"><Label>CNAE</Label><Input value={form.cnae || ''} onChange={e => setField('cnae', e.target.value)} /></div>
+              <div className="col-span-2"><Label>Nat. Operação</Label><Input value={form.nat_operacao || ''} onChange={e => setField('nat_operacao', e.target.value)} /></div>
+
+              <div className="col-span-2"><Label>Cód. Trib. Municipal</Label><Input value={form.cod_trib_municipal || ''} onChange={e => setField('cod_trib_municipal', e.target.value)} /></div>
+              <div className="col-span-2"><Label>Cód. Mun. Prestação</Label><Input value={form.cod_municipio_prestacao || ''} onChange={e => setField('cod_municipio_prestacao', e.target.value)} /></div>
+              <div className="col-span-2"><Label>Tipo CTRC</Label><Input value={form.tipo_ctrc || ''} onChange={e => setField('tipo_ctrc', e.target.value)} /></div>
+            </div>
+
+            <div className="space-y-2 pt-2">
+              <h4 className="font-semibold text-sm">Tomador (Cliente)</h4>
+              <div className="grid grid-cols-6 gap-3">
+                <div className="col-span-3"><Label>Nome</Label><Input value={form.cliente_nome || ''} onChange={e => setField('cliente_nome', e.target.value)} /></div>
+                <div className="col-span-2"><Label>CNPJ</Label><Input value={form.cliente_cnpj || ''} onChange={e => setField('cliente_cnpj', e.target.value)} /></div>
+                <div><Label>IE</Label><Input value={form.cliente_ie || ''} onChange={e => setField('cliente_ie', e.target.value)} /></div>
+                <div className="col-span-3"><Label>Endereço</Label><Input value={form.cliente_endereco || ''} onChange={e => setField('cliente_endereco', e.target.value)} /></div>
+                <div className="col-span-2"><Label>Bairro</Label><Input value={form.cliente_bairro || ''} onChange={e => setField('cliente_bairro', e.target.value)} /></div>
+                <div><Label>UF</Label><Input value={form.cliente_uf || ''} onChange={e => setField('cliente_uf', e.target.value)} /></div>
+                <div className="col-span-3"><Label>Município</Label><Input value={form.cliente_municipio || ''} onChange={e => setField('cliente_municipio', e.target.value)} /></div>
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="comp" className="space-y-4 pt-4">
+            <h4 className="font-semibold text-sm">Pagador (se diferente do tomador)</h4>
+            <div className="grid grid-cols-6 gap-3">
+              <div className="col-span-3"><Label>Nome</Label><Input value={form.pagador_nome || ''} onChange={e => setField('pagador_nome', e.target.value)} /></div>
+              <div className="col-span-2"><Label>CNPJ</Label><Input value={form.pagador_cnpj || ''} onChange={e => setField('pagador_cnpj', e.target.value)} /></div>
+            </div>
+            <div>
+              <Label>Discriminação dos Serviços</Label>
+              <Textarea rows={5} value={form.description || ''} onChange={e => setField('description', e.target.value)} />
+            </div>
+            <div>
+              <Label>Observações internas</Label>
+              <Textarea rows={3} value={form.notes || ''} onChange={e => setField('notes', e.target.value)} />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="itens" className="space-y-4 pt-4">
+            <div className="flex items-center justify-between">
+              <h4 className="font-semibold text-sm">Itens da Nota</h4>
+              <Button size="sm" variant="outline" onClick={addItem}><Plus className="h-3 w-3 mr-1" /> Adicionar item</Button>
+            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Descrição</TableHead>
+                  <TableHead className="w-24">Qtd</TableHead>
+                  <TableHead className="w-32">Vl. Unit.</TableHead>
+                  <TableHead className="w-32">Total</TableHead>
+                  <TableHead className="w-12"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {items.length === 0 && (
+                  <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground text-sm py-4">Nenhum item — informe o valor de serviços abaixo</TableCell></TableRow>
+                )}
+                {items.map((it, i) => (
+                  <TableRow key={i}>
+                    <TableCell><Input value={it.description} onChange={e => updateItem(i, { description: e.target.value })} /></TableCell>
+                    <TableCell><Input type="number" value={it.quantity} onChange={e => updateItem(i, { quantity: +e.target.value })} /></TableCell>
+                    <TableCell><Input type="number" step="0.01" value={it.unit_value} onChange={e => updateItem(i, { unit_value: +e.target.value })} /></TableCell>
+                    <TableCell className="text-right tabular-nums">R$ {it.total.toFixed(2)}</TableCell>
+                    <TableCell><Button size="icon" variant="ghost" onClick={() => removeItem(i)}><Trash2 className="h-3 w-3" /></Button></TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+
+            <div className="grid grid-cols-4 gap-3 pt-2">
+              <div><Label>Vl. Serviços (manual)</Label><Input type="number" step="0.01" disabled={items.length > 0} value={form.valor_servicos || 0} onChange={e => setField('valor_servicos', +e.target.value)} /></div>
+              <div><Label>Deduções</Label><Input type="number" step="0.01" value={form.valor_deducoes || 0} onChange={e => setField('valor_deducoes', +e.target.value)} /></div>
+              <div><Label>Alíquota ISS (%)</Label><Input type="number" step="0.0001" value={form.aliquota_iss || 0} onChange={e => setField('aliquota_iss', +e.target.value)} /></div>
+              <div className="flex items-end gap-2"><Checkbox checked={!!form.iss_retido} onCheckedChange={v => setField('iss_retido', !!v)} /><Label>ISS Retido</Label></div>
+
+              <div><Label>PIS</Label><Input type="number" step="0.01" value={form.valor_pis || 0} onChange={e => setField('valor_pis', +e.target.value)} /></div>
+              <div><Label>COFINS</Label><Input type="number" step="0.01" value={form.valor_cofins || 0} onChange={e => setField('valor_cofins', +e.target.value)} /></div>
+              <div><Label>INSS</Label><Input type="number" step="0.01" value={form.valor_inss || 0} onChange={e => setField('valor_inss', +e.target.value)} /></div>
+              <div><Label>IR</Label><Input type="number" step="0.01" value={form.valor_ir || 0} onChange={e => setField('valor_ir', +e.target.value)} /></div>
+              <div><Label>CSLL</Label><Input type="number" step="0.01" value={form.valor_csll || 0} onChange={e => setField('valor_csll', +e.target.value)} /></div>
+              <div><Label>Outras retenções</Label><Input type="number" step="0.01" value={form.outras_retencoes || 0} onChange={e => setField('outras_retencoes', +e.target.value)} /></div>
+            </div>
+
+            <div className="rounded-md border p-3 grid grid-cols-4 gap-3 bg-muted/30">
+              <div><div className="text-xs text-muted-foreground">Vl. Serviços</div><div className="font-semibold tabular-nums">R$ {totalServicos.toFixed(2)}</div></div>
+              <div><div className="text-xs text-muted-foreground">Base Cálculo</div><div className="font-semibold tabular-nums">R$ {baseCalculo.toFixed(2)}</div></div>
+              <div><div className="text-xs text-muted-foreground">Vl. ISS</div><div className="font-semibold tabular-nums">R$ {valorIss.toFixed(2)}</div></div>
+              <div><div className="text-xs text-muted-foreground">Vl. Líquido</div><div className="font-semibold tabular-nums">R$ {valorLiquido.toFixed(2)}</div></div>
+            </div>
+          </TabsContent>
+        </Tabs>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button onClick={handleSave} disabled={create.isPending || update.isPending}>
+            {editing ? 'Salvar alterações' : 'Criar RPS (rascunho)'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
