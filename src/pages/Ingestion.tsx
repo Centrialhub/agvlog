@@ -623,7 +623,9 @@ export default function Ingestion() {
       if (!currentTenant) return null;
       const cnpjDigits = onlyDigits(src.recipientCnpj || ortFields?.recipientCnpj);
       const nameKey = (src.recipientName || ortFields?.recipientName || '').trim().toLowerCase();
-      const ieDigits = onlyDigits(src.recipientStateRegistration || ortFields?.recipientStateRegistration);
+      const ieRawForKey = src.recipientStateRegistration || ortFields?.recipientStateRegistration || '';
+      const ieIsUnknownOrIsento = /^(UNKNOWN|ISENTO|ISENTA|IS|EX)$/i.test(String(ieRawForKey).trim());
+      const ieDigits = ieIsUnknownOrIsento ? '' : onlyDigits(ieRawForKey);
       const imDigits = onlyDigits(src.recipientMunicipalRegistration || ortFields?.recipientMunicipalRegistration);
       const uf = (src.recipientState || ortFields?.recipientState || '').trim().toUpperCase();
       const cityKey = (src.recipientCity || ortFields?.recipientCity || '').trim().toLowerCase();
