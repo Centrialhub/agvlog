@@ -30,7 +30,7 @@ import PickupOrderPicker from '@/components/pickup/PickupOrderPicker';
 import type { PickupOrder } from '@/hooks/usePickupOrders';
 
 import { supabase } from '@/integrations/supabase/client';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTenant } from '@/hooks/useTenant';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -67,6 +67,7 @@ export default function Ingestion() {
   const createLoadItem = useCreateLoadItem();
   const updateRoute = useUpdateOperationalRoute();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   // Learn city → persist to operational_routes destinations
   const handleLearnCity = useCallback((routeId: string, cityName: string) => {
