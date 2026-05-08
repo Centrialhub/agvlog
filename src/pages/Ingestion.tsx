@@ -1312,6 +1312,7 @@ export default function Ingestion() {
     setSuggestions([]);
     setRouteGroups([]);
     setExecutionResults([]);
+    setIngestionReport(null);
   };
 
   return (
@@ -1492,7 +1493,7 @@ export default function Ingestion() {
           onExecute={handleExecute}
         />
       )}
-      {step === 5 && <ResultsStep results={executionResults} onReset={reset} />}
+      {step === 5 && <ResultsStep results={executionResults} onReset={reset} report={ingestionReport} />}
     </div>
   );
 }
