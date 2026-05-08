@@ -146,8 +146,9 @@ export default function Ingestion() {
     errorCount: number;
     autoCreatedCount: number;
     matchedCount: number;
+    sourceLabel?: string;
   }): IngestionReport => {
-    const { docs, savedCount, errorCount, autoCreatedCount, matchedCount } = args;
+    const { docs, savedCount, errorCount, autoCreatedCount, matchedCount, sourceLabel } = args;
     const total = docs.length;
     const isFilled = (v: any) => {
       if (v === null || v === undefined) return false;
@@ -174,6 +175,27 @@ export default function Ingestion() {
       docs.filter(d => Number((d.source as any)?.confidence ?? 1) < reviewThreshold).length;
 
     const unresolved = docs.filter(d => !d.matchedClientId).length;
+
+    // Audit metadata: tenant, batch_id and processing period (from doc issue dates).
+    const issueDates = docs
+      .map(d => (d.source as any)?.issueDate)
+      .filter(Boolean)
+      .map((s: string) => new Date(s))
+      .filter((d: Date) => !isNaN(d.getTime()));
+    const periodFrom = issueDates.length ? new Date(Math.min(...issueDates.map(d => d.getTime()))) : null;
+    const periodTo = issueDates.length ? new Date(Math.max(...issueDates.map(d => d.getTime()))) : null;
+    const generatedAt = new Date();
+    const batchId = `ING-${generatedAt.toISOString().replace(/[-:T.Z]/g, '').slice(0, 14)}`;
+    const auditMeta = {
+      tenantId: currentTenant?.id || null,
+      tenantName: currentTenant?.name || null,
+      batchId,
+      sourceLabel: sourceLabel || null,
+      generatedAt: generatedAt.toISOString(),
+      periodFrom: periodFrom ? periodFrom.toISOString() : null,
+      periodTo: periodTo ? periodTo.toISOString() : null,
+      generatedByUserId: user?.id || null,
+    };
 
     // Build per-document review list with reasons (ORT/OCR + low-confidence XML).
     const reviewItems: ReviewItem[] = [];
@@ -238,13 +260,15 @@ export default function Ingestion() {
       fieldCoverage,
       reviewItems,
       reviewThreshold,
+      auditMeta,
     };
-  }, [ortReviewDocs, reviewThreshold]);
+  }, [ortReviewDocs, reviewThreshold, currentTenant?.id, currentTenant?.name, user?.id]);
 
   // Persists the report snapshot to ingestion_reports for historical browsing.
   const persistIngestionReport = useCallback(async (report: IngestionReport, sourceLabel: string) => {
     if (!currentTenant || report.totalDocs === 0) return;
-    const batchId = `ING-${new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14)}`;
+    const batchId = report.auditMeta?.batchId
+      || `ING-${new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14)}`;
     try {
       await supabase.from('ingestion_reports' as any).insert({
         tenant_id: currentTenant.id,
