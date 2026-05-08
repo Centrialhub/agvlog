@@ -220,7 +220,6 @@ export default function LoadAdvancedFilters({ value, onChange, drivers, vehicles
               </SelectContent>
             </Select>
           </div>
-          </div>
           <div className="space-y-1">
             <Label className="text-[11px] text-muted-foreground">Resp. Monitoramento</Label>
             <Input value={value.monitorResponsible} onChange={e => set('monitorResponsible', e.target.value)} className="h-8 text-xs" />
