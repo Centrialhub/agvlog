@@ -648,19 +648,37 @@ export default function Ingestion() {
       const zipDigits = onlyDigits(src.recipientZip || ortFields?.recipientZip);
       const zip = zipDigits.length === 8 ? `${zipDigits.slice(0,5)}-${zipDigits.slice(5)}` : null;
 
+      // Derivações fiscais a partir da nota
+      const isCpf = cnpjDigits.length === 11;
+      const indIE = src.recipientIeIndicator || '';
+      const taxCode = indIE === '1' ? 'C' : indIE === '2' ? 'I0' : indIE === '9' ? 'NC' : null;
+      const taxDescription = indIE === '1' ? 'Contribuinte ICMS'
+        : indIE === '2' ? 'Isento'
+        : indIE === '9' ? 'Não Contribuinte'
+        : null;
+      // CFOP do primeiro item indica natureza (5xxx/6xxx = venda → Comércio; 1xxx/2xxx = entrada)
+      const firstCfop = String(((src.items || ortFields?.items || [])[0] || {}).cfop || '').replace(/\D/g, '');
+      const cfopFirst = firstCfop ? firstCfop.charAt(0) : '';
+      const cfopClientType = ['5','6','7'].includes(cfopFirst) ? 'Comércio'
+        : ['1','2','3'].includes(cfopFirst) ? 'Comércio'
+        : null;
+
       const payload: any = {
         tenant_id: currentTenant.id,
         company_name: recipientName || taxId || 'Sem nome',
         legal_name: recipientName || null,
         trade_name: src.recipientFantasyName || null,
         tax_id: taxId,
-        person_type: cnpjDigits.length === 11 ? 'CPF' : 'CNPJ',
+        person_type: isCpf ? 'CPF' : 'CNPJ',
+        client_type: isCpf ? 'PF' : 'PJ',
         state_registration: src.recipientStateRegistration || null,
         municipal_registration: src.recipientMunicipalRegistration || null,
-        ie_indicator: src.recipientIeIndicator === '1' ? 'Contribuinte ICMS'
-          : src.recipientIeIndicator === '2' ? 'Isento'
-          : src.recipientIeIndicator === '9' ? 'Não Contribuinte'
-          : null,
+        ie_indicator: taxDescription,
+        tax_code: taxCode,
+        tax_description: taxDescription,
+        taxes_enabled: indIE !== '2',
+        cfop_client_type: cfopClientType,
+        freight_calc_type: 'PESO',
         address_street: src.recipientAddress || ortFields?.recipientAddress || null,
         address_number: src.recipientAddressNumber || ortFields?.recipientAddressNumber || null,
         address_complement: src.recipientAddressComplement || null,
@@ -673,7 +691,10 @@ export default function Ingestion() {
         email: src.recipientEmail || null,
         phone: ortFields?.recipientPhone || null,
         mobile: src.recipientPhone || null,
+        contact_name: recipientName || null,
         active: true,
+        blocked: false,
+        billed: false,
         notes: 'Cadastrado automaticamente via importação de XML/ORT',
         created_by: user?.id,
       };
