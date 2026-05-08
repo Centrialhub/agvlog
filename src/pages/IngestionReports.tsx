@@ -9,8 +9,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
-import { FileSearch, Download, AlertTriangle, ListChecks, RefreshCw } from 'lucide-react';
+import { FileSearch, Download, AlertTriangle, ListChecks, RefreshCw, FileText } from 'lucide-react';
 import { format } from 'date-fns';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 interface IngestionReportRow {
   id: string;
@@ -208,6 +210,9 @@ export default function IngestionReports() {
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" size="sm" onClick={() => downloadReportCsv(selected)}>
                   <Download className="h-3.5 w-3.5 mr-1.5" /> Exportar CSV
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => downloadReportPdf(selected)}>
+                  <FileText className="h-3.5 w-3.5 mr-1.5" /> Exportar PDF (Auditoria)
                 </Button>
                 <Button
                   size="sm"
