@@ -151,6 +151,13 @@ export default function ResultsStep({ results, onReset, report }: ResultsStepPro
       width: 220,
     });
 
+    const meta = report.auditMeta || {};
+    const fmtDate = (iso?: string | null) => {
+      if (!iso) return '-';
+      const d = new Date(iso);
+      return isNaN(d.getTime()) ? '-' : d.toLocaleDateString('pt-BR');
+    };
+
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(16);
     doc.text('Relatório de qualidade da ingestão', margin, 50);
@@ -163,8 +170,25 @@ export default function ResultsStep({ results, onReset, report }: ResultsStepPro
     }
     doc.setTextColor(0);
 
+    // Audit metadata table (tenant, batch, period).
     autoTable(doc, {
       startY: 84,
+      head: [['Auditoria', 'Detalhe']],
+      body: [
+        ['Empresa (tenant)', meta.tenantName || '-'],
+        ['ID do tenant', meta.tenantId || '-'],
+        ['Lote (batch_id)', meta.batchId || '-'],
+        ['Origem do lote', meta.sourceLabel || '-'],
+        ['Período de emissão dos documentos', `${fmtDate(meta.periodFrom)} → ${fmtDate(meta.periodTo)}`],
+        ['Gerado em', meta.generatedAt ? new Date(meta.generatedAt).toLocaleString('pt-BR') : now.toLocaleString('pt-BR')],
+      ],
+      theme: 'plain',
+      styles: { fontSize: 9, cellPadding: 4 },
+      columnStyles: { 0: { fontStyle: 'bold', cellWidth: 180, textColor: [80, 80, 80] } },
+      margin: { left: margin, right: margin },
+    });
+
+    autoTable(doc, {
       head: [['Resumo', 'Valor', 'Total', '%']],
       body: [
         ['Documentos totais', String(report.totalDocs), String(report.totalDocs), '100.0%'],
