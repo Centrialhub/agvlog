@@ -1,6 +1,6 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { CheckCircle, XCircle, Upload, ArrowRight, UserPlus, AlertTriangle, ListChecks, Download } from 'lucide-react';
+import { CheckCircle, XCircle, Upload, ArrowRight, UserPlus, AlertTriangle, ListChecks, Download, FileSearch, ExternalLink } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Progress } from '@/components/ui/progress';
 
@@ -18,6 +18,15 @@ export interface IngestionReport {
     filled: number;
     total: number;
   }[];
+  reviewItems?: ReviewItem[];
+}
+
+export interface ReviewItem {
+  invoiceNumber: string;
+  fileName?: string;
+  recipientName?: string;
+  confidence?: number;
+  reasons: string[]; // e.g. "Baixa confiança (62%)", "Campos UNKNOWN: IE, CEP", "OCR ilegível"
 }
 
 interface ResultsStepProps {
@@ -53,6 +62,20 @@ export default function ResultsStep({ results, onReset, report }: ResultsStepPro
     lines.push(`Clientes;Não resolvidos;${report.clientsUnresolved};${report.totalDocs};${pct(report.clientsUnresolved, report.totalDocs)}`);
     for (const f of report.fieldCoverage) {
       lines.push(`Cobertura;${esc(f.label)};${f.filled};${f.total};${pct(f.filled, f.total)}`);
+    }
+    if (report.reviewItems && report.reviewItems.length) {
+      lines.push('');
+      lines.push('Revisão;NF;Arquivo;Destinatário;Confiança;Motivos');
+      for (const ri of report.reviewItems) {
+        lines.push([
+          'Revisão',
+          esc(ri.invoiceNumber),
+          esc(ri.fileName || ''),
+          esc(ri.recipientName || ''),
+          ri.confidence != null ? `${Math.round(ri.confidence * 100)}%` : '',
+          esc(ri.reasons.join(' | ')),
+        ].join(';'));
+      }
     }
     lines.push('');
     lines.push('Detalhe;Resultado');
@@ -155,6 +178,51 @@ export default function ResultsStep({ results, onReset, report }: ResultsStepPro
                 })}
               </div>
             </div>
+
+            {report.reviewItems && report.reviewItems.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground mb-2">
+                  <FileSearch className="h-3.5 w-3.5 text-warning" />
+                  Documentos para revisão ({report.reviewItems.length})
+                </div>
+                <div className="border rounded-md divide-y max-h-72 overflow-y-auto">
+                  {report.reviewItems.map((ri, i) => (
+                    <button
+                      key={`${ri.invoiceNumber}-${i}`}
+                      type="button"
+                      onClick={() => navigate(`/fiscal-documents?q=${encodeURIComponent(ri.invoiceNumber)}`)}
+                      className="w-full text-left px-3 py-2 hover:bg-muted/40 transition-colors flex items-start gap-3"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium truncate">
+                          NF {ri.invoiceNumber}
+                          {ri.recipientName && <span className="text-muted-foreground font-normal"> · {ri.recipientName}</span>}
+                        </div>
+                        {ri.fileName && (
+                          <div className="text-[11px] text-muted-foreground truncate">{ri.fileName}</div>
+                        )}
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {ri.reasons.map((r, j) => (
+                            <span
+                              key={j}
+                              className="text-[10px] px-1.5 py-0.5 rounded bg-warning/10 text-warning border border-warning/30"
+                            >
+                              {r}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      {ri.confidence != null && (
+                        <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+                          {Math.round(ri.confidence * 100)}%
+                        </span>
+                      )}
+                      <ExternalLink className="h-3.5 w-3.5 text-muted-foreground mt-0.5" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
