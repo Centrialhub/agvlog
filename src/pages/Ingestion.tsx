@@ -9,6 +9,7 @@ import { useFiscalDocuments, useCreateFiscalDocument } from '@/hooks/useFiscalDo
 import { useClients } from '@/hooks/useClients';
 import { useCreateOrder } from '@/hooks/useOrders';
 import { useCreateLoad, useLoads } from '@/hooks/useLoads';
+import { getNextLoadNumberFromExisting } from '@/hooks/useLoads';
 import { useCreateLoadItem } from '@/hooks/useLoadItems';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useOperationalRoutes, useUpdateOperationalRoute } from '@/hooks/useOperationalRoutes';
