@@ -937,6 +937,18 @@ export default function Ingestion() {
       setStep(5);
 
       const successCount = results.filter(r => r.startsWith('✅')).length;
+      const errorCount = results.filter(r => r.startsWith('❌')).length;
+      const validDocsForReport = validatedDocs.filter(d => !d.hasErrors && !d.isDuplicate);
+      const matchedExisting = validDocsForReport.filter(d =>
+        d.matchedClientId && !clientsToSyncSsx.has(d.matchedClientId)
+      ).length;
+      setIngestionReport(buildIngestionReport({
+        docs: validDocsForReport,
+        savedCount: successCount,
+        errorCount,
+        autoCreatedCount: autoCreatedCount,
+        matchedCount: matchedExisting,
+      }));
       const loadLabel = loadId ? loads.find(l => l.id === loadId)?.load_number : null;
       if (autoCreatedCount > 0) {
         queryClient.invalidateQueries({ queryKey: ['clients'] });
