@@ -146,7 +146,7 @@ export default function Loads() {
       if (f.trailerPlate && !((l as any).trailer_plate || '').toLowerCase().includes(f.trailerPlate.toLowerCase())) return false;
       if (f.driverId && f.driverId !== 'all' && l.driver_id !== f.driverId) return false;
       if (f.statuses.length && !f.statuses.includes(l.status)) return false;
-      if (f.cargoType && !opNorm(l.operation_type).includes(opNorm(f.cargoType))) return false;
+      if (f.cargoType && l.operation_type !== f.cargoType) return false;
       if (f.romexpTypes.length && !f.romexpTypes.some(t => opNorm(l.operation_type).includes(opNorm(t)))) return false;
       if (f.romaneioTypes.length && !f.romaneioTypes.some(t => opNorm(l.operation_type).includes(opNorm(t)))) return false;
       const hasManifest = !!(l.supplier_manifest || l.distribution_manifest || l.shipment_manifest || l.origin_manifest);
