@@ -1,8 +1,10 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { CheckCircle, XCircle, Upload, ArrowRight, UserPlus, AlertTriangle, ListChecks, Download, FileSearch, ExternalLink } from 'lucide-react';
+import { CheckCircle, XCircle, Upload, ArrowRight, UserPlus, AlertTriangle, ListChecks, Download, FileSearch, ExternalLink, FileDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Progress } from '@/components/ui/progress';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 export interface IngestionReport {
   totalDocs: number;
@@ -95,6 +97,96 @@ export default function ResultsStep({ results, onReset, report }: ResultsStepPro
     URL.revokeObjectURL(url);
   };
 
+  const handleExportPdf = () => {
+    if (!report) return;
+    const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 40;
+    const now = new Date();
+    const pct = (n: number, d: number) => (d > 0 ? ((n / d) * 100).toFixed(1) : '0.0');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.text('Relatório de qualidade da ingestão', margin, 50);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(100);
+    doc.text(`Gerado em ${now.toLocaleString('pt-BR')}`, margin, 66);
+    if (report.reviewThreshold != null) {
+      doc.text(`Threshold de revisão: < ${Math.round(report.reviewThreshold * 100)}%`, pageWidth - margin, 66, { align: 'right' });
+    }
+    doc.setTextColor(0);
+
+    autoTable(doc, {
+      startY: 84,
+      head: [['Resumo', 'Valor', 'Total', '%']],
+      body: [
+        ['Documentos totais', String(report.totalDocs), String(report.totalDocs), '100.0%'],
+        ['Documentos salvos', String(report.savedDocs), String(report.totalDocs), `${pct(report.savedDocs, report.totalDocs)}%`],
+        ['Documentos com erro', String(report.errorDocs), String(report.totalDocs), `${pct(report.errorDocs, report.totalDocs)}%`],
+        ['Marcados para revisão', String(report.needsReviewDocs), String(report.totalDocs), `${pct(report.needsReviewDocs, report.totalDocs)}%`],
+        ['Clientes criados', String(report.clientsAutoCreated), String(report.totalDocs), `${pct(report.clientsAutoCreated, report.totalDocs)}%`],
+        ['Clientes vinculados', String(report.clientsMatched), String(report.totalDocs), `${pct(report.clientsMatched, report.totalDocs)}%`],
+        ['Clientes não resolvidos', String(report.clientsUnresolved), String(report.totalDocs), `${pct(report.clientsUnresolved, report.totalDocs)}%`],
+      ],
+      theme: 'striped',
+      styles: { fontSize: 9, cellPadding: 5 },
+      headStyles: { fillColor: [37, 99, 235], textColor: 255 },
+      margin: { left: margin, right: margin },
+    });
+
+    autoTable(doc, {
+      head: [['Cobertura de campos', 'Preenchidos', 'Total', '%']],
+      body: report.fieldCoverage.map(f => [
+        f.label,
+        String(f.filled),
+        String(f.total),
+        `${pct(f.filled, f.total)}%`,
+      ]),
+      theme: 'striped',
+      styles: { fontSize: 9, cellPadding: 5 },
+      headStyles: { fillColor: [16, 122, 87], textColor: 255 },
+      margin: { left: margin, right: margin },
+    });
+
+    if (report.reviewItems && report.reviewItems.length > 0) {
+      autoTable(doc, {
+        head: [['NF', 'Destinatário', 'Confiança', 'Motivos']],
+        body: report.reviewItems.map(ri => [
+          ri.invoiceNumber || '',
+          ri.recipientName || '',
+          ri.confidence != null ? `${Math.round(ri.confidence * 100)}%` : '-',
+          ri.reasons.join(' • '),
+        ]),
+        theme: 'grid',
+        styles: { fontSize: 8, cellPadding: 4, overflow: 'linebreak' },
+        headStyles: { fillColor: [202, 138, 4], textColor: 255 },
+        columnStyles: {
+          0: { cellWidth: 60 },
+          2: { cellWidth: 55, halign: 'right' },
+          3: { cellWidth: 220 },
+        },
+        margin: { left: margin, right: margin },
+      });
+    }
+
+    const pageCount = doc.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(120);
+      doc.text(
+        `Página ${i} de ${pageCount}`,
+        pageWidth - margin,
+        doc.internal.pageSize.getHeight() - 20,
+        { align: 'right' }
+      );
+    }
+
+    const ts = now.toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    doc.save(`relatorio-ingestao-${ts}.pdf`);
+  };
+
   return (
     <div className="space-y-4">
       {/* Summary */}
@@ -130,6 +222,9 @@ export default function ResultsStep({ results, onReset, report }: ResultsStepPro
               <h3 className="text-sm font-semibold">Relatório de qualidade da ingestão</h3>
               <Button size="sm" variant="outline" className="ml-auto h-7" onClick={handleExportCsv}>
                 <Download className="h-3.5 w-3.5 mr-1.5" /> Exportar CSV
+              </Button>
+              <Button size="sm" variant="outline" className="h-7" onClick={handleExportPdf}>
+                <FileDown className="h-3.5 w-3.5 mr-1.5" /> Exportar PDF
               </Button>
             </div>
 
