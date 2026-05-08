@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { Progress } from '@/components/ui/progress';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import QRCode from 'qrcode';
 
 export interface IngestionReport {
   totalDocs: number;
@@ -97,13 +98,48 @@ export default function ResultsStep({ results, onReset, report }: ResultsStepPro
     URL.revokeObjectURL(url);
   };
 
-  const handleExportPdf = () => {
+  const handleExportPdf = async () => {
     if (!report) return;
     const doc = new jsPDF({ unit: 'pt', format: 'a4' });
     const pageWidth = doc.internal.pageSize.getWidth();
     const margin = 40;
     const now = new Date();
     const pct = (n: number, d: number) => (d > 0 ? ((n / d) * 100).toFixed(1) : '0.0');
+
+    // Build a tamper-evident signature: SHA-256 hash of canonical report payload.
+    const canonical = JSON.stringify({
+      totalDocs: report.totalDocs,
+      savedDocs: report.savedDocs,
+      errorDocs: report.errorDocs,
+      needsReviewDocs: report.needsReviewDocs,
+      clientsAutoCreated: report.clientsAutoCreated,
+      clientsMatched: report.clientsMatched,
+      clientsUnresolved: report.clientsUnresolved,
+      reviewThreshold: report.reviewThreshold,
+      fieldCoverage: report.fieldCoverage,
+      reviewItems: report.reviewItems,
+      generatedAt: now.toISOString(),
+    });
+    const hashBuf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonical));
+    const hashHex = Array.from(new Uint8Array(hashBuf))
+      .map(b => b.toString(16).padStart(2, '0')).join('');
+    const shortHash = hashHex.slice(0, 16).toUpperCase();
+    const verificationPayload = JSON.stringify({
+      v: 1,
+      sig: hashHex,
+      ts: now.toISOString(),
+      totals: {
+        t: report.totalDocs,
+        s: report.savedDocs,
+        e: report.errorDocs,
+        r: report.needsReviewDocs,
+      },
+    });
+    const qrDataUrl = await QRCode.toDataURL(verificationPayload, {
+      errorCorrectionLevel: 'M',
+      margin: 1,
+      width: 220,
+    });
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(16);
@@ -181,7 +217,58 @@ export default function ResultsStep({ results, onReset, report }: ResultsStepPro
         doc.internal.pageSize.getHeight() - 20,
         { align: 'right' }
       );
+      doc.text(
+        `Assinatura SHA-256: ${shortHash}…  •  Verifique escaneando o QR na última página`,
+        margin,
+        doc.internal.pageSize.getHeight() - 20
+      );
     }
+
+    // Verification block on a dedicated last page.
+    doc.addPage();
+    doc.setTextColor(0);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.text('Verificação de autenticidade', margin, 60);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(80);
+    const intro = doc.splitTextToSize(
+      'Este relatório possui uma assinatura digital (SHA-256) gerada a partir do conteúdo original. ' +
+      'Para conferir a autenticidade, escaneie o QR code abaixo: ele contém o hash, data/hora e totais. ' +
+      'Qualquer alteração no PDF invalida a assinatura.',
+      pageWidth - margin * 2
+    );
+    doc.text(intro, margin, 84);
+
+    const qrSize = 180;
+    doc.addImage(qrDataUrl, 'PNG', margin, 140, qrSize, qrSize);
+
+    doc.setFontSize(9);
+    doc.setTextColor(40);
+    const rightX = margin + qrSize + 24;
+    let y = 150;
+    const line = (label: string, value: string) => {
+      doc.setFont('helvetica', 'bold');
+      doc.text(label, rightX, y);
+      doc.setFont('helvetica', 'normal');
+      const wrapped = doc.splitTextToSize(value, pageWidth - rightX - margin);
+      doc.text(wrapped, rightX, y + 12);
+      y += 12 + wrapped.length * 11 + 6;
+    };
+    line('Hash SHA-256', hashHex);
+    line('Gerado em', now.toLocaleString('pt-BR'));
+    line('Totais assinados', `${report.totalDocs} docs · ${report.savedDocs} salvos · ${report.errorDocs} erros · ${report.needsReviewDocs} revisão`);
+    line('Como conferir', 'Recompute SHA-256 do JSON canônico do relatório (mesmos campos e ordem) e compare com o hash acima ou escaneado pelo QR.');
+
+    doc.setFontSize(8);
+    doc.setTextColor(120);
+    doc.text(
+      `Página ${pageCount + 1} de ${pageCount + 1}`,
+      pageWidth - margin,
+      doc.internal.pageSize.getHeight() - 20,
+      { align: 'right' }
+    );
 
     const ts = now.toISOString().slice(0, 19).replace(/[:T]/g, '-');
     doc.save(`relatorio-ingestao-${ts}.pdf`);
