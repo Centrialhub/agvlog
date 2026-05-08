@@ -7,6 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { ChevronDown, Filter, RotateCcw } from 'lucide-react';
+import PlateInput from './PlateInput';
+import { OPERATION_TYPE_OPTIONS } from '@/lib/operationTypeMapping';
 
 export type TriState = 'all' | 'yes' | 'no';
 
@@ -96,6 +98,8 @@ interface Props {
   value: LoadAdvancedFiltersValue;
   onChange: (next: LoadAdvancedFiltersValue) => void;
   drivers: Array<{ id: string; name: string }>;
+  vehicles?: Array<{ plate?: string | null; trailer_plate?: string | null }>;
+  trailerPlateSuggestions?: string[];
 }
 
 const TriStateGroup = ({ label, value, onChange }: { label: string; value: TriState; onChange: (v: TriState) => void }) => (
