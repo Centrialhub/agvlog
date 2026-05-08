@@ -121,6 +121,64 @@ export default function ResultsStep({ results, onReset, report }: ResultsStepPro
     URL.revokeObjectURL(url);
   };
 
+  // Compact CSV: only audit meta, KPIs and the review list. Ideal for attaching to audits.
+  const handleExportCsvSummary = () => {
+    if (!report) return;
+    const esc = (v: unknown) => {
+      const s = String(v ?? '');
+      return /[",;\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const pct = (n: number, d: number) => (d > 0 ? ((n / d) * 100).toFixed(1) : '0.0');
+    const lines: string[] = [];
+    if (report.auditMeta) {
+      const m = report.auditMeta;
+      const fmt = (iso?: string | null) => iso ? new Date(iso).toLocaleString('pt-BR') : '-';
+      lines.push('Auditoria;Campo;Valor');
+      lines.push(`Auditoria;Empresa;${esc(m.tenantName || '-')}`);
+      lines.push(`Auditoria;Batch ID;${esc(m.batchId || '-')}`);
+      lines.push(`Auditoria;Origem;${esc(m.sourceLabel || '-')}`);
+      lines.push(`Auditoria;Período (de);${esc(fmt(m.periodFrom))}`);
+      lines.push(`Auditoria;Período (até);${esc(fmt(m.periodTo))}`);
+      lines.push(`Auditoria;Gerado em;${esc(fmt(m.generatedAt))}`);
+      lines.push('');
+    }
+    lines.push('KPI;Valor;Total;Percentual');
+    lines.push(`Documentos totais;${report.totalDocs};${report.totalDocs};100.0`);
+    lines.push(`Documentos salvos;${report.savedDocs};${report.totalDocs};${pct(report.savedDocs, report.totalDocs)}`);
+    lines.push(`Documentos com erro;${report.errorDocs};${report.totalDocs};${pct(report.errorDocs, report.totalDocs)}`);
+    lines.push(`Documentos para revisão;${report.needsReviewDocs};${report.totalDocs};${pct(report.needsReviewDocs, report.totalDocs)}`);
+    lines.push(`Clientes criados automaticamente;${report.clientsAutoCreated};${report.totalDocs};${pct(report.clientsAutoCreated, report.totalDocs)}`);
+    lines.push(`Clientes vinculados;${report.clientsMatched};${report.totalDocs};${pct(report.clientsMatched, report.totalDocs)}`);
+    lines.push(`Clientes não resolvidos;${report.clientsUnresolved};${report.totalDocs};${pct(report.clientsUnresolved, report.totalDocs)}`);
+    if (report.reviewThreshold != null) {
+      lines.push(`Threshold needsReview (%);${Math.round(report.reviewThreshold * 100)};;`);
+    }
+    if (report.reviewItems && report.reviewItems.length) {
+      lines.push('');
+      lines.push('Revisão;NF;Destinatário;Confiança;Motivos');
+      for (const ri of report.reviewItems) {
+        lines.push([
+          'Revisão',
+          esc(ri.invoiceNumber),
+          esc(ri.recipientName || ''),
+          ri.confidence != null ? `${Math.round(ri.confidence * 100)}%` : '',
+          esc(ri.reasons.join(' | ')),
+        ].join(';'));
+      }
+    }
+    const csv = '\uFEFF' + lines.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    a.href = url;
+    a.download = `relatorio-ingestao-resumo-${ts}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const handleExportPdf = async () => {
     if (!report) return;
     const doc = new jsPDF({ unit: 'pt', format: 'a4' });
@@ -357,6 +415,9 @@ export default function ResultsStep({ results, onReset, report }: ResultsStepPro
               <h3 className="text-sm font-semibold">Relatório de qualidade da ingestão</h3>
               <Button size="sm" variant="outline" className="ml-auto h-7" onClick={handleExportCsv}>
                 <Download className="h-3.5 w-3.5 mr-1.5" /> Exportar CSV
+              </Button>
+              <Button size="sm" variant="outline" className="h-7" onClick={handleExportCsvSummary}>
+                <Download className="h-3.5 w-3.5 mr-1.5" /> CSV resumido
               </Button>
               <Button size="sm" variant="outline" className="h-7" onClick={handleExportPdf}>
                 <FileDown className="h-3.5 w-3.5 mr-1.5" /> Exportar PDF
