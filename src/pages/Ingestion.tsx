@@ -1423,6 +1423,42 @@ export default function Ingestion() {
         <p className="text-xs text-muted-foreground mt-0.5">Upload → Validação → Roteirização → Agrupamento → Execução</p>
       </div>
 
+      {/* Confidence threshold calibrator for needsReview */}
+      <div className="flex flex-wrap items-center gap-3 rounded-md border bg-muted/30 px-3 py-2 text-xs">
+        <label className="font-medium text-muted-foreground" htmlFor="review-threshold">
+          Threshold de revisão (OCR/extração)
+        </label>
+        <input
+          id="review-threshold"
+          type="range"
+          min={0.5}
+          max={0.99}
+          step={0.01}
+          value={reviewThreshold}
+          onChange={(e) => updateReviewThreshold(Number(e.target.value))}
+          className="w-40 accent-primary"
+        />
+        <input
+          type="number"
+          min={0.5}
+          max={0.99}
+          step={0.01}
+          value={reviewThreshold}
+          onChange={(e) => updateReviewThreshold(Number(e.target.value))}
+          className="w-20 rounded border bg-background px-2 py-1"
+        />
+        <span className="text-muted-foreground">
+          Documentos com confiança abaixo de <strong>{Math.round(reviewThreshold * 100)}%</strong> serão marcados como <em>needsReview</em>.
+        </span>
+        <button
+          type="button"
+          onClick={() => updateReviewThreshold(0.82)}
+          className="ml-auto rounded border px-2 py-1 hover:bg-muted"
+        >
+          Restaurar padrão (82%)
+        </button>
+      </div>
+
       <IngestionStepper currentStep={step} />
 
       {step >= 0 && step <= 4 && (
