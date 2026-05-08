@@ -20,6 +20,7 @@ import PendingDocsGrouping from '@/components/loads/PendingDocsGrouping';
 import NewLoadDialog from '@/components/loads/NewLoadDialog';
 import BatchReimportDialog from '@/components/loads/BatchReimportDialog';
 import LoadAdvancedFilters, { EMPTY_LOAD_ADVANCED_FILTERS, LoadAdvancedFiltersValue } from '@/components/loads/LoadAdvancedFilters';
+import AppliedFiltersChips, { buildAppliedChips } from '@/components/loads/AppliedFiltersChips';
 import { exportLoadsCSV, exportLoadsPDF } from '@/lib/loadsExport';
 
 const STATUS_COLORS: Record<string, string> = {
@@ -520,6 +521,25 @@ export default function Loads() {
       </div>
 
       <LoadAdvancedFilters value={advFilters} onChange={setAdvFilters} drivers={drivers as any} />
+
+      <AppliedFiltersChips
+        chips={buildAppliedChips({
+          search, setSearch,
+          statusFilter, setStatusFilter,
+          datePreset, setDatePreset,
+          customStart, customEnd, setCustomStart, setCustomEnd,
+          adv: advFilters, setAdv: setAdvFilters,
+          drivers: drivers as any,
+        })}
+        onClearAll={() => {
+          setSearch('');
+          setStatusFilter('all');
+          setDatePreset('all');
+          setCustomStart('');
+          setCustomEnd('');
+          setAdvFilters(EMPTY_LOAD_ADVANCED_FILTERS);
+        }}
+      />
 
       {/* Load cards */}
       {isLoading ? (
