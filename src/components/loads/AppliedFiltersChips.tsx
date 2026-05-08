@@ -3,6 +3,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Button } from '@/components/ui/button';
 import { X, Info, RotateCcw } from 'lucide-react';
 import { LOAD_STATUS_LABELS } from '@/hooks/useLoads';
+import { OPERATION_TYPE_LABELS, isValidOperationType } from '@/lib/operationTypeMapping';
 import {
   EMPTY_LOAD_ADVANCED_FILTERS,
   LoadAdvancedFiltersValue,
@@ -24,7 +25,7 @@ const KIND_HINTS: Record<ChipKind, string> = {
   approx: 'Filtro aproximado: compara texto contra "Tipo de operação" (não há coluna dedicada).',
 };
 
-const APPROX_KEYS = new Set(['cargoType', 'romexpTypes', 'romaneioTypes']);
+const APPROX_KEYS = new Set(['romexpTypes', 'romaneioTypes']);
 
 const fmtRange = (from: string, to: string) =>
   from && to ? `${from} → ${to}` : from ? `≥ ${from}` : `≤ ${to}`;
@@ -89,7 +90,6 @@ export function buildAppliedChips(args: BuildArgs): AppliedChip[] {
     ['loadNumber', 'Romaneio'],
     ['plate', 'Placa'],
     ['trailerPlate', 'Placa Carreta'],
-    ['cargoType', 'Tipo de Carga'],
     ['monitorResponsible', 'Resp. Monit.'],
     ['driverType', 'Tipo Motorista'],
     ['smManager', 'Gerenciadora SM'],
@@ -101,6 +101,16 @@ export function buildAppliedChips(args: BuildArgs): AppliedChip[] {
       chips.push({ key: k as string, label, value: String(v), kind: kindOf(k as string), clear: () => setF(k, '' as any) });
     }
   });
+
+  if (adv.cargoType) {
+    chips.push({
+      key: 'cargoType',
+      label: 'Tipo de Carga',
+      value: isValidOperationType(adv.cargoType) ? OPERATION_TYPE_LABELS[adv.cargoType] : adv.cargoType,
+      kind: 'exact',
+      clear: () => setF('cargoType', ''),
+    });
+  }
 
   if (adv.driverId && adv.driverId !== 'all') {
     const d = drivers.find(x => x.id === adv.driverId);
