@@ -7,6 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { ChevronDown, Filter, RotateCcw } from 'lucide-react';
+import PlateInput from './PlateInput';
+import { OPERATION_TYPE_OPTIONS } from '@/lib/operationTypeMapping';
 
 export type TriState = 'all' | 'yes' | 'no';
 
@@ -96,6 +98,8 @@ interface Props {
   value: LoadAdvancedFiltersValue;
   onChange: (next: LoadAdvancedFiltersValue) => void;
   drivers: Array<{ id: string; name: string }>;
+  vehicles?: Array<{ plate?: string | null; trailer_plate?: string | null }>;
+  trailerPlateSuggestions?: string[];
 }
 
 const TriStateGroup = ({ label, value, onChange }: { label: string; value: TriState; onChange: (v: TriState) => void }) => (
@@ -144,11 +148,22 @@ const CheckboxList = ({ options, value, onChange }: { options: string[]; value: 
   </div>
 );
 
-export default function LoadAdvancedFilters({ value, onChange, drivers }: Props) {
+export default function LoadAdvancedFilters({ value, onChange, drivers, vehicles = [], trailerPlateSuggestions = [] }: Props) {
   const [open, setOpen] = useState(false);
   const applied = useMemo(() => countApplied(value), [value]);
   const set = <K extends keyof LoadAdvancedFiltersValue>(k: K, v: LoadAdvancedFiltersValue[K]) =>
     onChange({ ...value, [k]: v });
+  const plateOptions = useMemo(
+    () => Array.from(new Set(vehicles.map(v => v.plate || '').filter(Boolean))),
+    [vehicles],
+  );
+  const trailerOptions = useMemo(
+    () => Array.from(new Set([
+      ...vehicles.map(v => v.trailer_plate || '').filter(Boolean),
+      ...trailerPlateSuggestions,
+    ])),
+    [vehicles, trailerPlateSuggestions],
+  );
 
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="rounded-lg border border-border bg-card">
@@ -177,11 +192,11 @@ export default function LoadAdvancedFilters({ value, onChange, drivers }: Props)
           </div>
           <div className="space-y-1">
             <Label className="text-[11px] text-muted-foreground">Placa</Label>
-            <Input value={value.plate} onChange={e => set('plate', e.target.value)} className="h-8 text-xs" placeholder="Placa cavalo" />
+            <PlateInput value={value.plate} onChange={v => set('plate', v)} placeholder="Placa cavalo" suggestions={plateOptions} />
           </div>
           <div className="space-y-1">
             <Label className="text-[11px] text-muted-foreground">Placa Carreta</Label>
-            <Input value={value.trailerPlate} onChange={e => set('trailerPlate', e.target.value)} className="h-8 text-xs" placeholder="Placa carreta" />
+            <PlateInput value={value.trailerPlate} onChange={v => set('trailerPlate', v)} placeholder="Placa carreta" suggestions={trailerOptions} />
           </div>
           <div className="space-y-1">
             <Label className="text-[11px] text-muted-foreground">Motorista</Label>
@@ -195,7 +210,15 @@ export default function LoadAdvancedFilters({ value, onChange, drivers }: Props)
           </div>
           <div className="space-y-1">
             <Label className="text-[11px] text-muted-foreground">Tipo de Carga</Label>
-            <Input value={value.cargoType} onChange={e => set('cargoType', e.target.value)} className="h-8 text-xs" placeholder="Ex.: Seca, Refrigerada" />
+            <Select value={value.cargoType || 'all'} onValueChange={v => set('cargoType', v === 'all' ? '' : v)}>
+              <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Todos" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                {OPERATION_TYPE_OPTIONS.map(o => (
+                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-1">
             <Label className="text-[11px] text-muted-foreground">Resp. Monitoramento</Label>
