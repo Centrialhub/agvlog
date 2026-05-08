@@ -452,7 +452,10 @@ export type Database = {
           accounting_code_supplier: string | null
           active: boolean
           address_city: string | null
+          address_city_ibge_code: string | null
           address_complement: string | null
+          address_country_code: string | null
+          address_country_name: string | null
           address_neighborhood: string | null
           address_number: string | null
           address_state: string | null
@@ -507,7 +510,10 @@ export type Database = {
           accounting_code_supplier?: string | null
           active?: boolean
           address_city?: string | null
+          address_city_ibge_code?: string | null
           address_complement?: string | null
+          address_country_code?: string | null
+          address_country_name?: string | null
           address_neighborhood?: string | null
           address_number?: string | null
           address_state?: string | null
@@ -562,7 +568,10 @@ export type Database = {
           accounting_code_supplier?: string | null
           active?: boolean
           address_city?: string | null
+          address_city_ibge_code?: string | null
           address_complement?: string | null
+          address_country_code?: string | null
+          address_country_name?: string | null
           address_neighborhood?: string | null
           address_number?: string | null
           address_state?: string | null
