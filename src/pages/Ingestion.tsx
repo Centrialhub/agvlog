@@ -367,7 +367,7 @@ export default function Ingestion() {
       reviewed_payload: toOrtAuditPayload(ort),
       field_confidences: ort.fieldConfidences || {},
       overall_confidence: Math.max(0, Math.min(1, Number(ort.confidence) || 0)),
-      needs_review: Boolean(ort.needsReview) || Number(ort.confidence) < 0.82,
+      needs_review: Boolean(ort.needsReview) || Number(ort.confidence) < reviewThreshold,
       reviewed: true,
       changed_fields: getChangedOrtFields(ort),
       status,
@@ -599,7 +599,7 @@ export default function Ingestion() {
             confidence: Number(item.confidence) || Number(ort.confidence) || 0,
           })).filter((item: any) => item.description) : [],
           confidence: Number(ort.confidence) || 0,
-          needsReview: Boolean(ort.needsReview) || Number(ort.confidence) < 0.82,
+          needsReview: Boolean(ort.needsReview) || Number(ort.confidence) < reviewThreshold,
           fieldConfidences: ort.fieldConfidences || {},
           fileName: ort.sourceFileName || files[idx]?.name || `ORT ${idx + 1}`,
           sourcePages: Array.isArray(ort.sourcePages) && ort.sourcePages.length
@@ -735,7 +735,7 @@ export default function Ingestion() {
         validated.isDuplicate = true;
       }
       seenReviewKeys.add(accessKey);
-      if (ort.needsReview || ort.confidence < 0.82) {
+      if (ort.needsReview || ort.confidence < reviewThreshold) {
         validated.validations.push({ field: 'ortConfidence', message: 'ORT tinha campos de baixa confiança — revisão manual realizada', severity: 'info' });
       }
       return validated;
