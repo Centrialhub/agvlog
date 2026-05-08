@@ -66,6 +66,19 @@ export default function ResultsStep({ results, onReset, report }: ResultsStepPro
     };
     const pct = (n: number, d: number) => (d > 0 ? ((n / d) * 100).toFixed(1) : '0.0');
     const lines: string[] = [];
+    if (report.auditMeta) {
+      const m = report.auditMeta;
+      const fmt = (iso?: string | null) => iso ? new Date(iso).toLocaleString('pt-BR') : '-';
+      lines.push('Auditoria;Campo;Valor');
+      lines.push(`Auditoria;Empresa;${esc(m.tenantName || '-')}`);
+      lines.push(`Auditoria;Tenant ID;${esc(m.tenantId || '-')}`);
+      lines.push(`Auditoria;Batch ID;${esc(m.batchId || '-')}`);
+      lines.push(`Auditoria;Origem;${esc(m.sourceLabel || '-')}`);
+      lines.push(`Auditoria;Período (de);${esc(fmt(m.periodFrom))}`);
+      lines.push(`Auditoria;Período (até);${esc(fmt(m.periodTo))}`);
+      lines.push(`Auditoria;Gerado em;${esc(fmt(m.generatedAt))}`);
+      lines.push('');
+    }
     lines.push('Seção;Métrica;Valor;Total;Percentual');
     lines.push(`Resumo;Documentos totais;${report.totalDocs};${report.totalDocs};100.0`);
     lines.push(`Resumo;Documentos salvos;${report.savedDocs};${report.totalDocs};${pct(report.savedDocs, report.totalDocs)}`);
