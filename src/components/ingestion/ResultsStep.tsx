@@ -1,6 +1,6 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { CheckCircle, XCircle, Upload, ArrowRight, UserPlus, AlertTriangle, ListChecks, Download } from 'lucide-react';
+import { CheckCircle, XCircle, Upload, ArrowRight, UserPlus, AlertTriangle, ListChecks, Download, FileSearch, ExternalLink } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Progress } from '@/components/ui/progress';
 
@@ -18,6 +18,15 @@ export interface IngestionReport {
     filled: number;
     total: number;
   }[];
+  reviewItems?: ReviewItem[];
+}
+
+export interface ReviewItem {
+  invoiceNumber: string;
+  fileName?: string;
+  recipientName?: string;
+  confidence?: number;
+  reasons: string[]; // e.g. "Baixa confiança (62%)", "Campos UNKNOWN: IE, CEP", "OCR ilegível"
 }
 
 interface ResultsStepProps {
@@ -53,6 +62,20 @@ export default function ResultsStep({ results, onReset, report }: ResultsStepPro
     lines.push(`Clientes;Não resolvidos;${report.clientsUnresolved};${report.totalDocs};${pct(report.clientsUnresolved, report.totalDocs)}`);
     for (const f of report.fieldCoverage) {
       lines.push(`Cobertura;${esc(f.label)};${f.filled};${f.total};${pct(f.filled, f.total)}`);
+    }
+    if (report.reviewItems && report.reviewItems.length) {
+      lines.push('');
+      lines.push('Revisão;NF;Arquivo;Destinatário;Confiança;Motivos');
+      for (const ri of report.reviewItems) {
+        lines.push([
+          'Revisão',
+          esc(ri.invoiceNumber),
+          esc(ri.fileName || ''),
+          esc(ri.recipientName || ''),
+          ri.confidence != null ? `${Math.round(ri.confidence * 100)}%` : '',
+          esc(ri.reasons.join(' | ')),
+        ].join(';'));
+      }
     }
     lines.push('');
     lines.push('Detalhe;Resultado');
