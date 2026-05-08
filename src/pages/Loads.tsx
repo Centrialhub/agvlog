@@ -520,7 +520,13 @@ export default function Loads() {
         </div>
       </div>
 
-      <LoadAdvancedFilters value={advFilters} onChange={setAdvFilters} drivers={drivers as any} />
+      <LoadAdvancedFilters
+        value={advFilters}
+        onChange={setAdvFilters}
+        drivers={drivers as any}
+        vehicles={vehicles as any}
+        trailerPlateSuggestions={Array.from(new Set(loads.map(l => (l as any).trailer_plate || '').filter(Boolean)))}
+      />
 
       <AppliedFiltersChips
         chips={buildAppliedChips({
