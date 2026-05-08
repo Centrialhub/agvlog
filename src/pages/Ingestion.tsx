@@ -1421,16 +1421,17 @@ export default function Ingestion() {
       const errorCount = results.filter(r => r.startsWith('❌')).length;
       const validDocsForReport = validatedDocs.filter(d => !d.hasErrors && !d.isDuplicate);
       const matchedExisting = validDocsForReport.filter(d => !!d.matchedClientId).length;
+      const execLabel = `Execução completa de cargas${reprocessSuffix}`;
       const reportExec = buildIngestionReport({
         docs: validDocsForReport,
         savedCount: successCount,
         errorCount,
         autoCreatedCount: 0,
         matchedCount: matchedExisting,
-        sourceLabel: 'Execução completa de cargas',
+        sourceLabel: execLabel,
       });
       setIngestionReport(reportExec);
-      void persistIngestionReport(reportExec, 'Execução completa de cargas');
+      void persistIngestionReport(reportExec, execLabel);
 
       toast({
         title: 'Importação concluída',
