@@ -128,6 +128,7 @@ export default function ResultsStep({ results, onReset, report }: ResultsStepPro
       reviewThreshold: report.reviewThreshold,
       fieldCoverage: report.fieldCoverage,
       reviewItems: report.reviewItems,
+      auditMeta: report.auditMeta,
       generatedAt: now.toISOString(),
     });
     const hashBuf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonical));
