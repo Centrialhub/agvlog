@@ -752,6 +752,13 @@ export default function Ingestion() {
 
       const successCount = results.filter(r => r.startsWith('✅')).length;
       const loadLabel = loadId ? loads.find(l => l.id === loadId)?.load_number : null;
+      if (autoCreatedCount > 0) {
+        queryClient.invalidateQueries({ queryKey: ['clients'] });
+        toast({
+          title: `${autoCreatedCount} cliente(s) cadastrado(s) automaticamente`,
+          description: 'Dados extraídos do XML/ORT foram salvos na ficha do cliente.',
+        });
+      }
       toast({
         title: 'NF-es salvas',
         description: loadLabel
