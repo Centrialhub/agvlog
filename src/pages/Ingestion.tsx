@@ -24,6 +24,7 @@ import RoutingStep from '@/components/ingestion/RoutingStep';
 import type { RouteGroup } from '@/components/ingestion/RoutingStep';
 import GroupingStep from '@/components/ingestion/GroupingStep';
 import ResultsStep from '@/components/ingestion/ResultsStep';
+import type { IngestionReport } from '@/components/ingestion/ResultsStep';
 import { calculateFreight, logFreightCalculation } from '@/hooks/useFreightCalculator';
 import { applyOrtFallbacks, isUnknown, UNKNOWN } from '@/lib/ortFieldFallbacks';
 import { normalizeStateRegistration, normalizeIeIndicator, FISCAL_UNKNOWN } from '@/lib/fiscalNormalization';
@@ -97,6 +98,7 @@ export default function Ingestion() {
   const [savingDocsOnly, setSavingDocsOnly] = useState(false);
   const [ortProcessing, setOrtProcessing] = useState(false);
   const [executionResults, setExecutionResults] = useState<string[]>([]);
+  const [ingestionReport, setIngestionReport] = useState<IngestionReport | null>(null);
   const [ortClientIds, setOrtClientIds] = useState<Array<string | null>>([]);
   const [pickupOrderId, setPickupOrderId] = useState<string | null>(null);
   const [pickupOrder, setPickupOrder] = useState<PickupOrder | null>(null);
@@ -121,6 +123,54 @@ export default function Ingestion() {
   });
 
   const onlyDigits = (s: string | null | undefined) => String(s || '').replace(/\D/g, '');
+
+  // Builds a quality report after each ingestion execution.
+  const buildIngestionReport = useCallback((args: {
+    docs: ValidatedDocument[];
+    savedCount: number;
+    errorCount: number;
+    autoCreatedCount: number;
+    matchedCount: number;
+  }): IngestionReport => {
+    const { docs, savedCount, errorCount, autoCreatedCount, matchedCount } = args;
+    const total = docs.length;
+    const isFilled = (v: any) => {
+      if (v === null || v === undefined) return false;
+      const s = String(v).trim();
+      if (!s) return false;
+      return !/^(UNKNOWN|N\/?I|N\/?A)$/i.test(s);
+    };
+    const count = (pred: (s: any) => boolean) => docs.filter(d => pred(d.source as any)).length;
+
+    const fieldCoverage = [
+      { key: 'cnpj', label: 'CNPJ/CPF do destinatário', filled: count(s => isFilled(s.recipientCnpj)), total },
+      { key: 'ie', label: 'Inscrição Estadual (IE)', filled: count(s => isFilled(s.recipientStateRegistration)), total },
+      { key: 'im', label: 'Inscrição Municipal (IM)', filled: count(s => isFilled(s.recipientMunicipalRegistration)), total },
+      { key: 'email', label: 'E-mail', filled: count(s => isFilled(s.recipientEmail)), total },
+      { key: 'phone', label: 'Telefone', filled: count(s => isFilled(s.recipientPhone)), total },
+      { key: 'address', label: 'Endereço completo (rua/cidade/UF/CEP)', filled: count(s =>
+        isFilled(s.recipientAddress) && isFilled(s.recipientCity) && isFilled(s.recipientState) && isFilled(s.recipientZip)
+      ), total },
+      { key: 'ibge', label: 'Código IBGE do município', filled: count(s => onlyDigits(s.recipientCityCode).length === 7), total },
+    ];
+
+    const needsReviewDocs =
+      ortReviewDocs.filter(d => d.needsReview).length +
+      docs.filter(d => Number((d.source as any)?.confidence ?? 1) < 0.82).length;
+
+    const unresolved = docs.filter(d => !d.matchedClientId).length;
+
+    return {
+      totalDocs: total,
+      savedDocs: savedCount,
+      errorDocs: errorCount,
+      needsReviewDocs,
+      clientsAutoCreated: autoCreatedCount,
+      clientsMatched: matchedCount,
+      clientsUnresolved: Math.max(0, unresolved - autoCreatedCount),
+      fieldCoverage,
+    };
+  }, [ortReviewDocs]);
 
   const remitterMismatchDocs = useMemo(() => {
     if (!pickupOrder || noPickup) return [] as ValidatedDocument[];
@@ -887,6 +937,18 @@ export default function Ingestion() {
       setStep(5);
 
       const successCount = results.filter(r => r.startsWith('✅')).length;
+      const errorCount = results.filter(r => r.startsWith('❌')).length;
+      const validDocsForReport = validatedDocs.filter(d => !d.hasErrors && !d.isDuplicate);
+      const matchedExisting = validDocsForReport.filter(d =>
+        d.matchedClientId && !clientsToSyncSsx.has(d.matchedClientId)
+      ).length;
+      setIngestionReport(buildIngestionReport({
+        docs: validDocsForReport,
+        savedCount: successCount,
+        errorCount,
+        autoCreatedCount: autoCreatedCount,
+        matchedCount: matchedExisting,
+      }));
       const loadLabel = loadId ? loads.find(l => l.id === loadId)?.load_number : null;
       if (autoCreatedCount > 0) {
         queryClient.invalidateQueries({ queryKey: ['clients'] });
@@ -1220,6 +1282,15 @@ export default function Ingestion() {
 
       const successCount = results.filter(r => r.startsWith('✅')).length;
       const errorCount = results.filter(r => r.startsWith('❌')).length;
+      const validDocsForReport = validatedDocs.filter(d => !d.hasErrors && !d.isDuplicate);
+      const matchedExisting = validDocsForReport.filter(d => !!d.matchedClientId).length;
+      setIngestionReport(buildIngestionReport({
+        docs: validDocsForReport,
+        savedCount: successCount,
+        errorCount,
+        autoCreatedCount: 0,
+        matchedCount: matchedExisting,
+      }));
 
       toast({
         title: 'Importação concluída',
@@ -1241,6 +1312,7 @@ export default function Ingestion() {
     setSuggestions([]);
     setRouteGroups([]);
     setExecutionResults([]);
+    setIngestionReport(null);
   };
 
   return (
@@ -1421,7 +1493,7 @@ export default function Ingestion() {
           onExecute={handleExecute}
         />
       )}
-      {step === 5 && <ResultsStep results={executionResults} onReset={reset} />}
+      {step === 5 && <ResultsStep results={executionResults} onReset={reset} report={ingestionReport} />}
     </div>
   );
 }
