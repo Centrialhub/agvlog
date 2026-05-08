@@ -681,6 +681,26 @@ export default function Ingestion() {
       const zipDigits = onlyDigits(src.recipientZip || ortFields?.recipientZip);
       const zip = zipDigits.length === 8 ? `${zipDigits.slice(0,5)}-${zipDigits.slice(5)}` : null;
 
+      // Endereço completo do destinatário (XML/ORT) — preserva número 'S/N' quando aplicável,
+      // normaliza UF para 2 letras e código IBGE para 7 dígitos, e mantém código/nome do país.
+      const sanitizeText = (v?: string | null) => {
+        const t = (v || '').trim();
+        if (!t) return null;
+        if (/^(UNKNOWN|N\/?I|N\/?A)$/i.test(t)) return null;
+        return t.replace(/\s+/g, ' ');
+      };
+      const rawNumber = (src.recipientAddressNumber || ortFields?.recipientAddressNumber || '').trim();
+      const addressNumber = rawNumber
+        ? (/^(s\/?n|sem n[úu]mero)$/i.test(rawNumber) ? 'S/N' : rawNumber)
+        : null;
+      const ufRaw = (src.recipientState || ortFields?.recipientState || '').trim().toUpperCase();
+      const addressState = /^[A-Z]{2}$/.test(ufRaw) ? ufRaw : (ufRaw || null);
+      const ibgeDigits = onlyDigits(src.recipientCityCode || ortFields?.recipientCityCode);
+      const ibgeCode = ibgeDigits.length === 7 ? ibgeDigits : null;
+      const countryCodeRaw = onlyDigits(src.recipientCountryCode || ortFields?.recipientCountryCode);
+      const countryCode = countryCodeRaw || '1058';
+      const countryName = sanitizeText(src.recipientCountry || ortFields?.recipientCountry) || 'BRASIL';
+
       // Derivações fiscais a partir da nota
       const isCpf = cnpjDigits.length === 11;
       const ieRaw = src.recipientStateRegistration || ortFields?.recipientStateRegistration || '';
@@ -716,15 +736,18 @@ export default function Ingestion() {
         taxes_enabled: indIeNorm.taxesEnabled,
         cfop_client_type: cfopClientType,
         freight_calc_type: 'PESO',
-        address_street: src.recipientAddress || ortFields?.recipientAddress || null,
-        address_number: src.recipientAddressNumber || ortFields?.recipientAddressNumber || null,
-        address_complement: src.recipientAddressComplement || null,
-        address_neighborhood: src.recipientNeighborhood || ortFields?.recipientNeighborhood || null,
-        address_city: src.recipientCity || ortFields?.recipientCity || null,
-        address_state: src.recipientState || ortFields?.recipientState || null,
+        address_street: sanitizeText(src.recipientAddress || ortFields?.recipientAddress),
+        address_number: addressNumber,
+        address_complement: sanitizeText(src.recipientAddressComplement || ortFields?.recipientAddressComplement),
+        address_neighborhood: sanitizeText(src.recipientNeighborhood || ortFields?.recipientNeighborhood),
+        address_city: sanitizeText(src.recipientCity || ortFields?.recipientCity),
+        address_state: addressState,
         address_zip: zip,
-        country_name: src.recipientCountry || 'BRASIL',
-        country_code: src.recipientCountryCode || '1058',
+        address_city_ibge_code: ibgeCode,
+        address_country_code: countryCode,
+        address_country_name: countryName,
+        country_name: countryName,
+        country_code: countryCode,
         email: src.recipientEmail || null,
         phone: ortFields?.recipientPhone || null,
         mobile: src.recipientPhone || null,
