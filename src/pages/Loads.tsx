@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLoads, useDeleteLoad, useDeleteLoads, LOAD_STATUSES, LOAD_STATUS_LABELS, Load } from '@/hooks/useLoads';
 import { useVehicles } from '@/hooks/useVehicles';
@@ -9,7 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Search, PackageCheck, Truck, MapPin, ArrowRight, FileStack, Trash2, MoreVertical, X, CheckSquare, Printer, Route as RouteIcon, CalendarDays } from 'lucide-react';
+import { Search, PackageCheck, Truck, MapPin, ArrowRight, FileStack, Trash2, MoreVertical, X, CheckSquare, Printer, Route as RouteIcon, CalendarDays, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { printRomaneioRoutes, RomaneioDoc } from '@/lib/romaneioPrint';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
@@ -70,6 +71,10 @@ export default function Loads() {
   const [customEnd, setCustomEnd] = useState('');
   const [groupingOpen, setGroupingOpen] = useState(false);
   const [advFilters, setAdvFilters] = useState<LoadAdvancedFiltersValue>(EMPTY_LOAD_ADVANCED_FILTERS);
+
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   // Selection state
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -171,14 +176,24 @@ export default function Loads() {
     });
   }, [customEnd, customStart, datePreset, loads, search, statusFilter, advFilters]);
 
+  // Reset to first page whenever filters change result set or page size shrinks
+  useEffect(() => { setPage(1); }, [search, statusFilter, datePreset, customStart, customEnd, advFilters, pageSize]);
+
+  const totalCount = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pageStart = (safePage - 1) * pageSize;
+  const pageEnd = Math.min(pageStart + pageSize, totalCount);
+  const paginated = useMemo(() => filtered.slice(pageStart, pageEnd), [filtered, pageStart, pageEnd]);
+
   const groupedByDay = useMemo(() => {
-    return filtered.reduce((groups, load) => {
+    return paginated.reduce((groups, load) => {
       const label = new Date(load.created_at).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' });
       groups[label] = groups[label] || [];
       groups[label].push(load);
       return groups;
     }, {} as Record<string, Load[]>);
-  }, [filtered]);
+  }, [paginated]);
 
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -373,7 +388,11 @@ export default function Loads() {
           <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
             <PackageCheck className="h-5 w-5 text-primary" /> Cargas
           </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">{loads.length} cargas no total</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {totalCount === loads.length
+              ? `${loads.length} cargas no total`
+              : `${totalCount} de ${loads.length} cargas (filtros ativos)`}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           {!selectionMode && (
@@ -580,6 +599,41 @@ export default function Loads() {
               </div>
             </div>
           ))}
+
+          {/* Pagination */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-border">
+            <div className="text-xs text-muted-foreground">
+              {totalCount === 0 ? 'Nenhum resultado' : `Mostrando ${pageStart + 1}–${pageEnd} de ${totalCount}`}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Por página</span>
+              <Select value={String(pageSize)} onValueChange={v => setPageSize(Number(v))}>
+                <SelectTrigger className="h-8 w-20 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {[10, 25, 50, 100, 200].map(n => (
+                    <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className="flex items-center gap-1 ml-2">
+                <Button size="icon" variant="outline" className="h-8 w-8" disabled={safePage <= 1} onClick={() => setPage(1)}>
+                  <ChevronsLeft className="h-4 w-4" />
+                </Button>
+                <Button size="icon" variant="outline" className="h-8 w-8" disabled={safePage <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-xs text-muted-foreground px-2">
+                  Página <span className="font-medium text-foreground">{safePage}</span> de {totalPages}
+                </span>
+                <Button size="icon" variant="outline" className="h-8 w-8" disabled={safePage >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button size="icon" variant="outline" className="h-8 w-8" disabled={safePage >= totalPages} onClick={() => setPage(totalPages)}>
+                  <ChevronsRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
