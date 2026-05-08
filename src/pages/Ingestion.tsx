@@ -124,6 +124,54 @@ export default function Ingestion() {
 
   const onlyDigits = (s: string | null | undefined) => String(s || '').replace(/\D/g, '');
 
+  // Builds a quality report after each ingestion execution.
+  const buildIngestionReport = useCallback((args: {
+    docs: ValidatedDocument[];
+    savedCount: number;
+    errorCount: number;
+    autoCreatedCount: number;
+    matchedCount: number;
+  }): IngestionReport => {
+    const { docs, savedCount, errorCount, autoCreatedCount, matchedCount } = args;
+    const total = docs.length;
+    const isFilled = (v: any) => {
+      if (v === null || v === undefined) return false;
+      const s = String(v).trim();
+      if (!s) return false;
+      return !/^(UNKNOWN|N\/?I|N\/?A)$/i.test(s);
+    };
+    const count = (pred: (s: any) => boolean) => docs.filter(d => pred(d.source as any)).length;
+
+    const fieldCoverage = [
+      { key: 'cnpj', label: 'CNPJ/CPF do destinatário', filled: count(s => isFilled(s.recipientCnpj)), total },
+      { key: 'ie', label: 'Inscrição Estadual (IE)', filled: count(s => isFilled(s.recipientStateRegistration)), total },
+      { key: 'im', label: 'Inscrição Municipal (IM)', filled: count(s => isFilled(s.recipientMunicipalRegistration)), total },
+      { key: 'email', label: 'E-mail', filled: count(s => isFilled(s.recipientEmail)), total },
+      { key: 'phone', label: 'Telefone', filled: count(s => isFilled(s.recipientPhone)), total },
+      { key: 'address', label: 'Endereço completo (rua/cidade/UF/CEP)', filled: count(s =>
+        isFilled(s.recipientAddress) && isFilled(s.recipientCity) && isFilled(s.recipientState) && isFilled(s.recipientZip)
+      ), total },
+      { key: 'ibge', label: 'Código IBGE do município', filled: count(s => onlyDigits(s.recipientCityCode).length === 7), total },
+    ];
+
+    const needsReviewDocs =
+      ortReviewDocs.filter(d => d.needsReview).length +
+      docs.filter(d => Number((d.source as any)?.confidence ?? 1) < 0.82).length;
+
+    const unresolved = docs.filter(d => !d.matchedClientId).length;
+
+    return {
+      totalDocs: total,
+      savedDocs: savedCount,
+      errorDocs: errorCount,
+      needsReviewDocs,
+      clientsAutoCreated: autoCreatedCount,
+      clientsMatched: matchedCount,
+      clientsUnresolved: Math.max(0, unresolved - autoCreatedCount),
+      fieldCoverage,
+    };
+  }, [ortReviewDocs]);
+
   const remitterMismatchDocs = useMemo(() => {
     if (!pickupOrder || noPickup) return [] as ValidatedDocument[];
     const expectedCnpj = onlyDigits(pickupOrder.remitter_cnpj);
