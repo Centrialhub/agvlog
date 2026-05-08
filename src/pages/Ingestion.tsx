@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { parseNFeXml, parseCsvOrders, parseExcelOrders, ParsedOrderRow, ParsedNFe } from '@/lib/documentParsers';
 import {
   validateNFe, validateOrderRows, generateLoadSuggestions, buildValidationIndexes,
