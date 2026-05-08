@@ -23,6 +23,16 @@ export interface IngestionReport {
   }[];
   reviewItems?: ReviewItem[];
   reviewThreshold?: number;
+  auditMeta?: {
+    tenantId?: string | null;
+    tenantName?: string | null;
+    batchId?: string | null;
+    sourceLabel?: string | null;
+    generatedAt?: string | null;
+    periodFrom?: string | null;
+    periodTo?: string | null;
+    generatedByUserId?: string | null;
+  };
 }
 
 export interface ReviewItem {
