@@ -404,6 +404,33 @@ export default function Loads() {
           <Button size="sm" variant="outline" onClick={printAllRomaneios} disabled={isLoading || filtered.length === 0}>
             <Printer className="h-4 w-4 mr-1" /> Reimprimir todas
           </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="outline" disabled={isLoading || filtered.length === 0}>
+                <Download className="h-4 w-4 mr-1" /> Exportar
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onClick={() => {
+                  const ts = new Date().toISOString().slice(0, 10);
+                  exportLoadsCSV(filtered as any, `cargas_${ts}.csv`);
+                  toast({ title: `CSV exportado (${filtered.length} cargas)` });
+                }}
+              >
+                <FileSpreadsheet className="h-4 w-4 mr-2" /> Exportar CSV
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  const ts = new Date().toISOString().slice(0, 10);
+                  exportLoadsPDF(filtered as any, `cargas_${ts}.pdf`, 'Cargas / Romaneios');
+                  toast({ title: `PDF exportado (${filtered.length} cargas)` });
+                }}
+              >
+                <FileText className="h-4 w-4 mr-2" /> Exportar PDF
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <BatchReimportDialog />
           {pendingCount > 0 && (
             <Button size="sm" variant="secondary" onClick={() => setGroupingOpen(true)}>
