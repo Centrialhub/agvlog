@@ -69,6 +69,16 @@ export interface OrtReviewDocument {
   recipientAddressNumber: string;
   recipientZip: string;
   recipientNeighborhood: string;
+  // Dados cadastrais adicionais (opcional, alimenta auto-cadastro de cliente)
+  recipientFantasyName?: string;
+  recipientStateRegistration?: string;
+  recipientMunicipalRegistration?: string;
+  recipientIeIndicator?: string;
+  recipientEmail?: string;
+  recipientAddressComplement?: string;
+  recipientCountry?: string;
+  recipientCountryCode?: string;
+  recipientCityCode?: string;
   totalValue: number;
   totalWeight: number;
   totalVolume: number;
