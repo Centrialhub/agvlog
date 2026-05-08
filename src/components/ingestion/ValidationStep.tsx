@@ -9,11 +9,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   FileText, CheckCircle, AlertTriangle, XCircle, ArrowRight, ArrowLeft, Package, Info, Trash2, Pencil,
-  Weight, DollarSign, Boxes, LayoutGrid, Link2, Settings2,
+  Weight, DollarSign, Boxes, LayoutGrid, Link2, Settings2, Eye,
 } from 'lucide-react';
 import { Client } from '@/hooks/useClients';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Label } from '@/components/ui/label';
+import IngestionPreviewDialog from './IngestionPreviewDialog';
 
 interface LoadOption {
   id: string;
@@ -47,6 +48,7 @@ export default function ValidationStep({
   const [editingDocIdx, setEditingDocIdx] = useState<number | null>(null);
   const [editingOrderIdx, setEditingOrderIdx] = useState<number | null>(null);
   const [selectedLoadId, setSelectedLoadId] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   // ── Missing client-load alert (configurable threshold) ──
   const MISSING_THRESHOLD_KEY = 'ingestion.missingLoadThresholdPct';
@@ -527,7 +529,15 @@ export default function ValidationStep({
                   </SelectContent>
                 </Select>
               </div>
-              <Button variant="secondary" onClick={() => onSaveDocsOnly(selectedLoadId)} disabled={totalValid === 0 || savingDocs}>
+              <Button
+                variant="outline"
+                onClick={() => setPreviewOpen(true)}
+                disabled={totalValid === 0 || savingDocs}
+                title="Pré-visualizar campos extraídos antes de gravar no banco"
+              >
+                <Eye className="h-4 w-4 mr-1.5" /> Pré-visualizar
+              </Button>
+              <Button variant="secondary" onClick={() => setPreviewOpen(true)} disabled={totalValid === 0 || savingDocs}>
                 {savingDocs ? 'Salvando...' : selectedLoadId ? 'Salvar e Vincular' : 'Salvar NF-es apenas'}
               </Button>
             </div>
@@ -537,6 +547,19 @@ export default function ValidationStep({
           </Button>
         </div>
       </div>
+
+      <IngestionPreviewDialog
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        docs={docs}
+        orders={orders}
+        confirming={savingDocs}
+        confirmLabel={selectedLoadId ? 'Confirmar e vincular à carga' : 'Confirmar e persistir NF-es'}
+        onConfirm={() => {
+          onSaveDocsOnly?.(selectedLoadId);
+          setPreviewOpen(false);
+        }}
+      />
     </div>
   );
 }
