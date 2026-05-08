@@ -69,6 +69,16 @@ export interface OrtReviewDocument {
   recipientAddressNumber: string;
   recipientZip: string;
   recipientNeighborhood: string;
+  // Dados cadastrais adicionais (opcional, alimenta auto-cadastro de cliente)
+  recipientFantasyName?: string;
+  recipientStateRegistration?: string;
+  recipientMunicipalRegistration?: string;
+  recipientIeIndicator?: string;
+  recipientEmail?: string;
+  recipientAddressComplement?: string;
+  recipientCountry?: string;
+  recipientCountryCode?: string;
+  recipientCityCode?: string;
   totalValue: number;
   totalWeight: number;
   totalVolume: number;
@@ -251,6 +261,16 @@ export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm, clien
               <div><Label className="text-xs">Destinatário</Label><Input className={fieldClass(doc, 'recipientName', true)} value={doc.recipientName} onChange={e => onUpdate(index, { recipientName: e.target.value })} /></div>
               <div><Label className="text-xs">CNPJ/CPF destinatário</Label><Input className={fieldClass(doc, 'recipientCnpj')} value={doc.recipientCnpj} onChange={e => onUpdate(index, { recipientCnpj: e.target.value })} /></div>
               <div><Label className="text-xs">Telefone</Label><Input className={fieldClass(doc, 'recipientPhone')} value={doc.recipientPhone} onChange={e => onUpdate(index, { recipientPhone: e.target.value })} placeholder="(00) 00000-0000" /></div>
+            </div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <div><Label className="text-xs">Nome fantasia</Label><Input value={doc.recipientFantasyName || ''} onChange={e => onUpdate(index, { recipientFantasyName: e.target.value })} placeholder="Opcional" /></div>
+              <div><Label className="text-xs">Inscrição Estadual</Label><Input value={doc.recipientStateRegistration || ''} onChange={e => onUpdate(index, { recipientStateRegistration: e.target.value })} placeholder="IE / ISENTO" /></div>
+              <div><Label className="text-xs">Inscrição Municipal</Label><Input value={doc.recipientMunicipalRegistration || ''} onChange={e => onUpdate(index, { recipientMunicipalRegistration: e.target.value })} placeholder="IM" /></div>
+            </div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <div><Label className="text-xs">E-mail</Label><Input value={doc.recipientEmail || ''} onChange={e => onUpdate(index, { recipientEmail: e.target.value })} placeholder="contato@empresa.com" /></div>
+              <div><Label className="text-xs">Complemento</Label><Input value={doc.recipientAddressComplement || ''} onChange={e => onUpdate(index, { recipientAddressComplement: e.target.value })} placeholder="Sala / Andar / Bloco" /></div>
+              <div><Label className="text-xs">Indicador IE</Label><Input value={doc.recipientIeIndicator || ''} onChange={e => onUpdate(index, { recipientIeIndicator: e.target.value })} placeholder="1=Contrib. / 2=Isento / 9=Não" /></div>
             </div>
             {(() => {
               const status = linkageStatus(doc);
