@@ -388,7 +388,11 @@ export default function Loads() {
           <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
             <PackageCheck className="h-5 w-5 text-primary" /> Cargas
           </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">{loads.length} cargas no total</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {totalCount === loads.length
+              ? `${loads.length} cargas no total`
+              : `${totalCount} de ${loads.length} cargas (filtros ativos)`}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           {!selectionMode && (
@@ -595,6 +599,41 @@ export default function Loads() {
               </div>
             </div>
           ))}
+
+          {/* Pagination */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-border">
+            <div className="text-xs text-muted-foreground">
+              {totalCount === 0 ? 'Nenhum resultado' : `Mostrando ${pageStart + 1}–${pageEnd} de ${totalCount}`}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Por página</span>
+              <Select value={String(pageSize)} onValueChange={v => setPageSize(Number(v))}>
+                <SelectTrigger className="h-8 w-20 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {[10, 25, 50, 100, 200].map(n => (
+                    <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className="flex items-center gap-1 ml-2">
+                <Button size="icon" variant="outline" className="h-8 w-8" disabled={safePage <= 1} onClick={() => setPage(1)}>
+                  <ChevronsLeft className="h-4 w-4" />
+                </Button>
+                <Button size="icon" variant="outline" className="h-8 w-8" disabled={safePage <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-xs text-muted-foreground px-2">
+                  Página <span className="font-medium text-foreground">{safePage}</span> de {totalPages}
+                </span>
+                <Button size="icon" variant="outline" className="h-8 w-8" disabled={safePage >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button size="icon" variant="outline" className="h-8 w-8" disabled={safePage >= totalPages} onClick={() => setPage(totalPages)}>
+                  <ChevronsRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
