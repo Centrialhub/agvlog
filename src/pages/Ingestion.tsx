@@ -1346,6 +1346,24 @@ export default function Ingestion() {
         />
       )}
       {step === 2 && (
+        <>
+        {ssxAccountForClients?.id && (
+          <div className="mb-3 flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2 text-sm">
+            <div className="flex items-center gap-2">
+              <input
+                id="sync-ssx-clients"
+                type="checkbox"
+                className="h-4 w-4 accent-primary"
+                checked={syncSsxClients}
+                onChange={(e) => setSyncSsxClients(e.target.checked)}
+              />
+              <label htmlFor="sync-ssx-clients" className="cursor-pointer">
+                Sincronizar clientes recém-criados com a SSX (InsertPerson)
+              </label>
+            </div>
+            <span className="text-xs text-muted-foreground">conta: {ssxAccountForClients.username || 'SSX'}</span>
+          </div>
+        )}
         <ValidationStep
           docs={validatedDocs}
           orders={validatedOrders}
@@ -1360,6 +1378,7 @@ export default function Ingestion() {
           onRemoveDoc={handleRemoveDoc}
           onRemoveOrder={handleRemoveOrder}
         />
+        </>
       )}
       {step === 3 && (
         <RoutingStep
