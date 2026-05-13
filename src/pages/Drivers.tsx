@@ -288,10 +288,11 @@ function DriverDialog({ open, onOpenChange, driver, tenantId, userId }: {
     <span className="text-destructive ml-0.5">*</span>
   );
 
-  const F = ({ label, k, type = 'text', required = false, placeholder, className }: any) => (
+  const field = ({ label, k, type = 'text', required = false, placeholder, className }: any) => (
     <div className={`space-y-1 ${className || ''}`}>
       <Label className="text-xs">{label}{required && req(k)}</Label>
       <Input
+        key={k}
         type={type}
         value={form[k] ?? ''}
         onChange={(e) => set(k, e.target.value)}
