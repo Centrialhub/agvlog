@@ -367,9 +367,36 @@ function DriverDialog({ open, onOpenChange, driver, tenantId, userId }: {
             <h3 className="text-sm font-semibold text-foreground border-b pb-1">Documentos</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {field({label:"CPF",k:"cpf",required:true})}
+              {field({label:"RG",k:"rg"})}
+              {field({label:"Órgão emissor",k:"rg_issuer"})}
+              {field({label:"UF RG",k:"rg_uf"})}
               {field({label:"CNH nº",k:"cnh_number",required:true})}
+              {field({label:"UF CNH",k:"cnh_uf"})}
               {field({label:"CNH categoria",k:"cnh_category",placeholder:"A, B, C, D, E"})}
               {field({label:"CNH validade",k:"cnh_expiry",type:"date"})}
+              {field({label:"Cód. segurança CNH",k:"cnh_security_code"})}
+              {field({label:"Renach",k:"renach"})}
+              {field({label:"Emissão CNH",k:"cnh_issued_at",type:"date"})}
+              {field({label:"1ª Habilitação",k:"first_license_date",type:"date"})}
+              {field({label:"Validade MOPE",k:"mope_expiry",type:"date"})}
+              {field({label:"Nº Pamcary",k:"pamcary_number"})}
+              {field({label:"Vencimento Pamcary",k:"pamcary_expiry",type:"date"})}
+              {field({label:"Nº Cartão",k:"card_number"})}
+              {field({label:"Nº Cooperado",k:"coop_number"})}
+              {field({label:"Região atendida",k:"served_region"})}
+            </div>
+          </section>
+
+          {/* Trabalhista */}
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold text-foreground border-b pb-1">Dados trabalhistas</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {field({label:"CTPS",k:"ctps"})}
+              {field({label:"Série",k:"ctps_series"})}
+              {field({label:"PIS",k:"pis"})}
+              {field({label:"INSS",k:"inss"})}
+              {field({label:"INPS",k:"inps"})}
+              {field({label:"INSC",k:"insc"})}
             </div>
           </section>
 
