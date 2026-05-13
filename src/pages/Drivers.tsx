@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant, useIsAdmin } from '@/hooks/useTenant';
@@ -230,15 +230,14 @@ function DriverDialog({ open, onOpenChange, driver, tenantId, userId }: {
   const [driverType, setDriverType] = useState<'proprio' | 'terceiro'>('proprio');
   const [loading, setLoading] = useState(false);
 
-  const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
-
-  const handleOpenChange = (v: boolean) => {
-    if (v) {
+  useEffect(() => {
+    if (open) {
       setForm(driver || {});
       setDriverType((driver?.driver_type as any) || 'proprio');
     }
-    onOpenChange(v);
-  };
+  }, [open, driver]);
+
+  const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -303,7 +302,7 @@ function DriverDialog({ open, onOpenChange, driver, tenantId, userId }: {
   );
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{driver ? 'Editar motorista' : 'Novo motorista'}</DialogTitle>
