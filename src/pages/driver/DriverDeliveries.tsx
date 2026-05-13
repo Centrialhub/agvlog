@@ -20,6 +20,20 @@ import {
 import { cn } from '@/lib/utils';
 import SignaturePad from '@/components/driver/SignaturePad';
 
+// ====== Dados de demonstração ======
+const DEMO_TRIP = {
+  id: 'demo-trip',
+  loads: { load_number: '1042 (DEMO)' },
+};
+const DEMO_STOPS_INITIAL: any[] = [
+  { id: 'demo-1', stop_order: 1, status: 'arrived',  destination: 'Av. Brasil, 1200 - Centro, Pirapora/MG', notes: 'Pedido 2100077', clients: { company_name: 'AMANDA D' } },
+  { id: 'demo-2', stop_order: 2, status: 'pending',  destination: 'Rua das Flores, 45 - Jaíba/MG',          notes: 'NF 2100098',     clients: { company_name: 'LINDSAY @' } },
+  { id: 'demo-3', stop_order: 3, status: 'pending',  destination: 'BR-365 km 12 - Pai Pedro/MG',            notes: 'Pedido 2100090', clients: { company_name: 'IRMÃOS FERREIRA' } },
+  { id: 'demo-4', stop_order: 4, status: 'pending',  destination: 'Rua A, 200 - Janaúba/MG',                notes: 'NF 2100083',     clients: { company_name: 'CG BEATRIZ' } },
+  { id: 'demo-5', stop_order: 5, status: 'pending',  destination: 'Av. JK, 800 - Montes Claros/MG',         notes: 'Pedido 2100115', clients: { company_name: 'VICTORIA' } },
+  { id: 'demo-6', stop_order: 6, status: 'completed',destination: 'Centro - Espinosa/MG',                   notes: 'NF 2100050',     clients: { company_name: 'MERCADO BOM PRECO' } },
+];
+
 // ====== Catálogo de eventos (inspirado no app de referência) ======
 type EventCategory = 'finalizador' | 'informativo';
 type EventDef = {
@@ -67,6 +81,10 @@ export default function DriverDeliveries() {
   const { data: driver } = useCurrentDriver();
   const { data: trip } = useActiveTrip(driver?.id);
 
+  const isDemo = !trip;
+  const [demoStops, setDemoStops] = useState<any[]>(DEMO_STOPS_INITIAL);
+  const effectiveTrip: any = trip || DEMO_TRIP;
+
   const [tab, setTab] = useState<'em_rota' | 'planejadas'>('em_rota');
   const [search, setSearch] = useState('');
   const [expandedStop, setExpandedStop] = useState<string | null>(null);
@@ -100,9 +118,11 @@ export default function DriverDeliveries() {
     enabled: !!trip?.id,
   });
 
+  const effectiveStops: any[] = isDemo ? demoStops : (stops as any[]);
+
   const filteredStops = useMemo(() => {
     const q = search.trim().toLowerCase();
-    let list = stops as any[];
+    let list = effectiveStops;
     if (tab === 'em_rota') {
       list = list.filter((s) => s.status === 'arrived' || s.status === 'pending');
     } else {
@@ -115,9 +135,9 @@ export default function DriverDeliveries() {
       const notes = (s.notes || '').toLowerCase();
       return name.includes(q) || order.includes(q) || notes.includes(q);
     });
-  }, [stops, search, tab]);
+  }, [effectiveStops, search, tab]);
 
-  const completedStops = (stops as any[]).filter((s) => s.status === 'completed');
+  const completedStops = effectiveStops.filter((s) => s.status === 'completed');
 
   const resetForm = () => {
     setEventForm(null);
@@ -151,6 +171,20 @@ export default function DriverDeliveries() {
       if (!eventForm) throw new Error('Sem evento');
       const def = getEventDef(eventForm.eventKey);
       if (!def) throw new Error('Evento inválido');
+
+      // Demo: muta apenas em memória, sem chamar Supabase
+      if (isDemo) {
+        await new Promise((r) => setTimeout(r, 400));
+        setDemoStops((prev) =>
+          prev.map((s) => {
+            if (s.id !== eventForm.stop.id) return s;
+            if (def.finalAction) return { ...s, status: 'completed' };
+            if (def.key === 'chegada_no_cliente' && s.status === 'pending') return { ...s, status: 'arrived' };
+            return s;
+          })
+        );
+        return;
+      }
 
       const photoPaths: string[] = [];
       for (const photo of photos) {
@@ -224,28 +258,33 @@ export default function DriverDeliveries() {
     (!def.requiresPhoto || photos.length >= 1) &&
     (!def.requiresSignature || !!signatureDataUrl);
 
-  if (!trip) {
-    return (
-      <div className="space-y-4">
-        <h1 className="text-lg font-bold">Entregas e Coletas</h1>
-        <Card>
-          <CardContent className="py-8 text-center">
-            <Package className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-            <p className="text-sm text-muted-foreground">Nenhuma viagem ativa.</p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-4">
       <div>
         <h1 className="text-lg font-bold">Entregas e Coletas</h1>
         <p className="text-xs text-muted-foreground">
-          Carga {(trip as any).loads?.load_number || '—'} · {completedStops.length}/{stops.length} concluídas
+          Carga {effectiveTrip.loads?.load_number || '—'} · {completedStops.length}/{effectiveStops.length} concluídas
         </p>
       </div>
+
+      {isDemo && (
+        <div className="flex items-center gap-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs">
+          <AlertTriangle className="h-3.5 w-3.5 text-warning shrink-0" />
+          <span className="flex-1">
+            <span className="font-semibold">Modo demonstração.</span>{' '}
+            Sem viagem ativa — paradas e eventos são fictícios e não são salvos.
+          </span>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-6 px-2 text-[11px]"
+            onClick={() => setDemoStops(DEMO_STOPS_INITIAL)}
+          >
+            Resetar
+          </Button>
+        </div>
+      )}
 
       {/* Search */}
       <div className="relative">
