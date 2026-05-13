@@ -24,6 +24,7 @@ export default function Drivers() {
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
+  const [vehicleSearch, setVehicleSearch] = useState<Record<string, string>>({});
 
   const { data: drivers = [], isLoading } = useQuery({
     queryKey: ['drivers', currentTenant?.id],
@@ -165,12 +166,28 @@ export default function Drivers() {
                             <SelectValue placeholder="Sem veículo" />
                           </SelectTrigger>
                           <SelectContent>
+                            <div className="p-1 sticky top-0 bg-popover z-10 border-b">
+                              <Input
+                                autoFocus
+                                placeholder="Buscar placa..."
+                                className="h-7 text-xs"
+                                value={vehicleSearch[d.id] || ''}
+                                onChange={e => setVehicleSearch(s => ({ ...s, [d.id]: e.target.value }))}
+                                onKeyDown={e => e.stopPropagation()}
+                              />
+                            </div>
                             <SelectItem value="__none__">Sem veículo</SelectItem>
-                            {vehicles.map((v: any) => (
-                              <SelectItem key={v.id} value={v.id}>
-                                {v.plate} {v.nickname ? `(${v.nickname})` : ''} {v.current_driver_id && v.current_driver_id !== d.id ? '(em uso)' : ''}
-                              </SelectItem>
-                            ))}
+                            {vehicles
+                              .filter((v: any) => {
+                                const q = (vehicleSearch[d.id] || '').toLowerCase().trim();
+                                if (!q) return true;
+                                return (v.plate || '').toLowerCase().includes(q) || (v.nickname || '').toLowerCase().includes(q);
+                              })
+                              .map((v: any) => (
+                                <SelectItem key={v.id} value={v.id}>
+                                  {v.plate} {v.nickname ? `(${v.nickname})` : ''} {v.current_driver_id && v.current_driver_id !== d.id ? '(em uso)' : ''}
+                                </SelectItem>
+                              ))}
                           </SelectContent>
                         </Select>
                       ) : (
