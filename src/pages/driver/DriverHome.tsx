@@ -6,10 +6,11 @@ import { useChecklistStatus } from '@/hooks/useChecklistStatus';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Truck, MapPin, Package, Clock, ArrowRight, ClipboardCheck, AlertTriangle, Receipt } from 'lucide-react';
+import { Truck, MapPin, Package, Clock, ArrowRight, ClipboardCheck, AlertTriangle, Receipt, FileText, Map } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import DemoBanner from '@/components/driver/DemoBanner';
 import { useState } from 'react';
+import DriverDeliveryMap, { DeliveryPoint } from '@/components/driver/DriverDeliveryMap';
 
 const DEMO_TRIP = {
   id: 'demo-trip',
@@ -17,6 +18,16 @@ const DEMO_TRIP = {
   loads: { load_number: '1042 (DEMO)', origin: 'CD Montes Claros/MG', destination: 'PAI PEDRO - PIRAPORA - JAÍBA' },
   vehicles: { plate: 'DEM-1234', nickname: 'Demo' },
 };
+
+const DEMO_MAP_STOPS: DeliveryPoint[] = [
+  { id: 's1', name: 'CD Montes Claros', lat: -16.7286, lng: -43.8582, status: 'done', sequence: 0 },
+  { id: 's2', name: 'AMANDA D - Pai Pedro', lat: -15.4889, lng: -42.6692, status: 'done', sequence: 1 },
+  { id: 's3', name: 'LINDSAY @ - Pirapora', lat: -17.3447, lng: -44.9425, status: 'current', sequence: 2 },
+  { id: 's4', name: 'IRMÃOS FERREIRA - Jaíba', lat: -15.3225, lng: -43.6694, status: 'pending', sequence: 3 },
+  { id: 's5', name: 'CG BEATRIZ - Pirapora', lat: -17.3500, lng: -44.9400, status: 'pending', sequence: 4 },
+];
+
+const DEMO_VEHICLE_POS = { lat: -17.3447, lng: -44.9425, plate: 'DEM-1234' };
 
 export default function DriverHome() {
   const { currentTenant } = useTenant();
@@ -137,6 +148,35 @@ export default function DriverHome() {
         </div>
       )}
 
+      {/* Delivery map dashboard */}
+      {tripsToShow.length > 0 && (
+        <Card>
+          <CardContent className="p-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Map className="h-4 w-4 text-primary" />
+                <span className="text-sm font-medium">Mapa das entregas</span>
+              </div>
+              <Badge variant="outline" className="text-[10px]">
+                {DEMO_MAP_STOPS.filter((s) => s.status === 'done').length}/{DEMO_MAP_STOPS.length} entregues
+              </Badge>
+            </div>
+            <DriverDeliveryMap stops={DEMO_MAP_STOPS} vehicle={DEMO_VEHICLE_POS} height={240} />
+            <div className="flex items-center justify-around text-[10px] text-muted-foreground pt-1">
+              <span className="flex items-center gap-1">
+                <span className="h-2.5 w-2.5 rounded-full bg-success" /> Entregue
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="h-2.5 w-2.5 rounded-full bg-primary" /> Atual
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="h-2.5 w-2.5 rounded-full bg-muted-foreground" /> Pendente
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Checklist status banner */}
       {autoTrip && !checklist.isLoading && (!checklist.preCompleted || !checklist.postCompleted) && (
         <Card
@@ -178,7 +218,13 @@ export default function DriverHome() {
             <span className="text-xs font-medium">Checklist</span>
           </CardContent>
         </Card>
-        <Card className="cursor-pointer hover:bg-accent/50 transition-colors" onClick={() => navigate('/driver/issues')}>
+        <Card className="cursor-pointer hover:bg-accent/50 transition-colors" onClick={() => navigate('/driver/events')}>
+          <CardContent className="p-3 flex flex-col items-center gap-1.5">
+            <FileText className="h-5 w-5 text-muted-foreground" />
+            <span className="text-xs font-medium">Eventos</span>
+          </CardContent>
+        </Card>
+        <Card className="cursor-pointer hover:bg-accent/50 transition-colors col-span-2" onClick={() => navigate('/driver/issues')}>
           <CardContent className="p-3 flex flex-col items-center gap-1.5">
             <AlertTriangle className="h-5 w-5 text-muted-foreground" />
             <span className="text-xs font-medium">Ocorrências</span>

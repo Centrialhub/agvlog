@@ -69,6 +69,8 @@ const DriverIssues = lazy(() => import("@/pages/driver/DriverIssues"));
 const DriverJourney = lazy(() => import("@/pages/driver/DriverJourney"));
 const DriverExpenses = lazy(() => import("@/pages/driver/DriverExpenses"));
 const DriverChecklist = lazy(() => import("@/pages/driver/DriverChecklist"));
+const DriverEvents = lazy(() => import("@/pages/driver/DriverEvents"));
+const DriverEventDetail = lazy(() => import("@/pages/driver/DriverEventDetail"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -214,6 +216,8 @@ const App = () => (
             <Route path="/driver/journey" element={<DriverRoute><DriverJourney /></DriverRoute>} />
             <Route path="/driver/expenses" element={<DriverRoute><DriverExpenses /></DriverRoute>} />
             <Route path="/driver/checklist" element={<DriverRoute><DriverChecklist /></DriverRoute>} />
+            <Route path="/driver/events" element={<DriverRoute><DriverEvents /></DriverRoute>} />
+            <Route path="/driver/events/:id" element={<DriverRoute><DriverEventDetail /></DriverRoute>} />
 
             {/* Legacy redirect */}
             <Route path="/routes" element={<Navigate to="/corridors" replace />} />
