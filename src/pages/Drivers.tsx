@@ -325,14 +325,14 @@ function DriverDialog({ open, onOpenChange, driver, tenantId, userId }: {
           <section className="space-y-3">
             <h3 className="text-sm font-semibold text-foreground border-b pb-1">Identificação</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <F label="Sigla" k="sigla" />
-              <F label="Data cadastro" k="registration_date" type="date" />
-              <F label="Fornecedor" k="supplier" />
-              <F label="Contato" k="contact" />
+              {field({label:"Sigla",k:"sigla" })}
+              {field({label:"Data cadastro",k:"registration_date" type="date" })}
+              {field({label:"Fornecedor",k:"supplier" })}
+              {field({label:"Contato",k:"contact" })}
               <div className="col-span-2 md:col-span-2">
-                <F label="Nome" k="name" required />
+                {field({label:"Nome",k:"name" required })}
               </div>
-              <F label="E-mail" k="email" type="email" />
+              {field({label:"E-mail",k:"email" type="email" })}
               <div className="space-y-1">
                 <Label className="text-xs">Tipo (frota)</Label>
                 <Select value={form.fleet_type ?? ''} onValueChange={(v) => set('fleet_type', v)}>
@@ -344,7 +344,7 @@ function DriverDialog({ open, onOpenChange, driver, tenantId, userId }: {
                   </SelectContent>
                 </Select>
               </div>
-              <F label="Tipo motorista (cód.)" k="driver_kind_code" />
+              {field({label:"Tipo motorista (cód.)",k:"driver_kind_code" })}
             </div>
             <div className="flex flex-wrap gap-4 pt-1">
               {[
@@ -366,10 +366,10 @@ function DriverDialog({ open, onOpenChange, driver, tenantId, userId }: {
           <section className="space-y-3">
             <h3 className="text-sm font-semibold text-foreground border-b pb-1">Documentos</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <F label="CPF" k="cpf" required />
-              <F label="CNH nº" k="cnh_number" required />
-              <F label="CNH categoria" k="cnh_category" placeholder="A, B, C, D, E" />
-              <F label="CNH validade" k="cnh_expiry" type="date" />
+              {field({label:"CPF",k:"cpf" required })}
+              {field({label:"CNH nº",k:"cnh_number" required })}
+              {field({label:"CNH categoria",k:"cnh_category" placeholder="A, B, C, D, E" })}
+              {field({label:"CNH validade",k:"cnh_expiry" type="date" })}
             </div>
           </section>
 
@@ -377,10 +377,10 @@ function DriverDialog({ open, onOpenChange, driver, tenantId, userId }: {
           <section className="space-y-3">
             <h3 className="text-sm font-semibold text-foreground border-b pb-1">Dados pessoais</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <F label="Data nasc." k="birth_date" type="date" required />
-              <F label="Naturalidade" k="naturalidade" required />
-              <F label="UF" k="naturalidade_uf" />
-              <F label="Nacionalidade" k="nacionalidade" />
+              {field({label:"Data nasc.",k:"birth_date" type="date" required })}
+              {field({label:"Naturalidade",k:"naturalidade" required })}
+              {field({label:"UF",k:"naturalidade_uf" })}
+              {field({label:"Nacionalidade",k:"nacionalidade" })}
               <div className="space-y-1">
                 <Label className="text-xs">Sexo</Label>
                 <Select value={form.sex ?? ''} onValueChange={(v) => set('sex', v)}>
@@ -405,7 +405,7 @@ function DriverDialog({ open, onOpenChange, driver, tenantId, userId }: {
                   </SelectContent>
                 </Select>
               </div>
-              <F label="Cônjuge" k="spouse_name" />
+              {field({label:"Cônjuge",k:"spouse_name" })}
               <div className="space-y-1">
                 <Label className="text-xs">Escolaridade</Label>
                 <Select value={form.education ?? ''} onValueChange={(v) => set('education', v)}>
@@ -420,14 +420,14 @@ function DriverDialog({ open, onOpenChange, driver, tenantId, userId }: {
                   </SelectContent>
                 </Select>
               </div>
-              <F label="Pai" k="father_name" className="md:col-span-2" />
-              <F label="Mãe" k="mother_name" className="md:col-span-2" />
-              <F label="Cor pele" k="skin_color" />
-              <F label="Cor olhos" k="eye_color" />
-              <F label="Cor cabelo" k="hair_color" />
-              <F label="Sinais" k="distinguishing_marks" />
-              <F label="Peso (kg)" k="weight_kg" type="number" />
-              <F label="Altura (m)" k="height_m" type="number" />
+              {field({label:"Pai",k:"father_name" className="md:col-span-2" })}
+              {field({label:"Mãe",k:"mother_name" className="md:col-span-2" })}
+              {field({label:"Cor pele",k:"skin_color" })}
+              {field({label:"Cor olhos",k:"eye_color" })}
+              {field({label:"Cor cabelo",k:"hair_color" })}
+              {field({label:"Sinais",k:"distinguishing_marks" })}
+              {field({label:"Peso (kg)",k:"weight_kg" type="number" })}
+              {field({label:"Altura (m)",k:"height_m" type="number" })}
             </div>
           </section>
 
@@ -435,9 +435,9 @@ function DriverDialog({ open, onOpenChange, driver, tenantId, userId }: {
           <section className="space-y-3">
             <h3 className="text-sm font-semibold text-foreground border-b pb-1">Contatos</h3>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              <F label="Telefone" k="phone" />
-              <F label="Telefone secundário" k="phone_secondary" />
-              <F label="Celular" k="mobile" />
+              {field({label:"Telefone",k:"phone" })}
+              {field({label:"Telefone secundário",k:"phone_secondary" })}
+              {field({label:"Celular",k:"mobile" })}
             </div>
           </section>
 
@@ -445,7 +445,7 @@ function DriverDialog({ open, onOpenChange, driver, tenantId, userId }: {
           <section className="space-y-3">
             <h3 className="text-sm font-semibold text-foreground border-b pb-1">Residência atual</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <F label="Data inicial" k="residence_since" type="date" />
+              {field({label:"Data inicial",k:"residence_since" type="date" })}
               <div className="space-y-1">
                 <Label className="text-xs">Tipo residência</Label>
                 <Select value={form.residence_type ?? ''} onValueChange={(v) => set('residence_type', v)}>
@@ -459,13 +459,13 @@ function DriverDialog({ open, onOpenChange, driver, tenantId, userId }: {
                   </SelectContent>
                 </Select>
               </div>
-              <F label="CEP" k="address_zip" />
-              <F label="UF" k="address_state" />
-              <div className="md:col-span-2"><F label="Endereço" k="address_street" required /></div>
-              <F label="Número" k="address_number" />
-              <F label="Complemento" k="address_complement" />
-              <F label="Bairro" k="address_neighborhood" required />
-              <div className="md:col-span-2"><F label="Município" k="address_city" required /></div>
+              {field({label:"CEP",k:"address_zip" })}
+              {field({label:"UF",k:"address_state" })}
+              <div className="md:col-span-2">{field({label:"Endereço",k:"address_street" required })}</div>
+              {field({label:"Número",k:"address_number" })}
+              {field({label:"Complemento",k:"address_complement" })}
+              {field({label:"Bairro",k:"address_neighborhood" required })}
+              <div className="md:col-span-2">{field({label:"Município",k:"address_city" required })}</div>
             </div>
           </section>
 
@@ -473,7 +473,7 @@ function DriverDialog({ open, onOpenChange, driver, tenantId, userId }: {
           <section className="space-y-3">
             <h3 className="text-sm font-semibold text-foreground border-b pb-1">Residência anterior</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <F label="Tempo residência" k="prev_residence_duration" />
+              {field({label:"Tempo residência",k:"prev_residence_duration" })}
               <div className="space-y-1">
                 <Label className="text-xs">Tipo residência</Label>
                 <Select value={form.prev_residence_type ?? ''} onValueChange={(v) => set('prev_residence_type', v)}>
@@ -487,13 +487,13 @@ function DriverDialog({ open, onOpenChange, driver, tenantId, userId }: {
                   </SelectContent>
                 </Select>
               </div>
-              <F label="CEP" k="prev_address_zip" />
-              <F label="UF" k="prev_address_state" />
-              <div className="md:col-span-2"><F label="Endereço" k="prev_address_street" /></div>
-              <F label="Número" k="prev_address_number" />
-              <F label="Complemento" k="prev_address_complement" />
-              <F label="Bairro" k="prev_address_neighborhood" />
-              <div className="md:col-span-2"><F label="Município" k="prev_address_city" /></div>
+              {field({label:"CEP",k:"prev_address_zip" })}
+              {field({label:"UF",k:"prev_address_state" })}
+              <div className="md:col-span-2">{field({label:"Endereço",k:"prev_address_street" })}</div>
+              {field({label:"Número",k:"prev_address_number" })}
+              {field({label:"Complemento",k:"prev_address_complement" })}
+              {field({label:"Bairro",k:"prev_address_neighborhood" })}
+              <div className="md:col-span-2">{field({label:"Município",k:"prev_address_city" })}</div>
             </div>
           </section>
 
