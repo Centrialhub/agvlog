@@ -1355,48 +1355,210 @@ export type Database = {
       drivers: {
         Row: {
           active: boolean
+          address_city: string | null
+          address_complement: string | null
+          address_neighborhood: string | null
+          address_number: string | null
+          address_state: string | null
+          address_street: string | null
+          address_zip: string | null
+          birth_date: string | null
+          blocked: boolean | null
+          cnh_category: string | null
+          cnh_expiry: string | null
+          cnh_number: string | null
+          commissioned: boolean | null
+          contact: string | null
+          cpf: string | null
           created_at: string
           created_by: string | null
           current_vehicle_id: string | null
+          distinguishing_marks: string | null
           doc: string | null
+          driver_kind_code: string | null
+          driver_type: string
+          education: string | null
+          email: string | null
+          emit_contract: boolean | null
+          eye_color: string | null
+          father_name: string | null
+          fleet_type: string | null
+          hair_color: string | null
+          height_m: number | null
           id: string
+          marital_status: string | null
+          mechanic: boolean | null
+          mobile: string | null
+          mother_name: string | null
+          nacionalidade: string | null
           name: string
+          naturalidade: string | null
+          naturalidade_uf: string | null
+          notes: string | null
           phone: string | null
+          phone_secondary: string | null
+          prev_address_city: string | null
+          prev_address_complement: string | null
+          prev_address_neighborhood: string | null
+          prev_address_number: string | null
+          prev_address_state: string | null
+          prev_address_street: string | null
+          prev_address_zip: string | null
+          prev_residence_duration: string | null
+          prev_residence_type: string | null
           provider_person_id: string | null
           provider_person_sync_status: string | null
+          registration_date: string | null
+          residence_since: string | null
+          residence_type: string | null
+          romaneio_monitor_responsible: boolean | null
+          sex: string | null
+          sigla: string | null
+          skin_color: string | null
+          spouse_name: string | null
+          supplier: string | null
           tenant_id: string
           updated_at: string
           updated_by: string | null
+          weight_kg: number | null
         }
         Insert: {
           active?: boolean
+          address_city?: string | null
+          address_complement?: string | null
+          address_neighborhood?: string | null
+          address_number?: string | null
+          address_state?: string | null
+          address_street?: string | null
+          address_zip?: string | null
+          birth_date?: string | null
+          blocked?: boolean | null
+          cnh_category?: string | null
+          cnh_expiry?: string | null
+          cnh_number?: string | null
+          commissioned?: boolean | null
+          contact?: string | null
+          cpf?: string | null
           created_at?: string
           created_by?: string | null
           current_vehicle_id?: string | null
+          distinguishing_marks?: string | null
           doc?: string | null
+          driver_kind_code?: string | null
+          driver_type?: string
+          education?: string | null
+          email?: string | null
+          emit_contract?: boolean | null
+          eye_color?: string | null
+          father_name?: string | null
+          fleet_type?: string | null
+          hair_color?: string | null
+          height_m?: number | null
           id?: string
+          marital_status?: string | null
+          mechanic?: boolean | null
+          mobile?: string | null
+          mother_name?: string | null
+          nacionalidade?: string | null
           name: string
+          naturalidade?: string | null
+          naturalidade_uf?: string | null
+          notes?: string | null
           phone?: string | null
+          phone_secondary?: string | null
+          prev_address_city?: string | null
+          prev_address_complement?: string | null
+          prev_address_neighborhood?: string | null
+          prev_address_number?: string | null
+          prev_address_state?: string | null
+          prev_address_street?: string | null
+          prev_address_zip?: string | null
+          prev_residence_duration?: string | null
+          prev_residence_type?: string | null
           provider_person_id?: string | null
           provider_person_sync_status?: string | null
+          registration_date?: string | null
+          residence_since?: string | null
+          residence_type?: string | null
+          romaneio_monitor_responsible?: boolean | null
+          sex?: string | null
+          sigla?: string | null
+          skin_color?: string | null
+          spouse_name?: string | null
+          supplier?: string | null
           tenant_id: string
           updated_at?: string
           updated_by?: string | null
+          weight_kg?: number | null
         }
         Update: {
           active?: boolean
+          address_city?: string | null
+          address_complement?: string | null
+          address_neighborhood?: string | null
+          address_number?: string | null
+          address_state?: string | null
+          address_street?: string | null
+          address_zip?: string | null
+          birth_date?: string | null
+          blocked?: boolean | null
+          cnh_category?: string | null
+          cnh_expiry?: string | null
+          cnh_number?: string | null
+          commissioned?: boolean | null
+          contact?: string | null
+          cpf?: string | null
           created_at?: string
           created_by?: string | null
           current_vehicle_id?: string | null
+          distinguishing_marks?: string | null
           doc?: string | null
+          driver_kind_code?: string | null
+          driver_type?: string
+          education?: string | null
+          email?: string | null
+          emit_contract?: boolean | null
+          eye_color?: string | null
+          father_name?: string | null
+          fleet_type?: string | null
+          hair_color?: string | null
+          height_m?: number | null
           id?: string
+          marital_status?: string | null
+          mechanic?: boolean | null
+          mobile?: string | null
+          mother_name?: string | null
+          nacionalidade?: string | null
           name?: string
+          naturalidade?: string | null
+          naturalidade_uf?: string | null
+          notes?: string | null
           phone?: string | null
+          phone_secondary?: string | null
+          prev_address_city?: string | null
+          prev_address_complement?: string | null
+          prev_address_neighborhood?: string | null
+          prev_address_number?: string | null
+          prev_address_state?: string | null
+          prev_address_street?: string | null
+          prev_address_zip?: string | null
+          prev_residence_duration?: string | null
+          prev_residence_type?: string | null
           provider_person_id?: string | null
           provider_person_sync_status?: string | null
+          registration_date?: string | null
+          residence_since?: string | null
+          residence_type?: string | null
+          romaneio_monitor_responsible?: boolean | null
+          sex?: string | null
+          sigla?: string | null
+          skin_color?: string | null
+          spouse_name?: string | null
+          supplier?: string | null
           tenant_id?: string
           updated_at?: string
           updated_by?: string | null
+          weight_kg?: number | null
         }
         Relationships: [
           {
