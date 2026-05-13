@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import SignaturePad from '@/components/driver/SignaturePad';
+import DemoBanner from '@/components/driver/DemoBanner';
 
 // ====== Dados de demonstração ======
 const DEMO_TRIP = {
@@ -87,7 +88,8 @@ export default function DriverDeliveries() {
 
   const [tab, setTab] = useState<'em_rota' | 'planejadas'>('em_rota');
   const [search, setSearch] = useState('');
-  const [expandedStop, setExpandedStop] = useState<string | null>(null);
+  // Detalhe da entrega
+  const [detailStop, setDetailStop] = useState<any | null>(null);
 
   // catálogo de eventos do stop selecionado
   const [eventCatalogStop, setEventCatalogStop] = useState<any | null>(null);
@@ -268,22 +270,10 @@ export default function DriverDeliveries() {
       </div>
 
       {isDemo && (
-        <div className="flex items-center gap-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs">
-          <AlertTriangle className="h-3.5 w-3.5 text-warning shrink-0" />
-          <span className="flex-1">
-            <span className="font-semibold">Modo demonstração.</span>{' '}
-            Sem viagem ativa — paradas e eventos são fictícios e não são salvos.
-          </span>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className="h-6 px-2 text-[11px]"
-            onClick={() => setDemoStops(DEMO_STOPS_INITIAL)}
-          >
-            Resetar
-          </Button>
-        </div>
+        <DemoBanner
+          message="Sem viagem ativa — paradas e eventos são fictícios."
+          onReset={() => setDemoStops(DEMO_STOPS_INITIAL)}
+        />
       )}
 
       {/* Search */}
