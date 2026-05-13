@@ -306,14 +306,13 @@ export default function DriverDeliveries() {
             </Card>
           ) : (
             filteredStops.map((stop: any, idx: number) => {
-              const isExpanded = expandedStop === stop.id;
               const orderNum = getStopOrderNumber(stop);
               const isArrived = stop.status === 'arrived';
               return (
                 <Card key={stop.id} className={cn(isArrived && 'border-primary')}>
                   <button
                     type="button"
-                    onClick={() => setExpandedStop(isExpanded ? null : stop.id)}
+                    onClick={() => setDetailStop(stop)}
                     className="w-full text-left"
                   >
                     <CardContent className="p-3 flex items-center gap-3">
@@ -341,38 +340,9 @@ export default function DriverDeliveries() {
                       {isArrived && (
                         <Badge variant="secondary" className="bg-primary/10 text-primary text-[10px] mr-1">No local</Badge>
                       )}
-                      {isExpanded ? (
-                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                      ) : (
-                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                      )}
+                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
                     </CardContent>
                   </button>
-
-                  {isExpanded && (
-                    <CardContent className="p-3 pt-0 space-y-2 border-t border-border">
-                      {stop.destination && (
-                        <p className="text-xs text-muted-foreground">{stop.destination}</p>
-                      )}
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="flex-1 text-xs"
-                          onClick={() => setEventCatalogStop(stop)}
-                        >
-                          <PenLine className="h-3.5 w-3.5 mr-1" /> Lançar evento
-                        </Button>
-                        <Button
-                          size="sm"
-                          className="flex-1 text-xs"
-                          onClick={() => setEventForm({ stop, eventKey: 'entregue' })}
-                        >
-                          <CheckCircle className="h-3.5 w-3.5 mr-1" /> TudoEntregue
-                        </Button>
-                      </div>
-                    </CardContent>
-                  )}
                 </Card>
               );
             })
