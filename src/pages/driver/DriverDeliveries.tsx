@@ -16,6 +16,7 @@ import {
   Package, CheckCircle, AlertTriangle, Truck, Camera, X, ImageIcon,
   ChevronRight, ChevronDown, Search, PenLine, FileSignature,
   Ban, AlertCircle, PackageX, MapPinned, UserX,
+  Phone, MessageSquare, Send, Percent, FileText, RotateCcw, Clock, User as UserIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import SignaturePad from '@/components/driver/SignaturePad';
@@ -27,13 +28,39 @@ const DEMO_TRIP = {
   loads: { load_number: '1042 (DEMO)' },
 };
 const DEMO_STOPS_INITIAL: any[] = [
-  { id: 'demo-1', stop_order: 1, status: 'arrived',  destination: 'Av. Brasil, 1200 - Centro, Pirapora/MG', notes: 'Pedido 2100077', clients: { company_name: 'AMANDA D' } },
-  { id: 'demo-2', stop_order: 2, status: 'pending',  destination: 'Rua das Flores, 45 - Jaíba/MG',          notes: 'NF 2100098',     clients: { company_name: 'LINDSAY @' } },
-  { id: 'demo-3', stop_order: 3, status: 'pending',  destination: 'BR-365 km 12 - Pai Pedro/MG',            notes: 'Pedido 2100090', clients: { company_name: 'IRMÃOS FERREIRA' } },
-  { id: 'demo-4', stop_order: 4, status: 'pending',  destination: 'Rua A, 200 - Janaúba/MG',                notes: 'NF 2100083',     clients: { company_name: 'CG BEATRIZ' } },
-  { id: 'demo-5', stop_order: 5, status: 'pending',  destination: 'Av. JK, 800 - Montes Claros/MG',         notes: 'Pedido 2100115', clients: { company_name: 'VICTORIA' } },
+  { id: 'demo-1', stop_order: 1, status: 'arrived',  destination: 'Av. Brasil, 1200 - Centro, Pirapora/MG', notes: 'Pedido 2100077', clients: { company_name: 'AMANDA D', phone: '(38) 99876-1122', whatsapp: '5538998761122', email: 'amanda@cliente.com' } },
+  { id: 'demo-2', stop_order: 2, status: 'pending',  destination: 'Rua das Flores, 45 - Jaíba/MG',          notes: 'NF 2100098',     clients: { company_name: 'LINDSAY @', phone: '(38) 99811-2233', whatsapp: '5538998112233', email: 'lindsay@cliente.com' } },
+  { id: 'demo-3', stop_order: 3, status: 'pending',  destination: 'BR-365 km 12 - Pai Pedro/MG',            notes: 'Pedido 2100090', clients: { company_name: 'IRMÃOS FERREIRA', phone: '(38) 99700-1010', whatsapp: '5538997001010', email: 'financeiro@irmaosferreira.com' } },
+  { id: 'demo-4', stop_order: 4, status: 'pending',  destination: 'Rua A, 200 - Janaúba/MG',                notes: 'NF 2100083',     clients: { company_name: 'CG BEATRIZ', phone: '(38) 99655-7788' } },
+  { id: 'demo-5', stop_order: 5, status: 'pending',  destination: 'Av. JK, 800 - Montes Claros/MG',         notes: 'Pedido 2100115', clients: { company_name: 'VICTORIA', phone: '(38) 99511-4040' } },
   { id: 'demo-6', stop_order: 6, status: 'completed',destination: 'Centro - Espinosa/MG',                   notes: 'NF 2100050',     clients: { company_name: 'MERCADO BOM PRECO' } },
 ];
+
+// Produtos fictícios por parada (em produção, virá de load_items / order_items)
+type DemoProduct = { id: string; sku: string; name: string; qty: number; unit: string; price: number };
+const DEMO_PRODUCTS_BY_STOP: Record<string, DemoProduct[]> = {
+  'demo-1': [
+    { id: 'p1', sku: '7891234', name: 'Refrigerante Cola 2L',   qty: 24, unit: 'UN', price: 7.90 },
+    { id: 'p2', sku: '7891235', name: 'Suco Laranja 1L',         qty: 12, unit: 'UN', price: 5.50 },
+    { id: 'p3', sku: '7891236', name: 'Água Mineral 500ml fardo',qty:  6, unit: 'FD', price: 18.00 },
+  ],
+  'demo-2': [
+    { id: 'p4', sku: '7892001', name: 'Arroz 5kg Tipo 1',        qty: 20, unit: 'PC', price: 28.90 },
+    { id: 'p5', sku: '7892002', name: 'Feijão Carioca 1kg',      qty: 30, unit: 'PC', price: 8.40 },
+    { id: 'p6', sku: '7892003', name: 'Óleo Soja 900ml',         qty: 24, unit: 'UN', price: 6.20 },
+  ],
+  'demo-3': [
+    { id: 'p7', sku: '7893001', name: 'Cimento CP-II 50kg',      qty: 40, unit: 'SC', price: 38.00 },
+    { id: 'p8', sku: '7893002', name: 'Argamassa AC-II 20kg',    qty: 25, unit: 'SC', price: 22.50 },
+  ],
+  'demo-4': [
+    { id: 'p9', sku: '7894001', name: 'Detergente 500ml',        qty: 48, unit: 'UN', price: 2.10 },
+    { id: 'p10',sku: '7894002', name: 'Sabão em pó 1kg',         qty: 18, unit: 'UN', price: 11.50 },
+  ],
+  'demo-5': [
+    { id: 'p11',sku: '7895001', name: 'Café Torrado 500g',       qty: 30, unit: 'UN', price: 14.90 },
+  ],
+};
 
 // ====== Catálogo de eventos (inspirado no app de referência) ======
 type EventCategory = 'finalizador' | 'informativo';
@@ -48,14 +75,32 @@ type EventDef = {
   requiresSignature?: boolean;
 };
 
+type EventDef = {
+  key: string;
+  label: string;
+  icon: React.ComponentType<any>;
+  category: EventCategory;
+  finalAction?: 'delivered' | 'partial' | 'refused';
+  requiresReceiver?: boolean;
+  requiresPhoto?: boolean;
+  requiresSignature?: boolean;
+  showsItems?: boolean;     // lista produtos para devolver
+  showsDiscount?: boolean;  // pede desconto
+  showsContact?: boolean;   // mostra contato do cliente
+  needsOperatorReply?: boolean; // exige aprovação do operador
+};
+
 const EVENTS: EventDef[] = [
-  { key: 'entregue',            label: 'ENTREGUE',          icon: CheckCircle, category: 'finalizador', finalAction: 'delivered', requiresReceiver: true, requiresPhoto: true, requiresSignature: true },
-  { key: 'entrega_cancelada',   label: 'ENTREGA CANCELADA', icon: Ban,         category: 'finalizador', finalAction: 'refused' },
-  { key: 'avaria',              label: 'AVARIA',            icon: AlertCircle, category: 'informativo', requiresPhoto: true },
-  { key: 'cliente_recusou',     label: 'CLIENTE RECUSOU',   icon: PackageX,    category: 'informativo' },
-  { key: 'coleta_realizada',    label: 'COLETA REALIZADA',  icon: Package,     category: 'informativo', requiresPhoto: true },
-  { key: 'chegada_no_cliente',  label: 'CHEGADA NO CLIENTE',icon: MapPinned,   category: 'informativo' },
-  { key: 'cliente_estava_fora', label: 'CLIENTE ESTAVA FORA',icon: UserX,      category: 'informativo' },
+  { key: 'entregue',            label: 'ENTREGUE',            icon: CheckCircle, category: 'finalizador', finalAction: 'delivered', requiresReceiver: true, requiresPhoto: true, requiresSignature: true },
+  { key: 'devolucao_parcial',   label: 'DEVOLUÇÃO PARCIAL',   icon: PackageX,    category: 'finalizador', finalAction: 'partial', requiresReceiver: true, showsItems: true, needsOperatorReply: true },
+  { key: 'entrega_cancelada',   label: 'ENTREGA CANCELADA',   icon: Ban,         category: 'finalizador', finalAction: 'refused', showsItems: true, needsOperatorReply: true },
+  { key: 'solicitar_desconto',  label: 'SOLICITAR DESCONTO',  icon: Percent,     category: 'informativo', showsDiscount: true, showsContact: true, needsOperatorReply: true },
+  { key: 'atualizar_boleto',    label: 'ATUALIZAR BOLETO',    icon: FileText,    category: 'informativo', showsContact: true, needsOperatorReply: true },
+  { key: 'avaria',              label: 'AVARIA',              icon: AlertCircle, category: 'informativo', requiresPhoto: true, showsItems: true },
+  { key: 'cliente_recusou',     label: 'CLIENTE RECUSOU',     icon: PackageX,    category: 'informativo', showsItems: true },
+  { key: 'coleta_realizada',    label: 'COLETA REALIZADA',    icon: Package,     category: 'informativo', requiresPhoto: true },
+  { key: 'chegada_no_cliente',  label: 'CHEGADA NO CLIENTE',  icon: MapPinned,   category: 'informativo' },
+  { key: 'cliente_estava_fora', label: 'CLIENTE ESTAVA FORA', icon: UserX,       category: 'informativo' },
 ];
 
 function getEventDef(key: string) {
