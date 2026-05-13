@@ -257,14 +257,82 @@ export default function DriverDeliveries() {
       // Demo: muta apenas em memória, sem chamar Supabase
       if (isDemo) {
         await new Promise((r) => setTimeout(r, 400));
+        // Constrói mensagem inicial do motorista para a thread
+        const driverParts: string[] = [];
+        driverParts.push(`Evento: ${def.label}`);
+        if (receiverName) driverParts.push(`Recebedor: ${receiverName}${receiverDoc ? ` (${receiverDoc})` : ''}`);
+        const itemsList = stopProducts.filter(p => (returnedItems[p.id] || 0) > 0);
+        if (def.showsItems && itemsList.length) {
+          driverParts.push(
+            'Itens devolvidos:\n' + itemsList.map(p => `• ${p.name} — ${returnedItems[p.id]}/${p.qty} ${p.unit}`).join('\n')
+          );
+          if (returnReason) driverParts.push(`Motivo: ${returnReason}`);
+          driverParts.push(`Valor estimado: R$ ${totalReturnValue.toFixed(2)}`);
+        }
+        if (def.showsDiscount && discountAmount) {
+          driverParts.push(`Desconto solicitado: ${discountAmount}${discountKind === 'percent' ? '%' : ' R$'}`);
+          if (discountReason) driverParts.push(`Justificativa: ${discountReason}`);
+        }
+        if (def.key === 'atualizar_boleto') {
+          if (boletoDueDate) driverParts.push(`Novo vencimento sugerido: ${boletoDueDate}`);
+          if (boletoNote) driverParts.push(`Detalhe: ${boletoNote}`);
+        }
+        if (notes) driverParts.push(`Obs.: ${notes}`);
+
+        const initialMsg: ThreadMsg = {
+          id: `m-${Date.now()}`,
+          from: 'driver',
+          author: driver?.name || 'Motorista',
+          text: driverParts.join('\n'),
+          at: new Date().toISOString(),
+          status: def.needsOperatorReply ? 'pending' : 'info',
+        };
+        setThreads((prev) => ({ ...prev, [threadKey]: [...(prev[threadKey] || []), initialMsg] }));
+
+        // Atualiza stop conforme finalAction (mesmo se aguardando operador, para refletir UI)
         setDemoStops((prev) =>
           prev.map((s) => {
             if (s.id !== eventForm.stop.id) return s;
-            if (def.finalAction) return { ...s, status: 'completed' };
+            if (def.finalAction && !def.needsOperatorReply) return { ...s, status: 'completed' };
             if (def.key === 'chegada_no_cliente' && s.status === 'pending') return { ...s, status: 'arrived' };
             return s;
           })
         );
+
+        // Simula resposta do operador (apenas demo)
+        if (def.needsOperatorReply) {
+          const replies: Record<string, { text: string; status: 'approved' | 'rejected' }> = {
+            devolucao_parcial: { text: 'Devolução autorizada. Pode trazer os volumes marcados de volta ao CD.', status: 'approved' },
+            entrega_cancelada: { text: 'Cancelamento confirmado. Retorne com a carga e abriremos a NF de devolução.', status: 'approved' },
+            solicitar_desconto: { text: 'Desconto aprovado conforme solicitado. Pode finalizar a entrega normalmente.', status: 'approved' },
+            atualizar_boleto:   { text: 'Boleto atualizado e enviado por e-mail/WhatsApp ao cliente. Aguarde 2 min.', status: 'approved' },
+          };
+          const r = replies[def.key];
+          if (r) {
+            setTimeout(() => {
+              setThreads((prev) => {
+                const list = prev[threadKey] || [];
+                const reply: ThreadMsg = {
+                  id: `m-${Date.now()}-op`,
+                  from: 'operator',
+                  author: 'Operação CD',
+                  text: r.text,
+                  at: new Date().toISOString(),
+                  status: r.status,
+                };
+                // marca a primeira pendente como respondida
+                const updated = list.map((m, idx) =>
+                  idx === 0 && m.status === 'pending' ? { ...m, status: r.status } : m
+                );
+                return { ...prev, [threadKey]: [...updated, reply] };
+              });
+              if (def.finalAction === 'partial' || def.finalAction === 'refused') {
+                setDemoStops((prev) => prev.map((s) => s.id === eventForm.stop.id ? { ...s, status: 'completed' } : s));
+              }
+              toast({ title: 'Operação respondeu', description: r.text });
+            }, 2200);
+          }
+        }
         return;
       }
 
