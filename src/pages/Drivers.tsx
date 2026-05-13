@@ -230,15 +230,14 @@ function DriverDialog({ open, onOpenChange, driver, tenantId, userId }: {
   const [driverType, setDriverType] = useState<'proprio' | 'terceiro'>('proprio');
   const [loading, setLoading] = useState(false);
 
-  const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
-
-  const handleOpenChange = (v: boolean) => {
-    if (v) {
+  useEffect(() => {
+    if (open) {
       setForm(driver || {});
       setDriverType((driver?.driver_type as any) || 'proprio');
     }
-    onOpenChange(v);
-  };
+  }, [open, driver]);
+
+  const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
