@@ -64,16 +64,6 @@ const DEMO_PRODUCTS_BY_STOP: Record<string, DemoProduct[]> = {
 
 // ====== Catálogo de eventos (inspirado no app de referência) ======
 type EventCategory = 'finalizador' | 'informativo';
-type EventDef = {
-  key: string;          // event_subtype salvo em payload
-  label: string;
-  icon: React.ComponentType<any>;
-  category: EventCategory;
-  finalAction?: 'delivered' | 'partial' | 'refused'; // o que aciona no stop
-  requiresReceiver?: boolean;
-  requiresPhoto?: boolean;
-  requiresSignature?: boolean;
-};
 
 type EventDef = {
   key: string;
