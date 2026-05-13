@@ -611,6 +611,162 @@ export default function DriverDeliveries() {
                 Evento: <span className="font-bold">{def.label}</span>
               </div>
 
+              {/* Cliente / parada resumo */}
+              {eventForm?.stop && (
+                <div className="rounded-md border border-border p-3 space-y-1 bg-muted/30">
+                  <p className="text-sm font-semibold">{eventForm.stop.clients?.company_name || 'Cliente'}</p>
+                  <p className="text-[11px] text-muted-foreground">{eventForm.stop.destination}</p>
+                  {getStopOrderNumber(eventForm.stop) && (
+                    <Badge variant="outline" className="text-[10px]">Pedido {getStopOrderNumber(eventForm.stop)}</Badge>
+                  )}
+                </div>
+              )}
+
+              {/* Contato do cliente (boleto / desconto) */}
+              {def.showsContact && eventForm?.stop?.clients && (
+                <div className="rounded-md border border-border p-3 space-y-2">
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Contato do cliente</p>
+                  {eventForm.stop.clients.phone && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <Phone className="h-3.5 w-3.5 text-muted-foreground" />
+                      <a href={`tel:${eventForm.stop.clients.phone}`} className="text-primary">{eventForm.stop.clients.phone}</a>
+                    </div>
+                  )}
+                  {eventForm.stop.clients.whatsapp && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
+                      <a target="_blank" rel="noreferrer" href={`https://wa.me/${eventForm.stop.clients.whatsapp}`} className="text-primary">
+                        WhatsApp
+                      </a>
+                    </div>
+                  )}
+                  {eventForm.stop.clients.email && (
+                    <div className="text-[11px] text-muted-foreground">{eventForm.stop.clients.email}</div>
+                  )}
+                </div>
+              )}
+
+              {/* Bloco BOLETO */}
+              {def.key === 'atualizar_boleto' && (
+                <div className="space-y-2 rounded-md border border-border p-3">
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Atualização de boleto</p>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Novo vencimento sugerido</Label>
+                    <Input type="date" value={boletoDueDate} onChange={(e) => setBoletoDueDate(e.target.value)} className="h-10 text-sm" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Detalhe / motivo</Label>
+                    <Textarea rows={2} value={boletoNote} onChange={(e) => setBoletoNote(e.target.value)} placeholder="Ex.: cliente pediu prorrogar 3 dias úteis" className="text-sm" />
+                  </div>
+                </div>
+              )}
+
+              {/* Bloco DESCONTO */}
+              {def.showsDiscount && (
+                <div className="space-y-2 rounded-md border border-border p-3">
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Solicitar desconto</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button type="button" onClick={() => setDiscountKind('percent')} className={cn('text-xs h-9 rounded-md border', discountKind === 'percent' ? 'border-primary bg-primary/10 text-primary' : 'border-border')}>%</button>
+                    <button type="button" onClick={() => setDiscountKind('value')} className={cn('text-xs h-9 rounded-md border', discountKind === 'value' ? 'border-primary bg-primary/10 text-primary' : 'border-border')}>R$</button>
+                    <Input
+                      value={discountAmount}
+                      onChange={(e) => setDiscountAmount(e.target.value.replace(',', '.'))}
+                      inputMode="decimal"
+                      placeholder={discountKind === 'percent' ? '5' : '50,00'}
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                  <Textarea
+                    rows={2}
+                    value={discountReason}
+                    onChange={(e) => setDiscountReason(e.target.value)}
+                    placeholder="Justificativa (obrigatório)"
+                    className="text-sm"
+                  />
+                </div>
+              )}
+
+              {/* Bloco PRODUTOS para devolução */}
+              {def.showsItems && stopProducts.length > 0 && (
+                <div className="space-y-2 rounded-md border border-border p-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+                      Produtos do cliente ({stopProducts.length})
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const all: Record<string, number> = {};
+                        stopProducts.forEach((p) => { all[p.id] = p.qty; });
+                        setReturnedItems(all);
+                      }}
+                      className="text-[10px] text-primary"
+                    >
+                      Marcar tudo
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    {stopProducts.map((p) => {
+                      const q = returnedItems[p.id] || 0;
+                      const checked = q > 0;
+                      return (
+                        <div key={p.id} className={cn('rounded-md border p-2 space-y-1.5', checked ? 'border-primary bg-primary/5' : 'border-border')}>
+                          <button
+                            type="button"
+                            onClick={() => setReturnedItems((prev) => {
+                              const next = { ...prev };
+                              if (next[p.id]) delete next[p.id];
+                              else next[p.id] = p.qty;
+                              return next;
+                            })}
+                            className="w-full flex items-start gap-2 text-left"
+                          >
+                            <div className={cn('mt-0.5 h-4 w-4 rounded border flex items-center justify-center shrink-0', checked ? 'bg-primary border-primary text-primary-foreground' : 'border-border')}>
+                              {checked && <CheckCircle className="h-3 w-3" />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-medium leading-tight">{p.name}</p>
+                              <p className="text-[10px] text-muted-foreground">SKU {p.sku} · {p.qty} {p.unit} · R$ {p.price.toFixed(2)}</p>
+                            </div>
+                          </button>
+                          {checked && (
+                            <div className="flex items-center gap-2 pl-6">
+                              <Label className="text-[10px] text-muted-foreground">Devolver:</Label>
+                              <Input
+                                type="number"
+                                min={1}
+                                max={p.qty}
+                                value={q}
+                                onChange={(e) => {
+                                  const v = Math.min(p.qty, Math.max(0, parseInt(e.target.value || '0', 10)));
+                                  setReturnedItems((prev) => ({ ...prev, [p.id]: v }));
+                                }}
+                                className="h-7 text-xs w-20"
+                              />
+                              <span className="text-[10px] text-muted-foreground">/ {p.qty} {p.unit}</span>
+                              <span className="ml-auto text-[10px] font-semibold">R$ {(q * p.price).toFixed(2)}</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {totalReturnedQty > 0 && (
+                    <div className="flex items-center justify-between pt-1 border-t border-border text-xs">
+                      <span className="text-muted-foreground">Total devolução</span>
+                      <span className="font-semibold">R$ {totalReturnValue.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <Textarea
+                    rows={2}
+                    value={returnReason}
+                    onChange={(e) => setReturnReason(e.target.value)}
+                    placeholder="Motivo da devolução (avaria, validade, divergência...)"
+                    className="text-sm"
+                  />
+                </div>
+              )}
+
               {/* Recebedor */}
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium">
@@ -763,6 +919,55 @@ export default function DriverDeliveries() {
               >
                 {submitEvent.isPending ? 'Enviando...' : 'Lançar evento'}
               </Button>
+
+              {/* Thread de mensagens com a operação */}
+              {currentThread.length > 0 && (
+                <div className="space-y-2 rounded-md border border-border p-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+                      Conversa com a operação
+                    </p>
+                    {currentThread[0]?.status === 'pending' && (
+                      <Badge variant="outline" className="text-[10px] gap-1">
+                        <Clock className="h-3 w-3" /> Aguardando
+                      </Badge>
+                    )}
+                    {currentThread.some(m => m.status === 'approved') && (
+                      <Badge className="text-[10px] bg-success text-success-foreground">Aprovado</Badge>
+                    )}
+                  </div>
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                    {currentThread.map((m) => (
+                      <div key={m.id} className={cn('flex flex-col', m.from === 'driver' ? 'items-end' : 'items-start')}>
+                        <div className={cn(
+                          'max-w-[85%] rounded-lg px-3 py-2 text-xs whitespace-pre-wrap',
+                          m.from === 'driver' ? 'bg-primary text-primary-foreground' : 'bg-muted',
+                        )}>
+                          {m.text}
+                        </div>
+                        <div className="flex items-center gap-1 mt-0.5 text-[10px] text-muted-foreground">
+                          <UserIcon className="h-2.5 w-2.5" />
+                          <span>{m.author}</span>
+                          <span>·</span>
+                          <span>{new Date(m.at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-2 pt-1 border-t border-border">
+                    <Input
+                      value={followUp}
+                      onChange={(e) => setFollowUp(e.target.value)}
+                      placeholder="Enviar mensagem para a operação..."
+                      className="h-9 text-xs"
+                      onKeyDown={(e) => { if (e.key === 'Enter') sendFollowUp(); }}
+                    />
+                    <Button size="sm" onClick={sendFollowUp} disabled={!followUp.trim()}>
+                      <Send className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </SheetContent>
