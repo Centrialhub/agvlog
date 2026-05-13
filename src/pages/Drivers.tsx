@@ -11,6 +11,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Textarea } from '@/components/ui/textarea';
 import { Plus, Pencil, Trash2, RefreshCw, Truck } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -223,21 +226,50 @@ function DriverDialog({ open, onOpenChange, driver, tenantId, userId }: {
   open: boolean; onOpenChange: (v: boolean) => void; driver: any; tenantId?: string; userId?: string;
 }) {
   const queryClient = useQueryClient();
-  const [name, setName] = useState('');
-  const [doc, setDoc] = useState('');
-  const [phone, setPhone] = useState('');
+  const [form, setForm] = useState<any>({});
+  const [driverType, setDriverType] = useState<'proprio' | 'terceiro'>('proprio');
   const [loading, setLoading] = useState(false);
 
+  const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
+
   const handleOpenChange = (v: boolean) => {
-    if (v) { setName(driver?.name || ''); setDoc(driver?.doc || ''); setPhone(driver?.phone || ''); }
+    if (v) {
+      setForm(driver || {});
+      setDriverType((driver?.driver_type as any) || 'proprio');
+    }
     onOpenChange(v);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!tenantId) return;
+    if (driverType === 'proprio') {
+      const required = ['name', 'birth_date', 'naturalidade', 'address_street', 'address_neighborhood', 'address_city', 'cpf', 'cnh_number'];
+      const missing = required.filter((k) => !form[k] || String(form[k]).trim() === '');
+      if (missing.length) {
+        toast.error('Preencha os campos obrigatórios do motorista próprio');
+        return;
+      }
+    }
+    if (!form.name || !String(form.name).trim()) {
+      toast.error('Nome é obrigatório');
+      return;
+    }
     setLoading(true);
-    const payload = { tenant_id: tenantId, name, doc: doc || null, phone: phone || null, updated_by: userId };
+    // Strip nested/system fields
+    const { id, created_at, updated_at, created_by, current_vehicle, current_vehicle_id, provider_person_id, provider_person_sync_status, ...rest } = form;
+    const payload: any = {
+      ...rest,
+      driver_type: driverType,
+      tenant_id: tenantId,
+      updated_by: userId,
+    };
+    // Convert empty strings to null
+    Object.keys(payload).forEach((k) => { if (payload[k] === '') payload[k] = null; });
+    // Mirror cpf into legacy doc if doc empty
+    if (!payload.doc && payload.cpf) payload.doc = payload.cpf;
+    if (!payload.phone && payload.mobile) payload.phone = payload.mobile;
+
     if (driver) {
       const { error } = await supabase.from('drivers').update(payload).eq('id', driver.id);
       if (error) { toast.error(error.message); setLoading(false); return; }
@@ -252,15 +284,227 @@ function DriverDialog({ open, onOpenChange, driver, tenantId, userId }: {
     setLoading(false);
   };
 
+  const req = (k: string) => driverType === 'proprio' && (
+    <span className="text-destructive ml-0.5">*</span>
+  );
+
+  const field = ({ label, k, type = 'text', required = false, placeholder, className }: any) => (
+    <div className={`space-y-1 ${className || ''}`}>
+      <Label className="text-xs">{label}{required && req(k)}</Label>
+      <Input
+        key={k}
+        type={type}
+        value={form[k] ?? ''}
+        onChange={(e) => set(k, e.target.value)}
+        placeholder={placeholder}
+        className="h-9"
+      />
+    </div>
+  );
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent>
-        <DialogHeader><DialogTitle>{driver ? 'Editar motorista' : 'Novo motorista'}</DialogTitle></DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2"><Label>Nome</Label><Input value={name} onChange={e => setName(e.target.value)} required /></div>
-          <div className="space-y-2"><Label>Documento (CPF/CNH)</Label><Input value={doc} onChange={e => setDoc(e.target.value)} placeholder="Opcional" /></div>
-          <div className="space-y-2"><Label>Telefone</Label><Input value={phone} onChange={e => setPhone(e.target.value)} placeholder="Opcional" /></div>
-          <div className="flex justify-end gap-2">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{driver ? 'Editar motorista' : 'Novo motorista'}</DialogTitle>
+        </DialogHeader>
+
+        <Tabs value={driverType} onValueChange={(v) => setDriverType(v as any)} className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="proprio">Motorista Próprio</TabsTrigger>
+            <TabsTrigger value="terceiro">Motorista Terceiro</TabsTrigger>
+          </TabsList>
+          <div className="text-[11px] text-muted-foreground mt-2">
+            {driverType === 'proprio'
+              ? 'Campos com * são obrigatórios para motoristas próprios.'
+              : 'Nenhum campo é obrigatório para motoristas terceiros (apenas o nome).'}
+          </div>
+        </Tabs>
+
+        <form onSubmit={handleSubmit} className="space-y-5 mt-2">
+          {/* Identificação */}
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold text-foreground border-b pb-1">Identificação</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {field({label:"Sigla",k:"sigla"})}
+              {field({label:"Data cadastro",k:"registration_date",type:"date"})}
+              {field({label:"Fornecedor",k:"supplier"})}
+              {field({label:"Contato",k:"contact"})}
+              <div className="col-span-2 md:col-span-2">
+                {field({label:"Nome",k:"name",required:true})}
+              </div>
+              {field({label:"E-mail",k:"email",type:"email"})}
+              <div className="space-y-1">
+                <Label className="text-xs">Tipo (frota)</Label>
+                <Select value={form.fleet_type ?? ''} onValueChange={(v) => set('fleet_type', v)}>
+                  <SelectTrigger className="h-9"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="FROTA">FROTA</SelectItem>
+                    <SelectItem value="AGREGADO">AGREGADO</SelectItem>
+                    <SelectItem value="TERCEIRO">TERCEIRO</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {field({label:"Tipo motorista (cód.)",k:"driver_kind_code"})}
+            </div>
+            <div className="flex flex-wrap gap-4 pt-1">
+              {[
+                ['emit_contract', 'Emitir contrato'],
+                ['blocked', 'Bloqueado'],
+                ['commissioned', 'Comissionado'],
+                ['mechanic', 'Mecânico'],
+                ['romaneio_monitor_responsible', 'Resp. Monit. Romaneio'],
+              ].map(([k, label]) => (
+                <label key={k} className="flex items-center gap-2 text-xs cursor-pointer">
+                  <Checkbox checked={!!form[k]} onCheckedChange={(c) => set(k, !!c)} />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </section>
+
+          {/* Documentos */}
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold text-foreground border-b pb-1">Documentos</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {field({label:"CPF",k:"cpf",required:true})}
+              {field({label:"CNH nº",k:"cnh_number",required:true})}
+              {field({label:"CNH categoria",k:"cnh_category",placeholder:"A, B, C, D, E"})}
+              {field({label:"CNH validade",k:"cnh_expiry",type:"date"})}
+            </div>
+          </section>
+
+          {/* Dados pessoais */}
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold text-foreground border-b pb-1">Dados pessoais</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {field({label:"Data nasc.",k:"birth_date",type:"date",required:true})}
+              {field({label:"Naturalidade",k:"naturalidade",required:true})}
+              {field({label:"UF",k:"naturalidade_uf"})}
+              {field({label:"Nacionalidade",k:"nacionalidade"})}
+              <div className="space-y-1">
+                <Label className="text-xs">Sexo</Label>
+                <Select value={form.sex ?? ''} onValueChange={(v) => set('sex', v)}>
+                  <SelectTrigger className="h-9"><SelectValue placeholder="—" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="M">Masculino</SelectItem>
+                    <SelectItem value="F">Feminino</SelectItem>
+                    <SelectItem value="O">Outro</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Estado civil</Label>
+                <Select value={form.marital_status ?? ''} onValueChange={(v) => set('marital_status', v)}>
+                  <SelectTrigger className="h-9"><SelectValue placeholder="—" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="SOLTEIRO">Solteiro(a)</SelectItem>
+                    <SelectItem value="CASADO">Casado(a)</SelectItem>
+                    <SelectItem value="DIVORCIADO">Divorciado(a)</SelectItem>
+                    <SelectItem value="VIUVO">Viúvo(a)</SelectItem>
+                    <SelectItem value="UNIAO_ESTAVEL">União estável</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {field({label:"Cônjuge",k:"spouse_name"})}
+              <div className="space-y-1">
+                <Label className="text-xs">Escolaridade</Label>
+                <Select value={form.education ?? ''} onValueChange={(v) => set('education', v)}>
+                  <SelectTrigger className="h-9"><SelectValue placeholder="—" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="FUND_INC">Fundamental incompleto</SelectItem>
+                    <SelectItem value="FUND_COMP">Fundamental completo</SelectItem>
+                    <SelectItem value="MEDIO_INC">Médio incompleto</SelectItem>
+                    <SelectItem value="MEDIO_COMP">Médio completo</SelectItem>
+                    <SelectItem value="SUPERIOR_INC">Superior incompleto</SelectItem>
+                    <SelectItem value="SUPERIOR_COMP">Superior completo</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {field({label:"Pai",k:"father_name",className:"md:col-span-2"})}
+              {field({label:"Mãe",k:"mother_name",className:"md:col-span-2"})}
+              {field({label:"Cor pele",k:"skin_color"})}
+              {field({label:"Cor olhos",k:"eye_color"})}
+              {field({label:"Cor cabelo",k:"hair_color"})}
+              {field({label:"Sinais",k:"distinguishing_marks"})}
+              {field({label:"Peso (kg)",k:"weight_kg",type:"number"})}
+              {field({label:"Altura (m)",k:"height_m",type:"number"})}
+            </div>
+          </section>
+
+          {/* Contatos */}
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold text-foreground border-b pb-1">Contatos</h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {field({label:"Telefone",k:"phone"})}
+              {field({label:"Telefone secundário",k:"phone_secondary"})}
+              {field({label:"Celular",k:"mobile"})}
+            </div>
+          </section>
+
+          {/* Endereço atual */}
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold text-foreground border-b pb-1">Residência atual</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {field({label:"Data inicial",k:"residence_since",type:"date"})}
+              <div className="space-y-1">
+                <Label className="text-xs">Tipo residência</Label>
+                <Select value={form.residence_type ?? ''} onValueChange={(v) => set('residence_type', v)}>
+                  <SelectTrigger className="h-9"><SelectValue placeholder="—" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="CASA">Casa</SelectItem>
+                    <SelectItem value="APARTAMENTO">Apartamento</SelectItem>
+                    <SelectItem value="ALUGADA">Alugada</SelectItem>
+                    <SelectItem value="PROPRIA">Própria</SelectItem>
+                    <SelectItem value="FAMILIAR">Familiar</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {field({label:"CEP",k:"address_zip"})}
+              {field({label:"UF",k:"address_state"})}
+              <div className="md:col-span-2">{field({label:"Endereço",k:"address_street",required:true})}</div>
+              {field({label:"Número",k:"address_number"})}
+              {field({label:"Complemento",k:"address_complement"})}
+              {field({label:"Bairro",k:"address_neighborhood",required:true})}
+              <div className="md:col-span-2">{field({label:"Município",k:"address_city",required:true})}</div>
+            </div>
+          </section>
+
+          {/* Endereço anterior */}
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold text-foreground border-b pb-1">Residência anterior</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {field({label:"Tempo residência",k:"prev_residence_duration"})}
+              <div className="space-y-1">
+                <Label className="text-xs">Tipo residência</Label>
+                <Select value={form.prev_residence_type ?? ''} onValueChange={(v) => set('prev_residence_type', v)}>
+                  <SelectTrigger className="h-9"><SelectValue placeholder="—" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="CASA">Casa</SelectItem>
+                    <SelectItem value="APARTAMENTO">Apartamento</SelectItem>
+                    <SelectItem value="ALUGADA">Alugada</SelectItem>
+                    <SelectItem value="PROPRIA">Própria</SelectItem>
+                    <SelectItem value="FAMILIAR">Familiar</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {field({label:"CEP",k:"prev_address_zip"})}
+              {field({label:"UF",k:"prev_address_state"})}
+              <div className="md:col-span-2">{field({label:"Endereço",k:"prev_address_street"})}</div>
+              {field({label:"Número",k:"prev_address_number"})}
+              {field({label:"Complemento",k:"prev_address_complement"})}
+              {field({label:"Bairro",k:"prev_address_neighborhood"})}
+              <div className="md:col-span-2">{field({label:"Município",k:"prev_address_city"})}</div>
+            </div>
+          </section>
+
+          {/* Observações */}
+          <section className="space-y-2">
+            <h3 className="text-sm font-semibold text-foreground border-b pb-1">Observações</h3>
+            <Textarea value={form.notes ?? ''} onChange={(e) => set('notes', e.target.value)} rows={3} />
+          </section>
+
+          <div className="flex justify-end gap-2 sticky bottom-0 bg-background pt-3 border-t">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
             <Button type="submit" disabled={loading}>{loading ? 'Salvando...' : 'Salvar'}</Button>
           </div>
