@@ -587,6 +587,112 @@ export default function DriverDeliveries() {
           )}
         </SheetContent>
       </Sheet>
+
+      {/* Sheet: Detalhe da entrega (espelho do app de referência) */}
+      <Sheet open={!!detailStop} onOpenChange={(o) => !o && setDetailStop(null)}>
+        <SheetContent side="bottom" className="rounded-t-2xl max-h-[92vh] overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="text-base text-center">Entrega</SheetTitle>
+          </SheetHeader>
+          {detailStop && (
+            <div className="space-y-4 mt-2">
+              {/* Badge nº pedido */}
+              <div className="flex justify-center">
+                <Badge variant="secondary" className="bg-primary/10 text-primary px-3 py-1 text-xs">
+                  Outro: {getStopOrderNumber(detailStop) || '—'}
+                </Badge>
+              </div>
+
+              {/* Card cliente */}
+              <div className="rounded-lg border border-border overflow-hidden flex">
+                <div className="w-1.5 bg-primary" />
+                <div className="flex-1 p-3 flex items-start gap-3">
+                  <div className="h-9 w-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0">
+                    <Package className="h-4 w-4" />
+                  </div>
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <p className="text-sm font-bold truncate">
+                      {detailStop.clients?.company_name || 'Cliente'}
+                    </p>
+                    {detailStop.destination && (
+                      <p className="text-[11px] text-muted-foreground leading-snug">
+                        {detailStop.destination}
+                      </p>
+                    )}
+                    {detailStop.notes && (
+                      <p className="text-[11px] text-muted-foreground">
+                        {detailStop.notes}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Saída / Previsão */}
+              <div className="space-y-2">
+                <div>
+                  <p className="text-xs font-semibold">Saída</p>
+                  <p className="text-xs text-muted-foreground">
+                    {detailStop.actual_arrival_at
+                      ? new Date(detailStop.actual_arrival_at).toLocaleString('pt-BR', {
+                          day: '2-digit', month: '2-digit', year: 'numeric',
+                          hour: '2-digit', minute: '2-digit',
+                        })
+                      : 'Dia ' + new Date().toLocaleDateString('pt-BR') + ' às 05:00'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold">Previsão</p>
+                  <p className="text-xs text-muted-foreground">
+                    Dia {new Date().toLocaleDateString('pt-BR')}, das 08:00 às 18:00
+                  </p>
+                </div>
+              </div>
+
+              {/* Status atual */}
+              <div className="flex items-center justify-between bg-muted/50 rounded-md px-3 py-2">
+                <span className="text-[11px] text-muted-foreground">Status</span>
+                <Badge variant="secondary" className={cn(
+                  'text-[10px]',
+                  detailStop.status === 'arrived' && 'bg-primary/10 text-primary',
+                  detailStop.status === 'completed' && 'bg-green-100 text-green-700',
+                )}>
+                  {detailStop.status === 'arrived' ? 'No local'
+                    : detailStop.status === 'completed' ? 'Concluída'
+                    : 'Pendente'}
+                </Badge>
+              </div>
+
+              {/* Ações principais */}
+              <div className="flex gap-2 pt-2">
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="flex-1"
+                  onClick={() => {
+                    setEventCatalogStop(detailStop);
+                    setDetailStop(null);
+                  }}
+                  disabled={detailStop.status === 'completed'}
+                >
+                  <PenLine className="h-4 w-4 mr-1.5" /> Lançar evento
+                </Button>
+                <Button
+                  size="lg"
+                  className="flex-1"
+                  onClick={() => {
+                    setEventForm({ stop: detailStop, eventKey: 'entregue' });
+                    setDetailStop(null);
+                  }}
+                  disabled={detailStop.status === 'completed'}
+                >
+                  <CheckCircle className="h-4 w-4 mr-1.5" /> TudoEntregue
+                </Button>
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
