@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ClipboardCheck, Save } from 'lucide-react';
+import DemoBanner from '@/components/driver/DemoBanner';
 
 const PRE_TRIP_ITEMS = [
   'Pneus em bom estado',
@@ -117,6 +118,7 @@ export default function DriverChecklist() {
   const { currentTenant } = useTenant();
   const { data: driver } = useCurrentDriver();
   const { data: trip } = useActiveTrip(driver?.id);
+  const [demoVersion, setDemoVersion] = useState(0);
 
   // Load previously saved checklists
   const { data: savedEvents = [] } = useQuery({
@@ -135,23 +137,27 @@ export default function DriverChecklist() {
     enabled: !!trip?.id,
   });
 
+  const isDemo = !trip;
   const lastPre = savedEvents.find((e: any) => e.event_type === 'checklist_pre');
   const lastPost = savedEvents.find((e: any) => e.event_type === 'checklist_post');
-  const preChecked = new Set<number>((lastPre?.payload as any)?.checked_items || []);
-  const postChecked = new Set<number>((lastPost?.payload as any)?.checked_items || []);
+  const preChecked = isDemo
+    ? new Set<number>([0, 1, 2, 3, 4])
+    : new Set<number>((lastPre?.payload as any)?.checked_items || []);
+  const postChecked = isDemo
+    ? new Set<number>([0, 1])
+    : new Set<number>((lastPost?.payload as any)?.checked_items || []);
 
   return (
     <div className="space-y-4">
       <h1 className="text-lg font-bold">Checklist</h1>
-      {!trip && (
-        <Card>
-          <CardContent className="py-4 text-center text-xs text-muted-foreground">
-            <ClipboardCheck className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-            Sem viagem ativa. O checklist será salvo quando houver uma viagem.
-          </CardContent>
-        </Card>
+      {isDemo && (
+        <DemoBanner
+          message="Sem viagem ativa — checklist fictício, não será salvo."
+          onReset={() => setDemoVersion((v) => v + 1)}
+        />
       )}
       <ChecklistSection
+        key={`pre-${demoVersion}`}
         title="Pré-Viagem"
         items={PRE_TRIP_ITEMS}
         eventType="checklist_pre"
@@ -160,6 +166,7 @@ export default function DriverChecklist() {
         savedItems={preChecked}
       />
       <ChecklistSection
+        key={`post-${demoVersion}`}
         title="Pós-Viagem"
         items={POST_TRIP_ITEMS}
         eventType="checklist_post"
