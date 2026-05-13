@@ -402,11 +402,43 @@ export default function DriverDeliveries() {
   });
 
   const def = eventForm ? getEventDef(eventForm.eventKey) : null;
+  const totalReturnedQty = Object.values(returnedItems).reduce((a, b) => a + (b || 0), 0);
   const canSubmit =
     !!def &&
     (!def.requiresReceiver || receiverName.trim().length >= 2) &&
     (!def.requiresPhoto || photos.length >= 1) &&
-    (!def.requiresSignature || !!signatureDataUrl);
+    (!def.requiresSignature || !!signatureDataUrl) &&
+    (!def.showsItems || !def.finalAction || def.key === 'avaria' || def.key === 'cliente_recusou' || totalReturnedQty > 0) &&
+    (!def.showsDiscount || (parseFloat(discountAmount) > 0 && discountReason.trim().length >= 3));
+
+  const sendFollowUp = () => {
+    if (!followUp.trim() || !threadKey) return;
+    const msg: ThreadMsg = {
+      id: `m-${Date.now()}-fu`,
+      from: 'driver',
+      author: driver?.name || 'Motorista',
+      text: followUp.trim(),
+      at: new Date().toISOString(),
+      status: 'info',
+    };
+    setThreads((prev) => ({ ...prev, [threadKey]: [...(prev[threadKey] || []), msg] }));
+    setFollowUp('');
+    // resposta simulada do operador
+    setTimeout(() => {
+      setThreads((prev) => {
+        const list = prev[threadKey] || [];
+        const reply: ThreadMsg = {
+          id: `m-${Date.now()}-opfu`,
+          from: 'operator',
+          author: 'Operação CD',
+          text: 'Recebido, motorista. Vou verificar e te respondo em instantes.',
+          at: new Date().toISOString(),
+          status: 'info',
+        };
+        return { ...prev, [threadKey]: [...list, reply] };
+      });
+    }, 1500);
+  };
 
   return (
     <div className="space-y-4">
