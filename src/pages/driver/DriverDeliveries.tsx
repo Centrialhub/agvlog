@@ -140,6 +140,43 @@ export default function DriverDeliveries() {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
+  // Itens selecionados para devolução: { [productId]: qtyDevolvida }
+  const [returnedItems, setReturnedItems] = useState<Record<string, number>>({});
+  const [returnReason, setReturnReason] = useState('');
+
+  // Solicitação de desconto
+  const [discountKind, setDiscountKind] = useState<'percent' | 'value'>('percent');
+  const [discountAmount, setDiscountAmount] = useState('');
+  const [discountReason, setDiscountReason] = useState('');
+
+  // Boleto / contato
+  const [boletoDueDate, setBoletoDueDate] = useState('');
+  const [boletoNote, setBoletoNote] = useState('');
+
+  // Thread de mensagens (demo) — chave: stopId|eventKey
+  type ThreadMsg = {
+    id: string;
+    from: 'driver' | 'operator';
+    author: string;
+    text: string;
+    at: string;
+    status?: 'pending' | 'approved' | 'rejected' | 'info';
+  };
+  const [threads, setThreads] = useState<Record<string, ThreadMsg[]>>({});
+  const [followUp, setFollowUp] = useState('');
+
+  const threadKey = eventForm ? `${eventForm.stop.id}|${eventForm.eventKey}` : '';
+  const currentThread = threadKey ? (threads[threadKey] || []) : [];
+
+  const stopProducts: DemoProduct[] = eventForm
+    ? (DEMO_PRODUCTS_BY_STOP[eventForm.stop.id] || [])
+    : [];
+
+  const totalReturnValue = stopProducts.reduce((sum, p) => {
+    const q = returnedItems[p.id] || 0;
+    return sum + q * p.price;
+  }, 0);
+
   const { data: stops = [] } = useQuery({
     queryKey: ['driver_delivery_stops', trip?.id],
     queryFn: async () => {
@@ -185,6 +222,14 @@ export default function DriverDeliveries() {
     photoPreviews.forEach((u) => URL.revokeObjectURL(u));
     setPhotoPreviews([]);
     setSignatureDataUrl(null);
+    setReturnedItems({});
+    setReturnReason('');
+    setDiscountKind('percent');
+    setDiscountAmount('');
+    setDiscountReason('');
+    setBoletoDueDate('');
+    setBoletoNote('');
+    setFollowUp('');
   };
 
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
