@@ -25,6 +25,9 @@ import {
 } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
 import { Plus, Pencil, Trash2, ExternalLink, User, LinkIcon, Unlink } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -233,58 +236,55 @@ function VehicleDialog({ open, onOpenChange, vehicle, tenantId, userId }: {
   userId?: string;
 }) {
   const queryClient = useQueryClient();
-  const [plate, setPlate] = useState('');
-  const [nickname, setNickname] = useState('');
-  const [type, setType] = useState('truck');
-  const [bodyType, setBodyType] = useState('');
-  const [maxPallets, setMaxPallets] = useState('');
-  const [maxWeightKg, setMaxWeightKg] = useState('');
-  const [maxVolumeM3, setMaxVolumeM3] = useState('');
-  const [tankCapacity, setTankCapacity] = useState('');
+  const [form, setForm] = useState<any>({});
   const [loading, setLoading] = useState(false);
 
-  // Sync form when dialog opens or vehicle changes
   useEffect(() => {
-    if (open) {
-      setPlate(vehicle?.plate || '');
-      setNickname(vehicle?.nickname || '');
-      setType(vehicle?.type || 'truck');
-      setBodyType(vehicle?.body_type || '');
-      setMaxPallets(vehicle?.max_pallets?.toString() || '');
-      setMaxWeightKg(vehicle?.max_weight_kg?.toString() || '');
-      setMaxVolumeM3(vehicle?.max_volume_m3?.toString() || '');
-      setTankCapacity(vehicle?.tank_capacity_liters?.toString() || '');
-    }
+    if (open) setForm(vehicle ? { ...vehicle } : { type: 'truck', active: true, blocked: false, in_maintenance: false });
   }, [open, vehicle]);
+
+  const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
+
+  const text = (k: string, label: string, placeholder?: string) => (
+    <div className="space-y-1.5">
+      <Label className="text-xs">{label}</Label>
+      <Input value={form[k] ?? ''} onChange={e => set(k, e.target.value)} placeholder={placeholder} />
+    </div>
+  );
+  const num = (k: string, label: string, placeholder?: string) => (
+    <div className="space-y-1.5">
+      <Label className="text-xs">{label}</Label>
+      <Input type="number" step="any" value={form[k] ?? ''} onChange={e => set(k, e.target.value)} placeholder={placeholder} />
+    </div>
+  );
+  const bool = (k: string, label: string) => (
+    <div className="flex items-center justify-between rounded-md border p-3">
+      <Label className="text-sm">{label}</Label>
+      <Switch checked={!!form[k]} onCheckedChange={v => set(k, v)} />
+    </div>
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!tenantId) return;
+    if (!tenantId || !form.plate) { toast.error('Placa é obrigatória'); return; }
     setLoading(true);
 
-    const payload: any = {
-      tenant_id: tenantId,
-      plate: plate.toUpperCase(),
-      nickname: nickname || null,
-      type,
-      body_type: bodyType || null,
-      max_pallets: maxPallets ? parseInt(maxPallets) : null,
-      max_weight_kg: maxWeightKg ? parseFloat(maxWeightKg) : null,
-      max_volume_m3: maxVolumeM3 ? parseFloat(maxVolumeM3) : null,
-      tank_capacity_liters: tankCapacity ? parseFloat(tankCapacity) : null,
-      updated_by: userId,
-    };
+    const numKeys = ['odometer_km','year_of_manufacture','capacity_ton','avg_km_per_liter','max_pallets','max_weight_kg','max_volume_m3','tank_capacity_liters','speed_limit_kmh'];
+    const payload: any = { tenant_id: tenantId, updated_by: userId };
+    Object.keys(form).forEach(k => {
+      if (['id','tenant_id','created_at','updated_at','created_by','updated_by','current_driver','current_driver_id','tags'].includes(k)) return;
+      let v = form[k];
+      if (v === '' || v === undefined) v = null;
+      if (numKeys.includes(k) && v !== null) v = Number(v);
+      payload[k] = v;
+    });
+    if (payload.plate) payload.plate = String(payload.plate).toUpperCase();
 
-    if (vehicle) {
-      const { error } = await supabase.from('vehicles').update(payload).eq('id', vehicle.id);
-      if (error) { toast.error(error.message); setLoading(false); return; }
-      toast.success('Veículo atualizado');
-    } else {
-      const { error } = await supabase.from('vehicles').insert({ ...payload, created_by: userId });
-      if (error) { toast.error(error.message); setLoading(false); return; }
-      toast.success('Veículo criado');
-    }
-
+    const { error } = vehicle
+      ? await supabase.from('vehicles').update(payload).eq('id', vehicle.id)
+      : await supabase.from('vehicles').insert({ ...payload, created_by: userId });
+    if (error) { toast.error(error.message); setLoading(false); return; }
+    toast.success(vehicle ? 'Veículo atualizado' : 'Veículo criado');
     queryClient.invalidateQueries({ queryKey: ['vehicles'] });
     onOpenChange(false);
     setLoading(false);
@@ -292,54 +292,94 @@ function VehicleDialog({ open, onOpenChange, vehicle, tenantId, userId }: {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{vehicle ? 'Editar veículo' : 'Novo veículo'}</DialogTitle>
+          <DialogTitle>{vehicle ? `Editar veículo ${vehicle.plate || ''}` : 'Novo veículo'}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label>Placa</Label>
-            <Input value={plate} onChange={e => setPlate(e.target.value)} placeholder="ABC-1234" required />
-          </div>
-          <div className="space-y-2">
-            <Label>Apelido</Label>
-            <Input value={nickname} onChange={e => setNickname(e.target.value)} placeholder="Opcional" />
-          </div>
-          <div className="space-y-2">
-            <Label>Tipo</Label>
-            <Input value={type} onChange={e => setType(e.target.value)} placeholder="truck, van, car..." />
-          </div>
-          <div className="space-y-2">
-            <Label>Tipo de Carroceria</Label>
-            <Input value={bodyType} onChange={e => setBodyType(e.target.value)} placeholder="Baú, Sider, Graneleira..." />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Max Paletes</Label>
-              <Input type="number" value={maxPallets} onChange={e => setMaxPallets(e.target.value)} placeholder="Ex: 24" />
-            </div>
-            <div className="space-y-2">
-              <Label>Peso Máx (kg)</Label>
-              <Input type="number" value={maxWeightKg} onChange={e => setMaxWeightKg(e.target.value)} placeholder="Ex: 14000" />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Volume Máx (m³)</Label>
-              <Input type="number" value={maxVolumeM3} onChange={e => setMaxVolumeM3(e.target.value)} placeholder="Ex: 45" />
-            </div>
-            <div className="space-y-2">
-              <Label>Cap. Tanque (L)</Label>
-              <Input type="number" value={tankCapacity} onChange={e => setTankCapacity(e.target.value)} placeholder="Ex: 300" />
-            </div>
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? 'Salvando...' : 'Salvar'}
-            </Button>
+          <Tabs defaultValue="ident">
+            <TabsList className="grid w-full grid-cols-5">
+              <TabsTrigger value="ident">Identificação</TabsTrigger>
+              <TabsTrigger value="tech">Técnico</TabsTrigger>
+              <TabsTrigger value="op">Operação</TabsTrigger>
+              <TabsTrigger value="owner">Proprietário</TabsTrigger>
+              <TabsTrigger value="tracker">Rastreador</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="ident" className="space-y-3 pt-3">
+              <div className="grid grid-cols-3 gap-3">
+                {text('plate','Placa *','ABC-1234')}
+                {text('nickname','Apelido')}
+                {text('renavam','RENAVAM')}
+                {text('chassis','Chassi')}
+                {text('brand','Marca')}
+                {text('model','Modelo')}
+                {num('year_of_manufacture','Ano de fabricação')}
+                {text('color','Cor')}
+                {text('city','Cidade')}
+                {text('uf','UF')}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="tech" className="space-y-3 pt-3">
+              <div className="grid grid-cols-3 gap-3">
+                {text('type','Tipo (interno)','truck, van, car...')}
+                {text('vehicle_type_code','Tipo Veículo (código)','01 - CAVALO MECÂNICO')}
+                {text('body_type','Tipo de Carroceria')}
+                {text('body_type_code','Carroceria (código)')}
+                {text('category','Categoria')}
+                {text('axle_structure','Estrutura de eixos')}
+                {num('capacity_ton','Capacidade (ton)')}
+                {num('max_pallets','Max paletes')}
+                {num('max_weight_kg','Peso máx (kg)')}
+                {num('max_volume_m3','Volume máx (m³)')}
+                {num('tank_capacity_liters','Cap. tanque (L)')}
+                {num('avg_km_per_liter','Média km/L prev.')}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="op" className="space-y-3 pt-3">
+              <div className="grid grid-cols-3 gap-3">
+                {num('odometer_km','KM do veículo')}
+                {num('speed_limit_kmh','Limite velocidade (km/h)')}
+                {text('result_center','Centro de resultado')}
+                {text('result_area','Área de resultado')}
+                {text('business_unit','Unidade de negócio')}
+                {text('fleet_type_code','Tipo de frota')}
+                {text('situation_code','Situação do veículo')}
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                {bool('active','Ativo')}
+                {bool('blocked','Bloqueado')}
+                {bool('in_maintenance','Em manutenção')}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="owner" className="space-y-3 pt-3">
+              <div className="grid grid-cols-2 gap-3">
+                {text('owner_name','Proprietário')}
+                {text('owner_neighborhood','Bairro')}
+                {text('owner_mobile','Celular')}
+                {text('owner_phone','Telefone')}
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Observações</Label>
+                <Textarea value={form.owner_notes ?? ''} onChange={e => set('owner_notes', e.target.value)} rows={3} />
+              </div>
+            </TabsContent>
+
+            <TabsContent value="tracker" className="space-y-3 pt-3">
+              <div className="grid grid-cols-3 gap-3">
+                {text('tracker_name','Rastreador')}
+                {text('tracker_login','Login')}
+                {text('tracker_password','Senha')}
+              </div>
+            </TabsContent>
+          </Tabs>
+
+          <div className="flex justify-end gap-2 border-t pt-4">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+            <Button type="submit" disabled={loading}>{loading ? 'Salvando...' : 'Salvar'}</Button>
           </div>
         </form>
       </DialogContent>
