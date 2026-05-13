@@ -6654,75 +6654,165 @@ export type Database = {
       vehicles: {
         Row: {
           active: boolean
+          avg_km_per_liter: number | null
+          axle_structure: string | null
           base_consumption_estimate: number | null
+          blocked: boolean | null
           body_type: string | null
+          body_type_code: string | null
+          brand: string | null
+          business_unit: string | null
+          capacity_ton: number | null
+          category: string | null
+          chassis: string | null
+          city: string | null
+          color: string | null
           created_at: string
           created_by: string | null
           current_driver_id: string | null
           expected_speed_penalty_loaded: number | null
+          fleet_type_code: string | null
           fuel_canonical_key: string | null
           id: string
+          in_maintenance: boolean | null
           loaded_consumption_factor: number | null
           max_pallets: number | null
           max_volume_m3: number | null
           max_weight_kg: number | null
+          model: string | null
           nickname: string | null
+          odometer_km: number | null
+          owner_mobile: string | null
+          owner_name: string | null
+          owner_neighborhood: string | null
+          owner_notes: string | null
+          owner_phone: string | null
           plate: string
+          renavam: string | null
+          result_area: string | null
+          result_center: string | null
+          situation_code: string | null
           speed_limit_kmh: number | null
           tags: Json | null
           tank_capacity_liters: number | null
           tenant_id: string
+          tracker_login: string | null
+          tracker_name: string | null
+          tracker_password: string | null
           type: string | null
+          uf: string | null
           updated_at: string
           updated_by: string | null
+          vehicle_type_code: string | null
+          year_of_manufacture: number | null
         }
         Insert: {
           active?: boolean
+          avg_km_per_liter?: number | null
+          axle_structure?: string | null
           base_consumption_estimate?: number | null
+          blocked?: boolean | null
           body_type?: string | null
+          body_type_code?: string | null
+          brand?: string | null
+          business_unit?: string | null
+          capacity_ton?: number | null
+          category?: string | null
+          chassis?: string | null
+          city?: string | null
+          color?: string | null
           created_at?: string
           created_by?: string | null
           current_driver_id?: string | null
           expected_speed_penalty_loaded?: number | null
+          fleet_type_code?: string | null
           fuel_canonical_key?: string | null
           id?: string
+          in_maintenance?: boolean | null
           loaded_consumption_factor?: number | null
           max_pallets?: number | null
           max_volume_m3?: number | null
           max_weight_kg?: number | null
+          model?: string | null
           nickname?: string | null
+          odometer_km?: number | null
+          owner_mobile?: string | null
+          owner_name?: string | null
+          owner_neighborhood?: string | null
+          owner_notes?: string | null
+          owner_phone?: string | null
           plate: string
+          renavam?: string | null
+          result_area?: string | null
+          result_center?: string | null
+          situation_code?: string | null
           speed_limit_kmh?: number | null
           tags?: Json | null
           tank_capacity_liters?: number | null
           tenant_id: string
+          tracker_login?: string | null
+          tracker_name?: string | null
+          tracker_password?: string | null
           type?: string | null
+          uf?: string | null
           updated_at?: string
           updated_by?: string | null
+          vehicle_type_code?: string | null
+          year_of_manufacture?: number | null
         }
         Update: {
           active?: boolean
+          avg_km_per_liter?: number | null
+          axle_structure?: string | null
           base_consumption_estimate?: number | null
+          blocked?: boolean | null
           body_type?: string | null
+          body_type_code?: string | null
+          brand?: string | null
+          business_unit?: string | null
+          capacity_ton?: number | null
+          category?: string | null
+          chassis?: string | null
+          city?: string | null
+          color?: string | null
           created_at?: string
           created_by?: string | null
           current_driver_id?: string | null
           expected_speed_penalty_loaded?: number | null
+          fleet_type_code?: string | null
           fuel_canonical_key?: string | null
           id?: string
+          in_maintenance?: boolean | null
           loaded_consumption_factor?: number | null
           max_pallets?: number | null
           max_volume_m3?: number | null
           max_weight_kg?: number | null
+          model?: string | null
           nickname?: string | null
+          odometer_km?: number | null
+          owner_mobile?: string | null
+          owner_name?: string | null
+          owner_neighborhood?: string | null
+          owner_notes?: string | null
+          owner_phone?: string | null
           plate?: string
+          renavam?: string | null
+          result_area?: string | null
+          result_center?: string | null
+          situation_code?: string | null
           speed_limit_kmh?: number | null
           tags?: Json | null
           tank_capacity_liters?: number | null
           tenant_id?: string
+          tracker_login?: string | null
+          tracker_name?: string | null
+          tracker_password?: string | null
           type?: string | null
+          uf?: string | null
           updated_at?: string
           updated_by?: string | null
+          vehicle_type_code?: string | null
+          year_of_manufacture?: number | null
         }
         Relationships: [
           {
