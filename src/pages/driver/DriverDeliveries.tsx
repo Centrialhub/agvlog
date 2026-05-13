@@ -83,7 +83,7 @@ type EventDef = {
 const EVENTS: EventDef[] = [
   { key: 'entregue',            label: 'ENTREGUE',            icon: CheckCircle, category: 'finalizador', finalAction: 'delivered', requiresReceiver: true, requiresPhoto: true, requiresSignature: true },
   { key: 'devolucao_parcial',   label: 'DEVOLUÇÃO PARCIAL',   icon: PackageX,    category: 'finalizador', finalAction: 'partial', requiresReceiver: true, showsItems: true, needsOperatorReply: true },
-  { key: 'entrega_cancelada',   label: 'ENTREGA CANCELADA',   icon: Ban,         category: 'finalizador', finalAction: 'refused', showsItems: true, needsOperatorReply: true },
+  { key: 'devolucao_total',     label: 'DEVOLUÇÃO TOTAL',     icon: Ban,         category: 'finalizador', finalAction: 'refused', showsItems: true, needsOperatorReply: true },
   { key: 'solicitar_desconto',  label: 'SOLICITAR DESCONTO',  icon: Percent,     category: 'informativo', showsDiscount: true, showsContact: true, needsOperatorReply: true },
   { key: 'atualizar_boleto',    label: 'ATUALIZAR BOLETO',    icon: FileText,    category: 'informativo', showsContact: true, needsOperatorReply: true },
   { key: 'avaria',              label: 'AVARIA',              icon: AlertCircle, category: 'informativo', requiresPhoto: true, showsItems: true },
@@ -303,7 +303,7 @@ export default function DriverDeliveries() {
         if (def.needsOperatorReply) {
           const replies: Record<string, { text: string; status: 'approved' | 'rejected' }> = {
             devolucao_parcial: { text: 'Devolução autorizada. Pode trazer os volumes marcados de volta ao CD.', status: 'approved' },
-            entrega_cancelada: { text: 'Cancelamento confirmado. Retorne com a carga e abriremos a NF de devolução.', status: 'approved' },
+            devolucao_total: { text: 'Devolução total confirmada. Retorne com a carga e abriremos a NF de devolução.', status: 'approved' },
             solicitar_desconto: { text: 'Desconto aprovado conforme solicitado. Pode finalizar a entrega normalmente.', status: 'approved' },
             atualizar_boleto:   { text: 'Boleto atualizado e enviado por e-mail/WhatsApp ao cliente. Aguarde 2 min.', status: 'approved' },
           };
