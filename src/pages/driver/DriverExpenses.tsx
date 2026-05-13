@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Receipt, Fuel, UtensilsCrossed, Car, Wrench, ParkingCircle, Camera, Image } from 'lucide-react';
+import DemoBanner from '@/components/driver/DemoBanner';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
@@ -29,6 +30,13 @@ const approvalLabels: Record<string, string> = {
   rejected: 'Rejeitada',
 };
 
+const DEMO_EXPENSES_INITIAL: any[] = [
+  { id: 'e1', category: 'fuel',     amount: 320.50, notes: 'Posto BR — 65L diesel S10', approval_status: 'approved', expense_at: new Date(Date.now() - 1*86400000).toISOString() },
+  { id: 'e2', category: 'food',     amount: 35.00,  notes: 'Almoço no restaurante de beira de estrada', approval_status: 'pending',  expense_at: new Date(Date.now() - 2*3600000).toISOString() },
+  { id: 'e3', category: 'toll',     amount: 18.40,  notes: 'Pedágio BR-365', approval_status: 'approved', expense_at: new Date(Date.now() - 4*3600000).toISOString() },
+  { id: 'e4', category: 'parking',  amount: 12.00,  notes: 'Estacionamento Pirapora', approval_status: 'rejected', expense_at: new Date(Date.now() - 26*3600000).toISOString() },
+];
+
 export default function DriverExpenses() {
   const { currentTenant } = useTenant();
   const { toast } = useToast();
@@ -40,6 +48,7 @@ export default function DriverExpenses() {
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [demoExpenses, setDemoExpenses] = useState<any[]>(DEMO_EXPENSES_INITIAL);
 
   const { data: expenses = [] } = useQuery({
     queryKey: ['driver_expenses', driver?.id],
@@ -69,6 +78,18 @@ export default function DriverExpenses() {
 
   const createExpense = useMutation({
     mutationFn: async () => {
+      if (!currentTenant || !driver) {
+        // Demo
+        setDemoExpenses((prev) => [{
+          id: 'd' + Date.now(),
+          category: form.category,
+          amount: parseFloat(form.amount) || 0,
+          notes: form.notes || null,
+          approval_status: 'pending',
+          expense_at: new Date().toISOString(),
+        }, ...prev]);
+        return;
+      }
       let receiptUrl: string | null = null;
 
       if (receiptFile && currentTenant) {
@@ -105,6 +126,9 @@ export default function DriverExpenses() {
       toast({ title: 'Erro', description: e.message, variant: 'destructive' });
     },
   });
+
+  const isDemo = !driver;
+  const effectiveExpenses = isDemo ? demoExpenses : expenses;
 
   return (
     <div className="space-y-4">
@@ -164,7 +188,14 @@ export default function DriverExpenses() {
         </Dialog>
       </div>
 
-      {expenses.length === 0 ? (
+      {isDemo && (
+        <DemoBanner
+          message="Sem usuário motorista vinculado — despesas fictícias."
+          onReset={() => setDemoExpenses(DEMO_EXPENSES_INITIAL)}
+        />
+      )}
+
+      {effectiveExpenses.length === 0 ? (
         <Card>
           <CardContent className="py-8 text-center">
             <Receipt className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
@@ -173,7 +204,7 @@ export default function DriverExpenses() {
         </Card>
       ) : (
         <div className="space-y-2">
-          {expenses.map((exp: any) => {
+          {effectiveExpenses.map((exp: any) => {
             const cat = CATEGORIES.find(c => c.value === exp.category);
             const Icon = cat?.icon || Receipt;
             return (

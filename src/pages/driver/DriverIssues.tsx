@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { AlertTriangle, Plus, Clock } from 'lucide-react';
+import DemoBanner from '@/components/driver/DemoBanner';
 
 const ISSUE_TYPES = [
   { value: 'vehicle_breakdown', label: 'Pane no veículo' },
@@ -29,6 +30,12 @@ const SEVERITY_OPTIONS = [
   { value: 'high', label: 'Alta' },
 ];
 
+const DEMO_EVENTS_INITIAL: any[] = [
+  { id: 'de1', event_type: 'cargo_damage',     severity: 'medium', description: 'Caixa amassada no transporte — fotografada.', created_at: new Date(Date.now() - 2*3600000).toISOString() },
+  { id: 'de2', event_type: 'wrong_address',    severity: 'low',    description: 'Endereço da NF 2100090 estava desatualizado.', created_at: new Date(Date.now() - 5*3600000).toISOString() },
+  { id: 'de3', event_type: 'vehicle_breakdown',severity: 'high',   description: 'Pneu furado no km 142 da BR-365.',           created_at: new Date(Date.now() - 24*3600000).toISOString() },
+];
+
 export default function DriverIssues() {
   const { currentTenant } = useTenant();
   const { toast } = useToast();
@@ -37,6 +44,7 @@ export default function DriverIssues() {
   const { data: trip } = useActiveTrip(driver?.id);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ event_type: 'other', severity: 'medium', description: '' });
+  const [demoEvents, setDemoEvents] = useState<any[]>(DEMO_EVENTS_INITIAL);
 
   const { data: events = [] } = useQuery({
     queryKey: ['driver_operational_events', driver?.id],
@@ -57,6 +65,17 @@ export default function DriverIssues() {
 
   const createIssue = useMutation({
     mutationFn: async () => {
+      if (!currentTenant || !driver) {
+        // Demo
+        setDemoEvents((prev) => [{
+          id: 'd' + Date.now(),
+          event_type: form.event_type,
+          severity: form.severity,
+          description: form.description || null,
+          created_at: new Date().toISOString(),
+        }, ...prev]);
+        return;
+      }
       const { error } = await supabase.from('operational_events').insert({
         tenant_id: currentTenant!.id,
         event_type: form.event_type,
@@ -75,6 +94,9 @@ export default function DriverIssues() {
     },
     onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
   });
+
+  const isDemo = !driver;
+  const effectiveEvents = isDemo ? demoEvents : events;
 
   const severityColors: Record<string, string> = {
     low: 'bg-muted text-muted-foreground',
@@ -123,7 +145,14 @@ export default function DriverIssues() {
         </Dialog>
       </div>
 
-      {events.length === 0 ? (
+      {isDemo && (
+        <DemoBanner
+          message="Sem usuário motorista vinculado — ocorrências fictícias."
+          onReset={() => setDemoEvents(DEMO_EVENTS_INITIAL)}
+        />
+      )}
+
+      {effectiveEvents.length === 0 ? (
         <Card>
           <CardContent className="py-8 text-center">
             <AlertTriangle className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
@@ -132,7 +161,7 @@ export default function DriverIssues() {
         </Card>
       ) : (
         <div className="space-y-2">
-          {events.map((evt: any) => {
+          {effectiveEvents.map((evt: any) => {
             const typeLabel = ISSUE_TYPES.find(t => t.value === evt.event_type)?.label || evt.event_type;
             return (
               <Card key={evt.id}>

@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import SignaturePad from '@/components/driver/SignaturePad';
+import DemoBanner from '@/components/driver/DemoBanner';
 
 // ====== Dados de demonstração ======
 const DEMO_TRIP = {
@@ -87,7 +88,8 @@ export default function DriverDeliveries() {
 
   const [tab, setTab] = useState<'em_rota' | 'planejadas'>('em_rota');
   const [search, setSearch] = useState('');
-  const [expandedStop, setExpandedStop] = useState<string | null>(null);
+  // Detalhe da entrega
+  const [detailStop, setDetailStop] = useState<any | null>(null);
 
   // catálogo de eventos do stop selecionado
   const [eventCatalogStop, setEventCatalogStop] = useState<any | null>(null);
@@ -268,22 +270,10 @@ export default function DriverDeliveries() {
       </div>
 
       {isDemo && (
-        <div className="flex items-center gap-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs">
-          <AlertTriangle className="h-3.5 w-3.5 text-warning shrink-0" />
-          <span className="flex-1">
-            <span className="font-semibold">Modo demonstração.</span>{' '}
-            Sem viagem ativa — paradas e eventos são fictícios e não são salvos.
-          </span>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className="h-6 px-2 text-[11px]"
-            onClick={() => setDemoStops(DEMO_STOPS_INITIAL)}
-          >
-            Resetar
-          </Button>
-        </div>
+        <DemoBanner
+          message="Sem viagem ativa — paradas e eventos são fictícios."
+          onReset={() => setDemoStops(DEMO_STOPS_INITIAL)}
+        />
       )}
 
       {/* Search */}
@@ -316,14 +306,13 @@ export default function DriverDeliveries() {
             </Card>
           ) : (
             filteredStops.map((stop: any, idx: number) => {
-              const isExpanded = expandedStop === stop.id;
               const orderNum = getStopOrderNumber(stop);
               const isArrived = stop.status === 'arrived';
               return (
                 <Card key={stop.id} className={cn(isArrived && 'border-primary')}>
                   <button
                     type="button"
-                    onClick={() => setExpandedStop(isExpanded ? null : stop.id)}
+                    onClick={() => setDetailStop(stop)}
                     className="w-full text-left"
                   >
                     <CardContent className="p-3 flex items-center gap-3">
@@ -351,38 +340,9 @@ export default function DriverDeliveries() {
                       {isArrived && (
                         <Badge variant="secondary" className="bg-primary/10 text-primary text-[10px] mr-1">No local</Badge>
                       )}
-                      {isExpanded ? (
-                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                      ) : (
-                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                      )}
+                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
                     </CardContent>
                   </button>
-
-                  {isExpanded && (
-                    <CardContent className="p-3 pt-0 space-y-2 border-t border-border">
-                      {stop.destination && (
-                        <p className="text-xs text-muted-foreground">{stop.destination}</p>
-                      )}
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="flex-1 text-xs"
-                          onClick={() => setEventCatalogStop(stop)}
-                        >
-                          <PenLine className="h-3.5 w-3.5 mr-1" /> Lançar evento
-                        </Button>
-                        <Button
-                          size="sm"
-                          className="flex-1 text-xs"
-                          onClick={() => setEventForm({ stop, eventKey: 'entregue' })}
-                        >
-                          <CheckCircle className="h-3.5 w-3.5 mr-1" /> TudoEntregue
-                        </Button>
-                      </div>
-                    </CardContent>
-                  )}
                 </Card>
               );
             })
@@ -623,6 +583,112 @@ export default function DriverDeliveries() {
               >
                 {submitEvent.isPending ? 'Enviando...' : 'Lançar evento'}
               </Button>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
+
+      {/* Sheet: Detalhe da entrega (espelho do app de referência) */}
+      <Sheet open={!!detailStop} onOpenChange={(o) => !o && setDetailStop(null)}>
+        <SheetContent side="bottom" className="rounded-t-2xl max-h-[92vh] overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="text-base text-center">Entrega</SheetTitle>
+          </SheetHeader>
+          {detailStop && (
+            <div className="space-y-4 mt-2">
+              {/* Badge nº pedido */}
+              <div className="flex justify-center">
+                <Badge variant="secondary" className="bg-primary/10 text-primary px-3 py-1 text-xs">
+                  Outro: {getStopOrderNumber(detailStop) || '—'}
+                </Badge>
+              </div>
+
+              {/* Card cliente */}
+              <div className="rounded-lg border border-border overflow-hidden flex">
+                <div className="w-1.5 bg-primary" />
+                <div className="flex-1 p-3 flex items-start gap-3">
+                  <div className="h-9 w-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0">
+                    <Package className="h-4 w-4" />
+                  </div>
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <p className="text-sm font-bold truncate">
+                      {detailStop.clients?.company_name || 'Cliente'}
+                    </p>
+                    {detailStop.destination && (
+                      <p className="text-[11px] text-muted-foreground leading-snug">
+                        {detailStop.destination}
+                      </p>
+                    )}
+                    {detailStop.notes && (
+                      <p className="text-[11px] text-muted-foreground">
+                        {detailStop.notes}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Saída / Previsão */}
+              <div className="space-y-2">
+                <div>
+                  <p className="text-xs font-semibold">Saída</p>
+                  <p className="text-xs text-muted-foreground">
+                    {detailStop.actual_arrival_at
+                      ? new Date(detailStop.actual_arrival_at).toLocaleString('pt-BR', {
+                          day: '2-digit', month: '2-digit', year: 'numeric',
+                          hour: '2-digit', minute: '2-digit',
+                        })
+                      : 'Dia ' + new Date().toLocaleDateString('pt-BR') + ' às 05:00'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold">Previsão</p>
+                  <p className="text-xs text-muted-foreground">
+                    Dia {new Date().toLocaleDateString('pt-BR')}, das 08:00 às 18:00
+                  </p>
+                </div>
+              </div>
+
+              {/* Status atual */}
+              <div className="flex items-center justify-between bg-muted/50 rounded-md px-3 py-2">
+                <span className="text-[11px] text-muted-foreground">Status</span>
+                <Badge variant="secondary" className={cn(
+                  'text-[10px]',
+                  detailStop.status === 'arrived' && 'bg-primary/10 text-primary',
+                  detailStop.status === 'completed' && 'bg-green-100 text-green-700',
+                )}>
+                  {detailStop.status === 'arrived' ? 'No local'
+                    : detailStop.status === 'completed' ? 'Concluída'
+                    : 'Pendente'}
+                </Badge>
+              </div>
+
+              {/* Ações principais */}
+              <div className="flex gap-2 pt-2">
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="flex-1"
+                  onClick={() => {
+                    setEventCatalogStop(detailStop);
+                    setDetailStop(null);
+                  }}
+                  disabled={detailStop.status === 'completed'}
+                >
+                  <PenLine className="h-4 w-4 mr-1.5" /> Lançar evento
+                </Button>
+                <Button
+                  size="lg"
+                  className="flex-1"
+                  onClick={() => {
+                    setEventForm({ stop: detailStop, eventKey: 'entregue' });
+                    setDetailStop(null);
+                  }}
+                  disabled={detailStop.status === 'completed'}
+                >
+                  <CheckCircle className="h-4 w-4 mr-1.5" /> TudoEntregue
+                </Button>
+              </div>
             </div>
           )}
         </SheetContent>
