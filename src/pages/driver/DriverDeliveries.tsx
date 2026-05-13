@@ -16,6 +16,7 @@ import {
   Package, CheckCircle, AlertTriangle, Truck, Camera, X, ImageIcon,
   ChevronRight, ChevronDown, Search, PenLine, FileSignature,
   Ban, AlertCircle, PackageX, MapPinned, UserX,
+  Phone, MessageSquare, Send, Percent, FileText, RotateCcw, Clock, User as UserIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import SignaturePad from '@/components/driver/SignaturePad';
@@ -27,35 +28,69 @@ const DEMO_TRIP = {
   loads: { load_number: '1042 (DEMO)' },
 };
 const DEMO_STOPS_INITIAL: any[] = [
-  { id: 'demo-1', stop_order: 1, status: 'arrived',  destination: 'Av. Brasil, 1200 - Centro, Pirapora/MG', notes: 'Pedido 2100077', clients: { company_name: 'AMANDA D' } },
-  { id: 'demo-2', stop_order: 2, status: 'pending',  destination: 'Rua das Flores, 45 - Jaíba/MG',          notes: 'NF 2100098',     clients: { company_name: 'LINDSAY @' } },
-  { id: 'demo-3', stop_order: 3, status: 'pending',  destination: 'BR-365 km 12 - Pai Pedro/MG',            notes: 'Pedido 2100090', clients: { company_name: 'IRMÃOS FERREIRA' } },
-  { id: 'demo-4', stop_order: 4, status: 'pending',  destination: 'Rua A, 200 - Janaúba/MG',                notes: 'NF 2100083',     clients: { company_name: 'CG BEATRIZ' } },
-  { id: 'demo-5', stop_order: 5, status: 'pending',  destination: 'Av. JK, 800 - Montes Claros/MG',         notes: 'Pedido 2100115', clients: { company_name: 'VICTORIA' } },
+  { id: 'demo-1', stop_order: 1, status: 'arrived',  destination: 'Av. Brasil, 1200 - Centro, Pirapora/MG', notes: 'Pedido 2100077', clients: { company_name: 'AMANDA D', phone: '(38) 99876-1122', whatsapp: '5538998761122', email: 'amanda@cliente.com' } },
+  { id: 'demo-2', stop_order: 2, status: 'pending',  destination: 'Rua das Flores, 45 - Jaíba/MG',          notes: 'NF 2100098',     clients: { company_name: 'LINDSAY @', phone: '(38) 99811-2233', whatsapp: '5538998112233', email: 'lindsay@cliente.com' } },
+  { id: 'demo-3', stop_order: 3, status: 'pending',  destination: 'BR-365 km 12 - Pai Pedro/MG',            notes: 'Pedido 2100090', clients: { company_name: 'IRMÃOS FERREIRA', phone: '(38) 99700-1010', whatsapp: '5538997001010', email: 'financeiro@irmaosferreira.com' } },
+  { id: 'demo-4', stop_order: 4, status: 'pending',  destination: 'Rua A, 200 - Janaúba/MG',                notes: 'NF 2100083',     clients: { company_name: 'CG BEATRIZ', phone: '(38) 99655-7788' } },
+  { id: 'demo-5', stop_order: 5, status: 'pending',  destination: 'Av. JK, 800 - Montes Claros/MG',         notes: 'Pedido 2100115', clients: { company_name: 'VICTORIA', phone: '(38) 99511-4040' } },
   { id: 'demo-6', stop_order: 6, status: 'completed',destination: 'Centro - Espinosa/MG',                   notes: 'NF 2100050',     clients: { company_name: 'MERCADO BOM PRECO' } },
 ];
 
+// Produtos fictícios por parada (em produção, virá de load_items / order_items)
+type DemoProduct = { id: string; sku: string; name: string; qty: number; unit: string; price: number };
+const DEMO_PRODUCTS_BY_STOP: Record<string, DemoProduct[]> = {
+  'demo-1': [
+    { id: 'p1', sku: '7891234', name: 'Refrigerante Cola 2L',   qty: 24, unit: 'UN', price: 7.90 },
+    { id: 'p2', sku: '7891235', name: 'Suco Laranja 1L',         qty: 12, unit: 'UN', price: 5.50 },
+    { id: 'p3', sku: '7891236', name: 'Água Mineral 500ml fardo',qty:  6, unit: 'FD', price: 18.00 },
+  ],
+  'demo-2': [
+    { id: 'p4', sku: '7892001', name: 'Arroz 5kg Tipo 1',        qty: 20, unit: 'PC', price: 28.90 },
+    { id: 'p5', sku: '7892002', name: 'Feijão Carioca 1kg',      qty: 30, unit: 'PC', price: 8.40 },
+    { id: 'p6', sku: '7892003', name: 'Óleo Soja 900ml',         qty: 24, unit: 'UN', price: 6.20 },
+  ],
+  'demo-3': [
+    { id: 'p7', sku: '7893001', name: 'Cimento CP-II 50kg',      qty: 40, unit: 'SC', price: 38.00 },
+    { id: 'p8', sku: '7893002', name: 'Argamassa AC-II 20kg',    qty: 25, unit: 'SC', price: 22.50 },
+  ],
+  'demo-4': [
+    { id: 'p9', sku: '7894001', name: 'Detergente 500ml',        qty: 48, unit: 'UN', price: 2.10 },
+    { id: 'p10',sku: '7894002', name: 'Sabão em pó 1kg',         qty: 18, unit: 'UN', price: 11.50 },
+  ],
+  'demo-5': [
+    { id: 'p11',sku: '7895001', name: 'Café Torrado 500g',       qty: 30, unit: 'UN', price: 14.90 },
+  ],
+};
+
 // ====== Catálogo de eventos (inspirado no app de referência) ======
 type EventCategory = 'finalizador' | 'informativo';
+
 type EventDef = {
-  key: string;          // event_subtype salvo em payload
+  key: string;
   label: string;
   icon: React.ComponentType<any>;
   category: EventCategory;
-  finalAction?: 'delivered' | 'partial' | 'refused'; // o que aciona no stop
+  finalAction?: 'delivered' | 'partial' | 'refused';
   requiresReceiver?: boolean;
   requiresPhoto?: boolean;
   requiresSignature?: boolean;
+  showsItems?: boolean;     // lista produtos para devolver
+  showsDiscount?: boolean;  // pede desconto
+  showsContact?: boolean;   // mostra contato do cliente
+  needsOperatorReply?: boolean; // exige aprovação do operador
 };
 
 const EVENTS: EventDef[] = [
-  { key: 'entregue',            label: 'ENTREGUE',          icon: CheckCircle, category: 'finalizador', finalAction: 'delivered', requiresReceiver: true, requiresPhoto: true, requiresSignature: true },
-  { key: 'entrega_cancelada',   label: 'ENTREGA CANCELADA', icon: Ban,         category: 'finalizador', finalAction: 'refused' },
-  { key: 'avaria',              label: 'AVARIA',            icon: AlertCircle, category: 'informativo', requiresPhoto: true },
-  { key: 'cliente_recusou',     label: 'CLIENTE RECUSOU',   icon: PackageX,    category: 'informativo' },
-  { key: 'coleta_realizada',    label: 'COLETA REALIZADA',  icon: Package,     category: 'informativo', requiresPhoto: true },
-  { key: 'chegada_no_cliente',  label: 'CHEGADA NO CLIENTE',icon: MapPinned,   category: 'informativo' },
-  { key: 'cliente_estava_fora', label: 'CLIENTE ESTAVA FORA',icon: UserX,      category: 'informativo' },
+  { key: 'entregue',            label: 'ENTREGUE',            icon: CheckCircle, category: 'finalizador', finalAction: 'delivered', requiresReceiver: true, requiresPhoto: true, requiresSignature: true },
+  { key: 'devolucao_parcial',   label: 'DEVOLUÇÃO PARCIAL',   icon: PackageX,    category: 'finalizador', finalAction: 'partial', requiresReceiver: true, showsItems: true, needsOperatorReply: true },
+  { key: 'entrega_cancelada',   label: 'ENTREGA CANCELADA',   icon: Ban,         category: 'finalizador', finalAction: 'refused', showsItems: true, needsOperatorReply: true },
+  { key: 'solicitar_desconto',  label: 'SOLICITAR DESCONTO',  icon: Percent,     category: 'informativo', showsDiscount: true, showsContact: true, needsOperatorReply: true },
+  { key: 'atualizar_boleto',    label: 'ATUALIZAR BOLETO',    icon: FileText,    category: 'informativo', showsContact: true, needsOperatorReply: true },
+  { key: 'avaria',              label: 'AVARIA',              icon: AlertCircle, category: 'informativo', requiresPhoto: true, showsItems: true },
+  { key: 'cliente_recusou',     label: 'CLIENTE RECUSOU',     icon: PackageX,    category: 'informativo', showsItems: true },
+  { key: 'coleta_realizada',    label: 'COLETA REALIZADA',    icon: Package,     category: 'informativo', requiresPhoto: true },
+  { key: 'chegada_no_cliente',  label: 'CHEGADA NO CLIENTE',  icon: MapPinned,   category: 'informativo' },
+  { key: 'cliente_estava_fora', label: 'CLIENTE ESTAVA FORA', icon: UserX,       category: 'informativo' },
 ];
 
 function getEventDef(key: string) {
@@ -105,6 +140,43 @@ export default function DriverDeliveries() {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
+  // Itens selecionados para devolução: { [productId]: qtyDevolvida }
+  const [returnedItems, setReturnedItems] = useState<Record<string, number>>({});
+  const [returnReason, setReturnReason] = useState('');
+
+  // Solicitação de desconto
+  const [discountKind, setDiscountKind] = useState<'percent' | 'value'>('percent');
+  const [discountAmount, setDiscountAmount] = useState('');
+  const [discountReason, setDiscountReason] = useState('');
+
+  // Boleto / contato
+  const [boletoDueDate, setBoletoDueDate] = useState('');
+  const [boletoNote, setBoletoNote] = useState('');
+
+  // Thread de mensagens (demo) — chave: stopId|eventKey
+  type ThreadMsg = {
+    id: string;
+    from: 'driver' | 'operator';
+    author: string;
+    text: string;
+    at: string;
+    status?: 'pending' | 'approved' | 'rejected' | 'info';
+  };
+  const [threads, setThreads] = useState<Record<string, ThreadMsg[]>>({});
+  const [followUp, setFollowUp] = useState('');
+
+  const threadKey = eventForm ? `${eventForm.stop.id}|${eventForm.eventKey}` : '';
+  const currentThread = threadKey ? (threads[threadKey] || []) : [];
+
+  const stopProducts: DemoProduct[] = eventForm
+    ? (DEMO_PRODUCTS_BY_STOP[eventForm.stop.id] || [])
+    : [];
+
+  const totalReturnValue = stopProducts.reduce((sum, p) => {
+    const q = returnedItems[p.id] || 0;
+    return sum + q * p.price;
+  }, 0);
+
   const { data: stops = [] } = useQuery({
     queryKey: ['driver_delivery_stops', trip?.id],
     queryFn: async () => {
@@ -150,6 +222,14 @@ export default function DriverDeliveries() {
     photoPreviews.forEach((u) => URL.revokeObjectURL(u));
     setPhotoPreviews([]);
     setSignatureDataUrl(null);
+    setReturnedItems({});
+    setReturnReason('');
+    setDiscountKind('percent');
+    setDiscountAmount('');
+    setDiscountReason('');
+    setBoletoDueDate('');
+    setBoletoNote('');
+    setFollowUp('');
   };
 
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -177,14 +257,82 @@ export default function DriverDeliveries() {
       // Demo: muta apenas em memória, sem chamar Supabase
       if (isDemo) {
         await new Promise((r) => setTimeout(r, 400));
+        // Constrói mensagem inicial do motorista para a thread
+        const driverParts: string[] = [];
+        driverParts.push(`Evento: ${def.label}`);
+        if (receiverName) driverParts.push(`Recebedor: ${receiverName}${receiverDoc ? ` (${receiverDoc})` : ''}`);
+        const itemsList = stopProducts.filter(p => (returnedItems[p.id] || 0) > 0);
+        if (def.showsItems && itemsList.length) {
+          driverParts.push(
+            'Itens devolvidos:\n' + itemsList.map(p => `• ${p.name} — ${returnedItems[p.id]}/${p.qty} ${p.unit}`).join('\n')
+          );
+          if (returnReason) driverParts.push(`Motivo: ${returnReason}`);
+          driverParts.push(`Valor estimado: R$ ${totalReturnValue.toFixed(2)}`);
+        }
+        if (def.showsDiscount && discountAmount) {
+          driverParts.push(`Desconto solicitado: ${discountAmount}${discountKind === 'percent' ? '%' : ' R$'}`);
+          if (discountReason) driverParts.push(`Justificativa: ${discountReason}`);
+        }
+        if (def.key === 'atualizar_boleto') {
+          if (boletoDueDate) driverParts.push(`Novo vencimento sugerido: ${boletoDueDate}`);
+          if (boletoNote) driverParts.push(`Detalhe: ${boletoNote}`);
+        }
+        if (notes) driverParts.push(`Obs.: ${notes}`);
+
+        const initialMsg: ThreadMsg = {
+          id: `m-${Date.now()}`,
+          from: 'driver',
+          author: driver?.name || 'Motorista',
+          text: driverParts.join('\n'),
+          at: new Date().toISOString(),
+          status: def.needsOperatorReply ? 'pending' : 'info',
+        };
+        setThreads((prev) => ({ ...prev, [threadKey]: [...(prev[threadKey] || []), initialMsg] }));
+
+        // Atualiza stop conforme finalAction (mesmo se aguardando operador, para refletir UI)
         setDemoStops((prev) =>
           prev.map((s) => {
             if (s.id !== eventForm.stop.id) return s;
-            if (def.finalAction) return { ...s, status: 'completed' };
+            if (def.finalAction && !def.needsOperatorReply) return { ...s, status: 'completed' };
             if (def.key === 'chegada_no_cliente' && s.status === 'pending') return { ...s, status: 'arrived' };
             return s;
           })
         );
+
+        // Simula resposta do operador (apenas demo)
+        if (def.needsOperatorReply) {
+          const replies: Record<string, { text: string; status: 'approved' | 'rejected' }> = {
+            devolucao_parcial: { text: 'Devolução autorizada. Pode trazer os volumes marcados de volta ao CD.', status: 'approved' },
+            entrega_cancelada: { text: 'Cancelamento confirmado. Retorne com a carga e abriremos a NF de devolução.', status: 'approved' },
+            solicitar_desconto: { text: 'Desconto aprovado conforme solicitado. Pode finalizar a entrega normalmente.', status: 'approved' },
+            atualizar_boleto:   { text: 'Boleto atualizado e enviado por e-mail/WhatsApp ao cliente. Aguarde 2 min.', status: 'approved' },
+          };
+          const r = replies[def.key];
+          if (r) {
+            setTimeout(() => {
+              setThreads((prev) => {
+                const list = prev[threadKey] || [];
+                const reply: ThreadMsg = {
+                  id: `m-${Date.now()}-op`,
+                  from: 'operator',
+                  author: 'Operação CD',
+                  text: r.text,
+                  at: new Date().toISOString(),
+                  status: r.status,
+                };
+                // marca a primeira pendente como respondida
+                const updated = list.map((m, idx) =>
+                  idx === 0 && m.status === 'pending' ? { ...m, status: r.status } : m
+                );
+                return { ...prev, [threadKey]: [...updated, reply] };
+              });
+              if (def.finalAction === 'partial' || def.finalAction === 'refused') {
+                setDemoStops((prev) => prev.map((s) => s.id === eventForm.stop.id ? { ...s, status: 'completed' } : s));
+              }
+              toast({ title: 'Operação respondeu', description: r.text });
+            }, 2200);
+          }
+        }
         return;
       }
 
@@ -254,11 +402,43 @@ export default function DriverDeliveries() {
   });
 
   const def = eventForm ? getEventDef(eventForm.eventKey) : null;
+  const totalReturnedQty = Object.values(returnedItems).reduce((a, b) => a + (b || 0), 0);
   const canSubmit =
     !!def &&
     (!def.requiresReceiver || receiverName.trim().length >= 2) &&
     (!def.requiresPhoto || photos.length >= 1) &&
-    (!def.requiresSignature || !!signatureDataUrl);
+    (!def.requiresSignature || !!signatureDataUrl) &&
+    (!def.showsItems || !def.finalAction || def.key === 'avaria' || def.key === 'cliente_recusou' || totalReturnedQty > 0) &&
+    (!def.showsDiscount || (parseFloat(discountAmount) > 0 && discountReason.trim().length >= 3));
+
+  const sendFollowUp = () => {
+    if (!followUp.trim() || !threadKey) return;
+    const msg: ThreadMsg = {
+      id: `m-${Date.now()}-fu`,
+      from: 'driver',
+      author: driver?.name || 'Motorista',
+      text: followUp.trim(),
+      at: new Date().toISOString(),
+      status: 'info',
+    };
+    setThreads((prev) => ({ ...prev, [threadKey]: [...(prev[threadKey] || []), msg] }));
+    setFollowUp('');
+    // resposta simulada do operador
+    setTimeout(() => {
+      setThreads((prev) => {
+        const list = prev[threadKey] || [];
+        const reply: ThreadMsg = {
+          id: `m-${Date.now()}-opfu`,
+          from: 'operator',
+          author: 'Operação CD',
+          text: 'Recebido, motorista. Vou verificar e te respondo em instantes.',
+          at: new Date().toISOString(),
+          status: 'info',
+        };
+        return { ...prev, [threadKey]: [...list, reply] };
+      });
+    }, 1500);
+  };
 
   return (
     <div className="space-y-4">
@@ -431,6 +611,162 @@ export default function DriverDeliveries() {
                 Evento: <span className="font-bold">{def.label}</span>
               </div>
 
+              {/* Cliente / parada resumo */}
+              {eventForm?.stop && (
+                <div className="rounded-md border border-border p-3 space-y-1 bg-muted/30">
+                  <p className="text-sm font-semibold">{eventForm.stop.clients?.company_name || 'Cliente'}</p>
+                  <p className="text-[11px] text-muted-foreground">{eventForm.stop.destination}</p>
+                  {getStopOrderNumber(eventForm.stop) && (
+                    <Badge variant="outline" className="text-[10px]">Pedido {getStopOrderNumber(eventForm.stop)}</Badge>
+                  )}
+                </div>
+              )}
+
+              {/* Contato do cliente (boleto / desconto) */}
+              {def.showsContact && eventForm?.stop?.clients && (
+                <div className="rounded-md border border-border p-3 space-y-2">
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Contato do cliente</p>
+                  {eventForm.stop.clients.phone && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <Phone className="h-3.5 w-3.5 text-muted-foreground" />
+                      <a href={`tel:${eventForm.stop.clients.phone}`} className="text-primary">{eventForm.stop.clients.phone}</a>
+                    </div>
+                  )}
+                  {eventForm.stop.clients.whatsapp && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
+                      <a target="_blank" rel="noreferrer" href={`https://wa.me/${eventForm.stop.clients.whatsapp}`} className="text-primary">
+                        WhatsApp
+                      </a>
+                    </div>
+                  )}
+                  {eventForm.stop.clients.email && (
+                    <div className="text-[11px] text-muted-foreground">{eventForm.stop.clients.email}</div>
+                  )}
+                </div>
+              )}
+
+              {/* Bloco BOLETO */}
+              {def.key === 'atualizar_boleto' && (
+                <div className="space-y-2 rounded-md border border-border p-3">
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Atualização de boleto</p>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Novo vencimento sugerido</Label>
+                    <Input type="date" value={boletoDueDate} onChange={(e) => setBoletoDueDate(e.target.value)} className="h-10 text-sm" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Detalhe / motivo</Label>
+                    <Textarea rows={2} value={boletoNote} onChange={(e) => setBoletoNote(e.target.value)} placeholder="Ex.: cliente pediu prorrogar 3 dias úteis" className="text-sm" />
+                  </div>
+                </div>
+              )}
+
+              {/* Bloco DESCONTO */}
+              {def.showsDiscount && (
+                <div className="space-y-2 rounded-md border border-border p-3">
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Solicitar desconto</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button type="button" onClick={() => setDiscountKind('percent')} className={cn('text-xs h-9 rounded-md border', discountKind === 'percent' ? 'border-primary bg-primary/10 text-primary' : 'border-border')}>%</button>
+                    <button type="button" onClick={() => setDiscountKind('value')} className={cn('text-xs h-9 rounded-md border', discountKind === 'value' ? 'border-primary bg-primary/10 text-primary' : 'border-border')}>R$</button>
+                    <Input
+                      value={discountAmount}
+                      onChange={(e) => setDiscountAmount(e.target.value.replace(',', '.'))}
+                      inputMode="decimal"
+                      placeholder={discountKind === 'percent' ? '5' : '50,00'}
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                  <Textarea
+                    rows={2}
+                    value={discountReason}
+                    onChange={(e) => setDiscountReason(e.target.value)}
+                    placeholder="Justificativa (obrigatório)"
+                    className="text-sm"
+                  />
+                </div>
+              )}
+
+              {/* Bloco PRODUTOS para devolução */}
+              {def.showsItems && stopProducts.length > 0 && (
+                <div className="space-y-2 rounded-md border border-border p-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+                      Produtos do cliente ({stopProducts.length})
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const all: Record<string, number> = {};
+                        stopProducts.forEach((p) => { all[p.id] = p.qty; });
+                        setReturnedItems(all);
+                      }}
+                      className="text-[10px] text-primary"
+                    >
+                      Marcar tudo
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    {stopProducts.map((p) => {
+                      const q = returnedItems[p.id] || 0;
+                      const checked = q > 0;
+                      return (
+                        <div key={p.id} className={cn('rounded-md border p-2 space-y-1.5', checked ? 'border-primary bg-primary/5' : 'border-border')}>
+                          <button
+                            type="button"
+                            onClick={() => setReturnedItems((prev) => {
+                              const next = { ...prev };
+                              if (next[p.id]) delete next[p.id];
+                              else next[p.id] = p.qty;
+                              return next;
+                            })}
+                            className="w-full flex items-start gap-2 text-left"
+                          >
+                            <div className={cn('mt-0.5 h-4 w-4 rounded border flex items-center justify-center shrink-0', checked ? 'bg-primary border-primary text-primary-foreground' : 'border-border')}>
+                              {checked && <CheckCircle className="h-3 w-3" />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-medium leading-tight">{p.name}</p>
+                              <p className="text-[10px] text-muted-foreground">SKU {p.sku} · {p.qty} {p.unit} · R$ {p.price.toFixed(2)}</p>
+                            </div>
+                          </button>
+                          {checked && (
+                            <div className="flex items-center gap-2 pl-6">
+                              <Label className="text-[10px] text-muted-foreground">Devolver:</Label>
+                              <Input
+                                type="number"
+                                min={1}
+                                max={p.qty}
+                                value={q}
+                                onChange={(e) => {
+                                  const v = Math.min(p.qty, Math.max(0, parseInt(e.target.value || '0', 10)));
+                                  setReturnedItems((prev) => ({ ...prev, [p.id]: v }));
+                                }}
+                                className="h-7 text-xs w-20"
+                              />
+                              <span className="text-[10px] text-muted-foreground">/ {p.qty} {p.unit}</span>
+                              <span className="ml-auto text-[10px] font-semibold">R$ {(q * p.price).toFixed(2)}</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {totalReturnedQty > 0 && (
+                    <div className="flex items-center justify-between pt-1 border-t border-border text-xs">
+                      <span className="text-muted-foreground">Total devolução</span>
+                      <span className="font-semibold">R$ {totalReturnValue.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <Textarea
+                    rows={2}
+                    value={returnReason}
+                    onChange={(e) => setReturnReason(e.target.value)}
+                    placeholder="Motivo da devolução (avaria, validade, divergência...)"
+                    className="text-sm"
+                  />
+                </div>
+              )}
+
               {/* Recebedor */}
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium">
@@ -583,6 +919,55 @@ export default function DriverDeliveries() {
               >
                 {submitEvent.isPending ? 'Enviando...' : 'Lançar evento'}
               </Button>
+
+              {/* Thread de mensagens com a operação */}
+              {currentThread.length > 0 && (
+                <div className="space-y-2 rounded-md border border-border p-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+                      Conversa com a operação
+                    </p>
+                    {currentThread[0]?.status === 'pending' && (
+                      <Badge variant="outline" className="text-[10px] gap-1">
+                        <Clock className="h-3 w-3" /> Aguardando
+                      </Badge>
+                    )}
+                    {currentThread.some(m => m.status === 'approved') && (
+                      <Badge className="text-[10px] bg-success text-success-foreground">Aprovado</Badge>
+                    )}
+                  </div>
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                    {currentThread.map((m) => (
+                      <div key={m.id} className={cn('flex flex-col', m.from === 'driver' ? 'items-end' : 'items-start')}>
+                        <div className={cn(
+                          'max-w-[85%] rounded-lg px-3 py-2 text-xs whitespace-pre-wrap',
+                          m.from === 'driver' ? 'bg-primary text-primary-foreground' : 'bg-muted',
+                        )}>
+                          {m.text}
+                        </div>
+                        <div className="flex items-center gap-1 mt-0.5 text-[10px] text-muted-foreground">
+                          <UserIcon className="h-2.5 w-2.5" />
+                          <span>{m.author}</span>
+                          <span>·</span>
+                          <span>{new Date(m.at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-2 pt-1 border-t border-border">
+                    <Input
+                      value={followUp}
+                      onChange={(e) => setFollowUp(e.target.value)}
+                      placeholder="Enviar mensagem para a operação..."
+                      className="h-9 text-xs"
+                      onKeyDown={(e) => { if (e.key === 'Enter') sendFollowUp(); }}
+                    />
+                    <Button size="sm" onClick={sendFollowUp} disabled={!followUp.trim()}>
+                      <Send className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </SheetContent>
