@@ -302,7 +302,7 @@ function DriverDialog({ open, onOpenChange, driver, tenantId, userId }: {
   );
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{driver ? 'Editar motorista' : 'Novo motorista'}</DialogTitle>
