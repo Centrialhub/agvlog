@@ -8,6 +8,15 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Truck, MapPin, Package, Clock, ArrowRight, ClipboardCheck, AlertTriangle, Receipt } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import DemoBanner from '@/components/driver/DemoBanner';
+import { useState } from 'react';
+
+const DEMO_TRIP = {
+  id: 'demo-trip',
+  status: 'in_progress',
+  loads: { load_number: '1042 (DEMO)', origin: 'CD Montes Claros/MG', destination: 'PAI PEDRO - PIRAPORA - JAÍBA' },
+  vehicles: { plate: 'DEM-1234', nickname: 'Demo' },
+};
 
 export default function DriverHome() {
   const { currentTenant } = useTenant();
@@ -15,6 +24,7 @@ export default function DriverHome() {
   const navigate = useNavigate();
   const { data: autoTrip } = useActiveTrip(driver?.id);
   const checklist = useChecklistStatus(autoTrip?.id);
+  const [demoActive, setDemoActive] = useState(true);
 
   const { data: activeTrips = [], isLoading: tripsLoading } = useQuery({
     queryKey: ['driver_my_trips', driver?.id],
@@ -43,6 +53,9 @@ export default function DriverHome() {
 
   const loading = driverLoading || tripsLoading;
 
+  const isDemo = (!driver || activeTrips.length === 0) && demoActive && !loading;
+  const tripsToShow: any[] = isDemo ? [DEMO_TRIP] : activeTrips;
+
   return (
     <div className="space-y-4">
       <div>
@@ -50,7 +63,14 @@ export default function DriverHome() {
         <p className="text-sm text-muted-foreground">Seu painel de viagem</p>
       </div>
 
-      {!driver && !driverLoading && (
+      {isDemo && (
+        <DemoBanner
+          message="Sem viagem real — mostrando uma viagem fictícia."
+          onReset={() => setDemoActive(false)}
+        />
+      )}
+
+      {!driver && !driverLoading && !isDemo && (
         <Card>
           <CardContent className="py-6 text-center">
             <AlertTriangle className="h-8 w-8 text-warning mx-auto mb-2" />
@@ -62,7 +82,7 @@ export default function DriverHome() {
         </Card>
       )}
 
-      {driver && activeTrips.length === 0 && !loading && (
+      {driver && activeTrips.length === 0 && !loading && !isDemo && (
         <Card>
           <CardContent className="py-8 text-center">
             <Truck className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
@@ -74,9 +94,9 @@ export default function DriverHome() {
         </Card>
       )}
 
-      {activeTrips.length > 0 && (
+      {tripsToShow.length > 0 && (
         <div className="space-y-3">
-          {activeTrips.map((trip: any) => (
+          {tripsToShow.map((trip: any) => (
             <Card key={trip.id} className="border-l-4 border-l-primary">
               <CardContent className="p-4 space-y-3">
                 <div className="flex items-center justify-between">
