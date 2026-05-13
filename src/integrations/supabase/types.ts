@@ -1364,14 +1364,21 @@ export type Database = {
           address_zip: string | null
           birth_date: string | null
           blocked: boolean | null
+          card_number: string | null
           cnh_category: string | null
           cnh_expiry: string | null
+          cnh_issued_at: string | null
           cnh_number: string | null
+          cnh_security_code: string | null
+          cnh_uf: string | null
           commissioned: boolean | null
           contact: string | null
+          coop_number: string | null
           cpf: string | null
           created_at: string
           created_by: string | null
+          ctps: string | null
+          ctps_series: string | null
           current_vehicle_id: string | null
           distinguishing_marks: string | null
           doc: string | null
@@ -1382,21 +1389,29 @@ export type Database = {
           emit_contract: boolean | null
           eye_color: string | null
           father_name: string | null
+          first_license_date: string | null
           fleet_type: string | null
           hair_color: string | null
           height_m: number | null
           id: string
+          inps: string | null
+          insc: string | null
+          inss: string | null
           marital_status: string | null
           mechanic: boolean | null
           mobile: string | null
+          mope_expiry: string | null
           mother_name: string | null
           nacionalidade: string | null
           name: string
           naturalidade: string | null
           naturalidade_uf: string | null
           notes: string | null
+          pamcary_expiry: string | null
+          pamcary_number: string | null
           phone: string | null
           phone_secondary: string | null
+          pis: string | null
           prev_address_city: string | null
           prev_address_complement: string | null
           prev_address_neighborhood: string | null
@@ -1409,9 +1424,14 @@ export type Database = {
           provider_person_id: string | null
           provider_person_sync_status: string | null
           registration_date: string | null
+          renach: string | null
           residence_since: string | null
           residence_type: string | null
+          rg: string | null
+          rg_issuer: string | null
+          rg_uf: string | null
           romaneio_monitor_responsible: boolean | null
+          served_region: string | null
           sex: string | null
           sigla: string | null
           skin_color: string | null
@@ -1433,14 +1453,21 @@ export type Database = {
           address_zip?: string | null
           birth_date?: string | null
           blocked?: boolean | null
+          card_number?: string | null
           cnh_category?: string | null
           cnh_expiry?: string | null
+          cnh_issued_at?: string | null
           cnh_number?: string | null
+          cnh_security_code?: string | null
+          cnh_uf?: string | null
           commissioned?: boolean | null
           contact?: string | null
+          coop_number?: string | null
           cpf?: string | null
           created_at?: string
           created_by?: string | null
+          ctps?: string | null
+          ctps_series?: string | null
           current_vehicle_id?: string | null
           distinguishing_marks?: string | null
           doc?: string | null
@@ -1451,21 +1478,29 @@ export type Database = {
           emit_contract?: boolean | null
           eye_color?: string | null
           father_name?: string | null
+          first_license_date?: string | null
           fleet_type?: string | null
           hair_color?: string | null
           height_m?: number | null
           id?: string
+          inps?: string | null
+          insc?: string | null
+          inss?: string | null
           marital_status?: string | null
           mechanic?: boolean | null
           mobile?: string | null
+          mope_expiry?: string | null
           mother_name?: string | null
           nacionalidade?: string | null
           name: string
           naturalidade?: string | null
           naturalidade_uf?: string | null
           notes?: string | null
+          pamcary_expiry?: string | null
+          pamcary_number?: string | null
           phone?: string | null
           phone_secondary?: string | null
+          pis?: string | null
           prev_address_city?: string | null
           prev_address_complement?: string | null
           prev_address_neighborhood?: string | null
@@ -1478,9 +1513,14 @@ export type Database = {
           provider_person_id?: string | null
           provider_person_sync_status?: string | null
           registration_date?: string | null
+          renach?: string | null
           residence_since?: string | null
           residence_type?: string | null
+          rg?: string | null
+          rg_issuer?: string | null
+          rg_uf?: string | null
           romaneio_monitor_responsible?: boolean | null
+          served_region?: string | null
           sex?: string | null
           sigla?: string | null
           skin_color?: string | null
@@ -1502,14 +1542,21 @@ export type Database = {
           address_zip?: string | null
           birth_date?: string | null
           blocked?: boolean | null
+          card_number?: string | null
           cnh_category?: string | null
           cnh_expiry?: string | null
+          cnh_issued_at?: string | null
           cnh_number?: string | null
+          cnh_security_code?: string | null
+          cnh_uf?: string | null
           commissioned?: boolean | null
           contact?: string | null
+          coop_number?: string | null
           cpf?: string | null
           created_at?: string
           created_by?: string | null
+          ctps?: string | null
+          ctps_series?: string | null
           current_vehicle_id?: string | null
           distinguishing_marks?: string | null
           doc?: string | null
@@ -1520,21 +1567,29 @@ export type Database = {
           emit_contract?: boolean | null
           eye_color?: string | null
           father_name?: string | null
+          first_license_date?: string | null
           fleet_type?: string | null
           hair_color?: string | null
           height_m?: number | null
           id?: string
+          inps?: string | null
+          insc?: string | null
+          inss?: string | null
           marital_status?: string | null
           mechanic?: boolean | null
           mobile?: string | null
+          mope_expiry?: string | null
           mother_name?: string | null
           nacionalidade?: string | null
           name?: string
           naturalidade?: string | null
           naturalidade_uf?: string | null
           notes?: string | null
+          pamcary_expiry?: string | null
+          pamcary_number?: string | null
           phone?: string | null
           phone_secondary?: string | null
+          pis?: string | null
           prev_address_city?: string | null
           prev_address_complement?: string | null
           prev_address_neighborhood?: string | null
@@ -1547,9 +1602,14 @@ export type Database = {
           provider_person_id?: string | null
           provider_person_sync_status?: string | null
           registration_date?: string | null
+          renach?: string | null
           residence_since?: string | null
           residence_type?: string | null
+          rg?: string | null
+          rg_issuer?: string | null
+          rg_uf?: string | null
           romaneio_monitor_responsible?: boolean | null
+          served_region?: string | null
           sex?: string | null
           sigla?: string | null
           skin_color?: string | null
