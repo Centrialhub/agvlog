@@ -16,19 +16,21 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Plus, AlertOctagon, CheckCircle, MessageSquare, Send, Truck, User, Building2, Package, Wifi, ListOrdered, X, CalendarIcon, Loader2, Inbox, AlertTriangle, RefreshCw, ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUpToLine } from 'lucide-react';
+import { Search, Plus, AlertOctagon, CheckCircle, MessageSquare, Send, Truck, User, Building2, Package, Wifi, ListOrdered, X, CalendarIcon, Loader2, Inbox, AlertTriangle, RefreshCw, ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUpToLine, Bookmark, BookmarkPlus, Trash2, Star } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
-import { formatDistanceToNow, format, startOfMonth, subMonths, isAfter } from 'date-fns';
+import { formatDistanceToNow, format, startOfMonth, subMonths, isAfter, startOfDay, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useEffect, useRef } from 'react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from 'recharts';
 import { useEventMessages, useSendEventMessage } from '@/hooks/useEventMessages';
+import { useAuth } from '@/hooks/useAuth';
 
 const TYPE_COLORS: Record<string, string> = {
   missing_goods: '#ec4899',
@@ -46,6 +48,7 @@ const TYPE_COLORS: Record<string, string> = {
 
 export default function OperationalEvents() {
   const { currentTenant } = useTenant();
+  const { user } = useAuth();
   const { data: events = [], isLoading, isError, error, refetch, isFetching } = useOperationalEvents();
   const { data: loads = [] } = useLoads();
   const { data: clients = [] } = useClients();
@@ -104,6 +107,70 @@ export default function OperationalEvents() {
   useEffect(() => {
     try { localStorage.setItem(PAGE_SIZE_STORAGE_KEY, String(pageSize)); } catch {}
   }, [pageSize]);
+
+  // ====== Presets de filtros (por usuário) ======
+  type PresetFilters = {
+    search?: string; status?: string; type?: string; severity?: string; vehicleId?: string;
+    dateFromISO?: string | null; dateToISO?: string | null;
+  };
+  type Preset = { id: string; name: string; filters: PresetFilters; builtin?: boolean };
+  const PRESETS_KEY = `opEvents.presets.v1.${user?.id || 'anon'}`;
+  const todayISO = () => startOfDay(new Date()).toISOString();
+  const BUILTIN_PRESETS: Preset[] = [
+    { id: 'builtin:critical-today', name: 'Críticas hoje', builtin: true,
+      filters: { status: 'open', severity: 'critical', dateFromISO: todayISO() } },
+    { id: 'builtin:high-open', name: 'Alta severidade abertas', builtin: true,
+      filters: { status: 'open', severity: 'high' } },
+    { id: 'builtin:open-7d', name: 'Abertas últimos 7 dias', builtin: true,
+      filters: { status: 'open', dateFromISO: subDays(startOfDay(new Date()), 7).toISOString() } },
+    { id: 'builtin:resolved-7d', name: 'Resolvidas últimos 7 dias', builtin: true,
+      filters: { status: 'resolved', dateFromISO: subDays(startOfDay(new Date()), 7).toISOString() } },
+  ];
+  const [customPresets, setCustomPresets] = useState<Preset[]>([]);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(PRESETS_KEY);
+      setCustomPresets(raw ? JSON.parse(raw) : []);
+    } catch { setCustomPresets([]); }
+  }, [PRESETS_KEY]);
+  const persistPresets = (next: Preset[]) => {
+    setCustomPresets(next);
+    try { localStorage.setItem(PRESETS_KEY, JSON.stringify(next)); } catch {}
+  };
+  const applyPreset = (p: Preset) => {
+    const f = p.filters;
+    setSearch(f.search ?? '');
+    setStatusFilter(f.status ?? 'all');
+    setTypeFilter(f.type ?? 'all');
+    setSeverityFilter(f.severity ?? 'all');
+    setVehicleFilter(f.vehicleId ?? 'all');
+    setDateFrom(f.dateFromISO ? new Date(f.dateFromISO) : undefined);
+    setDateTo(f.dateToISO ? new Date(f.dateToISO) : undefined);
+    toast({ title: 'Preset aplicado', description: p.name });
+  };
+  const [savePresetOpen, setSavePresetOpen] = useState(false);
+  const [newPresetName, setNewPresetName] = useState('');
+  const saveCurrentAsPreset = () => {
+    const name = newPresetName.trim();
+    if (!name) return;
+    const preset: Preset = {
+      id: `custom:${Date.now()}`,
+      name,
+      filters: {
+        search, status: statusFilter, type: typeFilter, severity: severityFilter,
+        vehicleId: vehicleFilter,
+        dateFromISO: dateFrom ? dateFrom.toISOString() : null,
+        dateToISO: dateTo ? dateTo.toISOString() : null,
+      },
+    };
+    persistPresets([preset, ...customPresets]);
+    setNewPresetName('');
+    setSavePresetOpen(false);
+    toast({ title: 'Preset salvo', description: name });
+  };
+  const deletePreset = (id: string) => {
+    persistPresets(customPresets.filter(p => p.id !== id));
+  };
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<OperationalEvent | null>(null);
   const { toast } = useToast();
@@ -500,6 +567,69 @@ export default function OperationalEvents() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input ref={searchRef} placeholder="Buscar (descrição, carga, motorista, cliente)..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
         </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="h-9 gap-1.5">
+              <Bookmark className="h-4 w-4" /> Presets
+              {customPresets.length > 0 && (
+                <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">{customPresets.length}</Badge>
+              )}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-64">
+            <DropdownMenuLabel className="text-xs">Sugeridos</DropdownMenuLabel>
+            {BUILTIN_PRESETS.map(p => (
+              <DropdownMenuItem key={p.id} onClick={() => applyPreset(p)} className="cursor-pointer">
+                <Star className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+                <span className="flex-1 truncate">{p.name}</span>
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="text-xs">Meus presets</DropdownMenuLabel>
+            {customPresets.length === 0 ? (
+              <div className="px-2 py-1.5 text-xs text-muted-foreground">Nenhum preset salvo.</div>
+            ) : customPresets.map(p => (
+              <DropdownMenuItem key={p.id} onClick={() => applyPreset(p)} className="cursor-pointer group">
+                <Bookmark className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+                <span className="flex-1 truncate">{p.name}</span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); deletePreset(p.id); }}
+                  className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive ml-2"
+                  aria-label="Excluir preset"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={(e) => { e.preventDefault(); setSavePresetOpen(true); }} className="cursor-pointer">
+              <BookmarkPlus className="h-3.5 w-3.5 mr-2" />
+              Salvar filtros atuais...
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <Dialog open={savePresetOpen} onOpenChange={setSavePresetOpen}>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Salvar preset de filtros</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <Label htmlFor="preset-name">Nome</Label>
+              <Input
+                id="preset-name"
+                placeholder="Ex.: Críticas frota refrigerada"
+                value={newPresetName}
+                onChange={(e) => setNewPresetName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') saveCurrentAsPreset(); }}
+                autoFocus
+              />
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" size="sm" onClick={() => setSavePresetOpen(false)}>Cancelar</Button>
+                <Button size="sm" onClick={saveCurrentAsPreset} disabled={!newPresetName.trim()}>Salvar</Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-36"><SelectValue placeholder="Status" /></SelectTrigger>
           <SelectContent>
