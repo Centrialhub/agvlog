@@ -658,6 +658,21 @@ export default function OperationalEvents() {
         )}
       </Card>
 
+      <div className="flex justify-center pt-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            if (window.location.hash) {
+              window.history.pushState(null, '', window.location.pathname + window.location.search);
+            }
+          }}
+        >
+          <ArrowUpToLine className="h-4 w-4 mr-2" /> Voltar ao topo
+        </Button>
+      </div>
+
       <EventDetailDrawer
         event={selectedEvent}
         onClose={() => setSelectedEvent(null)}
