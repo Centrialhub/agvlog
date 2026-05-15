@@ -18,6 +18,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Search, Plus, AlertOctagon, CheckCircle, MessageSquare, Send, Truck, User, Building2, Package, Wifi, ListOrdered, X, CalendarIcon, Loader2, Inbox, AlertTriangle, RefreshCw, ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, ArrowUpToLine, Bookmark, BookmarkPlus, Trash2, Star, Download, ExternalLink } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Switch } from '@/components/ui/switch';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
@@ -96,6 +98,15 @@ export default function OperationalEvents() {
   const [vehicleFilter, setVehicleFilter] = useState<string>('all');
   const [dateFrom, setDateFrom] = useState<Date | undefined>();
   const [dateTo, setDateTo] = useState<Date | undefined>();
+  const [driverFilter, setDriverFilter] = useState<string>('all');
+  const [clientFilter, setClientFilter] = useState<string>('all');
+  const [loadFilter, setLoadFilter] = useState<string>('all');
+  const [impactMin, setImpactMin] = useState<string>('');
+  const [impactMax, setImpactMax] = useState<string>('');
+  const [hasImpactOnly, setHasImpactOnly] = useState(false);
+  const [respFilter, setRespFilter] = useState<'all' | 'deposito' | 'transporte'>('all');
+  const [hasChatOnly, setHasChatOnly] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [driverPanelSearch, setDriverPanelSearch] = useState('');
   const [expandedDriver, setExpandedDriver] = useState<string | null>(null);
   const [chatDriver, setChatDriver] = useState<{ id: string; name: string } | null>(null);
@@ -115,6 +126,12 @@ export default function OperationalEvents() {
     vehicleId: vehicleFilter,
     dateFrom,
     dateTo,
+    driverId: driverFilter,
+    clientId: clientFilter,
+    loadId: loadFilter,
+    impactMin: impactMin === '' ? null : Number(impactMin),
+    impactMax: impactMax === '' ? null : Number(impactMax),
+    hasImpact: hasImpactOnly,
   });
   type SortKey = 'created_at' | 'event_type' | 'severity' | 'load_number' | 'client' | 'driver' | 'financial_impact';
   const SORT_STORAGE_KEY = 'opEvents.sort.v1';
