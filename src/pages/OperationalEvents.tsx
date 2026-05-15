@@ -877,6 +877,234 @@ export default function OperationalEvents() {
         <KpiCard label="Impacto financeiro" value={`R$ ${totalImpact.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} accent="bg-warning/10 text-warning" />
       </div>
 
+      {/* Filtros Avançados (recolhível) */}
+      <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <button className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-muted/40 transition-colors rounded-t-lg">
+              <div className="flex items-center gap-2">
+                <Search className="h-4 w-4 text-primary" />
+                <span className="font-semibold text-sm">Filtros avançados</span>
+                {activeFiltersCount > 0 && (
+                  <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
+                    {activeFiltersCount} ativo(s)
+                  </Badge>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {activeFiltersCount > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={(e) => { e.stopPropagation(); clearAllFilters(); }}
+                  >
+                    <X className="h-3 w-3 mr-1" /> Limpar
+                  </Button>
+                )}
+                <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform', advancedOpen && 'rotate-180')} />
+              </div>
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="px-4 pb-4 pt-1 space-y-3 border-t">
+              {/* Linha 1: Busca + Status + Severidade + Responsabilidade */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 pt-3">
+                <div className="lg:col-span-2 relative">
+                  <Label className="text-xs text-muted-foreground">Busca livre</Label>
+                  <Search className="absolute left-2.5 top-[30px] h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Descrição, carga, motorista, cliente..."
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    className="pl-9 h-9 mt-1"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Status</Label>
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas</SelectItem>
+                      <SelectItem value="open">Abertas</SelectItem>
+                      <SelectItem value="resolved">Resolvidas</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Severidade</Label>
+                  <Select value={severityFilter} onValueChange={setSeverityFilter}>
+                    <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas</SelectItem>
+                      {Object.entries(SEVERITY_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Linha 2: Tipo + Responsabilidade + Veículo + Motorista */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div>
+                  <Label className="text-xs text-muted-foreground">Tipo de ocorrência</Label>
+                  <Select value={typeFilter} onValueChange={setTypeFilter}>
+                    <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos os tipos</SelectItem>
+                      {EVENT_TYPES.map(t => <SelectItem key={t} value={t}>{EVENT_TYPE_LABELS[t]}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Responsabilidade</Label>
+                  <Select value={respFilter} onValueChange={(v) => setRespFilter(v as any)}>
+                    <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas</SelectItem>
+                      <SelectItem value="transporte">Transporte</SelectItem>
+                      <SelectItem value="deposito">Depósito</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Veículo</Label>
+                  <Select value={vehicleFilter} onValueChange={setVehicleFilter}>
+                    <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      {vehicles.map((v: any) => <SelectItem key={v.id} value={v.id}>{v.plate}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Motorista</Label>
+                  <Select value={driverFilter} onValueChange={setDriverFilter}>
+                    <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent className="max-h-[300px]">
+                      <SelectItem value="all">Todos</SelectItem>
+                      {drivers.map((d: any) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Linha 3: Cliente + Carga + Datas */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div>
+                  <Label className="text-xs text-muted-foreground">Cliente</Label>
+                  <Select value={clientFilter} onValueChange={setClientFilter}>
+                    <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent className="max-h-[300px]">
+                      <SelectItem value="all">Todos</SelectItem>
+                      {clients.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Carga</Label>
+                  <Select value={loadFilter} onValueChange={setLoadFilter}>
+                    <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent className="max-h-[300px]">
+                      <SelectItem value="all">Todas</SelectItem>
+                      {loads.map((l: any) => <SelectItem key={l.id} value={l.id}>{l.load_number}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">De</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className={cn('h-9 mt-1 w-full justify-start text-left font-normal', !dateFrom && 'text-muted-foreground')}>
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {dateFrom ? format(dateFrom, 'dd/MM/yyyy') : 'Início'}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar mode="single" selected={dateFrom} onSelect={setDateFrom} initialFocus className={cn('p-3 pointer-events-auto')} />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Até</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className={cn('h-9 mt-1 w-full justify-start text-left font-normal', !dateTo && 'text-muted-foreground')}>
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {dateTo ? format(dateTo, 'dd/MM/yyyy') : 'Fim'}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar mode="single" selected={dateTo} onSelect={setDateTo} initialFocus className={cn('p-3 pointer-events-auto')} />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </div>
+
+              {/* Linha 4: Impacto financeiro */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
+                <div>
+                  <Label className="text-xs text-muted-foreground">Impacto mínimo (R$)</Label>
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    placeholder="0,00"
+                    value={impactMin}
+                    onChange={e => setImpactMin(e.target.value)}
+                    className="h-9 mt-1"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Impacto máximo (R$)</Label>
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    placeholder="∞"
+                    value={impactMax}
+                    onChange={e => setImpactMax(e.target.value)}
+                    className="h-9 mt-1"
+                  />
+                </div>
+                <div className="flex items-center gap-2 h-9">
+                  <Switch id="has-impact" checked={hasImpactOnly} onCheckedChange={setHasImpactOnly} />
+                  <Label htmlFor="has-impact" className="text-xs cursor-pointer">Apenas com impacto financeiro</Label>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" size="sm" className="h-9" onClick={clearAllFilters} disabled={activeFiltersCount === 0}>
+                    <X className="h-3.5 w-3.5 mr-1" /> Limpar tudo
+                  </Button>
+                </div>
+              </div>
+
+              {/* Atalhos rápidos de período */}
+              <div className="flex flex-wrap items-center gap-2 pt-2 border-t">
+                <span className="text-[11px] text-muted-foreground uppercase tracking-wide">Período rápido:</span>
+                {[
+                  { label: 'Hoje', from: startOfDay(new Date()) },
+                  { label: '7 dias', from: subDays(startOfDay(new Date()), 7) },
+                  { label: '30 dias', from: subDays(startOfDay(new Date()), 30) },
+                  { label: '90 dias', from: subDays(startOfDay(new Date()), 90) },
+                ].map(p => (
+                  <Button
+                    key={p.label}
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => { setDateFrom(p.from); setDateTo(undefined); }}
+                  >
+                    {p.label}
+                  </Button>
+                ))}
+                {(dateFrom || dateTo) && (
+                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => { setDateFrom(undefined); setDateTo(undefined); }}>
+                    <X className="h-3 w-3 mr-1" /> período
+                  </Button>
+                )}
+              </div>
+            </div>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
+
       {/* CHART em cima */}
       <Card>
         <CardHeader className="pb-2">
