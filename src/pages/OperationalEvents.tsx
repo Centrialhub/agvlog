@@ -574,7 +574,7 @@ export default function OperationalEvents() {
           </Button>
         )}
         <span className="text-xs text-muted-foreground ml-auto flex items-center gap-2">
-          {isFetching && !isLoading && <Loader2 className="h-3 w-3 animate-spin" />}
+          {(isTableFetching && !isTableLoading) && <Loader2 className="h-3 w-3 animate-spin" />}
           {sorted.length} resultado(s)
         </span>
       </div>
@@ -599,7 +599,7 @@ export default function OperationalEvents() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading ? (
+              {isTableLoading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <TableRow key={`sk-${i}`}>
                     {Array.from({ length: 8 }).map((__, j) => (
@@ -607,7 +607,7 @@ export default function OperationalEvents() {
                     ))}
                   </TableRow>
                 ))
-              ) : isError ? (
+              ) : isTableError ? (
                 <TableRow>
                   <TableCell colSpan={8} className="py-12">
                     <div className="flex flex-col items-center gap-3 text-center">
@@ -618,7 +618,7 @@ export default function OperationalEvents() {
                         <p className="text-sm font-medium text-foreground">Não foi possível carregar as ocorrências</p>
                         <p className="text-xs text-muted-foreground mt-1">{(error as any)?.message || 'Erro desconhecido. Verifique sua conexão.'}</p>
                       </div>
-                      <Button size="sm" variant="outline" onClick={() => refetch()}>
+                      <Button size="sm" variant="outline" onClick={() => refetchTable()}>
                         <RefreshCw className="h-3.5 w-3.5 mr-2" /> Tentar novamente
                       </Button>
                     </div>
