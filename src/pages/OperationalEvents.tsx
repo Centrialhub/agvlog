@@ -72,6 +72,14 @@ const RESPONSIBILITY_MAP: Record<string, 'deposito' | 'transporte'> = {
 const RESP_COLORS = { transporte: 'hsl(var(--primary))', deposito: 'hsl(var(--destructive))' };
 const SEPARATION_LINES = ['PESADO', 'LEVEZA', 'FRACIONADO', 'MIUDEZA'] as const;
 
+// Cores para o painel "Ocorrências por Motorista" (estilo TudoEntregue)
+const DRIVER_BAR_COLORS = {
+  critical: 'hsl(var(--destructive))',
+  high: '#f97316',     // laranja
+  medium: '#f59e0b',   // amarelo/âmbar
+  low: 'hsl(var(--success, 142 71% 45%))',
+};
+
 export default function OperationalEvents() {
   const { currentTenant } = useTenant();
   const { user } = useAuth();
