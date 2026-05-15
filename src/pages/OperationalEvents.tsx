@@ -97,6 +97,8 @@ export default function OperationalEvents() {
   const [dateTo, setDateTo] = useState<Date | undefined>();
   const [driverPanelSearch, setDriverPanelSearch] = useState('');
   const [expandedDriver, setExpandedDriver] = useState<string | null>(null);
+  type DriverSort = 'total' | 'critical' | 'severity' | 'name';
+  const [driverSort, setDriverSort] = useState<DriverSort>('total');
   // Filtros aplicados no servidor (Supabase) — performance para frotas grandes
   const {
     data: tableEvents = [],
@@ -667,16 +669,33 @@ export default function OperationalEvents() {
       cur.total++;
       map.set(name, cur);
     });
-    const arr = Array.from(map.values()).sort((a, b) => b.total - a.total);
+    const arr = Array.from(map.values());
     const max = arr.reduce((m, r) => Math.max(m, r.total), 0);
     return { rows: arr, max };
   }, [tableEvents]);
 
   const filteredDriverRows = useMemo(() => {
     const q = driverPanelSearch.trim().toLowerCase();
-    if (!q) return driverStats.rows;
-    return driverStats.rows.filter(r => r.name.toLowerCase().includes(q));
-  }, [driverStats.rows, driverPanelSearch]);
+    const base = q ? driverStats.rows.filter(r => r.name.toLowerCase().includes(q)) : driverStats.rows.slice();
+    // Score de "severidade mais alta" (peso por severidade — só não resolvidas)
+    const sevScore = (r: typeof base[number]) =>
+      r.critical * 1000 + r.high * 100 + r.medium * 10 + r.low;
+    switch (driverSort) {
+      case 'critical':
+        base.sort((a, b) => (b.critical - a.critical) || (b.high - a.high) || (b.total - a.total));
+        break;
+      case 'severity':
+        base.sort((a, b) => (sevScore(b) - sevScore(a)) || (b.total - a.total));
+        break;
+      case 'name':
+        base.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+        break;
+      case 'total':
+      default:
+        base.sort((a, b) => (b.total - a.total) || a.name.localeCompare(b.name, 'pt-BR'));
+    }
+    return base;
+  }, [driverStats.rows, driverPanelSearch, driverSort]);
 
   // Eventos agrupados por motorista (mesma fonte/ordem de tableEvents)
   const eventsByDriver = useMemo(() => {
@@ -1041,14 +1060,28 @@ export default function OperationalEvents() {
               Total de motoristas: {driverStats.rows.length}
             </CardDescription>
           </div>
-          <div className="relative w-56">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <Input
-              placeholder="Digite o nome do motorista"
-              value={driverPanelSearch}
-              onChange={(e) => setDriverPanelSearch(e.target.value)}
-              className="h-8 pl-8 text-xs"
-            />
+          <div className="flex items-center gap-2">
+            <Select value={driverSort} onValueChange={(v) => setDriverSort(v as DriverSort)}>
+              <SelectTrigger className="h-8 w-[180px] text-xs">
+                <ArrowUpDown className="h-3.5 w-3.5 mr-1 text-muted-foreground" />
+                <SelectValue placeholder="Ordenar por" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="total">Mais ocorrências</SelectItem>
+                <SelectItem value="critical">Mais críticas</SelectItem>
+                <SelectItem value="severity">Severidade mais alta</SelectItem>
+                <SelectItem value="name">Nome (A→Z)</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="relative w-56">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                placeholder="Digite o nome do motorista"
+                value={driverPanelSearch}
+                onChange={(e) => setDriverPanelSearch(e.target.value)}
+                className="h-8 pl-8 text-xs"
+              />
+            </div>
           </div>
         </CardHeader>
         <CardContent>
