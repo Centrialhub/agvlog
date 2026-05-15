@@ -365,6 +365,7 @@ export default function OperationalEvents() {
 
           {/* Type chips com totais (estilo TudoEntregue) */}
           {chartTypes.length > 0 && (
+            <>
             <div className="mt-4 flex flex-wrap gap-2">
               <button
                 onClick={() => setTypeFilter('all')}
@@ -394,6 +395,37 @@ export default function OperationalEvents() {
                   );
                 })}
             </div>
+
+            {/* Cards grandes por categoria (estilo TudoEntregue) */}
+            <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7 gap-3">
+              {chartTypes
+                .sort((a, b) => (totals[b] || 0) - (totals[a] || 0))
+                .map(t => {
+                  const c = totals[t] || 0;
+                  const pct = totalCount ? ((c / totalCount) * 100).toFixed(2).replace('.', ',') : '0,00';
+                  const color = TYPE_COLORS[t] || '#64748b';
+                  const active = typeFilter === t;
+                  return (
+                    <button
+                      key={`card-${t}`}
+                      onClick={() => setTypeFilter(active ? 'all' : t)}
+                      className={`group relative rounded-lg border-2 bg-card p-3 text-left transition-all hover:shadow-md ${active ? 'shadow-md ring-2 ring-offset-1' : ''}`}
+                      style={{ borderColor: color, ...(active ? { ['--tw-ring-color' as any]: color } : {}) }}
+                      title={`Filtrar por ${EVENT_TYPE_LABELS[t as keyof typeof EVENT_TYPE_LABELS] || t}`}
+                    >
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-2xl font-bold text-foreground">{c}</span>
+                        <span className="text-muted-foreground">|</span>
+                        <span className="text-base font-semibold" style={{ color }}>{pct}%</span>
+                      </div>
+                      <div className="mt-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground leading-tight line-clamp-2">
+                        {EVENT_TYPE_LABELS[t as keyof typeof EVENT_TYPE_LABELS] || t}
+                      </div>
+                    </button>
+                  );
+                })}
+            </div>
+            </>
           )}
         </CardContent>
       </Card>
