@@ -31,6 +31,8 @@ import { useEffect, useRef } from 'react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from 'recharts';
 import { useEventMessages, useSendEventMessage } from '@/hooks/useEventMessages';
 import { useAuth } from '@/hooks/useAuth';
+import { formatOccurrenceReport } from '@/lib/occurrenceTemplate';
+import { Copy } from 'lucide-react';
 
 const TYPE_COLORS: Record<string, string> = {
   missing_goods: '#ec4899',
