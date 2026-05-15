@@ -16,7 +16,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Plus, AlertOctagon, CheckCircle, MessageSquare, Send, Truck, User, Building2, Package, Wifi, ListOrdered, X, CalendarIcon, Loader2, Inbox, AlertTriangle, RefreshCw, ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUpToLine, Bookmark, BookmarkPlus, Trash2, Star, Download } from 'lucide-react';
+import { Search, Plus, AlertOctagon, CheckCircle, MessageSquare, Send, Truck, User, Building2, Package, Wifi, ListOrdered, X, CalendarIcon, Loader2, Inbox, AlertTriangle, RefreshCw, ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, ArrowUpToLine, Bookmark, BookmarkPlus, Trash2, Star, Download, ExternalLink } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Calendar } from '@/components/ui/calendar';
@@ -96,6 +96,7 @@ export default function OperationalEvents() {
   const [dateFrom, setDateFrom] = useState<Date | undefined>();
   const [dateTo, setDateTo] = useState<Date | undefined>();
   const [driverPanelSearch, setDriverPanelSearch] = useState('');
+  const [expandedDriver, setExpandedDriver] = useState<string | null>(null);
   // Filtros aplicados no servidor (Supabase) — performance para frotas grandes
   const {
     data: tableEvents = [],
@@ -640,6 +641,18 @@ export default function OperationalEvents() {
     return driverStats.rows.filter(r => r.name.toLowerCase().includes(q));
   }, [driverStats.rows, driverPanelSearch]);
 
+  // Eventos agrupados por motorista (mesma fonte/ordem de tableEvents)
+  const eventsByDriver = useMemo(() => {
+    const m = new Map<string, OperationalEvent[]>();
+    (tableEvents || []).forEach(e => {
+      const name = e.drivers?.name?.trim() || 'Sem motorista';
+      const arr = m.get(name) || [];
+      arr.push(e);
+      m.set(name, arr);
+    });
+    return m;
+  }, [tableEvents]);
+
   const handleCreate = async () => {
     try {
       await createEvent.mutateAsync({
@@ -1023,9 +1036,22 @@ export default function OperationalEvents() {
                   // "rating" derivado: 5 - peso da severidade média (apenas visual)
                   const weight = (r.critical * 4 + r.high * 3 + r.medium * 2 + r.low * 1 + r.resolved * 0) / Math.max(1, r.total);
                   const rating = Math.max(1, Math.min(5, 5 - weight));
+                  const isExpanded = expandedDriver === r.name;
+                  const driverEvents = eventsByDriver.get(r.name) || [];
                   return (
-                    <div key={r.name} className="grid grid-cols-[1fr_auto] items-center gap-3 py-3 px-1">
+                    <div key={r.name}>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedDriver(isExpanded ? null : r.name)}
+                      className={cn(
+                        'w-full grid grid-cols-[1fr_auto] items-center gap-3 py-3 px-1 text-left hover:bg-muted/40 transition-colors rounded-sm',
+                        isExpanded && 'bg-muted/40'
+                      )}
+                      aria-expanded={isExpanded}
+                      title={isExpanded ? 'Recolher ocorrências' : 'Expandir ocorrências'}
+                    >
                       <div className="flex items-center gap-3 min-w-0">
+                        <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform shrink-0', !isExpanded && '-rotate-90')} />
                         {/* Avatar */}
                         <div
                           className="h-9 w-9 rounded-full flex items-center justify-center text-[11px] font-bold text-foreground/80 shrink-0 ring-2 ring-background shadow-sm"
@@ -1095,6 +1121,55 @@ export default function OperationalEvents() {
                         </div>
                       </div>
                       <span className="w-10 text-right text-base font-bold tabular-nums">{r.total}</span>
+                    </button>
+                    {isExpanded && (
+                      <div className="bg-muted/20 border-l-2 border-primary/40 ml-2 mb-2 rounded-r-md">
+                        {driverEvents.length === 0 ? (
+                          <div className="px-4 py-3 text-xs text-muted-foreground">Nenhuma ocorrência neste período.</div>
+                        ) : (
+                          <ul className="divide-y divide-border/40">
+                            {driverEvents.map(ev => (
+                              <li key={ev.id} className="flex items-center gap-2 px-3 py-2 text-xs">
+                                <span
+                                  className={cn(
+                                    'h-2 w-2 rounded-full shrink-0',
+                                    ev.resolved_at ? 'bg-emerald-500'
+                                      : ev.severity === 'critical' ? 'bg-destructive'
+                                      : ev.severity === 'high' ? 'bg-orange-500'
+                                      : ev.severity === 'medium' ? 'bg-amber-500'
+                                      : 'bg-yellow-500'
+                                  )}
+                                />
+                                <span className="font-medium truncate flex-1" title={ev.description || ''}>
+                                  {EVENT_TYPE_LABELS[ev.event_type] || ev.event_type}
+                                  {ev.loads?.load_number && (
+                                    <span className="text-muted-foreground font-normal"> · Carga {ev.loads.load_number}</span>
+                                  )}
+                                  {ev.clients?.company_name && (
+                                    <span className="text-muted-foreground font-normal"> · {ev.clients.company_name}</span>
+                                  )}
+                                </span>
+                                <Badge variant="outline" className="text-[10px] h-5 shrink-0">
+                                  {SEVERITY_LABELS[ev.severity] || ev.severity}
+                                </Badge>
+                                <span className="text-[10px] text-muted-foreground shrink-0 tabular-nums">
+                                  {format(new Date(ev.created_at), 'dd/MM HH:mm')}
+                                </span>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 px-2 gap-1 text-[10px]"
+                                  onClick={(e) => { e.stopPropagation(); setSelectedEvent(ev); }}
+                                  title="Abrir ocorrência"
+                                >
+                                  Abrir <ExternalLink className="h-3 w-3" />
+                                </Button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    )}
                     </div>
                   );
                 })}
