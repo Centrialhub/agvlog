@@ -84,6 +84,12 @@ export interface OperationalEventsFilters {
   vehicleId?: string;     // 'all' or uuid
   dateFrom?: Date | null;
   dateTo?: Date | null;
+  driverId?: string;      // 'all' or uuid
+  clientId?: string;      // 'all' or uuid
+  loadId?: string;        // 'all' or uuid
+  impactMin?: number | null;
+  impactMax?: number | null;
+  hasImpact?: boolean;    // true => only impact > 0
 }
 
 /**
@@ -103,6 +109,12 @@ export function useOperationalEventsFiltered(filters: OperationalEventsFilters) 
       filters.type ?? 'all',
       filters.severity ?? 'all',
       filters.vehicleId ?? 'all',
+      filters.driverId ?? 'all',
+      filters.clientId ?? 'all',
+      filters.loadId ?? 'all',
+      filters.impactMin ?? null,
+      filters.impactMax ?? null,
+      filters.hasImpact ? 1 : 0,
       fromKey,
       toKey,
     ],
@@ -121,6 +133,12 @@ export function useOperationalEventsFiltered(filters: OperationalEventsFilters) 
       if (filters.type && filters.type !== 'all') q = q.eq('event_type', filters.type);
       if (filters.severity && filters.severity !== 'all') q = q.eq('severity', filters.severity);
       if (filters.vehicleId && filters.vehicleId !== 'all') q = q.eq('vehicle_id', filters.vehicleId);
+      if (filters.driverId && filters.driverId !== 'all') q = q.eq('driver_id', filters.driverId);
+      if (filters.clientId && filters.clientId !== 'all') q = q.eq('client_id', filters.clientId);
+      if (filters.loadId && filters.loadId !== 'all') q = q.eq('load_id', filters.loadId);
+      if (filters.hasImpact) q = q.gt('financial_impact', 0);
+      if (typeof filters.impactMin === 'number' && !isNaN(filters.impactMin)) q = q.gte('financial_impact', filters.impactMin);
+      if (typeof filters.impactMax === 'number' && !isNaN(filters.impactMax)) q = q.lte('financial_impact', filters.impactMax);
 
       if (filters.dateFrom) {
         const d = new Date(filters.dateFrom);
