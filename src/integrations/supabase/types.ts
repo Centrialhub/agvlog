@@ -4550,6 +4550,7 @@ export type Database = {
           id: string
           load_id: string | null
           order_id: string | null
+          report_details: Json | null
           resolution: string | null
           resolved_at: string | null
           severity: string
@@ -4568,6 +4569,7 @@ export type Database = {
           id?: string
           load_id?: string | null
           order_id?: string | null
+          report_details?: Json | null
           resolution?: string | null
           resolved_at?: string | null
           severity?: string
@@ -4586,6 +4588,7 @@ export type Database = {
           id?: string
           load_id?: string | null
           order_id?: string | null
+          report_details?: Json | null
           resolution?: string | null
           resolved_at?: string | null
           severity?: string

@@ -17,16 +17,17 @@ import { AlertTriangle, Plus, Clock, MessageSquare, Send } from 'lucide-react';
 import DemoBanner from '@/components/driver/DemoBanner';
 import { useEventMessages, useSendEventMessage } from '@/hooks/useEventMessages';
 import { format } from 'date-fns';
+import { OCCURRENCE_TEMPLATES, getTemplateFields, formatOccurrenceReport } from '@/lib/occurrenceTemplate';
+import { EVENT_TYPE_LABELS, OperationalEventType } from '@/hooks/useOperationalEvents';
+import { Copy } from 'lucide-react';
 
-const ISSUE_TYPES = [
-  { value: 'vehicle_breakdown', label: 'Pane no veículo' },
-  { value: 'accident', label: 'Acidente' },
-  { value: 'cargo_damage', label: 'Avaria na carga' },
-  { value: 'delivery_refused', label: 'Entrega recusada' },
-  { value: 'wrong_address', label: 'Endereço incorreto' },
-  { value: 'road_blocked', label: 'Via bloqueada' },
-  { value: 'other', label: 'Outro' },
-];
+// Tipos com modelo padronizado (texto pronto para o fornecedor) + tipos genéricos para casos do dia-a-dia.
+const TEMPLATE_TYPES = Object.keys(OCCURRENCE_TEMPLATES) as OperationalEventType[];
+const GENERIC_TYPES: OperationalEventType[] = ['damaged', 'wrong_address', 'wrong_quantity', 'partial_delivery', 'return', 'other'];
+const ISSUE_TYPES = [...TEMPLATE_TYPES, ...GENERIC_TYPES].map(v => ({
+  value: v,
+  label: EVENT_TYPE_LABELS[v] || v,
+}));
 
 const SEVERITY_OPTIONS = [
   { value: 'low', label: 'Baixa' },
@@ -47,7 +48,9 @@ export default function DriverIssues() {
   const { data: driver } = useCurrentDriver();
   const { data: trip } = useActiveTrip(driver?.id);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ event_type: 'other', severity: 'medium', description: '' });
+  const [form, setForm] = useState<{ event_type: string; severity: string; description: string; details: Record<string, any> }>({
+    event_type: 'missing_goods', severity: 'medium', description: '', details: {},
+  });
   const [demoEvents, setDemoEvents] = useState<any[]>(DEMO_EVENTS_INITIAL);
 
   const { data: events = [] } = useQuery({
@@ -69,13 +72,16 @@ export default function DriverIssues() {
 
   const createIssue = useMutation({
     mutationFn: async () => {
+      const report = formatOccurrenceReport(form.event_type, form.details);
+      const description = report || form.description || null;
       if (!currentTenant || !driver) {
         // Demo
         setDemoEvents((prev) => [{
           id: 'd' + Date.now(),
           event_type: form.event_type,
           severity: form.severity,
-          description: form.description || null,
+          description,
+          report_details: form.details,
           created_at: new Date().toISOString(),
         }, ...prev]);
         return;
@@ -84,7 +90,8 @@ export default function DriverIssues() {
         tenant_id: currentTenant!.id,
         event_type: form.event_type,
         severity: form.severity,
-        description: form.description || null,
+        description,
+        report_details: form.details,
         load_id: trip?.load_id || null,
         driver_id: driver?.id || null,
       } as any);
@@ -93,7 +100,7 @@ export default function DriverIssues() {
     onSuccess: () => {
       toast({ title: 'Ocorrência registrada' });
       setOpen(false);
-      setForm({ event_type: 'other', severity: 'medium', description: '' });
+      setForm({ event_type: 'missing_goods', severity: 'medium', description: '', details: {} });
       qc.invalidateQueries({ queryKey: ['driver_operational_events'] });
     },
     onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
@@ -109,6 +116,14 @@ export default function DriverIssues() {
     high: 'bg-destructive/10 text-destructive',
   };
 
+  const templateFields = getTemplateFields(form.event_type);
+  const previewText = formatOccurrenceReport(form.event_type, form.details);
+  const setDetail = (k: string, v: any) => setForm(f => ({ ...f, details: { ...f.details, [k]: v } }));
+  const allRequiredFilled = templateFields.filter(f => f.required).every(f => {
+    const v = form.details[f.key];
+    return v !== undefined && v !== null && String(v).trim() !== '';
+  });
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -117,12 +132,12 @@ export default function DriverIssues() {
           <DialogTrigger asChild>
             <Button size="sm"><Plus className="h-3.5 w-3.5 mr-1" /> Nova</Button>
           </DialogTrigger>
-          <DialogContent className="max-w-sm">
+          <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
             <DialogHeader><DialogTitle>Nova Ocorrência</DialogTitle></DialogHeader>
             <div className="space-y-3">
               <div>
                 <Label className="text-xs">Tipo</Label>
-                <Select value={form.event_type} onValueChange={v => setForm(f => ({ ...f, event_type: v }))}>
+                <Select value={form.event_type} onValueChange={v => setForm(f => ({ ...f, event_type: v, details: {} }))}>
                   <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {ISSUE_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
@@ -138,11 +153,61 @@ export default function DriverIssues() {
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label className="text-xs">Descrição</Label>
-                <Textarea rows={3} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Descreva o ocorrido..." className="text-sm" />
-              </div>
-              <Button className="w-full" size="sm" onClick={() => createIssue.mutate()} disabled={createIssue.isPending}>
+
+              {templateFields.length > 0 ? (
+                <>
+                  <div className="rounded-md border bg-muted/30 p-2 text-[10px] text-muted-foreground">
+                    Preencha os campos abaixo para gerar automaticamente o texto que será enviado ao fornecedor.
+                  </div>
+                  {templateFields.map(f => (
+                    <div key={f.key}>
+                      <Label className="text-xs">{f.label}{f.required && ' *'}</Label>
+                      {f.type === 'textarea' ? (
+                        <Textarea
+                          rows={2}
+                          className="text-sm"
+                          placeholder={f.placeholder}
+                          value={form.details[f.key] || ''}
+                          onChange={e => setDetail(f.key, e.target.value)}
+                        />
+                      ) : f.type === 'select' ? (
+                        <Select value={form.details[f.key] || ''} onValueChange={v => setDetail(f.key, v)}>
+                          <SelectTrigger className="h-9"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                          <SelectContent>
+                            {(f.options || []).map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      ) : f.type === 'date' ? (
+                        <Input type="date" className="h-9 text-sm" value={form.details[f.key] || ''} onChange={e => setDetail(f.key, e.target.value)} />
+                      ) : (
+                        <Input className="h-9 text-sm" placeholder={f.placeholder} value={form.details[f.key] || ''} onChange={e => setDetail(f.key, e.target.value)} />
+                      )}
+                    </div>
+                  ))}
+                  {previewText && (
+                    <div className="rounded-md border bg-background p-2">
+                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Pré-visualização (para fornecedor)</div>
+                      <pre className="text-[11px] whitespace-pre-wrap leading-snug">{previewText}</pre>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div>
+                  <Label className="text-xs">Descrição</Label>
+                  <Textarea rows={3} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Descreva o ocorrido..." className="text-sm" />
+                </div>
+              )}
+
+              <Button
+                className="w-full"
+                size="sm"
+                onClick={() => createIssue.mutate()}
+                disabled={
+                  createIssue.isPending ||
+                  (templateFields.length > 0 && !allRequiredFilled) ||
+                  (templateFields.length === 0 && !form.description.trim())
+                }
+              >
                 {createIssue.isPending ? 'Salvando...' : 'Registrar Ocorrência'}
               </Button>
             </div>
@@ -167,7 +232,7 @@ export default function DriverIssues() {
       ) : (
         <div className="space-y-2">
           {effectiveEvents.map((evt: any) => {
-            const typeLabel = ISSUE_TYPES.find(t => t.value === evt.event_type)?.label || evt.event_type;
+            const typeLabel = EVENT_TYPE_LABELS[evt.event_type as OperationalEventType] || ISSUE_TYPES.find(t => t.value === evt.event_type)?.label || evt.event_type;
             return (
               <Card key={evt.id} className="cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => !isDemo && setChatEvent(evt)}>
                 <CardContent className="p-3 space-y-1">
