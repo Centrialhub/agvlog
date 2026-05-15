@@ -1060,14 +1060,28 @@ export default function OperationalEvents() {
               Total de motoristas: {driverStats.rows.length}
             </CardDescription>
           </div>
-          <div className="relative w-56">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <Input
-              placeholder="Digite o nome do motorista"
-              value={driverPanelSearch}
-              onChange={(e) => setDriverPanelSearch(e.target.value)}
-              className="h-8 pl-8 text-xs"
-            />
+          <div className="flex items-center gap-2">
+            <Select value={driverSort} onValueChange={(v) => setDriverSort(v as DriverSort)}>
+              <SelectTrigger className="h-8 w-[180px] text-xs">
+                <ArrowUpDown className="h-3.5 w-3.5 mr-1 text-muted-foreground" />
+                <SelectValue placeholder="Ordenar por" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="total">Mais ocorrências</SelectItem>
+                <SelectItem value="critical">Mais críticas</SelectItem>
+                <SelectItem value="severity">Severidade mais alta</SelectItem>
+                <SelectItem value="name">Nome (A→Z)</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="relative w-56">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                placeholder="Digite o nome do motorista"
+                value={driverPanelSearch}
+                onChange={(e) => setDriverPanelSearch(e.target.value)}
+                className="h-8 pl-8 text-xs"
+              />
+            </div>
           </div>
         </CardHeader>
         <CardContent>
