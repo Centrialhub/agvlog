@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
@@ -10,9 +10,13 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { AlertTriangle, Plus, Clock } from 'lucide-react';
+import { AlertTriangle, Plus, Clock, MessageSquare, Send } from 'lucide-react';
 import DemoBanner from '@/components/driver/DemoBanner';
+import { useEventMessages, useSendEventMessage } from '@/hooks/useEventMessages';
+import { format } from 'date-fns';
 
 const ISSUE_TYPES = [
   { value: 'vehicle_breakdown', label: 'Pane no veículo' },
