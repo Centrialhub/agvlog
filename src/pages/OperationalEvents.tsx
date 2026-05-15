@@ -1203,18 +1203,6 @@ function SupplierTextBlock({ event }: { event: OperationalEvent }) {
   );
 }
 
-function _InfoRowOriginalRemoved({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-muted-foreground">{icon}</span>
-      <div className="flex-1 min-w-0">
-        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
-        <div className="text-sm font-medium truncate">{value}</div>
-      </div>
-    </div>
-  );
-}
-
 function EventChat({ eventId }: { eventId: string }) {
   const { data: messages = [], isLoading } = useEventMessages(eventId);
   const send = useSendEventMessage();
