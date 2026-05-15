@@ -72,6 +72,71 @@ export function useOperationalEvents() {
   });
 }
 
+export interface OperationalEventsFilters {
+  status?: 'all' | 'open' | 'resolved';
+  type?: string;          // 'all' or one of EVENT_TYPES
+  severity?: string;      // 'all' | 'low' | 'medium' | 'high' | 'critical'
+  vehicleId?: string;     // 'all' or uuid
+  dateFrom?: Date | null;
+  dateTo?: Date | null;
+}
+
+/**
+ * Versão server-side: empurra filtros (tipo, status, severidade, veículo, datas)
+ * para o Supabase. Otimizado para frotas grandes.
+ * Busca textual continua no cliente sobre o resultado já reduzido.
+ */
+export function useOperationalEventsFiltered(filters: OperationalEventsFilters) {
+  const { currentTenant } = useTenant();
+  const fromKey = filters.dateFrom ? filters.dateFrom.toISOString().slice(0, 10) : null;
+  const toKey = filters.dateTo ? filters.dateTo.toISOString().slice(0, 10) : null;
+  return useQuery({
+    queryKey: [
+      'operational_events_filtered',
+      currentTenant?.id,
+      filters.status ?? 'open',
+      filters.type ?? 'all',
+      filters.severity ?? 'all',
+      filters.vehicleId ?? 'all',
+      fromKey,
+      toKey,
+    ],
+    queryFn: async () => {
+      if (!currentTenant) return [];
+      let q = (supabase as any)
+        .from('operational_events')
+        .select('*, loads(load_number), drivers(name), clients(company_name)')
+        .eq('tenant_id', currentTenant.id)
+        .order('created_at', { ascending: false })
+        .limit(2000);
+
+      if (filters.status === 'open') q = q.is('resolved_at', null);
+      else if (filters.status === 'resolved') q = q.not('resolved_at', 'is', null);
+
+      if (filters.type && filters.type !== 'all') q = q.eq('event_type', filters.type);
+      if (filters.severity && filters.severity !== 'all') q = q.eq('severity', filters.severity);
+      if (filters.vehicleId && filters.vehicleId !== 'all') q = q.eq('vehicle_id', filters.vehicleId);
+
+      if (filters.dateFrom) {
+        const d = new Date(filters.dateFrom);
+        d.setHours(0, 0, 0, 0);
+        q = q.gte('created_at', d.toISOString());
+      }
+      if (filters.dateTo) {
+        const d = new Date(filters.dateTo);
+        d.setHours(23, 59, 59, 999);
+        q = q.lte('created_at', d.toISOString());
+      }
+
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data || []) as OperationalEvent[];
+    },
+    enabled: !!currentTenant,
+    placeholderData: (prev) => prev,
+  });
+}
+
 export function useCreateOperationalEvent() {
   const { currentTenant } = useTenant();
   const { user } = useAuth();
