@@ -10,18 +10,19 @@ import {
   MoreHorizontal,
   LogOut,
   Truck,
+  MessageSquare,
 } from 'lucide-react';
 
 const driverNav: { label: string; href: string; icon: typeof Home; match?: string[] }[] = [
   { label: 'Início', href: '/driver', icon: Home },
   { label: 'Paradas', href: '/driver/stops', icon: MapPin },
   { label: 'Entregas', href: '/driver/deliveries', icon: Package },
-  { label: 'Despesas', href: '/driver/expenses', icon: Receipt },
+  { label: 'Chat', href: '/driver/chat', icon: MessageSquare },
   {
     label: 'Mais',
     href: '/driver/journey',
     icon: MoreHorizontal,
-    match: ['/driver/journey', '/driver/checklist', '/driver/issues'],
+    match: ['/driver/journey', '/driver/checklist', '/driver/issues', '/driver/expenses'],
   },
 ];
 

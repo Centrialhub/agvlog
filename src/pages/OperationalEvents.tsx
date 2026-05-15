@@ -30,6 +30,7 @@ import { ptBR } from 'date-fns/locale';
 import { useEffect, useRef } from 'react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend, PieChart, Pie, Cell, BarChart, Bar, LabelList } from 'recharts';
 import { useEventMessages, useSendEventMessage } from '@/hooks/useEventMessages';
+import { useDriverMessages, useSendDriverMessage } from '@/hooks/useDriverMessages';
 import { useAuth } from '@/hooks/useAuth';
 import { formatOccurrenceReport } from '@/lib/occurrenceTemplate';
 import { Copy } from 'lucide-react';
@@ -97,6 +98,7 @@ export default function OperationalEvents() {
   const [dateTo, setDateTo] = useState<Date | undefined>();
   const [driverPanelSearch, setDriverPanelSearch] = useState('');
   const [expandedDriver, setExpandedDriver] = useState<string | null>(null);
+  const [chatDriver, setChatDriver] = useState<{ id: string; name: string } | null>(null);
   type DriverSort = 'total' | 'critical' | 'severity' | 'name';
   const [driverSort, setDriverSort] = useState<DriverSort>('total');
   // Filtros aplicados no servidor (Supabase) — performance para frotas grandes
@@ -1205,6 +1207,20 @@ export default function OperationalEvents() {
                           </span>
                           <div className="flex items-center gap-1">
                             <Button
+                              variant="default"
+                              size="sm"
+                              className="h-7 px-2 gap-1 text-[11px]"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const drvId = (driverEvents[0] as any)?.driver_id || (driverEvents[0] as any)?.drivers?.id;
+                                if (drvId) setChatDriver({ id: drvId, name: r.name });
+                              }}
+                              disabled={!((driverEvents[0] as any)?.driver_id || (driverEvents[0] as any)?.drivers?.id)}
+                              title="Abrir chat direto com o motorista (tempo real)"
+                            >
+                              <MessageSquare className="h-3 w-3" /> Chat
+                            </Button>
+                            <Button
                               variant="outline"
                               size="sm"
                               className="h-7 px-2 gap-1 text-[11px]"
@@ -1613,6 +1629,11 @@ export default function OperationalEvents() {
         onClose={() => setSelectedEvent(null)}
         onResolve={handleResolve}
       />
+
+      <DriverChatDrawer
+        driver={chatDriver}
+        onClose={() => setChatDriver(null)}
+      />
     </div>
   );
 }
@@ -1738,6 +1759,90 @@ function EventChat({ eventId }: { eventId: string }) {
     if (!v) return;
     setText('');
     await send.mutateAsync({ eventId, message: v, role: 'operator' });
+  };
+
+  return (
+    <div className="flex-1 flex flex-col min-h-0">
+      <div className="px-5 py-2 border-b flex items-center gap-2 text-xs text-muted-foreground">
+        <MessageSquare className="h-3.5 w-3.5" /> Chat com o motorista (sincronia em tempo real)
+      </div>
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-2 bg-muted/10">
+        {isLoading ? (
+          <div className="text-center text-xs text-muted-foreground py-4">Carregando mensagens...</div>
+        ) : messages.length === 0 ? (
+          <div className="text-center text-xs text-muted-foreground py-8">Nenhuma mensagem ainda. Inicie a conversa com o motorista.</div>
+        ) : (
+          messages.map(m => {
+            const fromDriver = m.sender_role === 'driver';
+            return (
+              <div key={m.id} className={`flex ${fromDriver ? 'justify-start' : 'justify-end'}`}>
+                <div className={`max-w-[80%] rounded-lg px-3 py-2 text-sm shadow-sm ${fromDriver ? 'bg-background border' : 'bg-primary text-primary-foreground'}`}>
+                  <div className={`text-[10px] mb-0.5 opacity-70 ${fromDriver ? 'text-muted-foreground' : ''}`}>
+                    {fromDriver ? `🚚 ${m.sender_name || 'Motorista'}` : (m.sender_name || 'Operação')}
+                    {' · '}
+                    {format(new Date(m.created_at), 'dd/MM HH:mm')}
+                  </div>
+                  <div className="whitespace-pre-wrap break-words">{m.message}</div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+      <div className="p-3 border-t bg-background flex gap-2">
+        <Input
+          placeholder="Escreva uma mensagem..."
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+        />
+        <Button onClick={handleSend} disabled={send.isPending || !text.trim()}>
+          <Send className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function DriverChatDrawer({ driver, onClose }: { driver: { id: string; name: string } | null; onClose: () => void }) {
+  const isOpen = !!driver;
+  return (
+    <Sheet open={isOpen} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <SheetContent className="w-full sm:max-w-xl flex flex-col p-0">
+        {driver && (
+          <>
+            <SheetHeader className="p-5 border-b">
+              <SheetTitle className="flex items-center gap-2">
+                <User className="h-4 w-4 text-primary" />
+                Chat direto — {driver.name}
+              </SheetTitle>
+              <SheetDescription>
+                Conversa em tempo real com o motorista (independente de uma ocorrência específica).
+              </SheetDescription>
+            </SheetHeader>
+            <DriverChat driverId={driver.id} />
+          </>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function DriverChat({ driverId }: { driverId: string }) {
+  const { data: messages = [], isLoading } = useDriverMessages(driverId);
+  const send = useSendDriverMessage();
+  const [text, setText] = useState('');
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+  }, [messages.length]);
+
+  const handleSend = async () => {
+    const v = text.trim();
+    if (!v) return;
+    setText('');
+    await send.mutateAsync({ driverId, message: v, role: 'operator' });
   };
 
   return (
