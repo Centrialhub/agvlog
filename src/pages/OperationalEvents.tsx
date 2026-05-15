@@ -416,7 +416,10 @@ export default function OperationalEvents() {
             <X className="h-4 w-4 mr-1" /> Limpar ({activeFiltersCount})
           </Button>
         )}
-        <span className="text-xs text-muted-foreground ml-auto">{filtered.length} resultado(s)</span>
+        <span className="text-xs text-muted-foreground ml-auto flex items-center gap-2">
+          {isFetching && !isLoading && <Loader2 className="h-3 w-3 animate-spin" />}
+          {filtered.length} resultado(s)
+        </span>
       </div>
 
       <Card>
