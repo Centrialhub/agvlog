@@ -15,7 +15,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Plus, AlertOctagon, CheckCircle, MessageSquare, Send, Truck, User, Building2, Package, Wifi, ListOrdered, X, CalendarIcon, Loader2, Inbox, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Search, Plus, AlertOctagon, CheckCircle, MessageSquare, Send, Truck, User, Building2, Package, Wifi, ListOrdered, X, CalendarIcon, Loader2, Inbox, AlertTriangle, RefreshCw, ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
@@ -57,6 +57,11 @@ export default function OperationalEvents() {
   const [vehicleFilter, setVehicleFilter] = useState<string>('all');
   const [dateFrom, setDateFrom] = useState<Date | undefined>();
   const [dateTo, setDateTo] = useState<Date | undefined>();
+  type SortKey = 'created_at' | 'event_type' | 'severity' | 'load_number' | 'client' | 'driver' | 'financial_impact';
+  const [sortKey, setSortKey] = useState<SortKey>('created_at');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<OperationalEvent | null>(null);
   const { toast } = useToast();
@@ -125,6 +130,45 @@ export default function OperationalEvents() {
       return true;
     });
   }, [events, search, statusFilter, typeFilter, severityFilter, vehicleFilter, dateFrom, dateTo]);
+
+  const SEVERITY_ORDER: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 };
+  const sorted = useMemo(() => {
+    const arr = [...filtered];
+    const dir = sortDir === 'asc' ? 1 : -1;
+    const cmpStr = (a: string, b: string) => a.localeCompare(b, 'pt-BR') * dir;
+    arr.sort((a, b) => {
+      switch (sortKey) {
+        case 'created_at': return (new Date(a.created_at).getTime() - new Date(b.created_at).getTime()) * dir;
+        case 'event_type': return cmpStr(EVENT_TYPE_LABELS[a.event_type] || '', EVENT_TYPE_LABELS[b.event_type] || '');
+        case 'severity': return ((SEVERITY_ORDER[a.severity] || 0) - (SEVERITY_ORDER[b.severity] || 0)) * dir;
+        case 'load_number': return cmpStr(a.loads?.load_number || '', b.loads?.load_number || '');
+        case 'client': return cmpStr(a.clients?.company_name || '', b.clients?.company_name || '');
+        case 'driver': return cmpStr(a.drivers?.name || '', b.drivers?.name || '');
+        case 'financial_impact': return ((Number(a.financial_impact) || 0) - (Number(b.financial_impact) || 0)) * dir;
+      }
+    });
+    return arr;
+  }, [filtered, sortKey, sortDir]);
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const paged = useMemo(() => sorted.slice((currentPage - 1) * pageSize, currentPage * pageSize), [sorted, currentPage, pageSize]);
+
+  // Reset to first page on filter/sort/pageSize changes
+  useEffect(() => { setPage(1); }, [search, statusFilter, typeFilter, severityFilter, vehicleFilter, dateFrom, dateTo, sortKey, sortDir, pageSize]);
+
+  const toggleSort = (k: SortKey) => {
+    if (sortKey === k) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortKey(k); setSortDir(k === 'created_at' || k === 'severity' || k === 'financial_impact' ? 'desc' : 'asc'); }
+  };
+  const SortHead = ({ k, label, className }: { k: SortKey; label: string; className?: string }) => (
+    <TableHead className={className}>
+      <button onClick={() => toggleSort(k)} className="inline-flex items-center gap-1 hover:text-foreground transition-colors">
+        {label}
+        {sortKey === k ? (sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-40" />}
+      </button>
+    </TableHead>
+  );
 
   const activeFiltersCount = (statusFilter !== 'open' ? 1 : 0) + (typeFilter !== 'all' ? 1 : 0) +
     (severityFilter !== 'all' ? 1 : 0) + (vehicleFilter !== 'all' ? 1 : 0) + (dateFrom ? 1 : 0) + (dateTo ? 1 : 0) + (search ? 1 : 0);
@@ -418,7 +462,7 @@ export default function OperationalEvents() {
         )}
         <span className="text-xs text-muted-foreground ml-auto flex items-center gap-2">
           {isFetching && !isLoading && <Loader2 className="h-3 w-3 animate-spin" />}
-          {filtered.length} resultado(s)
+          {sorted.length} resultado(s)
         </span>
       </div>
 
@@ -431,13 +475,13 @@ export default function OperationalEvents() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Tipo</TableHead>
-                <TableHead>Severidade</TableHead>
-                <TableHead>Carga</TableHead>
-                <TableHead>Cliente</TableHead>
-                <TableHead>Motorista</TableHead>
-                <TableHead>Impacto</TableHead>
-                <TableHead>Quando</TableHead>
+                <SortHead k="event_type" label="Tipo" />
+                <SortHead k="severity" label="Severidade" />
+                <SortHead k="load_number" label="Carga" />
+                <SortHead k="client" label="Cliente" />
+                <SortHead k="driver" label="Motorista" />
+                <SortHead k="financial_impact" label="Impacto" />
+                <SortHead k="created_at" label="Quando" />
                 <TableHead className="w-28 text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -504,7 +548,7 @@ export default function OperationalEvents() {
                     </div>
                   </TableCell>
                 </TableRow>
-              ) : filtered.map(e => (
+              ) : paged.map(e => (
                 <TableRow key={e.id} className={`cursor-pointer hover:bg-muted/50 ${e.resolved_at ? 'opacity-60' : ''}`} onClick={() => setSelectedEvent(e)}>
                   <TableCell className="text-sm font-medium">
                     <div className="flex items-center gap-2">
@@ -535,6 +579,29 @@ export default function OperationalEvents() {
             </TableBody>
           </Table>
         </CardContent>
+        {sorted.length > 0 && (
+          <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-border flex-wrap">
+            <div className="text-xs text-muted-foreground">
+              Mostrando {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, sorted.length)} de {sorted.length}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Por página</span>
+              <Select value={String(pageSize)} onValueChange={v => setPageSize(Number(v))}>
+                <SelectTrigger className="h-8 w-[72px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {[10, 25, 50, 100].map(n => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <div className="flex items-center gap-1 ml-2">
+                <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage <= 1} onClick={() => setPage(1)}><ChevronsLeft className="h-4 w-4" /></Button>
+                <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}><ChevronLeft className="h-4 w-4" /></Button>
+                <span className="text-xs text-muted-foreground px-2">{currentPage} / {totalPages}</span>
+                <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}><ChevronRight className="h-4 w-4" /></Button>
+                <Button variant="outline" size="icon" className="h-8 w-8" disabled={currentPage >= totalPages} onClick={() => setPage(totalPages)}><ChevronsRight className="h-4 w-4" /></Button>
+              </div>
+            </div>
+          </div>
+        )}
       </Card>
 
       <EventDetailDrawer
