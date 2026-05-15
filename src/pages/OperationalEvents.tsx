@@ -157,6 +157,16 @@ export default function OperationalEvents() {
   // Reset to first page on filter/sort/pageSize changes
   useEffect(() => { setPage(1); }, [search, statusFilter, typeFilter, severityFilter, vehicleFilter, dateFrom, dateTo, sortKey, sortDir, pageSize]);
 
+  // Scroll para a âncora ao abrir com hash (#detalhamento-ocorrencias)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.location.hash === '#detalhamento-ocorrencias') {
+      setTimeout(() => {
+        document.getElementById('detalhamento-ocorrencias')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+    }
+  }, []);
+
   const toggleSort = (k: SortKey) => {
     if (sortKey === k) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     else { setSortKey(k); setSortDir(k === 'created_at' || k === 'severity' || k === 'financial_impact' ? 'desc' : 'asc'); }
