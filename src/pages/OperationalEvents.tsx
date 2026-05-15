@@ -15,7 +15,10 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Plus, AlertOctagon, CheckCircle, MessageSquare, Send, Truck, User, Building2, Package, Wifi, ListOrdered } from 'lucide-react';
+import { Search, Plus, AlertOctagon, CheckCircle, MessageSquare, Send, Truck, User, Building2, Package, Wifi, ListOrdered, X, CalendarIcon } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -50,6 +53,10 @@ export default function OperationalEvents() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('open');
   const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [severityFilter, setSeverityFilter] = useState<string>('all');
+  const [vehicleFilter, setVehicleFilter] = useState<string>('all');
+  const [dateFrom, setDateFrom] = useState<Date | undefined>();
+  const [dateTo, setDateTo] = useState<Date | undefined>();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<OperationalEvent | null>(null);
   const { toast } = useToast();
@@ -60,6 +67,16 @@ export default function OperationalEvents() {
     queryFn: async () => {
       if (!currentTenant) return [];
       const { data } = await supabase.from('drivers').select('id, name').eq('tenant_id', currentTenant.id).eq('active', true).order('name');
+      return data || [];
+    },
+    enabled: !!currentTenant,
+  });
+
+  const { data: vehicles = [] } = useQuery({
+    queryKey: ['events_vehicles', currentTenant?.id],
+    queryFn: async () => {
+      if (!currentTenant) return [];
+      const { data } = await supabase.from('vehicles').select('id, plate').eq('tenant_id', currentTenant.id).eq('active', true).order('plate');
       return data || [];
     },
     enabled: !!currentTenant,
@@ -90,14 +107,31 @@ export default function OperationalEvents() {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
+    const fromTs = dateFrom ? new Date(dateFrom.getFullYear(), dateFrom.getMonth(), dateFrom.getDate()).getTime() : null;
+    const toTs = dateTo ? new Date(dateTo.getFullYear(), dateTo.getMonth(), dateTo.getDate(), 23, 59, 59, 999).getTime() : null;
     return events.filter(e => {
-      if (q && !(e.description || '').toLowerCase().includes(q) && !(e.loads?.load_number || '').toLowerCase().includes(q)) return false;
+      if (q) {
+        const hay = `${e.description || ''} ${e.loads?.load_number || ''} ${e.drivers?.name || ''} ${e.clients?.company_name || ''}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
       if (statusFilter === 'open' && e.resolved_at) return false;
       if (statusFilter === 'resolved' && !e.resolved_at) return false;
       if (typeFilter !== 'all' && e.event_type !== typeFilter) return false;
+      if (severityFilter !== 'all' && e.severity !== severityFilter) return false;
+      if (vehicleFilter !== 'all' && e.vehicle_id !== vehicleFilter) return false;
+      const ts = new Date(e.created_at).getTime();
+      if (fromTs && ts < fromTs) return false;
+      if (toTs && ts > toTs) return false;
       return true;
     });
-  }, [events, search, statusFilter, typeFilter]);
+  }, [events, search, statusFilter, typeFilter, severityFilter, vehicleFilter, dateFrom, dateTo]);
+
+  const activeFiltersCount = (statusFilter !== 'open' ? 1 : 0) + (typeFilter !== 'all' ? 1 : 0) +
+    (severityFilter !== 'all' ? 1 : 0) + (vehicleFilter !== 'all' ? 1 : 0) + (dateFrom ? 1 : 0) + (dateTo ? 1 : 0) + (search ? 1 : 0);
+  const clearAllFilters = () => {
+    setSearch(''); setStatusFilter('open'); setTypeFilter('all'); setSeverityFilter('all');
+    setVehicleFilter('all'); setDateFrom(undefined); setDateTo(undefined);
+  };
 
   // ===== Chart data: últimos 12 meses, séries por tipo =====
   const { chartData, chartTypes, totals, totalCount } = useMemo(() => {
@@ -321,13 +355,13 @@ export default function OperationalEvents() {
       </Card>
 
       {/* Filtros + Tabela detalhada */}
-      <div id="detalhamento-ocorrencias" className="flex gap-3 items-center flex-wrap scroll-mt-4">
-        <div className="relative max-w-sm flex-1">
+      <div id="detalhamento-ocorrencias" className="flex gap-2 items-center flex-wrap scroll-mt-4">
+        <div className="relative min-w-[220px] flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar por descrição ou carga..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+          <Input placeholder="Buscar (descrição, carga, motorista, cliente)..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-36"><SelectValue placeholder="Status" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todas</SelectItem>
             <SelectItem value="open">Abertas</SelectItem>
@@ -335,12 +369,53 @@ export default function OperationalEvents() {
           </SelectContent>
         </Select>
         <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className="w-52"><SelectValue placeholder="Tipo" /></SelectTrigger>
+          <SelectTrigger className="w-48"><SelectValue placeholder="Tipo" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos os tipos</SelectItem>
             {EVENT_TYPES.map(t => <SelectItem key={t} value={t}>{EVENT_TYPE_LABELS[t]}</SelectItem>)}
           </SelectContent>
         </Select>
+        <Select value={severityFilter} onValueChange={setSeverityFilter}>
+          <SelectTrigger className="w-40"><SelectValue placeholder="Severidade" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Toda severidade</SelectItem>
+            {Object.entries(SEVERITY_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={vehicleFilter} onValueChange={setVehicleFilter}>
+          <SelectTrigger className="w-44"><SelectValue placeholder="Veículo" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os veículos</SelectItem>
+            {vehicles.map((v: any) => <SelectItem key={v.id} value={v.id}>{v.plate}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className={cn('h-9 justify-start text-left font-normal', !dateFrom && 'text-muted-foreground')}>
+              <CalendarIcon className="h-4 w-4 mr-2" />
+              {dateFrom ? format(dateFrom, 'dd/MM/yy') : 'De'}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar mode="single" selected={dateFrom} onSelect={setDateFrom} initialFocus className={cn('p-3 pointer-events-auto')} />
+          </PopoverContent>
+        </Popover>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className={cn('h-9 justify-start text-left font-normal', !dateTo && 'text-muted-foreground')}>
+              <CalendarIcon className="h-4 w-4 mr-2" />
+              {dateTo ? format(dateTo, 'dd/MM/yy') : 'Até'}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar mode="single" selected={dateTo} onSelect={setDateTo} initialFocus className={cn('p-3 pointer-events-auto')} />
+          </PopoverContent>
+        </Popover>
+        {activeFiltersCount > 0 && (
+          <Button variant="ghost" size="sm" onClick={clearAllFilters} className="h-9 text-muted-foreground">
+            <X className="h-4 w-4 mr-1" /> Limpar ({activeFiltersCount})
+          </Button>
+        )}
         <span className="text-xs text-muted-foreground ml-auto">{filtered.length} resultado(s)</span>
       </div>
 
