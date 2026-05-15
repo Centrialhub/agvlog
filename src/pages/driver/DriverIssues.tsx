@@ -101,6 +101,7 @@ export default function DriverIssues() {
 
   const isDemo = !driver;
   const effectiveEvents = isDemo ? demoEvents : events;
+  const [chatEvent, setChatEvent] = useState<any | null>(null);
 
   const severityColors: Record<string, string> = {
     low: 'bg-muted text-muted-foreground',
@@ -168,16 +169,23 @@ export default function DriverIssues() {
           {effectiveEvents.map((evt: any) => {
             const typeLabel = ISSUE_TYPES.find(t => t.value === evt.event_type)?.label || evt.event_type;
             return (
-              <Card key={evt.id}>
+              <Card key={evt.id} className="cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => !isDemo && setChatEvent(evt)}>
                 <CardContent className="p-3 space-y-1">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-medium">{typeLabel}</p>
                     <Badge className={`text-[10px] ${severityColors[evt.severity] || ''}`} variant="secondary">{evt.severity}</Badge>
                   </div>
                   {evt.description && <p className="text-xs text-muted-foreground">{evt.description}</p>}
-                  <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                    <Clock className="h-2.5 w-2.5" />
-                    {new Date(evt.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                  <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-2.5 w-2.5" />
+                      {new Date(evt.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                    {!isDemo && (
+                      <span className="flex items-center gap-1 text-primary">
+                        <MessageSquare className="h-2.5 w-2.5" /> Chat
+                      </span>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -185,6 +193,92 @@ export default function DriverIssues() {
           })}
         </div>
       )}
+
+      <DriverChatSheet
+        event={chatEvent}
+        driverName={driver?.name || 'Motorista'}
+        onClose={() => setChatEvent(null)}
+      />
     </div>
+  );
+}
+
+function DriverChatSheet({ event, driverName, onClose }: { event: any | null; driverName: string; onClose: () => void }) {
+  const isOpen = !!event;
+  return (
+    <Sheet open={isOpen} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <SheetContent side="bottom" className="h-[85vh] flex flex-col p-0">
+        {event && (
+          <>
+            <SheetHeader className="p-4 border-b">
+              <SheetTitle className="text-base flex items-center gap-2">
+                <MessageSquare className="h-4 w-4 text-primary" /> Chat com a operação
+              </SheetTitle>
+              <p className="text-xs text-muted-foreground">{event.description || event.event_type}</p>
+            </SheetHeader>
+            <DriverChat eventId={event.id} driverName={driverName} />
+          </>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function DriverChat({ eventId, driverName }: { eventId: string; driverName: string }) {
+  const { data: messages = [], isLoading } = useEventMessages(eventId);
+  const send = useSendEventMessage();
+  const [text, setText] = useState('');
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+  }, [messages.length]);
+
+  const handleSend = async () => {
+    const v = text.trim();
+    if (!v) return;
+    setText('');
+    await send.mutateAsync({ eventId, message: v, role: 'driver', name: driverName });
+  };
+
+  return (
+    <>
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-2 bg-muted/10">
+        {isLoading ? (
+          <div className="text-center text-xs text-muted-foreground py-4">Carregando...</div>
+        ) : messages.length === 0 ? (
+          <div className="text-center text-xs text-muted-foreground py-8">
+            Nenhuma mensagem ainda. A operação será notificada assim que você escrever.
+          </div>
+        ) : (
+          messages.map((m: any) => {
+            const fromDriver = m.sender_role === 'driver';
+            return (
+              <div key={m.id} className={`flex ${fromDriver ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${fromDriver ? 'bg-primary text-primary-foreground' : 'bg-background border'}`}>
+                  <div className={`text-[10px] mb-0.5 opacity-70`}>
+                    {fromDriver ? 'Você' : `🏢 ${m.sender_name || 'Operação'}`}
+                    {' · '}
+                    {format(new Date(m.created_at), 'dd/MM HH:mm')}
+                  </div>
+                  <div className="whitespace-pre-wrap break-words">{m.message}</div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+      <div className="p-3 border-t bg-background flex gap-2">
+        <Input
+          placeholder="Mensagem para a operação..."
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+        />
+        <Button onClick={handleSend} disabled={send.isPending || !text.trim()} size="icon">
+          <Send className="h-4 w-4" />
+        </Button>
+      </div>
+    </>
   );
 }
