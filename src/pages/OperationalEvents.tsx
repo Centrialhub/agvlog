@@ -1172,6 +1172,43 @@ function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string;
       <span className="text-muted-foreground">{icon}</span>
       <div className="flex-1 min-w-0">
         <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
+        <div className="truncate">{value}</div>
+      </div>
+    </div>
+  );
+}
+
+function SupplierTextBlock({ event }: { event: OperationalEvent }) {
+  const { toast } = useToast();
+  const text = formatOccurrenceReport(event.event_type, (event as any).report_details);
+  if (!text) return null;
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({ title: 'Texto copiado', description: 'Pronto para enviar ao fornecedor.' });
+    } catch {
+      toast({ title: 'Não foi possível copiar', variant: 'destructive' });
+    }
+  };
+  return (
+    <div className="text-sm bg-background rounded-md border p-3">
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Texto para fornecedor</div>
+        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={copy}>
+          <Copy className="h-3 w-3 mr-1" /> Copiar
+        </Button>
+      </div>
+      <pre className="whitespace-pre-wrap font-sans text-xs leading-relaxed">{text}</pre>
+    </div>
+  );
+}
+
+function _InfoRowOriginalRemoved({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-muted-foreground">{icon}</span>
+      <div className="flex-1 min-w-0">
+        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
         <div className="text-sm font-medium truncate">{value}</div>
       </div>
     </div>
