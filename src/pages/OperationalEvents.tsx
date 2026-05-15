@@ -96,6 +96,7 @@ export default function OperationalEvents() {
   const [dateFrom, setDateFrom] = useState<Date | undefined>();
   const [dateTo, setDateTo] = useState<Date | undefined>();
   const [driverPanelSearch, setDriverPanelSearch] = useState('');
+  const [expandedDriver, setExpandedDriver] = useState<string | null>(null);
   // Filtros aplicados no servidor (Supabase) — performance para frotas grandes
   const {
     data: tableEvents = [],
