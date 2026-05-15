@@ -1112,7 +1112,12 @@ export default function OperationalEvents() {
                     <div key={r.name}>
                     <button
                       type="button"
-                      onClick={() => setExpandedDriver(isExpanded ? null : r.name)}
+                       onClick={() => {
+                         const next = isExpanded ? null : r.name;
+                         setExpandedDriver(next);
+                         setSearch(next ?? '');
+                         setPage(1);
+                       }}
                       className={cn(
                         'w-full grid grid-cols-[1fr_auto] items-center gap-3 py-3 px-1 text-left hover:bg-muted/40 transition-colors rounded-sm',
                         isExpanded && 'bg-muted/40'
