@@ -48,6 +48,7 @@ const TYPE_COLORS: Record<string, string> = {
 
 export default function OperationalEvents() {
   const { currentTenant } = useTenant();
+  const { user } = useAuth();
   const { data: events = [], isLoading, isError, error, refetch, isFetching } = useOperationalEvents();
   const { data: loads = [] } = useLoads();
   const { data: clients = [] } = useClients();
@@ -106,6 +107,70 @@ export default function OperationalEvents() {
   useEffect(() => {
     try { localStorage.setItem(PAGE_SIZE_STORAGE_KEY, String(pageSize)); } catch {}
   }, [pageSize]);
+
+  // ====== Presets de filtros (por usuário) ======
+  type PresetFilters = {
+    search?: string; status?: string; type?: string; severity?: string; vehicleId?: string;
+    dateFromISO?: string | null; dateToISO?: string | null;
+  };
+  type Preset = { id: string; name: string; filters: PresetFilters; builtin?: boolean };
+  const PRESETS_KEY = `opEvents.presets.v1.${user?.id || 'anon'}`;
+  const todayISO = () => startOfDay(new Date()).toISOString();
+  const BUILTIN_PRESETS: Preset[] = [
+    { id: 'builtin:critical-today', name: 'Críticas hoje', builtin: true,
+      filters: { status: 'open', severity: 'critical', dateFromISO: todayISO() } },
+    { id: 'builtin:high-open', name: 'Alta severidade abertas', builtin: true,
+      filters: { status: 'open', severity: 'high' } },
+    { id: 'builtin:open-7d', name: 'Abertas últimos 7 dias', builtin: true,
+      filters: { status: 'open', dateFromISO: subDays(startOfDay(new Date()), 7).toISOString() } },
+    { id: 'builtin:resolved-7d', name: 'Resolvidas últimos 7 dias', builtin: true,
+      filters: { status: 'resolved', dateFromISO: subDays(startOfDay(new Date()), 7).toISOString() } },
+  ];
+  const [customPresets, setCustomPresets] = useState<Preset[]>([]);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(PRESETS_KEY);
+      setCustomPresets(raw ? JSON.parse(raw) : []);
+    } catch { setCustomPresets([]); }
+  }, [PRESETS_KEY]);
+  const persistPresets = (next: Preset[]) => {
+    setCustomPresets(next);
+    try { localStorage.setItem(PRESETS_KEY, JSON.stringify(next)); } catch {}
+  };
+  const applyPreset = (p: Preset) => {
+    const f = p.filters;
+    setSearch(f.search ?? '');
+    setStatusFilter(f.status ?? 'all');
+    setTypeFilter(f.type ?? 'all');
+    setSeverityFilter(f.severity ?? 'all');
+    setVehicleFilter(f.vehicleId ?? 'all');
+    setDateFrom(f.dateFromISO ? new Date(f.dateFromISO) : undefined);
+    setDateTo(f.dateToISO ? new Date(f.dateToISO) : undefined);
+    toast({ title: 'Preset aplicado', description: p.name });
+  };
+  const [savePresetOpen, setSavePresetOpen] = useState(false);
+  const [newPresetName, setNewPresetName] = useState('');
+  const saveCurrentAsPreset = () => {
+    const name = newPresetName.trim();
+    if (!name) return;
+    const preset: Preset = {
+      id: `custom:${Date.now()}`,
+      name,
+      filters: {
+        search, status: statusFilter, type: typeFilter, severity: severityFilter,
+        vehicleId: vehicleFilter,
+        dateFromISO: dateFrom ? dateFrom.toISOString() : null,
+        dateToISO: dateTo ? dateTo.toISOString() : null,
+      },
+    };
+    persistPresets([preset, ...customPresets]);
+    setNewPresetName('');
+    setSavePresetOpen(false);
+    toast({ title: 'Preset salvo', description: name });
+  };
+  const deletePreset = (id: string) => {
+    persistPresets(customPresets.filter(p => p.id !== id));
+  };
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<OperationalEvent | null>(null);
   const { toast } = useToast();
