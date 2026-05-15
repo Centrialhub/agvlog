@@ -47,6 +47,17 @@ const TYPE_COLORS: Record<string, string> = {
 export default function OperationalEvents() {
   const { currentTenant } = useTenant();
   const { data: events = [], isLoading, isError, error, refetch, isFetching } = useOperationalEvents();
+  const { data: loads = [] } = useLoads();
+  const { data: clients = [] } = useClients();
+  const createEvent = useCreateOperationalEvent();
+  const updateEvent = useUpdateOperationalEvent();
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('open');
+  const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [severityFilter, setSeverityFilter] = useState<string>('all');
+  const [vehicleFilter, setVehicleFilter] = useState<string>('all');
+  const [dateFrom, setDateFrom] = useState<Date | undefined>();
+  const [dateTo, setDateTo] = useState<Date | undefined>();
   // Filtros aplicados no servidor (Supabase) — performance para frotas grandes
   const {
     data: tableEvents = [],
@@ -62,17 +73,6 @@ export default function OperationalEvents() {
     dateFrom,
     dateTo,
   });
-  const { data: loads = [] } = useLoads();
-  const { data: clients = [] } = useClients();
-  const createEvent = useCreateOperationalEvent();
-  const updateEvent = useUpdateOperationalEvent();
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('open');
-  const [typeFilter, setTypeFilter] = useState<string>('all');
-  const [severityFilter, setSeverityFilter] = useState<string>('all');
-  const [vehicleFilter, setVehicleFilter] = useState<string>('all');
-  const [dateFrom, setDateFrom] = useState<Date | undefined>();
-  const [dateTo, setDateTo] = useState<Date | undefined>();
   type SortKey = 'created_at' | 'event_type' | 'severity' | 'load_number' | 'client' | 'driver' | 'financial_impact';
   const SORT_STORAGE_KEY = 'opEvents.sort.v1';
   const PAGE_SIZE_STORAGE_KEY = 'opEvents.pageSize.v1';
