@@ -4494,6 +4494,50 @@ export type Database = {
         }
         Relationships: []
       }
+      operational_event_messages: {
+        Row: {
+          attachment_url: string | null
+          created_at: string
+          event_id: string
+          id: string
+          message: string
+          sender_id: string | null
+          sender_name: string | null
+          sender_role: string
+          tenant_id: string
+        }
+        Insert: {
+          attachment_url?: string | null
+          created_at?: string
+          event_id: string
+          id?: string
+          message: string
+          sender_id?: string | null
+          sender_name?: string | null
+          sender_role?: string
+          tenant_id: string
+        }
+        Update: {
+          attachment_url?: string | null
+          created_at?: string
+          event_id?: string
+          id?: string
+          message?: string
+          sender_id?: string | null
+          sender_name?: string | null
+          sender_role?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "operational_event_messages_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "operational_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       operational_events: {
         Row: {
           client_id: string | null
