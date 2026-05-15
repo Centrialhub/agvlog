@@ -15,7 +15,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Plus, AlertOctagon, CheckCircle, MessageSquare, Send, Truck, User, Building2, Package, Wifi } from 'lucide-react';
+import { Search, Plus, AlertOctagon, CheckCircle, MessageSquare, Send, Truck, User, Building2, Package, Wifi, ListOrdered } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -173,6 +173,13 @@ export default function OperationalEvents() {
           </h1>
           <p className="text-sm text-muted-foreground">{openCount} abertas · {events.length} total · sincronia em tempo real com o app do motorista</p>
         </div>
+        <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          onClick={() => document.getElementById('detalhamento-ocorrencias')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+        >
+          <ListOrdered className="h-4 w-4 mr-2" /> Ir para detalhamento
+        </Button>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button><Plus className="h-4 w-4 mr-2" /> Nova Ocorrência</Button>
@@ -232,6 +239,7 @@ export default function OperationalEvents() {
             </div>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {/* KPI Cards */}
@@ -313,7 +321,7 @@ export default function OperationalEvents() {
       </Card>
 
       {/* Filtros + Tabela detalhada */}
-      <div className="flex gap-3 items-center flex-wrap">
+      <div id="detalhamento-ocorrencias" className="flex gap-3 items-center flex-wrap scroll-mt-4">
         <div className="relative max-w-sm flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Buscar por descrição ou carga..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
