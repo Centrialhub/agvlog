@@ -4,24 +4,28 @@ import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
 
 export const EVENT_TYPES = [
-  'missing_goods', 'wrong_quantity', 'client_refused', 'no_order',
+  'missing_goods', 'missing_goods_fractional', 'wrong_quantity', 'client_refused', 'no_order',
   'expired_goods', 'near_expiration', 'damaged', 'wrong_address',
-  'partial_delivery', 'return', 'other',
+  'partial_delivery', 'return', 'wrong_product', 'boleto_extension', 'delivery_delay', 'other',
 ] as const;
 
 export type OperationalEventType = typeof EVENT_TYPES[number];
 
 export const EVENT_TYPE_LABELS: Record<OperationalEventType, string> = {
-  missing_goods: 'Mercadoria Faltante',
+  missing_goods: 'Falta de Mercadoria (fechada)',
+  missing_goods_fractional: 'Falta de Mercadoria (fracionado)',
   wrong_quantity: 'Quantidade Errada',
-  client_refused: 'Recusa do Cliente',
-  no_order: 'Sem Pedido',
+  client_refused: 'Cliente Fechado / Recusa',
+  no_order: 'Cliente Não Fez o Pedido',
   expired_goods: 'Mercadoria Vencida',
-  near_expiration: 'Próximo ao Vencimento',
+  near_expiration: 'Produto Próximo do Vencimento',
   damaged: 'Avaria',
   wrong_address: 'Endereço Errado',
   partial_delivery: 'Entrega Parcial',
   return: 'Devolução',
+  wrong_product: 'Mercadoria Invertida',
+  boleto_extension: 'Prorrogação de Boleto',
+  delivery_delay: 'Atraso na Entrega',
   other: 'Outro',
 };
 
@@ -49,6 +53,7 @@ export interface OperationalEvent {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  report_details?: Record<string, any> | null;
   loads?: { load_number: string } | null;
   drivers?: { name: string } | null;
   clients?: { company_name: string } | null;
