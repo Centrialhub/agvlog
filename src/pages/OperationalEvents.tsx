@@ -254,9 +254,21 @@ export default function OperationalEvents() {
         <div className="flex items-center gap-2">
         <Button
           variant="outline"
-          onClick={() => document.getElementById('detalhamento-ocorrencias')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+          asChild
         >
-          <ListOrdered className="h-4 w-4 mr-2" /> Ir para detalhamento
+          <a
+            href="#detalhamento-ocorrencias"
+            onClick={(e) => {
+              e.preventDefault();
+              const el = document.getElementById('detalhamento-ocorrencias');
+              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              if (window.location.hash !== '#detalhamento-ocorrencias') {
+                window.history.pushState(null, '', '#detalhamento-ocorrencias');
+              }
+            }}
+          >
+            <ListOrdered className="h-4 w-4 mr-2" /> Ir para detalhamento
+          </a>
         </Button>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
