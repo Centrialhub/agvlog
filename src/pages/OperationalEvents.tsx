@@ -975,6 +975,116 @@ export default function OperationalEvents() {
         </Card>
       </div>
 
+      {/* Ocorrências por Motorista (estilo TudoEntregue: barra empilhada + total) */}
+      <Card>
+        <CardHeader className="pb-2 flex flex-row items-center justify-between gap-2 space-y-0">
+          <div>
+            <CardTitle className="text-sm font-bold uppercase tracking-wide">
+              Ocorrências por Motorista{periodLabel !== 'período selecionado' ? ` ${periodLabel}` : ''}
+            </CardTitle>
+            <CardDescription className="text-[11px]">
+              Total de motoristas: {driverStats.rows.length}
+            </CardDescription>
+          </div>
+          <div className="relative w-56">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              placeholder="Digite o nome do motorista"
+              value={driverPanelSearch}
+              onChange={(e) => setDriverPanelSearch(e.target.value)}
+              className="h-8 pl-8 text-xs"
+            />
+          </div>
+        </CardHeader>
+        <CardContent>
+          {filteredDriverRows.length === 0 ? (
+            <div className="h-32 flex items-center justify-center text-sm text-muted-foreground">
+              {driverStats.rows.length === 0 ? 'Sem ocorrências no período' : 'Nenhum motorista corresponde à busca'}
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between text-[10px] uppercase tracking-wide text-muted-foreground pb-2 border-b border-border/60">
+                <span>Motorista</span>
+                <span>Total</span>
+              </div>
+              <div className="divide-y divide-border/60 max-h-[420px] overflow-y-auto">
+                {filteredDriverRows.map((r) => {
+                  const widthPct = driverStats.max > 0 ? (r.total / driverStats.max) * 100 : 0;
+                  const seg = (n: number) => (r.total > 0 ? (n / r.total) * widthPct : 0);
+                  return (
+                    <div key={r.name} className="flex items-center gap-3 py-2.5">
+                      <div className="flex items-center gap-2 w-44 min-w-0">
+                        <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center text-[10px] font-semibold text-muted-foreground shrink-0">
+                          {r.name.split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase() || '—'}
+                        </div>
+                        <span className="text-xs font-medium truncate" title={r.name}>{r.name}</span>
+                      </div>
+                      <div className="flex-1 h-5 rounded-sm bg-muted/40 overflow-hidden flex">
+                        {r.critical > 0 && (
+                          <div
+                            className="h-full flex items-center justify-center text-[10px] font-semibold text-white"
+                            style={{ width: `${seg(r.critical)}%`, backgroundColor: DRIVER_BAR_COLORS.critical }}
+                            title={`Críticas: ${r.critical}`}
+                          >
+                            {seg(r.critical) > 6 ? r.critical : ''}
+                          </div>
+                        )}
+                        {r.high > 0 && (
+                          <div
+                            className="h-full flex items-center justify-center text-[10px] font-semibold text-white"
+                            style={{ width: `${seg(r.high)}%`, backgroundColor: DRIVER_BAR_COLORS.high }}
+                            title={`Altas: ${r.high}`}
+                          >
+                            {seg(r.high) > 6 ? r.high : ''}
+                          </div>
+                        )}
+                        {r.medium > 0 && (
+                          <div
+                            className="h-full flex items-center justify-center text-[10px] font-semibold text-white"
+                            style={{ width: `${seg(r.medium)}%`, backgroundColor: DRIVER_BAR_COLORS.medium }}
+                            title={`Médias: ${r.medium}`}
+                          >
+                            {seg(r.medium) > 6 ? r.medium : ''}
+                          </div>
+                        )}
+                        {r.low > 0 && (
+                          <div
+                            className="h-full flex items-center justify-center text-[10px] font-semibold text-white"
+                            style={{ width: `${seg(r.low)}%`, backgroundColor: DRIVER_BAR_COLORS.low }}
+                            title={`Baixas: ${r.low}`}
+                          >
+                            {seg(r.low) > 6 ? r.low : ''}
+                          </div>
+                        )}
+                      </div>
+                      <span className="w-10 text-right text-sm font-bold tabular-nums">{r.total}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-3 text-[11px]">
+                <div className="flex items-center gap-1.5">
+                  <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: DRIVER_BAR_COLORS.critical }} />
+                  <span className="text-muted-foreground">Críticas</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: DRIVER_BAR_COLORS.high }} />
+                  <span className="text-muted-foreground">Altas</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: DRIVER_BAR_COLORS.medium }} />
+                  <span className="text-muted-foreground">Médias</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: DRIVER_BAR_COLORS.low }} />
+                  <span className="text-muted-foreground">Baixas</span>
+                </div>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Filtros + Tabela detalhada */}
       <div id="detalhamento-ocorrencias" className="flex gap-2 items-center flex-wrap scroll-mt-4">
         <div className="relative min-w-[220px] flex-1 max-w-sm">
