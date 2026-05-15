@@ -923,8 +923,9 @@ export default function OperationalEvents() {
             <X className="h-4 w-4 mr-1" /> Limpar ({activeFiltersCount})
           </Button>
         )}
-        <Button variant="outline" size="sm" onClick={exportCsv} className="h-9" disabled={!sorted.length} title="Exportar resultados filtrados para CSV">
-          <Download className="h-4 w-4 mr-1" /> Exportar CSV
+        <Button variant="outline" size="sm" onClick={exportReport} className="h-9" disabled={!sorted.length || exporting} title="Exportar relatório XLSX (resumo por motorista + detalhe)">
+          {exporting ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Download className="h-4 w-4 mr-1" />}
+          Exportar XLSX
         </Button>
         <span className="text-xs text-muted-foreground ml-auto flex items-center gap-2">
           {(isTableFetching && !isTableLoading) && <Loader2 className="h-3 w-3 animate-spin" />}
