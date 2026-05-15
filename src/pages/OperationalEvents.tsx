@@ -15,7 +15,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Plus, AlertOctagon, CheckCircle, MessageSquare, Send, Truck, User, Building2, Package, Wifi, ListOrdered, X, CalendarIcon, Loader2, Inbox, AlertTriangle, RefreshCw, ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { Search, Plus, AlertOctagon, CheckCircle, MessageSquare, Send, Truck, User, Building2, Package, Wifi, ListOrdered, X, CalendarIcon, Loader2, Inbox, AlertTriangle, RefreshCw, ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUpToLine } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
@@ -657,6 +657,21 @@ export default function OperationalEvents() {
           </div>
         )}
       </Card>
+
+      <div className="flex justify-center pt-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            if (window.location.hash) {
+              window.history.pushState(null, '', window.location.pathname + window.location.search);
+            }
+          }}
+        >
+          <ArrowUpToLine className="h-4 w-4 mr-2" /> Voltar ao topo
+        </Button>
+      </div>
 
       <EventDetailDrawer
         event={selectedEvent}
