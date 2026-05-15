@@ -669,16 +669,33 @@ export default function OperationalEvents() {
       cur.total++;
       map.set(name, cur);
     });
-    const arr = Array.from(map.values()).sort((a, b) => b.total - a.total);
+    const arr = Array.from(map.values());
     const max = arr.reduce((m, r) => Math.max(m, r.total), 0);
     return { rows: arr, max };
   }, [tableEvents]);
 
   const filteredDriverRows = useMemo(() => {
     const q = driverPanelSearch.trim().toLowerCase();
-    if (!q) return driverStats.rows;
-    return driverStats.rows.filter(r => r.name.toLowerCase().includes(q));
-  }, [driverStats.rows, driverPanelSearch]);
+    const base = q ? driverStats.rows.filter(r => r.name.toLowerCase().includes(q)) : driverStats.rows.slice();
+    // Score de "severidade mais alta" (peso por severidade — só não resolvidas)
+    const sevScore = (r: typeof base[number]) =>
+      r.critical * 1000 + r.high * 100 + r.medium * 10 + r.low;
+    switch (driverSort) {
+      case 'critical':
+        base.sort((a, b) => (b.critical - a.critical) || (b.high - a.high) || (b.total - a.total));
+        break;
+      case 'severity':
+        base.sort((a, b) => (sevScore(b) - sevScore(a)) || (b.total - a.total));
+        break;
+      case 'name':
+        base.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+        break;
+      case 'total':
+      default:
+        base.sort((a, b) => (b.total - a.total) || a.name.localeCompare(b.name, 'pt-BR'));
+    }
+    return base;
+  }, [driverStats.rows, driverPanelSearch, driverSort]);
 
   // Eventos agrupados por motorista (mesma fonte/ordem de tableEvents)
   const eventsByDriver = useMemo(() => {
