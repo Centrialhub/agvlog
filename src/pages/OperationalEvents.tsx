@@ -1143,10 +1143,11 @@ function EventDetailDrawer({ event, onClose, onResolve }: { event: OperationalEv
                 <InfoRow icon={<User className="h-3.5 w-3.5" />} label="Motorista" value={event.drivers?.name || '—'} />
                 <InfoRow icon={<Truck className="h-3.5 w-3.5" />} label="Impacto" value={event.financial_impact ? `R$ ${Number(event.financial_impact).toLocaleString('pt-BR')}` : '—'} />
               </div>
+              <SupplierTextBlock event={event} />
               {event.description && (
                 <div className="text-sm bg-background rounded-md border p-3">
                   <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Descrição</div>
-                  {event.description}
+                  <pre className="whitespace-pre-wrap font-sans text-sm">{event.description}</pre>
                 </div>
               )}
               {event.resolution && (
