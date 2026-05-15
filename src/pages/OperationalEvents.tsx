@@ -1629,6 +1629,11 @@ export default function OperationalEvents() {
         onClose={() => setSelectedEvent(null)}
         onResolve={handleResolve}
       />
+
+      <DriverChatDrawer
+        driver={chatDriver}
+        onClose={() => setChatDriver(null)}
+      />
     </div>
   );
 }
