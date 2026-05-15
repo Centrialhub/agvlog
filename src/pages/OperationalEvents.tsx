@@ -210,8 +210,13 @@ export default function OperationalEvents() {
 
   // ====== Exportar relatório (XLSX no formato modelo) ======
   const [exporting, setExporting] = useState(false);
-  const exportReport = async () => {
-    if (!sorted.length) {
+  const exportReport = async (opts: { driverName?: string; format?: 'xlsx' | 'csv' } = {}) => {
+    const fmt = opts.format || 'xlsx';
+    // Aplica filtro por motorista (sobre a lista JÁ ordenada/filtrada)
+    const baseRows = opts.driverName
+      ? (sorted as any[]).filter(e => (e.drivers?.name?.trim() || 'Sem motorista') === opts.driverName)
+      : (sorted as any[]);
+    if (!baseRows.length) {
       toast({ title: 'Nada para exportar', description: 'Ajuste os filtros para gerar resultados.' });
       return;
     }
@@ -224,7 +229,7 @@ export default function OperationalEvents() {
         'Quando', 'Tipo', 'Severidade', 'Status', 'Carga', 'Cliente', 'Motorista',
         'Veículo', 'Impacto (R$)', 'Descrição', 'Resolvido em',
       ];
-      const detailRows = sorted.map((e: any) => [
+      const detailRows = baseRows.map((e: any) => [
         format(new Date(e.created_at), 'dd/MM/yyyy HH:mm'),
         EVENT_TYPE_LABELS[e.event_type as keyof typeof EVENT_TYPE_LABELS] || e.event_type || '',
         SEVERITY_LABELS[e.severity] || e.severity || '',
@@ -238,21 +243,53 @@ export default function OperationalEvents() {
         e.resolved_at ? format(new Date(e.resolved_at), 'dd/MM/yyyy HH:mm') : '',
       ]);
 
+      // ---------- Saída CSV (apenas Detalhe, com BOM e ; como separador) ----------
+      const baseName = opts.driverName
+        ? `ocorrencias_${opts.driverName.replace(/[^\p{L}\p{N}_-]+/gu, '_')}_${format(new Date(), 'yyyyMMdd_HHmm')}`
+        : `ocorrencias_${format(new Date(), 'yyyyMMdd_HHmm')}`;
+      if (fmt === 'csv') {
+        const escape = (v: any) => {
+          const s = v == null ? '' : String(v);
+          return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+        };
+        const csv = [detailHeaders, ...detailRows]
+          .map(r => r.map(escape).join(';'))
+          .join('\r\n');
+        const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${baseName}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        toast({ title: 'CSV exportado', description: `${baseRows.length} ocorrência(s)${opts.driverName ? ` — ${opts.driverName}` : ''}.` });
+        setExporting(false);
+        return;
+      }
+
       // ---------- Aba 2: Resumo por motorista (modelo da planilha) ----------
       // Buscar cargas no período para entregas/notas/valor por motorista
-      const periodFrom = dateFrom || (sorted.length
-        ? new Date(Math.min(...sorted.map((e: any) => +new Date(e.created_at))))
+      const periodFrom = dateFrom || (baseRows.length
+        ? new Date(Math.min(...baseRows.map((e: any) => +new Date(e.created_at))))
         : startOfMonth(new Date()));
       const periodTo = dateTo || new Date();
       let loadsByDriver: Record<string, { entregas: number; notas: number; valor: number }> = {};
       if (currentTenant) {
-        const { data: loadsRows } = await supabase
+        let lq = supabase
           .from('loads')
           .select('driver_id, merchandise_value, status, created_at')
           .eq('tenant_id', currentTenant.id)
           .gte('created_at', periodFrom.toISOString())
           .lte('created_at', periodTo.toISOString())
           .limit(5000);
+        // Restringe por motorista quando exportando individual
+        if (opts.driverName) {
+          const driverIds = Array.from(new Set(baseRows.map((e: any) => e.driver_id).filter(Boolean)));
+          if (driverIds.length) lq = lq.in('driver_id', driverIds as string[]);
+        }
+        const { data: loadsRows } = await lq;
         for (const l of (loadsRows || [])) {
           if (!l.driver_id) continue;
           const k = l.driver_id;
@@ -277,7 +314,7 @@ export default function OperationalEvents() {
       };
       const driverMap = new Map<string, Acc>();
       const keyFor = (e: any) => e.driver_id || `__sem__:${e.drivers?.name || 'Sem motorista'}`;
-      for (const e of sorted as any[]) {
+      for (const e of baseRows as any[]) {
         const k = keyFor(e);
         const cur: Acc = driverMap.get(k) || {
           name: e.drivers?.name || 'Sem motorista',
@@ -313,7 +350,7 @@ export default function OperationalEvents() {
 
       // Cabeçalho mesclado em 3 linhas (modelo)
       const aoa: any[][] = [];
-      aoa.push([`RESUMO DIVERGÊNCIAS — ${periodLabel}`]);
+      aoa.push([`RESUMO DIVERGÊNCIAS — ${periodLabel}${opts.driverName ? ` — ${opts.driverName}` : ''}`]);
       aoa.push([]);
       // Linha 3: grupos
       aoa.push([
@@ -418,9 +455,9 @@ export default function OperationalEvents() {
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Resumo por motorista');
       XLSX.utils.book_append_sheet(wb, wsDetail, 'Detalhe');
-      XLSX.writeFile(wb, `ocorrencias_${format(new Date(), 'yyyyMMdd_HHmm')}.xlsx`);
+      XLSX.writeFile(wb, `${baseName}.xlsx`);
 
-      toast({ title: 'Relatório exportado', description: `${sorted.length} ocorrência(s) em 2 abas.` });
+      toast({ title: 'Relatório exportado', description: `${baseRows.length} ocorrência(s)${opts.driverName ? ` — ${opts.driverName}` : ''} em 2 abas.` });
     } catch (err: any) {
       toast({ title: 'Falha ao exportar', description: err?.message || 'Erro desconhecido.', variant: 'destructive' });
     } finally {
