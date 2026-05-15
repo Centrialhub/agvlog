@@ -612,6 +612,29 @@ export default function OperationalEvents() {
     return { responsibilityData: respArr, separationData: sepArr, respTotal: respT, sepTotal: sepT, periodLabel: label };
   }, [tableEvents, dateFrom, dateTo]);
 
+  // ===== Ocorrências por Motorista (estilo TudoEntregue: barra empilhada + total) =====
+  const driverStats = useMemo(() => {
+    const map = new Map<string, { name: string; critical: number; high: number; medium: number; low: number; total: number }>();
+    (tableEvents || []).forEach(e => {
+      const name = e.drivers?.name?.trim() || 'Sem motorista';
+      const cur = map.get(name) || { name, critical: 0, high: 0, medium: 0, low: 0, total: 0 };
+      const sev = (e.severity || 'medium') as 'critical' | 'high' | 'medium' | 'low';
+      if (sev === 'critical' || sev === 'high' || sev === 'medium' || sev === 'low') cur[sev]++;
+      else cur.medium++;
+      cur.total++;
+      map.set(name, cur);
+    });
+    const arr = Array.from(map.values()).sort((a, b) => b.total - a.total);
+    const max = arr.reduce((m, r) => Math.max(m, r.total), 0);
+    return { rows: arr, max };
+  }, [tableEvents]);
+
+  const filteredDriverRows = useMemo(() => {
+    const q = driverPanelSearch.trim().toLowerCase();
+    if (!q) return driverStats.rows;
+    return driverStats.rows.filter(r => r.name.toLowerCase().includes(q));
+  }, [driverStats.rows, driverPanelSearch]);
+
   const handleCreate = async () => {
     try {
       await createEvent.mutateAsync({
