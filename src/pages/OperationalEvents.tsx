@@ -1008,81 +1008,113 @@ export default function OperationalEvents() {
             </div>
           ) : (
             <>
-              <div className="flex items-center justify-between text-[10px] uppercase tracking-wide text-muted-foreground pb-2 border-b border-border/60">
+              <div className="grid grid-cols-[1fr_auto] items-center text-[10px] uppercase tracking-wide text-muted-foreground pb-2 border-b border-border/60 px-1">
                 <span>Motorista</span>
-                <span>Total</span>
+                <span className="pr-1">Total</span>
               </div>
-              <div className="divide-y divide-border/60 max-h-[420px] overflow-y-auto">
-                {filteredDriverRows.map((r) => {
-                  const widthPct = driverStats.max > 0 ? (r.total / driverStats.max) * 100 : 0;
-                  const seg = (n: number) => (r.total > 0 ? (n / r.total) * widthPct : 0);
+              <div className="divide-y divide-border/60 max-h-[460px] overflow-y-auto">
+                {filteredDriverRows.map((r, idx) => {
+                  const widthPct = driverStats.max > 0 ? Math.max(8, (r.total / driverStats.max) * 100) : 0;
+                  const seg = (n: number) => (r.total > 0 ? (n / r.total) * 100 : 0);
+                  // Avatar color por índice (paleta suave) — emula foto de perfil
+                  const palette = ['#fde68a', '#bfdbfe', '#fecaca', '#bbf7d0', '#ddd6fe', '#fcd5b5', '#a5f3fc', '#fbcfe8'];
+                  const bg = palette[idx % palette.length];
+                  const initials = r.name.split(' ').filter(Boolean).map(p => p[0]).slice(0, 2).join('').toUpperCase() || '—';
+                  // "rating" derivado: 5 - peso da severidade média (apenas visual)
+                  const weight = (r.critical * 4 + r.high * 3 + r.medium * 2 + r.low * 1 + r.resolved * 0) / Math.max(1, r.total);
+                  const rating = Math.max(1, Math.min(5, 5 - weight));
                   return (
-                    <div key={r.name} className="flex items-center gap-3 py-2.5">
-                      <div className="flex items-center gap-2 w-44 min-w-0">
-                        <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center text-[10px] font-semibold text-muted-foreground shrink-0">
-                          {r.name.split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase() || '—'}
+                    <div key={r.name} className="grid grid-cols-[1fr_auto] items-center gap-3 py-3 px-1">
+                      <div className="flex items-center gap-3 min-w-0">
+                        {/* Avatar */}
+                        <div
+                          className="h-9 w-9 rounded-full flex items-center justify-center text-[11px] font-bold text-foreground/80 shrink-0 ring-2 ring-background shadow-sm"
+                          style={{ backgroundColor: bg }}
+                        >
+                          {initials}
                         </div>
-                        <span className="text-xs font-medium truncate" title={r.name}>{r.name}</span>
+                        {/* Nome + estrelas + barra */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-sm font-semibold truncate" title={r.name}>{r.name}</span>
+                            <div className="flex items-center gap-0.5 shrink-0">
+                              {[1, 2, 3, 4, 5].map(i => (
+                                <Star
+                                  key={i}
+                                  className={cn(
+                                    'h-3 w-3',
+                                    i <= Math.round(rating) ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/30'
+                                  )}
+                                />
+                              ))}
+                              <span className="text-[10px] text-muted-foreground ml-1 tabular-nums">{rating.toFixed(2)}</span>
+                            </div>
+                          </div>
+                          {/* Barra horizontal — width relativa ao maior total */}
+                          <div
+                            className="mt-1.5 h-5 rounded-sm bg-muted/40 overflow-hidden flex"
+                            style={{ width: `${widthPct}%` }}
+                          >
+                            {r.resolved > 0 && (
+                              <div
+                                className="h-full flex items-center justify-center text-[11px] font-bold text-white"
+                                style={{ width: `${seg(r.resolved)}%`, backgroundColor: DRIVER_BAR_COLORS.low }}
+                                title={`Resolvidas: ${r.resolved}`}
+                              >
+                                {seg(r.resolved) >= 7 ? r.resolved : ''}
+                              </div>
+                            )}
+                            {r.low > 0 && (
+                              <div
+                                className="h-full flex items-center justify-center text-[11px] font-bold text-white"
+                                style={{ width: `${seg(r.low)}%`, backgroundColor: DRIVER_BAR_COLORS.medium }}
+                                title={`Baixas: ${r.low}`}
+                              >
+                                {seg(r.low) >= 7 ? r.low : ''}
+                              </div>
+                            )}
+                            {r.medium > 0 && (
+                              <div
+                                className="h-full flex items-center justify-center text-[11px] font-bold text-white"
+                                style={{ width: `${seg(r.medium)}%`, backgroundColor: DRIVER_BAR_COLORS.high }}
+                                title={`Médias: ${r.medium}`}
+                              >
+                                {seg(r.medium) >= 7 ? r.medium : ''}
+                              </div>
+                            )}
+                            {(r.high + r.critical) > 0 && (
+                              <div
+                                className="h-full flex items-center justify-center text-[11px] font-bold text-white"
+                                style={{ width: `${seg(r.high + r.critical)}%`, backgroundColor: DRIVER_BAR_COLORS.critical }}
+                                title={`Altas/Críticas: ${r.high + r.critical}`}
+                              >
+                                {seg(r.high + r.critical) >= 7 ? r.high + r.critical : ''}
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex-1 h-5 rounded-sm bg-muted/40 overflow-hidden flex">
-                        {r.critical > 0 && (
-                          <div
-                            className="h-full flex items-center justify-center text-[10px] font-semibold text-white"
-                            style={{ width: `${seg(r.critical)}%`, backgroundColor: DRIVER_BAR_COLORS.critical }}
-                            title={`Críticas: ${r.critical}`}
-                          >
-                            {seg(r.critical) > 6 ? r.critical : ''}
-                          </div>
-                        )}
-                        {r.high > 0 && (
-                          <div
-                            className="h-full flex items-center justify-center text-[10px] font-semibold text-white"
-                            style={{ width: `${seg(r.high)}%`, backgroundColor: DRIVER_BAR_COLORS.high }}
-                            title={`Altas: ${r.high}`}
-                          >
-                            {seg(r.high) > 6 ? r.high : ''}
-                          </div>
-                        )}
-                        {r.medium > 0 && (
-                          <div
-                            className="h-full flex items-center justify-center text-[10px] font-semibold text-white"
-                            style={{ width: `${seg(r.medium)}%`, backgroundColor: DRIVER_BAR_COLORS.medium }}
-                            title={`Médias: ${r.medium}`}
-                          >
-                            {seg(r.medium) > 6 ? r.medium : ''}
-                          </div>
-                        )}
-                        {r.low > 0 && (
-                          <div
-                            className="h-full flex items-center justify-center text-[10px] font-semibold text-white"
-                            style={{ width: `${seg(r.low)}%`, backgroundColor: DRIVER_BAR_COLORS.low }}
-                            title={`Baixas: ${r.low}`}
-                          >
-                            {seg(r.low) > 6 ? r.low : ''}
-                          </div>
-                        )}
-                      </div>
-                      <span className="w-10 text-right text-sm font-bold tabular-nums">{r.total}</span>
+                      <span className="w-10 text-right text-base font-bold tabular-nums">{r.total}</span>
                     </div>
                   );
                 })}
               </div>
               <div className="mt-3 flex flex-wrap gap-3 text-[11px]">
                 <div className="flex items-center gap-1.5">
-                  <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: DRIVER_BAR_COLORS.critical }} />
-                  <span className="text-muted-foreground">Críticas</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: DRIVER_BAR_COLORS.high }} />
-                  <span className="text-muted-foreground">Altas</span>
+                  <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: DRIVER_BAR_COLORS.low }} />
+                  <span className="text-muted-foreground">Resolvidas</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: DRIVER_BAR_COLORS.medium }} />
+                  <span className="text-muted-foreground">Baixas</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: DRIVER_BAR_COLORS.high }} />
                   <span className="text-muted-foreground">Médias</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: DRIVER_BAR_COLORS.low }} />
-                  <span className="text-muted-foreground">Baixas</span>
+                  <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: DRIVER_BAR_COLORS.critical }} />
+                  <span className="text-muted-foreground">Altas / Críticas</span>
                 </div>
               </div>
             </>
