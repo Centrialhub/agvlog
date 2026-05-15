@@ -28,7 +28,7 @@ import { useTenant } from '@/hooks/useTenant';
 import { formatDistanceToNow, format, startOfMonth, subMonths, isAfter, startOfDay, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useEffect, useRef } from 'react';
-import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from 'recharts';
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend, PieChart, Pie, Cell, BarChart, Bar, LabelList } from 'recharts';
 import { useEventMessages, useSendEventMessage } from '@/hooks/useEventMessages';
 import { useAuth } from '@/hooks/useAuth';
 import { formatOccurrenceReport } from '@/lib/occurrenceTemplate';
@@ -47,6 +47,30 @@ const TYPE_COLORS: Record<string, string> = {
   return: '#f97316',
   other: '#64748b',
 };
+
+// Mapa de responsabilidade por tipo de ocorrência (Depósito vs Transporte).
+// Baseado no padrão do mercado: erros de separação/produto = Depósito;
+// erros operacionais de entrega = Transporte.
+const RESPONSIBILITY_MAP: Record<string, 'deposito' | 'transporte'> = {
+  missing_goods: 'deposito',
+  missing_goods_fractional: 'deposito',
+  wrong_quantity: 'deposito',
+  wrong_product: 'deposito',
+  expired_goods: 'deposito',
+  near_expiration: 'deposito',
+  damaged: 'transporte',
+  wrong_address: 'transporte',
+  client_refused: 'transporte',
+  no_order: 'transporte',
+  partial_delivery: 'transporte',
+  return: 'transporte',
+  delivery_delay: 'transporte',
+  boleto_extension: 'transporte',
+  other: 'transporte',
+};
+
+const RESP_COLORS = { transporte: 'hsl(var(--primary))', deposito: 'hsl(var(--destructive))' };
+const SEPARATION_LINES = ['PESADO', 'LEVEZA', 'FRACIONADO', 'MIUDEZA'] as const;
 
 export default function OperationalEvents() {
   const { currentTenant } = useTenant();
@@ -542,6 +566,43 @@ export default function OperationalEvents() {
     return { chartData: data, chartTypes: types, totals: totalsMap, totalCount: recent.length };
   }, [events]);
 
+  // ===== Responsabilidade (Depósito vs Transporte) e Linhas de Separação =====
+  // Usa o conjunto JÁ FILTRADO (tableEvents) para refletir período/filtros ativos.
+  const { responsibilityData, separationData, respTotal, sepTotal, periodLabel } = useMemo(() => {
+    const src = tableEvents || [];
+    const resp = { transporte: 0, deposito: 0 };
+    const sep: Record<string, number> = { PESADO: 0, LEVEZA: 0, FRACIONADO: 0, MIUDEZA: 0 };
+    let outros = 0;
+    src.forEach(e => {
+      const r = RESPONSIBILITY_MAP[e.event_type] || 'transporte';
+      resp[r]++;
+      const rawLine = (e.report_details as any)?.separation_line
+        || (e.report_details as any)?.linha_separacao
+        || (e.report_details as any)?.linha
+        || '';
+      const norm = String(rawLine).trim().toUpperCase();
+      if (SEPARATION_LINES.includes(norm as any)) sep[norm]++;
+      else if (norm) outros++;
+    });
+    if (outros > 0) (sep as any).OUTROS = outros;
+    const respArr = [
+      { name: 'TRANSPORTE', value: resp.transporte, key: 'transporte' as const },
+      { name: 'DEPÓSITO', value: resp.deposito, key: 'deposito' as const },
+    ].filter(d => d.value > 0);
+    const sepArr = Object.entries(sep)
+      .filter(([, v]) => v > 0)
+      .map(([k, v]) => ({ name: k, value: v }));
+    const respT = resp.transporte + resp.deposito;
+    const sepT = sepArr.reduce((s, d) => s + d.value, 0);
+    let label = 'período selecionado';
+    if (dateFrom || dateTo) {
+      const f = dateFrom ? format(dateFrom, 'dd/MM/yy') : '...';
+      const t = dateTo ? format(dateTo, 'dd/MM/yy') : 'hoje';
+      label = `${f} - ${t}`;
+    }
+    return { responsibilityData: respArr, separationData: sepArr, respTotal: respT, sepTotal: sepT, periodLabel: label };
+  }, [tableEvents, dateFrom, dateTo]);
+
   const handleCreate = async () => {
     try {
       await createEvent.mutateAsync({
@@ -782,6 +843,105 @@ export default function OperationalEvents() {
           )}
         </CardContent>
       </Card>
+
+      {/* Responsabilidade + Linhas de Separação (estilo relatório AGV) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-bold uppercase tracking-wide text-center">
+              Responsabilidade das Ocorrências{periodLabel !== 'período selecionado' ? ` ${periodLabel}` : ''}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {respTotal === 0 ? (
+              <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">
+                Sem dados no período
+              </div>
+            ) : (
+              <div className="h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={responsibilityData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={100}
+                      label={({ name, percent }) =>
+                        `${name}\n${(percent * 100).toFixed(1)}%`
+                      }
+                      labelLine={true}
+                    >
+                      {responsibilityData.map(d => (
+                        <Cell key={d.key} fill={RESP_COLORS[d.key]} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{ backgroundColor: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }}
+                      formatter={(v: any, n: any) => [`${v} (${((Number(v) / respTotal) * 100).toFixed(1)}%)`, n]}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+            <div className="mt-2 flex justify-center gap-4 text-xs">
+              {responsibilityData.map(d => (
+                <div key={d.key} className="flex items-center gap-1.5">
+                  <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: RESP_COLORS[d.key] }} />
+                  <span className="font-semibold">{d.name}</span>
+                  <span className="text-muted-foreground">{d.value}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-bold uppercase tracking-wide text-center">
+              Ocorrências por Linhas de Separação{periodLabel !== 'período selecionado' ? ` ${periodLabel}` : ''}
+            </CardTitle>
+            <CardDescription className="text-center text-[11px]">
+              Origem: campo "linha de separação" da ocorrência
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {sepTotal === 0 ? (
+              <div className="h-64 flex flex-col items-center justify-center text-sm text-muted-foreground gap-1">
+                <span>Sem dados de linha de separação no período</span>
+                <span className="text-xs">Drivers/operadores devem informar a linha ao registrar a ocorrência.</span>
+              </div>
+            ) : (
+              <div className="h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={separationData} margin={{ top: 16, right: 16, left: 0, bottom: 16 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }}
+                      formatter={(v: any) => [`${v} ocorrência(s)`, 'Total']}
+                    />
+                    <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                      {separationData.map((d, i) => (
+                        <Cell
+                          key={i}
+                          fill={d.name === 'MIUDEZA' ? 'hsl(var(--warning))' : 'hsl(var(--destructive))'}
+                        />
+                      ))}
+                      <LabelList dataKey="value" position="center" fill="#fff" style={{ fontSize: 12, fontWeight: 700 }} />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+            <div className="text-center text-[11px] text-muted-foreground mt-1">
+              Contagem de LINHA DE SEPARAÇÃO
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Filtros + Tabela detalhada */}
       <div id="detalhamento-ocorrencias" className="flex gap-2 items-center flex-wrap scroll-mt-4">
