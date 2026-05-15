@@ -172,45 +172,224 @@ export default function OperationalEvents() {
     persistPresets(customPresets.filter(p => p.id !== id));
   };
 
-  // ====== Exportar CSV (respeita filtros + ordenação atual) ======
-  const exportCsv = () => {
+  // ====== Exportar relatório (XLSX no formato modelo) ======
+  const [exporting, setExporting] = useState(false);
+  const exportReport = async () => {
     if (!sorted.length) {
       toast({ title: 'Nada para exportar', description: 'Ajuste os filtros para gerar resultados.' });
       return;
     }
-    const headers = [
-      'Quando', 'Tipo', 'Severidade', 'Status', 'Carga', 'Cliente', 'Motorista',
-      'Veículo', 'Impacto (R$)', 'Descrição', 'Resolvido em',
-    ];
-    const escape = (v: any) => {
-      if (v === null || v === undefined) return '';
-      const s = String(v).replace(/"/g, '""');
-      return /[",;\n\r]/.test(s) ? `"${s}"` : s;
-    };
-    const rows = sorted.map((e: any) => [
-      format(new Date(e.created_at), 'yyyy-MM-dd HH:mm:ss'),
-      EVENT_TYPE_LABELS[e.event_type as keyof typeof EVENT_TYPE_LABELS] || e.event_type || '',
-      SEVERITY_LABELS[e.severity] || e.severity || '',
-      e.resolved_at ? 'Resolvida' : 'Aberta',
-      e.loads?.load_number || '',
-      e.clients?.company_name || '',
-      e.drivers?.name || '',
-      e.vehicles?.plate || '',
-      e.financial_impact != null ? Number(e.financial_impact).toFixed(2) : '',
-      (e.description || '').replace(/\s+/g, ' ').trim(),
-      e.resolved_at ? format(new Date(e.resolved_at), 'yyyy-MM-dd HH:mm:ss') : '',
-    ].map(escape).join(';'));
-    const csv = '\ufeff' + [headers.join(';'), ...rows].join('\r\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `ocorrencias_${format(new Date(), 'yyyyMMdd_HHmm')}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    toast({ title: 'CSV exportado', description: `${sorted.length} ocorrência(s).` });
+    setExporting(true);
+    try {
+      const XLSX = await import('xlsx');
+
+      // ---------- Aba 1: Detalhe (lista plana, ordem atual) ----------
+      const detailHeaders = [
+        'Quando', 'Tipo', 'Severidade', 'Status', 'Carga', 'Cliente', 'Motorista',
+        'Veículo', 'Impacto (R$)', 'Descrição', 'Resolvido em',
+      ];
+      const detailRows = sorted.map((e: any) => [
+        format(new Date(e.created_at), 'dd/MM/yyyy HH:mm'),
+        EVENT_TYPE_LABELS[e.event_type as keyof typeof EVENT_TYPE_LABELS] || e.event_type || '',
+        SEVERITY_LABELS[e.severity] || e.severity || '',
+        e.resolved_at ? 'Resolvida' : 'Aberta',
+        e.loads?.load_number || '',
+        e.clients?.company_name || '',
+        e.drivers?.name || '',
+        e.vehicles?.plate || '',
+        e.financial_impact != null ? Number(e.financial_impact) : '',
+        (e.description || '').replace(/\s+/g, ' ').trim(),
+        e.resolved_at ? format(new Date(e.resolved_at), 'dd/MM/yyyy HH:mm') : '',
+      ]);
+
+      // ---------- Aba 2: Resumo por motorista (modelo da planilha) ----------
+      // Buscar cargas no período para entregas/notas/valor por motorista
+      const periodFrom = dateFrom || (sorted.length
+        ? new Date(Math.min(...sorted.map((e: any) => +new Date(e.created_at))))
+        : startOfMonth(new Date()));
+      const periodTo = dateTo || new Date();
+      let loadsByDriver: Record<string, { entregas: number; notas: number; valor: number }> = {};
+      if (currentTenant) {
+        const { data: loadsRows } = await supabase
+          .from('loads')
+          .select('driver_id, merchandise_value, status, created_at')
+          .eq('tenant_id', currentTenant.id)
+          .gte('created_at', periodFrom.toISOString())
+          .lte('created_at', periodTo.toISOString())
+          .limit(5000);
+        for (const l of (loadsRows || [])) {
+          if (!l.driver_id) continue;
+          const k = l.driver_id;
+          loadsByDriver[k] = loadsByDriver[k] || { entregas: 0, notas: 0, valor: 0 };
+          loadsByDriver[k].entregas += 1;
+          loadsByDriver[k].notas += 1;
+          loadsByDriver[k].valor += Number(l.merchandise_value || 0);
+        }
+      }
+
+      // Agrupa ocorrências por motorista
+      type Acc = {
+        name: string;
+        nao_efetuada_motorista: number;
+        nao_efetuada: number;
+        baixa_nao_efetuada: number;
+        comprovantes_nao_entregues: number;
+        devolucoes: number;
+        danif_qtd: number; danif_valor: number;
+        falta_qtd: number; falta_valor: number;
+        observacao: string;
+      };
+      const driverMap = new Map<string, Acc>();
+      const keyFor = (e: any) => e.driver_id || `__sem__:${e.drivers?.name || 'Sem motorista'}`;
+      for (const e of sorted as any[]) {
+        const k = keyFor(e);
+        const cur: Acc = driverMap.get(k) || {
+          name: e.drivers?.name || 'Sem motorista',
+          nao_efetuada_motorista: 0, nao_efetuada: 0, baixa_nao_efetuada: 0,
+          comprovantes_nao_entregues: 0, devolucoes: 0,
+          danif_qtd: 0, danif_valor: 0, falta_qtd: 0, falta_valor: 0, observacao: '',
+        };
+        const v = Number(e.financial_impact || 0);
+        switch (e.event_type) {
+          case 'client_refused':
+          case 'wrong_address':
+          case 'no_order':
+            cur.nao_efetuada += 1; break;
+          case 'partial_delivery':
+            cur.nao_efetuada_motorista += 1; break;
+          case 'return':
+            cur.devolucoes += 1; break;
+          case 'damaged':
+            cur.danif_qtd += 1; cur.danif_valor += v; break;
+          case 'missing_goods':
+          case 'wrong_quantity':
+          case 'expired_goods':
+          case 'near_expiration':
+            cur.falta_qtd += 1; cur.falta_valor += v; break;
+          default:
+            cur.observacao = (cur.observacao ? cur.observacao + ' | ' : '') + (EVENT_TYPE_LABELS[e.event_type] || e.event_type);
+        }
+        driverMap.set(k, cur);
+      }
+
+      const drivers = Array.from(driverMap.entries()).sort((a, b) => a[1].name.localeCompare(b[1].name, 'pt-BR'));
+      const periodLabel = `${format(periodFrom, 'dd/MM/yyyy')} a ${format(periodTo, 'dd/MM/yyyy')}`;
+
+      // Cabeçalho mesclado em 3 linhas (modelo)
+      const aoa: any[][] = [];
+      aoa.push([`RESUMO DIVERGÊNCIAS — ${periodLabel}`]);
+      aoa.push([]);
+      // Linha 3: grupos
+      aoa.push([
+        'Motorista',
+        'Entregas', 'Entregas', 'Valor',
+        'Ocorrências',
+        'Entrega NÃO efetuada / motorista',
+        'Entrega NÃO efetuada',
+        'Baixa NÃO Efetuada (qtd)',
+        'Comprovantes NÃO Entregues',
+        'Devoluções efetuadas',
+        'Produtos danificados', 'Produtos danificados',
+        'Falta de produtos', 'Falta de produtos',
+        'Observação',
+      ]);
+      // Linha 4: subcabeçalhos
+      aoa.push([
+        '',
+        'quantidade', 'Notas', 'entregue (R$)',
+        'NÃO efetuadas',
+        '',
+        '',
+        '',
+        '',
+        '',
+        'quantidade', 'Vr. total (R$)',
+        'No. de faltas', 'Vr. total (R$)',
+        '',
+      ]);
+
+      // Linhas dos motoristas
+      let totals = {
+        entregas: 0, notas: 0, valor: 0, ocorrencias: 0,
+        nao_efetuada_motorista: 0, nao_efetuada: 0, baixa: 0, comp: 0, devol: 0,
+        dq: 0, dv: 0, fq: 0, fv: 0,
+      };
+      for (const [id, a] of drivers) {
+        const ld = (id && loadsByDriver[id]) || { entregas: 0, notas: 0, valor: 0 };
+        const ocorrencias = a.nao_efetuada_motorista + a.nao_efetuada + a.devolucoes + a.danif_qtd + a.falta_qtd;
+        aoa.push([
+          a.name,
+          ld.entregas || '', ld.notas || '', ld.valor || '',
+          ocorrencias || '',
+          a.nao_efetuada_motorista || '',
+          a.nao_efetuada || '',
+          a.baixa_nao_efetuada || '',
+          a.comprovantes_nao_entregues || '',
+          a.devolucoes || '',
+          a.danif_qtd || '', a.danif_valor || '',
+          a.falta_qtd || '', a.falta_valor || '',
+          a.observacao || '',
+        ]);
+        totals.entregas += ld.entregas; totals.notas += ld.notas; totals.valor += ld.valor;
+        totals.ocorrencias += ocorrencias;
+        totals.nao_efetuada_motorista += a.nao_efetuada_motorista;
+        totals.nao_efetuada += a.nao_efetuada;
+        totals.baixa += a.baixa_nao_efetuada;
+        totals.comp += a.comprovantes_nao_entregues;
+        totals.devol += a.devolucoes;
+        totals.dq += a.danif_qtd; totals.dv += a.danif_valor;
+        totals.fq += a.falta_qtd; totals.fv += a.falta_valor;
+      }
+      aoa.push([]);
+      aoa.push([
+        'TOTAL',
+        totals.entregas, totals.notas, totals.valor,
+        totals.ocorrencias,
+        totals.nao_efetuada_motorista, totals.nao_efetuada,
+        totals.baixa, totals.comp, totals.devol,
+        totals.dq, totals.dv, totals.fq, totals.fv, '',
+      ]);
+
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      // Merges (linhas em índice 0-based dentro do array `aoa`)
+      ws['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 14 } }, // título
+        { s: { r: 2, c: 1 }, e: { r: 2, c: 2 } }, // Entregas (qtd + notas)
+        { s: { r: 2, c: 10 }, e: { r: 2, c: 11 } }, // Produtos danificados
+        { s: { r: 2, c: 12 }, e: { r: 2, c: 13 } }, // Falta de produtos
+        { s: { r: 2, c: 0 }, e: { r: 3, c: 0 } }, // Motorista
+        { s: { r: 2, c: 3 }, e: { r: 3, c: 3 } }, // Valor
+        { s: { r: 2, c: 4 }, e: { r: 3, c: 4 } }, // Ocorrências
+        { s: { r: 2, c: 5 }, e: { r: 3, c: 5 } },
+        { s: { r: 2, c: 6 }, e: { r: 3, c: 6 } },
+        { s: { r: 2, c: 7 }, e: { r: 3, c: 7 } },
+        { s: { r: 2, c: 8 }, e: { r: 3, c: 8 } },
+        { s: { r: 2, c: 9 }, e: { r: 3, c: 9 } },
+        { s: { r: 2, c: 14 }, e: { r: 3, c: 14 } },
+      ];
+      ws['!cols'] = [
+        { wch: 22 }, { wch: 12 }, { wch: 10 }, { wch: 16 }, { wch: 12 },
+        { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 14 }, { wch: 12 },
+        { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 14 }, { wch: 32 },
+      ];
+
+      const wsDetail = XLSX.utils.aoa_to_sheet([detailHeaders, ...detailRows]);
+      wsDetail['!cols'] = [
+        { wch: 16 }, { wch: 22 }, { wch: 12 }, { wch: 10 }, { wch: 14 },
+        { wch: 24 }, { wch: 20 }, { wch: 10 }, { wch: 14 }, { wch: 60 }, { wch: 16 },
+      ];
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Resumo por motorista');
+      XLSX.utils.book_append_sheet(wb, wsDetail, 'Detalhe');
+      XLSX.writeFile(wb, `ocorrencias_${format(new Date(), 'yyyyMMdd_HHmm')}.xlsx`);
+
+      toast({ title: 'Relatório exportado', description: `${sorted.length} ocorrência(s) em 2 abas.` });
+    } catch (err: any) {
+      toast({ title: 'Falha ao exportar', description: err?.message || 'Erro desconhecido.', variant: 'destructive' });
+    } finally {
+      setExporting(false);
+    }
   };
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<OperationalEvent | null>(null);
@@ -744,8 +923,9 @@ export default function OperationalEvents() {
             <X className="h-4 w-4 mr-1" /> Limpar ({activeFiltersCount})
           </Button>
         )}
-        <Button variant="outline" size="sm" onClick={exportCsv} className="h-9" disabled={!sorted.length} title="Exportar resultados filtrados para CSV">
-          <Download className="h-4 w-4 mr-1" /> Exportar CSV
+        <Button variant="outline" size="sm" onClick={exportReport} className="h-9" disabled={!sorted.length || exporting} title="Exportar relatório XLSX (resumo por motorista + detalhe)">
+          {exporting ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Download className="h-4 w-4 mr-1" />}
+          Exportar XLSX
         </Button>
         <span className="text-xs text-muted-foreground ml-auto flex items-center gap-2">
           {(isTableFetching && !isTableLoading) && <Loader2 className="h-3 w-3 animate-spin" />}
