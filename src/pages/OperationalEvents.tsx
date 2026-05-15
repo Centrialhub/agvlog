@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import {
   useOperationalEvents, useCreateOperationalEvent, useUpdateOperationalEvent,
+  useOperationalEventsFiltered,
   EVENT_TYPES, EVENT_TYPE_LABELS, SEVERITY_LABELS, OperationalEvent,
 } from '@/hooks/useOperationalEvents';
 import { useLoads } from '@/hooks/useLoads';
@@ -46,6 +47,21 @@ const TYPE_COLORS: Record<string, string> = {
 export default function OperationalEvents() {
   const { currentTenant } = useTenant();
   const { data: events = [], isLoading, isError, error, refetch, isFetching } = useOperationalEvents();
+  // Filtros aplicados no servidor (Supabase) — performance para frotas grandes
+  const {
+    data: tableEvents = [],
+    isLoading: isTableLoading,
+    isError: isTableError,
+    isFetching: isTableFetching,
+    refetch: refetchTable,
+  } = useOperationalEventsFiltered({
+    status: statusFilter as any,
+    type: typeFilter,
+    severity: severityFilter,
+    vehicleId: vehicleFilter,
+    dateFrom,
+    dateTo,
+  });
   const { data: loads = [] } = useLoads();
   const { data: clients = [] } = useClients();
   const createEvent = useCreateOperationalEvent();
@@ -125,7 +141,10 @@ export default function OperationalEvents() {
       .channel('operational_events_live')
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'operational_events', filter: `tenant_id=eq.${currentTenant.id}` },
-        () => qc.invalidateQueries({ queryKey: ['operational_events'] }),
+        () => {
+          qc.invalidateQueries({ queryKey: ['operational_events'] });
+          qc.invalidateQueries({ queryKey: ['operational_events_filtered'] });
+        },
       )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
@@ -141,26 +160,16 @@ export default function OperationalEvents() {
     financial_impact: 0,
   });
 
+  // Filtros estruturais (status/tipo/severidade/veículo/datas) já vieram do Supabase em `tableEvents`.
+  // Aqui aplicamos apenas a busca textual sobre o resultado já reduzido.
   const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    const fromTs = dateFrom ? new Date(dateFrom.getFullYear(), dateFrom.getMonth(), dateFrom.getDate()).getTime() : null;
-    const toTs = dateTo ? new Date(dateTo.getFullYear(), dateTo.getMonth(), dateTo.getDate(), 23, 59, 59, 999).getTime() : null;
-    return events.filter(e => {
-      if (q) {
-        const hay = `${e.description || ''} ${e.loads?.load_number || ''} ${e.drivers?.name || ''} ${e.clients?.company_name || ''}`.toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
-      if (statusFilter === 'open' && e.resolved_at) return false;
-      if (statusFilter === 'resolved' && !e.resolved_at) return false;
-      if (typeFilter !== 'all' && e.event_type !== typeFilter) return false;
-      if (severityFilter !== 'all' && e.severity !== severityFilter) return false;
-      if (vehicleFilter !== 'all' && e.vehicle_id !== vehicleFilter) return false;
-      const ts = new Date(e.created_at).getTime();
-      if (fromTs && ts < fromTs) return false;
-      if (toTs && ts > toTs) return false;
-      return true;
+    const q = search.trim().toLowerCase();
+    if (!q) return tableEvents;
+    return tableEvents.filter(e => {
+      const hay = `${e.description || ''} ${e.loads?.load_number || ''} ${e.drivers?.name || ''} ${e.clients?.company_name || ''}`.toLowerCase();
+      return hay.includes(q);
     });
-  }, [events, search, statusFilter, typeFilter, severityFilter, vehicleFilter, dateFrom, dateTo]);
+  }, [tableEvents, search]);
 
   const SEVERITY_ORDER: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 };
   const sorted = useMemo(() => {
