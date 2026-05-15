@@ -545,12 +545,18 @@ export default function OperationalEvents() {
   // Aqui aplicamos apenas a busca textual sobre o resultado já reduzido.
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return tableEvents;
     return tableEvents.filter(e => {
-      const hay = `${e.description || ''} ${e.loads?.load_number || ''} ${e.drivers?.name || ''} ${e.clients?.company_name || ''}`.toLowerCase();
-      return hay.includes(q);
+      if (q) {
+        const hay = `${e.description || ''} ${e.loads?.load_number || ''} ${e.drivers?.name || ''} ${e.clients?.company_name || ''}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      if (respFilter !== 'all') {
+        const r = RESPONSIBILITY_MAP[e.event_type] || 'transporte';
+        if (r !== respFilter) return false;
+      }
+      return true;
     });
-  }, [tableEvents, search]);
+  }, [tableEvents, search, respFilter]);
 
   const SEVERITY_ORDER: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 };
   const sorted = useMemo(() => {
@@ -576,7 +582,7 @@ export default function OperationalEvents() {
   const paged = useMemo(() => sorted.slice((currentPage - 1) * pageSize, currentPage * pageSize), [sorted, currentPage, pageSize]);
 
   // Reset to first page on filter/sort/pageSize changes
-  useEffect(() => { setPage(1); }, [search, statusFilter, typeFilter, severityFilter, vehicleFilter, dateFrom, dateTo, sortKey, sortDir, pageSize]);
+  useEffect(() => { setPage(1); }, [search, statusFilter, typeFilter, severityFilter, vehicleFilter, dateFrom, dateTo, sortKey, sortDir, pageSize, driverFilter, clientFilter, loadFilter, impactMin, impactMax, hasImpactOnly, respFilter]);
 
   // Scroll para a âncora ao abrir com hash (#detalhamento-ocorrencias)
   useEffect(() => {
@@ -603,10 +609,14 @@ export default function OperationalEvents() {
   );
 
   const activeFiltersCount = (statusFilter !== 'open' ? 1 : 0) + (typeFilter !== 'all' ? 1 : 0) +
-    (severityFilter !== 'all' ? 1 : 0) + (vehicleFilter !== 'all' ? 1 : 0) + (dateFrom ? 1 : 0) + (dateTo ? 1 : 0) + (search ? 1 : 0);
+    (severityFilter !== 'all' ? 1 : 0) + (vehicleFilter !== 'all' ? 1 : 0) + (dateFrom ? 1 : 0) + (dateTo ? 1 : 0) + (search ? 1 : 0) +
+    (driverFilter !== 'all' ? 1 : 0) + (clientFilter !== 'all' ? 1 : 0) + (loadFilter !== 'all' ? 1 : 0) +
+    (impactMin !== '' ? 1 : 0) + (impactMax !== '' ? 1 : 0) + (hasImpactOnly ? 1 : 0) + (respFilter !== 'all' ? 1 : 0);
   const clearAllFilters = () => {
     setSearch(''); setStatusFilter('open'); setTypeFilter('all'); setSeverityFilter('all');
     setVehicleFilter('all'); setDateFrom(undefined); setDateTo(undefined);
+    setDriverFilter('all'); setClientFilter('all'); setLoadFilter('all');
+    setImpactMin(''); setImpactMax(''); setHasImpactOnly(false); setRespFilter('all');
   };
 
   // ===== Chart data: últimos 12 meses, séries por tipo =====
