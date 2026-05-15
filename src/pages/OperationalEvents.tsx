@@ -66,6 +66,11 @@ export default function OperationalEvents() {
   const [selectedEvent, setSelectedEvent] = useState<OperationalEvent | null>(null);
   const { toast } = useToast();
   const qc = useQueryClient();
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  const focusSearch = () => {
+    setTimeout(() => searchRef.current?.focus({ preventScroll: true }), 350);
+  };
 
   const { data: drivers = [] } = useQuery({
     queryKey: ['drivers', currentTenant?.id],
@@ -163,6 +168,7 @@ export default function OperationalEvents() {
     if (window.location.hash === '#detalhamento-ocorrencias') {
       setTimeout(() => {
         document.getElementById('detalhamento-ocorrencias')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        focusSearch();
       }, 100);
     }
   }, []);
@@ -275,6 +281,7 @@ export default function OperationalEvents() {
               if (window.location.hash !== '#detalhamento-ocorrencias') {
                 window.history.pushState(null, '', '#detalhamento-ocorrencias');
               }
+              focusSearch();
             }}
           >
             <ListOrdered className="h-4 w-4 mr-2" /> Ir para detalhamento
@@ -456,7 +463,7 @@ export default function OperationalEvents() {
       <div id="detalhamento-ocorrencias" className="flex gap-2 items-center flex-wrap scroll-mt-4">
         <div className="relative min-w-[220px] flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar (descrição, carga, motorista, cliente)..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+          <Input ref={searchRef} placeholder="Buscar (descrição, carga, motorista, cliente)..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-36"><SelectValue placeholder="Status" /></SelectTrigger>
