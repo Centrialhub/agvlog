@@ -95,6 +95,7 @@ export default function OperationalEvents() {
   const [vehicleFilter, setVehicleFilter] = useState<string>('all');
   const [dateFrom, setDateFrom] = useState<Date | undefined>();
   const [dateTo, setDateTo] = useState<Date | undefined>();
+  const [driverPanelSearch, setDriverPanelSearch] = useState('');
   // Filtros aplicados no servidor (Supabase) — performance para frotas grandes
   const {
     data: tableEvents = [],
