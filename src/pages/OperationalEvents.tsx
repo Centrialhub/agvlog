@@ -614,13 +614,18 @@ export default function OperationalEvents() {
 
   // ===== Ocorrências por Motorista (estilo TudoEntregue: barra empilhada + total) =====
   const driverStats = useMemo(() => {
-    const map = new Map<string, { name: string; critical: number; high: number; medium: number; low: number; total: number }>();
+    const map = new Map<string, { name: string; critical: number; high: number; medium: number; low: number; resolved: number; total: number }>();
     (tableEvents || []).forEach(e => {
       const name = e.drivers?.name?.trim() || 'Sem motorista';
-      const cur = map.get(name) || { name, critical: 0, high: 0, medium: 0, low: 0, total: 0 };
+      const cur = map.get(name) || { name, critical: 0, high: 0, medium: 0, low: 0, resolved: 0, total: 0 };
       const sev = (e.severity || 'medium') as 'critical' | 'high' | 'medium' | 'low';
-      if (sev === 'critical' || sev === 'high' || sev === 'medium' || sev === 'low') cur[sev]++;
-      else cur.medium++;
+      if (e.resolved_at) {
+        cur.resolved++;
+      } else if (sev === 'critical' || sev === 'high' || sev === 'medium' || sev === 'low') {
+        cur[sev]++;
+      } else {
+        cur.medium++;
+      }
       cur.total++;
       map.set(name, cur);
     });
