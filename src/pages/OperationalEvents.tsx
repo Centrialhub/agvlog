@@ -15,7 +15,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Plus, AlertOctagon, CheckCircle, MessageSquare, Send, Truck, User, Building2, Package, Wifi, ListOrdered, X, CalendarIcon } from 'lucide-react';
+import { Search, Plus, AlertOctagon, CheckCircle, MessageSquare, Send, Truck, User, Building2, Package, Wifi, ListOrdered, X, CalendarIcon, Loader2, Inbox, AlertTriangle, RefreshCw } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
@@ -45,7 +45,7 @@ const TYPE_COLORS: Record<string, string> = {
 
 export default function OperationalEvents() {
   const { currentTenant } = useTenant();
-  const { data: events = [], isLoading } = useOperationalEvents();
+  const { data: events = [], isLoading, isError, error, refetch, isFetching } = useOperationalEvents();
   const { data: loads = [] } = useLoads();
   const { data: clients = [] } = useClients();
   const createEvent = useCreateOperationalEvent();
@@ -440,9 +440,67 @@ export default function OperationalEvents() {
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Carregando...</TableCell></TableRow>
+                Array.from({ length: 5 }).map((_, i) => (
+                  <TableRow key={`sk-${i}`}>
+                    {Array.from({ length: 8 }).map((__, j) => (
+                      <TableCell key={j}><div className="h-4 bg-muted/60 rounded animate-pulse" /></TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              ) : isError ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="py-12">
+                    <div className="flex flex-col items-center gap-3 text-center">
+                      <div className="h-12 w-12 rounded-full bg-destructive/10 flex items-center justify-center">
+                        <AlertTriangle className="h-6 w-6 text-destructive" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-foreground">Não foi possível carregar as ocorrências</p>
+                        <p className="text-xs text-muted-foreground mt-1">{(error as any)?.message || 'Erro desconhecido. Verifique sua conexão.'}</p>
+                      </div>
+                      <Button size="sm" variant="outline" onClick={() => refetch()}>
+                        <RefreshCw className="h-3.5 w-3.5 mr-2" /> Tentar novamente
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
               ) : filtered.length === 0 ? (
-                <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Nenhuma ocorrência</TableCell></TableRow>
+                <TableRow>
+                  <TableCell colSpan={8} className="py-12">
+                    <div className="flex flex-col items-center gap-3 text-center">
+                      <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+                        <Inbox className="h-6 w-6 text-muted-foreground" />
+                      </div>
+                      {events.length === 0 ? (
+                        <>
+                          <div>
+                            <p className="text-sm font-medium text-foreground">Nenhuma ocorrência registrada</p>
+                            <p className="text-xs text-muted-foreground mt-1 max-w-sm">
+                              Quando o motorista reportar uma avaria, recusa ou outra ocorrência pelo app, ela aparece aqui em tempo real.
+                            </p>
+                          </div>
+                          <Button size="sm" onClick={() => setDialogOpen(true)}>
+                            <Plus className="h-3.5 w-3.5 mr-2" /> Registrar manualmente
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <div>
+                            <p className="text-sm font-medium text-foreground">Nenhum resultado para os filtros aplicados</p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Existem {events.length} ocorrência(s) no total. Ajuste os filtros para visualizá-las.
+                            </p>
+                          </div>
+                          {activeFiltersCount > 0 && (
+                            <Button size="sm" variant="outline" onClick={clearAllFilters}>
+                              <X className="h-3.5 w-3.5 mr-2" /> Limpar filtros
+                            </Button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
               ) : filtered.map(e => (
                 <TableRow key={e.id} className={`cursor-pointer hover:bg-muted/50 ${e.resolved_at ? 'opacity-60' : ''}`} onClick={() => setSelectedEvent(e)}>
                   <TableCell className="text-sm font-medium">
