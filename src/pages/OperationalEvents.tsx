@@ -16,7 +16,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Plus, AlertOctagon, CheckCircle, MessageSquare, Send, Truck, User, Building2, Package, Wifi, ListOrdered, X, CalendarIcon, Loader2, Inbox, AlertTriangle, RefreshCw, ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUpToLine, Bookmark, BookmarkPlus, Trash2, Star } from 'lucide-react';
+import { Search, Plus, AlertOctagon, CheckCircle, MessageSquare, Send, Truck, User, Building2, Package, Wifi, ListOrdered, X, CalendarIcon, Loader2, Inbox, AlertTriangle, RefreshCw, ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUpToLine, Bookmark, BookmarkPlus, Trash2, Star, Download } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Calendar } from '@/components/ui/calendar';
@@ -170,6 +170,47 @@ export default function OperationalEvents() {
   };
   const deletePreset = (id: string) => {
     persistPresets(customPresets.filter(p => p.id !== id));
+  };
+
+  // ====== Exportar CSV (respeita filtros + ordenação atual) ======
+  const exportCsv = () => {
+    if (!sorted.length) {
+      toast({ title: 'Nada para exportar', description: 'Ajuste os filtros para gerar resultados.' });
+      return;
+    }
+    const headers = [
+      'Quando', 'Tipo', 'Severidade', 'Status', 'Carga', 'Cliente', 'Motorista',
+      'Veículo', 'Impacto (R$)', 'Descrição', 'Resolvido em',
+    ];
+    const escape = (v: any) => {
+      if (v === null || v === undefined) return '';
+      const s = String(v).replace(/"/g, '""');
+      return /[",;\n\r]/.test(s) ? `"${s}"` : s;
+    };
+    const rows = sorted.map((e: any) => [
+      format(new Date(e.created_at), 'yyyy-MM-dd HH:mm:ss'),
+      EVENT_TYPE_LABELS[e.event_type as keyof typeof EVENT_TYPE_LABELS] || e.event_type || '',
+      SEVERITY_LABELS[e.severity] || e.severity || '',
+      e.resolved_at ? 'Resolvida' : 'Aberta',
+      e.loads?.load_number || '',
+      e.clients?.company_name || '',
+      e.drivers?.name || '',
+      e.vehicles?.plate || '',
+      e.financial_impact != null ? Number(e.financial_impact).toFixed(2) : '',
+      (e.description || '').replace(/\s+/g, ' ').trim(),
+      e.resolved_at ? format(new Date(e.resolved_at), 'yyyy-MM-dd HH:mm:ss') : '',
+    ].map(escape).join(';'));
+    const csv = '\ufeff' + [headers.join(';'), ...rows].join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ocorrencias_${format(new Date(), 'yyyyMMdd_HHmm')}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast({ title: 'CSV exportado', description: `${sorted.length} ocorrência(s).` });
   };
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<OperationalEvent | null>(null);
@@ -703,6 +744,9 @@ export default function OperationalEvents() {
             <X className="h-4 w-4 mr-1" /> Limpar ({activeFiltersCount})
           </Button>
         )}
+        <Button variant="outline" size="sm" onClick={exportCsv} className="h-9" disabled={!sorted.length} title="Exportar resultados filtrados para CSV">
+          <Download className="h-4 w-4 mr-1" /> Exportar CSV
+        </Button>
         <span className="text-xs text-muted-foreground ml-auto flex items-center gap-2">
           {(isTableFetching && !isTableLoading) && <Loader2 className="h-3 w-3 animate-spin" />}
           {sorted.length} resultado(s)
