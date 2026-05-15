@@ -641,6 +641,18 @@ export default function OperationalEvents() {
     return driverStats.rows.filter(r => r.name.toLowerCase().includes(q));
   }, [driverStats.rows, driverPanelSearch]);
 
+  // Eventos agrupados por motorista (mesma fonte/ordem de tableEvents)
+  const eventsByDriver = useMemo(() => {
+    const m = new Map<string, OperationalEvent[]>();
+    (tableEvents || []).forEach(e => {
+      const name = e.drivers?.name?.trim() || 'Sem motorista';
+      const arr = m.get(name) || [];
+      arr.push(e);
+      m.set(name, arr);
+    });
+    return m;
+  }, [tableEvents]);
+
   const handleCreate = async () => {
     try {
       await createEvent.mutateAsync({
