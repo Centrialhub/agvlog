@@ -1207,6 +1207,20 @@ export default function OperationalEvents() {
                           </span>
                           <div className="flex items-center gap-1">
                             <Button
+                              variant="default"
+                              size="sm"
+                              className="h-7 px-2 gap-1 text-[11px]"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const drvId = (driverEvents[0] as any)?.driver_id || (driverEvents[0] as any)?.drivers?.id;
+                                if (drvId) setChatDriver({ id: drvId, name: r.name });
+                              }}
+                              disabled={!((driverEvents[0] as any)?.driver_id || (driverEvents[0] as any)?.drivers?.id)}
+                              title="Abrir chat direto com o motorista (tempo real)"
+                            >
+                              <MessageSquare className="h-3 w-3" /> Chat
+                            </Button>
+                            <Button
                               variant="outline"
                               size="sm"
                               className="h-7 px-2 gap-1 text-[11px]"
