@@ -567,6 +567,69 @@ export default function OperationalEvents() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input ref={searchRef} placeholder="Buscar (descrição, carga, motorista, cliente)..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
         </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="h-9 gap-1.5">
+              <Bookmark className="h-4 w-4" /> Presets
+              {customPresets.length > 0 && (
+                <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">{customPresets.length}</Badge>
+              )}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-64">
+            <DropdownMenuLabel className="text-xs">Sugeridos</DropdownMenuLabel>
+            {BUILTIN_PRESETS.map(p => (
+              <DropdownMenuItem key={p.id} onClick={() => applyPreset(p)} className="cursor-pointer">
+                <Star className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+                <span className="flex-1 truncate">{p.name}</span>
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="text-xs">Meus presets</DropdownMenuLabel>
+            {customPresets.length === 0 ? (
+              <div className="px-2 py-1.5 text-xs text-muted-foreground">Nenhum preset salvo.</div>
+            ) : customPresets.map(p => (
+              <DropdownMenuItem key={p.id} onClick={() => applyPreset(p)} className="cursor-pointer group">
+                <Bookmark className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+                <span className="flex-1 truncate">{p.name}</span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); deletePreset(p.id); }}
+                  className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive ml-2"
+                  aria-label="Excluir preset"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={(e) => { e.preventDefault(); setSavePresetOpen(true); }} className="cursor-pointer">
+              <BookmarkPlus className="h-3.5 w-3.5 mr-2" />
+              Salvar filtros atuais...
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <Dialog open={savePresetOpen} onOpenChange={setSavePresetOpen}>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Salvar preset de filtros</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <Label htmlFor="preset-name">Nome</Label>
+              <Input
+                id="preset-name"
+                placeholder="Ex.: Críticas frota refrigerada"
+                value={newPresetName}
+                onChange={(e) => setNewPresetName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') saveCurrentAsPreset(); }}
+                autoFocus
+              />
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" size="sm" onClick={() => setSavePresetOpen(false)}>Cancelar</Button>
+                <Button size="sm" onClick={saveCurrentAsPreset} disabled={!newPresetName.trim()}>Salvar</Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-36"><SelectValue placeholder="Status" /></SelectTrigger>
           <SelectContent>
