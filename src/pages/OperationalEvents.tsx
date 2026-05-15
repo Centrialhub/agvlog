@@ -1161,6 +1161,33 @@ export default function OperationalEvents() {
                     </button>
                     {isExpanded && (
                       <div className="bg-muted/20 border-l-2 border-primary/40 ml-2 mb-2 rounded-r-md">
+                        <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border/40">
+                          <span className="text-[11px] text-muted-foreground">
+                            {driverEvents.length} ocorrência(s) — respeita filtros e ordenação atuais
+                          </span>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 px-2 gap-1 text-[11px]"
+                              disabled={exporting || driverEvents.length === 0}
+                              onClick={(e) => { e.stopPropagation(); exportReport({ driverName: r.name, format: 'xlsx' }); }}
+                              title="Exportar XLSX (apenas este motorista)"
+                            >
+                              {exporting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />} XLSX
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 px-2 gap-1 text-[11px]"
+                              disabled={exporting || driverEvents.length === 0}
+                              onClick={(e) => { e.stopPropagation(); exportReport({ driverName: r.name, format: 'csv' }); }}
+                              title="Exportar CSV (apenas este motorista)"
+                            >
+                              {exporting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />} CSV
+                            </Button>
+                          </div>
+                        </div>
                         {driverEvents.length === 0 ? (
                           <div className="px-4 py-3 text-xs text-muted-foreground">Nenhuma ocorrência neste período.</div>
                         ) : (
