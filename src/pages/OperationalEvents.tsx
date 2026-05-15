@@ -520,6 +520,23 @@ export default function OperationalEvents() {
             {vehicles.map((v: any) => <SelectItem key={v.id} value={v.id}>{v.plate}</SelectItem>)}
           </SelectContent>
         </Select>
+        <Select
+          value={`${sortKey}:${sortDir}`}
+          onValueChange={(v) => {
+            const [k, d] = v.split(':') as [SortKey, 'asc' | 'desc'];
+            setSortKey(k); setSortDir(d);
+          }}
+        >
+          <SelectTrigger className="w-52"><SelectValue placeholder="Ordenar por" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="created_at:desc">Mais recentes primeiro</SelectItem>
+            <SelectItem value="created_at:asc">Mais antigas primeiro</SelectItem>
+            <SelectItem value="severity:desc">Severidade (maior → menor)</SelectItem>
+            <SelectItem value="severity:asc">Severidade (menor → maior)</SelectItem>
+            <SelectItem value="financial_impact:desc">Impacto (maior → menor)</SelectItem>
+            <SelectItem value="financial_impact:asc">Impacto (menor → maior)</SelectItem>
+          </SelectContent>
+        </Select>
         <Popover>
           <PopoverTrigger asChild>
             <Button variant="outline" className={cn('h-9 justify-start text-left font-normal', !dateFrom && 'text-muted-foreground')}>
