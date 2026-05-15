@@ -844,6 +844,105 @@ export default function OperationalEvents() {
         </CardContent>
       </Card>
 
+      {/* Responsabilidade + Linhas de Separação (estilo relatório AGV) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-bold uppercase tracking-wide text-center">
+              Responsabilidade das Ocorrências{periodLabel !== 'período selecionado' ? ` ${periodLabel}` : ''}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {respTotal === 0 ? (
+              <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">
+                Sem dados no período
+              </div>
+            ) : (
+              <div className="h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={responsibilityData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={100}
+                      label={({ name, percent }) =>
+                        `${name}\n${(percent * 100).toFixed(1)}%`
+                      }
+                      labelLine={true}
+                    >
+                      {responsibilityData.map(d => (
+                        <Cell key={d.key} fill={RESP_COLORS[d.key]} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{ backgroundColor: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }}
+                      formatter={(v: any, n: any) => [`${v} (${((Number(v) / respTotal) * 100).toFixed(1)}%)`, n]}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+            <div className="mt-2 flex justify-center gap-4 text-xs">
+              {responsibilityData.map(d => (
+                <div key={d.key} className="flex items-center gap-1.5">
+                  <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: RESP_COLORS[d.key] }} />
+                  <span className="font-semibold">{d.name}</span>
+                  <span className="text-muted-foreground">{d.value}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-bold uppercase tracking-wide text-center">
+              Ocorrências por Linhas de Separação{periodLabel !== 'período selecionado' ? ` ${periodLabel}` : ''}
+            </CardTitle>
+            <CardDescription className="text-center text-[11px]">
+              Origem: campo "linha de separação" da ocorrência
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {sepTotal === 0 ? (
+              <div className="h-64 flex flex-col items-center justify-center text-sm text-muted-foreground gap-1">
+                <span>Sem dados de linha de separação no período</span>
+                <span className="text-xs">Drivers/operadores devem informar a linha ao registrar a ocorrência.</span>
+              </div>
+            ) : (
+              <div className="h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={separationData} margin={{ top: 16, right: 16, left: 0, bottom: 16 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }}
+                      formatter={(v: any) => [`${v} ocorrência(s)`, 'Total']}
+                    />
+                    <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                      {separationData.map((d, i) => (
+                        <Cell
+                          key={i}
+                          fill={d.name === 'MIUDEZA' ? 'hsl(var(--warning))' : 'hsl(var(--destructive))'}
+                        />
+                      ))}
+                      <LabelList dataKey="value" position="center" fill="#fff" style={{ fontSize: 12, fontWeight: 700 }} />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+            <div className="text-center text-[11px] text-muted-foreground mt-1">
+              Contagem de LINHA DE SEPARAÇÃO
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Filtros + Tabela detalhada */}
       <div id="detalhamento-ocorrencias" className="flex gap-2 items-center flex-wrap scroll-mt-4">
         <div className="relative min-w-[220px] flex-1 max-w-sm">
