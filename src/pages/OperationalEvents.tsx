@@ -30,6 +30,7 @@ import { ptBR } from 'date-fns/locale';
 import { useEffect, useRef } from 'react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend, PieChart, Pie, Cell, BarChart, Bar, LabelList } from 'recharts';
 import { useEventMessages, useSendEventMessage } from '@/hooks/useEventMessages';
+import { useDriverMessages, useSendDriverMessage } from '@/hooks/useDriverMessages';
 import { useAuth } from '@/hooks/useAuth';
 import { formatOccurrenceReport } from '@/lib/occurrenceTemplate';
 import { Copy } from 'lucide-react';
@@ -97,6 +98,7 @@ export default function OperationalEvents() {
   const [dateTo, setDateTo] = useState<Date | undefined>();
   const [driverPanelSearch, setDriverPanelSearch] = useState('');
   const [expandedDriver, setExpandedDriver] = useState<string | null>(null);
+  const [chatDriver, setChatDriver] = useState<{ id: string; name: string } | null>(null);
   type DriverSort = 'total' | 'critical' | 'severity' | 'name';
   const [driverSort, setDriverSort] = useState<DriverSort>('total');
   // Filtros aplicados no servidor (Supabase) — performance para frotas grandes
