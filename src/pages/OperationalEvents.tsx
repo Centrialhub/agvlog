@@ -58,10 +58,36 @@ export default function OperationalEvents() {
   const [dateFrom, setDateFrom] = useState<Date | undefined>();
   const [dateTo, setDateTo] = useState<Date | undefined>();
   type SortKey = 'created_at' | 'event_type' | 'severity' | 'load_number' | 'client' | 'driver' | 'financial_impact';
-  const [sortKey, setSortKey] = useState<SortKey>('created_at');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const SORT_STORAGE_KEY = 'opEvents.sort.v1';
+  const PAGE_SIZE_STORAGE_KEY = 'opEvents.pageSize.v1';
+  const loadSort = (): { key: SortKey; dir: 'asc' | 'desc' } => {
+    if (typeof window === 'undefined') return { key: 'created_at', dir: 'desc' };
+    try {
+      const raw = localStorage.getItem(SORT_STORAGE_KEY);
+      if (raw) {
+        const p = JSON.parse(raw);
+        if (p?.key && p?.dir) return { key: p.key as SortKey, dir: p.dir };
+      }
+    } catch {}
+    return { key: 'created_at', dir: 'desc' };
+  };
+  const initialSort = loadSort();
+  const [sortKey, setSortKey] = useState<SortKey>(initialSort.key);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>(initialSort.dir);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
+  const [pageSize, setPageSize] = useState<number>(() => {
+    if (typeof window === 'undefined') return 25;
+    const raw = Number(localStorage.getItem(PAGE_SIZE_STORAGE_KEY));
+    return [10, 25, 50, 100].includes(raw) ? raw : 25;
+  });
+
+  // Persistir escolha do usuário
+  useEffect(() => {
+    try { localStorage.setItem(SORT_STORAGE_KEY, JSON.stringify({ key: sortKey, dir: sortDir })); } catch {}
+  }, [sortKey, sortDir]);
+  useEffect(() => {
+    try { localStorage.setItem(PAGE_SIZE_STORAGE_KEY, String(pageSize)); } catch {}
+  }, [pageSize]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<OperationalEvent | null>(null);
   const { toast } = useToast();
