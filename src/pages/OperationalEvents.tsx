@@ -566,6 +566,43 @@ export default function OperationalEvents() {
     return { chartData: data, chartTypes: types, totals: totalsMap, totalCount: recent.length };
   }, [events]);
 
+  // ===== Responsabilidade (Depósito vs Transporte) e Linhas de Separação =====
+  // Usa o conjunto JÁ FILTRADO (tableEvents) para refletir período/filtros ativos.
+  const { responsibilityData, separationData, respTotal, sepTotal, periodLabel } = useMemo(() => {
+    const src = tableEvents || [];
+    const resp = { transporte: 0, deposito: 0 };
+    const sep: Record<string, number> = { PESADO: 0, LEVEZA: 0, FRACIONADO: 0, MIUDEZA: 0 };
+    let outros = 0;
+    src.forEach(e => {
+      const r = RESPONSIBILITY_MAP[e.event_type] || 'transporte';
+      resp[r]++;
+      const rawLine = (e.report_details as any)?.separation_line
+        || (e.report_details as any)?.linha_separacao
+        || (e.report_details as any)?.linha
+        || '';
+      const norm = String(rawLine).trim().toUpperCase();
+      if (SEPARATION_LINES.includes(norm as any)) sep[norm]++;
+      else if (norm) outros++;
+    });
+    if (outros > 0) (sep as any).OUTROS = outros;
+    const respArr = [
+      { name: 'TRANSPORTE', value: resp.transporte, key: 'transporte' as const },
+      { name: 'DEPÓSITO', value: resp.deposito, key: 'deposito' as const },
+    ].filter(d => d.value > 0);
+    const sepArr = Object.entries(sep)
+      .filter(([, v]) => v > 0)
+      .map(([k, v]) => ({ name: k, value: v }));
+    const respT = resp.transporte + resp.deposito;
+    const sepT = sepArr.reduce((s, d) => s + d.value, 0);
+    let label = 'período selecionado';
+    if (dateFrom || dateTo) {
+      const f = dateFrom ? format(dateFrom, 'dd/MM/yy') : '...';
+      const t = dateTo ? format(dateTo, 'dd/MM/yy') : 'hoje';
+      label = `${f} - ${t}`;
+    }
+    return { responsibilityData: respArr, separationData: sepArr, respTotal: respT, sepTotal: sepT, periodLabel: label };
+  }, [tableEvents, dateFrom, dateTo]);
+
   const handleCreate = async () => {
     try {
       await createEvent.mutateAsync({
