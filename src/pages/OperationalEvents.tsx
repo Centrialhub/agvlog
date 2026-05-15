@@ -28,7 +28,7 @@ import { useTenant } from '@/hooks/useTenant';
 import { formatDistanceToNow, format, startOfMonth, subMonths, isAfter, startOfDay, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useEffect, useRef } from 'react';
-import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from 'recharts';
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend, PieChart, Pie, Cell, BarChart, Bar, LabelList } from 'recharts';
 import { useEventMessages, useSendEventMessage } from '@/hooks/useEventMessages';
 import { useAuth } from '@/hooks/useAuth';
 import { formatOccurrenceReport } from '@/lib/occurrenceTemplate';
@@ -47,6 +47,30 @@ const TYPE_COLORS: Record<string, string> = {
   return: '#f97316',
   other: '#64748b',
 };
+
+// Mapa de responsabilidade por tipo de ocorrência (Depósito vs Transporte).
+// Baseado no padrão do mercado: erros de separação/produto = Depósito;
+// erros operacionais de entrega = Transporte.
+const RESPONSIBILITY_MAP: Record<string, 'deposito' | 'transporte'> = {
+  missing_goods: 'deposito',
+  missing_goods_fractional: 'deposito',
+  wrong_quantity: 'deposito',
+  wrong_product: 'deposito',
+  expired_goods: 'deposito',
+  near_expiration: 'deposito',
+  damaged: 'transporte',
+  wrong_address: 'transporte',
+  client_refused: 'transporte',
+  no_order: 'transporte',
+  partial_delivery: 'transporte',
+  return: 'transporte',
+  delivery_delay: 'transporte',
+  boleto_extension: 'transporte',
+  other: 'transporte',
+};
+
+const RESP_COLORS = { transporte: 'hsl(var(--primary))', deposito: 'hsl(var(--destructive))' };
+const SEPARATION_LINES = ['PESADO', 'LEVEZA', 'FRACIONADO', 'MIUDEZA'] as const;
 
 export default function OperationalEvents() {
   const { currentTenant } = useTenant();
