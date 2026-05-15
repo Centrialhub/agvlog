@@ -1279,6 +1279,42 @@ export type Database = {
           },
         ]
       }
+      driver_direct_messages: {
+        Row: {
+          attachment_url: string | null
+          created_at: string
+          driver_id: string
+          id: string
+          message: string
+          sender_id: string | null
+          sender_name: string | null
+          sender_role: string
+          tenant_id: string
+        }
+        Insert: {
+          attachment_url?: string | null
+          created_at?: string
+          driver_id: string
+          id?: string
+          message: string
+          sender_id?: string | null
+          sender_name?: string | null
+          sender_role?: string
+          tenant_id: string
+        }
+        Update: {
+          attachment_url?: string | null
+          created_at?: string
+          driver_id?: string
+          id?: string
+          message?: string
+          sender_id?: string | null
+          sender_name?: string | null
+          sender_role?: string
+          tenant_id?: string
+        }
+        Relationships: []
+      }
       driver_expenses: {
         Row: {
           amount: number
