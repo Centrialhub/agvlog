@@ -1902,6 +1902,7 @@ export type Database = {
           client_load_source: Json | null
           created_at: string
           created_by: string | null
+          delivery_meta: Json
           document_type: string
           freight_breakdown: Json | null
           freight_confirmed_at: string | null
@@ -1949,6 +1950,7 @@ export type Database = {
           client_load_source?: Json | null
           created_at?: string
           created_by?: string | null
+          delivery_meta?: Json
           document_type?: string
           freight_breakdown?: Json | null
           freight_confirmed_at?: string | null
@@ -1996,6 +1998,7 @@ export type Database = {
           client_load_source?: Json | null
           created_at?: string
           created_by?: string | null
+          delivery_meta?: Json
           document_type?: string
           freight_breakdown?: Json | null
           freight_confirmed_at?: string | null
@@ -3680,10 +3683,15 @@ export type Database = {
           monitor_responsible: string | null
           monitored: boolean
           notes: string | null
+          occurrence_at: string | null
+          occurrence_notes: string | null
+          occurrence_responsible: string | null
           operation_type: Database["public"]["Enums"]["operation_type"] | null
           origin: string | null
           origin_manifest: string | null
           os_number: string | null
+          payment_method: string | null
+          schedule_at: string | null
           scheduled_load_at: string | null
           shipment_manifest: string | null
           sm_manager: string | null
@@ -3718,10 +3726,15 @@ export type Database = {
           monitor_responsible?: string | null
           monitored?: boolean
           notes?: string | null
+          occurrence_at?: string | null
+          occurrence_notes?: string | null
+          occurrence_responsible?: string | null
           operation_type?: Database["public"]["Enums"]["operation_type"] | null
           origin?: string | null
           origin_manifest?: string | null
           os_number?: string | null
+          payment_method?: string | null
+          schedule_at?: string | null
           scheduled_load_at?: string | null
           shipment_manifest?: string | null
           sm_manager?: string | null
@@ -3756,10 +3769,15 @@ export type Database = {
           monitor_responsible?: string | null
           monitored?: boolean
           notes?: string | null
+          occurrence_at?: string | null
+          occurrence_notes?: string | null
+          occurrence_responsible?: string | null
           operation_type?: Database["public"]["Enums"]["operation_type"] | null
           origin?: string | null
           origin_manifest?: string | null
           os_number?: string | null
+          payment_method?: string | null
+          schedule_at?: string | null
           scheduled_load_at?: string | null
           shipment_manifest?: string | null
           sm_manager?: string | null
@@ -7167,10 +7185,15 @@ export type Database = {
           monitor_responsible: string | null
           monitored: boolean
           notes: string | null
+          occurrence_at: string | null
+          occurrence_notes: string | null
+          occurrence_responsible: string | null
           operation_type: Database["public"]["Enums"]["operation_type"] | null
           origin: string | null
           origin_manifest: string | null
           os_number: string | null
+          payment_method: string | null
+          schedule_at: string | null
           scheduled_load_at: string | null
           shipment_manifest: string | null
           sm_manager: string | null
