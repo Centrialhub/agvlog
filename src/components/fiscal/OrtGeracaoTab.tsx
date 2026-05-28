@@ -120,7 +120,7 @@ export default function OrtGeracaoTab() {
       const pickup = await createPickup.mutateAsync({
         status: 'pendente',
         pickup_at: new Date().toISOString(),
-        observations: `Geração automática de ORT • ${selectedIds.length} NF(s)`,
+        notes: `Geração automática de ORT • ${selectedIds.length} NF(s)`,
       } as any);
 
       const { error } = await supabase
