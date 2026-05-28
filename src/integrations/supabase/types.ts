@@ -3466,6 +3466,81 @@ export type Database = {
           },
         ]
       }
+      load_manifests: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          cte_document_ids: string[]
+          destination: string | null
+          fiscal_document_ids: string[]
+          id: string
+          load_id: string
+          manifest_number: string
+          observations: string | null
+          origin: string | null
+          receipt_number: string | null
+          responsible_address: string | null
+          responsible_city: string | null
+          responsible_cnpj: string | null
+          responsible_ie: string | null
+          responsible_name: string | null
+          responsible_neighborhood: string | null
+          status: string
+          tenant_id: string
+          toll_value: number | null
+          uf_route: string[] | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          cte_document_ids?: string[]
+          destination?: string | null
+          fiscal_document_ids?: string[]
+          id?: string
+          load_id: string
+          manifest_number: string
+          observations?: string | null
+          origin?: string | null
+          receipt_number?: string | null
+          responsible_address?: string | null
+          responsible_city?: string | null
+          responsible_cnpj?: string | null
+          responsible_ie?: string | null
+          responsible_name?: string | null
+          responsible_neighborhood?: string | null
+          status?: string
+          tenant_id: string
+          toll_value?: number | null
+          uf_route?: string[] | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          cte_document_ids?: string[]
+          destination?: string | null
+          fiscal_document_ids?: string[]
+          id?: string
+          load_id?: string
+          manifest_number?: string
+          observations?: string | null
+          origin?: string | null
+          receipt_number?: string | null
+          responsible_address?: string | null
+          responsible_city?: string | null
+          responsible_cnpj?: string | null
+          responsible_ie?: string | null
+          responsible_name?: string | null
+          responsible_neighborhood?: string | null
+          status?: string
+          tenant_id?: string
+          toll_value?: number | null
+          uf_route?: string[] | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       load_note_audit_events: {
         Row: {
           action_type: string
