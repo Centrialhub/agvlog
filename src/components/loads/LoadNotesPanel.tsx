@@ -10,7 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { toast } from 'sonner';
-import { Save, CheckCircle2, XCircle, FileText, AlertTriangle } from 'lucide-react';
+import { Save, CheckCircle2, XCircle, FileText, AlertTriangle, RotateCcw } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -84,6 +84,9 @@ type DocMeta = {
   delivery_at?: string;
   ne_reason?: string;
   ne_at?: string;
+  redelivery?: boolean;
+  redelivery_reason?: string;
+  redelivery_at?: string;
 };
 
 export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
@@ -109,6 +112,7 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
   const [savingAll, setSavingAll] = useState(false);
   const [dirty, setDirty] = useState<Set<string>>(new Set());
   const [neModal, setNeModal] = useState<{ docId: string; reason: string } | null>(null);
+  const [reModal, setReModal] = useState<{ docId: string; reason: string } | null>(null);
 
   const patchDoc = (id: string, patch: Partial<DocMeta>) => {
     setMeta(prev => ({ ...prev, [id]: { ...(prev[id] || {}), ...patch } }));
@@ -212,6 +216,40 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
     }
   };
 
+  // Marca nota para REENTREGA: libera para entrar na próxima carga
+  const confirmRedelivery = async () => {
+    if (!reModal) return;
+    const nowIso = new Date().toISOString();
+    const docId = reModal.docId;
+    const next: DocMeta = {
+      ...(meta[docId] || {}),
+      redelivery: true,
+      redelivery_reason: reModal.reason.trim() || 'Reentrega solicitada',
+      redelivery_at: nowIso,
+      ne: false,
+      ne_reason: '',
+      ne_at: undefined,
+      delivery_at: undefined,
+    };
+    setMeta(prev => ({ ...prev, [docId]: next }));
+    try {
+      // status volta para 'confirmed' e load_id é liberado para reagrupar na próxima carga
+      const { error } = await supabase
+        .from('fiscal_documents')
+        .update({ status: 'confirmed', load_id: null, delivery_meta: next } as any)
+        .eq('id', docId);
+      if (error) throw error;
+      toast.success('Nota marcada para Reentrega — disponível para próxima carga');
+      await qc.invalidateQueries({ queryKey: ['load_documents'] });
+      await qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
+      setReModal(null);
+      setDirty(prev => { const n = new Set(prev); n.delete(docId); return n; });
+      onSaved?.();
+    } catch (e: any) {
+      toast.error(e.message || 'Erro ao marcar reentrega');
+    }
+  };
+
   const saveAll = async () => {
     setSavingAll(true);
     try {
@@ -279,6 +317,7 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
               <TableHead className="text-[10px] whitespace-nowrap">Nº NFS</TableHead>
               <TableHead className="text-[10px] whitespace-nowrap">NUMREF</TableHead>
               <TableHead className="text-[10px] whitespace-nowrap">Situação</TableHead>
+              <TableHead className="text-[10px] whitespace-nowrap">Fornecedor</TableHead>
               <TableHead className="text-[10px] whitespace-nowrap">Destinatário</TableHead>
               <TableHead className="text-[10px] whitespace-nowrap">Município</TableHead>
               <TableHead className="text-[10px] whitespace-nowrap text-right">Vl NFS</TableHead>
@@ -293,7 +332,7 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
           <TableBody>
             {inboundDocs.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={13} className="text-center text-xs text-muted-foreground py-6">
+                <TableCell colSpan={14} className="text-center text-xs text-muted-foreground py-6">
                   Nenhuma nota fiscal vinculada a esta carga.
                 </TableCell>
               </TableRow>
@@ -319,6 +358,14 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
                     ) : (
                       <Badge variant="outline" className="text-[10px]">Pendente</Badge>
                     )}
+                    {m.redelivery && (
+                      <Badge variant="outline" className="text-[10px] ml-1 border-info/40 text-info" title={m.redelivery_reason || ''}>
+                        Reentrega
+                      </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-xs max-w-[160px] truncate" title={d.remitter || ''}>
+                    {d.remitter || '—'}
                   </TableCell>
                   <TableCell className="text-xs max-w-[180px] truncate" title={d.recipient || ''}>
                     {d.recipient || '—'}
@@ -393,6 +440,15 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
                       >
                         <XCircle className="h-3 w-3 mr-1" /> Não Entregue
                       </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2 text-[10px] text-info border-info/40 hover:bg-info/10"
+                        onClick={() => setReModal({ docId: d.id, reason: m.redelivery_reason || '' })}
+                        title="Marcar para Reentrega — libera nota para entrar na próxima carga"
+                      >
+                        <RotateCcw className="h-3 w-3 mr-1" /> Reentrega
+                      </Button>
                     </div>
                     {isNotDelivered && m.ne_reason && (
                       <div className="text-[10px] text-destructive mt-1 px-1 truncate max-w-[280px]" title={m.ne_reason}>
@@ -407,7 +463,7 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
           {inboundDocs.length > 0 && (
             <TableBody>
               <TableRow className="bg-muted/40 font-bold">
-                <TableCell colSpan={6} className="text-xs text-right">Total:</TableCell>
+                <TableCell colSpan={7} className="text-xs text-right">Total:</TableCell>
                 <TableCell className="text-xs text-right whitespace-nowrap">
                   {fmtMoney(inboundDocs.reduce((s: number, d: any) => s + Number(d.value || 0), 0))}
                 </TableCell>
@@ -445,6 +501,38 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
             <Button variant="destructive" onClick={confirmNotDelivered}>
               <XCircle className="h-4 w-4 mr-1" />
               Confirmar Não Entrega
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL REENTREGA */}
+      <Dialog open={!!reModal} onOpenChange={(o) => !o && setReModal(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RotateCcw className="h-4 w-4 text-info" />
+              Marcar Nota para Reentrega
+            </DialogTitle>
+            <DialogDescription>
+              A nota será liberada da carga atual e ficará disponível para entrar na próxima carga (agrupamento). Informe o motivo da reentrega.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label className="text-xs">Motivo da Reentrega</Label>
+            <Textarea
+              rows={4}
+              autoFocus
+              placeholder="Ex.: Cliente solicitou nova tentativa, reentrega agendada para próxima rota..."
+              value={reModal?.reason || ''}
+              onChange={e => setReModal(prev => prev ? { ...prev, reason: e.target.value } : prev)}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReModal(null)}>Cancelar</Button>
+            <Button onClick={confirmRedelivery} className="bg-info hover:bg-info/90 text-info-foreground">
+              <RotateCcw className="h-4 w-4 mr-1" />
+              Confirmar Reentrega
             </Button>
           </DialogFooter>
         </DialogContent>
