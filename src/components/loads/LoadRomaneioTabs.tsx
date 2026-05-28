@@ -22,6 +22,9 @@ import ManifestPanel from './ManifestPanel';
 import {
   FileText, DollarSign, Package, TrendingUp, FileSignature,
   HandCoins, ShieldCheck, Boxes, Files, Truck, Save, Plus,
+  Unlock, Database, Network, DollarSign as DollarIcon, Bot, Search,
+  X as XIcon, Lock, ClipboardCheck, AlertTriangle, Pencil, FileSearch,
+  FilePlus, Key,
 } from 'lucide-react';
 
 interface Props {
@@ -216,6 +219,40 @@ export default function LoadRomaneioTabs({ load, documents, items, onSaved }: Pr
 
   return (
     <Card className="overflow-hidden">
+      {/* Barra de ações rápidas (replica do sistema legado) */}
+      <div className="flex flex-wrap items-center gap-1 px-2 py-2 border-b bg-primary/5">
+        {[
+          { icon: Unlock, label: 'Liberar Travas', onClick: () => toast.info('Liberar Travas — em breve') },
+          { icon: Database, label: 'WMS', onClick: () => toast.info('Integração WMS — em breve') },
+          { icon: Network, label: 'EDI', onClick: () => toast.info('EDI — em breve') },
+          { icon: DollarIcon, label: 'Financeiro', onClick: () => window.open('/financial', '_blank') },
+          { icon: Bot, label: 'RPA', onClick: () => toast.info('RPA — em breve') },
+          { icon: FileText, label: 'Romaneio', onClick: () => window.print() },
+          { icon: Search, label: 'Consultar CT-e', onClick: () => window.open(`/cte-hub?tab=consulta&load=${load.load_number}`, '_blank') },
+          { icon: XIcon, label: 'Cancelar Carga', onClick: () => toast.info('Use o menu Status para cancelar') },
+          { icon: Lock, label: 'Bloquear', onClick: () => toast.info('Bloquear edição — em breve') },
+          { icon: ClipboardCheck, label: 'Checklist', onClick: () => window.open(`/checklists?load=${load.id}`, '_blank') },
+          { icon: AlertTriangle, label: 'Ocorrência', onClick: () => window.open(`/incidents?load=${load.id}`, '_blank') },
+          { icon: Pencil, label: 'Editar', onClick: () => toast.info('Edite os campos abaixo e clique em Salvar') },
+          { icon: FileSearch, label: 'CON (Consulta)', onClick: () => window.open(`/cte-hub?tab=monitor&load=${load.load_number}`, '_blank') },
+          { icon: Files, label: 'ORT', onClick: () => window.open('/ort', '_blank') },
+          { icon: FilePlus, label: 'Novo Documento', onClick: () => window.open(`/fiscal-documents?load=${load.id}`, '_blank') },
+          { icon: Key, label: 'Chave de Acesso', onClick: () => toast.info('Pesquisa por chave — em breve') },
+          { icon: Save, label: 'Salvar', onClick: handleSave, primary: true },
+        ].map(({ icon: Icon, label, onClick, primary }) => (
+          <Button
+            key={label}
+            size="sm"
+            variant={primary ? 'default' : 'outline'}
+            className="h-8 px-2 text-xs gap-1"
+            onClick={onClick}
+            title={label}
+          >
+            <Icon className="h-3.5 w-3.5" />
+            <span className="hidden md:inline">{label}</span>
+          </Button>
+        ))}
+      </div>
       <Tabs defaultValue="geral" className="w-full">
         <TabsList className="w-full justify-start rounded-none border-b bg-muted/40 h-auto flex-wrap p-0">
           <TabsTrigger value="geral" className="data-[state=active]:bg-background data-[state=active]:shadow-none rounded-none border-r"><FileText className="h-3 w-3 mr-1" />Geral</TabsTrigger>
