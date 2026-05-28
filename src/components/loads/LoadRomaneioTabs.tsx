@@ -276,7 +276,7 @@ export default function LoadRomaneioTabs({ load, documents, items, onSaved }: Pr
               key={b.label}
               size="sm"
               variant={b.primary ? 'default' : 'outline'}
-              className="h-8 px-2 text-xs gap-1 bg-background hover:bg-muted"
+              className={`h-8 px-2 text-xs gap-1 ${b.primary ? 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm' : 'bg-background hover:bg-muted'}`}
               onClick={b.onClick}
               title={b.label}
             >
