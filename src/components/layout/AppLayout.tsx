@@ -42,9 +42,7 @@ const navSections: NavSection[] = [
         label: 'Documentos Fiscais',
         icon: <FileSpreadsheet className="h-4 w-4" />,
         items: [
-          { label: 'Faturamento (CT-e)', href: '/billing', icon: <FileSpreadsheet className="h-4 w-4" /> },
-          { label: 'Monitor DOC-e', href: '/cte-monitor', icon: <ShieldCheck className="h-4 w-4" /> },
-          { label: 'Consulta CT-e', href: '/cte-search', icon: <FileSearch className="h-4 w-4" /> },
+          { label: 'CT-e (Faturamento, Monitor, Consulta)', href: '/cte-hub', icon: <FileSpreadsheet className="h-4 w-4" /> },
           { label: 'NFS-e (Serviços)', href: '/nfse', icon: <FileSpreadsheet className="h-4 w-4" /> },
           { label: 'ORT', href: '/ort-management', icon: <FileSearch className="h-4 w-4" /> },
         ],
