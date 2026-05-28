@@ -348,6 +348,9 @@ export default function FiscalDocuments() {
         </Dialog>
       </div>
 
+      {/* KPI Cards */}
+      <SummaryCards docs={docs} />
+
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-center">
         <div className="relative max-w-sm flex-1 min-w-[200px]">
@@ -408,16 +411,6 @@ export default function FiscalDocuments() {
           </Table>
         </CardContent>
       </Card>
-        </TabsContent>
-
-        <TabsContent value="ort-consulta" className="mt-0">
-          <OrtConsultaTab />
-        </TabsContent>
-
-        <TabsContent value="ort-geracao" className="mt-0">
-          <OrtGeracaoTab />
-        </TabsContent>
-      </Tabs>
     </div>
   );
 }
