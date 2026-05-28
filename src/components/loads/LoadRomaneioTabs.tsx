@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
 import LoadItemsPanel from './LoadItemsPanel';
@@ -68,7 +69,7 @@ export default function LoadRomaneioTabs({ load, documents, items, onSaved }: Pr
       if (!currentTenant) return [];
       const { data } = await supabase
         .from('drivers')
-        .select('id, name')
+        .select('id, name, current_vehicle_id')
         .eq('tenant_id', currentTenant.id)
         .eq('active', true)
         .order('name');
@@ -115,6 +116,15 @@ export default function LoadRomaneioTabs({ load, documents, items, onSaved }: Pr
     .filter((d: any) => d.document_type === 'inbound')
     .reduce((s: number, d: any) => s + Number(d.value || 0), 0), [documents]);
   const nfeQty = useMemo(() => documents.filter((d: any) => d.document_type === 'inbound').length, [documents]);
+  const deliveriesQty = useMemo(() => {
+    const recipients = new Set(
+      documents
+        .filter((d: any) => d.document_type === 'inbound')
+        .map((d: any) => (d.recipient_name || d.recipient || d.destination || '').trim().toUpperCase())
+        .filter(Boolean)
+    );
+    return recipients.size;
+  }, [documents]);
 
   const { data: ctes = [] } = useQuery({
     queryKey: ['romaneio_ctes', load.id],
