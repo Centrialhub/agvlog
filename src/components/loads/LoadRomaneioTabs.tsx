@@ -318,24 +318,45 @@ export default function LoadRomaneioTabs({ load, documents, items, onSaved }: Pr
               <div className="text-[10px] font-bold uppercase text-muted-foreground border-b pb-1">Identificação & Datas</div>
               <div>
                 <Label className="text-[10px]">Motorista</Label>
-                <Select value={form.driver_id} onValueChange={v => setForm({ ...form, driver_id: v })}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecionar" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">— Nenhum —</SelectItem>
-                    {drivers.map((d: any) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={form.driver_id}
+                  onChange={v => {
+                    const drv: any = drivers.find((d: any) => d.id === v);
+                    setForm(f => ({
+                      ...f,
+                      driver_id: v,
+                      // Auto-fill plate from driver's current vehicle (only if empty/none)
+                      vehicle_id:
+                        drv?.current_vehicle_id && (f.vehicle_id === '__none__' || !f.vehicle_id)
+                          ? drv.current_vehicle_id
+                          : f.vehicle_id,
+                    }));
+                  }}
+                  options={[
+                    { value: '__none__', label: '— Nenhum —' },
+                    ...drivers.map((d: any) => ({ value: d.id, label: d.name })),
+                  ]}
+                  placeholder="Selecionar motorista"
+                  searchPlaceholder="Digite o nome..."
+                />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <Label className="text-[10px]">Placa</Label>
-                  <Select value={form.vehicle_id} onValueChange={v => setForm({ ...form, vehicle_id: v })}>
-                    <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Placa" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">— Nenhum —</SelectItem>
-                      {vehicles.map((v: any) => <SelectItem key={v.id} value={v.id}>{v.plate}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    value={form.vehicle_id}
+                    onChange={v => setForm({ ...form, vehicle_id: v })}
+                    options={[
+                      { value: '__none__', label: '— Nenhum —' },
+                      ...vehicles.map((v: any) => ({
+                        value: v.id,
+                        label: v.plate,
+                        hint: v.nickname || undefined,
+                      })),
+                    ]}
+                    placeholder="Placa"
+                    searchPlaceholder="Digite a placa..."
+                  />
                 </div>
                 <div>
                   <Label className="text-[10px]">Placa Carreta</Label>
@@ -383,12 +404,13 @@ export default function LoadRomaneioTabs({ load, documents, items, onSaved }: Pr
               <div className="text-[10px] font-bold uppercase text-muted-foreground border-b pb-1">Operação & Carga</div>
               <div>
                 <Label className="text-[10px]">Tipo Operação (Romexp)</Label>
-                <Select value={form.operation_type} onValueChange={v => setForm({ ...form, operation_type: v })}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {OP_TYPES.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={form.operation_type}
+                  onChange={v => setForm({ ...form, operation_type: v })}
+                  options={OP_TYPES.map(o => ({ value: o.value, label: o.label }))}
+                  placeholder="— Selecionar —"
+                  searchPlaceholder="Digite o tipo..."
+                />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
@@ -415,10 +437,6 @@ export default function LoadRomaneioTabs({ load, documents, items, onSaved }: Pr
                 <Input type="number" className="h-8 text-xs" value={form.total_pallet_count} onChange={e => setForm({ ...form, total_pallet_count: e.target.value })} />
               </div>
               <div>
-                <Label className="text-[10px]">Valor Mercadoria</Label>
-                <Input type="number" step="0.01" className="h-8 text-xs" value={form.merchandise_value} onChange={e => setForm({ ...form, merchandise_value: e.target.value })} />
-              </div>
-              <div>
                 <Label className="text-[10px]">Valor CT-e Bruto (auto)</Label>
                 <Input className="h-8 text-xs font-semibold" disabled value={fmtMoney(cteTotal)} />
               </div>
@@ -435,7 +453,11 @@ export default function LoadRomaneioTabs({ load, documents, items, onSaved }: Pr
             {/* COLUNA 3 */}
             <div className="space-y-2">
               <div className="text-[10px] font-bold uppercase text-muted-foreground border-b pb-1">Notas & Monitoramento</div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <Label className="text-[10px]">Qtd Entregas</Label>
+                  <Input className="h-8 text-xs" disabled value={deliveriesQty} />
+                </div>
                 <div>
                   <Label className="text-[10px]">Qtd NFS</Label>
                   <Input className="h-8 text-xs" disabled value={nfeQty} />
