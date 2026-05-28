@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useUpdateLoad, type Load } from '@/hooks/useLoads';
+import { useUpdateLoad } from '@/hooks/useLoads';
 import { useTenant } from '@/hooks/useTenant';
 import { useVehicles } from '@/hooks/useVehicles';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 
 interface Props {
-  load: Load;
+  load: any;
   documents: any[];
   items: any[];
   onSaved?: () => void;
