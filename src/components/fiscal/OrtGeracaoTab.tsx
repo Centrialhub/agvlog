@@ -15,6 +15,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Sparkles, Search, FileSpreadsheet, Upload } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { FilePlus } from 'lucide-react';
+import NewManualOrtDialog from '@/components/pickup/NewManualOrtDialog';
 
 const OPERACAO_LABELS = ['Distribuição', 'Filial', 'Armazenagem', 'Frota'];
 const ROMANEIO_LABELS = ['Entrega/Coleta', 'Viagem Direta', 'Retira', 'Transferência', 'Devolução', 'Redespacho/Sub'];
@@ -58,6 +60,7 @@ export default function OrtGeracaoTab() {
 
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [searched, setSearched] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
 
   const { data: candidates = [], isLoading, refetch } = useQuery({
     queryKey: ['ort_candidates', currentTenant?.id, filters],
@@ -148,9 +151,14 @@ export default function OrtGeracaoTab() {
             <div className="flex items-center gap-2 text-sm font-medium">
               <Sparkles className="h-4 w-4 text-primary" /> Geração Automática de ORT
             </div>
-            <Button variant="outline" size="sm" onClick={() => navigate('/ingestion')}>
-              <Upload className="h-4 w-4 mr-1" /> Importar XML/PDF
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setManualOpen(true)}>
+                <FilePlus className="h-4 w-4 mr-1" /> Criar ORT Manual
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => navigate('/ingestion')}>
+                <Upload className="h-4 w-4 mr-1" /> Importar XML/PDF
+              </Button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -318,6 +326,11 @@ export default function OrtGeracaoTab() {
           </CardContent>
         </Card>
       )}
+      <NewManualOrtDialog
+        open={manualOpen}
+        onOpenChange={setManualOpen}
+        onCreated={() => navigate('/pickup-orders')}
+      />
     </div>
   );
 }

@@ -5098,6 +5098,7 @@ export type Database = {
           driver_id: string | null
           driver_name_snapshot: string | null
           id: string
+          manual_meta: Json | null
           notes: string | null
           pickup_at: string
           pickup_number: string
@@ -5117,6 +5118,7 @@ export type Database = {
           driver_id?: string | null
           driver_name_snapshot?: string | null
           id?: string
+          manual_meta?: Json | null
           notes?: string | null
           pickup_at?: string
           pickup_number: string
@@ -5136,6 +5138,7 @@ export type Database = {
           driver_id?: string | null
           driver_name_snapshot?: string | null
           id?: string
+          manual_meta?: Json | null
           notes?: string | null
           pickup_at?: string
           pickup_number?: string
