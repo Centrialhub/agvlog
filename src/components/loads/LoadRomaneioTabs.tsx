@@ -444,10 +444,6 @@ export default function LoadRomaneioTabs({ load, documents, items, onSaved }: Pr
                 <Label className="text-[10px]">Observações</Label>
                 <Textarea rows={3} className="text-xs" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
               </div>
-              <div className="flex items-center justify-between p-2 border rounded-md">
-                <Label className="text-xs">Carro Dedicado</Label>
-                <Switch checked={form.dedicated_vehicle} onCheckedChange={v => setForm({ ...form, dedicated_vehicle: v })} />
-              </div>
             </div>
 
             {/* COLUNA 3 */}
@@ -482,22 +478,6 @@ export default function LoadRomaneioTabs({ load, documents, items, onSaved }: Pr
               <div className="flex items-center justify-between p-2 border rounded-md">
                 <Label className="text-xs">Monitorado</Label>
                 <Switch checked={form.monitored} onCheckedChange={v => setForm({ ...form, monitored: v })} />
-              </div>
-              <div>
-                <Label className="text-[10px]">Gerenciadora SM</Label>
-                <Input className="h-8 text-xs" value={form.sm_manager} onChange={e => setForm({ ...form, sm_manager: e.target.value })} />
-              </div>
-              <div>
-                <Label className="text-[10px]">Liberação SM</Label>
-                <Input className="h-8 text-xs" value={form.sm_release} onChange={e => setForm({ ...form, sm_release: e.target.value })} />
-              </div>
-              <div>
-                <Label className="text-[10px]">Manifesto Distribuição</Label>
-                <Input className="h-8 text-xs" value={form.distribution_manifest} onChange={e => setForm({ ...form, distribution_manifest: e.target.value })} />
-              </div>
-              <div>
-                <Label className="text-[10px]">Manifesto Embarque</Label>
-                <Input className="h-8 text-xs" value={form.shipment_manifest} onChange={e => setForm({ ...form, shipment_manifest: e.target.value })} />
               </div>
             </div>
           </div>
