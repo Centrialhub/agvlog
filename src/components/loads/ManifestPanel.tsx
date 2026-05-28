@@ -13,6 +13,9 @@ import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { FileSignature, Send, AlertTriangle, CheckCircle2, Info } from 'lucide-react';
 import { toast } from 'sonner';
+import { Download } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 interface Props {
   loadId: string;
@@ -159,6 +162,116 @@ export default function ManifestPanel({ loadId, loadNumber, origin, destination 
 
   const fmt = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
 
+  const downloadPDF = (manifest?: any) => {
+    const m = manifest || existing;
+    const number = m?.manifest_number || form.manifest_number || `MDF-${loadNumber}`;
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+    const pageW = doc.internal.pageSize.getWidth();
+    let y = 40;
+
+    doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+    doc.text('MANIFESTO DE CARGA / MDF-e', pageW / 2, y, { align: 'center' });
+    y += 18;
+    doc.setFontSize(10); doc.setFont('helvetica', 'normal');
+    doc.text(`Nº ${number}`, pageW / 2, y, { align: 'center' });
+    y += 8;
+    doc.setFontSize(8); doc.setTextColor(120);
+    doc.text(`Emitido em ${new Date(m?.created_at || Date.now()).toLocaleString('pt-BR')} · Carga ${loadNumber}`, pageW / 2, y, { align: 'center' });
+    doc.setTextColor(0);
+    y += 16;
+
+    const info: Array<[string, string]> = [
+      ['Responsável', m?.responsible_name || form.responsible_name || '—'],
+      ['CNPJ', m?.responsible_cnpj || form.responsible_cnpj || '—'],
+      ['IE', m?.responsible_ie || form.responsible_ie || '—'],
+      ['Endereço', m?.responsible_address || form.responsible_address || '—'],
+      ['Bairro', m?.responsible_neighborhood || form.responsible_neighborhood || '—'],
+      ['Município', m?.responsible_city || form.responsible_city || '—'],
+      ['Origem', m?.origin || form.origin || '—'],
+      ['Destino', m?.destination || form.destination || '—'],
+      ['UFs do Percurso', Array.isArray(m?.uf_route) ? m.uf_route.join(', ') : form.uf_route || '—'],
+      ['Nº Comprovante', m?.receipt_number || form.receipt_number || '—'],
+      ['Valor Pedágio', m?.toll_value != null ? fmt(Number(m.toll_value)) : (form.toll_value ? fmt(Number(form.toll_value)) : '—')],
+    ];
+    autoTable(doc, {
+      startY: y,
+      body: info,
+      theme: 'plain',
+      styles: { fontSize: 8, cellPadding: 2 },
+      columnStyles: { 0: { fontStyle: 'bold', cellWidth: 110 } },
+      margin: { left: 30, right: 30 },
+    });
+    y = (doc as any).lastAutoTable.finalY + 10;
+
+    autoTable(doc, {
+      startY: y,
+      head: [['NF', 'Chave', 'Destinatário', 'Cidade/UF', 'Valor', 'Peso (kg)']],
+      body: (nfes as any[]).map(d => [
+        d.invoice_number || '—',
+        d.access_key || '—',
+        d.recipient || '—',
+        `${d.recipient_city || ''}${d.recipient_state ? '-' + d.recipient_state : ''}`,
+        d.value ? fmt(Number(d.value)) : '—',
+        String(d.weight_kg || 0),
+      ]),
+      styles: { fontSize: 7, cellPadding: 2, overflow: 'linebreak' },
+      headStyles: { fillColor: [37, 99, 235], textColor: 255 },
+      margin: { left: 30, right: 30 },
+    });
+    y = (doc as any).lastAutoTable.finalY + 10;
+
+    autoTable(doc, {
+      startY: y,
+      head: [['CT-e', 'Série', 'Chave', 'Destinatário', 'Frete']],
+      body: (ctes as any[]).filter(c => !c.is_voided).map(c => [
+        c.cte_number || '—',
+        c.cte_series || '—',
+        c.access_key || '—',
+        `${c.recipient || ''}${c.recipient_city ? ' / ' + c.recipient_city : ''}${c.recipient_state ? '-' + c.recipient_state : ''}`,
+        c.freight_value ? fmt(Number(c.freight_value)) : '—',
+      ]),
+      styles: { fontSize: 7, cellPadding: 2, overflow: 'linebreak' },
+      headStyles: { fillColor: [37, 99, 235], textColor: 255 },
+      margin: { left: 30, right: 30 },
+    });
+    y = (doc as any).lastAutoTable.finalY + 14;
+
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold');
+    doc.text('Totais', 30, y); y += 4;
+    autoTable(doc, {
+      startY: y,
+      body: [
+        ['NF-es', String(totals.nfeCount), 'CT-es', String(totals.cteCount)],
+        ['Paletes', String(totals.pallets), 'Peso Total', `${totals.weight.toLocaleString('pt-BR')} kg`],
+        ['Valor Mercadoria', fmt(totals.value), 'Frete CT-es', fmt(totals.freight)],
+      ],
+      theme: 'grid',
+      styles: { fontSize: 8, cellPadding: 3 },
+      columnStyles: { 0: { fontStyle: 'bold' }, 2: { fontStyle: 'bold' } },
+      margin: { left: 30, right: 30 },
+    });
+    y = (doc as any).lastAutoTable.finalY + 14;
+
+    const obs = m?.observations || form.observations;
+    if (obs) {
+      doc.setFontSize(8); doc.setFont('helvetica', 'bold');
+      doc.text('Observações', 30, y); y += 10;
+      doc.setFont('helvetica', 'normal');
+      const lines = doc.splitTextToSize(String(obs), pageW - 60);
+      doc.text(lines, 30, y);
+      y += lines.length * 10 + 10;
+    }
+
+    if (y > 700) { doc.addPage(); y = 60; }
+    doc.setFontSize(8);
+    doc.text('_______________________________________', 30, y + 30);
+    doc.text('Assinatura do Responsável', 30, y + 42);
+    doc.text('_______________________________________', pageW - 230, y + 30);
+    doc.text('Assinatura do Motorista', pageW - 230, y + 42);
+
+    doc.save(`manifesto-${number}.pdf`);
+  };
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -258,6 +371,11 @@ export default function ManifestPanel({ loadId, loadNumber, origin, destination 
                 <Textarea rows={3} value={form.observations} onChange={e => setForm({ ...form, observations: e.target.value })} />
               </div>
               <div className="flex justify-end gap-2">
+                {(existing || totals.nfeCount > 0) && (
+                  <Button variant="outline" onClick={() => downloadPDF()}>
+                    <Download className="h-3.5 w-3.5 mr-1" /> Baixar PDF
+                  </Button>
+                )}
                 <Button onClick={() => generateMutation.mutate()} disabled={generateMutation.isPending}>
                   <Send className="h-3.5 w-3.5 mr-1" />
                   {generateMutation.isPending ? 'Gerando...' : 'Gerar Manifesto'}
