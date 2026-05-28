@@ -1049,6 +1049,7 @@ export default function Ingestion() {
                         observationSnippet: String(doc.source.observation).replace(/\s+/g, ' ').trim().slice(0, 400),
                       }
                     : null),
+                delivery_meta: (() => { const pm = detectPaymentMethod(doc.source.observation, (doc.source as any).paymentTerms); return pm ? { payment_method: pm } : {}; })(),
             });
 
             if (freightValue && freightBreakdown?.tableId && currentTenant) {
@@ -1306,6 +1307,7 @@ export default function Ingestion() {
                         observationSnippet: String(doc.source.observation).replace(/\s+/g, ' ').trim().slice(0, 400),
                       }
                     : null),
+                delivery_meta: (() => { const pm = detectPaymentMethod(doc.source.observation, (doc.source as any).paymentTerms); return pm ? { payment_method: pm } : {}; })(),
             });
             createdDocIds.set(doc.source.invoiceNumber, created.id);
 
