@@ -253,7 +253,7 @@ export default function LoadRomaneioTabs({ load, documents, items, onSaved }: Pr
           { icon: Search, label: 'Consultar CT-e', color: 'text-blue-700',
             onClick: () => navigate(`/cte-hub?tab=consulta&load=${load.load_number}`) },
           { icon: Files, label: 'ORT', color: 'text-orange-600',
-            onClick: () => navigate('/ort') },
+            onClick: () => navigate('/ort-management') },
           { icon: FilePlus, label: 'Novo Doc.', color: 'text-teal-600',
             onClick: () => navigate(`/fiscal-documents?load=${load.id}`) },
           { icon: Key, label: 'Chave Acesso', color: 'text-yellow-600',
