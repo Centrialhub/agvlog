@@ -254,8 +254,13 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
   // Confirma modal de Não Entregue (exige motivo)
   const confirmNotDelivered = async () => {
     if (!neModal) return;
-    if (!neModal.reason.trim()) {
+    const reason = neModal.reason.trim();
+    if (!reason) {
       toast.error('Informe o motivo da não entrega');
+      return;
+    }
+    if (reason.length < 5) {
+      toast.error('Motivo muito curto (mínimo 5 caracteres)');
       return;
     }
     const nowIso = new Date().toISOString();
@@ -263,7 +268,7 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
     const next: DocMeta = {
       ...(meta[docId] || {}),
       ne: true,
-      ne_reason: neModal.reason.trim(),
+      ne_reason: reason,
       ne_at: nowIso,
       delivery_at: undefined,
     };
