@@ -10,10 +10,11 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { toast } from 'sonner';
-import { Save, CheckCircle2, XCircle, FileText, AlertTriangle, RotateCcw } from 'lucide-react';
+import { Save, CheckCircle2, XCircle, FileText, AlertTriangle, RotateCcw, Printer } from 'lucide-react';
 import { Wand2, Info } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { isReasonableDate } from '@/lib/inputMasks';
+import { printLoadNotesReport } from '@/lib/printLoadNotes';
 import {
   Dialog,
   DialogContent,
@@ -380,6 +381,17 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
         >
           <Wand2 className="h-3 w-3 mr-1 text-primary" />
           Detectar Forma de Pagamento
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 text-xs"
+          onClick={() => printLoadNotesReport(load, inboundDocs.map(d => ({ ...d, delivery_meta: meta[d.id] || d.delivery_meta })))}
+          disabled={!inboundDocs.length}
+          title="Gerar relatório imprimível / Salvar como PDF"
+        >
+          <Printer className="h-3 w-3 mr-1" />
+          Imprimir / PDF
         </Button>
         <div className="flex-1" />
         <Button
