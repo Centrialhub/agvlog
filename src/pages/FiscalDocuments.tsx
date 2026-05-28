@@ -24,12 +24,10 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import OrtConsultaTab from '@/components/fiscal/OrtConsultaTab';
-import OrtGeracaoTab from '@/components/fiscal/OrtGeracaoTab';
 import {
   Search, Plus, FileText, ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight,
   PackageCheck, Clock, XCircle, ExternalLink, ChevronDown, ChevronRight,
-  DollarSign, Weight, Layers, FileSearch, Sparkles,
+  DollarSign, Weight, Layers,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -284,7 +282,6 @@ export default function FiscalDocuments() {
   const createDoc = useCreateFiscalDocument();
   const updateDoc = useUpdateFiscalDocument();
   const initialQ = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('q') || '' : '';
-  const initialTab = typeof window !== 'undefined' ? (new URLSearchParams(window.location.search).get('tab') || 'docs') : 'docs';
   const [search, setSearch] = useState(initialQ);
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -350,17 +347,6 @@ export default function FiscalDocuments() {
           </DialogContent>
         </Dialog>
       </div>
-
-      <Tabs defaultValue={initialTab} className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="docs" className="gap-2"><FileText className="h-4 w-4" /> Documentos Fiscais</TabsTrigger>
-          <TabsTrigger value="ort-consulta" className="gap-2"><FileSearch className="h-4 w-4" /> ORT — Consulta</TabsTrigger>
-          <TabsTrigger value="ort-geracao" className="gap-2"><Sparkles className="h-4 w-4" /> ORT — Geração</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="docs" className="space-y-6 mt-0">
-          {/* KPI Cards */}
-          <SummaryCards docs={docs} />
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-center">
