@@ -1201,6 +1201,7 @@ export default function Ingestion() {
         });
 
         (doc as any)._savedId = created.id;
+        // mantém forma de pagamento detectada disponível em delivery_meta também aqui
 
         if (freightValue && freightBreakdown?.tableId && currentTenant) {
           await logFreightCalculation(currentTenant.id, created.id, 'fiscal_document', freightBreakdown, user?.id);
