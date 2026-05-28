@@ -59,7 +59,6 @@ const NFSe = lazy(() => import("@/pages/NFSe"));
 const PickupOrders = lazy(() => import("@/pages/PickupOrders"));
 const OrtManagement = lazy(() => import("@/pages/OrtManagement"));
 const ProductTraceability = lazy(() => import("@/pages/ProductTraceability"));
-const ProductTraceability = lazy(() => import("@/pages/ProductTraceability"));
 const ProductHistory = lazy(() => import("@/pages/ProductHistory"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
