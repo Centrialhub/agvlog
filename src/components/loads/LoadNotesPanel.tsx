@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { Save, CheckCircle2, XCircle, FileText, AlertTriangle, RotateCcw } from 'lucide-react';
 import { Wand2, Info } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { isReasonableDate } from '@/lib/inputMasks';
 import {
   Dialog,
   DialogContent,
@@ -253,8 +254,13 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
   // Confirma modal de Não Entregue (exige motivo)
   const confirmNotDelivered = async () => {
     if (!neModal) return;
-    if (!neModal.reason.trim()) {
+    const reason = neModal.reason.trim();
+    if (!reason) {
       toast.error('Informe o motivo da não entrega');
+      return;
+    }
+    if (reason.length < 5) {
+      toast.error('Motivo muito curto (mínimo 5 caracteres)');
       return;
     }
     const nowIso = new Date().toISOString();
@@ -262,7 +268,7 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
     const next: DocMeta = {
       ...(meta[docId] || {}),
       ne: true,
-      ne_reason: neModal.reason.trim(),
+      ne_reason: reason,
       ne_at: nowIso,
       delivery_at: undefined,
     };
@@ -524,7 +530,20 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
                     <Input
                       type="datetime-local"
                       value={toLocalDT(m.delivery_at)}
-                      onChange={e => patchDoc(d.id, { delivery_at: fromLocalDT(e.target.value) || undefined })}
+                      max={(() => {
+                        const f = new Date(Date.now() + 7 * 86400000);
+                        const pad = (n: number) => String(n).padStart(2, '0');
+                        return `${f.getFullYear()}-${pad(f.getMonth() + 1)}-${pad(f.getDate())}T23:59`;
+                      })()}
+                      min="2000-01-01T00:00"
+                      onChange={e => {
+                        const iso = fromLocalDT(e.target.value) || undefined;
+                        if (iso && !isReasonableDate(iso, 7)) {
+                          toast.error('Data inválida (não pode ser anterior a 2000 ou mais de 7 dias no futuro)');
+                          return;
+                        }
+                        patchDoc(d.id, { delivery_at: iso });
+                      }}
                       className="h-7 text-xs w-40"
                     />
                   </TableCell>
@@ -599,10 +618,14 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
             <Textarea
               rows={4}
               autoFocus
+              maxLength={500}
               placeholder="Ex.: Cliente ausente, endereço incorreto, recusou mercadoria..."
               value={neModal?.reason || ''}
               onChange={e => setNeModal(prev => prev ? { ...prev, reason: e.target.value } : prev)}
             />
+            <div className="text-[10px] text-muted-foreground text-right">
+              {(neModal?.reason || '').length}/500
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setNeModal(null)}>Cancelar</Button>
@@ -631,10 +654,14 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
             <Textarea
               rows={4}
               autoFocus
+              maxLength={500}
               placeholder="Ex.: Cliente solicitou nova tentativa, reentrega agendada para próxima rota..."
               value={reModal?.reason || ''}
               onChange={e => setReModal(prev => prev ? { ...prev, reason: e.target.value } : prev)}
             />
+            <div className="text-[10px] text-muted-foreground text-right">
+              {(reModal?.reason || '').length}/500
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setReModal(null)}>Cancelar</Button>
