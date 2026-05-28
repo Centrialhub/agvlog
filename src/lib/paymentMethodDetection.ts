@@ -5,17 +5,19 @@ export function detectPaymentMethod(...texts: Array<string | null | undefined>):
   const joined = texts.filter(Boolean).join(' | ');
   if (!joined) return null;
   const t = ` ${joined.toUpperCase()} `;
+  // Regras conservadoras: apenas palavras inteiras e termos sem ambiguidade.
+  // Evita falsos positivos como "N DOC" (número do documento) virar "transferência".
   const rules: Array<{ re: RegExp; value: string }> = [
     { re: /\bPIX\b/, value: 'pix' },
-    { re: /\b(BOLETO|BOL\.?|\bBC\b|\bBB\b|\bBOL\b|COBRAN[ÇC]A\s*BANC[ÁA]RIA|DUPLICATA|DUP\.?)\b/, value: 'boleto' },
-    { re: /\b(TED|DOC|TRANSFER[ÊE]NCIA|TRANSF\.?)\b/, value: 'transferencia' },
-    { re: /\bCHEQUE\b|\bCH\b/, value: 'cheque' },
-    { re: /\bDINHEIRO\b|\bESP[ÉE]CIE\b|\bDIN\b/, value: 'dinheiro' },
-    { re: /\bCART[ÃA]O\s*(DE\s*)?CR[ÉE]DITO\b|\bCC\b/, value: 'cartao_credito' },
-    { re: /\bCART[ÃA]O\s*(DE\s*)?D[ÉE]BITO\b|\bCD\b/, value: 'cartao_debito' },
-    { re: /\bFATURADO\b|\bFATURA\b|\bFAT\.?\b/, value: 'faturado' },
-    { re: /\bA\s*PRAZO\b|\bPRAZO\b|\bAPRAZ\b/, value: 'a_prazo' },
-    { re: /\bA\s*VISTA\b|\b[ÀA]\s*VISTA\b|\bAVISTA\b/, value: 'a_vista' },
+    { re: /\b(BOLETO|COBRAN[ÇC]A\s*BANC[ÁA]RIA|DUPLICATA)\b/, value: 'boleto' },
+    { re: /\b(TED|TRANSFER[ÊE]NCIA\s*BANC[ÁA]RIA|TRANSFER[ÊE]NCIA\s*ELETR[ÔO]NICA)\b/, value: 'transferencia' },
+    { re: /\bCHEQUE\b/, value: 'cheque' },
+    { re: /\b(DINHEIRO|ESP[ÉE]CIE)\b/, value: 'dinheiro' },
+    { re: /\bCART[ÃA]O\s*(DE\s*)?CR[ÉE]DITO\b/, value: 'cartao_credito' },
+    { re: /\bCART[ÃA]O\s*(DE\s*)?D[ÉE]BITO\b/, value: 'cartao_debito' },
+    { re: /\b(FATURADO|FATURA\s*MENSAL)\b/, value: 'faturado' },
+    { re: /\b(A\s*PRAZO|APRAZO)\b/, value: 'a_prazo' },
+    { re: /\b(A\s*VISTA|[ÀA]\s*VISTA|AVISTA)\b/, value: 'a_vista' },
   ];
   for (const r of rules) if (r.re.test(t)) return r.value;
   return null;
