@@ -23,10 +23,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import OrtConsultaTab from '@/components/fiscal/OrtConsultaTab';
+import OrtGeracaoTab from '@/components/fiscal/OrtGeracaoTab';
 import {
   Search, Plus, FileText, ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight,
   PackageCheck, Clock, XCircle, ExternalLink, ChevronDown, ChevronRight,
-  DollarSign, Weight, Layers,
+  DollarSign, Weight, Layers, FileSearch, Sparkles,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
