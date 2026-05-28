@@ -152,6 +152,32 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
     }
   };
 
+  // Volta a nota para Pendente (desmarca Entregue/Não Entregue)
+  const clearDeliveryStatus = async (docId: string) => {
+    const next: DocMeta = {
+      ...(meta[docId] || {}),
+      ne: false,
+      ne_reason: '',
+      ne_at: undefined,
+      delivery_at: undefined,
+    };
+    setMeta(prev => ({ ...prev, [docId]: next }));
+    try {
+      const { error } = await supabase
+        .from('fiscal_documents')
+        .update({ status: 'confirmed', delivery_meta: next } as any)
+        .eq('id', docId);
+      if (error) throw error;
+      toast.success('Status revertido para Pendente');
+      await qc.invalidateQueries({ queryKey: ['load_documents'] });
+      await qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
+      setDirty(prev => { const n = new Set(prev); n.delete(docId); return n; });
+      onSaved?.();
+    } catch (e: any) {
+      toast.error(e.message || 'Erro ao reverter status');
+    }
+  };
+
   // Confirma modal de Não Entregue (exige motivo)
   const confirmNotDelivered = async () => {
     if (!neModal) return;
@@ -353,8 +379,8 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
                         size="sm"
                         variant={isDelivered ? 'default' : 'outline'}
                         className={`h-7 px-2 text-[10px] ${isDelivered ? 'bg-success hover:bg-success/90 text-success-foreground' : 'text-success border-success/40 hover:bg-success/10'}`}
-                        onClick={() => markDelivered(d.id)}
-                        title="Marcar como Entregue (sincroniza no sistema)"
+                        onClick={() => isDelivered ? clearDeliveryStatus(d.id) : markDelivered(d.id)}
+                        title={isDelivered ? 'Clique para desmarcar Entregue' : 'Marcar como Entregue (sincroniza no sistema)'}
                       >
                         <CheckCircle2 className="h-3 w-3 mr-1" /> Entregue
                       </Button>
@@ -362,8 +388,8 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
                         size="sm"
                         variant={isNotDelivered ? 'destructive' : 'outline'}
                         className={`h-7 px-2 text-[10px] ${isNotDelivered ? '' : 'text-destructive border-destructive/40 hover:bg-destructive/10'}`}
-                        onClick={() => setNeModal({ docId: d.id, reason: m.ne_reason || '' })}
-                        title="Marcar como Não Entregue (exige observação)"
+                        onClick={() => isNotDelivered ? clearDeliveryStatus(d.id) : setNeModal({ docId: d.id, reason: m.ne_reason || '' })}
+                        title={isNotDelivered ? 'Clique para desmarcar Não Entregue' : 'Marcar como Não Entregue (exige observação)'}
                       >
                         <XCircle className="h-3 w-3 mr-1" /> Não Entregue
                       </Button>
