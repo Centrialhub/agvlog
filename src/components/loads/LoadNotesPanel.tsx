@@ -364,6 +364,17 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
           <CheckCircle2 className="h-3 w-3 mr-1 text-success" />
           Marcar todos canhotos como Recebidos
         </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 text-xs"
+          onClick={autoFillPayment}
+          disabled={!inboundDocs.length}
+          title="Detecta automaticamente a forma de pagamento a partir da observação da NF (BC, Boleto, PIX, etc.)"
+        >
+          <Wand2 className="h-3 w-3 mr-1 text-primary" />
+          Detectar Forma de Pagamento
+        </Button>
         <div className="flex-1" />
         <Button
           size="sm"
