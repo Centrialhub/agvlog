@@ -196,7 +196,7 @@ export default function NewManualOrtDialog({ open, onOpenChange, onCreated }: Pr
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <Tabs defaultValue="doc" className="space-y-3">
-            <TabsList className="grid grid-cols-5 w-full">
+            <TabsList className="grid grid-cols-6 w-full">
               <TabsTrigger value="doc">Documento</TabsTrigger>
               <TabsTrigger value="partes">Partes</TabsTrigger>
               <TabsTrigger value="conhec">Conhecimento</TabsTrigger>
