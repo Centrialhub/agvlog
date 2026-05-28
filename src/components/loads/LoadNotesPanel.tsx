@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { Save, CheckCircle2, XCircle, FileText, AlertTriangle, RotateCcw } from 'lucide-react';
 import { Wand2, Info } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { isReasonableDate } from '@/lib/inputMasks';
 import {
   Dialog,
   DialogContent,
