@@ -329,7 +329,7 @@ export default function LoadDetail() {
   };
 
   return (
-    <div className="animate-fade-in space-y-6 max-w-5xl">
+    <div className="animate-fade-in space-y-6 w-full">
       {/* Header */}
       <div className="flex items-start gap-4">
         <Button variant="ghost" size="sm" onClick={() => navigate('/loads')} className="mt-1">
