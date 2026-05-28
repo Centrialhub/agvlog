@@ -202,6 +202,7 @@ export default function NewManualOrtDialog({ open, onOpenChange, onCreated }: Pr
               <TabsTrigger value="conhec">Conhecimento</TabsTrigger>
               <TabsTrigger value="merc">Mercadoria</TabsTrigger>
               <TabsTrigger value="frete">Frete / ICMS</TabsTrigger>
+              <TabsTrigger value="pagto">Pagamento</TabsTrigger>
             </TabsList>
 
             {/* DOCUMENTO */}
