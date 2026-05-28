@@ -57,6 +57,7 @@ const CteMonitor = lazy(() => import("@/pages/CteMonitor"));
 const CteSearch = lazy(() => import("@/pages/CteSearch"));
 const NFSe = lazy(() => import("@/pages/NFSe"));
 const PickupOrders = lazy(() => import("@/pages/PickupOrders"));
+const OrtManagement = lazy(() => import("@/pages/OrtManagement"));
 const ProductTraceability = lazy(() => import("@/pages/ProductTraceability"));
 const ProductHistory = lazy(() => import("@/pages/ProductHistory"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
@@ -206,6 +207,8 @@ const App = () => (
             <Route path="/cte-search" element={<ProtectedRoute><CteSearch /></ProtectedRoute>} />
             <Route path="/nfse" element={<ProtectedRoute><NFSe /></ProtectedRoute>} />
             <Route path="/pickup-orders" element={<ProtectedRoute><PickupOrders /></ProtectedRoute>} />
+            <Route path="/ort-management" element={<ProtectedRoute><OrtManagement /></ProtectedRoute>} />
+            <Route path="/product-traceability" element={<ProtectedRoute><ProductTraceability /></ProtectedRoute>} />
             <Route path="/product-traceability" element={<ProtectedRoute><ProductTraceability /></ProtectedRoute>} />
             <Route path="/product-history" element={<ProtectedRoute><ProductHistory /></ProtectedRoute>} />
 

@@ -46,8 +46,7 @@ const navSections: NavSection[] = [
           { label: 'Monitor DOC-e', href: '/cte-monitor', icon: <ShieldCheck className="h-4 w-4" /> },
           { label: 'Consulta CT-e', href: '/cte-search', icon: <FileSearch className="h-4 w-4" /> },
           { label: 'NFS-e (Serviços)', href: '/nfse', icon: <FileSpreadsheet className="h-4 w-4" /> },
-          { label: 'ORT — Consulta', href: '/fiscal-documents?tab=ort-consulta', icon: <FileSearch className="h-4 w-4" /> },
-          { label: 'ORT — Geração', href: '/fiscal-documents?tab=ort-geracao', icon: <FileSpreadsheet className="h-4 w-4" /> },
+          { label: 'ORT', href: '/ort-management', icon: <FileSearch className="h-4 w-4" /> },
         ],
       },
       {
