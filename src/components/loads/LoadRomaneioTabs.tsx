@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useUpdateLoad } from '@/hooks/useLoads';
@@ -59,6 +60,7 @@ export default function LoadRomaneioTabs({ load, documents, items, onSaved }: Pr
   const { currentTenant } = useTenant();
   const { data: vehicles = [] } = useVehicles();
   const updateLoad = useUpdateLoad();
+  const navigate = useNavigate();
 
   const { data: drivers = [] } = useQuery({
     queryKey: ['drivers_picker', currentTenant?.id],
@@ -219,39 +221,70 @@ export default function LoadRomaneioTabs({ load, documents, items, onSaved }: Pr
 
   return (
     <Card className="overflow-hidden">
-      {/* Barra de ações rápidas (replica do sistema legado) */}
-      <div className="flex flex-wrap items-center gap-1 px-2 py-2 border-b bg-primary/5">
-        {[
-          { icon: Unlock, label: 'Liberar Travas', onClick: () => toast.info('Liberar Travas — em breve') },
-          { icon: Database, label: 'WMS', onClick: () => toast.info('Integração WMS — em breve') },
-          { icon: Network, label: 'EDI', onClick: () => toast.info('EDI — em breve') },
-          { icon: DollarIcon, label: 'Financeiro', onClick: () => window.open('/financial', '_blank') },
-          { icon: Bot, label: 'RPA', onClick: () => toast.info('RPA — em breve') },
-          { icon: FileText, label: 'Romaneio', onClick: () => window.print() },
-          { icon: Search, label: 'Consultar CT-e', onClick: () => window.open(`/cte-hub?tab=consulta&load=${load.load_number}`, '_blank') },
-          { icon: XIcon, label: 'Cancelar Carga', onClick: () => toast.info('Use o menu Status para cancelar') },
-          { icon: Lock, label: 'Bloquear', onClick: () => toast.info('Bloquear edição — em breve') },
-          { icon: ClipboardCheck, label: 'Checklist', onClick: () => window.open(`/checklists?load=${load.id}`, '_blank') },
-          { icon: AlertTriangle, label: 'Ocorrência', onClick: () => window.open(`/incidents?load=${load.id}`, '_blank') },
-          { icon: Pencil, label: 'Editar', onClick: () => toast.info('Edite os campos abaixo e clique em Salvar') },
-          { icon: FileSearch, label: 'CON (Consulta)', onClick: () => window.open(`/cte-hub?tab=monitor&load=${load.load_number}`, '_blank') },
-          { icon: Files, label: 'ORT', onClick: () => window.open('/ort', '_blank') },
-          { icon: FilePlus, label: 'Novo Documento', onClick: () => window.open(`/fiscal-documents?load=${load.id}`, '_blank') },
-          { icon: Key, label: 'Chave de Acesso', onClick: () => toast.info('Pesquisa por chave — em breve') },
-          { icon: Save, label: 'Salvar', onClick: handleSave, primary: true },
-        ].map(({ icon: Icon, label, onClick, primary }) => (
-          <Button
-            key={label}
-            size="sm"
-            variant={primary ? 'default' : 'outline'}
-            className="h-8 px-2 text-xs gap-1"
-            onClick={onClick}
-            title={label}
-          >
-            <Icon className="h-3.5 w-3.5" />
-            <span className="hidden md:inline">{label}</span>
-          </Button>
-        ))}
+      {/* Barra de ações rápidas (replica do sistema legado, com cores) */}
+      <div className="flex flex-wrap items-center gap-1.5 px-2 py-2 border-b bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">
+        {([
+          // OPERAÇÃO
+          { icon: Unlock, label: 'Liberar Travas', color: 'text-amber-600',
+            onClick: () => toast.info('Liberar travas operacionais — confirme com supervisor (em breve).') },
+          { icon: Lock, label: 'Bloquear', color: 'text-slate-600',
+            onClick: () => toast.info('Bloquear edição da carga — em breve.') },
+          { icon: Pencil, label: 'Editar', color: 'text-sky-600',
+            onClick: () => { const el = document.getElementById('romaneio-form-top'); el?.scrollIntoView({ behavior: 'smooth' }); toast.info('Edite os campos abaixo e clique em Salvar.'); } },
+          { icon: Save, label: 'Salvar', color: 'text-white', primary: true, onClick: handleSave },
+          { sep: true },
+          // INTEGRAÇÕES
+          { icon: Database, label: 'WMS', color: 'text-emerald-600',
+            onClick: () => navigate('/inventory') },
+          { icon: Network, label: 'EDI', color: 'text-indigo-600',
+            onClick: () => navigate('/integration-health') },
+          { icon: Bot, label: 'RPA', color: 'text-purple-600',
+            onClick: () => navigate('/ingestion') },
+          { sep: true },
+          // FINANCEIRO
+          { icon: DollarIcon, label: 'Financeiro', color: 'text-green-600',
+            onClick: () => navigate('/financial') },
+          { icon: HandCoins, label: 'Receber', color: 'text-green-700',
+            onClick: () => navigate('/receivables') },
+          { sep: true },
+          // DOCUMENTOS FISCAIS
+          { icon: FileSearch, label: 'CON (Monitor)', color: 'text-blue-600',
+            onClick: () => navigate(`/cte-hub?tab=monitor&load=${load.load_number}`) },
+          { icon: Search, label: 'Consultar CT-e', color: 'text-blue-700',
+            onClick: () => navigate(`/cte-hub?tab=consulta&load=${load.load_number}`) },
+          { icon: Files, label: 'ORT', color: 'text-orange-600',
+            onClick: () => navigate('/ort') },
+          { icon: FilePlus, label: 'Novo Doc.', color: 'text-teal-600',
+            onClick: () => navigate(`/fiscal-documents?load=${load.id}`) },
+          { icon: Key, label: 'Chave Acesso', color: 'text-yellow-600',
+            onClick: () => navigate(`/cte-hub?tab=consulta&key=${load.id}`) },
+          { sep: true },
+          // OPERACIONAL / QUALIDADE
+          { icon: ClipboardCheck, label: 'Checklist', color: 'text-cyan-600',
+            onClick: () => navigate(`/checklists?load=${load.id}`) },
+          { icon: AlertTriangle, label: 'Ocorrência', color: 'text-red-600',
+            onClick: () => navigate(`/incidents?load=${load.id}`) },
+          { icon: XIcon, label: 'Cancelar Carga', color: 'text-destructive',
+            onClick: () => toast.warning('Use o menu Status (acima) para cancelar a carga.') },
+          { icon: FileText, label: 'Imprimir', color: 'text-zinc-600',
+            onClick: () => window.print() },
+        ] as Array<any>).map((b, i) => {
+          if (b.sep) return <div key={`sep-${i}`} className="h-6 w-px bg-border mx-1" />;
+          const Icon = b.icon;
+          return (
+            <Button
+              key={b.label}
+              size="sm"
+              variant={b.primary ? 'default' : 'outline'}
+              className="h-8 px-2 text-xs gap-1 bg-background hover:bg-muted"
+              onClick={b.onClick}
+              title={b.label}
+            >
+              <Icon className={`h-3.5 w-3.5 ${b.primary ? '' : b.color}`} />
+              <span className="hidden lg:inline">{b.label}</span>
+            </Button>
+          );
+        })}
       </div>
       <Tabs defaultValue="geral" className="w-full">
         <TabsList className="w-full justify-start rounded-none border-b bg-muted/40 h-auto flex-wrap p-0">
