@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import LoadItemsPanel from '@/components/loads/LoadItemsPanel';
 import CTeWorkbench from '@/components/loads/CTeWorkbench';
 import NFSePanel from '@/components/loads/NFSePanel';
+import ManifestPanel from '@/components/loads/ManifestPanel';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -532,6 +533,13 @@ export default function LoadDetail() {
         defaultClientName={(documents as any)?.[0]?.recipient ?? null}
         defaultClientCnpj={(documents as any)?.[0]?.recipient_cnpj ?? null}
         freightTotal={(documents as any)?.reduce((s: number, d: any) => s + Number(d.freight_value || 0), 0) ?? 0}
+      />
+
+      <ManifestPanel
+        loadId={load.id}
+        loadNumber={load.load_number}
+        origin={(load as any).origin}
+        destination={load.destination}
       />
 
       {/* CT-e Freight Preview Dialog */}
