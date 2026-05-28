@@ -10,7 +10,15 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { toast } from 'sonner';
-import { Save, CheckCircle2, XCircle, FileText } from 'lucide-react';
+import { Save, CheckCircle2, XCircle, FileText, AlertTriangle } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from '@/components/ui/dialog';
 
 interface Props {
   load: any;
@@ -19,7 +27,7 @@ interface Props {
 }
 
 const PAYMENT_METHODS = [
-  { value: '__none__', label: '— Selecionar —' },
+  { value: '__none__', label: '— Forma Pgto —' },
   { value: 'a_vista', label: 'À Vista' },
   { value: 'a_prazo', label: 'A Prazo' },
   { value: 'boleto', label: 'Boleto' },
@@ -67,14 +75,15 @@ const fmtMoney = (n?: number | null) =>
   n == null ? 'R$ 0,00' : Number(n).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 type DocMeta = {
-  palete?: string;
   rec_canhoto?: boolean;
-  lote_canhoto?: string;
   ne?: boolean;
   oco_01?: string;
   oco_02?: string;
   resp_oco?: string;
+  payment_method?: string;
   delivery_at?: string;
+  ne_reason?: string;
+  ne_at?: string;
 };
 
 export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
@@ -83,24 +92,6 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
     () => (documents || []).filter((d: any) => d.document_type === 'inbound'),
     [documents],
   );
-
-  // Header (per-load) state
-  const [header, setHeader] = useState({
-    payment_method: load.payment_method || '__none__',
-    schedule_at: toLocalDT(load.schedule_at),
-    occurrence_at: toLocalDT(load.occurrence_at),
-    occurrence_responsible: load.occurrence_responsible || '__none__',
-    occurrence_notes: load.occurrence_notes || '',
-  });
-  useEffect(() => {
-    setHeader({
-      payment_method: load.payment_method || '__none__',
-      schedule_at: toLocalDT(load.schedule_at),
-      occurrence_at: toLocalDT(load.occurrence_at),
-      occurrence_responsible: load.occurrence_responsible || '__none__',
-      occurrence_notes: load.occurrence_notes || '',
-    });
-  }, [load.id]);
 
   // Per-document meta state (keyed by doc.id)
   const [meta, setMeta] = useState<Record<string, DocMeta>>(() => {
@@ -112,45 +103,92 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
     const m: Record<string, DocMeta> = {};
     inboundDocs.forEach((d: any) => { m[d.id] = (d.delivery_meta || {}) as DocMeta; });
     setMeta(m);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load.id, inboundDocs.length]);
 
   const [savingAll, setSavingAll] = useState(false);
   const [dirty, setDirty] = useState<Set<string>>(new Set());
+  const [neModal, setNeModal] = useState<{ docId: string; reason: string } | null>(null);
 
   const patchDoc = (id: string, patch: Partial<DocMeta>) => {
     setMeta(prev => ({ ...prev, [id]: { ...(prev[id] || {}), ...patch } }));
     setDirty(prev => new Set(prev).add(id));
   };
 
-  const markAll = (patch: Partial<DocMeta>) => {
+  const markAllCanhotos = () => {
     setMeta(prev => {
       const next = { ...prev };
       inboundDocs.forEach((d: any) => {
-        next[d.id] = { ...(next[d.id] || {}), ...patch };
+        next[d.id] = { ...(next[d.id] || {}), rec_canhoto: true };
       });
       return next;
     });
     setDirty(new Set(inboundDocs.map((d: any) => d.id)));
   };
 
+  // Marca documento como Entregue e salva imediatamente (sincroniza com o sistema)
+  const markDelivered = async (docId: string) => {
+    const nowIso = new Date().toISOString();
+    const next: DocMeta = {
+      ...(meta[docId] || {}),
+      ne: false,
+      ne_reason: '',
+      delivery_at: nowIso,
+    };
+    setMeta(prev => ({ ...prev, [docId]: next }));
+    try {
+      const { error } = await supabase
+        .from('fiscal_documents')
+        .update({ status: 'delivered', delivery_meta: next } as any)
+        .eq('id', docId);
+      if (error) throw error;
+      toast.success('Nota marcada como Entregue');
+      await qc.invalidateQueries({ queryKey: ['load_documents'] });
+      await qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
+      setDirty(prev => { const n = new Set(prev); n.delete(docId); return n; });
+      onSaved?.();
+    } catch (e: any) {
+      toast.error(e.message || 'Erro ao marcar como entregue');
+    }
+  };
+
+  // Confirma modal de Não Entregue (exige motivo)
+  const confirmNotDelivered = async () => {
+    if (!neModal) return;
+    if (!neModal.reason.trim()) {
+      toast.error('Informe o motivo da não entrega');
+      return;
+    }
+    const nowIso = new Date().toISOString();
+    const docId = neModal.docId;
+    const next: DocMeta = {
+      ...(meta[docId] || {}),
+      ne: true,
+      ne_reason: neModal.reason.trim(),
+      ne_at: nowIso,
+      delivery_at: undefined,
+    };
+    setMeta(prev => ({ ...prev, [docId]: next }));
+    try {
+      const { error } = await supabase
+        .from('fiscal_documents')
+        .update({ status: 'not_delivered', delivery_meta: next } as any)
+        .eq('id', docId);
+      if (error) throw error;
+      toast.success('Nota marcada como Não Entregue');
+      await qc.invalidateQueries({ queryKey: ['load_documents'] });
+      await qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
+      setNeModal(null);
+      setDirty(prev => { const n = new Set(prev); n.delete(docId); return n; });
+      onSaved?.();
+    } catch (e: any) {
+      toast.error(e.message || 'Erro ao salvar não entrega');
+    }
+  };
+
   const saveAll = async () => {
     setSavingAll(true);
     try {
-      // 1) Save load header
-      const { error: lerr } = await supabase
-        .from('loads')
-        .update({
-          payment_method: header.payment_method !== '__none__' ? header.payment_method : null,
-          schedule_at: fromLocalDT(header.schedule_at),
-          occurrence_at: fromLocalDT(header.occurrence_at),
-          occurrence_responsible:
-            header.occurrence_responsible !== '__none__' ? header.occurrence_responsible : null,
-          occurrence_notes: header.occurrence_notes || null,
-        } as any)
-        .eq('id', load.id);
-      if (lerr) throw lerr;
-
-      // 2) Save per-document metadata (only dirty)
       const ids = Array.from(dirty);
       for (const id of ids) {
         const { error } = await supabase
@@ -159,11 +197,10 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
           .eq('id', id);
         if (error) throw error;
       }
-
       toast.success(`Notas salvas (${ids.length} alteração(ões))`);
       setDirty(new Set());
       await qc.invalidateQueries({ queryKey: ['load_documents'] });
-      await qc.invalidateQueries({ queryKey: ['loads'] });
+      await qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
       onSaved?.();
     } catch (e: any) {
       toast.error(e.message || 'Erro ao salvar notas');
@@ -183,84 +220,23 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
         </span>
       </div>
 
-      {/* HEADER (replica do POPUP_LG_ROMEXP_CLI) */}
-      <div className="p-3 grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-2 border-b bg-muted/10">
-        <div>
-          <Label className="text-[10px]">Forma de Pagamento</Label>
-          <SearchableSelect
-            value={header.payment_method}
-            onChange={v => setHeader({ ...header, payment_method: v })}
-            options={PAYMENT_METHODS.map(p => ({ value: p.value, label: p.label }))}
-            placeholder="Selecionar"
-            searchPlaceholder="Buscar..."
-          />
-        </div>
-        <div>
-          <Label className="text-[10px]">Dt. Agendamento</Label>
-          <Input
-            type="datetime-local"
-            className="h-8 text-xs"
-            value={header.schedule_at}
-            onChange={e => setHeader({ ...header, schedule_at: e.target.value })}
-          />
-        </div>
-        <div>
-          <Label className="text-[10px]">Dt. Ocorrência</Label>
-          <Input
-            type="datetime-local"
-            className="h-8 text-xs"
-            value={header.occurrence_at}
-            onChange={e => setHeader({ ...header, occurrence_at: e.target.value })}
-          />
-        </div>
-        <div>
-          <Label className="text-[10px]">Responsável Ocorrência</Label>
-          <SearchableSelect
-            value={header.occurrence_responsible}
-            onChange={v => setHeader({ ...header, occurrence_responsible: v })}
-            options={OCO_RESPONSIBLES.map(p => ({ value: p.value, label: p.label }))}
-            placeholder="Selecionar"
-            searchPlaceholder="Buscar..."
-          />
-        </div>
-        <div className="md:col-span-3 lg:col-span-4">
-          <Label className="text-[10px]">Observações</Label>
-          <Textarea
-            rows={2}
-            className="text-xs"
-            value={header.occurrence_notes}
-            onChange={e => setHeader({ ...header, occurrence_notes: e.target.value })}
-          />
-        </div>
-      </div>
-
       {/* AÇÕES EM MASSA */}
       <div className="flex flex-wrap gap-2 px-3 py-2 border-b bg-muted/5">
         <Button
           size="sm"
           variant="outline"
           className="h-7 text-xs"
-          onClick={() => markAll({ ne: true })}
-          disabled={!inboundDocs.length}
-        >
-          <XCircle className="h-3 w-3 mr-1 text-destructive" />
-          Marcar todas como Não Entregue
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-7 text-xs"
-          onClick={() => markAll({ rec_canhoto: true })}
+          onClick={markAllCanhotos}
           disabled={!inboundDocs.length}
         >
           <CheckCircle2 className="h-3 w-3 mr-1 text-success" />
-          Marcar todas como Canhoto Recebido
+          Marcar todos canhotos como Recebidos
         </Button>
         <div className="flex-1" />
         <Button
           size="sm"
           onClick={saveAll}
-          disabled={savingAll || (!dirty.size && header.payment_method === (load.payment_method || '__none__'))}
+          disabled={savingAll || !dirty.size}
           className="h-7 text-xs"
         >
           <Save className="h-3 w-3 mr-1" />
@@ -268,84 +244,73 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
         </Button>
       </div>
 
-      {/* TABELA — replica das colunas do POPUP */}
+      {/* TABELA */}
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/30">
-              <TableHead className="text-[10px] whitespace-nowrap">Palete</TableHead>
               <TableHead className="text-[10px] whitespace-nowrap text-center">Rec. Canhoto</TableHead>
-              <TableHead className="text-[10px] whitespace-nowrap">Lote Canhoto</TableHead>
-              <TableHead className="text-[10px] whitespace-nowrap text-center">Ne</TableHead>
               <TableHead className="text-[10px] whitespace-nowrap">Nº NFS</TableHead>
               <TableHead className="text-[10px] whitespace-nowrap">NUMREF</TableHead>
               <TableHead className="text-[10px] whitespace-nowrap">Situação</TableHead>
-              <TableHead className="text-[10px] whitespace-nowrap">Fornecedor</TableHead>
-              <TableHead className="text-[10px] whitespace-nowrap">Município</TableHead>
               <TableHead className="text-[10px] whitespace-nowrap">Destinatário</TableHead>
+              <TableHead className="text-[10px] whitespace-nowrap">Município</TableHead>
+              <TableHead className="text-[10px] whitespace-nowrap text-right">Vl NFS</TableHead>
+              <TableHead className="text-[10px] whitespace-nowrap">Forma Pgto</TableHead>
               <TableHead className="text-[10px] whitespace-nowrap">Oco 01</TableHead>
               <TableHead className="text-[10px] whitespace-nowrap">Oco 02</TableHead>
               <TableHead className="text-[10px] whitespace-nowrap">Resp. Oco</TableHead>
-              <TableHead className="text-[10px] whitespace-nowrap text-right">Vl NFS</TableHead>
               <TableHead className="text-[10px] whitespace-nowrap">Dt. Entrega/Oco</TableHead>
+              <TableHead className="text-[10px] whitespace-nowrap text-center">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {inboundDocs.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={15} className="text-center text-xs text-muted-foreground py-6">
+                <TableCell colSpan={13} className="text-center text-xs text-muted-foreground py-6">
                   Nenhuma nota fiscal vinculada a esta carga.
                 </TableCell>
               </TableRow>
             ) : inboundDocs.map((d: any) => {
               const m = meta[d.id] || {};
+              const isDelivered = d.status === 'delivered';
+              const isNotDelivered = d.status === 'not_delivered' || m.ne;
               return (
-                <TableRow key={d.id} className={m.ne ? 'bg-destructive/5' : ''}>
-                  <TableCell className="p-1">
-                    <Input
-                      value={m.palete || ''}
-                      onChange={e => patchDoc(d.id, { palete: e.target.value })}
-                      className="h-7 text-xs w-16"
-                    />
-                  </TableCell>
+                <TableRow key={d.id} className={isNotDelivered ? 'bg-destructive/5' : isDelivered ? 'bg-success/5' : ''}>
                   <TableCell className="p-1 text-center">
                     <Checkbox
                       checked={!!m.rec_canhoto}
                       onCheckedChange={v => patchDoc(d.id, { rec_canhoto: !!v })}
                     />
                   </TableCell>
-                  <TableCell className="p-1">
-                    <Input
-                      value={m.lote_canhoto || ''}
-                      onChange={e => patchDoc(d.id, { lote_canhoto: e.target.value })}
-                      className="h-7 text-xs w-24"
-                    />
-                  </TableCell>
-                  <TableCell className="p-1 text-center">
-                    <Checkbox
-                      checked={!!m.ne}
-                      onCheckedChange={v => patchDoc(d.id, { ne: !!v })}
-                    />
-                  </TableCell>
                   <TableCell className="text-xs font-semibold whitespace-nowrap">{d.invoice_number || '—'}</TableCell>
                   <TableCell className="text-xs whitespace-nowrap">{d.reference_number || '0'}</TableCell>
                   <TableCell className="text-xs">
-                    {m.ne ? (
-                      <Badge variant="destructive" className="text-[10px]">Não Entregue</Badge>
-                    ) : m.rec_canhoto ? (
+                    {isNotDelivered ? (
+                      <Badge variant="destructive" className="text-[10px]" title={m.ne_reason || ''}>Não Entregue</Badge>
+                    ) : isDelivered ? (
                       <Badge className="text-[10px] bg-success text-success-foreground">Entregue</Badge>
                     ) : (
                       <Badge variant="outline" className="text-[10px]">Pendente</Badge>
                     )}
                   </TableCell>
-                  <TableCell className="text-xs max-w-[180px] truncate" title={d.remitter || ''}>
-                    {d.remitter || '—'}
+                  <TableCell className="text-xs max-w-[180px] truncate" title={d.recipient || ''}>
+                    {d.recipient || '—'}
                   </TableCell>
                   <TableCell className="text-xs whitespace-nowrap">
                     {d.recipient_city || '—'}{d.recipient_state ? `/${d.recipient_state}` : ''}
                   </TableCell>
-                  <TableCell className="text-xs max-w-[180px] truncate" title={d.recipient || ''}>
-                    {d.recipient || '—'}
+                  <TableCell className="text-xs text-right whitespace-nowrap font-medium">
+                    {fmtMoney(Number(d.value || 0))}
+                  </TableCell>
+                  <TableCell className="p-1">
+                    <SearchableSelect
+                      value={m.payment_method || '__none__'}
+                      onChange={v => patchDoc(d.id, { payment_method: v === '__none__' ? '' : v })}
+                      options={PAYMENT_METHODS}
+                      placeholder="—"
+                      className="h-7 w-32"
+                    />
                   </TableCell>
                   <TableCell className="p-1">
                     <SearchableSelect
@@ -374,9 +339,6 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
                       className="h-7 w-28"
                     />
                   </TableCell>
-                  <TableCell className="text-xs text-right whitespace-nowrap font-medium">
-                    {fmtMoney(Number(d.value || 0))}
-                  </TableCell>
                   <TableCell className="p-1">
                     <Input
                       type="datetime-local"
@@ -385,6 +347,33 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
                       className="h-7 text-xs w-40"
                     />
                   </TableCell>
+                  <TableCell className="p-1">
+                    <div className="flex items-center gap-1 justify-center">
+                      <Button
+                        size="sm"
+                        variant={isDelivered ? 'default' : 'outline'}
+                        className={`h-7 px-2 text-[10px] ${isDelivered ? 'bg-success hover:bg-success/90 text-success-foreground' : 'text-success border-success/40 hover:bg-success/10'}`}
+                        onClick={() => markDelivered(d.id)}
+                        title="Marcar como Entregue (sincroniza no sistema)"
+                      >
+                        <CheckCircle2 className="h-3 w-3 mr-1" /> Entregue
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={isNotDelivered ? 'destructive' : 'outline'}
+                        className={`h-7 px-2 text-[10px] ${isNotDelivered ? '' : 'text-destructive border-destructive/40 hover:bg-destructive/10'}`}
+                        onClick={() => setNeModal({ docId: d.id, reason: m.ne_reason || '' })}
+                        title="Marcar como Não Entregue (exige observação)"
+                      >
+                        <XCircle className="h-3 w-3 mr-1" /> Não Entregue
+                      </Button>
+                    </div>
+                    {isNotDelivered && m.ne_reason && (
+                      <div className="text-[10px] text-destructive mt-1 px-1 truncate max-w-[280px]" title={m.ne_reason}>
+                        <AlertTriangle className="h-2.5 w-2.5 inline mr-1" />{m.ne_reason}
+                      </div>
+                    )}
+                  </TableCell>
                 </TableRow>
               );
             })}
@@ -392,16 +381,48 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
           {inboundDocs.length > 0 && (
             <TableBody>
               <TableRow className="bg-muted/40 font-bold">
-                <TableCell colSpan={13} className="text-xs text-right">Total:</TableCell>
+                <TableCell colSpan={6} className="text-xs text-right">Total:</TableCell>
                 <TableCell className="text-xs text-right whitespace-nowrap">
                   {fmtMoney(inboundDocs.reduce((s: number, d: any) => s + Number(d.value || 0), 0))}
                 </TableCell>
-                <TableCell />
+                <TableCell colSpan={6} />
               </TableRow>
             </TableBody>
           )}
         </Table>
       </div>
+
+      {/* MODAL NÃO ENTREGUE */}
+      <Dialog open={!!neModal} onOpenChange={(o) => !o && setNeModal(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <XCircle className="h-4 w-4 text-destructive" />
+              Marcar Nota como Não Entregue
+            </DialogTitle>
+            <DialogDescription>
+              Informe o motivo da não entrega. Esta observação será usada nos relatórios operacionais.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label className="text-xs">Motivo / Observação *</Label>
+            <Textarea
+              rows={4}
+              autoFocus
+              placeholder="Ex.: Cliente ausente, endereço incorreto, recusou mercadoria..."
+              value={neModal?.reason || ''}
+              onChange={e => setNeModal(prev => prev ? { ...prev, reason: e.target.value } : prev)}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNeModal(null)}>Cancelar</Button>
+            <Button variant="destructive" onClick={confirmNotDelivered}>
+              <XCircle className="h-4 w-4 mr-1" />
+              Confirmar Não Entrega
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
