@@ -618,10 +618,14 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
             <Textarea
               rows={4}
               autoFocus
+              maxLength={500}
               placeholder="Ex.: Cliente ausente, endereço incorreto, recusou mercadoria..."
               value={neModal?.reason || ''}
               onChange={e => setNeModal(prev => prev ? { ...prev, reason: e.target.value } : prev)}
             />
+            <div className="text-[10px] text-muted-foreground text-right">
+              {(neModal?.reason || '').length}/500
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setNeModal(null)}>Cancelar</Button>
@@ -650,10 +654,14 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
             <Textarea
               rows={4}
               autoFocus
+              maxLength={500}
               placeholder="Ex.: Cliente solicitou nova tentativa, reentrega agendada para próxima rota..."
               value={reModal?.reason || ''}
               onChange={e => setReModal(prev => prev ? { ...prev, reason: e.target.value } : prev)}
             />
+            <div className="text-[10px] text-muted-foreground text-right">
+              {(reModal?.reason || '').length}/500
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setReModal(null)}>Cancelar</Button>
