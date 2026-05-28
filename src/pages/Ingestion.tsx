@@ -30,6 +30,7 @@ import type { IngestionReport, ReviewItem } from '@/components/ingestion/Results
 import { calculateFreight, logFreightCalculation } from '@/hooks/useFreightCalculator';
 import { applyOrtFallbacks, isUnknown, UNKNOWN } from '@/lib/ortFieldFallbacks';
 import { normalizeStateRegistration, normalizeIeIndicator, FISCAL_UNKNOWN } from '@/lib/fiscalNormalization';
+import { detectPaymentMethod } from '@/lib/paymentMethodDetection';
 import PickupOrderPicker from '@/components/pickup/PickupOrderPicker';
 import type { PickupOrder } from '@/hooks/usePickupOrders';
 
@@ -1048,6 +1049,7 @@ export default function Ingestion() {
                         observationSnippet: String(doc.source.observation).replace(/\s+/g, ' ').trim().slice(0, 400),
                       }
                     : null),
+                delivery_meta: (() => { const pm = detectPaymentMethod(doc.source.observation, (doc.source as any).paymentTerms); return pm ? { payment_method: pm } : {}; })(),
             });
 
             if (freightValue && freightBreakdown?.tableId && currentTenant) {
@@ -1199,6 +1201,7 @@ export default function Ingestion() {
         });
 
         (doc as any)._savedId = created.id;
+        // mantém forma de pagamento detectada disponível em delivery_meta também aqui
 
         if (freightValue && freightBreakdown?.tableId && currentTenant) {
           await logFreightCalculation(currentTenant.id, created.id, 'fiscal_document', freightBreakdown, user?.id);
@@ -1305,6 +1308,7 @@ export default function Ingestion() {
                         observationSnippet: String(doc.source.observation).replace(/\s+/g, ' ').trim().slice(0, 400),
                       }
                     : null),
+                delivery_meta: (() => { const pm = detectPaymentMethod(doc.source.observation, (doc.source as any).paymentTerms); return pm ? { payment_method: pm } : {}; })(),
             });
             createdDocIds.set(doc.source.invoiceNumber, created.id);
 
