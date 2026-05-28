@@ -284,6 +284,7 @@ export default function FiscalDocuments() {
   const createDoc = useCreateFiscalDocument();
   const updateDoc = useUpdateFiscalDocument();
   const initialQ = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('q') || '' : '';
+  const initialTab = typeof window !== 'undefined' ? (new URLSearchParams(window.location.search).get('tab') || 'docs') : 'docs';
   const [search, setSearch] = useState(initialQ);
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -350,7 +351,7 @@ export default function FiscalDocuments() {
         </Dialog>
       </div>
 
-      <Tabs defaultValue="docs" className="space-y-6">
+      <Tabs defaultValue={initialTab} className="space-y-6">
         <TabsList>
           <TabsTrigger value="docs" className="gap-2"><FileText className="h-4 w-4" /> Documentos Fiscais</TabsTrigger>
           <TabsTrigger value="ort-consulta" className="gap-2"><FileSearch className="h-4 w-4" /> ORT — Consulta</TabsTrigger>
