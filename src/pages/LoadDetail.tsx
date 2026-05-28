@@ -11,10 +11,7 @@ import { calculateFreight, type FreightResult } from '@/hooks/useFreightCalculat
 import FreightBreakdownPanel from '@/components/freight/FreightBreakdownPanel';
 import { getNextStatuses } from '@/lib/statusPipeline';
 import { useToast } from '@/hooks/use-toast';
-import LoadItemsPanel from '@/components/loads/LoadItemsPanel';
-import CTeWorkbench from '@/components/loads/CTeWorkbench';
-import NFSePanel from '@/components/loads/NFSePanel';
-import ManifestPanel from '@/components/loads/ManifestPanel';
+import LoadRomaneioTabs from '@/components/loads/LoadRomaneioTabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -511,35 +508,12 @@ export default function LoadDetail() {
         </Card>
       )}
 
-      {/* Items panel */}
-      <LoadItemsPanel
-        loadId={load.id}
-        vehicleMaxPallets={vehicle?.max_pallets}
-        vehicleMaxWeight={vehicle?.max_weight_kg}
-      />
-
-      {/* CT-e Workbench */}
-      <CTeWorkbench
-        loadId={load.id}
-        loadNumber={load.load_number}
-        destination={load.destination}
+      {/* Cabeçalho com abas (Romaneio de Expedição) */}
+      <LoadRomaneioTabs
+        load={load}
         documents={documents as any}
-      />
-
-      <NFSePanel
-        loadId={load.id}
-        loadNumber={load.load_number}
-        destination={load.destination}
-        defaultClientName={(documents as any)?.[0]?.recipient ?? null}
-        defaultClientCnpj={(documents as any)?.[0]?.recipient_cnpj ?? null}
-        freightTotal={(documents as any)?.reduce((s: number, d: any) => s + Number(d.freight_value || 0), 0) ?? 0}
-      />
-
-      <ManifestPanel
-        loadId={load.id}
-        loadNumber={load.load_number}
-        origin={(load as any).origin}
-        destination={load.destination}
+        items={items as any}
+        onSaved={() => { refetch(); qc.invalidateQueries({ queryKey: ['load_documents', load.id] }); }}
       />
 
       {/* CT-e Freight Preview Dialog */}
