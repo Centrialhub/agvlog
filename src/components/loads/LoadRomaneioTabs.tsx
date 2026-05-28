@@ -21,6 +21,7 @@ import LoadItemsPanel from './LoadItemsPanel';
 import CTeWorkbench from './CTeWorkbench';
 import NFSePanel from './NFSePanel';
 import ManifestPanel from './ManifestPanel';
+import LoadNotesPanel from './LoadNotesPanel';
 import {
   FileText, DollarSign, Package, TrendingUp, FileSignature,
   HandCoins, ShieldCheck, Boxes, Files, Truck, Save, Plus,
@@ -512,6 +513,9 @@ export default function LoadRomaneioTabs({ load, documents, items, onSaved }: Pr
               </TableBody>
             </Table>
           </div>
+
+          {/* Painel de Notas Fiscais (POPUP_LG_ROMEXP_CLI) */}
+          <LoadNotesPanel load={load} documents={documents} onSaved={onSaved} />
 
           <div className="flex justify-end">
             <Button onClick={handleSave} disabled={updateLoad.isPending}>
