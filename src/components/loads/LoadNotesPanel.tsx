@@ -456,13 +456,42 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
                     {fmtMoney(Number(d.value || 0))}
                   </TableCell>
                   <TableCell className="p-1">
-                    <SearchableSelect
-                      value={m.payment_method || '__none__'}
-                      onChange={v => patchDoc(d.id, { payment_method: v === '__none__' ? '' : v })}
-                      options={PAYMENT_METHODS}
-                      placeholder="—"
-                      className="h-7 w-32"
-                    />
+                    <div className="flex items-center gap-1">
+                      <SearchableSelect
+                        value={m.payment_method || '__none__'}
+                        onChange={v => patchDoc(d.id, { payment_method: v === '__none__' ? '' : v })}
+                        options={PAYMENT_METHODS}
+                        placeholder="—"
+                        className="h-7 w-32"
+                      />
+                      {getDocObservation(d) && (
+                        <TooltipProvider delayDuration={150}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                type="button"
+                                className="text-muted-foreground hover:text-primary"
+                                onClick={() => {
+                                  const detected = detectPaymentMethod(getDocObservation(d));
+                                  if (detected) {
+                                    patchDoc(d.id, { payment_method: detected });
+                                    toast.success(`Detectado: ${PAYMENT_METHODS.find(p => p.value === detected)?.label}`);
+                                  } else {
+                                    toast.info('Nenhum padrão de pagamento identificado na observação');
+                                  }
+                                }}
+                                title="Ver observação da NF / Detectar pagamento"
+                              >
+                                <Info className="h-3.5 w-3.5" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-xs text-xs whitespace-pre-wrap">
+                              {getDocObservation(d)}
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="p-1">
                     <SearchableSelect
