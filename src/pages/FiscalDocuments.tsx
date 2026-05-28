@@ -23,10 +23,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import OrtConsultaTab from '@/components/fiscal/OrtConsultaTab';
+import OrtGeracaoTab from '@/components/fiscal/OrtGeracaoTab';
 import {
   Search, Plus, FileText, ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight,
   PackageCheck, Clock, XCircle, ExternalLink, ChevronDown, ChevronRight,
-  DollarSign, Weight, Layers,
+  DollarSign, Weight, Layers, FileSearch, Sparkles,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -347,8 +350,16 @@ export default function FiscalDocuments() {
         </Dialog>
       </div>
 
-      {/* KPI Cards */}
-      <SummaryCards docs={docs} />
+      <Tabs defaultValue="docs" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="docs" className="gap-2"><FileText className="h-4 w-4" /> Documentos Fiscais</TabsTrigger>
+          <TabsTrigger value="ort-consulta" className="gap-2"><FileSearch className="h-4 w-4" /> ORT — Consulta</TabsTrigger>
+          <TabsTrigger value="ort-geracao" className="gap-2"><Sparkles className="h-4 w-4" /> ORT — Geração</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="docs" className="space-y-6 mt-0">
+          {/* KPI Cards */}
+          <SummaryCards docs={docs} />
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-center">
@@ -410,6 +421,16 @@ export default function FiscalDocuments() {
           </Table>
         </CardContent>
       </Card>
+        </TabsContent>
+
+        <TabsContent value="ort-consulta" className="mt-0">
+          <OrtConsultaTab />
+        </TabsContent>
+
+        <TabsContent value="ort-geracao" className="mt-0">
+          <OrtGeracaoTab />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
