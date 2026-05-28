@@ -436,6 +436,57 @@ export default function NewManualOrtDialog({ open, onOpenChange, onCreated }: Pr
                 </div>
               </div>
             </TabsContent>
+
+            {/* PLANO DE PAGAMENTO */}
+            <TabsContent value="pagto" className="space-y-4 border rounded-md p-3">
+              <div className="text-sm font-semibold">Plano de Pagamento — Financeiro</div>
+              <div className="flex flex-wrap gap-3">
+                {C('Gerar título no financeiro', 'gera_titulo_financeiro')}
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {F('Cód. Plano Pagto', 'plano_pagto_codigo')}
+                {F('Descrição Plano', 'plano_pagto_descricao', { cls: 'md:col-span-3' })}
+                <div className="space-y-1">
+                  <Label className="text-xs">Condição</Label>
+                  <Select value={form.condicao_pagto} onValueChange={v => set('condicao_pagto', v)}>
+                    <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="A_VISTA">À Vista</SelectItem>
+                      <SelectItem value="A_PRAZO">A Prazo</SelectItem>
+                      <SelectItem value="FATURADO">Faturado</SelectItem>
+                      <SelectItem value="BOLETO">Boleto</SelectItem>
+                      <SelectItem value="PIX">PIX</SelectItem>
+                      <SelectItem value="DEPOSITO">Depósito</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Forma Pagto</Label>
+                  <Select value={form.forma_pagto} onValueChange={v => set('forma_pagto', v)}>
+                    <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="BOLETO">Boleto</SelectItem>
+                      <SelectItem value="PIX">PIX</SelectItem>
+                      <SelectItem value="DINHEIRO">Dinheiro</SelectItem>
+                      <SelectItem value="DEPOSITO">Depósito</SelectItem>
+                      <SelectItem value="CARTAO">Cartão</SelectItem>
+                      <SelectItem value="CHEQUE">Cheque</SelectItem>
+                      <SelectItem value="TRANSFERENCIA">Transferência</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {F('Prazo (dias)', 'prazo_dias', { type: 'number' })}
+                {F('Qtd. Parcelas', 'qtd_parcelas', { type: 'number' })}
+                {F('1º Vencimento', 'primeiro_vencimento', { type: 'date' })}
+                {F('Valor Total a Receber', 'valor_total_receber', { mask: 'currency' })}
+                {F('Centro de Custo', 'centro_custo')}
+                {F('Conta Financeira', 'conta_financeira')}
+                {F('Histórico Financeiro', 'historico_financeiro', { cls: 'md:col-span-4' })}
+              </div>
+              <div className="text-xs text-muted-foreground border-t pt-2">
+                Pagador definido em <strong>Partes</strong>: {form.pagador_tipo === 'CIF' ? 'Pago (CIF) — Remetente' : form.pagador_tipo === 'FOB' ? 'À pagar (FOB) — Destinatário' : 'Consignatário'}
+              </div>
+            </TabsContent>
           </Tabs>
 
           <DialogFooter>
