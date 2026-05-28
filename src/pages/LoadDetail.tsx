@@ -48,7 +48,7 @@ function useLoad(id: string | undefined) {
 
 function useLoadDocuments(loadId: string | undefined) {
   return useQuery({
-    queryKey: ['load_documents', loadId],
+    queryKey: ['load_documents', loadId, 'v2'],
     queryFn: async () => {
       if (!loadId) return [];
       const { data, error } = await supabase
