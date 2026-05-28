@@ -525,7 +525,20 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
                     <Input
                       type="datetime-local"
                       value={toLocalDT(m.delivery_at)}
-                      onChange={e => patchDoc(d.id, { delivery_at: fromLocalDT(e.target.value) || undefined })}
+                      max={(() => {
+                        const f = new Date(Date.now() + 7 * 86400000);
+                        const pad = (n: number) => String(n).padStart(2, '0');
+                        return `${f.getFullYear()}-${pad(f.getMonth() + 1)}-${pad(f.getDate())}T23:59`;
+                      })()}
+                      min="2000-01-01T00:00"
+                      onChange={e => {
+                        const iso = fromLocalDT(e.target.value) || undefined;
+                        if (iso && !isReasonableDate(iso, 7)) {
+                          toast.error('Data inválida (não pode ser anterior a 2000 ou mais de 7 dias no futuro)');
+                          return;
+                        }
+                        patchDoc(d.id, { delivery_at: iso });
+                      }}
                       className="h-7 text-xs w-40"
                     />
                   </TableCell>
