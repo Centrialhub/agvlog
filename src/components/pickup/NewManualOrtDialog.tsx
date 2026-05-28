@@ -71,6 +71,19 @@ const empty = () => ({
   base_gnre: '0,00%', valor_guia_gnre: 'R$ 0,00',
   aliquota_gnre: '0,00%', valor_frete_gnre: 'R$ 0,00',
   aliquota_pis: '0,65%', valor_pis: 'R$ 0,00',
+  // Plano de Pagamento (Financeiro)
+  plano_pagto_codigo: '',
+  plano_pagto_descricao: '',
+  condicao_pagto: 'A_VISTA', // A_VISTA | A_PRAZO | FATURADO | BOLETO | PIX | DEPOSITO
+  forma_pagto: 'BOLETO',
+  prazo_dias: '0',
+  qtd_parcelas: '1',
+  primeiro_vencimento: '',
+  valor_total_receber: 'R$ 0,00',
+  centro_custo: '',
+  conta_financeira: '',
+  historico_financeiro: '',
+  gera_titulo_financeiro: true,
 });
 
 type FormState = ReturnType<typeof empty>;
