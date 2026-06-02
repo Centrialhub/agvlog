@@ -164,6 +164,15 @@ export default function RoutePlanning() {
   const [filterDest, setFilterDest] = useState('all');
   const [newRouteName, setNewRouteName] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [globalStartAt, setGlobalStartAt] = useState<string>(() => defaultPlannedStartAt());
+
+  // Carrega janelas dos clientes presentes nas paradas
+  const clientIdsInRoutes = useMemo(() => {
+    const ids = new Set<string>();
+    routes.forEach(r => (r.stops || []).forEach(s => { if (s.client_id) ids.add(s.client_id); }));
+    return Array.from(ids);
+  }, [routes]);
+  const { data: customerWindows = [] } = useCustomerDeliveryWindowsForRouting(clientIdsInRoutes);
 
   const assignedLoadIds = useMemo(
     () => new Set(routes.flatMap(r => r.loads.map(l => l.id))),
