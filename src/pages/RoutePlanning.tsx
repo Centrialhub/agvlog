@@ -412,21 +412,62 @@ export default function RoutePlanning() {
     if (!r.driver_id) issues.push({ level: 'error', message: 'Selecione um motorista (obrigatório para o app do motorista).' });
     if (!r.planned_start_at) issues.push({ level: 'error', message: 'Informe horário previsto de saída.' });
     if (r.loads.length === 0) issues.push({ level: 'error', message: 'Sem cargas vinculadas.' });
-    if (!r.stops || r.stops.length === 0) issues.push({ level: 'error', message: 'Gere as paradas antes de despachar.' });
+    if (!r.stops || r.stops.length === 0) issues.push({ level: 'error', message: 'Sem paradas consolidadas.' });
     (r.stops || []).forEach((s, i) => {
       if (!s.destination?.trim() || !s.recipient_name?.trim())
         issues.push({ level: 'error', message: `Parada ${i + 1} sem destino/destinatário.` });
       if (s.fiscal_document_ids.length === 0)
         issues.push({ level: 'warning', message: `Parada ${i + 1} sem documentos fiscais.` });
+      if (!s.city) issues.push({ level: 'warning', message: `Parada ${i + 1} sem cidade cadastrada.` });
+      if (s.risk_level === 'critical') issues.push({ level: 'warning', message: `Parada ${i + 1}: ${s.risk_reason || 'risco crítico de janela'}.` });
+      if (s.risk_level === 'warning' && s.risk_reason && !s.risk_reason.startsWith('Cliente sem janela'))
+        issues.push({ level: 'warning', message: `Parada ${i + 1}: ${s.risk_reason}.` });
     });
-    // Capacidade
     const v: any = vehicles.find((vv: any) => vv.id === r.vehicle_id);
-    if (v?.max_pallets) {
-      const totalPallets = r.loads.reduce((s, l) => s + (Number(l.total_pallet_count) || 0), 0);
-      if (totalPallets > v.max_pallets)
-        issues.push({ level: 'warning', message: `Paletes (${totalPallets}) excedem capacidade do veículo (${v.max_pallets}).` });
+    if (v) {
+      const totals = r.loads.reduce((acc, l) => ({
+        pallets: acc.pallets + (Number(l.total_pallet_count) || 0),
+        weight: acc.weight + (Number(l.total_weight_kg) || 0),
+        volume: acc.volume + (Number(l.total_volume_m3) || 0),
+      }), { pallets: 0, weight: 0, volume: 0 });
+      if (v.max_pallets && totals.pallets > v.max_pallets)
+        issues.push({ level: 'warning', message: `Paletes (${totals.pallets}) excedem capacidade (${v.max_pallets}).` });
+      if (v.max_weight_kg && totals.weight > v.max_weight_kg)
+        issues.push({ level: 'warning', message: `Peso (${totals.weight.toFixed(0)}kg) excede capacidade (${v.max_weight_kg}kg).` });
+      if (v.max_volume_m3 && totals.volume > v.max_volume_m3)
+        issues.push({ level: 'warning', message: `Volume (${totals.volume.toFixed(2)}m³) excede capacidade (${v.max_volume_m3}m³).` });
+    }
+    // Motorista duplicado
+    if (r.driver_id) {
+      const dup = routes.find(other => other.id !== r.id && other.driver_id === r.driver_id);
+      if (dup) issues.push({ level: 'warning', message: `Motorista também alocado em "${dup.name}".` });
     }
     return issues;
+  };
+
+  const routeStatus = (r: RoutePlan): 'ready' | 'review' | 'blocked' => {
+    const issues = validateRoute(r);
+    if (issues.some(i => i.level === 'error')) return 'blocked';
+    if (issues.some(i => i.level === 'warning')) return 'review';
+    return 'ready';
+  };
+
+  const dispatchAllValid = async () => {
+    const dispatchable = routes.filter(r => routeStatus(r) !== 'blocked');
+    if (dispatchable.length === 0) {
+      toast.info('Nenhuma rota válida para despacho em lote.');
+      return;
+    }
+    let ok = 0, fail = 0;
+    for (const r of dispatchable) {
+      try {
+        await dispatchRouteMutation.mutateAsync(r);
+        ok++;
+      } catch (e) {
+        fail++;
+      }
+    }
+    toast[fail === 0 ? 'success' : 'warning'](`Despachadas ${ok} rota(s)${fail ? ` · ${fail} falharam` : ''}`);
   };
 
   const exportRoutePdf = (route: RoutePlan) => {
