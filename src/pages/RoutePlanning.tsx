@@ -83,8 +83,12 @@ interface RoutePlan {
   name: string;
   loads: PendingLoad[];
   vehicle_id?: string;
+  driver_id?: string;
+  planned_start_at?: string;
   notes?: string;
   collapsed?: boolean;
+  stops?: RouteStopDraft[];
+  sortMode?: RouteStopSortMode;
 }
 
 /* ────────────── main component ────────────── */
