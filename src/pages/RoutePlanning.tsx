@@ -382,6 +382,11 @@ export default function RoutePlanning() {
       if (r.id !== routeId || !r.stops) return r;
       if (mode === 'smart') return { ...r, sortMode: mode, stops: applySmartSequence(r.stops) };
       if (mode === 'original') return { ...r, sortMode: mode, stops: applyOriginalOrder(r.stops) };
+      if (mode === 'auto') {
+        const seq = autoSequenceStops(r.stops);
+        const sim = simulateStopTimeline(seq, r.planned_start_at || globalStartAt);
+        return { ...r, sortMode: mode, stops: sim };
+      }
       return { ...r, sortMode: mode };
     }));
   };
