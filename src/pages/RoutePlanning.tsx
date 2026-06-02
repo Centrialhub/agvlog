@@ -98,6 +98,23 @@ export default function RoutePlanning() {
   const { data: vehicles = [] } = useVehicles();
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const dispatchPlan = useDispatchRoutePlan();
+
+  const { data: drivers = [] } = useQuery({
+    queryKey: ['drivers_for_routing', currentTenant?.id],
+    queryFn: async () => {
+      if (!currentTenant) return [] as any[];
+      const { data, error } = await supabase
+        .from('drivers')
+        .select('id, name, active')
+        .eq('tenant_id', currentTenant.id)
+        .eq('active', true)
+        .order('name');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentTenant,
+  });
 
   // Cargas pendentes (planned, sem trip vinculada)
   const { data: pendingLoads = [], isLoading } = useQuery({
