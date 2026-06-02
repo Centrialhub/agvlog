@@ -694,20 +694,26 @@ export default function RoutePlanning() {
                           {route.stops && <Badge variant="secondary">{route.stops.length}</Badge>}
                         </div>
                         <div className="flex items-center gap-2">
-                          <Button size="sm" variant="outline" onClick={() => generateStops(route.id)}>
-                            <Wand2 className="h-3 w-3 mr-1" /> Gerar paradas
+                          <Button size="sm" variant="outline" onClick={() => setStopSort(route.id, 'auto')} disabled={!route.stops?.length}>
+                            <Bot className="h-3 w-3 mr-1" /> Recalcular sequência
                           </Button>
-                          <Button size="sm" variant="outline" onClick={() => setStopSort(route.id, 'smart')} disabled={!route.stops?.length}>
-                            <Sparkles className="h-3 w-3 mr-1" /> Ordem inteligente
+                          <Button size="sm" variant="ghost" onClick={() => generateStops(route.id)}>
+                            <Wand2 className="h-3 w-3 mr-1" /> Regenerar paradas
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => setStopSort(route.id, 'smart')} disabled={!route.stops?.length}>
+                            <Sparkles className="h-3 w-3 mr-1" /> Ordem simples
                           </Button>
                           <Button size="sm" variant="ghost" onClick={() => setStopSort(route.id, 'original')} disabled={!route.stops?.length}>
-                            Ordem original
+                            Original
                           </Button>
                         </div>
                       </div>
                       <p className="text-[11px] text-muted-foreground">
-                        Sequência sugerida sem cálculo geográfico — usa janela de recebimento, prioridade, cidade e bairro.
+                        Previsão operacional aproximada — sem rota geográfica nem trânsito em tempo real.
                       </p>
+                      {route.notes && (
+                        <p className="text-[11px] text-amber-700">{route.notes}</p>
+                      )}
                       <StopDraftTable
                         stops={(route.stops || []).slice().sort((a,b) => (a.manual_order||0) - (b.manual_order||0))}
                         onMove={(id, dir) => moveStop(route.id, id, dir)}
