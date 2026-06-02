@@ -321,6 +321,66 @@ export default function RoutePlanning() {
     };
   };
 
+  const generateStops = (routeId: string) => {
+    setRoutes(prev => prev.map(r => {
+      if (r.id !== routeId) return r;
+      const stops = consolidateLoadsIntoStops(r.loads as any).map((s, i) => ({ ...s, manual_order: i + 1 }));
+      return { ...r, stops, sortMode: 'original' as const };
+    }));
+  };
+
+  const setStopSort = (routeId: string, mode: RouteStopSortMode) => {
+    setRoutes(prev => prev.map(r => {
+      if (r.id !== routeId || !r.stops) return r;
+      if (mode === 'smart') return { ...r, sortMode: mode, stops: applySmartSequence(r.stops) };
+      if (mode === 'original') return { ...r, sortMode: mode, stops: applyOriginalOrder(r.stops) };
+      return { ...r, sortMode: mode };
+    }));
+  };
+
+  const moveStop = (routeId: string, stopId: string, dir: 'up' | 'down') => {
+    setRoutes(prev => prev.map(r => {
+      if (r.id !== routeId || !r.stops) return r;
+      const ordered = [...r.stops].sort((a, b) => (a.manual_order || 0) - (b.manual_order || 0));
+      const idx = ordered.findIndex(s => s.id === stopId);
+      const ni = dir === 'up' ? idx - 1 : idx + 1;
+      if (idx < 0 || ni < 0 || ni >= ordered.length) return r;
+      [ordered[idx], ordered[ni]] = [ordered[ni], ordered[idx]];
+      const stops = ordered.map((s, i) => ({ ...s, manual_order: i + 1 }));
+      return { ...r, stops, sortMode: 'manual' as const };
+    }));
+  };
+
+  const updateStop = (routeId: string, stopId: string, patch: Partial<RouteStopDraft>) => {
+    setRoutes(prev => prev.map(r => {
+      if (r.id !== routeId || !r.stops) return r;
+      return { ...r, stops: r.stops.map(s => s.id === stopId ? { ...s, ...patch } : s) };
+    }));
+  };
+
+  const validateRoute = (r: RoutePlan): RoutePlanValidationIssue[] => {
+    const issues: RoutePlanValidationIssue[] = [];
+    if (!r.vehicle_id) issues.push({ level: 'error', message: 'Selecione um veículo.' });
+    if (!r.driver_id) issues.push({ level: 'error', message: 'Selecione um motorista (obrigatório para o app do motorista).' });
+    if (!r.planned_start_at) issues.push({ level: 'error', message: 'Informe horário previsto de saída.' });
+    if (r.loads.length === 0) issues.push({ level: 'error', message: 'Sem cargas vinculadas.' });
+    if (!r.stops || r.stops.length === 0) issues.push({ level: 'error', message: 'Gere as paradas antes de despachar.' });
+    (r.stops || []).forEach((s, i) => {
+      if (!s.destination?.trim() || !s.recipient_name?.trim())
+        issues.push({ level: 'error', message: `Parada ${i + 1} sem destino/destinatário.` });
+      if (s.fiscal_document_ids.length === 0)
+        issues.push({ level: 'warning', message: `Parada ${i + 1} sem documentos fiscais.` });
+    });
+    // Capacidade
+    const v: any = vehicles.find((vv: any) => vv.id === r.vehicle_id);
+    if (v?.max_pallets) {
+      const totalPallets = r.loads.reduce((s, l) => s + (Number(l.total_pallet_count) || 0), 0);
+      if (totalPallets > v.max_pallets)
+        issues.push({ level: 'warning', message: `Paletes (${totalPallets}) excedem capacidade do veículo (${v.max_pallets}).` });
+    }
+    return issues;
+  };
+
   const exportRoutePdf = (route: RoutePlan) => {
     const vehicle = vehicles.find((v: any) => v.id === route.vehicle_id) as any;
     const docs: RomaneioDoc[] = sortLoadsByRecipient(route.loads).flatMap(load =>
