@@ -103,6 +103,7 @@ export default function RoutePlanning() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const dispatchPlan = useDispatchRoutePlan();
+  const { data: operationalRoutes = [] } = useOperationalRoutes();
 
   const { data: drivers = [] } = useQuery({
     queryKey: ['drivers_for_routing', currentTenant?.id],
@@ -110,7 +111,7 @@ export default function RoutePlanning() {
       if (!currentTenant) return [] as any[];
       const { data, error } = await supabase
         .from('drivers')
-        .select('id, name, active')
+        .select('id, name, active, current_vehicle_id')
         .eq('tenant_id', currentTenant.id)
         .eq('active', true)
         .order('name');
