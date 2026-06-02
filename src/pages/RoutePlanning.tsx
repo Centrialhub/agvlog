@@ -536,6 +536,20 @@ export default function RoutePlanning() {
                           ))}
                         </SelectContent>
                       </Select>
+                      <Select value={route.driver_id || ''} onValueChange={v => setRoutes(prev => prev.map(r => r.id === route.id ? { ...r, driver_id: v } : r))}>
+                        <SelectTrigger className="w-40 h-8 text-xs"><SelectValue placeholder="Motorista" /></SelectTrigger>
+                        <SelectContent>
+                          {drivers.map((d: any) => (
+                            <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        type="datetime-local"
+                        value={route.planned_start_at || ''}
+                        onChange={(e) => setRoutes(prev => prev.map(r => r.id === route.id ? { ...r, planned_start_at: e.target.value } : r))}
+                        className="w-44 h-8 text-xs"
+                      />
                       <Button size="sm" variant="outline" onClick={() => exportRoutePdf(route)}>
                         <Download className="h-3 w-3 mr-1" /> PDF
                       </Button>
@@ -550,6 +564,36 @@ export default function RoutePlanning() {
                 </CardHeader>
                 {!route.collapsed && (
                   <CardContent className="pt-0 space-y-3">
+                    {/* Sequência operacional de paradas */}
+                    <div className="border rounded-md p-3 bg-muted/20 space-y-2">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-2 text-sm font-medium">
+                          <ListOrdered className="h-4 w-4" /> Paradas consolidadas
+                          {route.stops && <Badge variant="secondary">{route.stops.length}</Badge>}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button size="sm" variant="outline" onClick={() => generateStops(route.id)}>
+                            <Wand2 className="h-3 w-3 mr-1" /> Gerar paradas
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => setStopSort(route.id, 'smart')} disabled={!route.stops?.length}>
+                            <Sparkles className="h-3 w-3 mr-1" /> Ordem inteligente
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => setStopSort(route.id, 'original')} disabled={!route.stops?.length}>
+                            Ordem original
+                          </Button>
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">
+                        Sequência sugerida sem cálculo geográfico — usa janela de recebimento, prioridade, cidade e bairro.
+                      </p>
+                      <StopDraftTable
+                        stops={(route.stops || []).slice().sort((a,b) => (a.manual_order||0) - (b.manual_order||0))}
+                        onMove={(id, dir) => moveStop(route.id, id, dir)}
+                        onUpdate={(id, patch) => updateStop(route.id, id, patch)}
+                      />
+                      <RouteValidationPanel issues={validateRoute(route)} />
+                    </div>
+
                     {sortLoadsByRecipient(route.loads).map((load, loadIdx) => (
                       <div key={load.id} className="border rounded-md overflow-hidden">
                         <div className="flex items-center justify-between px-3 py-2 bg-muted/50">
