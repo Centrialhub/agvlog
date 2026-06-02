@@ -93,6 +93,8 @@ interface RoutePlan {
   collapsed?: boolean;
   stops?: RouteStopDraft[];
   sortMode?: RouteStopSortMode;
+  /** Minutos de deslocamento do depósito/origem até a 1ª parada (heurística). */
+  initial_transit_minutes?: number;
 }
 
 /* ────────────── main component ────────────── */
