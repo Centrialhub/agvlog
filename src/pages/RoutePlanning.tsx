@@ -18,10 +18,16 @@ import { toast } from 'sonner';
 import {
   Route, Plus, Wand2, Trash2,
   PackageCheck, Truck, ChevronDown, ChevronUp,
-  FileText, Send, Download,
+  FileText, Send, Download, ListOrdered, Sparkles,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { printRomaneioRoutes, RomaneioDoc } from '@/lib/romaneioPrint';
+import StopDraftTable from '@/components/route-planning/StopDraftTable';
+import RouteValidationPanel from '@/components/route-planning/RouteValidationPanel';
+import { consolidateLoadsIntoStops } from '@/lib/route-planning/stopConsolidation';
+import { applySmartSequence, applyOriginalOrder } from '@/lib/route-planning/simpleStopSequencing';
+import { useDispatchRoutePlan } from '@/hooks/route-planning/useDispatchRoutePlan';
+import type { RouteStopDraft, RoutePlanValidationIssue, RouteStopSortMode } from '@/lib/route-planning/routePlanningTypes';
 
 /* ────────────── types ────────────── */
 const recipientCollator = new Intl.Collator('pt-BR', { sensitivity: 'base', numeric: true });
@@ -77,8 +83,12 @@ interface RoutePlan {
   name: string;
   loads: PendingLoad[];
   vehicle_id?: string;
+  driver_id?: string;
+  planned_start_at?: string;
   notes?: string;
   collapsed?: boolean;
+  stops?: RouteStopDraft[];
+  sortMode?: RouteStopSortMode;
 }
 
 /* ────────────── main component ────────────── */
@@ -88,6 +98,23 @@ export default function RoutePlanning() {
   const { data: vehicles = [] } = useVehicles();
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const dispatchPlan = useDispatchRoutePlan();
+
+  const { data: drivers = [] } = useQuery({
+    queryKey: ['drivers_for_routing', currentTenant?.id],
+    queryFn: async () => {
+      if (!currentTenant) return [] as any[];
+      const { data, error } = await supabase
+        .from('drivers')
+        .select('id, name, active')
+        .eq('tenant_id', currentTenant.id)
+        .eq('active', true)
+        .order('name');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentTenant,
+  });
 
   // Cargas pendentes (planned, sem trip vinculada)
   const { data: pendingLoads = [], isLoading } = useQuery({
@@ -251,32 +278,22 @@ export default function RoutePlanning() {
     mutationFn: async (route: RoutePlan) => {
       if (!currentTenant) throw new Error('Tenant não selecionado');
       if (!route.vehicle_id) throw new Error('Selecione um veículo para despachar');
+      if (!route.driver_id) throw new Error('Selecione um motorista para despachar');
+      if (!route.planned_start_at) throw new Error('Informe horário previsto de saída');
+      const stops = route.stops && route.stops.length > 0
+        ? route.stops
+        : consolidateLoadsIntoStops(route.loads as any);
+      if (stops.length === 0) throw new Error('Rota sem paradas consolidadas');
 
-      // Atualizar cada carga com o veículo
-      for (const load of route.loads) {
-        const { error } = await supabase.from('loads').update({
-          vehicle_id: route.vehicle_id,
-          status: 'loading',
-        } as any).eq('id', load.id);
-        if (error) throw error;
-      }
-
-      // Criar dispatch_trip para a primeira carga (principal)
-      const { data: trip, error: tripErr } = await supabase.from('dispatch_trips').insert({
-        tenant_id: currentTenant.id,
+      const tripId = await dispatchPlan.mutateAsync({
         vehicle_id: route.vehicle_id,
-        load_id: route.loads[0]?.id || null,
-        status: 'planned',
-        notes: `Rota: ${route.name} (${route.loads.length} cargas)`,
-        created_by: user?.id,
-      } as any).select().single();
-      if (tripErr) throw tripErr;
-
-      // Vincular trip_id nas cargas
-      const loadIds = route.loads.map(l => l.id);
-      await supabase.from('loads').update({ trip_id: trip.id } as any).in('id', loadIds);
-
-      return trip;
+        driver_id: route.driver_id,
+        planned_start_at: route.planned_start_at,
+        route_name: route.name,
+        load_ids: route.loads.map(l => l.id),
+        stops,
+      });
+      return { id: tripId } as { id: string };
     },
     onSuccess: (_, route) => {
       removeRoute(route.id);
@@ -302,6 +319,66 @@ export default function RoutePlanning() {
       pallets: route.loads.reduce((s, l) => s + (Number(l.total_pallet_count) || 0), 0),
       value: allItems.reduce((s, i) => s + (Number(i.fiscal_documents?.value) || 0), 0),
     };
+  };
+
+  const generateStops = (routeId: string) => {
+    setRoutes(prev => prev.map(r => {
+      if (r.id !== routeId) return r;
+      const stops = consolidateLoadsIntoStops(r.loads as any).map((s, i) => ({ ...s, manual_order: i + 1 }));
+      return { ...r, stops, sortMode: 'original' as const };
+    }));
+  };
+
+  const setStopSort = (routeId: string, mode: RouteStopSortMode) => {
+    setRoutes(prev => prev.map(r => {
+      if (r.id !== routeId || !r.stops) return r;
+      if (mode === 'smart') return { ...r, sortMode: mode, stops: applySmartSequence(r.stops) };
+      if (mode === 'original') return { ...r, sortMode: mode, stops: applyOriginalOrder(r.stops) };
+      return { ...r, sortMode: mode };
+    }));
+  };
+
+  const moveStop = (routeId: string, stopId: string, dir: 'up' | 'down') => {
+    setRoutes(prev => prev.map(r => {
+      if (r.id !== routeId || !r.stops) return r;
+      const ordered = [...r.stops].sort((a, b) => (a.manual_order || 0) - (b.manual_order || 0));
+      const idx = ordered.findIndex(s => s.id === stopId);
+      const ni = dir === 'up' ? idx - 1 : idx + 1;
+      if (idx < 0 || ni < 0 || ni >= ordered.length) return r;
+      [ordered[idx], ordered[ni]] = [ordered[ni], ordered[idx]];
+      const stops = ordered.map((s, i) => ({ ...s, manual_order: i + 1 }));
+      return { ...r, stops, sortMode: 'manual' as const };
+    }));
+  };
+
+  const updateStop = (routeId: string, stopId: string, patch: Partial<RouteStopDraft>) => {
+    setRoutes(prev => prev.map(r => {
+      if (r.id !== routeId || !r.stops) return r;
+      return { ...r, stops: r.stops.map(s => s.id === stopId ? { ...s, ...patch } : s) };
+    }));
+  };
+
+  const validateRoute = (r: RoutePlan): RoutePlanValidationIssue[] => {
+    const issues: RoutePlanValidationIssue[] = [];
+    if (!r.vehicle_id) issues.push({ level: 'error', message: 'Selecione um veículo.' });
+    if (!r.driver_id) issues.push({ level: 'error', message: 'Selecione um motorista (obrigatório para o app do motorista).' });
+    if (!r.planned_start_at) issues.push({ level: 'error', message: 'Informe horário previsto de saída.' });
+    if (r.loads.length === 0) issues.push({ level: 'error', message: 'Sem cargas vinculadas.' });
+    if (!r.stops || r.stops.length === 0) issues.push({ level: 'error', message: 'Gere as paradas antes de despachar.' });
+    (r.stops || []).forEach((s, i) => {
+      if (!s.destination?.trim() || !s.recipient_name?.trim())
+        issues.push({ level: 'error', message: `Parada ${i + 1} sem destino/destinatário.` });
+      if (s.fiscal_document_ids.length === 0)
+        issues.push({ level: 'warning', message: `Parada ${i + 1} sem documentos fiscais.` });
+    });
+    // Capacidade
+    const v: any = vehicles.find((vv: any) => vv.id === r.vehicle_id);
+    if (v?.max_pallets) {
+      const totalPallets = r.loads.reduce((s, l) => s + (Number(l.total_pallet_count) || 0), 0);
+      if (totalPallets > v.max_pallets)
+        issues.push({ level: 'warning', message: `Paletes (${totalPallets}) excedem capacidade do veículo (${v.max_pallets}).` });
+    }
+    return issues;
   };
 
   const exportRoutePdf = (route: RoutePlan) => {
@@ -345,7 +422,7 @@ export default function RoutePlanning() {
             <Route className="h-6 w-6 text-primary" /> Planejamento de Rotas
           </h1>
           <p className="text-sm text-muted-foreground">
-            Monte romaneios agrupando cargas por destino. As cargas são criadas automaticamente pela ingestão de NF-es.
+            Monte viagens, consolide paradas, defina a ordem de atendimento e envie a sequência para o motorista.
           </p>
         </div>
         <div className="flex gap-2">
@@ -459,6 +536,20 @@ export default function RoutePlanning() {
                           ))}
                         </SelectContent>
                       </Select>
+                      <Select value={route.driver_id || ''} onValueChange={v => setRoutes(prev => prev.map(r => r.id === route.id ? { ...r, driver_id: v } : r))}>
+                        <SelectTrigger className="w-40 h-8 text-xs"><SelectValue placeholder="Motorista" /></SelectTrigger>
+                        <SelectContent>
+                          {drivers.map((d: any) => (
+                            <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        type="datetime-local"
+                        value={route.planned_start_at || ''}
+                        onChange={(e) => setRoutes(prev => prev.map(r => r.id === route.id ? { ...r, planned_start_at: e.target.value } : r))}
+                        className="w-44 h-8 text-xs"
+                      />
                       <Button size="sm" variant="outline" onClick={() => exportRoutePdf(route)}>
                         <Download className="h-3 w-3 mr-1" /> PDF
                       </Button>
@@ -473,6 +564,36 @@ export default function RoutePlanning() {
                 </CardHeader>
                 {!route.collapsed && (
                   <CardContent className="pt-0 space-y-3">
+                    {/* Sequência operacional de paradas */}
+                    <div className="border rounded-md p-3 bg-muted/20 space-y-2">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-2 text-sm font-medium">
+                          <ListOrdered className="h-4 w-4" /> Paradas consolidadas
+                          {route.stops && <Badge variant="secondary">{route.stops.length}</Badge>}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button size="sm" variant="outline" onClick={() => generateStops(route.id)}>
+                            <Wand2 className="h-3 w-3 mr-1" /> Gerar paradas
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => setStopSort(route.id, 'smart')} disabled={!route.stops?.length}>
+                            <Sparkles className="h-3 w-3 mr-1" /> Ordem inteligente
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => setStopSort(route.id, 'original')} disabled={!route.stops?.length}>
+                            Ordem original
+                          </Button>
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">
+                        Sequência sugerida sem cálculo geográfico — usa janela de recebimento, prioridade, cidade e bairro.
+                      </p>
+                      <StopDraftTable
+                        stops={(route.stops || []).slice().sort((a,b) => (a.manual_order||0) - (b.manual_order||0))}
+                        onMove={(id, dir) => moveStop(route.id, id, dir)}
+                        onUpdate={(id, patch) => updateStop(route.id, id, patch)}
+                      />
+                      <RouteValidationPanel issues={validateRoute(route)} />
+                    </div>
+
                     {sortLoadsByRecipient(route.loads).map((load, loadIdx) => (
                       <div key={load.id} className="border rounded-md overflow-hidden">
                         <div className="flex items-center justify-between px-3 py-2 bg-muted/50">
