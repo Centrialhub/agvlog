@@ -93,6 +93,8 @@ interface RoutePlan {
   collapsed?: boolean;
   stops?: RouteStopDraft[];
   sortMode?: RouteStopSortMode;
+  /** Minutos de deslocamento do depósito/origem até a 1ª parada (heurística). */
+  initial_transit_minutes?: number;
 }
 
 /* ────────────── main component ────────────── */
@@ -384,7 +386,9 @@ export default function RoutePlanning() {
       if (mode === 'original') return { ...r, sortMode: mode, stops: applyOriginalOrder(r.stops) };
       if (mode === 'auto') {
         const seq = autoSequenceStops(r.stops);
-        const sim = simulateStopTimeline(seq, r.planned_start_at || globalStartAt);
+        const sim = simulateStopTimeline(seq, r.planned_start_at || globalStartAt, {
+          initialTransitMinutes: r.initial_transit_minutes ?? 30,
+        });
         return { ...r, sortMode: mode, stops: sim };
       }
       return { ...r, sortMode: mode };
@@ -399,7 +403,10 @@ export default function RoutePlanning() {
       const ni = dir === 'up' ? idx - 1 : idx + 1;
       if (idx < 0 || ni < 0 || ni >= ordered.length) return r;
       [ordered[idx], ordered[ni]] = [ordered[ni], ordered[idx]];
-      const stops = ordered.map((s, i) => ({ ...s, manual_order: i + 1 }));
+      const reseq = ordered.map((s, i) => ({ ...s, manual_order: i + 1 }));
+      const stops = simulateStopTimeline(reseq, r.planned_start_at || globalStartAt, {
+        initialTransitMinutes: r.initial_transit_minutes ?? 30,
+      });
       return { ...r, stops, sortMode: 'manual' as const };
     }));
   };
@@ -407,7 +414,12 @@ export default function RoutePlanning() {
   const updateStop = (routeId: string, stopId: string, patch: Partial<RouteStopDraft>) => {
     setRoutes(prev => prev.map(r => {
       if (r.id !== routeId || !r.stops) return r;
-      return { ...r, stops: r.stops.map(s => s.id === stopId ? { ...s, ...patch } : s) };
+      const next = r.stops.map(s => s.id === stopId ? { ...s, ...patch } : s);
+      const ordered = [...next].sort((a, b) => (a.manual_order || 0) - (b.manual_order || 0));
+      const sim = simulateStopTimeline(ordered, r.planned_start_at || globalStartAt, {
+        initialTransitMinutes: r.initial_transit_minutes ?? 30,
+      });
+      return { ...r, stops: sim };
     }));
   };
 
@@ -669,9 +681,44 @@ export default function RoutePlanning() {
                       <Input
                         type="datetime-local"
                         value={route.planned_start_at || ''}
-                        onChange={(e) => setRoutes(prev => prev.map(r => r.id === route.id ? { ...r, planned_start_at: e.target.value } : r))}
+                        onChange={(e) => setRoutes(prev => prev.map(r => {
+                          if (r.id !== route.id) return r;
+                          const stops = r.stops
+                            ? simulateStopTimeline(
+                                [...r.stops].sort((a, b) => (a.manual_order || 0) - (b.manual_order || 0)),
+                                e.target.value,
+                                { initialTransitMinutes: r.initial_transit_minutes ?? 30 },
+                              )
+                            : r.stops;
+                          return { ...r, planned_start_at: e.target.value, stops };
+                        }))}
                         className="w-44 h-8 text-xs"
+                        title="Horário previsto de saída do depósito/origem"
                       />
+                      <div className="flex items-center gap-1" title="Minutos de deslocamento do depósito até a 1ª parada (usado para estimar a 1ª chegada)">
+                        <Label className="text-[11px] text-muted-foreground whitespace-nowrap">→ 1ª parada</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={route.initial_transit_minutes ?? 30}
+                          onChange={(e) => {
+                            const v = Math.max(0, Number(e.target.value) || 0);
+                            setRoutes(prev => prev.map(r => {
+                              if (r.id !== route.id) return r;
+                              const stops = r.stops
+                                ? simulateStopTimeline(
+                                    [...r.stops].sort((a, b) => (a.manual_order || 0) - (b.manual_order || 0)),
+                                    r.planned_start_at || globalStartAt,
+                                    { initialTransitMinutes: v },
+                                  )
+                                : r.stops;
+                              return { ...r, initial_transit_minutes: v, stops };
+                            }));
+                          }}
+                          className="w-16 h-8 text-xs text-right"
+                        />
+                        <span className="text-[11px] text-muted-foreground">min</span>
+                      </div>
                       <Button size="sm" variant="outline" onClick={() => exportRoutePdf(route)}>
                         <Download className="h-3 w-3 mr-1" /> PDF
                       </Button>

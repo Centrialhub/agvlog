@@ -2,33 +2,74 @@ import type { RouteStopDraft, RouteStopRiskLevel } from './routePlanningTypes';
 
 const norm = (v?: string | null) => (v || '').trim().toUpperCase();
 
+export interface SimulateOptions {
+  /** Tempo de deslocamento do ponto de partida (depósito/origem) até a 1ª parada, em minutos. */
+  initialTransitMinutes?: number;
+  /** Cidade do ponto de partida (depósito), usada para estimar a 1ª perna. */
+  originCity?: string | null;
+  /** Estado/UF do ponto de partida. */
+  originState?: string | null;
+  /** Bairro do ponto de partida. */
+  originNeighborhood?: string | null;
+}
+
 /**
- * Simulação operacional aproximada (sem cálculo geográfico real).
- * - 20 min entre paradas na mesma cidade
- * - 30 min entre bairros diferentes
- * - 60 min entre cidades diferentes
- * - + service_time_minutes em cada parada
- * Marca risco quando previsão estoura/aproxima do fim da janela.
+ * Estimativa heurística de deslocamento entre dois pontos sem coordenadas:
+ * - mesmo bairro: 15 min
+ * - mesma cidade, bairro diferente: 25 min
+ * - mesmo estado, cidade diferente: 75 min
+ * - estados diferentes: 180 min
+ * - sem informação: 60 min
+ */
+function estimateTransitMinutes(
+  from: { city?: string | null; state?: string | null; neighborhood?: string | null },
+  to: { city?: string | null; state?: string | null; neighborhood?: string | null },
+): number {
+  const fc = norm(from.city), tc = norm(to.city);
+  const fs = norm(from.state), ts = norm(to.state);
+  const fn = norm(from.neighborhood), tn = norm(to.neighborhood);
+  if (!tc && !fc) return 60;
+  if (fc && tc && fc === tc) {
+    if (fn && tn && fn === tn) return 15;
+    return 25;
+  }
+  if (fs && ts && fs !== ts) return 180;
+  return 75;
+}
+
+/**
+ * Simulação operacional encadeada (sem cálculo geográfico real).
+ * Cada parada = chegada da anterior + tempo de serviço + deslocamento estimado.
+ * A 1ª parada considera o deslocamento do depósito/origem (initialTransitMinutes
+ * ou heurística a partir de originCity/originState).
  */
 export function simulateStopTimeline(
   stops: RouteStopDraft[],
   plannedStartAt?: string | null,
+  options: SimulateOptions = {},
 ): RouteStopDraft[] {
   if (!plannedStartAt) return stops.map(s => ({ ...s }));
   const start = new Date(plannedStartAt);
   if (isNaN(start.getTime())) return stops.map(s => ({ ...s }));
 
   let cursor = start.getTime();
-  let prev: RouteStopDraft | null = null;
+  let prevLoc: { city?: string | null; state?: string | null; neighborhood?: string | null } | null =
+    options.originCity || options.originState
+      ? { city: options.originCity, state: options.originState, neighborhood: options.originNeighborhood }
+      : null;
+  // Deslocamento até a 1ª parada: usa override explícito ou heurística a partir da origem.
+  const firstTransitOverride = typeof options.initialTransitMinutes === 'number'
+    ? Math.max(0, options.initialTransitMinutes)
+    : null;
 
   return stops.map((s) => {
-    if (prev) {
-      const sameCity = norm(prev.city) === norm(s.city) && !!norm(s.city);
-      const sameNeighborhood = sameCity && norm(prev.neighborhood) === norm(s.neighborhood);
-      let transitMin = 60;
-      if (sameCity) transitMin = sameNeighborhood ? 20 : 30;
-      cursor += transitMin * 60_000;
+    let transitMin = 0;
+    if (prevLoc) {
+      transitMin = estimateTransitMinutes(prevLoc, s);
+    } else if (firstTransitOverride !== null) {
+      transitMin = firstTransitOverride;
     }
+    cursor += transitMin * 60_000;
 
     const arrival = new Date(cursor);
     const serviceMin = Math.max(0, Number(s.service_time_minutes) || 20);
@@ -64,7 +105,7 @@ export function simulateStopTimeline(
       }
     }
 
-    prev = s;
+    prevLoc = { city: s.city, state: s.state, neighborhood: s.neighborhood };
     return {
       ...s,
       planned_arrival_at: arrival.toISOString(),

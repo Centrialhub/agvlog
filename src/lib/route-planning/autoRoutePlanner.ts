@@ -18,6 +18,8 @@ export interface AutoRoutePlannerInput {
     defaultWorkingWindowStart?: string;
     defaultWorkingWindowEnd?: string;
     maxStopsPerRoute?: number;
+    /** Minutos do depósito/origem até a 1ª parada (default 30). */
+    initialTransitMinutes?: number;
   };
 }
 
@@ -80,14 +82,15 @@ export function generateAutomaticRoutePlans(input: AutoRoutePlannerInput): Gener
       stops = stops.map(s => ({ ...s, service_time_minutes: s.service_time_minutes || tenantConfig.defaultServiceTimeMinutes! }));
     }
 
+    const initialTransitMinutes = tenantConfig.initialTransitMinutes ?? 30;
     // 4) Simulação inicial (para classificação de risco)
-    stops = simulateStopTimeline(stops, plannedStartAt);
+    stops = simulateStopTimeline(stops, plannedStartAt, { initialTransitMinutes });
 
     // 5) Sequência automática
     stops = autoSequenceStops(stops);
 
     // 6) Re-simular já na ordem definitiva
-    stops = simulateStopTimeline(stops, plannedStartAt);
+    stops = simulateStopTimeline(stops, plannedStartAt, { initialTransitMinutes });
 
     // 7) Necessidade x veículo
     const need = {
