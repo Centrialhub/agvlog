@@ -422,7 +422,7 @@ export default function RoutePlanning() {
             <Route className="h-6 w-6 text-primary" /> Planejamento de Rotas
           </h1>
           <p className="text-sm text-muted-foreground">
-            Monte romaneios agrupando cargas por destino. As cargas são criadas automaticamente pela ingestão de NF-es.
+            Monte viagens, consolide paradas, defina a ordem de atendimento e envie a sequência para o motorista.
           </p>
         </div>
         <div className="flex gap-2">
