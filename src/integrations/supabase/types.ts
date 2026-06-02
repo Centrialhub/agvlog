@@ -1068,6 +1068,60 @@ export type Database = {
           },
         ]
       }
+      customer_delivery_windows: {
+        Row: {
+          active: boolean | null
+          client_id: string
+          created_at: string | null
+          end_time: string
+          id: string
+          notes: string | null
+          start_time: string
+          tenant_id: string
+          updated_at: string | null
+          weekday: number
+        }
+        Insert: {
+          active?: boolean | null
+          client_id: string
+          created_at?: string | null
+          end_time: string
+          id?: string
+          notes?: string | null
+          start_time: string
+          tenant_id: string
+          updated_at?: string | null
+          weekday: number
+        }
+        Update: {
+          active?: boolean | null
+          client_id?: string
+          created_at?: string | null
+          end_time?: string
+          id?: string
+          notes?: string | null
+          start_time?: string
+          tenant_id?: string
+          updated_at?: string | null
+          weekday?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_delivery_windows_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_delivery_windows_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dispatch_events: {
         Row: {
           created_at: string
@@ -1129,17 +1183,81 @@ export type Database = {
           },
         ]
       }
+      dispatch_stop_documents: {
+        Row: {
+          created_at: string
+          dispatch_stop_id: string
+          fiscal_document_id: string
+          id: string
+          load_id: string | null
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          dispatch_stop_id: string
+          fiscal_document_id: string
+          id?: string
+          load_id?: string | null
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          dispatch_stop_id?: string
+          fiscal_document_id?: string
+          id?: string
+          load_id?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dispatch_stop_documents_dispatch_stop_id_fkey"
+            columns: ["dispatch_stop_id"]
+            isOneToOne: false
+            referencedRelation: "dispatch_stops"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dispatch_stop_documents_fiscal_document_id_fkey"
+            columns: ["fiscal_document_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dispatch_stop_documents_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dispatch_stop_documents_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dispatch_stops: {
         Row: {
           actual_arrival_at: string | null
           actual_departure_at: string | null
           client_id: string | null
           created_at: string
+          delivery_window_end: string | null
+          delivery_window_start: string | null
           destination: string | null
           dispatch_trip_id: string
+          estimated_departure_at: string | null
           id: string
+          latitude: number | null
+          longitude: number | null
           notes: string | null
           planned_arrival_at: string | null
+          risk_level: string | null
+          risk_reason: string | null
+          service_time_minutes: number | null
           status: string
           stop_order: number
           tenant_id: string
@@ -1150,11 +1268,19 @@ export type Database = {
           actual_departure_at?: string | null
           client_id?: string | null
           created_at?: string
+          delivery_window_end?: string | null
+          delivery_window_start?: string | null
           destination?: string | null
           dispatch_trip_id: string
+          estimated_departure_at?: string | null
           id?: string
+          latitude?: number | null
+          longitude?: number | null
           notes?: string | null
           planned_arrival_at?: string | null
+          risk_level?: string | null
+          risk_reason?: string | null
+          service_time_minutes?: number | null
           status?: string
           stop_order?: number
           tenant_id: string
@@ -1165,11 +1291,19 @@ export type Database = {
           actual_departure_at?: string | null
           client_id?: string | null
           created_at?: string
+          delivery_window_end?: string | null
+          delivery_window_start?: string | null
           destination?: string | null
           dispatch_trip_id?: string
+          estimated_departure_at?: string | null
           id?: string
+          latitude?: number | null
+          longitude?: number | null
           notes?: string | null
           planned_arrival_at?: string | null
+          risk_level?: string | null
+          risk_reason?: string | null
+          service_time_minutes?: number | null
           status?: string
           stop_order?: number
           tenant_id?: string
@@ -1192,6 +1326,52 @@ export type Database = {
           },
           {
             foreignKeyName: "dispatch_stops_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dispatch_trip_loads: {
+        Row: {
+          created_at: string
+          dispatch_trip_id: string
+          id: string
+          load_id: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          dispatch_trip_id: string
+          id?: string
+          load_id: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          dispatch_trip_id?: string
+          id?: string
+          load_id?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dispatch_trip_loads_dispatch_trip_id_fkey"
+            columns: ["dispatch_trip_id"]
+            isOneToOne: false
+            referencedRelation: "dispatch_trips"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dispatch_trip_loads_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dispatch_trip_loads_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -5553,45 +5733,190 @@ export type Database = {
           converted_load_id: string | null
           created_at: string
           created_by: string | null
+          driver_id: string | null
           id: string
+          load_ids: string[] | null
           name: string
           notes: string | null
           operational_route_id: string | null
+          optimization_summary: Json | null
           order_ids: Json | null
+          planned_date: string | null
+          planned_start_at: string | null
+          route_config: Json | null
           status: string
           tenant_id: string
           updated_at: string
+          validation_summary: Json | null
           vehicle_id: string | null
         }
         Insert: {
           converted_load_id?: string | null
           created_at?: string
           created_by?: string | null
+          driver_id?: string | null
           id?: string
+          load_ids?: string[] | null
           name: string
           notes?: string | null
           operational_route_id?: string | null
+          optimization_summary?: Json | null
           order_ids?: Json | null
+          planned_date?: string | null
+          planned_start_at?: string | null
+          route_config?: Json | null
           status?: string
           tenant_id: string
           updated_at?: string
+          validation_summary?: Json | null
           vehicle_id?: string | null
         }
         Update: {
           converted_load_id?: string | null
           created_at?: string
           created_by?: string | null
+          driver_id?: string | null
           id?: string
+          load_ids?: string[] | null
           name?: string
           notes?: string | null
           operational_route_id?: string | null
+          optimization_summary?: Json | null
           order_ids?: Json | null
+          planned_date?: string | null
+          planned_start_at?: string | null
+          route_config?: Json | null
           status?: string
           tenant_id?: string
           updated_at?: string
+          validation_summary?: Json | null
           vehicle_id?: string | null
         }
         Relationships: []
+      }
+      route_planning_stop_drafts: {
+        Row: {
+          city: string | null
+          client_id: string | null
+          created_at: string | null
+          delivery_window_end: string | null
+          delivery_window_start: string | null
+          destination: string | null
+          estimated_departure_at: string | null
+          fiscal_document_ids: string[]
+          id: string
+          invoice_numbers: string[]
+          load_ids: string[]
+          manual_order: number | null
+          neighborhood: string | null
+          notes: string | null
+          optimized_order: number | null
+          original_order: number | null
+          planned_arrival_at: string | null
+          planning_draft_id: string | null
+          priority: number | null
+          recipient_name: string | null
+          risk_level: string | null
+          risk_reason: string | null
+          service_time_minutes: number | null
+          state: string | null
+          status: string | null
+          tenant_id: string
+          total_pallet_count: number | null
+          total_value: number | null
+          total_volume_m3: number | null
+          total_weight_kg: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          city?: string | null
+          client_id?: string | null
+          created_at?: string | null
+          delivery_window_end?: string | null
+          delivery_window_start?: string | null
+          destination?: string | null
+          estimated_departure_at?: string | null
+          fiscal_document_ids?: string[]
+          id?: string
+          invoice_numbers?: string[]
+          load_ids?: string[]
+          manual_order?: number | null
+          neighborhood?: string | null
+          notes?: string | null
+          optimized_order?: number | null
+          original_order?: number | null
+          planned_arrival_at?: string | null
+          planning_draft_id?: string | null
+          priority?: number | null
+          recipient_name?: string | null
+          risk_level?: string | null
+          risk_reason?: string | null
+          service_time_minutes?: number | null
+          state?: string | null
+          status?: string | null
+          tenant_id: string
+          total_pallet_count?: number | null
+          total_value?: number | null
+          total_volume_m3?: number | null
+          total_weight_kg?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          city?: string | null
+          client_id?: string | null
+          created_at?: string | null
+          delivery_window_end?: string | null
+          delivery_window_start?: string | null
+          destination?: string | null
+          estimated_departure_at?: string | null
+          fiscal_document_ids?: string[]
+          id?: string
+          invoice_numbers?: string[]
+          load_ids?: string[]
+          manual_order?: number | null
+          neighborhood?: string | null
+          notes?: string | null
+          optimized_order?: number | null
+          original_order?: number | null
+          planned_arrival_at?: string | null
+          planning_draft_id?: string | null
+          priority?: number | null
+          recipient_name?: string | null
+          risk_level?: string | null
+          risk_reason?: string | null
+          service_time_minutes?: number | null
+          state?: string | null
+          status?: string | null
+          tenant_id?: string
+          total_pallet_count?: number | null
+          total_value?: number | null
+          total_volume_m3?: number | null
+          total_weight_kg?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "route_planning_stop_drafts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_planning_stop_drafts_planning_draft_id_fkey"
+            columns: ["planning_draft_id"]
+            isOneToOne: false
+            referencedRelation: "route_planning_drafts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_planning_stop_drafts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       route_runs: {
         Row: {
@@ -7223,6 +7548,7 @@ export type Database = {
         Args: { _tenant_name: string }
         Returns: string
       }
+      dispatch_planned_route: { Args: { _payload: Json }; Returns: string }
       get_user_tenant_ids: { Args: never; Returns: string[] }
       has_tenant_role: {
         Args: {
