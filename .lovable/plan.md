@@ -1,83 +1,95 @@
+# Evolução /route-planning → Despacho Operacional Real
 
+## Objetivo
+Transformar `/route-planning` em origem operacional de execução: gerar `dispatch_trips` + `dispatch_trip_loads` + `dispatch_stops` + `dispatch_stop_documents`, com paradas consolidadas e ordenáveis, sem quebrar telas atuais do motorista.
 
-# Auditoria Pós-Mudanças Recentes
+## 1. Migração de banco (single migration)
 
-Após analisar o código-fonte, o build, os logs de runtime e a estrutura do banco, identifiquei os seguintes problemas e riscos:
+### Novas tabelas
 
----
+**`dispatch_trip_loads`** — vínculo N:N viagem ↔ cargas (hoje só existe `dispatch_trips.load_id` 1:1).
+Campos: `id`, `tenant_id`, `dispatch_trip_id` (cascade), `load_id` (cascade), `created_at`, `unique(dispatch_trip_id, load_id)`.
 
-## Bugs Confirmados
+**`dispatch_stop_documents`** — vínculo parada ↔ NF-es.
+Campos: `id`, `tenant_id`, `dispatch_stop_id` (cascade), `fiscal_document_id` (cascade), `load_id` (set null), `created_at`, `unique(dispatch_stop_id, fiscal_document_id)`.
 
-### 1. `calcTotals` com dependência circular no `useCallback`
-**Arquivo:** `src/pages/Orders.tsx`, linha 81-119
+**`route_planning_stop_drafts`** — rascunho de paradas antes do despacho.
+Conforme schema do brief (load_ids/fiscal_document_ids arrays, totais, janelas, risk).
 
-A função `calcTotals` depende de `[form]` inteiro no array de dependências do `useCallback`. Isso significa que **a cada tecla digitada**, uma nova referência é criada. Porém o problema real é que `calcTotals` lê `form` do closure e depois chama `setForm` — se o usuário digitar rapidamente e clicar "Calcular", os valores podem estar desatualizados. Deveria usar `setForm(prev => ...)` para ler o estado mais recente.
+**`customer_delivery_windows`** — janelas por cliente (preparação futura).
+Campos do brief.
 
-### 2. Cast `(o as any).city` no PDF do RoutePlanning
-**Arquivo:** `src/pages/RoutePlanning.tsx`, linha 307
+Todas com GRANT (authenticated CRUD, service_role ALL), RLS via `is_tenant_member(tenant_id)`.
 
-O campo `city` está definido na interface `PendingOrder` (linha 44), então o cast `(o as any).city` é desnecessário. Não é um bug funcional, mas indica código inconsistente.
+### Colunas adicionadas (sem renomear/remover)
 
-### 3. `useGenerateCTe` — join incorreto em `load_items`
-**Arquivo:** `src/hooks/useGenerateCTe.tsx`, linhas 82-85
+`dispatch_stops`: `estimated_departure_at`, `service_time_minutes default 20`, `delivery_window_start`, `delivery_window_end`, `latitude`, `longitude`, `risk_level default 'normal'`, `risk_reason`.
 
-A query faz `.select('..., orders(order_number, clients(company_name))')` sobre `load_items`, mas a tabela `load_items` não tem foreign key declarada para `orders`. O Supabase PostgREST **não** consegue resolver joins sem FK. O resultado será um erro silencioso ou dados nulos no `itemSummary`. A query precisa ser ajustada para buscar orders separadamente via `load_orders`.
+`route_planning_drafts`: `load_ids uuid[]`, `planned_date date`, `driver_id uuid`, `planned_start_at timestamptz`, `route_config jsonb`, `optimization_summary jsonb`, `validation_summary jsonb`.
 
-### 4. Falta `pallet_count` com default diferente entre Order interface e DB
-**Arquivo:** `src/hooks/useOrders.tsx` — `pallet_count: number` (não nullable)
-**DB:** `pallet_count integer DEFAULT 0` (nullable: Yes)
+### RPC atômica `dispatch_planned_route`
 
-A interface declara `pallet_count: number` mas o DB permite null. Se um pedido antigo tiver null, o TypeScript não reclamará mas o runtime pode mostrar `null` onde espera número.
+`SECURITY DEFINER`, valida `is_tenant_member`, recebe JSON com `vehicle_id, driver_id, planned_start_at, route_name, load_ids[], stops[]`. Faz tudo em uma transação:
+1. valida posse das cargas pelo tenant e ausência de `trip_id`
+2. cria `dispatch_trips` (load_id = primeira carga)
+3. insert em `dispatch_trip_loads`
+4. update `loads`: `trip_id`, `vehicle_id`, `driver_id`, `status='loading'`
+5. cria `dispatch_stops` em ordem
+6. cria `dispatch_stop_documents`
+7. marca draft como dispatched se houver
+8. retorna `dispatch_trip_id`
 
----
+Erro em qualquer passo = rollback total.
 
-## Riscos Funcionais
+## 2. Lib / tipos
 
-### 5. Status transition sem validação no frontend
-**Arquivo:** `src/pages/Orders.tsx`, linhas 162-164
+- `src/lib/route-planning/routePlanningTypes.ts` — `RouteStopDraft`, `RoutePlanState`, `ValidationIssue`.
+- `src/lib/route-planning/stopConsolidation.ts` — consolida cargas+NFes em paradas via chave `client_id|recipient|city|neighborhood`, soma totais, preserva listas.
+- `src/lib/route-planning/simpleStopSequencing.ts` — ordem inteligente simples: janela mais cedo → priority desc → city → neighborhood → recipient; sem janela depois de quem tem janela exceto priority alta.
 
-O formulário permite selecionar **qualquer** status ao editar um pedido. O `statusPipeline.ts` define transições válidas (`ORDER_TRANSITIONS`), mas **nunca é usado** na tela de pedidos. Um operador pode pular de "Recebido" direto para "Entregue".
+## 3. Hooks
 
-### 6. RoutePlanning — estado perdido ao navegar
-As rotas planejadas ficam apenas em `useState`. Se o usuário sair da página e voltar, perde tudo. Não há persistência no banco.
+- `src/hooks/route-planning/usePendingLoadsForRouting.ts` — cargas sem `trip_id`, com items+fiscal_documents.
+- `src/hooks/route-planning/useStopConsolidation.ts` — memoiza consolidação.
+- `src/hooks/route-planning/useRoutePlanBuilder.ts` — estado da rota em montagem (selectedLoadIds, vehicle, driver, plannedStartAt, stops, reorder/move up-down, modo de ordenação).
+- `src/hooks/route-planning/useDispatchRoutePlan.ts` — mutation chamando RPC `dispatch_planned_route`, invalidando: `pending_loads`, `dispatch_trips`, `route_planning_drafts`, `driver_trip`, `loads`.
 
-### 7. Tabela de fretes sem FK — integridade referencial fraca
-`freight_tables`, `client_regions`, `orders`, `loads`, `load_items`, `load_orders` — nenhuma dessas tabelas possui foreign keys declaradas no banco. Isso permite dados órfãos (ex: `load_items.order_id` apontando para um order deletado).
+## 4. Componentes
 
-### 8. `useGenerateCTe` — sem campos IBS/CBS no CT-e
-O CT-e gerado pelo `useGenerateCTe` não inclui os novos campos de IBS e CBS que foram adicionados na reforma tributária. A tabela `fiscal_documents` também não possui essas colunas — elas só existem em `orders`.
+- `src/components/route-planning/StopDraftTable.tsx` — tabela de paradas com ordem, destinatário/cidade/bairro, docs, totais, janela, risk, botões ↑↓.
+- `src/components/route-planning/RouteValidationPanel.tsx` — lista issues (sem motorista/veículo/parada/destino/docs, possível duplicidade, capacidade).
+- `src/components/route-planning/RouteDispatchDialog.tsx` — confirmação final + dispatch.
 
----
+## 5. Refatoração `RoutePlanning.tsx`
 
-## Plano de Correção
+Mantém:
+- agrupamento por destino atual (não remover)
+- geração de PDF / romaneio (se existir)
+- drafts existentes
 
-### Etapa 1 — Corrigir bugs críticos
-- **Corrigir `calcTotals`**: Usar `setForm(prev => { ... })` em vez de ler do closure
-- **Remover cast `(o as any).city`** no RoutePlanning
-- **Corrigir query do CT-e**: Substituir o join inválido `load_items → orders` por busca via `load_orders`
+Adiciona seções:
+- **Cargas disponíveis** (já existe — adapta para selecionar múltiplas)
+- **Rota em montagem** (nome, veículo, motorista, planned_start_at)
+- **Paradas consolidadas** (StopDraftTable, modo manual/original/inteligente)
+- **Validações** (RouteValidationPanel)
+- **Ações**: gerar paradas, aplicar ordem inteligente, voltar ao original, despachar (RouteDispatchDialog)
 
-### Etapa 2 — Validação de transições de status
-- Na tela de pedidos, filtrar o Select de status usando `getNextStatuses()` do `statusPipeline.ts`, mostrando apenas transições válidas a partir do status atual
+Texto: "Monte viagens, consolide paradas, defina a ordem de atendimento e envie a sequência para o motorista." Evitar "menor distância/melhor rota geográfica".
 
-### Etapa 3 — Consistência de tipos
-- Ajustar `pallet_count` na interface `Order` para `number | null` ou garantir coerção no fetch
+## 6. Compatibilidade
 
-### Etapa 4 — IBS/CBS no CT-e (se necessário)
-- Avaliar se `fiscal_documents` precisa das colunas de IBS/CBS para o portal fiscal. Se sim, criar migração e atualizar o hook `useGenerateCTe`.
+Não altera leitura de `dispatch_stops.stop_order/destination/status/planned_arrival_at/actual_*` usados em `DriverStops`, `DriverDeliveries`, `LoadDetail`, `PodHistory`, `OperationsCenter`. Apenas adiciona colunas nullable.
 
-### Etapa 5 — Persistência de rotas planejadas (melhoria futura)
-- Considerar salvar rascunhos de roteirização no banco para não perder ao navegar
+`dispatch_trips.load_id` continua preenchido com primeira carga = legado intacto. Novos consumidores podem ler `dispatch_trip_loads`.
 
----
+## 7. Validações pré-despacho (frontend + RPC)
 
-## Resumo de Prioridades
+Frontend bloqueia botão se falta: vehicle, driver, planned_start_at, ≥1 carga, ≥1 parada, toda parada com destination/recipient.
 
-| # | Problema | Severidade | Esforço |
-|---|----------|-----------|---------|
-| 3 | Join sem FK no CT-e | Alto — dados sempre nulos | Baixo |
-| 5 | Status sem validação | Médio — erro operacional | Baixo |
-| 1 | calcTotals closure | Baixo — raro em uso normal | Baixo |
-| 8 | IBS/CBS no CT-e | Médio — compliance fiscal | Médio |
-| 6 | Rotas não persistidas | Médio — UX | Alto |
-| 7 | FKs ausentes | Baixo — dados órfãos possíveis | Alto |
+RPC revalida tenant, posse de cargas, ausência de trip_id, posse de docs → rollback se inconsistente.
 
+## Critérios de aceite
+Conforme brief: cargas selecionáveis → paradas geradas → reordenação → dispatch cria trip+loads+stops+documents → motorista vê na ordem → telas existentes não quebram → sem promessa de otimização geográfica.
+
+## Fora de escopo (preparado, não implementado)
+OR-Tools, OSRM/Google Routes, matriz real, geocoding, mapa avançado, reotimização tempo real, multi-veículo.
