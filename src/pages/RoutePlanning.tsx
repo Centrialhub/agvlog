@@ -278,32 +278,22 @@ export default function RoutePlanning() {
     mutationFn: async (route: RoutePlan) => {
       if (!currentTenant) throw new Error('Tenant não selecionado');
       if (!route.vehicle_id) throw new Error('Selecione um veículo para despachar');
+      if (!route.driver_id) throw new Error('Selecione um motorista para despachar');
+      if (!route.planned_start_at) throw new Error('Informe horário previsto de saída');
+      const stops = route.stops && route.stops.length > 0
+        ? route.stops
+        : consolidateLoadsIntoStops(route.loads as any);
+      if (stops.length === 0) throw new Error('Rota sem paradas consolidadas');
 
-      // Atualizar cada carga com o veículo
-      for (const load of route.loads) {
-        const { error } = await supabase.from('loads').update({
-          vehicle_id: route.vehicle_id,
-          status: 'loading',
-        } as any).eq('id', load.id);
-        if (error) throw error;
-      }
-
-      // Criar dispatch_trip para a primeira carga (principal)
-      const { data: trip, error: tripErr } = await supabase.from('dispatch_trips').insert({
-        tenant_id: currentTenant.id,
+      const tripId = await dispatchPlan.mutateAsync({
         vehicle_id: route.vehicle_id,
-        load_id: route.loads[0]?.id || null,
-        status: 'planned',
-        notes: `Rota: ${route.name} (${route.loads.length} cargas)`,
-        created_by: user?.id,
-      } as any).select().single();
-      if (tripErr) throw tripErr;
-
-      // Vincular trip_id nas cargas
-      const loadIds = route.loads.map(l => l.id);
-      await supabase.from('loads').update({ trip_id: trip.id } as any).in('id', loadIds);
-
-      return trip;
+        driver_id: route.driver_id,
+        planned_start_at: route.planned_start_at,
+        route_name: route.name,
+        load_ids: route.loads.map(l => l.id),
+        stops,
+      });
+      return { id: tripId } as { id: string };
     },
     onSuccess: (_, route) => {
       removeRoute(route.id);
