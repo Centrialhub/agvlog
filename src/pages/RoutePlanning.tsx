@@ -241,12 +241,11 @@ export default function RoutePlanning() {
   };
 
   const autoSuggest = () => {
-    // Agrupar cargas por destino
+    // Agrupamento simples por destination textual (legado, opcional).
     const groups: Record<string, PendingLoad[]> = {};
     availableLoads.forEach(l => {
       const key = (l.destination || 'Sem destino').trim().toUpperCase();
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(l);
+      (groups[key] ||= []).push(l);
     });
     const suggested: RoutePlan[] = Object.entries(groups).map(([dest, loads]) => ({
       id: crypto.randomUUID(),
@@ -256,6 +255,41 @@ export default function RoutePlanning() {
     setRoutes(prev => [...prev, ...suggested]);
     setSelectedLoads(new Set());
     toast.success(`${suggested.length} rotas sugeridas criadas`);
+  };
+
+  /** Planejamento automático completo: agrupamento + paradas + sequência + veículo + motorista. */
+  const generateAutoPlan = () => {
+    if (availableLoads.length === 0) {
+      toast.info('Não há cargas pendentes para planejar.');
+      return;
+    }
+    const plans = generateAutomaticRoutePlans({
+      loads: availableLoads as any,
+      vehicles: vehicles as any,
+      drivers: drivers as any,
+      operationalRoutes: operationalRoutes as any,
+      customerWindows: customerWindows as any,
+      plannedStartAt: globalStartAt,
+    });
+    if (plans.length === 0) {
+      toast.info('Nenhum plano gerado.');
+      return;
+    }
+    const newRoutes: RoutePlan[] = plans.map(p => ({
+      id: p.id,
+      name: p.name,
+      loads: p.loads as any,
+      stops: p.stops,
+      vehicle_id: p.vehicle_id,
+      driver_id: p.driver_id,
+      planned_start_at: p.planned_start_at,
+      sortMode: 'auto',
+      notes: p.automation_warnings.join(' · '),
+    }));
+    setRoutes(prev => [...prev, ...newRoutes]);
+    setSelectedLoads(new Set());
+    const review = newRoutes.filter((_, i) => plans[i].requires_review).length;
+    toast.success(`${newRoutes.length} rotas planejadas automaticamente${review ? ` · ${review} para revisão` : ''}`);
   };
 
   const removeLoadFromRoute = (routeId: string, loadId: string) => {
