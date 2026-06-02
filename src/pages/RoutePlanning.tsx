@@ -692,7 +692,7 @@ export default function RoutePlanning() {
                             : r.stops;
                           return { ...r, planned_start_at: e.target.value, stops };
                         }))}
-                        className="w-44 h-8 text-xs"
+                        className="w-52 h-8 text-xs"
                         title="Horário previsto de saída do depósito/origem"
                       />
                       <div className="flex items-center gap-1" title="Minutos de deslocamento do depósito até a 1ª parada (usado para estimar a 1ª chegada)">
