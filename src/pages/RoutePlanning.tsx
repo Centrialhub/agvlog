@@ -629,6 +629,19 @@ export default function RoutePlanning() {
                     <div className="flex items-center gap-3 cursor-pointer" onClick={() => toggleRouteCollapse(route.id)}>
                       {route.collapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
                       <CardTitle className="text-base">{route.name}</CardTitle>
+                      {(() => {
+                        const st = routeStatus(route);
+                        const map = {
+                          ready: { label: 'Pronta', cls: 'bg-green-100 text-green-700 border-green-300' },
+                          review: { label: 'Revisão', cls: 'bg-amber-100 text-amber-700 border-amber-300' },
+                          blocked: { label: 'Bloqueada', cls: 'bg-destructive/10 text-destructive border-destructive/30' },
+                        } as const;
+                        const m = map[st];
+                        return <Badge variant="outline" className={`text-[10px] ${m.cls}`}>{m.label}</Badge>;
+                      })()}
+                      {route.sortMode && (
+                        <Badge variant="outline" className="text-[10px]">{route.sortMode === 'auto' ? 'auto' : route.sortMode}</Badge>
+                      )}
                       <Badge variant="secondary">{totals.loads} cargas</Badge>
                       <Badge variant="outline">{totals.nfes} NF-es</Badge>
                       <span className="text-xs text-muted-foreground">{totals.weight.toFixed(0)} kg • {totals.pallets} vol</span>
