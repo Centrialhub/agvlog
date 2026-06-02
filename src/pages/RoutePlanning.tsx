@@ -516,15 +516,30 @@ export default function RoutePlanning() {
             <Route className="h-6 w-6 text-primary" /> Planejamento de Rotas
           </h1>
           <p className="text-sm text-muted-foreground">
-            Monte viagens, consolide paradas, defina a ordem de atendimento e envie a sequência para o motorista.
+            O sistema propõe a melhor sequência. Você revisa apenas as exceções e despacha. Previsão operacional aproximada, sem cálculo geográfico.
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={autoSuggest} disabled={availableLoads.length === 0}>
-            <Wand2 className="h-4 w-4 mr-2" /> Sugerir Rotas
+        <div className="flex gap-2 items-end flex-wrap justify-end">
+          <div className="flex flex-col">
+            <Label className="text-[10px] text-muted-foreground">Saída padrão</Label>
+            <Input
+              type="datetime-local"
+              value={globalStartAt}
+              onChange={e => setGlobalStartAt(e.target.value)}
+              className="h-9 w-48 text-xs"
+            />
+          </div>
+          <Button onClick={generateAutoPlan} disabled={availableLoads.length === 0}>
+            <Bot className="h-4 w-4 mr-2" /> Gerar planejamento automático
           </Button>
-          <Button onClick={() => { if (selectedLoads.size > 0) setDialogOpen(true); else toast.info('Selecione cargas primeiro'); }}>
-            <Plus className="h-4 w-4 mr-2" /> Criar Rota Manual
+          <Button variant="default" onClick={dispatchAllValid} disabled={routes.length === 0 || dispatchRouteMutation.isPending}>
+            <Rocket className="h-4 w-4 mr-2" /> Despachar rotas válidas
+          </Button>
+          <Button variant="outline" onClick={() => { if (selectedLoads.size > 0) setDialogOpen(true); else toast.info('Selecione cargas primeiro'); }}>
+            <Plus className="h-4 w-4 mr-2" /> Criar rota manual
+          </Button>
+          <Button variant="ghost" size="sm" onClick={autoSuggest} disabled={availableLoads.length === 0} title="Agrupamento simples por destino textual">
+            <Wand2 className="h-3 w-3 mr-1" /> Sugerir por destino
           </Button>
         </div>
       </div>
