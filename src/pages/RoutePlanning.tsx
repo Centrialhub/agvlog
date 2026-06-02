@@ -18,14 +18,18 @@ import { toast } from 'sonner';
 import {
   Route, Plus, Wand2, Trash2,
   PackageCheck, Truck, ChevronDown, ChevronUp,
-  FileText, Send, Download, ListOrdered, Sparkles,
+  FileText, Send, Download, ListOrdered, Sparkles, Bot, Rocket,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { printRomaneioRoutes, RomaneioDoc } from '@/lib/romaneioPrint';
 import StopDraftTable from '@/components/route-planning/StopDraftTable';
 import RouteValidationPanel from '@/components/route-planning/RouteValidationPanel';
 import { consolidateLoadsIntoStops } from '@/lib/route-planning/stopConsolidation';
-import { applySmartSequence, applyOriginalOrder } from '@/lib/route-planning/simpleStopSequencing';
+import { applySmartSequence, applyOriginalOrder, autoSequenceStops } from '@/lib/route-planning/simpleStopSequencing';
+import { simulateStopTimeline } from '@/lib/route-planning/timelineSimulation';
+import { generateAutomaticRoutePlans, defaultPlannedStartAt } from '@/lib/route-planning/autoRoutePlanner';
+import { useOperationalRoutes } from '@/hooks/useOperationalRoutes';
+import { useCustomerDeliveryWindowsForRouting } from '@/hooks/route-planning/useCustomerDeliveryWindowsForRouting';
 import { useDispatchRoutePlan } from '@/hooks/route-planning/useDispatchRoutePlan';
 import type { RouteStopDraft, RoutePlanValidationIssue, RouteStopSortMode } from '@/lib/route-planning/routePlanningTypes';
 
