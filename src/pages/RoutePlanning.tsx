@@ -18,14 +18,18 @@ import { toast } from 'sonner';
 import {
   Route, Plus, Wand2, Trash2,
   PackageCheck, Truck, ChevronDown, ChevronUp,
-  FileText, Send, Download, ListOrdered, Sparkles,
+  FileText, Send, Download, ListOrdered, Sparkles, Bot, Rocket,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { printRomaneioRoutes, RomaneioDoc } from '@/lib/romaneioPrint';
 import StopDraftTable from '@/components/route-planning/StopDraftTable';
 import RouteValidationPanel from '@/components/route-planning/RouteValidationPanel';
 import { consolidateLoadsIntoStops } from '@/lib/route-planning/stopConsolidation';
-import { applySmartSequence, applyOriginalOrder } from '@/lib/route-planning/simpleStopSequencing';
+import { applySmartSequence, applyOriginalOrder, autoSequenceStops } from '@/lib/route-planning/simpleStopSequencing';
+import { simulateStopTimeline } from '@/lib/route-planning/timelineSimulation';
+import { generateAutomaticRoutePlans, defaultPlannedStartAt } from '@/lib/route-planning/autoRoutePlanner';
+import { useOperationalRoutes } from '@/hooks/useOperationalRoutes';
+import { useCustomerDeliveryWindowsForRouting } from '@/hooks/route-planning/useCustomerDeliveryWindowsForRouting';
 import { useDispatchRoutePlan } from '@/hooks/route-planning/useDispatchRoutePlan';
 import type { RouteStopDraft, RoutePlanValidationIssue, RouteStopSortMode } from '@/lib/route-planning/routePlanningTypes';
 
@@ -99,6 +103,7 @@ export default function RoutePlanning() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const dispatchPlan = useDispatchRoutePlan();
+  const { data: operationalRoutes = [] } = useOperationalRoutes();
 
   const { data: drivers = [] } = useQuery({
     queryKey: ['drivers_for_routing', currentTenant?.id],
@@ -106,7 +111,7 @@ export default function RoutePlanning() {
       if (!currentTenant) return [] as any[];
       const { data, error } = await supabase
         .from('drivers')
-        .select('id, name, active')
+        .select('id, name, active, current_vehicle_id')
         .eq('tenant_id', currentTenant.id)
         .eq('active', true)
         .order('name');
@@ -159,6 +164,15 @@ export default function RoutePlanning() {
   const [filterDest, setFilterDest] = useState('all');
   const [newRouteName, setNewRouteName] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [globalStartAt, setGlobalStartAt] = useState<string>(() => defaultPlannedStartAt());
+
+  // Carrega janelas dos clientes presentes nas paradas
+  const clientIdsInRoutes = useMemo(() => {
+    const ids = new Set<string>();
+    routes.forEach(r => (r.stops || []).forEach(s => { if (s.client_id) ids.add(s.client_id); }));
+    return Array.from(ids);
+  }, [routes]);
+  const { data: customerWindows = [] } = useCustomerDeliveryWindowsForRouting(clientIdsInRoutes);
 
   const assignedLoadIds = useMemo(
     () => new Set(routes.flatMap(r => r.loads.map(l => l.id))),
@@ -227,12 +241,11 @@ export default function RoutePlanning() {
   };
 
   const autoSuggest = () => {
-    // Agrupar cargas por destino
+    // Agrupamento simples por destination textual (legado, opcional).
     const groups: Record<string, PendingLoad[]> = {};
     availableLoads.forEach(l => {
       const key = (l.destination || 'Sem destino').trim().toUpperCase();
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(l);
+      (groups[key] ||= []).push(l);
     });
     const suggested: RoutePlan[] = Object.entries(groups).map(([dest, loads]) => ({
       id: crypto.randomUUID(),
@@ -242,6 +255,41 @@ export default function RoutePlanning() {
     setRoutes(prev => [...prev, ...suggested]);
     setSelectedLoads(new Set());
     toast.success(`${suggested.length} rotas sugeridas criadas`);
+  };
+
+  /** Planejamento automático completo: agrupamento + paradas + sequência + veículo + motorista. */
+  const generateAutoPlan = () => {
+    if (availableLoads.length === 0) {
+      toast.info('Não há cargas pendentes para planejar.');
+      return;
+    }
+    const plans = generateAutomaticRoutePlans({
+      loads: availableLoads as any,
+      vehicles: vehicles as any,
+      drivers: drivers as any,
+      operationalRoutes: operationalRoutes as any,
+      customerWindows: customerWindows as any,
+      plannedStartAt: globalStartAt,
+    });
+    if (plans.length === 0) {
+      toast.info('Nenhum plano gerado.');
+      return;
+    }
+    const newRoutes: RoutePlan[] = plans.map(p => ({
+      id: p.id,
+      name: p.name,
+      loads: p.loads as any,
+      stops: p.stops,
+      vehicle_id: p.vehicle_id,
+      driver_id: p.driver_id,
+      planned_start_at: p.planned_start_at,
+      sortMode: 'auto',
+      notes: p.automation_warnings.join(' · '),
+    }));
+    setRoutes(prev => [...prev, ...newRoutes]);
+    setSelectedLoads(new Set());
+    const review = newRoutes.filter((_, i) => plans[i].requires_review).length;
+    toast.success(`${newRoutes.length} rotas planejadas automaticamente${review ? ` · ${review} para revisão` : ''}`);
   };
 
   const removeLoadFromRoute = (routeId: string, loadId: string) => {
@@ -334,6 +382,11 @@ export default function RoutePlanning() {
       if (r.id !== routeId || !r.stops) return r;
       if (mode === 'smart') return { ...r, sortMode: mode, stops: applySmartSequence(r.stops) };
       if (mode === 'original') return { ...r, sortMode: mode, stops: applyOriginalOrder(r.stops) };
+      if (mode === 'auto') {
+        const seq = autoSequenceStops(r.stops);
+        const sim = simulateStopTimeline(seq, r.planned_start_at || globalStartAt);
+        return { ...r, sortMode: mode, stops: sim };
+      }
       return { ...r, sortMode: mode };
     }));
   };
@@ -364,21 +417,62 @@ export default function RoutePlanning() {
     if (!r.driver_id) issues.push({ level: 'error', message: 'Selecione um motorista (obrigatório para o app do motorista).' });
     if (!r.planned_start_at) issues.push({ level: 'error', message: 'Informe horário previsto de saída.' });
     if (r.loads.length === 0) issues.push({ level: 'error', message: 'Sem cargas vinculadas.' });
-    if (!r.stops || r.stops.length === 0) issues.push({ level: 'error', message: 'Gere as paradas antes de despachar.' });
+    if (!r.stops || r.stops.length === 0) issues.push({ level: 'error', message: 'Sem paradas consolidadas.' });
     (r.stops || []).forEach((s, i) => {
       if (!s.destination?.trim() || !s.recipient_name?.trim())
         issues.push({ level: 'error', message: `Parada ${i + 1} sem destino/destinatário.` });
       if (s.fiscal_document_ids.length === 0)
         issues.push({ level: 'warning', message: `Parada ${i + 1} sem documentos fiscais.` });
+      if (!s.city) issues.push({ level: 'warning', message: `Parada ${i + 1} sem cidade cadastrada.` });
+      if (s.risk_level === 'critical') issues.push({ level: 'warning', message: `Parada ${i + 1}: ${s.risk_reason || 'risco crítico de janela'}.` });
+      if (s.risk_level === 'warning' && s.risk_reason && !s.risk_reason.startsWith('Cliente sem janela'))
+        issues.push({ level: 'warning', message: `Parada ${i + 1}: ${s.risk_reason}.` });
     });
-    // Capacidade
     const v: any = vehicles.find((vv: any) => vv.id === r.vehicle_id);
-    if (v?.max_pallets) {
-      const totalPallets = r.loads.reduce((s, l) => s + (Number(l.total_pallet_count) || 0), 0);
-      if (totalPallets > v.max_pallets)
-        issues.push({ level: 'warning', message: `Paletes (${totalPallets}) excedem capacidade do veículo (${v.max_pallets}).` });
+    if (v) {
+      const totals = r.loads.reduce((acc, l) => ({
+        pallets: acc.pallets + (Number(l.total_pallet_count) || 0),
+        weight: acc.weight + (Number(l.total_weight_kg) || 0),
+        volume: acc.volume + (Number(l.total_volume_m3) || 0),
+      }), { pallets: 0, weight: 0, volume: 0 });
+      if (v.max_pallets && totals.pallets > v.max_pallets)
+        issues.push({ level: 'warning', message: `Paletes (${totals.pallets}) excedem capacidade (${v.max_pallets}).` });
+      if (v.max_weight_kg && totals.weight > v.max_weight_kg)
+        issues.push({ level: 'warning', message: `Peso (${totals.weight.toFixed(0)}kg) excede capacidade (${v.max_weight_kg}kg).` });
+      if (v.max_volume_m3 && totals.volume > v.max_volume_m3)
+        issues.push({ level: 'warning', message: `Volume (${totals.volume.toFixed(2)}m³) excede capacidade (${v.max_volume_m3}m³).` });
+    }
+    // Motorista duplicado
+    if (r.driver_id) {
+      const dup = routes.find(other => other.id !== r.id && other.driver_id === r.driver_id);
+      if (dup) issues.push({ level: 'warning', message: `Motorista também alocado em "${dup.name}".` });
     }
     return issues;
+  };
+
+  const routeStatus = (r: RoutePlan): 'ready' | 'review' | 'blocked' => {
+    const issues = validateRoute(r);
+    if (issues.some(i => i.level === 'error')) return 'blocked';
+    if (issues.some(i => i.level === 'warning')) return 'review';
+    return 'ready';
+  };
+
+  const dispatchAllValid = async () => {
+    const dispatchable = routes.filter(r => routeStatus(r) !== 'blocked');
+    if (dispatchable.length === 0) {
+      toast.info('Nenhuma rota válida para despacho em lote.');
+      return;
+    }
+    let ok = 0, fail = 0;
+    for (const r of dispatchable) {
+      try {
+        await dispatchRouteMutation.mutateAsync(r);
+        ok++;
+      } catch (e) {
+        fail++;
+      }
+    }
+    toast[fail === 0 ? 'success' : 'warning'](`Despachadas ${ok} rota(s)${fail ? ` · ${fail} falharam` : ''}`);
   };
 
   const exportRoutePdf = (route: RoutePlan) => {
@@ -422,15 +516,30 @@ export default function RoutePlanning() {
             <Route className="h-6 w-6 text-primary" /> Planejamento de Rotas
           </h1>
           <p className="text-sm text-muted-foreground">
-            Monte viagens, consolide paradas, defina a ordem de atendimento e envie a sequência para o motorista.
+            O sistema propõe a melhor sequência. Você revisa apenas as exceções e despacha. Previsão operacional aproximada, sem cálculo geográfico.
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={autoSuggest} disabled={availableLoads.length === 0}>
-            <Wand2 className="h-4 w-4 mr-2" /> Sugerir Rotas
+        <div className="flex gap-2 items-end flex-wrap justify-end">
+          <div className="flex flex-col">
+            <Label className="text-[10px] text-muted-foreground">Saída padrão</Label>
+            <Input
+              type="datetime-local"
+              value={globalStartAt}
+              onChange={e => setGlobalStartAt(e.target.value)}
+              className="h-9 w-48 text-xs"
+            />
+          </div>
+          <Button onClick={generateAutoPlan} disabled={availableLoads.length === 0}>
+            <Bot className="h-4 w-4 mr-2" /> Gerar planejamento automático
           </Button>
-          <Button onClick={() => { if (selectedLoads.size > 0) setDialogOpen(true); else toast.info('Selecione cargas primeiro'); }}>
-            <Plus className="h-4 w-4 mr-2" /> Criar Rota Manual
+          <Button variant="default" onClick={dispatchAllValid} disabled={routes.length === 0 || dispatchRouteMutation.isPending}>
+            <Rocket className="h-4 w-4 mr-2" /> Despachar rotas válidas
+          </Button>
+          <Button variant="outline" onClick={() => { if (selectedLoads.size > 0) setDialogOpen(true); else toast.info('Selecione cargas primeiro'); }}>
+            <Plus className="h-4 w-4 mr-2" /> Criar rota manual
+          </Button>
+          <Button variant="ghost" size="sm" onClick={autoSuggest} disabled={availableLoads.length === 0} title="Agrupamento simples por destino textual">
+            <Wand2 className="h-3 w-3 mr-1" /> Sugerir por destino
           </Button>
         </div>
       </div>
@@ -520,6 +629,19 @@ export default function RoutePlanning() {
                     <div className="flex items-center gap-3 cursor-pointer" onClick={() => toggleRouteCollapse(route.id)}>
                       {route.collapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
                       <CardTitle className="text-base">{route.name}</CardTitle>
+                      {(() => {
+                        const st = routeStatus(route);
+                        const map = {
+                          ready: { label: 'Pronta', cls: 'bg-green-100 text-green-700 border-green-300' },
+                          review: { label: 'Revisão', cls: 'bg-amber-100 text-amber-700 border-amber-300' },
+                          blocked: { label: 'Bloqueada', cls: 'bg-destructive/10 text-destructive border-destructive/30' },
+                        } as const;
+                        const m = map[st];
+                        return <Badge variant="outline" className={`text-[10px] ${m.cls}`}>{m.label}</Badge>;
+                      })()}
+                      {route.sortMode && (
+                        <Badge variant="outline" className="text-[10px]">{route.sortMode === 'auto' ? 'auto' : route.sortMode}</Badge>
+                      )}
                       <Badge variant="secondary">{totals.loads} cargas</Badge>
                       <Badge variant="outline">{totals.nfes} NF-es</Badge>
                       <span className="text-xs text-muted-foreground">{totals.weight.toFixed(0)} kg • {totals.pallets} vol</span>
@@ -572,20 +694,26 @@ export default function RoutePlanning() {
                           {route.stops && <Badge variant="secondary">{route.stops.length}</Badge>}
                         </div>
                         <div className="flex items-center gap-2">
-                          <Button size="sm" variant="outline" onClick={() => generateStops(route.id)}>
-                            <Wand2 className="h-3 w-3 mr-1" /> Gerar paradas
+                          <Button size="sm" variant="outline" onClick={() => setStopSort(route.id, 'auto')} disabled={!route.stops?.length}>
+                            <Bot className="h-3 w-3 mr-1" /> Recalcular sequência
                           </Button>
-                          <Button size="sm" variant="outline" onClick={() => setStopSort(route.id, 'smart')} disabled={!route.stops?.length}>
-                            <Sparkles className="h-3 w-3 mr-1" /> Ordem inteligente
+                          <Button size="sm" variant="ghost" onClick={() => generateStops(route.id)}>
+                            <Wand2 className="h-3 w-3 mr-1" /> Regenerar paradas
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => setStopSort(route.id, 'smart')} disabled={!route.stops?.length}>
+                            <Sparkles className="h-3 w-3 mr-1" /> Ordem simples
                           </Button>
                           <Button size="sm" variant="ghost" onClick={() => setStopSort(route.id, 'original')} disabled={!route.stops?.length}>
-                            Ordem original
+                            Original
                           </Button>
                         </div>
                       </div>
                       <p className="text-[11px] text-muted-foreground">
-                        Sequência sugerida sem cálculo geográfico — usa janela de recebimento, prioridade, cidade e bairro.
+                        Previsão operacional aproximada — sem rota geográfica nem trânsito em tempo real.
                       </p>
+                      {route.notes && (
+                        <p className="text-[11px] text-amber-700">{route.notes}</p>
+                      )}
                       <StopDraftTable
                         stops={(route.stops || []).slice().sort((a,b) => (a.manual_order||0) - (b.manual_order||0))}
                         onMove={(id, dir) => moveStop(route.id, id, dir)}

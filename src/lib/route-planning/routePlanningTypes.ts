@@ -1,5 +1,6 @@
 export type RouteStopRiskLevel = 'normal' | 'warning' | 'critical';
-export type RouteStopSortMode = 'original' | 'manual' | 'smart';
+export type RouteStopSortMode = 'original' | 'manual' | 'smart' | 'auto';
+export type RoutePlanStatus = 'ready' | 'review' | 'blocked';
 
 export interface RouteStopDraft {
   id: string;
@@ -39,4 +40,10 @@ export interface RouteStopDraft {
 export interface RoutePlanValidationIssue {
   level: 'error' | 'warning';
   message: string;
+}
+
+export interface CustomerWindow {
+  client_id: string;
+  start_time: string; // HH:MM
+  end_time: string;   // HH:MM
 }
