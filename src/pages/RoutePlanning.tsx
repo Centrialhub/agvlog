@@ -386,7 +386,9 @@ export default function RoutePlanning() {
       if (mode === 'original') return { ...r, sortMode: mode, stops: applyOriginalOrder(r.stops) };
       if (mode === 'auto') {
         const seq = autoSequenceStops(r.stops);
-        const sim = simulateStopTimeline(seq, r.planned_start_at || globalStartAt);
+        const sim = simulateStopTimeline(seq, r.planned_start_at || globalStartAt, {
+          initialTransitMinutes: r.initial_transit_minutes ?? 30,
+        });
         return { ...r, sortMode: mode, stops: sim };
       }
       return { ...r, sortMode: mode };
@@ -401,7 +403,10 @@ export default function RoutePlanning() {
       const ni = dir === 'up' ? idx - 1 : idx + 1;
       if (idx < 0 || ni < 0 || ni >= ordered.length) return r;
       [ordered[idx], ordered[ni]] = [ordered[ni], ordered[idx]];
-      const stops = ordered.map((s, i) => ({ ...s, manual_order: i + 1 }));
+      const reseq = ordered.map((s, i) => ({ ...s, manual_order: i + 1 }));
+      const stops = simulateStopTimeline(reseq, r.planned_start_at || globalStartAt, {
+        initialTransitMinutes: r.initial_transit_minutes ?? 30,
+      });
       return { ...r, stops, sortMode: 'manual' as const };
     }));
   };
@@ -409,7 +414,12 @@ export default function RoutePlanning() {
   const updateStop = (routeId: string, stopId: string, patch: Partial<RouteStopDraft>) => {
     setRoutes(prev => prev.map(r => {
       if (r.id !== routeId || !r.stops) return r;
-      return { ...r, stops: r.stops.map(s => s.id === stopId ? { ...s, ...patch } : s) };
+      const next = r.stops.map(s => s.id === stopId ? { ...s, ...patch } : s);
+      const ordered = [...next].sort((a, b) => (a.manual_order || 0) - (b.manual_order || 0));
+      const sim = simulateStopTimeline(ordered, r.planned_start_at || globalStartAt, {
+        initialTransitMinutes: r.initial_transit_minutes ?? 30,
+      });
+      return { ...r, stops: sim };
     }));
   };
 
