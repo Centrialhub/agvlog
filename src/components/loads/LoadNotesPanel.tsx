@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { toast } from 'sonner';
 import { Save, CheckCircle2, XCircle, FileText, AlertTriangle, RotateCcw, Printer } from 'lucide-react';
-import { Wand2, Info } from 'lucide-react';
+import { Info } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { isReasonableDate } from '@/lib/inputMasks';
 import { printLoadNotesReport } from '@/lib/printLoadNotes';
@@ -166,37 +166,6 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
       return next;
     });
     setDirty(new Set(inboundDocs.map((d: any) => d.id)));
-  };
-
-  // Aplica detecção automática de forma de pagamento em todas as notas pendentes
-  const autoFillPayment = () => {
-    let count = 0;
-    setMeta(prev => {
-      const next = { ...prev };
-      inboundDocs.forEach((d: any) => {
-        const cur = next[d.id] || {};
-        if (cur.payment_method) return;
-        const detected = detectPaymentMethod(getDocObservation(d));
-        if (detected) {
-          next[d.id] = { ...cur, payment_method: detected };
-          count++;
-        }
-      });
-      return next;
-    });
-    if (count > 0) {
-      setDirty(prev => {
-        const n = new Set(prev);
-        inboundDocs.forEach((d: any) => {
-          const obs = getDocObservation(d);
-          if (detectPaymentMethod(obs) && !(meta[d.id]?.payment_method)) n.add(d.id);
-        });
-        return n;
-      });
-      toast.success(`Forma de pagamento detectada em ${count} nota(s)`);
-    } else {
-      toast.info('Nenhuma nota pendente com forma de pagamento detectável');
-    }
   };
 
   // Marca documento como Entregue e salva imediatamente (sincroniza com o sistema)
