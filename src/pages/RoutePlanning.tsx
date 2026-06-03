@@ -108,6 +108,27 @@ export default function RoutePlanning() {
   const dispatchPlan = useDispatchRoutePlan();
   const { data: operationalRoutes = [] } = useOperationalRoutes();
 
+  const revertXmlsMutation = useMutation({
+    mutationFn: async () => {
+      if (!currentTenant) throw new Error('Sem tenant');
+      const { data, error } = await supabase.rpc('revert_xml_loads_to_available', {
+        _tenant_id: currentTenant.id,
+      });
+      if (error) throw error;
+      return data as Record<string, any>;
+    },
+    onSuccess: (result) => {
+      toast.success(result?.message || 'XMLs revertidos com sucesso');
+      qc.invalidateQueries({ queryKey: ['pending_loads_for_routing'] });
+      qc.invalidateQueries({ queryKey: ['loads'] });
+      qc.invalidateQueries({ queryKey: ['dispatch_trips'] });
+      qc.invalidateQueries({ queryKey: ['route_planning_drafts'] });
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || 'Erro ao reverter XMLs');
+    },
+  });
+
   const { data: drivers = [] } = useQuery({
     queryKey: ['drivers_for_routing', currentTenant?.id],
     queryFn: async () => {
