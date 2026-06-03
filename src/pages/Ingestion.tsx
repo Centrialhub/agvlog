@@ -1042,6 +1042,9 @@ export default function Ingestion() {
                     source: doc.source.clientLoadSource || 'none',
                     ruleId: doc.source.clientLoadRuleId || null,
                     ruleLabel: doc.source.clientLoadRuleLabel || null,
+                    observationSnippet: doc.source.observation
+                      ? String(doc.source.observation).replace(/\s+/g, ' ').trim().slice(0, 400)
+                      : null,
                   }
                 : (doc.source.observation
                     ? {
@@ -1049,7 +1052,11 @@ export default function Ingestion() {
                         observationSnippet: String(doc.source.observation).replace(/\s+/g, ' ').trim().slice(0, 400),
                       }
                     : null),
-                delivery_meta: (() => { const pm = detectPaymentMethod(doc.source.observation, (doc.source as any).paymentTerms); return pm ? { payment_method: pm } : {}; })(),
+                delivery_meta: (() => {
+                  const pm = (doc.source as any).paymentMethod
+                    || detectPaymentMethod(doc.source.observation, (doc.source as any).paymentTerms);
+                  return pm ? { payment_method: pm } : {};
+                })(),
             });
 
             if (freightValue && freightBreakdown?.tableId && currentTenant) {
@@ -1301,6 +1308,9 @@ export default function Ingestion() {
                     source: doc.source.clientLoadSource || 'none',
                     ruleId: doc.source.clientLoadRuleId || null,
                     ruleLabel: doc.source.clientLoadRuleLabel || null,
+                    observationSnippet: doc.source.observation
+                      ? String(doc.source.observation).replace(/\s+/g, ' ').trim().slice(0, 400)
+                      : null,
                   }
                 : (doc.source.observation
                     ? {
@@ -1308,7 +1318,11 @@ export default function Ingestion() {
                         observationSnippet: String(doc.source.observation).replace(/\s+/g, ' ').trim().slice(0, 400),
                       }
                     : null),
-                delivery_meta: (() => { const pm = detectPaymentMethod(doc.source.observation, (doc.source as any).paymentTerms); return pm ? { payment_method: pm } : {}; })(),
+                delivery_meta: (() => {
+                  const pm = (doc.source as any).paymentMethod
+                    || detectPaymentMethod(doc.source.observation, (doc.source as any).paymentTerms);
+                  return pm ? { payment_method: pm } : {};
+                })(),
             });
             createdDocIds.set(doc.source.invoiceNumber, created.id);
 
