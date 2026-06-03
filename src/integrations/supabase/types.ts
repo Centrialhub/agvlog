@@ -3992,7 +3992,7 @@ export type Database = {
             foreignKeyName: "loads_trip_id_fkey"
             columns: ["trip_id"]
             isOneToOne: false
-            referencedRelation: "trips"
+            referencedRelation: "dispatch_trips"
             referencedColumns: ["id"]
           },
           {
