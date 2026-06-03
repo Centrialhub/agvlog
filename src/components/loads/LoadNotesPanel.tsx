@@ -11,12 +11,11 @@ import { Badge } from '@/components/ui/badge';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { toast } from 'sonner';
 import { Save, CheckCircle2, XCircle, FileText, AlertTriangle, RotateCcw, Printer } from 'lucide-react';
-import { Info, Upload } from 'lucide-react';
+import { Info } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { isReasonableDate } from '@/lib/inputMasks';
 import { printLoadNotesReport } from '@/lib/printLoadNotes';
 import { detectPaymentMethod } from '@/lib/paymentMethodDetection';
-import { parseNFeXml } from '@/lib/documentParsers';
 import {
   Dialog,
   DialogContent,
@@ -159,63 +158,9 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
     load?.pix_to_receive != null ? String(load.pix_to_receive) : '0',
   );
   const [savingTotals, setSavingTotals] = useState(false);
-  const [reextracting, setReextracting] = useState(false);
   const totalsDirty =
     Number(cashToReceive || 0) !== Number(load?.cash_to_receive || 0)
     || Number(pixToReceive || 0) !== Number(load?.pix_to_receive || 0);
-
-  // Re-extrai forma de pagamento e observação a partir de XMLs anexados pelo usuário.
-  // Cruza por access_key ou (invoice_number + remitter_cnpj).
-  const reextractFromXmls = async (files: FileList | null) => {
-    if (!files || files.length === 0) return;
-    setReextracting(true);
-    let matched = 0, updated = 0, skipped = 0;
-    try {
-      const docsByKey = new Map<string, any>();
-      const docsByNum = new Map<string, any>();
-      inboundDocs.forEach((d: any) => {
-        if (d.access_key) docsByKey.set(String(d.access_key), d);
-        const k = `${d.invoice_number || ''}::${d.remitter_cnpj || ''}`;
-        if (d.invoice_number) docsByNum.set(k, d);
-      });
-      for (const f of Array.from(files)) {
-        try {
-          const xml = await f.text();
-          const parsed = parseNFeXml(xml);
-          let doc = parsed.accessKey ? docsByKey.get(parsed.accessKey) : null;
-          if (!doc) doc = docsByNum.get(`${parsed.invoiceNumber}::${parsed.emitterCnpj}`);
-          if (!doc) { skipped++; continue; }
-          matched++;
-          const pm = parsed.paymentMethod || detectPaymentMethod(parsed.observation);
-          const newMeta = { ...(doc.delivery_meta || {}) };
-          if (pm) newMeta.payment_method = pm;
-          const newCls = { ...(doc.client_load_source || {}) };
-          if (parsed.observation) {
-            newCls.observationSnippet = String(parsed.observation).replace(/\s+/g, ' ').trim().slice(0, 400);
-          }
-          const { error } = await supabase
-            .from('fiscal_documents')
-            .update({ delivery_meta: newMeta, client_load_source: newCls } as any)
-            .eq('id', doc.id);
-          if (!error) updated++;
-        } catch {
-          skipped++;
-        }
-      }
-      if (updated > 0) {
-        toast.success(`Re-extraído de ${updated} XML(s) — pagamento atualizado`);
-        await qc.invalidateQueries({ queryKey: ['load_documents'] });
-        await qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
-        onSaved?.();
-      } else if (matched === 0) {
-        toast.error('Nenhum XML correspondente às notas desta carga');
-      } else {
-        toast.info('Nenhum dado de pagamento encontrado nos XMLs enviados');
-      }
-    } finally {
-      setReextracting(false);
-    }
-  };
 
   const saveTotals = async () => {
     setSavingTotals(true);
@@ -479,28 +424,6 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
           <Printer className="h-3 w-3 mr-1" />
           Imprimir / PDF
         </Button>
-        <label className="inline-flex">
-          <input
-            type="file"
-            multiple
-            accept=".xml,text/xml,application/xml"
-            className="hidden"
-            onChange={(e) => { reextractFromXmls(e.target.files); e.currentTarget.value = ''; }}
-          />
-          <Button
-            asChild
-            size="sm"
-            variant="outline"
-            className="h-7 text-xs"
-            disabled={reextracting || !inboundDocs.length}
-            title="Reanexar os XMLs originais para extrair forma de pagamento (tPag) e observação"
-          >
-            <span>
-              <Upload className="h-3 w-3 mr-1" />
-              {reextracting ? 'Re-extraindo...' : 'Re-extrair pagto. de XML'}
-            </span>
-          </Button>
-        </label>
         <div className="flex-1" />
         <Button
           size="sm"
