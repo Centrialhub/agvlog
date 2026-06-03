@@ -19,6 +19,7 @@ import {
   Route, Plus, Wand2, Trash2,
   PackageCheck, Truck, ChevronDown, ChevronUp,
   FileText, Send, Download, ListOrdered, Sparkles, Bot, Rocket, Printer,
+  RefreshCw,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { printRomaneioRoutes, RomaneioDoc } from '@/lib/romaneioPrint';
@@ -106,6 +107,27 @@ export default function RoutePlanning() {
   const navigate = useNavigate();
   const dispatchPlan = useDispatchRoutePlan();
   const { data: operationalRoutes = [] } = useOperationalRoutes();
+
+  const revertXmlsMutation = useMutation({
+    mutationFn: async () => {
+      if (!currentTenant) throw new Error('Sem tenant');
+      const { data, error } = await supabase.rpc('revert_xml_loads_to_available', {
+        _tenant_id: currentTenant.id,
+      });
+      if (error) throw error;
+      return data as Record<string, any>;
+    },
+    onSuccess: (result) => {
+      toast.success(result?.message || 'XMLs revertidos com sucesso');
+      qc.invalidateQueries({ queryKey: ['pending_loads_for_routing'] });
+      qc.invalidateQueries({ queryKey: ['loads'] });
+      qc.invalidateQueries({ queryKey: ['dispatch_trips'] });
+      qc.invalidateQueries({ queryKey: ['route_planning_drafts'] });
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || 'Erro ao reverter XMLs');
+    },
+  });
 
   const { data: drivers = [] } = useQuery({
     queryKey: ['drivers_for_routing', currentTenant?.id],
@@ -592,6 +614,20 @@ export default function RoutePlanning() {
           </Button>
           <Button variant="ghost" size="sm" onClick={autoSuggest} disabled={availableLoads.length === 0} title="Agrupamento simples por destino textual">
             <Wand2 className="h-3 w-3 mr-1" /> Sugerir por destino
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              if (window.confirm('Isso vai reverter TODOS os loads criados de XMLs de volta para "carga disponível", removendo trips, stops e eventos associados. Continuar?')) {
+                revertXmlsMutation.mutate();
+              }
+            }}
+            disabled={revertXmlsMutation.isPending}
+            title="Reverter todos os loads de XML para o status inicial"
+          >
+            <RefreshCw className="h-3 w-3 mr-1" />
+            {revertXmlsMutation.isPending ? 'Revertendo...' : 'Reverter XMLs'}
           </Button>
         </div>
       </div>
