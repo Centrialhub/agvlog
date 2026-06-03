@@ -151,6 +151,38 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
   const [dirty, setDirty] = useState<Set<string>>(new Set());
   const [neModal, setNeModal] = useState<{ docId: string; reason: string } | null>(null);
   const [reModal, setReModal] = useState<{ docId: string; reason: string } | null>(null);
+  const [cashToReceive, setCashToReceive] = useState<string>(
+    load?.cash_to_receive != null ? String(load.cash_to_receive) : '0',
+  );
+  const [pixToReceive, setPixToReceive] = useState<string>(
+    load?.pix_to_receive != null ? String(load.pix_to_receive) : '0',
+  );
+  const [savingTotals, setSavingTotals] = useState(false);
+  const totalsDirty =
+    Number(cashToReceive || 0) !== Number(load?.cash_to_receive || 0)
+    || Number(pixToReceive || 0) !== Number(load?.pix_to_receive || 0);
+
+  const saveTotals = async () => {
+    setSavingTotals(true);
+    try {
+      const { error } = await supabase
+        .from('loads')
+        .update({
+          cash_to_receive: Number(cashToReceive || 0),
+          pix_to_receive: Number(pixToReceive || 0),
+        } as any)
+        .eq('id', load.id);
+      if (error) throw error;
+      toast.success('Totais de fechamento salvos');
+      await qc.invalidateQueries({ queryKey: ['load', load.id] });
+      await qc.invalidateQueries({ queryKey: ['loads'] });
+      onSaved?.();
+    } catch (e: any) {
+      toast.error(e.message || 'Erro ao salvar totais');
+    } finally {
+      setSavingTotals(false);
+    }
+  };
 
   const patchDoc = (id: string, patch: Partial<DocMeta>) => {
     setMeta(prev => ({ ...prev, [id]: { ...(prev[id] || {}), ...patch } }));
@@ -325,6 +357,48 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
         <span className="text-[10px] font-normal normal-case text-muted-foreground">
           Carga: {load.load_number}
         </span>
+      </div>
+
+      {/* TOTAIS DE FECHAMENTO (entrada manual) */}
+      <div className="flex flex-wrap items-end gap-3 px-3 py-2 border-b bg-muted/10">
+        <div className="flex flex-col">
+          <Label className="text-[10px] uppercase text-muted-foreground">Total a receber em Dinheiro</Label>
+          <Input
+            type="number"
+            step="0.01"
+            min="0"
+            value={cashToReceive}
+            onChange={(e) => setCashToReceive(e.target.value)}
+            className="h-7 text-xs w-36 tabular-nums"
+          />
+        </div>
+        <div className="flex flex-col">
+          <Label className="text-[10px] uppercase text-muted-foreground">Total a receber em PIX</Label>
+          <Input
+            type="number"
+            step="0.01"
+            min="0"
+            value={pixToReceive}
+            onChange={(e) => setPixToReceive(e.target.value)}
+            className="h-7 text-xs w-36 tabular-nums"
+          />
+        </div>
+        <div className="flex flex-col">
+          <Label className="text-[10px] uppercase text-muted-foreground">Total Fechamento</Label>
+          <div className="h-7 px-2 flex items-center text-xs font-semibold tabular-nums rounded-md border bg-background w-36">
+            {fmtMoney(Number(cashToReceive || 0) + Number(pixToReceive || 0))}
+          </div>
+        </div>
+        <Button
+          size="sm"
+          variant={totalsDirty ? 'default' : 'outline'}
+          className="h-7 text-xs"
+          onClick={saveTotals}
+          disabled={savingTotals || !totalsDirty}
+        >
+          <Save className="h-3 w-3 mr-1" />
+          {savingTotals ? 'Salvando...' : 'Salvar totais'}
+        </Button>
       </div>
 
       {/* AÇÕES EM MASSA */}
@@ -564,6 +638,15 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
                   {fmtMoney(inboundDocs.reduce((s: number, d: any) => s + Number(d.value || 0), 0))}
                 </TableCell>
                 <TableCell colSpan={6} />
+              </TableRow>
+              <TableRow className="bg-muted/20 text-[11px]">
+                <TableCell colSpan={7} className="text-right text-muted-foreground">Fechamento — Dinheiro / PIX:</TableCell>
+                <TableCell className="text-right whitespace-nowrap font-medium">
+                  {fmtMoney(Number(load?.cash_to_receive || 0))} <span className="text-muted-foreground">+</span> {fmtMoney(Number(load?.pix_to_receive || 0))}
+                </TableCell>
+                <TableCell colSpan={6} className="text-xs font-semibold">
+                  = {fmtMoney(Number(load?.cash_to_receive || 0) + Number(load?.pix_to_receive || 0))}
+                </TableCell>
               </TableRow>
             </TableBody>
           )}

@@ -3847,6 +3847,7 @@ export type Database = {
         Row: {
           actual_load_at: string | null
           arrival_at: string | null
+          cash_to_receive: number
           ciot: string | null
           created_at: string
           created_by: string | null
@@ -3871,6 +3872,7 @@ export type Database = {
           origin_manifest: string | null
           os_number: string | null
           payment_method: string | null
+          pix_to_receive: number
           schedule_at: string | null
           scheduled_load_at: string | null
           shipment_manifest: string | null
@@ -3890,6 +3892,7 @@ export type Database = {
         Insert: {
           actual_load_at?: string | null
           arrival_at?: string | null
+          cash_to_receive?: number
           ciot?: string | null
           created_at?: string
           created_by?: string | null
@@ -3914,6 +3917,7 @@ export type Database = {
           origin_manifest?: string | null
           os_number?: string | null
           payment_method?: string | null
+          pix_to_receive?: number
           schedule_at?: string | null
           scheduled_load_at?: string | null
           shipment_manifest?: string | null
@@ -3933,6 +3937,7 @@ export type Database = {
         Update: {
           actual_load_at?: string | null
           arrival_at?: string | null
+          cash_to_receive?: number
           ciot?: string | null
           created_at?: string
           created_by?: string | null
@@ -3957,6 +3962,7 @@ export type Database = {
           origin_manifest?: string | null
           os_number?: string | null
           payment_method?: string | null
+          pix_to_receive?: number
           schedule_at?: string | null
           scheduled_load_at?: string | null
           shipment_manifest?: string | null
@@ -7497,6 +7503,7 @@ export type Database = {
         Returns: {
           actual_load_at: string | null
           arrival_at: string | null
+          cash_to_receive: number
           ciot: string | null
           created_at: string
           created_by: string | null
@@ -7521,6 +7528,7 @@ export type Database = {
           origin_manifest: string | null
           os_number: string | null
           payment_method: string | null
+          pix_to_receive: number
           schedule_at: string | null
           scheduled_load_at: string | null
           shipment_manifest: string | null
