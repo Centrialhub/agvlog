@@ -1,5 +1,6 @@
 // NF-e XML parser — extracts structured data from Brazilian electronic invoice XML
 import * as XLSX from 'xlsx';
+import { detectPaymentMethodDetailed } from './paymentMethodDetection';
 
 /**
  * Regras configuráveis para extração do "número da carga do cliente" a partir do
@@ -101,6 +102,8 @@ export interface ParsedNFe {
   paymentMethod?: string | null;
   /** Código bruto tPag conforme NF-e (01..99) — para auditoria. */
   paymentMethodCode?: string | null;
+  /** Camada que detectou a forma de pagamento (auditoria). */
+  paymentMethodSource?: 'tpag' | 'xpag' | 'cobr' | 'infcpl_context' | 'infcpl_keyword' | 'indpag' | null;
 }
 
 function getTagText(parent: Element, tagName: string): string {
@@ -229,21 +232,51 @@ export function parseNFeXml(xmlString: string): ParsedNFe {
   };
   let paymentMethod: string | null = null;
   let paymentMethodCode: string | null = null;
+  let paymentMethodSource: ParsedNFe['paymentMethodSource'] = null;
   const pag = infNFe.getElementsByTagName('pag')[0];
+  let xPagText = '';
   if (pag) {
     const detPagList = pag.getElementsByTagName('detPag');
     const detPag = detPagList[0] || pag;
     const tPag = getTagText(detPag, 'tPag');
+    xPagText = getTagText(detPag, 'xPag') || getTagText(pag, 'xPag') || '';
     if (tPag) {
       paymentMethodCode = tPag;
-      paymentMethod = TPAG_MAP[tPag] || null;
+      const mapped = TPAG_MAP[tPag] || null;
+      // tPag 90 = Sem pagamento, 99 = Outros → não confiar, cair para próximas camadas
+      if (mapped && tPag !== '90' && tPag !== '99') {
+        paymentMethod = mapped;
+        paymentMethodSource = 'tpag';
+      }
     }
   }
-  // Fallback antigo: indPag (0=à vista, 1=a prazo) no <ide>
+  // Camada 2: <xPag> — descrição livre quando tPag=99
+  if (!paymentMethod && xPagText) {
+    const r = detectPaymentMethodDetailed(xPagText);
+    if (r.value) { paymentMethod = r.value; paymentMethodSource = 'xpag'; }
+  }
+  // Camada 3: <cobr>/<dup> — presença de duplicatas implica boleto/a prazo
+  if (!paymentMethod) {
+    const cobr = infNFe.getElementsByTagName('cobr')[0];
+    const dups = cobr?.getElementsByTagName('dup');
+    if (dups && dups.length > 0) {
+      paymentMethod = 'boleto';
+      paymentMethodSource = 'cobr';
+    }
+  }
+  // Camada 4: texto livre — observation (infCpl/infAdFisco) com regex contextual
+  if (!paymentMethod && observation) {
+    const r = detectPaymentMethodDetailed(observation);
+    if (r.value) {
+      paymentMethod = r.value;
+      paymentMethodSource = r.source === 'context' ? 'infcpl_context' : 'infcpl_keyword';
+    }
+  }
+  // Camada 5 (fallback genérico antigo): indPag (0=à vista, 1=a prazo) no <ide>
   if (!paymentMethod) {
     const indPag = getTagText(ide || infNFe, 'indPag');
-    if (indPag === '0') paymentMethod = 'a_vista';
-    else if (indPag === '1') paymentMethod = 'a_prazo';
+    if (indPag === '0') { paymentMethod = 'a_vista'; paymentMethodSource = 'indpag'; }
+    else if (indPag === '1') { paymentMethod = 'a_prazo'; paymentMethodSource = 'indpag'; }
   }
 
   return {
@@ -257,7 +290,7 @@ export function parseNFeXml(xmlString: string): ParsedNFe {
     items, totalValue, totalWeight, totalVolume, estimatedPallets,
     clientLoadNumber, observation,
     clientLoadSource, clientLoadRuleId, clientLoadRuleLabel,
-    paymentMethod, paymentMethodCode,
+    paymentMethod, paymentMethodCode, paymentMethodSource,
   };
 }
 
