@@ -97,6 +97,10 @@ export interface ParsedNFe {
   clientLoadSource?: 'xPed' | 'observation' | 'none';
   clientLoadRuleId?: string;
   clientLoadRuleLabel?: string;
+  /** Forma de pagamento normalizada a partir de <pag>/<detPag>/<tPag> (ou indPag). */
+  paymentMethod?: string | null;
+  /** Código bruto tPag conforme NF-e (01..99) — para auditoria. */
+  paymentMethodCode?: string | null;
 }
 
 function getTagText(parent: Element, tagName: string): string {
