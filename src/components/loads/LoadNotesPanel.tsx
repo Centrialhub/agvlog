@@ -479,6 +479,28 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
           <Printer className="h-3 w-3 mr-1" />
           Imprimir / PDF
         </Button>
+        <label className="inline-flex">
+          <input
+            type="file"
+            multiple
+            accept=".xml,text/xml,application/xml"
+            className="hidden"
+            onChange={(e) => { reextractFromXmls(e.target.files); e.currentTarget.value = ''; }}
+          />
+          <Button
+            asChild
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs"
+            disabled={reextracting || !inboundDocs.length}
+            title="Reanexar os XMLs originais para extrair forma de pagamento (tPag) e observação"
+          >
+            <span>
+              <Upload className="h-3 w-3 mr-1" />
+              {reextracting ? 'Re-extraindo...' : 'Re-extrair pagto. de XML'}
+            </span>
+          </Button>
+        </label>
         <div className="flex-1" />
         <Button
           size="sm"
