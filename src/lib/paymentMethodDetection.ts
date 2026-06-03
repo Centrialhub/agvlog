@@ -1,12 +1,12 @@
 // Detecta forma de pagamento a partir de texto livre (observação da NF, infCpl,
 // termos de pagamento da ORT, etc.). Retorna null quando não há indício claro
 // — assim não sobrescreve escolha manual posterior.
+// Mantém regras conservadoras (palavras inteiras, sem abreviações ambíguas)
+// para evitar falsos positivos como "N DOC" virar "transferência".
 export function detectPaymentMethod(...texts: Array<string | null | undefined>): string | null {
   const joined = texts.filter(Boolean).join(' | ');
   if (!joined) return null;
   const t = ` ${joined.toUpperCase()} `;
-  // Regras conservadoras: apenas palavras inteiras e termos sem ambiguidade.
-  // Evita falsos positivos como "N DOC" (número do documento) virar "transferência".
   const rules: Array<{ re: RegExp; value: string }> = [
     { re: /\bPIX\b/, value: 'pix' },
     { re: /\b(BOLETO|COBRAN[ÇC]A\s*BANC[ÁA]RIA|DUPLICATA)\b/, value: 'boleto' },
