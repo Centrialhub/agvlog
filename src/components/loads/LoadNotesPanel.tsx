@@ -151,6 +151,38 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
   const [dirty, setDirty] = useState<Set<string>>(new Set());
   const [neModal, setNeModal] = useState<{ docId: string; reason: string } | null>(null);
   const [reModal, setReModal] = useState<{ docId: string; reason: string } | null>(null);
+  const [cashToReceive, setCashToReceive] = useState<string>(
+    load?.cash_to_receive != null ? String(load.cash_to_receive) : '0',
+  );
+  const [pixToReceive, setPixToReceive] = useState<string>(
+    load?.pix_to_receive != null ? String(load.pix_to_receive) : '0',
+  );
+  const [savingTotals, setSavingTotals] = useState(false);
+  const totalsDirty =
+    Number(cashToReceive || 0) !== Number(load?.cash_to_receive || 0)
+    || Number(pixToReceive || 0) !== Number(load?.pix_to_receive || 0);
+
+  const saveTotals = async () => {
+    setSavingTotals(true);
+    try {
+      const { error } = await supabase
+        .from('loads')
+        .update({
+          cash_to_receive: Number(cashToReceive || 0),
+          pix_to_receive: Number(pixToReceive || 0),
+        } as any)
+        .eq('id', load.id);
+      if (error) throw error;
+      toast.success('Totais de fechamento salvos');
+      await qc.invalidateQueries({ queryKey: ['load', load.id] });
+      await qc.invalidateQueries({ queryKey: ['loads'] });
+      onSaved?.();
+    } catch (e: any) {
+      toast.error(e.message || 'Erro ao salvar totais');
+    } finally {
+      setSavingTotals(false);
+    }
+  };
 
   const patchDoc = (id: string, patch: Partial<DocMeta>) => {
     setMeta(prev => ({ ...prev, [id]: { ...(prev[id] || {}), ...patch } }));
