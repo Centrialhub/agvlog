@@ -639,6 +639,15 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
                 </TableCell>
                 <TableCell colSpan={6} />
               </TableRow>
+              <TableRow className="bg-muted/20 text-[11px]">
+                <TableCell colSpan={7} className="text-right text-muted-foreground">Fechamento — Dinheiro / PIX:</TableCell>
+                <TableCell className="text-right whitespace-nowrap font-medium">
+                  {fmtMoney(Number(load?.cash_to_receive || 0))} <span className="text-muted-foreground">+</span> {fmtMoney(Number(load?.pix_to_receive || 0))}
+                </TableCell>
+                <TableCell colSpan={6} className="text-xs font-semibold">
+                  = {fmtMoney(Number(load?.cash_to_receive || 0) + Number(load?.pix_to_receive || 0))}
+                </TableCell>
+              </TableRow>
             </TableBody>
           )}
         </Table>
