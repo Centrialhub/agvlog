@@ -114,16 +114,36 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
   });
   useEffect(() => {
     const m: Record<string, DocMeta> = {};
+    const toPersist: Array<{ id: string; meta: DocMeta }> = [];
     inboundDocs.forEach((d: any) => {
       const dm = (d.delivery_meta || {}) as DocMeta;
       // Auto-detect forma de pagamento se ainda não definida
       if (!dm.payment_method) {
         const detected = detectPaymentMethod(getDocObservation(d));
-        if (detected) dm.payment_method = detected;
+        if (detected) {
+          dm.payment_method = detected;
+          toPersist.push({ id: d.id, meta: dm });
+        }
       }
       m[d.id] = dm;
     });
     setMeta(m);
+    // Persiste silenciosamente as detecções no banco — usuário não precisa salvar manualmente
+    if (toPersist.length > 0) {
+      (async () => {
+        try {
+          await Promise.all(
+            toPersist.map(({ id, meta }) =>
+              supabase.from('fiscal_documents').update({ delivery_meta: meta } as any).eq('id', id),
+            ),
+          );
+          qc.invalidateQueries({ queryKey: ['load_documents'] });
+          qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
+        } catch {
+          // silencioso: detecção é melhor-esforço
+        }
+      })();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load.id, inboundDocs.length]);
 
