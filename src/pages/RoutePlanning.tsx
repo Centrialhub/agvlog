@@ -564,9 +564,23 @@ export default function RoutePlanning() {
               className="h-9 w-48 text-xs"
             />
           </div>
-          <Button onClick={generateAutoPlan} disabled={availableLoads.length === 0}>
-            <Bot className="h-4 w-4 mr-2" /> Gerar planejamento automático
-          </Button>
+          <div className="flex flex-col items-start gap-0.5">
+            <Button
+              onClick={generateAutoPlan}
+              disabled={selectedLoads.size === 0}
+              title={selectedLoads.size === 0
+                ? 'Selecione as cargas que deseja planejar (use o checkbox do cabeçalho para marcar todas).'
+                : `Gerar planejamento das ${selectedLoads.size} carga(s) selecionada(s)`}
+            >
+              <Bot className="h-4 w-4 mr-2" />
+              Gerar planejamento automático{selectedLoads.size > 0 ? ` (${selectedLoads.size})` : ''}
+            </Button>
+            <span className="text-[10px] text-muted-foreground pl-1">
+              {selectedLoads.size === 0
+                ? 'Selecione as cargas desejadas — marque o checkbox do topo para incluir todas.'
+                : `${selectedLoads.size} carga(s) selecionada(s) entrarão no planejamento.`}
+            </span>
+          </div>
           <Button variant="default" onClick={dispatchAllValid} disabled={routes.length === 0 || dispatchRouteMutation.isPending}>
             <Rocket className="h-4 w-4 mr-2" /> Despachar rotas válidas
           </Button>
