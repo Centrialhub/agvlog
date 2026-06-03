@@ -30,7 +30,7 @@ import type { IngestionReport, ReviewItem } from '@/components/ingestion/Results
 import { calculateFreight, logFreightCalculation } from '@/hooks/useFreightCalculator';
 import { applyOrtFallbacks, isUnknown, UNKNOWN } from '@/lib/ortFieldFallbacks';
 import { normalizeStateRegistration, normalizeIeIndicator, FISCAL_UNKNOWN } from '@/lib/fiscalNormalization';
-import { detectPaymentMethod } from '@/lib/paymentMethodDetection';
+import { detectPaymentMethod, detectPaymentMethodDetailed } from '@/lib/paymentMethodDetection';
 import PickupOrderPicker from '@/components/pickup/PickupOrderPicker';
 import type { PickupOrder } from '@/hooks/usePickupOrders';
 
