@@ -261,12 +261,17 @@ export default function RoutePlanning() {
 
   /** Planejamento automático completo: agrupamento + paradas + sequência + veículo + motorista. */
   const generateAutoPlan = () => {
-    if (availableLoads.length === 0) {
-      toast.info('Não há cargas pendentes para planejar.');
+    if (selectedLoads.size === 0) {
+      toast.info('Selecione ao menos uma carga para gerar o planejamento.');
+      return;
+    }
+    const scoped = availableLoads.filter(l => selectedLoads.has(l.id));
+    if (scoped.length === 0) {
+      toast.info('As cargas selecionadas não estão mais disponíveis.');
       return;
     }
     const plans = generateAutomaticRoutePlans({
-      loads: availableLoads as any,
+      loads: scoped as any,
       vehicles: vehicles as any,
       drivers: drivers as any,
       operationalRoutes: operationalRoutes as any,
