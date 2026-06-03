@@ -359,6 +359,48 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
         </span>
       </div>
 
+      {/* TOTAIS DE FECHAMENTO (entrada manual) */}
+      <div className="flex flex-wrap items-end gap-3 px-3 py-2 border-b bg-muted/10">
+        <div className="flex flex-col">
+          <Label className="text-[10px] uppercase text-muted-foreground">Total a receber em Dinheiro</Label>
+          <Input
+            type="number"
+            step="0.01"
+            min="0"
+            value={cashToReceive}
+            onChange={(e) => setCashToReceive(e.target.value)}
+            className="h-7 text-xs w-36 tabular-nums"
+          />
+        </div>
+        <div className="flex flex-col">
+          <Label className="text-[10px] uppercase text-muted-foreground">Total a receber em PIX</Label>
+          <Input
+            type="number"
+            step="0.01"
+            min="0"
+            value={pixToReceive}
+            onChange={(e) => setPixToReceive(e.target.value)}
+            className="h-7 text-xs w-36 tabular-nums"
+          />
+        </div>
+        <div className="flex flex-col">
+          <Label className="text-[10px] uppercase text-muted-foreground">Total Fechamento</Label>
+          <div className="h-7 px-2 flex items-center text-xs font-semibold tabular-nums rounded-md border bg-background w-36">
+            {fmtMoney(Number(cashToReceive || 0) + Number(pixToReceive || 0))}
+          </div>
+        </div>
+        <Button
+          size="sm"
+          variant={totalsDirty ? 'default' : 'outline'}
+          className="h-7 text-xs"
+          onClick={saveTotals}
+          disabled={savingTotals || !totalsDirty}
+        >
+          <Save className="h-3 w-3 mr-1" />
+          {savingTotals ? 'Salvando...' : 'Salvar totais'}
+        </Button>
+      </div>
+
       {/* AÇÕES EM MASSA */}
       <div className="flex flex-wrap gap-2 px-3 py-2 border-b bg-muted/5">
         <Button
