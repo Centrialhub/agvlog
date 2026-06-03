@@ -15,6 +15,7 @@ import { Wand2, Info } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { isReasonableDate } from '@/lib/inputMasks';
 import { printLoadNotesReport } from '@/lib/printLoadNotes';
+import { detectPaymentMethod } from '@/lib/paymentMethodDetection';
 import {
   Dialog,
   DialogContent,
@@ -66,28 +67,6 @@ const OCO_CODES = [
   { value: '08', label: '08 - Falta de pagamento' },
   { value: '09', label: '09 - Reentrega agendada' },
 ];
-
-// Detecta forma de pagamento a partir de texto livre (observação da NF, infCpl, etc.)
-// Retorna null quando não há indício claro — assim não sobrescreve escolha manual.
-export function detectPaymentMethod(text?: string | null): string | null {
-  if (!text) return null;
-  const t = ` ${String(text).toUpperCase()} `;
-  // Ordem importa: padrões mais específicos primeiro.
-  const rules: Array<{ re: RegExp; value: string }> = [
-    { re: /\bPIX\b/, value: 'pix' },
-    { re: /\b(BOLETO|BOL\.?|\bBC\b|\bBB\b|\bBOL\b|COBRAN[ÇC]A\s*BANC[ÁA]RIA|DUPLICATA|DUP\.?)\b/, value: 'boleto' },
-    { re: /\b(TED|DOC|TRANSFER[ÊE]NCIA|TRANSF\.?)\b/, value: 'transferencia' },
-    { re: /\bCHEQUE\b|\bCH\b/, value: 'cheque' },
-    { re: /\bDINHEIRO\b|\bESP[ÉE]CIE\b|\bDIN\b/, value: 'dinheiro' },
-    { re: /\bCART[ÃA]O\s*(DE\s*)?CR[ÉE]DITO\b|\bCC\b/, value: 'cartao_credito' },
-    { re: /\bCART[ÃA]O\s*(DE\s*)?D[ÉE]BITO\b|\bCD\b/, value: 'cartao_debito' },
-    { re: /\bFATURADO\b|\bFATURA\b|\bFAT\.?\b/, value: 'faturado' },
-    { re: /\bA\s*PRAZO\b|\bPRAZO\b|\bAPRAZ\b/, value: 'a_prazo' },
-    { re: /\bA\s*VISTA\b|\b[ÀA]\s*VISTA\b|\bAVISTA\b/, value: 'a_vista' },
-  ];
-  for (const r of rules) if (r.re.test(t)) return r.value;
-  return null;
-}
 
 const getDocObservation = (d: any): string => {
   const cls = d?.client_load_source || {};
