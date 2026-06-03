@@ -1053,9 +1053,18 @@ export default function Ingestion() {
                       }
                     : null),
                 delivery_meta: (() => {
-                  const pm = (doc.source as any).paymentMethod
-                    || detectPaymentMethod(doc.source.observation, (doc.source as any).paymentTerms);
-                  return pm ? { payment_method: pm } : {};
+                  const src: any = doc.source;
+                  if (src.paymentMethod) {
+                    return {
+                      payment_method: src.paymentMethod,
+                      payment_method_source: src.paymentMethodSource || 'tpag',
+                      payment_method_code: src.paymentMethodCode || null,
+                    };
+                  }
+                  const r = detectPaymentMethodDetailed(src.observation, src.paymentTerms);
+                  return r.value
+                    ? { payment_method: r.value, payment_method_source: r.source === 'context' ? 'infcpl_context' : 'infcpl_keyword' }
+                    : {};
                 })(),
             });
 
@@ -1319,9 +1328,18 @@ export default function Ingestion() {
                       }
                     : null),
                 delivery_meta: (() => {
-                  const pm = (doc.source as any).paymentMethod
-                    || detectPaymentMethod(doc.source.observation, (doc.source as any).paymentTerms);
-                  return pm ? { payment_method: pm } : {};
+                  const src: any = doc.source;
+                  if (src.paymentMethod) {
+                    return {
+                      payment_method: src.paymentMethod,
+                      payment_method_source: src.paymentMethodSource || 'tpag',
+                      payment_method_code: src.paymentMethodCode || null,
+                    };
+                  }
+                  const r = detectPaymentMethodDetailed(src.observation, src.paymentTerms);
+                  return r.value
+                    ? { payment_method: r.value, payment_method_source: r.source === 'context' ? 'infcpl_context' : 'infcpl_keyword' }
+                    : {};
                 })(),
             });
             createdDocIds.set(doc.source.invoiceNumber, created.id);
