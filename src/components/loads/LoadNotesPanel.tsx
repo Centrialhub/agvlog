@@ -11,11 +11,12 @@ import { Badge } from '@/components/ui/badge';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { toast } from 'sonner';
 import { Save, CheckCircle2, XCircle, FileText, AlertTriangle, RotateCcw, Printer } from 'lucide-react';
-import { Info } from 'lucide-react';
+import { Info, Upload } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { isReasonableDate } from '@/lib/inputMasks';
 import { printLoadNotesReport } from '@/lib/printLoadNotes';
 import { detectPaymentMethod } from '@/lib/paymentMethodDetection';
+import { parseNFeXml } from '@/lib/documentParsers';
 import {
   Dialog,
   DialogContent,
