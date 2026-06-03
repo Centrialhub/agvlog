@@ -7548,6 +7548,7 @@ export type Database = {
         Args: { _tenant_name: string }
         Returns: string
       }
+      detect_payment_method: { Args: { p_text: string }; Returns: string }
       dispatch_planned_route: { Args: { _payload: Json }; Returns: string }
       get_user_tenant_ids: { Args: never; Returns: string[] }
       has_tenant_role: {
