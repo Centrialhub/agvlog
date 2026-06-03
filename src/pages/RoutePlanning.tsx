@@ -615,6 +615,20 @@ export default function RoutePlanning() {
           <Button variant="ghost" size="sm" onClick={autoSuggest} disabled={availableLoads.length === 0} title="Agrupamento simples por destino textual">
             <Wand2 className="h-3 w-3 mr-1" /> Sugerir por destino
           </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              if (window.confirm('Isso vai reverter TODOS os loads criados de XMLs de volta para "carga disponível", removendo trips, stops e eventos associados. Continuar?')) {
+                revertXmlsMutation.mutate();
+              }
+            }}
+            disabled={revertXmlsMutation.isPending}
+            title="Reverter todos os loads de XML para o status inicial"
+          >
+            <RefreshCw className="h-3 w-3 mr-1" />
+            {revertXmlsMutation.isPending ? 'Revertendo...' : 'Reverter XMLs'}
+          </Button>
         </div>
       </div>
 
