@@ -487,8 +487,9 @@ export default function RoutePlanning() {
     toast[fail === 0 ? 'success' : 'warning'](`Despachadas ${ok} rota(s)${fail ? ` · ${fail} falharam` : ''}`);
   };
 
-  const exportRoutePdf = (route: RoutePlan) => {
+  const buildRouteRomaneio = (route: RoutePlan) => {
     const vehicle = vehicles.find((v: any) => v.id === route.vehicle_id) as any;
+    const driver = drivers.find((d: any) => d.id === route.driver_id) as any;
     const docs: RomaneioDoc[] = sortLoadsByRecipient(route.loads).flatMap(load =>
       sortItemsByRecipient(load.items).map(item => {
         const fd = item.fiscal_documents;
@@ -510,14 +511,31 @@ export default function RoutePlanning() {
         };
       })
     );
-
-    printRomaneioRoutes([{
+    return {
       routeName: route.name,
       vehicleInfo: vehicle ? `Veículo: ${vehicle.plate}${vehicle.nickname ? ` (${vehicle.nickname})` : ''}${vehicle.max_pallets ? ` - ${vehicle.max_pallets}p` : ''}` : undefined,
+      driverInfo: driver ? `Motorista: ${driver.name}` : undefined,
       docs,
-    }], `Romaneio ${route.name}`);
+    };
+  };
 
+  const exportRoutePdf = (route: RoutePlan) => {
+    printRomaneioRoutes([buildRouteRomaneio(route)], `Romaneio ${route.name}`);
     toast.success('Romaneio aberto para impressão!');
+  };
+
+  const printAllRoutes = () => {
+    if (routes.length === 0) {
+      toast.info('Nenhuma rota para imprimir.');
+      return;
+    }
+    const pages = routes.map(buildRouteRomaneio).filter(p => p.docs.length > 0);
+    if (pages.length === 0) {
+      toast.info('Rotas sem documentos fiscais para imprimir.');
+      return;
+    }
+    printRomaneioRoutes(pages, `Romaneios — ${pages.length} rota(s)`);
+    toast.success(`${pages.length} romaneio(s) abertos para impressão!`);
   };
 
   return (
