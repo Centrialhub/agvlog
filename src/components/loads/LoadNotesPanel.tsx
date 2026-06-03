@@ -374,17 +374,6 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
           size="sm"
           variant="outline"
           className="h-7 text-xs"
-          onClick={autoFillPayment}
-          disabled={!inboundDocs.length}
-          title="Detecta automaticamente a forma de pagamento a partir da observação da NF (BC, Boleto, PIX, etc.)"
-        >
-          <Wand2 className="h-3 w-3 mr-1 text-primary" />
-          Detectar Forma de Pagamento
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-7 text-xs"
           onClick={() => printLoadNotesReport(load, inboundDocs.map(d => ({ ...d, delivery_meta: meta[d.id] || d.delivery_meta })))}
           disabled={!inboundDocs.length}
           title="Gerar relatório imprimível / Salvar como PDF"
