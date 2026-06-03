@@ -214,6 +214,38 @@ export function parseNFeXml(xmlString: string): ParsedNFe {
 
   const estimatedPallets = Math.max(1, Math.ceil(totalWeight / 800));
 
+  // Forma de pagamento: padrão NF-e v4 <pag>/<detPag>/<tPag>
+  // Mapeia código tPag -> valor interno usado no sistema.
+  const TPAG_MAP: Record<string, string> = {
+    '01': 'dinheiro',
+    '02': 'cheque',
+    '03': 'cartao_credito',
+    '04': 'cartao_debito',
+    '15': 'boleto',
+    '16': 'transferencia', // depósito bancário
+    '17': 'pix',
+    '18': 'transferencia',
+    '14': 'boleto',        // duplicata mercantil
+  };
+  let paymentMethod: string | null = null;
+  let paymentMethodCode: string | null = null;
+  const pag = infNFe.getElementsByTagName('pag')[0];
+  if (pag) {
+    const detPagList = pag.getElementsByTagName('detPag');
+    const detPag = detPagList[0] || pag;
+    const tPag = getTagText(detPag, 'tPag');
+    if (tPag) {
+      paymentMethodCode = tPag;
+      paymentMethod = TPAG_MAP[tPag] || null;
+    }
+  }
+  // Fallback antigo: indPag (0=à vista, 1=a prazo) no <ide>
+  if (!paymentMethod) {
+    const indPag = getTagText(ide || infNFe, 'indPag');
+    if (indPag === '0') paymentMethod = 'a_vista';
+    else if (indPag === '1') paymentMethod = 'a_prazo';
+  }
+
   return {
     invoiceNumber, series, accessKey, issueDate,
     emitterName, emitterCnpj, recipientName, recipientCnpj,
@@ -225,6 +257,7 @@ export function parseNFeXml(xmlString: string): ParsedNFe {
     items, totalValue, totalWeight, totalVolume, estimatedPallets,
     clientLoadNumber, observation,
     clientLoadSource, clientLoadRuleId, clientLoadRuleLabel,
+    paymentMethod, paymentMethodCode,
   };
 }
 
