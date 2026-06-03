@@ -11,10 +11,11 @@ import { Badge } from '@/components/ui/badge';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { toast } from 'sonner';
 import { Save, CheckCircle2, XCircle, FileText, AlertTriangle, RotateCcw, Printer } from 'lucide-react';
-import { Wand2, Info } from 'lucide-react';
+import { Info } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { isReasonableDate } from '@/lib/inputMasks';
 import { printLoadNotesReport } from '@/lib/printLoadNotes';
+import { detectPaymentMethod } from '@/lib/paymentMethodDetection';
 import {
   Dialog,
   DialogContent,
@@ -67,28 +68,6 @@ const OCO_CODES = [
   { value: '09', label: '09 - Reentrega agendada' },
 ];
 
-// Detecta forma de pagamento a partir de texto livre (observação da NF, infCpl, etc.)
-// Retorna null quando não há indício claro — assim não sobrescreve escolha manual.
-export function detectPaymentMethod(text?: string | null): string | null {
-  if (!text) return null;
-  const t = ` ${String(text).toUpperCase()} `;
-  // Ordem importa: padrões mais específicos primeiro.
-  const rules: Array<{ re: RegExp; value: string }> = [
-    { re: /\bPIX\b/, value: 'pix' },
-    { re: /\b(BOLETO|BOL\.?|\bBC\b|\bBB\b|\bBOL\b|COBRAN[ÇC]A\s*BANC[ÁA]RIA|DUPLICATA|DUP\.?)\b/, value: 'boleto' },
-    { re: /\b(TED|DOC|TRANSFER[ÊE]NCIA|TRANSF\.?)\b/, value: 'transferencia' },
-    { re: /\bCHEQUE\b|\bCH\b/, value: 'cheque' },
-    { re: /\bDINHEIRO\b|\bESP[ÉE]CIE\b|\bDIN\b/, value: 'dinheiro' },
-    { re: /\bCART[ÃA]O\s*(DE\s*)?CR[ÉE]DITO\b|\bCC\b/, value: 'cartao_credito' },
-    { re: /\bCART[ÃA]O\s*(DE\s*)?D[ÉE]BITO\b|\bCD\b/, value: 'cartao_debito' },
-    { re: /\bFATURADO\b|\bFATURA\b|\bFAT\.?\b/, value: 'faturado' },
-    { re: /\bA\s*PRAZO\b|\bPRAZO\b|\bAPRAZ\b/, value: 'a_prazo' },
-    { re: /\bA\s*VISTA\b|\b[ÀA]\s*VISTA\b|\bAVISTA\b/, value: 'a_vista' },
-  ];
-  for (const r of rules) if (r.re.test(t)) return r.value;
-  return null;
-}
-
 const getDocObservation = (d: any): string => {
   const cls = d?.client_load_source || {};
   return (cls.observationSnippet || cls.infCpl || cls.observation || '').toString();
@@ -135,16 +114,36 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
   });
   useEffect(() => {
     const m: Record<string, DocMeta> = {};
+    const toPersist: Array<{ id: string; meta: DocMeta }> = [];
     inboundDocs.forEach((d: any) => {
       const dm = (d.delivery_meta || {}) as DocMeta;
       // Auto-detect forma de pagamento se ainda não definida
       if (!dm.payment_method) {
         const detected = detectPaymentMethod(getDocObservation(d));
-        if (detected) dm.payment_method = detected;
+        if (detected) {
+          dm.payment_method = detected;
+          toPersist.push({ id: d.id, meta: dm });
+        }
       }
       m[d.id] = dm;
     });
     setMeta(m);
+    // Persiste silenciosamente as detecções no banco — usuário não precisa salvar manualmente
+    if (toPersist.length > 0) {
+      (async () => {
+        try {
+          await Promise.all(
+            toPersist.map(({ id, meta }) =>
+              supabase.from('fiscal_documents').update({ delivery_meta: meta } as any).eq('id', id),
+            ),
+          );
+          qc.invalidateQueries({ queryKey: ['load_documents'] });
+          qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
+        } catch {
+          // silencioso: detecção é melhor-esforço
+        }
+      })();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load.id, inboundDocs.length]);
 
@@ -167,37 +166,6 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
       return next;
     });
     setDirty(new Set(inboundDocs.map((d: any) => d.id)));
-  };
-
-  // Aplica detecção automática de forma de pagamento em todas as notas pendentes
-  const autoFillPayment = () => {
-    let count = 0;
-    setMeta(prev => {
-      const next = { ...prev };
-      inboundDocs.forEach((d: any) => {
-        const cur = next[d.id] || {};
-        if (cur.payment_method) return;
-        const detected = detectPaymentMethod(getDocObservation(d));
-        if (detected) {
-          next[d.id] = { ...cur, payment_method: detected };
-          count++;
-        }
-      });
-      return next;
-    });
-    if (count > 0) {
-      setDirty(prev => {
-        const n = new Set(prev);
-        inboundDocs.forEach((d: any) => {
-          const obs = getDocObservation(d);
-          if (detectPaymentMethod(obs) && !(meta[d.id]?.payment_method)) n.add(d.id);
-        });
-        return n;
-      });
-      toast.success(`Forma de pagamento detectada em ${count} nota(s)`);
-    } else {
-      toast.info('Nenhuma nota pendente com forma de pagamento detectável');
-    }
   };
 
   // Marca documento como Entregue e salva imediatamente (sincroniza com o sistema)
@@ -370,17 +338,6 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
         >
           <CheckCircle2 className="h-3 w-3 mr-1 text-success" />
           Marcar todos canhotos como Recebidos
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-7 text-xs"
-          onClick={autoFillPayment}
-          disabled={!inboundDocs.length}
-          title="Detecta automaticamente a forma de pagamento a partir da observação da NF (BC, Boleto, PIX, etc.)"
-        >
-          <Wand2 className="h-3 w-3 mr-1 text-primary" />
-          Detectar Forma de Pagamento
         </Button>
         <Button
           size="sm"
