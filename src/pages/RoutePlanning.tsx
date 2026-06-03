@@ -18,7 +18,7 @@ import { toast } from 'sonner';
 import {
   Route, Plus, Wand2, Trash2,
   PackageCheck, Truck, ChevronDown, ChevronUp,
-  FileText, Send, Download, ListOrdered, Sparkles, Bot, Rocket,
+  FileText, Send, Download, ListOrdered, Sparkles, Bot, Rocket, Printer,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { printRomaneioRoutes, RomaneioDoc } from '@/lib/romaneioPrint';
