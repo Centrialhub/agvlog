@@ -565,6 +565,9 @@ export default function RoutePlanning() {
           <Button variant="default" onClick={dispatchAllValid} disabled={routes.length === 0 || dispatchRouteMutation.isPending}>
             <Rocket className="h-4 w-4 mr-2" /> Despachar rotas válidas
           </Button>
+          <Button variant="outline" onClick={printAllRoutes} disabled={routes.length === 0}>
+            <Printer className="h-4 w-4 mr-2" /> Imprimir todas as rotas
+          </Button>
           <Button variant="outline" onClick={() => { if (selectedLoads.size > 0) setDialogOpen(true); else toast.info('Selecione cargas primeiro'); }}>
             <Plus className="h-4 w-4 mr-2" /> Criar rota manual
           </Button>
