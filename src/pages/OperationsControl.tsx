@@ -3,13 +3,16 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Maximize2, Radio, RefreshCw } from 'lucide-react';
+import { Maximize2, Radio, RefreshCw, Route } from 'lucide-react';
 import { useActiveTripsLive, useOpenTripAlerts } from '@/hooks/useActiveTripsLive';
 import ControlTowerMap from '@/components/control-tower/ControlTowerMap';
 import KpiCards from '@/components/control-tower/KpiCards';
 import AlertsPanel from '@/components/control-tower/AlertsPanel';
 import TripDetailsDrawer from '@/components/control-tower/TripDetailsDrawer';
 import { STATE_COLORS, STATE_LABELS, type ActiveTripLive } from '@/lib/controlTower/types';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from '@/hooks/use-toast';
+
 
 export default function OperationsControl() {
   const { data: trips = [], isLoading, dataUpdatedAt, refetch, isFetching } = useActiveTripsLive();
