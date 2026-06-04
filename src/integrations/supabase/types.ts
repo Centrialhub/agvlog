@@ -6552,6 +6552,195 @@ export type Database = {
         }
         Relationships: []
       }
+      trip_alerts: {
+        Row: {
+          acknowledged_at: string | null
+          closed_at: string | null
+          id: string
+          message: string | null
+          metadata: Json | null
+          opened_at: string
+          severity: string
+          status: string
+          tenant_id: string
+          title: string
+          trip_id: string | null
+          type: string
+          vehicle_id: string | null
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          closed_at?: string | null
+          id?: string
+          message?: string | null
+          metadata?: Json | null
+          opened_at?: string
+          severity?: string
+          status?: string
+          tenant_id: string
+          title: string
+          trip_id?: string | null
+          type: string
+          vehicle_id?: string | null
+        }
+        Update: {
+          acknowledged_at?: string | null
+          closed_at?: string | null
+          id?: string
+          message?: string | null
+          metadata?: Json | null
+          opened_at?: string
+          severity?: string
+          status?: string
+          tenant_id?: string
+          title?: string
+          trip_id?: string | null
+          type?: string
+          vehicle_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trip_alerts_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "dispatch_trips"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trip_live_status: {
+        Row: {
+          average_speed_kmh: number | null
+          current_stop_id: string | null
+          delay_minutes: number | null
+          distance_from_route_meters: number | null
+          eta_next_stop_at: string | null
+          last_signal_age_seconds: number | null
+          last_signal_at: string | null
+          message: string | null
+          metadata: Json | null
+          next_stop_id: string | null
+          severity: string
+          state: string
+          stopped_minutes: number | null
+          tenant_id: string
+          trip_id: string
+          updated_at: string
+          vehicle_id: string
+        }
+        Insert: {
+          average_speed_kmh?: number | null
+          current_stop_id?: string | null
+          delay_minutes?: number | null
+          distance_from_route_meters?: number | null
+          eta_next_stop_at?: string | null
+          last_signal_age_seconds?: number | null
+          last_signal_at?: string | null
+          message?: string | null
+          metadata?: Json | null
+          next_stop_id?: string | null
+          severity?: string
+          state?: string
+          stopped_minutes?: number | null
+          tenant_id: string
+          trip_id: string
+          updated_at?: string
+          vehicle_id: string
+        }
+        Update: {
+          average_speed_kmh?: number | null
+          current_stop_id?: string | null
+          delay_minutes?: number | null
+          distance_from_route_meters?: number | null
+          eta_next_stop_at?: string | null
+          last_signal_age_seconds?: number | null
+          last_signal_at?: string | null
+          message?: string | null
+          metadata?: Json | null
+          next_stop_id?: string | null
+          severity?: string
+          state?: string
+          stopped_minutes?: number | null
+          tenant_id?: string
+          trip_id?: string
+          updated_at?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trip_live_status_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "dispatch_trips"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trip_routes: {
+        Row: {
+          calculated_at: string
+          created_at: string
+          destination_lat: number | null
+          destination_lng: number | null
+          distance_meters: number | null
+          duration_seconds: number | null
+          encoded_polyline: string | null
+          geometry_geojson: Json
+          id: string
+          origin_lat: number | null
+          origin_lng: number | null
+          provider: string
+          tenant_id: string
+          trip_id: string
+          updated_at: string
+          waypoints: Json | null
+        }
+        Insert: {
+          calculated_at?: string
+          created_at?: string
+          destination_lat?: number | null
+          destination_lng?: number | null
+          distance_meters?: number | null
+          duration_seconds?: number | null
+          encoded_polyline?: string | null
+          geometry_geojson: Json
+          id?: string
+          origin_lat?: number | null
+          origin_lng?: number | null
+          provider?: string
+          tenant_id: string
+          trip_id: string
+          updated_at?: string
+          waypoints?: Json | null
+        }
+        Update: {
+          calculated_at?: string
+          created_at?: string
+          destination_lat?: number | null
+          destination_lng?: number | null
+          distance_meters?: number | null
+          duration_seconds?: number | null
+          encoded_polyline?: string | null
+          geometry_geojson?: Json
+          id?: string
+          origin_lat?: number | null
+          origin_lng?: number | null
+          provider?: string
+          tenant_id?: string
+          trip_id?: string
+          updated_at?: string
+          waypoints?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trip_routes_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "dispatch_trips"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       trip_stops: {
         Row: {
           created_at: string
@@ -7558,6 +7747,31 @@ export type Database = {
       }
       detect_payment_method: { Args: { p_text: string }; Returns: string }
       dispatch_planned_route: { Args: { _payload: Json }; Returns: string }
+      get_active_trips_live: { Args: { _tenant_id: string }; Returns: Json }
+      get_open_trip_alerts: {
+        Args: { _tenant_id: string }
+        Returns: {
+          acknowledged_at: string | null
+          closed_at: string | null
+          id: string
+          message: string | null
+          metadata: Json | null
+          opened_at: string
+          severity: string
+          status: string
+          tenant_id: string
+          title: string
+          trip_id: string | null
+          type: string
+          vehicle_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "trip_alerts"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_user_tenant_ids: { Args: never; Returns: string[] }
       has_tenant_role: {
         Args: {
