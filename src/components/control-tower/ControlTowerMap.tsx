@@ -1,6 +1,6 @@
-import { useEffect, useMemo } from 'react';
+import { Fragment, useEffect, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
-import L from 'leaflet';
+import L, { type LatLngExpression } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { STATE_COLORS, type ActiveTripLive } from '@/lib/controlTower/types';
 
@@ -85,10 +85,12 @@ export default function ControlTowerMap({
         {trips.map((t) => {
           const color = STATE_COLORS[t.state] ?? '#2563eb';
           return (
-            <g key={t.trip_id}>
+            <Fragment key={t.trip_id}>
               {t.route_geometry_geojson?.coordinates && (
                 <Polyline
-                  positions={t.route_geometry_geojson.coordinates.map(([lng, lat]) => [lat, lng])}
+                  positions={t.route_geometry_geojson.coordinates.map(
+                    ([lng, lat]) => [lat, lng] as LatLngExpression,
+                  )}
                   pathOptions={{ color, weight: 4, opacity: 0.75 }}
                 />
               )}
@@ -107,7 +109,7 @@ export default function ControlTowerMap({
                   eventHandlers={{ click: () => onSelectTrip(t) }}
                 />
               )}
-            </g>
+            </Fragment>
           );
         })}
       </MapContainer>
