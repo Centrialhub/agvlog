@@ -3,19 +3,23 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Maximize2, Radio, RefreshCw } from 'lucide-react';
+import { Maximize2, Radio, RefreshCw, Route } from 'lucide-react';
 import { useActiveTripsLive, useOpenTripAlerts } from '@/hooks/useActiveTripsLive';
 import ControlTowerMap from '@/components/control-tower/ControlTowerMap';
 import KpiCards from '@/components/control-tower/KpiCards';
 import AlertsPanel from '@/components/control-tower/AlertsPanel';
 import TripDetailsDrawer from '@/components/control-tower/TripDetailsDrawer';
 import { STATE_COLORS, STATE_LABELS, type ActiveTripLive } from '@/lib/controlTower/types';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from '@/hooks/use-toast';
+
 
 export default function OperationsControl() {
   const { data: trips = [], isLoading, dataUpdatedAt, refetch, isFetching } = useActiveTripsLive();
   const { data: alerts = [] } = useOpenTripAlerts();
   const [selectedTrip, setSelectedTrip] = useState<ActiveTripLive | null>(null);
   const [now, setNow] = useState(Date.now());
+  const [calculatingAll, setCalculatingAll] = useState(false);
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
@@ -32,6 +36,30 @@ export default function OperationsControl() {
   const goFullscreen = () => {
     if (document.fullscreenElement) document.exitFullscreen();
     else document.documentElement.requestFullscreen();
+  };
+
+  const handleCalculateAll = async () => {
+    if (trips.length === 0) return;
+    setCalculatingAll(true);
+    try {
+      const results = await Promise.allSettled(
+        trips.map((t) =>
+          supabase.functions.invoke('calculate-trip-route', { body: { trip_id: t.trip_id } })
+        )
+      );
+      const ok = results.filter((r) => r.status === 'fulfilled').length;
+      const fail = results.length - ok;
+      toast({
+        title: 'Rotas calculadas',
+        description: `${ok} sucesso${fail > 0 ? `, ${fail} falha` : ''} via OSRM.`,
+        variant: fail > 0 ? 'default' : 'default',
+      });
+      await refetch();
+    } catch (e: any) {
+      toast({ title: 'Falha ao calcular rotas', description: e?.message ?? 'Erro inesperado', variant: 'destructive' });
+    } finally {
+      setCalculatingAll(false);
+    }
   };
 
   return (
@@ -75,9 +103,22 @@ export default function OperationsControl() {
           </div>
 
           <div className="flex-1 overflow-hidden flex flex-col">
-            <h3 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground p-3 pb-1">
-              Viagens ({trips.length})
-            </h3>
+            <div className="px-3 pt-2 pb-1 flex items-center justify-between">
+              <h3 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Viagens ({trips.length})
+              </h3>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 text-[10px] px-2"
+                onClick={handleCalculateAll}
+                disabled={calculatingAll || trips.length === 0}
+                title="Calcular rotas OSRM para todas as viagens"
+              >
+                <Route className={`h-3 w-3 mr-1 ${calculatingAll ? 'animate-spin' : ''}`} />
+                {calculatingAll ? 'Calculando…' : 'Calcular todas'}
+              </Button>
+            </div>
             <ScrollArea className="flex-1">
               <div className="px-2 pb-3 space-y-1">
                 {isLoading && (
