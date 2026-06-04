@@ -103,9 +103,22 @@ export default function OperationsControl() {
           </div>
 
           <div className="flex-1 overflow-hidden flex flex-col">
-            <h3 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground p-3 pb-1">
-              Viagens ({trips.length})
-            </h3>
+            <div className="px-3 pt-2 pb-1 flex items-center justify-between">
+              <h3 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Viagens ({trips.length})
+              </h3>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 text-[10px] px-2"
+                onClick={handleCalculateAll}
+                disabled={calculatingAll || trips.length === 0}
+                title="Calcular rotas OSRM para todas as viagens"
+              >
+                <Route className={`h-3 w-3 mr-1 ${calculatingAll ? 'animate-spin' : ''}`} />
+                {calculatingAll ? 'Calculando…' : 'Calcular todas'}
+              </Button>
+            </div>
             <ScrollArea className="flex-1">
               <div className="px-2 pb-3 space-y-1">
                 {isLoading && (
