@@ -12,6 +12,7 @@ import Auth from "@/pages/Auth";
 
 // Admin / Operations pages
 const OperationsCenter = lazy(() => import("@/pages/OperationsCenter"));
+const OperationsControl = lazy(() => import("@/pages/OperationsControl"));
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Vehicles = lazy(() => import("@/pages/Vehicles"));
 const Drivers = lazy(() => import("@/pages/Drivers"));
@@ -182,6 +183,7 @@ const App = () => (
             <Route path="/load-extraction-audit" element={<ProtectedRoute><LoadExtractionAudit /></ProtectedRoute>} />
             <Route path="/traceability/:docId/pod" element={<ProtectedRoute><PodHistory /></ProtectedRoute>} />
             <Route path="/operations" element={<ProtectedRoute><OperationsDashboard /></ProtectedRoute>} />
+            <Route path="/operations-control" element={<ProtectedRoute><OperationsControl /></ProtectedRoute>} />
             <Route path="/events" element={<ProtectedRoute><OperationalEvents /></ProtectedRoute>} />
             <Route path="/ingestion" element={<ProtectedRoute><Ingestion /></ProtectedRoute>} />
             <Route path="/ingestion-reports" element={<ProtectedRoute><IngestionReports /></ProtectedRoute>} />
