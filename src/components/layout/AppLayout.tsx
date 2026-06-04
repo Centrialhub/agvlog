@@ -17,7 +17,7 @@ import {
   PackageCheck, AlertOctagon, Upload, TrendingUp, ChevronDown, Plug,
   Radio, ShieldCheck, Receipt, DollarSign, UserCog, Package, Wrench,
   Boxes, ClipboardCheck, ArrowRightLeft, Wallet, FileSearch, FileSpreadsheet,
-  PackageOpen,
+  PackageOpen, MonitorPlay,
 } from 'lucide-react';
 
 type NavLeaf = { label: string; href: string; icon: ReactNode };
@@ -103,6 +103,7 @@ const navSections: NavSection[] = [
   {
     label: 'Monitoramento',
     items: [
+      { label: 'Torre de Controle', href: '/operations-control', icon: <MonitorPlay className="h-4 w-4" /> },
       { label: 'Mapa da Frota', href: '/fleet-map', icon: <Map className="h-4 w-4" /> },
       { label: 'Alertas', href: '/alerts', icon: <Bell className="h-4 w-4" /> },
       { label: 'Corredores Monitorados', href: '/corridors', icon: <Radio className="h-4 w-4" /> },
