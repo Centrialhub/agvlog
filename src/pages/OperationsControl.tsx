@@ -19,6 +19,7 @@ export default function OperationsControl() {
   const { data: alerts = [] } = useOpenTripAlerts();
   const [selectedTrip, setSelectedTrip] = useState<ActiveTripLive | null>(null);
   const [now, setNow] = useState(Date.now());
+  const [calculatingAll, setCalculatingAll] = useState(false);
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
@@ -35,6 +36,30 @@ export default function OperationsControl() {
   const goFullscreen = () => {
     if (document.fullscreenElement) document.exitFullscreen();
     else document.documentElement.requestFullscreen();
+  };
+
+  const handleCalculateAll = async () => {
+    if (trips.length === 0) return;
+    setCalculatingAll(true);
+    try {
+      const results = await Promise.allSettled(
+        trips.map((t) =>
+          supabase.functions.invoke('calculate-trip-route', { body: { trip_id: t.trip_id } })
+        )
+      );
+      const ok = results.filter((r) => r.status === 'fulfilled').length;
+      const fail = results.length - ok;
+      toast({
+        title: 'Rotas calculadas',
+        description: `${ok} sucesso${fail > 0 ? `, ${fail} falha` : ''} via OSRM.`,
+        variant: fail > 0 ? 'default' : 'default',
+      });
+      await refetch();
+    } catch (e: any) {
+      toast({ title: 'Falha ao calcular rotas', description: e?.message ?? 'Erro inesperado', variant: 'destructive' });
+    } finally {
+      setCalculatingAll(false);
+    }
   };
 
   return (
