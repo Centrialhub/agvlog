@@ -503,6 +503,17 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
           <Printer className="h-3 w-3 mr-1" />
           Imprimir / PDF
         </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 text-xs"
+          onClick={detectAllPayments}
+          disabled={detectingPayments || !inboundDocs.length}
+          title="Re-analisa observações dos XMLs e preenche a forma de pagamento detectada"
+        >
+          <Wand2 className="h-3 w-3 mr-1" />
+          {detectingPayments ? 'Detectando...' : 'Detectar formas de pagamento'}
+        </Button>
         <div className="flex-1" />
         <Button
           size="sm"
