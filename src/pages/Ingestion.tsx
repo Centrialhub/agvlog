@@ -1207,6 +1207,9 @@ export default function Ingestion() {
                 source: doc.source.clientLoadSource || 'none',
                 ruleId: doc.source.clientLoadRuleId || null,
                 ruleLabel: doc.source.clientLoadRuleLabel || null,
+                observationSnippet: doc.source.observation
+                  ? String(doc.source.observation).replace(/\s+/g, ' ').trim().slice(0, 400)
+                  : null,
               }
             : (doc.source.observation
                 ? {
@@ -1214,6 +1217,20 @@ export default function Ingestion() {
                     observationSnippet: String(doc.source.observation).replace(/\s+/g, ' ').trim().slice(0, 400),
                   }
                 : null),
+          delivery_meta: (() => {
+            const src: any = doc.source;
+            if (src.paymentMethod) {
+              return {
+                payment_method: src.paymentMethod,
+                payment_method_source: src.paymentMethodSource || 'tpag',
+                payment_method_code: src.paymentMethodCode || null,
+              };
+            }
+            const r = detectPaymentMethodDetailed(src.observation, src.paymentTerms);
+            return r.value
+              ? { payment_method: r.value, payment_method_source: r.source === 'context' ? 'infcpl_context' : 'infcpl_keyword' }
+              : {};
+          })(),
         });
 
         (doc as any)._savedId = created.id;
@@ -1395,6 +1412,12 @@ export default function Ingestion() {
             destination: suggestion.region,
             vehicle_id: assignment?.vehicleId || null,
             driver_id: assignment?.driverId || null,
+            payment_method: (() => {
+              const detectedMethods = suggestion.documents
+                .map((doc) => doc.source.paymentMethod || detectPaymentMethodDetailed(doc.source.observation, (doc.source as any).paymentTerms).value)
+                .filter(Boolean) as string[];
+              return detectedMethods[0] || null;
+            })(),
             status: 'planned',
           } as any);
 
