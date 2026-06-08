@@ -26,6 +26,13 @@ function expandAbbreviations(t: string): string {
     .replace(/\bF\.\s*PAG\.?\b/g, 'FORMA PAGAMENTO')
     .replace(/\bCOND\.?\s*PAG(?:TO|AMENTO)?\.?\b/g, 'CONDICAO PAGAMENTO')
     .replace(/\bPAGTO\b/g, 'PAGAMENTO')
+    // formas — códigos curtos usados em infCpl de ERPs
+    // (ordem importa: variantes mais longas primeiro)
+    .replace(/\bBCPARC\b/g, 'BOLETO PARCELADO')
+    .replace(/\bBCP\b/g, 'BOLETO PARCELADO')
+    .replace(/\bBC\b/g, 'BOLETO')
+    .replace(/\bOP\b/g, 'ORDEM PAGAMENTO')
+    .replace(/\bDM\b/g, 'DUPLICATA MERCANTIL')
     // formas
     .replace(/\bTRANSF\.?\b/g, 'TRANSFERENCIA')
     .replace(/\bDEP\.?\s*BANC(?:ARIO|\.)?\b/g, 'DEPOSITO BANCARIO')
@@ -43,18 +50,20 @@ function expandAbbreviations(t: string): string {
 const KEYWORD_RULES: Array<{ re: RegExp; value: string }> = [
   { re: /\bPIX\b/, value: 'pix' },
   { re: /\b(BOLETO|COBRANCA\s*BANCARIA|DUPLICATA|FATURA\s*BANCARIA)\b/, value: 'boleto' },
-  { re: /\b(TED|DOC|TRANSFERENCIA(?:\s*(?:BANCARIA|ELETRONICA))?|DEPOSITO\s*BANCARIO)\b/, value: 'transferencia' },
+  { re: /\b(TED|DOC|TRANSFERENCIA(?:\s*(?:BANCARIA|ELETRONICA))?|DEPOSITO\s*BANCARIO|ORDEM\s*(?:DE\s*)?PAGAMENTO)\b/, value: 'transferencia' },
   { re: /\bCHEQUE\b/, value: 'cheque' },
   { re: /\b(DINHEIRO|ESPECIE)\b/, value: 'dinheiro' },
   { re: /\bCARTAO\s*(?:DE\s*)?CREDITO\b/, value: 'cartao_credito' },
   { re: /\bCARTAO\s*(?:DE\s*)?DEBITO\b/, value: 'cartao_debito' },
   { re: /\b(FATURADO|FATURA\s*MENSAL|FATURAMENTO\s*MENSAL)\b/, value: 'faturado' },
-  { re: /\b(A\s*PRAZO|APRAZO|\d+\/\d+(?:\/\d+)*\s*DIAS?|\d+\s*DDL|\d+\s*DDF|\d+\s*X(?:\s|$)|\d+\s*PARCELAS?)\b/, value: 'a_prazo' },
+  // a_prazo: aceita 30/60/90 ou 21-28-35 (com ou sem "DIAS"), N DDL/DDF, NX, N PARCELAS,
+  // e também "NN DIAS" isolado (ex.: "Cond. Pagto: 28 DIAS")
+  { re: /\b(A\s*PRAZO|APRAZO|\d+(?:[\/\-]\d+)+\s*(?:DIAS?)?|\d+\s*DDL|\d+\s*DDF|\d+\s*X(?:\s|$)|\d+\s*PARCELAS?|\d+\s*DIAS?\b)\b/, value: 'a_prazo' },
   { re: /\b(A\s*VISTA|AVISTA|ANTECIPADO|PRE\s*PAGO)\b/, value: 'a_vista' },
 ];
 
 /** Triggers contextuais: "FORMA PAGAMENTO:", "PAGAMENTO -", etc. */
-const CONTEXT_TRIGGER = /\b(?:FORMA\s+(?:DE\s+)?PAGAMENTO|CONDICAO\s+(?:DE\s+)?PAGAMENTO|PAGAMENTO|PRAZO\s+(?:DE\s+)?PAGAMENTO)\s*[:\-=]?\s*/g;
+const CONTEXT_TRIGGER = /\b(?:FORMA\s+(?:DE\s+)?PAGAMENTO|CONDICAO\s+(?:DE\s+)?PAGAMENTO|PAGAMENTO|PRAZO\s+(?:DE\s+)?PAGAMENTO|COBRANCA)\s*[:\-=]?\s*/g;
 
 export type PaymentDetectionResult = {
   value: string | null;
