@@ -104,6 +104,14 @@ export interface ParsedNFe {
   paymentMethodCode?: string | null;
   /** Camada que detectou a forma de pagamento (auditoria). */
   paymentMethodSource?: 'tpag' | 'xpag' | 'cobr' | 'infcpl_context' | 'infcpl_keyword' | 'indpag' | null;
+  /** Número de parcelas (count de <dup>). */
+  installmentCount?: number | null;
+  /** Primeira data de vencimento (dVenc da 1ª <dup>), YYYY-MM-DD. */
+  firstDueDate?: string | null;
+  /** Período médio em dias entre emissão e vencimentos (média de dVenc - dhEmi). */
+  averageDueDays?: number | null;
+  /** Descrição amigável da forma de pagamento (ex.: "Boleto a prazo (3 parcelas)"). */
+  paymentDescription?: string | null;
 }
 
 function getTagText(parent: Element, tagName: string): string {
