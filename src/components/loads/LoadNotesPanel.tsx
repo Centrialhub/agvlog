@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { toast } from 'sonner';
 import { Save, CheckCircle2, XCircle, FileText, AlertTriangle, RotateCcw, Printer } from 'lucide-react';
+import { Wand2 } from 'lucide-react';
 import { Info } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { isReasonableDate } from '@/lib/inputMasks';
@@ -148,6 +149,7 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
   }, [load.id, inboundDocs.length]);
 
   const [savingAll, setSavingAll] = useState(false);
+  const [detectingPayments, setDetectingPayments] = useState(false);
   const [dirty, setDirty] = useState<Set<string>>(new Set());
   const [neModal, setNeModal] = useState<{ docId: string; reason: string } | null>(null);
   const [reModal, setReModal] = useState<{ docId: string; reason: string } | null>(null);
@@ -228,6 +230,53 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
       return next;
     });
     setDirty(new Set(inboundDocs.map((d: any) => d.id)));
+  };
+
+  // Re-executa detecção de forma de pagamento para todos os documentos da carga
+  // (útil para XMLs já ingeridos antes da nova lógica de detecção)
+  const detectAllPayments = async () => {
+    if (!inboundDocs.length) return;
+    setDetectingPayments(true);
+    try {
+      const updates: Array<{ id: string; meta: DocMeta; detected: string }> = [];
+      const nextMeta: Record<string, DocMeta> = { ...meta };
+      for (const d of inboundDocs) {
+        const current = (nextMeta[d.id] || {}) as DocMeta;
+        const detected = detectPaymentMethod(getDocObservation(d));
+        if (detected && detected !== current.payment_method) {
+          const merged: DocMeta = { ...current, payment_method: detected };
+          nextMeta[d.id] = merged;
+          updates.push({ id: d.id, meta: merged, detected });
+        }
+      }
+      if (updates.length === 0) {
+        toast.info('Nenhuma nova forma de pagamento detectada nas observações');
+        return;
+      }
+      setMeta(nextMeta);
+      await Promise.all(
+        updates.map(({ id, meta }) =>
+          supabase.from('fiscal_documents').update({ delivery_meta: meta } as any).eq('id', id),
+        ),
+      );
+      // sincroniza carga com a primeira forma detectada se ainda estiver vazia
+      if (!load.payment_method && updates[0]?.detected) {
+        await supabase
+          .from('loads')
+          .update({ payment_method: updates[0].detected } as any)
+          .eq('id', load.id);
+      }
+      toast.success(`Forma de pagamento detectada em ${updates.length} nota(s)`);
+      await qc.invalidateQueries({ queryKey: ['load_documents'] });
+      await qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
+      await qc.invalidateQueries({ queryKey: ['load', load.id] });
+      await qc.invalidateQueries({ queryKey: ['loads'] });
+      onSaved?.();
+    } catch (e: any) {
+      toast.error(e.message || 'Erro ao detectar forma de pagamento');
+    } finally {
+      setDetectingPayments(false);
+    }
   };
 
   // Marca documento como Entregue e salva imediatamente (sincroniza com o sistema)
@@ -453,6 +502,17 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
         >
           <Printer className="h-3 w-3 mr-1" />
           Imprimir / PDF
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 text-xs"
+          onClick={detectAllPayments}
+          disabled={detectingPayments || !inboundDocs.length}
+          title="Re-analisa observações dos XMLs e preenche a forma de pagamento detectada"
+        >
+          <Wand2 className="h-3 w-3 mr-1" />
+          {detectingPayments ? 'Detectando...' : 'Detectar formas de pagamento'}
         </Button>
         <div className="flex-1" />
         <Button
