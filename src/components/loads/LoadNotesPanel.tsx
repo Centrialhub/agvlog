@@ -162,6 +162,36 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
     Number(cashToReceive || 0) !== Number(load?.cash_to_receive || 0)
     || Number(pixToReceive || 0) !== Number(load?.pix_to_receive || 0);
 
+  useEffect(() => {
+    const syncLoadPaymentMethod = async () => {
+      if (!load?.id) return;
+
+      const detectedMethods = inboundDocs
+        .map((d: any) => {
+          const dm = (d.delivery_meta || {}) as DocMeta;
+          return dm.payment_method || detectPaymentMethod(getDocObservation(d));
+        })
+        .filter(Boolean) as string[];
+
+      const nextLoadPaymentMethod = detectedMethods[0] || null;
+      if ((load.payment_method || null) === nextLoadPaymentMethod) return;
+
+      try {
+        const { error } = await supabase
+          .from('loads')
+          .update({ payment_method: nextLoadPaymentMethod } as any)
+          .eq('id', load.id);
+        if (error) throw error;
+        qc.invalidateQueries({ queryKey: ['load', load.id] });
+        qc.invalidateQueries({ queryKey: ['loads'] });
+      } catch {
+        // silencioso: sincronização derivada
+      }
+    };
+
+    void syncLoadPaymentMethod();
+  }, [inboundDocs, load?.id, load?.payment_method, qc]);
+
   const saveTotals = async () => {
     setSavingTotals(true);
     try {
