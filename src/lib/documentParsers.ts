@@ -104,6 +104,14 @@ export interface ParsedNFe {
   paymentMethodCode?: string | null;
   /** Camada que detectou a forma de pagamento (auditoria). */
   paymentMethodSource?: 'tpag' | 'xpag' | 'cobr' | 'infcpl_context' | 'infcpl_keyword' | 'indpag' | null;
+  /** Número de parcelas (count de <dup>). */
+  installmentCount?: number | null;
+  /** Primeira data de vencimento (dVenc da 1ª <dup>), YYYY-MM-DD. */
+  firstDueDate?: string | null;
+  /** Período médio em dias entre emissão e vencimentos (média de dVenc - dhEmi). */
+  averageDueDays?: number | null;
+  /** Descrição amigável da forma de pagamento (ex.: "Boleto a prazo (3 parcelas)"). */
+  paymentDescription?: string | null;
 }
 
 function getTagText(parent: Element, tagName: string): string {
@@ -236,31 +244,57 @@ export function parseNFeXml(xmlString: string): ParsedNFe {
   const pag = infNFe.getElementsByTagName('pag')[0];
   let xPagText = '';
   if (pag) {
-    const detPagList = pag.getElementsByTagName('detPag');
-    const detPag = detPagList[0] || pag;
-    const tPag = getTagText(detPag, 'tPag');
-    xPagText = getTagText(detPag, 'xPag') || getTagText(pag, 'xPag') || '';
-    if (tPag) {
-      paymentMethodCode = tPag;
+    // Itera TODAS as <detPag> e prioriza a primeira com tPag mapeado (alguns
+    // emissores enviam várias formas: 99 vazio + a real). xPag agregado serve
+    // de fallback para tPag=99.
+    const detPagList = Array.from(pag.getElementsByTagName('detPag'));
+    const candidates = detPagList.length ? detPagList : [pag];
+    const xPagPieces: string[] = [];
+    for (const detPag of candidates) {
+      const tPag = getTagText(detPag, 'tPag');
+      const xp = getTagText(detPag, 'xPag');
+      if (xp) xPagPieces.push(xp);
+      if (!tPag) continue;
       const mapped = TPAG_MAP[tPag] || null;
-      // tPag 90 = Sem pagamento, 99 = Outros → não confiar, cair para próximas camadas
-      if (mapped && tPag !== '90' && tPag !== '99') {
+      if (!paymentMethodCode) paymentMethodCode = tPag;
+      if (!paymentMethod && mapped && tPag !== '90' && tPag !== '99') {
         paymentMethod = mapped;
+        paymentMethodCode = tPag;
         paymentMethodSource = 'tpag';
       }
     }
+    xPagText = [...xPagPieces, getTagText(pag, 'xPag')].filter(Boolean).join(' | ');
   }
   // Camada 2: <xPag> — descrição livre quando tPag=99
   if (!paymentMethod && xPagText) {
     const r = detectPaymentMethodDetailed(xPagText);
     if (r.value) { paymentMethod = r.value; paymentMethodSource = 'xpag'; }
   }
-  // Camada 3: <cobr>/<dup> — presença de duplicatas implica boleto/a prazo
-  if (!paymentMethod) {
-    const cobr = infNFe.getElementsByTagName('cobr')[0];
-    const dups = cobr?.getElementsByTagName('dup');
-    if (dups && dups.length > 0) {
-      paymentMethod = 'boleto';
+  // Camada 3: <cobr>/<dup> — duplicatas geram boleto/a prazo + dados de parcelas.
+  // Sempre extrai os dados de parcelas (mesmo quando paymentMethod já veio de tPag),
+  // pois servem para preencher OS/contas a receber.
+  const cobr = infNFe.getElementsByTagName('cobr')[0];
+  const dups = cobr ? Array.from(cobr.getElementsByTagName('dup')) : [];
+  let installmentCount: number | null = null;
+  let firstDueDate: string | null = null;
+  let averageDueDays: number | null = null;
+  if (dups.length > 0) {
+    installmentCount = dups.length;
+    const dVencs = dups.map(d => getTagText(d, 'dVenc')).filter(Boolean);
+    if (dVencs.length > 0) {
+      firstDueDate = dVencs[0];
+      const emiTs = issueDate ? Date.parse(issueDate) : NaN;
+      if (!Number.isNaN(emiTs)) {
+        const diffs = dVencs
+          .map(d => (Date.parse(d) - emiTs) / 86_400_000)
+          .filter(n => Number.isFinite(n) && n >= 0);
+        if (diffs.length > 0) {
+          averageDueDays = Math.round(diffs.reduce((a, b) => a + b, 0) / diffs.length);
+        }
+      }
+    }
+    if (!paymentMethod) {
+      paymentMethod = dups.length >= 2 ? 'a_prazo' : 'boleto';
       paymentMethodSource = 'cobr';
     }
   }
@@ -279,6 +313,30 @@ export function parseNFeXml(xmlString: string): ParsedNFe {
     else if (indPag === '1') { paymentMethod = 'a_prazo'; paymentMethodSource = 'indpag'; }
   }
 
+  // Descrição amigável para UI (não substitui paymentMethod normalizado).
+  let paymentDescription: string | null = null;
+  if (paymentMethod) {
+    const base: Record<string, string> = {
+      dinheiro: 'Dinheiro',
+      cheque: 'Cheque',
+      cartao_credito: 'Cartão de crédito',
+      cartao_debito: 'Cartão de débito',
+      pix: 'PIX',
+      transferencia: 'Transferência',
+      boleto: 'Boleto',
+      a_prazo: 'A prazo',
+      a_vista: 'À vista',
+      faturado: 'Faturado',
+    };
+    paymentDescription = base[paymentMethod] || paymentMethod;
+    if (installmentCount && installmentCount >= 2) {
+      paymentDescription = `${paymentDescription === 'Boleto' ? 'Boleto a prazo' : paymentDescription} (${installmentCount} parcelas)`;
+    }
+    if (averageDueDays && averageDueDays > 0 && !paymentDescription.includes('dias')) {
+      paymentDescription += ` — ${averageDueDays} dias`;
+    }
+  }
+
   return {
     invoiceNumber, series, accessKey, issueDate,
     emitterName, emitterCnpj, recipientName, recipientCnpj,
@@ -291,6 +349,7 @@ export function parseNFeXml(xmlString: string): ParsedNFe {
     clientLoadNumber, observation,
     clientLoadSource, clientLoadRuleId, clientLoadRuleLabel,
     paymentMethod, paymentMethodCode, paymentMethodSource,
+    installmentCount, firstDueDate, averageDueDays, paymentDescription,
   };
 }
 
