@@ -352,17 +352,18 @@ export default function RoutePlanning() {
   const dispatchRouteMutation = useMutation({
     mutationFn: async (route: RoutePlan) => {
       if (!currentTenant) throw new Error('Tenant não selecionado');
-      if (!route.vehicle_id) throw new Error('Selecione um veículo para despachar');
-      if (!route.driver_id) throw new Error('Selecione um motorista para despachar');
-      if (!route.planned_start_at) throw new Error('Informe horário previsto de saída');
-      const stops = route.stops && route.stops.length > 0
-        ? route.stops
-        : consolidateLoadsIntoStops(route.loads as any);
-      if (stops.length === 0) throw new Error('Rota sem paradas consolidadas');
-
-      const tripId = await dispatchPlan.mutateAsync({
-        vehicle_id: route.vehicle_id,
-        driver_id: route.driver_id,
+      const c = validateRouteConsistency(route as any, {
+        vehicles: vehicles as any,
+        otherRoutes: routes.map(o => ({ id: o.id, vehicle_id: o.vehicle_id, driver_id: o.driver_id, name: o.name })),
+        routeId: route.id,
+      });
+      if (!c.valid) {
+        throw new Error(c.blockingErrors.join(' · '));
+      }
+      const stops = route.stops!;
+      const tripId = await dispatchPlan.dispatchRoute({
+        vehicle_id: route.vehicle_id!,
+        driver_id: route.driver_id!,
         planned_start_at: route.planned_start_at,
         route_name: route.name,
         load_ids: route.loads.map(l => l.id),
@@ -372,9 +373,7 @@ export default function RoutePlanning() {
     },
     onSuccess: (_, route) => {
       removeRoute(route.id);
-      qc.invalidateQueries({ queryKey: ['loads'] });
-      qc.invalidateQueries({ queryKey: ['pending_loads_for_routing'] });
-      qc.invalidateQueries({ queryKey: ['dispatch_trips'] });
+      dispatchPlan.invalidateAll();
       toast.success('Rota despachada! Redirecionando para a carga...');
       // Redirecionar para o detalhe da primeira carga para faturamento/CT-e
       const firstLoadId = route.loads[0]?.id;
