@@ -602,8 +602,8 @@ export default function RoutePlanning() {
                 : `${selectedLoads.size} carga(s) selecionada(s) entrarão no planejamento.`}
             </span>
           </div>
-          <Button variant="default" onClick={dispatchAllValid} disabled={routes.length === 0 || dispatchRouteMutation.isPending}>
-            <Rocket className="h-4 w-4 mr-2" /> Despachar rotas válidas
+          <Button variant="default" onClick={() => dispatchAllValid(false)} disabled={routes.length === 0 || dispatchRouteMutation.isPending}>
+            <Rocket className="h-4 w-4 mr-2" /> Despachar rotas prontas
           </Button>
           <Button variant="outline" onClick={printAllRoutes} disabled={routes.length === 0}>
             <Printer className="h-4 w-4 mr-2" /> Imprimir todas as rotas
