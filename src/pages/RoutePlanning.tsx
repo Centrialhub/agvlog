@@ -407,6 +407,8 @@ export default function RoutePlanning() {
 
   const removeRoute = (routeId: string) => {
     setRoutes(prev => prev.filter(r => r.id !== routeId));
+    // Best-effort: remove draft persistido. Erros silenciosos.
+    deleteDraft.mutate(routeId, { onError: () => {/* draft pode não existir ainda */} });
   };
 
   const toggleRouteCollapse = (routeId: string) => {
@@ -579,6 +581,7 @@ export default function RoutePlanning() {
         ok++;
         // remove on success
         setRoutes(prev => prev.filter(x => x.id !== r.id));
+        deleteDraft.mutate(r.id, { onError: () => {} });
       } catch (e: any) {
         fail++;
         const msg = e?.message || String(e);
