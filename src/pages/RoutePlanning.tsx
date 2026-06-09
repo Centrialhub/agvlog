@@ -798,12 +798,7 @@ export default function RoutePlanning() {
                       <CardTitle className="text-base">{route.name}</CardTitle>
                       {(() => {
                         const st = routeStatus(route);
-                        const map = {
-                          ready: { label: 'Pronta', cls: 'bg-green-100 text-green-700 border-green-300' },
-                          review: { label: 'Revisão', cls: 'bg-amber-100 text-amber-700 border-amber-300' },
-                          blocked: { label: 'Bloqueada', cls: 'bg-destructive/10 text-destructive border-destructive/30' },
-                        } as const;
-                        const m = map[st];
+                        const m = STATUS_VISUALS[st];
                         return <Badge variant="outline" className={`text-[10px] ${m.cls}`}>{m.label}</Badge>;
                       })()}
                       {route.sortMode && (
