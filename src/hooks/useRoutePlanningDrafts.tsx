@@ -15,6 +15,10 @@ export interface RoutePlanningDraft {
   converted_load_id: string | null;
   created_at: string;
   updated_at: string;
+  load_ids?: string[] | null;
+  driver_id?: string | null;
+  planned_start_at?: string | null;
+  route_config?: any;
 }
 
 export function useRoutePlanningDrafts() {
@@ -33,6 +37,44 @@ export function useRoutePlanningDrafts() {
       return (data || []) as unknown as RoutePlanningDraft[];
     },
     enabled: !!currentTenant,
+  });
+}
+
+/**
+ * Persiste um snapshot completo de uma rota planejada como rascunho.
+ * Usa o id local da rota como id estável do draft (1 rota = 1 draft).
+ * Armazena tudo em `route_config` (jsonb existente).
+ */
+export function useSavePlanSnapshot() {
+  const { currentTenant } = useTenant();
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ routeId, name, snapshot }: { routeId: string; name: string; snapshot: any }) => {
+      if (!currentTenant) return null;
+      const loadIds: string[] = Array.isArray(snapshot?.loads)
+        ? snapshot.loads.map((l: any) => l.id).filter(Boolean)
+        : [];
+      const payload: any = {
+        id: routeId,
+        tenant_id: currentTenant.id,
+        name,
+        load_ids: loadIds,
+        order_ids: loadIds,
+        vehicle_id: snapshot?.vehicle_id || null,
+        driver_id: snapshot?.driver_id || null,
+        planned_start_at: snapshot?.planned_start_at || null,
+        notes: snapshot?.notes || null,
+        route_config: snapshot,
+        status: 'draft',
+        created_by: user?.id,
+        updated_at: new Date().toISOString(),
+      };
+      const { error } = await supabase.from('route_planning_drafts').upsert(payload as any, { onConflict: 'id' });
+      if (error) throw error;
+      return routeId;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['route_planning_drafts'] }),
   });
 }
 
