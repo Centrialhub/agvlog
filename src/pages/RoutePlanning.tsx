@@ -211,6 +211,21 @@ export default function RoutePlanning() {
     return Array.from(set).sort();
   }, [availableLoads]);
 
+  /** Cargas selecionadas que NÃO estão no filtro atual (risco de inclusão silenciosa). */
+  const hiddenSelectedLoads = useMemo(() => {
+    const visibleIds = new Set(filteredLoads.map(l => l.id));
+    return availableLoads.filter(l => selectedLoads.has(l.id) && !visibleIds.has(l.id));
+  }, [filteredLoads, availableLoads, selectedLoads]);
+
+  const confirmIfHidden = useCallback((proceed: () => void) => {
+    if (hiddenSelectedLoads.length === 0) { proceed(); return; }
+    const names = hiddenSelectedLoads.slice(0, 5).map(l => l.load_number).join(', ');
+    const extra = hiddenSelectedLoads.length > 5 ? ` e mais ${hiddenSelectedLoads.length - 5}` : '';
+    if (window.confirm(
+      `Existem ${hiddenSelectedLoads.length} carga(s) selecionada(s) fora do filtro atual (${names}${extra}). Deseja incluí-las mesmo assim?`,
+    )) proceed();
+  }, [hiddenSelectedLoads]);
+
   /* ──── actions ──── */
   const toggleLoad = (id: string) => {
     setSelectedLoads(prev => {
@@ -239,7 +254,8 @@ export default function RoutePlanning() {
     setSelectedLoads(new Set());
   };
 
-  const createRouteFromSelected = () => {
+  const createRouteFromSelected = () => confirmIfHidden(() => _createRouteFromSelected());
+  const _createRouteFromSelected = () => {
     const selected = availableLoads.filter(l => selectedLoads.has(l.id));
     if (selected.length === 0) return;
     const dest = selected[0].destination || 'Rota';
@@ -247,7 +263,7 @@ export default function RoutePlanning() {
     setRoutes(prev => [...prev, {
       id: crypto.randomUUID(),
       name,
-      loads: sortLoadsByRecipient(selected),
+      loads: selected,
     }]);
     setSelectedLoads(new Set());
     setNewRouteName('');
@@ -272,7 +288,8 @@ export default function RoutePlanning() {
   };
 
   /** Planejamento automático completo: agrupamento + paradas + sequência + veículo + motorista. */
-  const generateAutoPlan = () => {
+  const generateAutoPlan = () => confirmIfHidden(() => _generateAutoPlan());
+  const _generateAutoPlan = () => {
     if (selectedLoads.size === 0) {
       toast.info('Selecione ao menos uma carga para gerar o planejamento.');
       return;
