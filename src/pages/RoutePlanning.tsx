@@ -197,6 +197,63 @@ export default function RoutePlanning() {
     [routes]
   );
 
+  // ──── Hidratar drafts persistidos (uma vez quando pendingLoads chega) ────
+  useEffect(() => {
+    if (draftsHydratedRef.current) return;
+    if (!pendingLoads || pendingLoads.length === 0) return;
+    if (persistedDrafts.length === 0) { draftsHydratedRef.current = true; return; }
+    const loadById = new Map(pendingLoads.map(l => [l.id, l] as const));
+    const hydrated: RoutePlan[] = persistedDrafts.map((d: any) => {
+      const cfg = d.route_config || {};
+      const ids: string[] = Array.isArray(d.load_ids) ? d.load_ids : (Array.isArray(cfg.load_ids) ? cfg.load_ids : []);
+      const loads = ids.map(id => loadById.get(id)).filter(Boolean) as PendingLoad[];
+      const missingCount = ids.length - loads.length;
+      return {
+        id: d.id,
+        name: d.name,
+        loads,
+        stops: Array.isArray(cfg.stops) ? cfg.stops : undefined,
+        vehicle_id: d.vehicle_id || cfg.vehicle_id || undefined,
+        driver_id: d.driver_id || cfg.driver_id || undefined,
+        planned_start_at: d.planned_start_at || cfg.planned_start_at || undefined,
+        sortMode: cfg.sortMode,
+        initial_transit_minutes: cfg.initial_transit_minutes,
+        notes: d.notes || cfg.notes,
+        dirty: missingCount > 0 || (Array.isArray(cfg.stops) && cfg.stops.length > 0 && loads.length === 0),
+      } as RoutePlan;
+    }).filter(r => r.loads.length > 0);
+    if (hydrated.length > 0) {
+      setRoutes(hydrated);
+      setRestoredFromDraft(true);
+    }
+    draftsHydratedRef.current = true;
+  }, [pendingLoads, persistedDrafts]);
+
+  // ──── Persistir cada rota como draft (debounce) ────
+  useEffect(() => {
+    if (!draftsHydratedRef.current) return;
+    if (routes.length === 0) return;
+    const timers = routes.map(r => setTimeout(() => {
+      savePlanSnapshot.mutate({
+        routeId: r.id,
+        name: r.name,
+        snapshot: {
+          loads: r.loads.map(l => ({ id: l.id })),
+          load_ids: r.loads.map(l => l.id),
+          stops: r.stops,
+          vehicle_id: r.vehicle_id,
+          driver_id: r.driver_id,
+          planned_start_at: r.planned_start_at,
+          sortMode: r.sortMode,
+          initial_transit_minutes: r.initial_transit_minutes,
+          notes: r.notes,
+        },
+      });
+    }, 1500));
+    return () => { timers.forEach(t => clearTimeout(t)); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routes]);
+
   const availableLoads = useMemo(() => {
     return pendingLoads.filter(l => !assignedLoadIds.has(l.id));
   }, [pendingLoads, assignedLoadIds]);
