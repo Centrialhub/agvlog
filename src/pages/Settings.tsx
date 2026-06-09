@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useTenant } from '@/hooks/useTenant';
+import { useTenant, useIsAdmin } from '@/hooks/useTenant';
 import { useAuth } from '@/hooks/useAuth';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useProviderUnits, useProviderUnitMutations, useTrackerLinks, useTrackerLinkMutations } from '@/hooks/useProviderUnits';
@@ -34,14 +34,94 @@ export default function Settings() {
           <TabsTrigger value="telemetry">Catálogo Telemetria</TabsTrigger>
           <TabsTrigger value="mapping">Mapeamento</TabsTrigger>
           <TabsTrigger value="logs">Logs</TabsTrigger>
+          <TabsTrigger value="maintenance">Manutenção</TabsTrigger>
         </TabsList>
         <TabsContent value="integration" className="mt-4"><IntegrationSection /></TabsContent>
         <TabsContent value="units" className="mt-4"><UnitsSection /></TabsContent>
         <TabsContent value="telemetry" className="mt-4"><TelemetryCatalogSection /></TabsContent>
         <TabsContent value="mapping" className="mt-4"><TelemetryMappingSection /></TabsContent>
         <TabsContent value="logs" className="mt-4"><IntegrationLogsSection /></TabsContent>
+        <TabsContent value="maintenance" className="mt-4"><MaintenanceSection /></TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+/* ===== Maintenance Section (admin only) ===== */
+function MaintenanceSection() {
+  const { currentTenant } = useTenant();
+  const isAdmin = useIsAdmin();
+  const qc = useQueryClient();
+  const [confirmText, setConfirmText] = useState('');
+  const CONFIRM_PHRASE = 'REVERTER TODOS OS XMLS';
+
+  const revertMutation = useMutation({
+    mutationFn: async () => {
+      if (!currentTenant) throw new Error('Sem tenant');
+      const { data, error } = await supabase.rpc('revert_xml_loads_to_available', { _tenant_id: currentTenant.id });
+      if (error) throw error;
+      return data as Record<string, any>;
+    },
+    onSuccess: (result) => {
+      toast.success(result?.message || 'XMLs revertidos com sucesso');
+      setConfirmText('');
+      qc.invalidateQueries({ queryKey: ['pending_loads_for_routing'] });
+      qc.invalidateQueries({ queryKey: ['loads'] });
+      qc.invalidateQueries({ queryKey: ['dispatch_trips'] });
+      qc.invalidateQueries({ queryKey: ['route_planning_drafts'] });
+    },
+    onError: (err: any) => toast.error(err?.message || 'Erro ao reverter XMLs'),
+  });
+
+  if (!isAdmin) {
+    return (
+      <Card>
+        <CardContent className="py-8 text-center text-sm text-muted-foreground">
+          Apenas administradores podem acessar a área de manutenção.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="border-destructive/30">
+      <CardHeader>
+        <CardTitle className="text-base text-destructive flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4" /> Ações destrutivas
+        </CardTitle>
+        <CardDescription>
+          Estas operações afetam dados em produção e não podem ser desfeitas. Use somente em situações excepcionais.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800 space-y-2">
+          <p className="font-medium">Reverter todos os XMLs para "carga disponível"</p>
+          <ul className="list-disc pl-4 space-y-0.5">
+            <li>Remove TODAS as viagens (dispatch_trips) criadas a partir de XMLs.</li>
+            <li>Apaga paradas, eventos e vínculos relacionados.</li>
+            <li>Reseta status das cargas para "planned", removendo veículo e motorista vinculados.</li>
+            <li>Reseta rascunhos despachados para draft.</li>
+          </ul>
+          <p className="text-[11px]">Esta ação é registrada em auditoria do tenant.</p>
+        </div>
+        <div>
+          <Label className="text-xs">Para confirmar, digite: <code className="font-mono text-destructive">{CONFIRM_PHRASE}</code></Label>
+          <Input
+            value={confirmText}
+            onChange={e => setConfirmText(e.target.value)}
+            placeholder={CONFIRM_PHRASE}
+            className="mt-1 font-mono"
+          />
+        </div>
+        <Button
+          variant="destructive"
+          disabled={confirmText !== CONFIRM_PHRASE || revertMutation.isPending}
+          onClick={() => revertMutation.mutate()}
+        >
+          {revertMutation.isPending ? 'Revertendo...' : 'Reverter todos os XMLs'}
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
 
