@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import type { RouteStopDraft } from '@/lib/route-planning/routePlanningTypes';
+import { useCallback } from 'react';
 
 export interface DispatchRoutePayload {
   vehicle_id: string;
@@ -17,10 +18,9 @@ export function useDispatchRoutePlan() {
   const { currentTenant } = useTenant();
   const qc = useQueryClient();
 
-  return useMutation({
-    mutationFn: async (payload: DispatchRoutePayload) => {
-      if (!currentTenant) throw new Error('Tenant não selecionado');
-      const stops = [...payload.stops]
+  const dispatchOnce = useCallback(async (payload: DispatchRoutePayload): Promise<string> => {
+    if (!currentTenant) throw new Error('Tenant não selecionado');
+    const stops = [...payload.stops]
         .sort((a, b) => (a.manual_order || 0) - (b.manual_order || 0))
         .map((s) => ({
           client_id: s.client_id,
@@ -37,7 +37,7 @@ export function useDispatchRoutePlan() {
           load_ids: s.load_ids,
         }));
 
-      const { data, error } = await supabase.rpc('dispatch_planned_route' as any, {
+    const { data, error } = await supabase.rpc('dispatch_planned_route' as any, {
         _payload: {
           tenant_id: currentTenant.id,
           vehicle_id: payload.vehicle_id,
@@ -49,17 +49,27 @@ export function useDispatchRoutePlan() {
           planning_draft_id: payload.planning_draft_id || null,
         },
       });
-      if (error) throw error;
-      return data as unknown as string;
-    },
+    if (error) throw new Error(error.message || String(error));
+    return data as unknown as string;
+  }, [currentTenant]);
+
+  const invalidate = useCallback(() => {
+    qc.invalidateQueries({ queryKey: ['pending_loads_for_routing'] });
+    qc.invalidateQueries({ queryKey: ['loads'] });
+    qc.invalidateQueries({ queryKey: ['dispatch_trips'] });
+    qc.invalidateQueries({ queryKey: ['route_planning_drafts'] });
+    qc.invalidateQueries({ queryKey: ['driver_trip'] });
+    qc.invalidateQueries({ queryKey: ['driver_active_trip'] });
+    qc.invalidateQueries({ queryKey: ['driver_stops'] });
+  }, [qc]);
+
+  const mutation = useMutation({
+    mutationFn: dispatchOnce,
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['pending_loads_for_routing'] });
-      qc.invalidateQueries({ queryKey: ['loads'] });
-      qc.invalidateQueries({ queryKey: ['dispatch_trips'] });
-      qc.invalidateQueries({ queryKey: ['route_planning_drafts'] });
-      qc.invalidateQueries({ queryKey: ['driver_trip'] });
-      qc.invalidateQueries({ queryKey: ['driver_active_trip'] });
-      qc.invalidateQueries({ queryKey: ['driver_stops'] });
+      invalidate();
     },
   });
+
+  // Attach the bare callable for batch flows that need to handle navigation/toasts themselves.
+  return Object.assign(mutation, { dispatchRoute: dispatchOnce, invalidateAll: invalidate });
 }

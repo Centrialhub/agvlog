@@ -1,110 +1,98 @@
-## Painel de Controle Operacional (Torre de Controle) — OSRM Self-hosted
 
-Nova tela `/operations-control` para monitorar todas as viagens ativas em tempo real, com mapa, KPIs, alertas e drawer de detalhes. Roteamento via OSRM self-hosted.
+# Plano: Endurecimento do fluxo /route-planning
 
----
+Trabalho grande e crítico. Vou dividir em fases para reduzir risco de quebra. Cada fase é entregável e testável isoladamente.
 
-### 1. Pré-requisitos do usuário (antes de implementar)
+## Arquivos principais afetados
 
-Preciso confirmar com você:
+- `src/pages/RoutePlanning.tsx` (refatorar — fonte de várias inconsistências)
+- `src/hooks/route-planning/usePendingLoadsForRouting.ts` + query inline em `RoutePlanning.tsx` (adicionar `client_id`)
+- `src/hooks/route-planning/useDispatchRoutePlan.ts` (separar versão sem navegação)
+- `src/hooks/useRoutePlanningDrafts.tsx` (estender para persistir rota completa)
+- `src/hooks/useTenant.tsx` (guard localStorage)
+- Novos: `src/lib/route-planning/routeConsistency.ts`, `src/lib/route-planning/routeStatus.ts`
+- Novos testes: `src/test/routeConsistency.test.ts`, `src/test/routeStatus.test.ts`
+- Migration SQL: endurecer `dispatch_planned_route` + nova coluna `route_planning_drafts.plan_snapshot jsonb`
 
-1. **URL do OSRM**: você já tem um OSRM self-hosted rodando? Se sim, qual é a URL pública? (ex.: `https://osrm.seudominio.com`). Se ainda não tem, posso deixar a integração pronta e você adiciona a variável depois — mas a tela só renderiza rotas quando o OSRM estiver acessível.
-2. **Secret backend**: vou adicionar `OSRM_BASE_URL` como secret do Supabase (para Edge Functions) e `VITE_OSRM_BASE_URL` no `.env` (para fallback frontend, se necessário).
+## Fase 1 — Fundação (validação + status + queries)
 
----
+1. Adicionar `client_id` em ambas as queries de `fiscal_documents` (RoutePlanning inline + `usePendingLoadsForRouting`). Propagar pelo tipo `LoadItem`.
+2. Criar `routeStatus.ts` com enum `RoutePlanStatus` estendido: `ready | review | blocked | dirty | dispatching | dispatched | failed`. Função `computeRouteStatus(route, validation)` derivada.
+3. Criar `routeConsistency.ts` com:
+   - `validateRouteConsistency(route): { valid, blockingErrors[], warnings[] }`
+   - checks: stops cobrem todas loads; load_ids em stops ⊂ route.loads; FDs ⊂ loads; sem FD duplicado entre stops; cidade/destino presentes; capacidade vs veículo; janela violada → warning.
+4. Tests unitários para ambos.
 
-### 2. Migrations (banco)
+## Fase 2 — Consistência cargas/stops + ordenação
 
-Criar 4 tabelas novas, todas multi-tenant com RLS no padrão do projeto (`is_tenant_member` / `is_tenant_admin`):
+1. Quando `loads` muda (add/remove/move) em uma rota com stops existentes:
+   - Se mudança trivial (apenas remoção): filtrar stops e marcar `dirty` se sobrar FD/load órfão; tentar auto-regenerar paradas.
+   - Caso contrário: limpar `stops` e marcar `dirty`. Bloquear despacho enquanto `dirty`.
+2. Remover `sortLoadsByRecipient` da renderização interna de uma rota (Opção A do brief) — preservar ordem manual. Manter sort só na lista de cargas disponíveis.
+3. Reaplicar sort manual quando `moveLoad` for chamado (já é o caso, mas removendo o re-sort no render).
 
-- `trip_routes` — rota planejada por viagem (geometry GeoJSON, distância, duração, provider='osrm'), única por `(trip_id, provider)`.
-- `trip_live_status` — status operacional calculado por viagem (state, severity, próxima parada, atraso, distância da rota, ETA, último sinal). PK `(tenant_id, trip_id)`.
-- `trip_alerts` — alertas operacionais abertos/fechados (off_route, delayed, stopped, no_signal, etc.).
-- **Reutilizar `positions_last`** em vez de criar `vehicle_latest_positions` (já existe e cumpre o papel).
+## Fase 3 — Despacho seguro (individual + lote)
 
-GRANTs para `authenticated` e `service_role` em todas, RLS por `tenant_id`.
+1. Refatorar `useDispatchRoutePlan` para expor `dispatchRoute(payload)` puro (sem navegação/toast).
+2. Em `RoutePlanning.tsx`:
+   - `dispatchRouteMutation` (individual): chama base + navega no sucesso.
+   - `dispatchBatchMutation`: itera apenas rotas com status `ready`, marca cada uma `dispatching → dispatched|failed`, acumula resultado, mostra resumo (`toast` + dialog) sem navegar.
+   - Botão "Despachar em lote" desabilitado se nenhuma `ready`. Botão secundário "Despachar mesmo com alertas" requer digitação de confirmação e lista alertas.
+3. Pré-validação obrigatória chamando `validateRouteConsistency` antes de cada chamada.
 
-Função RPC `get_active_trips_live(_tenant_id uuid)` que devolve o DTO consolidado (viagem + veículo + última posição + rota + paradas + status + cargas) para evitar N+1 no frontend.
+## Fase 4 — Persistência de drafts
 
----
+1. Migration: `ALTER TABLE route_planning_drafts ADD COLUMN plan_snapshot jsonb` (rota completa serializada: loads ids, stops, vehicle/driver, planned_start_at, sortMode, status).
+2. Estender `useRoutePlanningDrafts` com:
+   - `useSavePlanSnapshot(routeId, snapshot)` — debounced upsert
+   - `useActivePlanSnapshots()` — restaura ao montar
+3. Em `RoutePlanning.tsx`:
+   - useEffect debounced (1.5s) que persiste cada `route` como snapshot.
+   - Ao montar: hidratar `routes` a partir dos snapshots ativos + cruzar com `pendingLoads` (descartar loads que não existem mais).
+   - Banner "Existem rotas planejadas não despachadas" quando snapshots restaurados.
+   - Botão "Descartar rascunho" por rota.
+   - No sucesso de dispatch: marcar draft `dispatched` no servidor.
 
-### 3. Serviços / Edge Functions
+## Fase 5 — Seleção vs filtro
 
-- **`supabase/functions/_shared/osrm.ts`** — `calculateOsrmRoute(coordinates)` chamando `{OSRM_BASE_URL}/route/v1/driving/...?overview=full&geometries=geojson`. Validação ≥2 pontos, conversão lng,lat, tratamento de erro.
-- **`supabase/functions/calculate-trip-route`** — recebe `trip_id`, monta waypoints (origem → paradas ordenadas), chama OSRM, salva em `trip_routes`.
-- **`supabase/functions/update-trip-live-status`** — varre viagens ativas do tenant, busca posição (`positions_last`), rota (`trip_routes`), paradas, calcula status com regras de prioridade (`no_signal` > `off_route` > `delayed` > `stopped` > `at_stop` > `arriving` > `normal`), upsert em `trip_live_status`, cria/fecha `trip_alerts`. Usa `@turf/turf` (via npm: para Deno) para `pointToLineDistance`.
+1. Calcular `selectedVisible` / `selectedHidden` a partir de `selectedLoads` × `filteredLoads`.
+2. Mostrar chip: "Selecionadas: N (M visíveis · K fora do filtro)".
+3. Em `createRouteFromSelected` / `generateAutoPlan`: se houver `selectedHidden > 0`, abrir `confirm dialog` listando-as antes de prosseguir.
 
-Lógica de status: thresholds conforme especificado (sinal ≥15min, desvio >500m com v>10km/h, parado <3km/h por ≥10min, chegando ≤1000m, na parada ≤150m, atrasado vs `planned_arrival_at`).
+## Fase 6 — Reverter XMLs
 
----
+Mover botão de `/route-planning` para `/settings` (área admin) atrás de:
+- `is_tenant_admin` check (já feito server-side; UI esconde se não-admin).
+- Dialog com texto explicativo do impacto.
+- Confirmação textual: digitar `REVERTER TODOS OS XMLS`.
+- Auditoria: já registrada no RPC (não tocar SQL aqui).
 
-### 4. Frontend
+## Fase 7 — SQL hardening + tenant guard
 
-Dependência nova: `@turf/turf` (para distância ponto-linha no client se necessário; principalmente backend).
+1. Migration `dispatch_planned_route` (substituir): validar array não-vazio, sem duplicatas, todos `load_ids` existem no tenant E `trip_id IS NULL` (contagem exata), todos FDs referenciados existem, toda stop tem `destination`. Erros claros em PT.
+2. `useTenant.tsx`: mover `localStorage.setItem(guardKey,'true')` para dentro do `then` de sucesso da criação do tenant; mostrar toast de erro no catch.
 
-Estrutura:
+## Fase 8 — Estados visuais
 
-```
-src/pages/OperationsControl.tsx          # Tela principal
-src/components/control-tower/
-  ControlTowerHeader.tsx                  # Header com KPIs gerais + última atualização
-  ControlTowerSidebar.tsx                 # KPIs + lista de alertas + lista de viagens
-  ControlTowerMap.tsx                     # Leaflet: rotas, marcadores, paradas
-  VehicleMarker.tsx                       # Ícone L.divIcon com placa + status (cores por state)
-  TripDetailsDrawer.tsx                   # Drawer ao clicar no veículo
-  AlertsPanel.tsx                         # Lista ordenada por severidade
-  KpiCards.tsx                            # Cards: em rota, normal, atrasados, fora rota, parados, sem sinal
-src/hooks/useActiveTripsLive.ts           # useQuery com refetchInterval: 10000
-src/lib/controlTower/
-  stateColors.ts                          # routeColorByState, severity → tokens
-  stateLabels.ts                          # labels PT-BR
-```
+Atualizar header de cada rota com badge colorida por status + ações desabilitadas/escondidas conforme status (`dirty` → "Recalcular paradas"; `dispatching` → spinner + lock; `blocked` → tooltip com motivo).
 
-Rota em `App.tsx`: `/operations-control` dentro de `ProtectedRoute`.
-Item de menu no `AppLayout` (sidebar).
+## Testes a entregar
 
-Mapa em Leaflet 4.2.1 (já é o padrão do projeto, `react-leaflet@4.2.1`). Fullscreen, auto-fit bounds nas viagens ativas, polylines com cor conforme `state`, markers com `L.divIcon` HTML mostrando placa.
+- `routeConsistency.test.ts` — 6+ cenários
+- `routeStatus.test.ts` — transições
+- `dispatchBatch.test.ts` — separa ready/review/blocked
+- `routeDraftHydration.test.ts` — descarta loads inexistentes
 
-Drawer com: dados atuais (vel, vel média, distância da rota, atraso, ETA), próxima parada, paradas concluídas/pendentes, cargas vinculadas, ações (recalcular rota = trigger Edge Function; centralizar; abrir viagem). Ações sem lógica final ficam disabled com tooltip "em breve".
+## Pontos para decisão de produto (vou assumir defaults, mas sinalizar)
 
-Polling 10s via TanStack Query, mantendo último estado em caso de falha, indicador "Atualizado há Xs".
+1. **Auto-regenerar stops vs apenas marcar dirty**: vou implementar híbrido — só auto-regenera se nenhuma stop tinha edição manual; caso contrário marca `dirty`.
+2. **Janela violada**: gravidade = `review` (não `blocked`).
+3. **Ordenação manual de cargas**: Opção A (preservar ordem manual, remover re-sort).
+4. **Local do "Reverter XMLs"**: `/settings` aba "Manutenção" (criar se não houver).
+5. **Persistência de draft**: por rota individual (1 draft = 1 rota planejada), não 1 draft = sessão inteira.
 
----
+## Escopo / esforço
 
-### 5. Comportamento adaptativo
+Grande. ~12-15 arquivos editados, ~5 novos, 2 migrations, 4 suites de teste. Vou executar **todas as fases na ordem** numa única rodada, mas mantendo cada commit lógico autocontido para o caso de você querer parar antes.
 
-- Viagem sem rota: botão "Calcular rota" no drawer (chama `calculate-trip-route`).
-- Veículo sem posição recente (>15min): renderiza no estado `no_signal` se houver última posição conhecida; oculta se nunca houve.
-- OSRM offline: status engine continua funcionando (sem cálculo de distância-da-rota); UI mostra aviso discreto "Rota não disponível".
-- Sem paradas geocodificadas: rota parcial com os waypoints válidos.
-
----
-
-### 6. Cron (opcional, MVP)
-
-Posso adicionar `pg_cron` chamando `update-trip-live-status` a cada 1min para manter `trip_live_status` fresco em background. Como envolve dados específicos do usuário (URL da function + anon key), faço via `supabase--insert` separado, **somente se você confirmar**. Caso prefira, o `get_active_trips_live` chama o recálculo on-demand antes de retornar (mais simples, sem cron).
-
----
-
-### 7. Fora de escopo (conforme pedido)
-
-Google Routes, OR-Tools, WebSocket, IA preditiva, WhatsApp automático, replay de viagem, app mobile, reordenação automática de paradas.
-
----
-
-### Plano de execução (incremental)
-
-1. Migration (tabelas + GRANTs + RLS + RPC).
-2. Edge Functions (OSRM service, calculate-trip-route, update-trip-live-status).
-3. Hook + tipos no frontend.
-4. Tela + componentes (Header, Sidebar, Map, Markers, Drawer, KPIs, Alerts).
-5. Rota + item de menu.
-6. Documentação curta em `docs/control-tower.md` explicando configuração do OSRM.
-
----
-
-### Perguntas antes de começar
-
-1. Você já tem OSRM self-hosted rodando? Qual a URL? (ou implemento e você configura depois)
-2. Quer cron automático (recalc a cada 1min) ou recálculo on-demand quando a tela carrega?
-3. Confirma o caminho `/operations-control` (vs `/control-tower`)?
+Posso seguir?
