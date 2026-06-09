@@ -117,27 +117,6 @@ export default function RoutePlanning() {
   const dispatchPlan = useDispatchRoutePlan();
   const { data: operationalRoutes = [] } = useOperationalRoutes();
 
-  const revertXmlsMutation = useMutation({
-    mutationFn: async () => {
-      if (!currentTenant) throw new Error('Sem tenant');
-      const { data, error } = await supabase.rpc('revert_xml_loads_to_available', {
-        _tenant_id: currentTenant.id,
-      });
-      if (error) throw error;
-      return data as Record<string, any>;
-    },
-    onSuccess: (result) => {
-      toast.success(result?.message || 'XMLs revertidos com sucesso');
-      qc.invalidateQueries({ queryKey: ['pending_loads_for_routing'] });
-      qc.invalidateQueries({ queryKey: ['loads'] });
-      qc.invalidateQueries({ queryKey: ['dispatch_trips'] });
-      qc.invalidateQueries({ queryKey: ['route_planning_drafts'] });
-    },
-    onError: (err: any) => {
-      toast.error(err?.message || 'Erro ao reverter XMLs');
-    },
-  });
-
   const { data: drivers = [] } = useQuery({
     queryKey: ['drivers_for_routing', currentTenant?.id],
     queryFn: async () => {
@@ -253,7 +232,9 @@ export default function RoutePlanning() {
     const selected = availableLoads.filter(l => selectedLoads.has(l.id));
     if (selected.length === 0) return;
     setRoutes(prev => prev.map(r =>
-      r.id === routeId ? { ...r, loads: sortLoadsByRecipient([...r.loads, ...selected]) } : r
+      r.id === routeId
+        ? { ...r, loads: [...r.loads, ...selected], dirty: !!r.stops && r.stops.length > 0 }
+        : r
     ));
     setSelectedLoads(new Set());
   };
@@ -331,9 +312,17 @@ export default function RoutePlanning() {
   };
 
   const removeLoadFromRoute = (routeId: string, loadId: string) => {
-    setRoutes(prev => prev.map(r =>
-      r.id === routeId ? { ...r, loads: r.loads.filter(l => l.id !== loadId) } : r
-    ));
+    setRoutes(prev => prev.map(r => {
+      if (r.id !== routeId) return r;
+      const loads = r.loads.filter(l => l.id !== loadId);
+      // Auto-filter stops referencing the removed load; if any stop became empty, mark dirty.
+      const stops = (r.stops || []).map(s => ({
+        ...s,
+        load_ids: s.load_ids.filter(id => id !== loadId),
+      }));
+      const hasOrphanStop = stops.some(s => s.load_ids.length === 0);
+      return { ...r, loads, stops, dirty: hasOrphanStop || stops.length === 0 };
+    }));
   };
 
   const removeRoute = (routeId: string) => {
@@ -355,7 +344,7 @@ export default function RoutePlanning() {
       if (newIdx < 0 || newIdx >= r.loads.length) return r;
       const loads = [...r.loads];
       [loads[idx], loads[newIdx]] = [loads[newIdx], loads[idx]];
-      return { ...r, loads };
+      return { ...r, loads }; // Opção A: ordem manual preservada (render não re-ordena).
     }));
   };
 
@@ -411,7 +400,7 @@ export default function RoutePlanning() {
     setRoutes(prev => prev.map(r => {
       if (r.id !== routeId) return r;
       const stops = consolidateLoadsIntoStops(r.loads as any).map((s, i) => ({ ...s, manual_order: i + 1 }));
-      return { ...r, stops, sortMode: 'original' as const };
+      return { ...r, stops, sortMode: 'original' as const, dirty: false };
     }));
   };
 
