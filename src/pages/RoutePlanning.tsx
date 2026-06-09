@@ -648,6 +648,32 @@ export default function RoutePlanning() {
 
   return (
     <div className="animate-fade-in space-y-6">
+      {restoredFromDraft && (
+        <div className="flex items-center justify-between gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          <span className="flex items-center gap-2"><AlertTriangle className="h-3 w-3" /> Existem rotas planejadas não despachadas restauradas do rascunho.</span>
+          <Button size="sm" variant="ghost" onClick={() => setRestoredFromDraft(false)}>OK</Button>
+        </div>
+      )}
+      <Dialog open={!!batchSummary} onOpenChange={(o) => !o && setBatchSummary(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Resumo do despacho em lote</DialogTitle></DialogHeader>
+          {batchSummary && (
+            <div className="space-y-2 text-sm">
+              <p><strong>{batchSummary.ok}</strong> rota(s) despachada(s) com sucesso.</p>
+              {batchSummary.fail > 0 && <p className="text-destructive"><strong>{batchSummary.fail}</strong> rota(s) falharam.</p>}
+              {batchSummary.skipped > 0 && <p className="text-muted-foreground"><strong>{batchSummary.skipped}</strong> rota(s) ignorada(s) por não estarem prontas.</p>}
+              {batchSummary.errors.length > 0 && (
+                <ul className="text-xs space-y-1 max-h-40 overflow-y-auto border rounded p-2 bg-muted/30">
+                  {batchSummary.errors.map((e, i) => <li key={i}>• {e}</li>)}
+                </ul>
+              )}
+              <div className="flex justify-end pt-2">
+                <Button onClick={() => setBatchSummary(null)}>Fechar</Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
