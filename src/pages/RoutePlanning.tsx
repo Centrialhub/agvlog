@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -19,7 +19,7 @@ import {
   Route, Plus, Wand2, Trash2,
   PackageCheck, Truck, ChevronDown, ChevronUp,
   FileText, Send, Download, ListOrdered, Sparkles, Bot, Rocket, Printer,
-  RefreshCw,
+  RefreshCw, AlertTriangle,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { printRomaneioRoutes, RomaneioDoc } from '@/lib/romaneioPrint';
@@ -32,6 +32,8 @@ import { generateAutomaticRoutePlans, defaultPlannedStartAt } from '@/lib/route-
 import { useOperationalRoutes } from '@/hooks/useOperationalRoutes';
 import { useCustomerDeliveryWindowsForRouting } from '@/hooks/route-planning/useCustomerDeliveryWindowsForRouting';
 import { useDispatchRoutePlan } from '@/hooks/route-planning/useDispatchRoutePlan';
+import { validateRouteConsistency } from '@/lib/route-planning/routeConsistency';
+import { computeRouteStatus, STATUS_VISUALS, type RoutePlanStatusExt } from '@/lib/route-planning/routeStatus';
 import type { RouteStopDraft, RoutePlanValidationIssue, RouteStopSortMode } from '@/lib/route-planning/routePlanningTypes';
 
 /* ────────────── types ────────────── */
