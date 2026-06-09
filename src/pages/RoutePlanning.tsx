@@ -448,68 +448,69 @@ export default function RoutePlanning() {
     }));
   };
 
-  const validateRoute = (r: RoutePlan): RoutePlanValidationIssue[] => {
-    const issues: RoutePlanValidationIssue[] = [];
-    if (!r.vehicle_id) issues.push({ level: 'error', message: 'Selecione um veículo.' });
-    if (!r.driver_id) issues.push({ level: 'error', message: 'Selecione um motorista (obrigatório para o app do motorista).' });
-    if (!r.planned_start_at) issues.push({ level: 'error', message: 'Informe horário previsto de saída.' });
-    if (r.loads.length === 0) issues.push({ level: 'error', message: 'Sem cargas vinculadas.' });
-    if (!r.stops || r.stops.length === 0) issues.push({ level: 'error', message: 'Sem paradas consolidadas.' });
-    (r.stops || []).forEach((s, i) => {
-      if (!s.destination?.trim() || !s.recipient_name?.trim())
-        issues.push({ level: 'error', message: `Parada ${i + 1} sem destino/destinatário.` });
-      if (s.fiscal_document_ids.length === 0)
-        issues.push({ level: 'warning', message: `Parada ${i + 1} sem documentos fiscais.` });
-      if (!s.city) issues.push({ level: 'warning', message: `Parada ${i + 1} sem cidade cadastrada.` });
-      if (s.risk_level === 'critical') issues.push({ level: 'warning', message: `Parada ${i + 1}: ${s.risk_reason || 'risco crítico de janela'}.` });
-      if (s.risk_level === 'warning' && s.risk_reason && !s.risk_reason.startsWith('Cliente sem janela'))
-        issues.push({ level: 'warning', message: `Parada ${i + 1}: ${s.risk_reason}.` });
+  const routeConsistency = useCallback((r: RoutePlan) => validateRouteConsistency(
+    r as any,
+    {
+      vehicles: vehicles as any,
+      otherRoutes: routes.map(o => ({ id: o.id, vehicle_id: o.vehicle_id, driver_id: o.driver_id, name: o.name })),
+      routeId: r.id,
+    },
+  ), [vehicles, routes]);
+
+  const routeStatus = useCallback((r: RoutePlan): RoutePlanStatusExt => computeRouteStatus({
+    dirty: r.dirty,
+    dispatching: r.dispatching,
+    failed: !!r.lastDispatchError,
+    consistency: routeConsistency(r),
+  }), [routeConsistency]);
+
+  const validateRoute = useCallback((r: RoutePlan): RoutePlanValidationIssue[] => {
+    const c = routeConsistency(r);
+    return [
+      ...c.blockingErrors.map(m => ({ level: 'error' as const, message: m })),
+      ...c.warnings.map(m => ({ level: 'warning' as const, message: m })),
+    ];
+  }, [routeConsistency]);
+
+  /** Despacho em lote: só rotas com status 'ready' por padrão. */
+  const [batchSummary, setBatchSummary] = useState<{ ok: number; fail: number; skipped: number; errors: string[] } | null>(null);
+  const dispatchAllValid = async (allowReview = false) => {
+    const ready = routes.filter(r => {
+      const st = routeStatus(r);
+      return st === 'ready' || (allowReview && st === 'review');
     });
-    const v: any = vehicles.find((vv: any) => vv.id === r.vehicle_id);
-    if (v) {
-      const totals = r.loads.reduce((acc, l) => ({
-        pallets: acc.pallets + (Number(l.total_pallet_count) || 0),
-        weight: acc.weight + (Number(l.total_weight_kg) || 0),
-        volume: acc.volume + (Number(l.total_volume_m3) || 0),
-      }), { pallets: 0, weight: 0, volume: 0 });
-      if (v.max_pallets && totals.pallets > v.max_pallets)
-        issues.push({ level: 'warning', message: `Paletes (${totals.pallets}) excedem capacidade (${v.max_pallets}).` });
-      if (v.max_weight_kg && totals.weight > v.max_weight_kg)
-        issues.push({ level: 'warning', message: `Peso (${totals.weight.toFixed(0)}kg) excede capacidade (${v.max_weight_kg}kg).` });
-      if (v.max_volume_m3 && totals.volume > v.max_volume_m3)
-        issues.push({ level: 'warning', message: `Volume (${totals.volume.toFixed(2)}m³) excede capacidade (${v.max_volume_m3}m³).` });
-    }
-    // Motorista duplicado
-    if (r.driver_id) {
-      const dup = routes.find(other => other.id !== r.id && other.driver_id === r.driver_id);
-      if (dup) issues.push({ level: 'warning', message: `Motorista também alocado em "${dup.name}".` });
-    }
-    return issues;
-  };
-
-  const routeStatus = (r: RoutePlan): 'ready' | 'review' | 'blocked' => {
-    const issues = validateRoute(r);
-    if (issues.some(i => i.level === 'error')) return 'blocked';
-    if (issues.some(i => i.level === 'warning')) return 'review';
-    return 'ready';
-  };
-
-  const dispatchAllValid = async () => {
-    const dispatchable = routes.filter(r => routeStatus(r) !== 'blocked');
-    if (dispatchable.length === 0) {
-      toast.info('Nenhuma rota válida para despacho em lote.');
+    if (ready.length === 0) {
+      toast.info(allowReview ? 'Nenhuma rota elegível.' : 'Nenhuma rota pronta para despacho em lote.');
       return;
     }
+    const skipped = routes.length - ready.length;
     let ok = 0, fail = 0;
-    for (const r of dispatchable) {
+    const errors: string[] = [];
+    for (const r of ready) {
+      setRoutes(prev => prev.map(x => x.id === r.id ? { ...x, dispatching: true, lastDispatchError: undefined } : x));
       try {
-        await dispatchRouteMutation.mutateAsync(r);
+        await dispatchPlan.dispatchRoute({
+          vehicle_id: r.vehicle_id!,
+          driver_id: r.driver_id!,
+          planned_start_at: r.planned_start_at!,
+          route_name: r.name,
+          load_ids: r.loads.map(l => l.id),
+          stops: r.stops!,
+        });
         ok++;
-      } catch (e) {
+        // remove on success
+        setRoutes(prev => prev.filter(x => x.id !== r.id));
+      } catch (e: any) {
         fail++;
+        const msg = e?.message || String(e);
+        errors.push(`${r.name}: ${msg}`);
+        setRoutes(prev => prev.map(x => x.id === r.id ? { ...x, dispatching: false, lastDispatchError: msg } : x));
       }
     }
-    toast[fail === 0 ? 'success' : 'warning'](`Despachadas ${ok} rota(s)${fail ? ` · ${fail} falharam` : ''}`);
+    dispatchPlan.invalidateAll();
+    setBatchSummary({ ok, fail, skipped, errors });
+    if (ok > 0) toast.success(`${ok} rota(s) despachada(s)`);
+    if (fail > 0) toast.error(`${fail} rota(s) falharam`);
   };
 
   const buildRouteRomaneio = (route: RoutePlan) => {
