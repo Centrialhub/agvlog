@@ -67,8 +67,12 @@ export function TenantProvider({ children }: { children: ReactNode }) {
             const { data: newTenantId, error: createErr } = await supabase.rpc('create_tenant_with_owner', {
               _tenant_name: user.email?.split('@')[0] || 'Minha Empresa',
             });
-            localStorage.setItem(guardKey, 'true');
-            if (!createErr && newTenantId) {
+            if (createErr) {
+              console.error('Auto-create tenant RPC failed:', createErr);
+              // Não gravar guard: permitir nova tentativa no próximo carregamento.
+            } else if (newTenantId) {
+              // Só gravar guard após sucesso real.
+              localStorage.setItem(guardKey, 'true');
               const { data: newData } = await supabase
                 .from('tenant_memberships')
                 .select('tenant_id, role, tenants(id, name, plan_key, timezone)')
@@ -92,6 +96,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
             }
           } catch (e) {
             console.error('Auto-create tenant failed:', e);
+            // Não gravar guard em caso de exceção: permitir retry.
           } finally {
             creatingRef.current = false;
           }

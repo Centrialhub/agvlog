@@ -64,6 +64,7 @@ interface LoadItem {
     recipient_city: string | null;
     recipient_state: string | null;
     recipient_neighborhood: string | null;
+    client_id?: string | null;
     value: number | null;
     weight_kg: number | null;
     issue_date: string | null;
@@ -164,7 +165,7 @@ export default function RoutePlanning() {
       const loadIds = loads.map((l: any) => l.id);
       const { data: items, error: itemsErr } = await supabase
         .from('load_items')
-        .select('*, fiscal_documents(invoice_number, remitter, recipient, recipient_city, recipient_state, recipient_neighborhood, value, weight_kg, issue_date)')
+        .select('*, fiscal_documents(invoice_number, remitter, recipient, recipient_city, recipient_state, recipient_neighborhood, client_id, value, weight_kg, issue_date)')
         .in('load_id', loadIds)
         .order('created_at', { ascending: true });
       if (itemsErr) throw itemsErr;
