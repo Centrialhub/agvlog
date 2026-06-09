@@ -656,6 +656,18 @@ export default function RoutePlanning() {
                 </SelectContent>
               </Select>
             )}
+            {selectedLoads.size > 0 && (
+              <Badge
+                variant="outline"
+                className={hiddenSelectedLoads.length > 0 ? 'bg-amber-50 text-amber-700 border-amber-300' : ''}
+                title={hiddenSelectedLoads.length > 0
+                  ? `${hiddenSelectedLoads.length} carga(s) selecionada(s) estão fora do filtro atual.`
+                  : 'Todas as selecionadas estão visíveis no filtro.'}
+              >
+                {selectedLoads.size} selecionada(s)
+                {hiddenSelectedLoads.length > 0 && ` · ${hiddenSelectedLoads.length} fora do filtro`}
+              </Badge>
+            )}
           </div>
         </CardHeader>
         <CardContent className="p-0">
