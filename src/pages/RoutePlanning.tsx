@@ -99,6 +99,12 @@ interface RoutePlan {
   sortMode?: RouteStopSortMode;
   /** Minutos de deslocamento do depósito/origem até a 1ª parada (heurística). */
   initial_transit_minutes?: number;
+  /** Marca rota cujas cargas mudaram após a geração de paradas — bloqueia despacho até recalcular. */
+  dirty?: boolean;
+  /** Estado transitório de despacho. */
+  dispatching?: boolean;
+  /** Última tentativa de despacho falhou (mensagem). */
+  lastDispatchError?: string;
 }
 
 /* ────────────── main component ────────────── */
