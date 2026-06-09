@@ -34,6 +34,7 @@ import { useCustomerDeliveryWindowsForRouting } from '@/hooks/route-planning/use
 import { useDispatchRoutePlan } from '@/hooks/route-planning/useDispatchRoutePlan';
 import { validateRouteConsistency } from '@/lib/route-planning/routeConsistency';
 import { computeRouteStatus, STATUS_VISUALS, type RoutePlanStatusExt } from '@/lib/route-planning/routeStatus';
+import { useRoutePlanningDrafts, useSavePlanSnapshot, useDeleteDraft } from '@/hooks/useRoutePlanningDrafts';
 import type { RouteStopDraft, RoutePlanValidationIssue, RouteStopSortMode } from '@/lib/route-planning/routePlanningTypes';
 
 /* ────────────── types ────────────── */
@@ -177,6 +178,11 @@ export default function RoutePlanning() {
   const [newRouteName, setNewRouteName] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [globalStartAt, setGlobalStartAt] = useState<string>(() => defaultPlannedStartAt());
+  const { data: persistedDrafts = [] } = useRoutePlanningDrafts();
+  const savePlanSnapshot = useSavePlanSnapshot();
+  const deleteDraft = useDeleteDraft();
+  const draftsHydratedRef = useRef(false);
+  const [restoredFromDraft, setRestoredFromDraft] = useState(false);
 
   // Carrega janelas dos clientes presentes nas paradas
   const clientIdsInRoutes = useMemo(() => {
