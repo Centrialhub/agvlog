@@ -28,6 +28,7 @@ import RouteValidationPanel from '@/components/route-planning/RouteValidationPan
 import { consolidateLoadsIntoStops } from '@/lib/route-planning/stopConsolidation';
 import { applySmartSequence, applyOriginalOrder, autoSequenceStops } from '@/lib/route-planning/simpleStopSequencing';
 import { simulateStopTimeline } from '@/lib/route-planning/timelineSimulation';
+import { regenerateStopsPreservingEdits } from '@/lib/route-planning/regenerateStops';
 import { generateAutomaticRoutePlans, defaultPlannedStartAt } from '@/lib/route-planning/autoRoutePlanner';
 import { useOperationalRoutes } from '@/hooks/useOperationalRoutes';
 import { useCustomerDeliveryWindowsForRouting } from '@/hooks/route-planning/useCustomerDeliveryWindowsForRouting';
@@ -309,11 +310,16 @@ export default function RoutePlanning() {
   const addToRoute = (routeId: string) => {
     const selected = availableLoads.filter(l => selectedLoads.has(l.id));
     if (selected.length === 0) return;
-    setRoutes(prev => prev.map(r =>
-      r.id === routeId
-        ? { ...r, loads: [...r.loads, ...selected], dirty: !!r.stops && r.stops.length > 0 }
-        : r
-    ));
+    setRoutes(prev => prev.map(r => {
+      if (r.id !== routeId) return r;
+      const loads = [...r.loads, ...selected];
+      if (!r.stops || r.stops.length === 0) return { ...r, loads };
+      const stops = regenerateStopsPreservingEdits(
+        loads as any, r.stops, r.sortMode,
+        r.planned_start_at || globalStartAt, r.initial_transit_minutes ?? 30,
+      );
+      return { ...r, loads, stops, dirty: false };
+    }));
     setSelectedLoads(new Set());
   };
 
@@ -395,13 +401,12 @@ export default function RoutePlanning() {
     setRoutes(prev => prev.map(r => {
       if (r.id !== routeId) return r;
       const loads = r.loads.filter(l => l.id !== loadId);
-      // Auto-filter stops referencing the removed load; if any stop became empty, mark dirty.
-      const stops = (r.stops || []).map(s => ({
-        ...s,
-        load_ids: s.load_ids.filter(id => id !== loadId),
-      }));
-      const hasOrphanStop = stops.some(s => s.load_ids.length === 0);
-      return { ...r, loads, stops, dirty: hasOrphanStop || stops.length === 0 };
+      if (!r.stops || r.stops.length === 0) return { ...r, loads };
+      const stops = regenerateStopsPreservingEdits(
+        loads as any, r.stops, r.sortMode,
+        r.planned_start_at || globalStartAt, r.initial_transit_minutes ?? 30,
+      );
+      return { ...r, loads, stops, dirty: false };
     }));
   };
 
@@ -426,7 +431,15 @@ export default function RoutePlanning() {
       if (newIdx < 0 || newIdx >= r.loads.length) return r;
       const loads = [...r.loads];
       [loads[idx], loads[newIdx]] = [loads[newIdx], loads[idx]];
-      return { ...r, loads }; // Opção A: ordem manual preservada (render não re-ordena).
+      if (!r.stops || r.stops.length === 0 || r.sortMode === 'manual' || r.sortMode === 'smart') {
+        return { ...r, loads };
+      }
+      // sortMode 'original' ou 'auto': reflete a nova ordem das cargas nas paradas.
+      const stops = regenerateStopsPreservingEdits(
+        loads as any, r.stops, r.sortMode,
+        r.planned_start_at || globalStartAt, r.initial_transit_minutes ?? 30,
+      );
+      return { ...r, loads, stops, dirty: false };
     }));
   };
 
