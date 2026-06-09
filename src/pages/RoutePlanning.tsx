@@ -898,9 +898,22 @@ export default function RoutePlanning() {
                       <Button size="sm" variant="outline" onClick={() => exportRoutePdf(route)}>
                         <Download className="h-3 w-3 mr-1" /> PDF
                       </Button>
-                      <Button size="sm" variant="default" onClick={() => dispatchRouteMutation.mutate(route)} disabled={dispatchRouteMutation.isPending}>
-                        <Send className="h-3 w-3 mr-1" /> Despachar
-                      </Button>
+                      {(() => {
+                        const st = routeStatus(route);
+                        const v = STATUS_VISUALS[st];
+                        const c = routeConsistency(route);
+                        return (
+                          <Button
+                            size="sm"
+                            variant="default"
+                            onClick={() => dispatchRouteMutation.mutate(route)}
+                            disabled={v.blocksDispatch || dispatchRouteMutation.isPending}
+                            title={v.blocksDispatch ? (c.blockingErrors.join(' · ') || v.label) : 'Despachar rota'}
+                          >
+                            <Send className="h-3 w-3 mr-1" /> Despachar
+                          </Button>
+                        );
+                      })()}
                       <Button size="sm" variant="ghost" onClick={() => removeRoute(route.id)}>
                         <Trash2 className="h-3 w-3 text-destructive" />
                       </Button>
