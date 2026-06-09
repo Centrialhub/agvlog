@@ -28,6 +28,7 @@ import RouteValidationPanel from '@/components/route-planning/RouteValidationPan
 import { consolidateLoadsIntoStops } from '@/lib/route-planning/stopConsolidation';
 import { applySmartSequence, applyOriginalOrder, autoSequenceStops } from '@/lib/route-planning/simpleStopSequencing';
 import { simulateStopTimeline } from '@/lib/route-planning/timelineSimulation';
+import { regenerateStopsPreservingEdits } from '@/lib/route-planning/regenerateStops';
 import { generateAutomaticRoutePlans, defaultPlannedStartAt } from '@/lib/route-planning/autoRoutePlanner';
 import { useOperationalRoutes } from '@/hooks/useOperationalRoutes';
 import { useCustomerDeliveryWindowsForRouting } from '@/hooks/route-planning/useCustomerDeliveryWindowsForRouting';
