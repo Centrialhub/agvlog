@@ -830,7 +830,8 @@ export default function RoutePlanning() {
                       <RouteValidationPanel issues={validateRoute(route)} />
                     </div>
 
-                    {sortLoadsByRecipient(route.loads).map((load, loadIdx) => (
+                    {/* Opção A: preserva ordem manual definida pelo usuário (não re-ordena no render). */}
+                    {route.loads.map((load, loadIdx) => (
                       <div key={load.id} className="border rounded-md overflow-hidden">
                         <div className="flex items-center justify-between px-3 py-2 bg-muted/50">
                           <div className="flex items-center gap-2">
