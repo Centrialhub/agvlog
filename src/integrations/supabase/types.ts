@@ -7857,6 +7857,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _portal_user_client_ids: {
+        Args: { _tenant_id: string }
+        Returns: string[]
+      }
+      _portal_user_has_perm: {
+        Args: { _client_id: string; _perm: string; _tenant_id: string }
+        Returns: boolean
+      }
       clear_reimport_batch_data:
         | { Args: { _tenant_id: string }; Returns: Json }
         | {
@@ -7870,6 +7878,18 @@ export type Database = {
       count_points_in_geofence: {
         Args: { _geofence_id: string; _points: Json }
         Returns: Json
+      }
+      create_client_occurrence: {
+        Args: {
+          _client_id: string
+          _description: string
+          _event_type: string
+          _load_id?: string
+          _order_id?: string
+          _severity?: string
+          _tenant_id: string
+        }
+        Returns: string
       }
       create_load_with_next_number: {
         Args: {
@@ -7944,6 +7964,13 @@ export type Database = {
         Args: { _proof_id: string }
         Returns: Json
       }
+      get_client_pod_metadata: {
+        Args: { _pod_id: string; _tenant_id: string }
+        Returns: {
+          storage_bucket: string
+          storage_path: string
+        }[]
+      }
       get_client_portal_shipment_detail: {
         Args: { _fiscal_document_id: string }
         Returns: Json
@@ -8003,6 +8030,104 @@ export type Database = {
       }
       is_tenant_admin: { Args: { _tenant_id: string }; Returns: boolean }
       is_tenant_member: { Args: { _tenant_id: string }; Returns: boolean }
+      list_client_documents: {
+        Args: {
+          _document_type?: string
+          _end_date?: string
+          _limit?: number
+          _offset?: number
+          _search?: string
+          _start_date?: string
+          _tenant_id: string
+        }
+        Returns: {
+          access_key: string
+          client_id: string
+          document_type: string
+          has_pod: boolean
+          id: string
+          invoice_number: string
+          issue_date: string
+          load_id: string
+          recipient: string
+          recipient_city: string
+          recipient_state: string
+          remitter: string
+          status: string
+          value: number
+          weight_kg: number
+        }[]
+      }
+      list_client_occurrences: {
+        Args: {
+          _limit?: number
+          _offset?: number
+          _resolved?: boolean
+          _severity?: string
+          _tenant_id: string
+        }
+        Returns: {
+          client_action_required: boolean
+          client_opened: boolean
+          client_resolution_note: string
+          created_at: string
+          description: string
+          event_type: string
+          id: string
+          load_id: string
+          order_id: string
+          public_status: string
+          resolution: string
+          resolved_at: string
+          severity: string
+        }[]
+      }
+      list_client_pickups: {
+        Args: {
+          _end_date?: string
+          _limit?: number
+          _offset?: number
+          _start_date?: string
+          _status?: string
+          _tenant_id: string
+        }
+        Returns: {
+          id: string
+          linked_docs_count: number
+          notes: string
+          pickup_at: string
+          pickup_number: string
+          recipient_name: string
+          remitter_cnpj: string
+          remitter_name: string
+          status: string
+        }[]
+      }
+      list_client_pods: {
+        Args: {
+          _end_date?: string
+          _limit?: number
+          _offset?: number
+          _start_date?: string
+          _status?: string
+          _tenant_id: string
+        }
+        Returns: {
+          fiscal_document_id: string
+          id: string
+          invoice_number: string
+          load_id: string
+          proof_type: string
+          received_at: string
+          receiver_document: string
+          receiver_name: string
+          receiver_role: string
+          status: string
+          storage_bucket: string
+          storage_path: string
+          validated_at: string
+        }[]
+      }
       next_nfse_number: {
         Args: { _branch_code?: string; _series?: string; _tenant_id: string }
         Returns: number
@@ -8012,6 +8137,16 @@ export type Database = {
       preview_reimport_cleanup_counts: {
         Args: { _end_date?: string; _start_date?: string; _tenant_id: string }
         Returns: Json
+      }
+      request_client_pickup: {
+        Args: {
+          _client_id: string
+          _notes?: string
+          _pickup_at: string
+          _recipient_name?: string
+          _tenant_id: string
+        }
+        Returns: string
       }
       revert_xml_loads_to_available: {
         Args: { _tenant_id: string }
