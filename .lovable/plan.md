@@ -1,98 +1,79 @@
 
-# Plano: Endurecimento do fluxo /route-planning
+# Portal do Cliente AGVLog — Plano de Entrega
 
-Trabalho grande e crítico. Vou dividir em fases para reduzir risco de quebra. Cada fase é entregável e testável isoladamente.
+O escopo solicitado é muito grande para um único ciclo (5 migrations, 10+ RPCs, 30+ arquivos novos, mapa, exportações, área administrativa). Para manter qualidade e segurança, proponho dividir em **4 fases**. Cada fase é independente, deixa o sistema funcionando e pode ser validada antes da próxima.
 
-## Arquivos principais afetados
+## Fundação que vale para todas as fases
 
-- `src/pages/RoutePlanning.tsx` (refatorar — fonte de várias inconsistências)
-- `src/hooks/route-planning/usePendingLoadsForRouting.ts` + query inline em `RoutePlanning.tsx` (adicionar `client_id`)
-- `src/hooks/route-planning/useDispatchRoutePlan.ts` (separar versão sem navegação)
-- `src/hooks/useRoutePlanningDrafts.tsx` (estender para persistir rota completa)
-- `src/hooks/useTenant.tsx` (guard localStorage)
-- Novos: `src/lib/route-planning/routeConsistency.ts`, `src/lib/route-planning/routeStatus.ts`
-- Novos testes: `src/test/routeConsistency.test.ts`, `src/test/routeStatus.test.ts`
-- Migration SQL: endurecer `dispatch_planned_route` + nova coluna `route_planning_drafts.plan_snapshot jsonb`
+- Não tocar em `auth`/`storage`/`realtime`.
+- Toda consulta do portal via **RPC SECURITY DEFINER** filtrando por `client_portal_access` + `auth.uid()`. Nada de query direta por `tenant_id` no frontend cliente.
+- `GRANT` explícito em toda tabela nova (regra do projeto).
+- Bucket `receipts` já existe e é privado → usado para POD/canhotos via signed URL.
+- Status público unificado calculado em `src/lib/portal/portalStatus.ts` a partir de `dispatch_*`, `loads`, `pickup_orders`, `proof_of_delivery`, `operational_events` — uma única fonte de verdade no frontend.
 
-## Fase 1 — Fundação (validação + status + queries)
+---
 
-1. Adicionar `client_id` em ambas as queries de `fiscal_documents` (RoutePlanning inline + `usePendingLoadsForRouting`). Propagar pelo tipo `LoadItem`.
-2. Criar `routeStatus.ts` com enum `RoutePlanStatus` estendido: `ready | review | blocked | dirty | dispatching | dispatched | failed`. Função `computeRouteStatus(route, validation)` derivada.
-3. Criar `routeConsistency.ts` com:
-   - `validateRouteConsistency(route): { valid, blockingErrors[], warnings[] }`
-   - checks: stops cobrem todas loads; load_ids em stops ⊂ route.loads; FDs ⊂ loads; sem FD duplicado entre stops; cidade/destino presentes; capacidade vs veículo; janela violada → warning.
-4. Tests unitários para ambos.
+## Fase 1 — Segurança, schema e dashboard (esta entrega)
 
-## Fase 2 — Consistência cargas/stops + ordenação
+Objetivo: travar o acesso e ter um `/portal` funcional substituindo o atual.
 
-1. Quando `loads` muda (add/remove/move) em uma rota com stops existentes:
-   - Se mudança trivial (apenas remoção): filtrar stops e marcar `dirty` se sobrar FD/load órfão; tentar auto-regenerar paradas.
-   - Caso contrário: limpar `stops` e marcar `dirty`. Bloquear despacho enquanto `dirty`.
-2. Remover `sortLoadsByRecipient` da renderização interna de uma rota (Opção A do brief) — preservar ordem manual. Manter sort só na lista de cargas disponíveis.
-3. Reaplicar sort manual quando `moveLoad` for chamado (já é o caso, mas removendo o re-sort no render).
+### Migration 1
+- `client_portal_access` (com `access_type`, flags `can_*`, UNIQUE por tenant+user+client+access_type).
+- `proof_of_delivery` (POD estruturado, FK para `fiscal_documents`, `loads`, `dispatch_trips`, `dispatch_stops`).
+- ALTER `operational_events` adicionando `visible_to_client`, `client_action_required`, `client_opened`, `public_status`, `client_resolution_note`.
+- Funções: `get_user_client_access(_tenant_id)`, `user_has_client_access(_client_id)`, `get_client_portal_summary(_tenant_id, _start, _end)`.
+- GRANTs + RLS + policies em todas as tabelas novas (cliente só vê suas linhas via `user_has_client_access`).
 
-## Fase 3 — Despacho seguro (individual + lote)
+### Frontend
+- Reescrita de `src/pages/ClientPortal.tsx` → estrutura `src/pages/portal/` + `src/components/portal/` + `src/hooks/portal/` + `src/lib/portal/`.
+- Rotas aninhadas em `App.tsx`:
+  - `/portal` → `PortalDashboard` (KPIs + próximas entregas + alertas + busca global)
+  - placeholders navegáveis para `shipments`, `pickups`, `documents`, `pods`, `occurrences`, `reports`, `tracking/:loadId`, `settings` (cada um com `PortalEmptyState` "em construção" para evitar 404).
+- `PortalLayout` com sidebar desktop + bottom nav mobile, header com busca global e seletor de cliente quando o usuário tem mais de um vínculo.
+- Hook `useClientPortalAccess` → bloqueia render se usuário não tem nenhum acesso.
 
-1. Refatorar `useDispatchRoutePlan` para expor `dispatchRoute(payload)` puro (sem navegação/toast).
-2. Em `RoutePlanning.tsx`:
-   - `dispatchRouteMutation` (individual): chama base + navega no sucesso.
-   - `dispatchBatchMutation`: itera apenas rotas com status `ready`, marca cada uma `dispatching → dispatched|failed`, acumula resultado, mostra resumo (`toast` + dialog) sem navegar.
-   - Botão "Despachar em lote" desabilitado se nenhuma `ready`. Botão secundário "Despachar mesmo com alertas" requer digitação de confirmação e lista alertas.
-3. Pré-validação obrigatória chamando `validateRouteConsistency` antes de cada chamada.
+## Fase 2 — Listagem e detalhe de mercadorias
 
-## Fase 4 — Persistência de drafts
+- RPCs `search_client_portal_shipments` e `get_client_portal_shipment_detail` (joins respeitando access_type: remitter/recipient/payer/full).
+- View `client_portal_shipments` (ou materializada como CTE dentro da RPC se algum campo não existir no schema atual — checar primeiro).
+- `/portal/shipments` (tabela desktop + cards mobile, todos os filtros listados, exportação CSV).
+- `/portal/shipments/:documentId` (timeline, dados fiscais, operacionais, documentos, ocorrências, POD).
+- `get_client_document_download_url` → signed URL com validação dupla de escopo.
 
-1. Migration: `ALTER TABLE route_planning_drafts ADD COLUMN plan_snapshot jsonb` (rota completa serializada: loads ids, stops, vehicle/driver, planned_start_at, sortMode, status).
-2. Estender `useRoutePlanningDrafts` com:
-   - `useSavePlanSnapshot(routeId, snapshot)` — debounced upsert
-   - `useActivePlanSnapshots()` — restaura ao montar
-3. Em `RoutePlanning.tsx`:
-   - useEffect debounced (1.5s) que persiste cada `route` como snapshot.
-   - Ao montar: hidratar `routes` a partir dos snapshots ativos + cruzar com `pendingLoads` (descartar loads que não existem mais).
-   - Banner "Existem rotas planejadas não despachadas" quando snapshots restaurados.
-   - Botão "Descartar rascunho" por rota.
-   - No sucesso de dispatch: marcar draft `dispatched` no servidor.
+## Fase 3 — Coletas, documentos, POD e ocorrências
 
-## Fase 5 — Seleção vs filtro
+- `/portal/pickups` (+ RPC `request_client_pickup` quando `can_request_pickup`).
+- `/portal/documents` (abas NF-e/CT-e/MDF-e/romaneios/canhotos/faturas).
+- `/portal/pods` (filtros por status de POD, validação interna).
+- `/portal/occurrences` (+ RPC `create_client_occurrence` quando `can_open_occurrences`, lista filtrada por `visible_to_client`).
 
-1. Calcular `selectedVisible` / `selectedHidden` a partir de `selectedLoads` × `filteredLoads`.
-2. Mostrar chip: "Selecionadas: N (M visíveis · K fora do filtro)".
-3. Em `createRouteFromSelected` / `generateAutoPlan`: se houver `selectedHidden > 0`, abrir `confirm dialog` listando-as antes de prosseguir.
+## Fase 4 — Rastreamento, relatórios e administração
 
-## Fase 6 — Reverter XMLs
+- `/portal/tracking/:loadId` com mapa (`react-leaflet` 4.2.1 — limitação do projeto), mascarando paradas de terceiros via RPC dedicada.
+- `/portal/reports` com exportação CSV/Excel; bloco financeiro condicional a `can_view_financial`.
+- Aba **Portal do Cliente** em `/clients/:id` (admin interno): convidar usuário, definir `access_type`, toggles de permissões, filiais autorizadas, histórico de acesso.
 
-Mover botão de `/route-planning` para `/settings` (área admin) atrás de:
-- `is_tenant_admin` check (já feito server-side; UI esconde se não-admin).
-- Dialog com texto explicativo do impacto.
-- Confirmação textual: digitar `REVERTER TODOS OS XMLS`.
-- Auditoria: já registrada no RPC (não tocar SQL aqui).
+---
 
-## Fase 7 — SQL hardening + tenant guard
+## Detalhes técnicos relevantes
 
-1. Migration `dispatch_planned_route` (substituir): validar array não-vazio, sem duplicatas, todos `load_ids` existem no tenant E `trip_id IS NULL` (contagem exata), todos FDs referenciados existem, toda stop tem `destination`. Erros claros em PT.
-2. `useTenant.tsx`: mover `localStorage.setItem(guardKey,'true')` para dentro do `then` de sucesso da criação do tenant; mostrar toast de erro no catch.
+- Campos como `remitter_cnpj`, `recipient_cnpj`, `client_load_number`, `pickup_order_id`, `delivery_meta` em `fiscal_documents` precisam ser verificados antes da view — se algum não existir no schema atual, adapto a RPC para usar apenas o que existe e marco como TODO no código (sem quebrar build).
+- Status público calculado por prioridade: ocorrência crítica > entregue > POD > parada em andamento > trânsito > carregado > planejado > coleta > apenas importado.
+- Frontend nunca confia em flags locais para autorização — toda escrita passa por RPC que revalida `client_portal_access`.
+- Realtime opcional (Fase 4) só se necessário para tracking ao vivo.
 
-## Fase 8 — Estados visuais
+---
 
-Atualizar header de cada rota com badge colorida por status + ações desabilitadas/escondidas conforme status (`dirty` → "Recalcular paradas"; `dispatching` → spinner + lock; `blocked` → tooltip com motivo).
+## Pontos que precisam de decisão antes da Fase 2
 
-## Testes a entregar
+1. **Vínculo remetente/destinatário**: confirmar se `fiscal_documents` tem `remitter_cnpj`/`recipient_cnpj` ou se o match é por `client_id` + tabela de filiais. Determina como o `access_type` filtra.
+2. **CT-e / MDF-e / faturas**: existem hoje (`cte_documents`, `nfse_documents`) mas o vínculo com cliente externo pode não estar mapeado — pode exigir migration adicional.
+3. **Convite de usuário cliente**: usar mesmo fluxo de `create-team-member` (Admin API) ou novo edge function dedicado a clientes externos?
 
-- `routeConsistency.test.ts` — 6+ cenários
-- `routeStatus.test.ts` — transições
-- `dispatchBatch.test.ts` — separa ready/review/blocked
-- `routeDraftHydration.test.ts` — descarta loads inexistentes
+---
 
-## Pontos para decisão de produto (vou assumir defaults, mas sinalizar)
+## Confirmação necessária
 
-1. **Auto-regenerar stops vs apenas marcar dirty**: vou implementar híbrido — só auto-regenera se nenhuma stop tinha edição manual; caso contrário marca `dirty`.
-2. **Janela violada**: gravidade = `review` (não `blocked`).
-3. **Ordenação manual de cargas**: Opção A (preservar ordem manual, remover re-sort).
-4. **Local do "Reverter XMLs"**: `/settings` aba "Manutenção" (criar se não houver).
-5. **Persistência de draft**: por rota individual (1 draft = 1 rota planejada), não 1 draft = sessão inteira.
+Posso começar pela **Fase 1** agora (migration + dashboard + estrutura de rotas + segurança), entregar funcional, e seguir para Fase 2 na próxima rodada?
 
-## Escopo / esforço
-
-Grande. ~12-15 arquivos editados, ~5 novos, 2 migrations, 4 suites de teste. Vou executar **todas as fases na ordem** numa única rodada, mas mantendo cada commit lógico autocontido para o caso de você querer parar antes.
-
-Posso seguir?
+Se preferir um recorte diferente (ex.: priorizar shipments antes do dashboard, ou entregar tudo de schema de uma vez e UI depois), me avise antes de eu iniciar.

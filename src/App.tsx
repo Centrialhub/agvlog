@@ -41,7 +41,17 @@ const Settings = lazy(() => import("@/pages/Settings"));
 const ExpenseApproval = lazy(() => import("@/pages/ExpenseApproval"));
 const TeamManagement = lazy(() => import("@/pages/TeamManagement"));
 const FreightHub = lazy(() => import("@/pages/FreightHub"));
-const ClientPortal = lazy(() => import("@/pages/ClientPortal"));
+const PortalLayout = lazy(() => import("@/components/portal/PortalLayout"));
+const PortalDashboard = lazy(() => import("@/pages/portal/PortalDashboard"));
+const PortalShipments = lazy(() => import("@/pages/portal/PortalShipments"));
+const PortalShipmentDetail = lazy(() => import("@/pages/portal/PortalShipmentDetail"));
+const PortalTracking = lazy(() => import("@/pages/portal/PortalTracking"));
+const PortalPickups = lazy(() => import("@/pages/portal/PortalPickups"));
+const PortalDocuments = lazy(() => import("@/pages/portal/PortalDocuments"));
+const PortalPods = lazy(() => import("@/pages/portal/PortalPods"));
+const PortalOccurrences = lazy(() => import("@/pages/portal/PortalOccurrences"));
+const PortalReports = lazy(() => import("@/pages/portal/PortalReports"));
+const PortalSettings = lazy(() => import("@/pages/portal/PortalSettings"));
 const RoutePlanning = lazy(() => import("@/pages/RoutePlanning"));
 const Receivables = lazy(() => import("@/pages/Receivables"));
 const Financial = lazy(() => import("@/pages/Financial"));
@@ -232,7 +242,18 @@ const App = () => (
             <Route path="/routes" element={<Navigate to="/corridors" replace />} />
 
             {/* Client portal */}
-            <Route path="/portal" element={<ClientRoute><ClientPortal /></ClientRoute>} />
+            <Route path="/portal" element={<ClientRoute><PortalLayout /></ClientRoute>}>
+              <Route index element={<PortalDashboard />} />
+              <Route path="shipments" element={<PortalShipments />} />
+              <Route path="shipments/:documentId" element={<PortalShipmentDetail />} />
+              <Route path="tracking/:loadId" element={<PortalTracking />} />
+              <Route path="pickups" element={<PortalPickups />} />
+              <Route path="documents" element={<PortalDocuments />} />
+              <Route path="pods" element={<PortalPods />} />
+              <Route path="occurrences" element={<PortalOccurrences />} />
+              <Route path="reports" element={<PortalReports />} />
+              <Route path="settings" element={<PortalSettings />} />
+            </Route>
 
             <Route path="*" element={<Suspense fallback={<PageLoader />}><NotFound /></Suspense>} />
           </Routes>
