@@ -242,7 +242,18 @@ const App = () => (
             <Route path="/routes" element={<Navigate to="/corridors" replace />} />
 
             {/* Client portal */}
-            <Route path="/portal" element={<ClientRoute><ClientPortal /></ClientRoute>} />
+            <Route path="/portal" element={<ClientRoute><PortalLayout /></ClientRoute>}>
+              <Route index element={<PortalDashboard />} />
+              <Route path="shipments" element={<PortalShipments />} />
+              <Route path="shipments/:documentId" element={<PortalShipmentDetail />} />
+              <Route path="tracking/:loadId" element={<PortalTracking />} />
+              <Route path="pickups" element={<PortalPickups />} />
+              <Route path="documents" element={<PortalDocuments />} />
+              <Route path="pods" element={<PortalPods />} />
+              <Route path="occurrences" element={<PortalOccurrences />} />
+              <Route path="reports" element={<PortalReports />} />
+              <Route path="settings" element={<PortalSettings />} />
+            </Route>
 
             <Route path="*" element={<Suspense fallback={<PageLoader />}><NotFound /></Suspense>} />
           </Routes>
