@@ -27,7 +27,7 @@ export function usePortalSummary(startDate?: string, endDate?: string) {
         _end_date: endDate ?? null,
       });
       if (error) throw error;
-      return data as PortalSummary;
+      return data as unknown as PortalSummary;
     },
     enabled: !!currentTenant,
     staleTime: 60_000,
