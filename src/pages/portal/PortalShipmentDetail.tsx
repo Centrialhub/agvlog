@@ -2,7 +2,7 @@ import { Link, useParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Loader2, ClipboardCheck, AlertTriangle, FileText } from 'lucide-react';
+import { ArrowLeft, Loader2, ClipboardCheck, AlertTriangle } from 'lucide-react';
 import { usePortalShipmentDetail } from '@/hooks/portal/usePortalShipmentDetail';
 import { PortalEmptyState } from '@/components/portal/PortalEmptyState';
 
