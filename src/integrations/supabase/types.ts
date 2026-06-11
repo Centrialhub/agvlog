@@ -395,6 +395,75 @@ export type Database = {
           },
         ]
       }
+      client_portal_access: {
+        Row: {
+          access_type: string
+          active: boolean
+          can_download_documents: boolean
+          can_open_occurrences: boolean
+          can_request_pickup: boolean
+          can_view_driver_contact: boolean
+          can_view_financial: boolean
+          can_view_vehicle_live: boolean
+          client_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          tenant_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_type?: string
+          active?: boolean
+          can_download_documents?: boolean
+          can_open_occurrences?: boolean
+          can_request_pickup?: boolean
+          can_view_driver_contact?: boolean
+          can_view_financial?: boolean
+          can_view_vehicle_live?: boolean
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          tenant_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_type?: string
+          active?: boolean
+          can_download_documents?: boolean
+          can_open_occurrences?: boolean
+          can_request_pickup?: boolean
+          can_view_driver_contact?: boolean
+          can_view_financial?: boolean
+          can_view_vehicle_live?: boolean
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          tenant_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_portal_access_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_portal_access_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_regions: {
         Row: {
           client_id: string | null
@@ -4855,7 +4924,10 @@ export type Database = {
       }
       operational_events: {
         Row: {
+          client_action_required: boolean
           client_id: string | null
+          client_opened: boolean
+          client_resolution_note: string | null
           created_at: string
           created_by: string | null
           description: string | null
@@ -4865,6 +4937,7 @@ export type Database = {
           id: string
           load_id: string | null
           order_id: string | null
+          public_status: string | null
           report_details: Json | null
           resolution: string | null
           resolved_at: string | null
@@ -4872,9 +4945,13 @@ export type Database = {
           tenant_id: string
           updated_at: string
           vehicle_id: string | null
+          visible_to_client: boolean
         }
         Insert: {
+          client_action_required?: boolean
           client_id?: string | null
+          client_opened?: boolean
+          client_resolution_note?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -4884,6 +4961,7 @@ export type Database = {
           id?: string
           load_id?: string | null
           order_id?: string | null
+          public_status?: string | null
           report_details?: Json | null
           resolution?: string | null
           resolved_at?: string | null
@@ -4891,9 +4969,13 @@ export type Database = {
           tenant_id: string
           updated_at?: string
           vehicle_id?: string | null
+          visible_to_client?: boolean
         }
         Update: {
+          client_action_required?: boolean
           client_id?: string | null
+          client_opened?: boolean
+          client_resolution_note?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -4903,6 +4985,7 @@ export type Database = {
           id?: string
           load_id?: string | null
           order_id?: string | null
+          public_status?: string | null
           report_details?: Json | null
           resolution?: string | null
           resolved_at?: string | null
@@ -4910,6 +4993,7 @@ export type Database = {
           tenant_id?: string
           updated_at?: string
           vehicle_id?: string | null
+          visible_to_client?: boolean
         }
         Relationships: [
           {
@@ -5556,6 +5640,114 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      proof_of_delivery: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          dispatch_stop_id: string | null
+          dispatch_trip_id: string | null
+          fiscal_document_id: string
+          id: string
+          load_id: string | null
+          metadata: Json
+          proof_type: string
+          received_at: string | null
+          receiver_document: string | null
+          receiver_name: string | null
+          receiver_role: string | null
+          rejection_reason: string | null
+          status: string
+          storage_bucket: string | null
+          storage_path: string | null
+          tenant_id: string
+          updated_at: string
+          validated_at: string | null
+          validated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          dispatch_stop_id?: string | null
+          dispatch_trip_id?: string | null
+          fiscal_document_id: string
+          id?: string
+          load_id?: string | null
+          metadata?: Json
+          proof_type: string
+          received_at?: string | null
+          receiver_document?: string | null
+          receiver_name?: string | null
+          receiver_role?: string | null
+          rejection_reason?: string | null
+          status?: string
+          storage_bucket?: string | null
+          storage_path?: string | null
+          tenant_id: string
+          updated_at?: string
+          validated_at?: string | null
+          validated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          dispatch_stop_id?: string | null
+          dispatch_trip_id?: string | null
+          fiscal_document_id?: string
+          id?: string
+          load_id?: string | null
+          metadata?: Json
+          proof_type?: string
+          received_at?: string | null
+          receiver_document?: string | null
+          receiver_name?: string | null
+          receiver_role?: string | null
+          rejection_reason?: string | null
+          status?: string
+          storage_bucket?: string | null
+          storage_path?: string | null
+          tenant_id?: string
+          updated_at?: string
+          validated_at?: string | null
+          validated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proof_of_delivery_dispatch_stop_id_fkey"
+            columns: ["dispatch_stop_id"]
+            isOneToOne: false
+            referencedRelation: "dispatch_stops"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proof_of_delivery_dispatch_trip_id_fkey"
+            columns: ["dispatch_trip_id"]
+            isOneToOne: false
+            referencedRelation: "dispatch_trips"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proof_of_delivery_fiscal_document_id_fkey"
+            columns: ["fiscal_document_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proof_of_delivery_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proof_of_delivery_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       provider_units: {
         Row: {
@@ -7748,6 +7940,10 @@ export type Database = {
       detect_payment_method: { Args: { p_text: string }; Returns: string }
       dispatch_planned_route: { Args: { _payload: Json }; Returns: string }
       get_active_trips_live: { Args: { _tenant_id: string }; Returns: Json }
+      get_client_portal_summary: {
+        Args: { _end_date?: string; _start_date?: string; _tenant_id: string }
+        Returns: Json
+      }
       get_open_trip_alerts: {
         Args: { _tenant_id: string }
         Returns: {
@@ -7771,6 +7967,19 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      get_user_client_access: {
+        Args: { _tenant_id: string }
+        Returns: {
+          access_type: string
+          can_download_documents: boolean
+          can_open_occurrences: boolean
+          can_request_pickup: boolean
+          can_view_driver_contact: boolean
+          can_view_financial: boolean
+          can_view_vehicle_live: boolean
+          client_id: string
+        }[]
       }
       get_user_tenant_ids: { Args: never; Returns: string[] }
       has_tenant_role: {
@@ -7813,6 +8022,7 @@ export type Database = {
         }
         Returns: string
       }
+      user_has_client_access: { Args: { _client_id: string }; Returns: boolean }
     }
     Enums: {
       app_role: "owner" | "admin" | "operator" | "client" | "driver"
