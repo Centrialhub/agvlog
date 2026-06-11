@@ -7940,6 +7940,14 @@ export type Database = {
       detect_payment_method: { Args: { p_text: string }; Returns: string }
       dispatch_planned_route: { Args: { _payload: Json }; Returns: string }
       get_active_trips_live: { Args: { _tenant_id: string }; Returns: Json }
+      get_client_document_download_url: {
+        Args: { _proof_id: string }
+        Returns: Json
+      }
+      get_client_portal_shipment_detail: {
+        Args: { _fiscal_document_id: string }
+        Returns: Json
+      }
       get_client_portal_summary: {
         Args: { _end_date?: string; _start_date?: string; _tenant_id: string }
         Returns: Json
@@ -8007,6 +8015,22 @@ export type Database = {
       }
       revert_xml_loads_to_available: {
         Args: { _tenant_id: string }
+        Returns: Json
+      }
+      search_client_portal_shipments: {
+        Args: {
+          _city?: string
+          _end_date?: string
+          _has_occurrence?: boolean
+          _has_pod?: boolean
+          _limit?: number
+          _offset?: number
+          _search?: string
+          _start_date?: string
+          _state?: string
+          _status?: string[]
+          _tenant_id: string
+        }
         Returns: Json
       }
       show_limit: { Args: never; Returns: number }
