@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -60,6 +60,12 @@ export default function DriverDeliveryMap({
   vehicle: VehiclePoint;
   height?: number;
 }) {
+  const mapId = useId();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
   const all = [
     ...stops.map((s) => ({ lat: s.lat, lng: s.lng })),
     ...(vehicle ? [{ lat: vehicle.lat, lng: vehicle.lng }] : []),
@@ -69,7 +75,8 @@ export default function DriverDeliveryMap({
 
   return (
     <div className="rounded-lg overflow-hidden border border-border" style={{ height }}>
-      <MapContainer center={center} zoom={11} className="h-full w-full z-0" zoomControl={false}>
+      {mounted && (
+      <MapContainer key={mapId} center={center} zoom={11} className="h-full w-full z-0" zoomControl={false}>
         <TileLayer
           attribution='&copy; OpenStreetMap'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -101,6 +108,7 @@ export default function DriverDeliveryMap({
           </Marker>
         )}
       </MapContainer>
+      )}
     </div>
   );
 }
