@@ -41,3 +41,6 @@ verify_jwt = false
 
 [functions.cte-sefaz-callback]
 verify_jwt = false
+
+[functions.hub-fiscal-webhook-in]
+verify_jwt = false
