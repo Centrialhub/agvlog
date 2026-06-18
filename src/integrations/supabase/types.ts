@@ -2915,6 +2915,140 @@ export type Database = {
           },
         ]
       }
+      hub_fiscal_emissions: {
+        Row: {
+          access_key: string | null
+          authorization_protocol: string | null
+          c_stat: number | null
+          cancel_reason: string | null
+          cancelled_at: string | null
+          created_at: string
+          created_by: string | null
+          cte_document_id: string | null
+          doc_type: string
+          emitter_cnpj: string | null
+          environment: string
+          external_id: string | null
+          fiscal_document_id: string | null
+          hub_document_id: string | null
+          id: string
+          id_integracao: string | null
+          last_callback: Json | null
+          last_response: Json | null
+          last_synced_at: string | null
+          message: string | null
+          nfse_document_id: string | null
+          number: string | null
+          pdf_url: string | null
+          plugnotas_id: string | null
+          plugnotas_status: string | null
+          request_payload: Json | null
+          series: string | null
+          status: string
+          sync_attempts: number
+          tenant_id: string
+          updated_at: string
+          xml_url: string | null
+        }
+        Insert: {
+          access_key?: string | null
+          authorization_protocol?: string | null
+          c_stat?: number | null
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          cte_document_id?: string | null
+          doc_type: string
+          emitter_cnpj?: string | null
+          environment?: string
+          external_id?: string | null
+          fiscal_document_id?: string | null
+          hub_document_id?: string | null
+          id?: string
+          id_integracao?: string | null
+          last_callback?: Json | null
+          last_response?: Json | null
+          last_synced_at?: string | null
+          message?: string | null
+          nfse_document_id?: string | null
+          number?: string | null
+          pdf_url?: string | null
+          plugnotas_id?: string | null
+          plugnotas_status?: string | null
+          request_payload?: Json | null
+          series?: string | null
+          status?: string
+          sync_attempts?: number
+          tenant_id: string
+          updated_at?: string
+          xml_url?: string | null
+        }
+        Update: {
+          access_key?: string | null
+          authorization_protocol?: string | null
+          c_stat?: number | null
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          cte_document_id?: string | null
+          doc_type?: string
+          emitter_cnpj?: string | null
+          environment?: string
+          external_id?: string | null
+          fiscal_document_id?: string | null
+          hub_document_id?: string | null
+          id?: string
+          id_integracao?: string | null
+          last_callback?: Json | null
+          last_response?: Json | null
+          last_synced_at?: string | null
+          message?: string | null
+          nfse_document_id?: string | null
+          number?: string | null
+          pdf_url?: string | null
+          plugnotas_id?: string | null
+          plugnotas_status?: string | null
+          request_payload?: Json | null
+          series?: string | null
+          status?: string
+          sync_attempts?: number
+          tenant_id?: string
+          updated_at?: string
+          xml_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hub_fiscal_emissions_cte_document_id_fkey"
+            columns: ["cte_document_id"]
+            isOneToOne: false
+            referencedRelation: "cte_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hub_fiscal_emissions_fiscal_document_id_fkey"
+            columns: ["fiscal_document_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hub_fiscal_emissions_nfse_document_id_fkey"
+            columns: ["nfse_document_id"]
+            isOneToOne: false
+            referencedRelation: "nfse_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hub_fiscal_emissions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       incident_attachments: {
         Row: {
           created_at: string
