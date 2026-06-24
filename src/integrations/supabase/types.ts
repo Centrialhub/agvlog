@@ -2092,6 +2092,51 @@ export type Database = {
           },
         ]
       }
+      entity_audit_log: {
+        Row: {
+          action: string
+          actor_role: string | null
+          actor_user_id: string | null
+          created_at: string
+          entity_id: string
+          entity_type: string
+          id: string
+          new_data: Json | null
+          old_data: Json | null
+          request_id: string | null
+          source: string | null
+          tenant_id: string
+        }
+        Insert: {
+          action: string
+          actor_role?: string | null
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id: string
+          entity_type: string
+          id?: string
+          new_data?: Json | null
+          old_data?: Json | null
+          request_id?: string | null
+          source?: string | null
+          tenant_id: string
+        }
+        Update: {
+          action?: string
+          actor_role?: string | null
+          actor_user_id?: string | null
+          created_at?: string
+          entity_id?: string
+          entity_type?: string
+          id?: string
+          new_data?: Json | null
+          old_data?: Json | null
+          request_id?: string | null
+          source?: string | null
+          tenant_id?: string
+        }
+        Relationships: []
+      }
       events: {
         Row: {
           created_at: string
@@ -8038,6 +8083,19 @@ export type Database = {
       _driver_order_ids: { Args: never; Returns: string[] }
       _driver_pickup_order_ids: { Args: never; Returns: string[] }
       _driver_trip_ids: { Args: never; Returns: string[] }
+      _load_is_locked: { Args: { _load_id: string }; Returns: boolean }
+      _log_entity_audit: {
+        Args: {
+          _action: string
+          _entity_id: string
+          _entity_type: string
+          _new?: Json
+          _old?: Json
+          _source?: string
+          _tenant_id: string
+        }
+        Returns: undefined
+      }
       _portal_user_client_ids: {
         Args: { _tenant_id: string }
         Returns: string[]
@@ -8045,6 +8103,20 @@ export type Database = {
       _portal_user_has_perm: {
         Args: { _client_id: string; _perm: string; _tenant_id: string }
         Returns: boolean
+      }
+      assign_fiscal_documents_to_load: {
+        Args: { _document_ids: string[]; _load_id: string; _tenant_id: string }
+        Returns: Json
+      }
+      audit_data_consistency: {
+        Args: { _tenant_id: string }
+        Returns: {
+          category: string
+          entity_id: string
+          entity_type: string
+          message: string
+          severity: string
+        }[]
       }
       clear_reimport_batch_data:
         | { Args: { _tenant_id: string }; Returns: Json }
@@ -8139,6 +8211,10 @@ export type Database = {
         Returns: string
       }
       current_driver_id: { Args: { _tenant_id: string }; Returns: string }
+      delete_load_safely: {
+        Args: { _load_id: string; _tenant_id: string }
+        Returns: Json
+      }
       detect_payment_method: { Args: { p_text: string }; Returns: string }
       dispatch_planned_route: { Args: { _payload: Json }; Returns: string }
       driver_can_access_vehicle: {
@@ -8202,7 +8278,7 @@ export type Database = {
       }
       driver_update_stop_status: {
         Args: { _new_status: string; _reason?: string; _stop_id: string }
-        Returns: string
+        Returns: Json
       }
       finalize_driver_delivery: {
         Args: {
@@ -8257,6 +8333,10 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      get_public_shipment_status: {
+        Args: { _fiscal_document_id: string }
+        Returns: string
       }
       get_user_client_access: {
         Args: { _tenant_id: string }
@@ -8396,6 +8476,15 @@ export type Database = {
           validated_at: string
         }[]
       }
+      move_load_items_between_loads: {
+        Args: {
+          _item_ids: string[]
+          _source_load_id: string
+          _target_load_id: string
+          _tenant_id: string
+        }
+        Returns: Json
+      }
       next_nfse_number: {
         Args: { _branch_code?: string; _series?: string; _tenant_id: string }
         Returns: number
@@ -8424,6 +8513,23 @@ export type Database = {
       }
       preview_reimport_cleanup_counts: {
         Args: { _end_date?: string; _start_date?: string; _tenant_id: string }
+        Returns: Json
+      }
+      record_operational_event_with_status: {
+        Args: {
+          _description: string
+          _entity_id: string
+          _entity_type: string
+          _event_type: string
+          _new_status?: string
+          _severity?: string
+          _tenant_id: string
+          _visible_to_client?: boolean
+        }
+        Returns: string
+      }
+      remove_fiscal_documents_from_load: {
+        Args: { _document_ids: string[]; _load_id: string; _tenant_id: string }
         Returns: Json
       }
       request_client_pickup: {
