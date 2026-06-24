@@ -737,7 +737,7 @@ function InviteDialog({
                   <SelectItem value="admin">Administrador — acesso total</SelectItem>
                   <SelectItem value="operator">Operador — acesso operacional</SelectItem>
                   <SelectItem value="driver">Motorista — app do motorista</SelectItem>
-                  <SelectItem value="client">Cliente — portal do cliente</SelectItem>
+                  
                 </SelectContent>
               </Select>
             </div>
@@ -749,7 +749,7 @@ function InviteDialog({
                 </p>
               </div>
             )}
-            {role === 'client' && clients.length > 0 && (
+            {false && clients.length > 0 && (
               <div className="rounded-md bg-muted/50 p-3">
                 <p className="text-xs text-muted-foreground">
                   <strong>Dica:</strong> Após criar a conta, vincule o usuário ao cadastro de cliente na página de Clientes.
@@ -774,7 +774,7 @@ function InviteDialog({
                   <SelectItem value="admin">Administrador — acesso total</SelectItem>
                   <SelectItem value="operator">Operador — acesso operacional</SelectItem>
                   <SelectItem value="driver">Motorista — app do motorista</SelectItem>
-                  <SelectItem value="client">Cliente — portal do cliente</SelectItem>
+                  
                 </SelectContent>
               </Select>
             </div>
