@@ -8248,6 +8248,7 @@ export type Database = {
         }
         Returns: {
           fiscal_document_id: string
+          has_file: boolean
           id: string
           invoice_number: string
           load_id: string
@@ -8257,8 +8258,6 @@ export type Database = {
           receiver_name: string
           receiver_role: string
           status: string
-          storage_bucket: string
-          storage_path: string
           validated_at: string
         }[]
       }
