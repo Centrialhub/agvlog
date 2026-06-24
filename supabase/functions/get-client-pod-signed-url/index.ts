@@ -52,18 +52,35 @@ Deno.serve(async (req) => {
       _fiscal_document_id: pod.fiscal_document_id,
     });
     if (accessErr || !canDownload) {
+      await userClient.rpc('log_pod_access', {
+        _tenant_id: tenant_id,
+        _pod_id: pod.id,
+        _fiscal_document_id: pod.fiscal_document_id,
+        _success: false,
+      }).catch(() => undefined);
       return new Response(JSON.stringify({ error: 'Download not allowed' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
-    // userId reserved for audit logging
     void userId;
 
-    // 4) sign URL
     const { data: signed, error: signErr } = await admin.storage
       .from(pod.storage_bucket || 'receipts')
       .createSignedUrl(pod.storage_path, 300);
     if (signErr || !signed?.signedUrl) {
+      await userClient.rpc('log_pod_access', {
+        _tenant_id: tenant_id,
+        _pod_id: pod.id,
+        _fiscal_document_id: pod.fiscal_document_id,
+        _success: false,
+      }).catch(() => undefined);
       return new Response(JSON.stringify({ error: 'Could not sign URL' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
+
+    await userClient.rpc('log_pod_access', {
+      _tenant_id: tenant_id,
+      _pod_id: pod.id,
+      _fiscal_document_id: pod.fiscal_document_id,
+      _success: true,
+    }).catch(() => undefined);
 
     return new Response(JSON.stringify({ signed_url: signed.signedUrl }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
