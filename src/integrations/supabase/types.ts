@@ -8002,6 +8002,11 @@ export type Database = {
           tenant_id: string
         }[]
       }
+      _driver_client_ids: { Args: never; Returns: string[] }
+      _driver_fiscal_document_ids: { Args: never; Returns: string[] }
+      _driver_load_ids: { Args: never; Returns: string[] }
+      _driver_order_ids: { Args: never; Returns: string[] }
+      _driver_pickup_order_ids: { Args: never; Returns: string[] }
       _driver_trip_ids: { Args: never; Returns: string[] }
       _portal_user_client_ids: {
         Args: { _tenant_id: string }
@@ -8252,6 +8257,7 @@ export type Database = {
       }
       is_tenant_admin: { Args: { _tenant_id: string }; Returns: boolean }
       is_tenant_member: { Args: { _tenant_id: string }; Returns: boolean }
+      is_user_internal_role: { Args: { _tenant_id: string }; Returns: boolean }
       list_client_documents: {
         Args: {
           _document_type?: string
@@ -8357,6 +8363,14 @@ export type Database = {
       peek_next_pickup_number: { Args: { _tenant_id: string }; Returns: string }
       portal_user_can_access_fiscal_document: {
         Args: { _fiscal_document_id: string; _tenant_id: string }
+        Returns: boolean
+      }
+      portal_user_can_access_operational_event: {
+        Args: { _event_id: string; _tenant_id: string }
+        Returns: boolean
+      }
+      portal_user_can_access_pickup_order: {
+        Args: { _pickup_order_id: string; _tenant_id: string }
         Returns: boolean
       }
       portal_user_can_download_fiscal_document: {

@@ -500,6 +500,10 @@ function PortalAccessDialog({ open, onOpenChange, editing, clients, tenantId }: 
 }) {
   const queryClient = useQueryClient();
   const [userId, setUserId] = useState('');
+  const [userQuery, setUserQuery] = useState('');
+  const [userResults, setUserResults] = useState<Array<{ id: string; email: string | null; full_name: string | null }>>([]);
+  const [searching, setSearching] = useState(false);
+  const [pickedLabel, setPickedLabel] = useState<string>('');
   const [clientId, setClientId] = useState('');
   const [accessType, setAccessType] = useState('full');
   const [perms, setPerms] = useState<Record<string, boolean>>({});
@@ -509,14 +513,36 @@ function PortalAccessDialog({ open, onOpenChange, editing, clients, tenantId }: 
     if (open) {
       if (editing) {
         setUserId(editing.user_id);
+        setPickedLabel(editing.user_id);
         setClientId(editing.client_id);
         setAccessType(editing.access_type);
         setPerms(Object.fromEntries(PERM_FIELDS.map(([k]) => [k, (editing as any)[k]])));
       } else {
-        setUserId(''); setClientId(''); setAccessType('full'); setPerms({});
+        setUserId(''); setPickedLabel(''); setUserQuery(''); setUserResults([]);
+        setClientId(''); setAccessType('full'); setPerms({});
       }
     }
   }, [open, editing]);
+
+  useEffect(() => {
+    if (!open || !tenantId) return;
+    const q = userQuery.trim();
+    if (q.length < 2) { setUserResults([]); return; }
+    const handle = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const { data, error } = await supabase.functions.invoke('search-users-by-email', {
+          body: { tenant_id: tenantId, query: q },
+        });
+        if (error) throw error;
+        if (data?.error) throw new Error(data.error);
+        setUserResults(data?.users || []);
+      } catch (e: any) {
+        toast.error(e.message || 'Falha na busca de usuários');
+      } finally { setSearching(false); }
+    }, 300);
+    return () => clearTimeout(handle);
+  }, [userQuery, open, tenantId]);
 
   const save = async () => {
     if (!tenantId || !userId || !clientId) { toast.error('Preencha usuário, cliente e tipo'); return; }
@@ -541,7 +567,8 @@ function PortalAccessDialog({ open, onOpenChange, editing, clients, tenantId }: 
       }
       queryClient.invalidateQueries({ queryKey: ['client_portal_access_admin'] });
       onOpenChange(false);
-      setUserId(''); setClientId(''); setAccessType('full'); setPerms({});
+      setUserId(''); setPickedLabel(''); setUserQuery(''); setUserResults([]);
+      setClientId(''); setAccessType('full'); setPerms({});
     } catch (e: any) {
       toast.error(e.message);
     } finally { setLoading(false); }
@@ -556,8 +583,46 @@ function PortalAccessDialog({ open, onOpenChange, editing, clients, tenantId }: 
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1">
-            <Label className="text-xs">ID do usuário (auth.users.id)</Label>
-            <Input value={userId} onChange={(e) => setUserId(e.target.value)} placeholder="UUID do usuário Supabase" />
+            <Label className="text-xs">Usuário</Label>
+            {userId && pickedLabel ? (
+              <div className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
+                <span className="truncate">{pickedLabel}</span>
+                <Button size="sm" variant="ghost" onClick={() => { setUserId(''); setPickedLabel(''); setUserQuery(''); }}>
+                  Trocar
+                </Button>
+              </div>
+            ) : (
+              <>
+                <Input
+                  value={userQuery}
+                  onChange={(e) => setUserQuery(e.target.value)}
+                  placeholder="Buscar por e-mail ou nome (mín. 2 caracteres)"
+                />
+                {searching && <p className="text-[11px] text-muted-foreground">Buscando…</p>}
+                {!searching && userQuery.trim().length >= 2 && userResults.length === 0 && (
+                  <p className="text-[11px] text-muted-foreground">Nenhum usuário encontrado.</p>
+                )}
+                {userResults.length > 0 && (
+                  <div className="max-h-40 overflow-y-auto rounded-md border divide-y">
+                    {userResults.map((u) => (
+                      <button
+                        key={u.id}
+                        type="button"
+                        className="block w-full px-3 py-2 text-left text-sm hover:bg-muted"
+                        onClick={() => {
+                          setUserId(u.id);
+                          setPickedLabel(u.full_name ? `${u.full_name} <${u.email ?? '?'}>` : (u.email ?? u.id));
+                          setUserResults([]); setUserQuery('');
+                        }}
+                      >
+                        <div className="font-medium">{u.full_name || u.email || u.id}</div>
+                        {u.email && <div className="text-[11px] text-muted-foreground">{u.email}</div>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
           </div>
           <div className="space-y-1">
             <Label className="text-xs">Cliente</Label>

@@ -49,9 +49,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (!["admin", "operator", "driver", "client"].includes(role)) {
+    if (!["admin", "operator", "driver"].includes(role)) {
       return new Response(
-        JSON.stringify({ error: "Invalid role" }),
+        JSON.stringify({ error: "Invalid role. Cliente externo deve ser cadastrado via client_portal_access." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
