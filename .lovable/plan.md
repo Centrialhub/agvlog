@@ -1,111 +1,80 @@
-# Hardening Final Pré-Beta AGVLog
+## Rodada final pré-beta — hardening de RLS, motorista, portal e status
 
-Vou dividir em 4 ondas para que cada parte seja revisável. Cada onda termina compilando e funcional.
-
----
-
-## Onda 1 — SQL: helpers, RLS, RPCs de motorista, status canônicos
-
-**Migração única** com:
-
-### 1.1 Helper de download
-```sql
-portal_user_can_download_fiscal_document(_tenant_id, _fiscal_document_id) returns boolean
-```
-- Repete a lógica de `portal_user_can_access_fiscal_document`, mas exige `can_download_documents = true` **na mesma linha** de `client_portal_access` que dá acesso (mesmo `client_id` / `tax_id`).
-- Substitui o check genérico do edge function.
-
-### 1.2 Status canônicos de parada
-- `public.stop_terminal_statuses() returns text[]` = `{completed, delivered, cancelled, skipped, refused, returned, partial_delivery, failed}` (damaged fica como **informativo**, não finalizador).
-- `driver_finalize_delivery`, `get_active_trips_live`, `update-trip-live-status` e summaries passam a consultar este helper para decidir se a viagem pode ser encerrada.
-- Viagem com **todas** as paradas em status terminal ⇒ trip status = `completed`.
-
-### 1.3 RPCs novas / ajustadas para motorista
-- `driver_update_stop_status(_stop_id, _new_status, _notes, _payload)` — aceita: `arrived`, `departed`, `delivered`, `refused`, `returned`, `partial_delivery`, `failed`, `cancelled`, `skipped`. Cada transição grava `dispatch_events` com `event_type` correspondente. **Bloqueia transições inválidas** (não permite voltar de terminal).
-- `driver_register_departure(_stop_id)` — sai do cliente (departure event + `actual_departure_at`).
-- `driver_create_operational_occurrence` já existe; manter.
-- Confirmar que `driver_create_event`, `driver_mark_arrival`, `driver_finalize_delivery` cobrem todo o resto.
-
-### 1.4 Portal shipment detail isolado por cliente
-Reescrever `get_client_portal_shipment_detail(_fiscal_document_id)`:
-- Buscar `dispatch_stop_id` específico via `dispatch_stop_documents`.
-- `events`: somente `dispatch_events` com aquele `dispatch_stop_id`.
-- `occurrences`: `operational_events` filtrados por **(`fiscal_document_id` = _fd) OR (`client_id` = fd.client_id AND `dispatch_stop_id` = stop_id) OR (`load_id` = fd.load_id AND `client_id` = fd.client_id)**. Nunca expor ocorrência de outro client da mesma carga.
-
-### 1.5 Portal RPCs usando helper unificado
-- `list_client_documents`, `list_client_pods`, `get_client_pod_metadata`, `get_client_portal_summary` ⇒ filtrar via `portal_user_can_access_fiscal_document(tenant_id, fd.id)` em vez de só `client_id IN allowed`. Isso cobre remetente/destinatário/payer por CNPJ.
-
-### 1.6 RLS e modelo de cliente externo
-- **Decisão**: cliente externo **não** é `tenant_member`. Remover qualquer policy que dependa de `role = 'client'` em `tenant_memberships` para: `clients`, `orders`, `fiscal_documents`, `loads`, `load_orders`, `pickup_orders`, `dispatch_trip_loads`. Essas tabelas continuam restritas a `owner/admin/operator/driver` (driver só vê o próprio trip). Cliente acessa exclusivamente via RPCs do portal.
-- `get_active_trips_live` e `get_open_trip_alerts`: exigir `is_tenant_admin(_tenant_id) OR has_tenant_role(_tenant_id,'operator')`. Driver e client são bloqueados.
-- Bucket `receipts`: alterar policy `receipts_tenant_select` para `admin/operator/driver` (sem client). Cliente baixa só via Edge Function com service role.
-
-### 1.7 Unique de driver↔user
-- `CREATE UNIQUE INDEX IF NOT EXISTS uq_drivers_tenant_user ON public.drivers(tenant_id, user_id) WHERE user_id IS NOT NULL;`
+Objetivo: fechar a superfície de segurança e consistência operacional antes do beta externo. Sem features novas.
 
 ---
 
-## Onda 2 — Edge Function
+### Fase 1 — Migration única de RLS (parte 1: helpers + telemetria/torre/frota)
 
-`supabase/functions/get-client-pod-signed-url/index.ts`:
-- Trocar import problemático `npm:@supabase/supabase-js@2/cors` por **definição local** de `corsHeaders` (mesmo padrão das demais funções do projeto).
-- Trocar a checagem de `can_download_documents` por chamada RPC `portal_user_can_download_fiscal_document` (passa o `fiscal_document_id` do POD).
-- Manter validação de JWT via `getClaims`.
+Helpers SQL novos:
+- `public.is_tenant_operator_or_admin(_tenant_id uuid)` — owner/admin/operator.
+- `public.current_driver_id(_tenant_id uuid)` — `drivers.id` para `auth.uid()`.
+- `public.driver_owns_trip(_trip_id uuid)` — trip pertence ao motorista logado.
+- `public.driver_can_access_vehicle(_vehicle_id uuid)` — veículo ligado a uma trip atual/histórica do motorista.
+
+Tabelas reescritas (drop all old policies, recriar):
+
+| Tabela | SELECT | INSERT/UPDATE/DELETE |
+|---|---|---|
+| trip_live_status | op/admin tenant; driver: própria trip | só op/admin (service_role bypass) |
+| trip_alerts | op/admin; driver: própria trip | só op/admin |
+| trip_routes | op/admin; driver: própria trip | só op/admin |
+| positions_last | op/admin; driver: veículo da trip ativa | bloqueado (só service_role) |
+| vehicles | op/admin; driver: veículo da própria trip | só op/admin |
+| drivers | op/admin; driver: próprio registro | só op/admin |
+
+Remove especificamente: `trip_live_status_write_member`, `trip_alerts_write_member`, `trip_routes_write_member`, "Members can…", "Tenant members can…", `*_write_member` em todas as 6 tabelas.
+
+### Fase 2 — Migration parte 2: operational_events + RPC motorista + portal
+
+1. Adicionar (se faltar) colunas em `operational_events`: `dispatch_stop_id uuid`, `fiscal_document_id uuid` (nullable, FKs com ON DELETE SET NULL).
+2. Reescrever policies de `operational_events`:
+   - op/admin: tudo do tenant.
+   - driver: apenas eventos onde `driver_id = current_driver_id` OU `dispatch_trip_id` pertence ao driver OU `dispatch_stop_id` em stop de trip do driver.
+   - cliente externo: sem acesso direto.
+3. Reescrever `driver_create_operational_occurrence` para:
+   - Validar `drivers.user_id = auth.uid()`.
+   - Derivar trip ativa, stop atual (status arrived/servicing/in_progress, senão próxima pendente), load, client, vehicle, driver, fiscal_document via `dispatch_stop_documents`.
+   - `visible_to_client = true` apenas quando vinculado a `client_id`/`fiscal_document_id` E tipo não-interno.
+4. Atualizar `get_client_portal_shipment_detail` para filtro tri-fold (NF id, stop-document, ou client+visible_to_client).
+
+### Fase 3 — Frontend: helper de status + dashboards
+
+Novo: `src/lib/status/loadStatus.ts` com `TERMINAL_STOP_STATUSES` e `LOAD_STATUS_LABELS` (10 status). Cores via tokens semânticos.
+
+Substituir literais de status em:
+- `src/pages/Dashboard.tsx`, `src/pages/Loads.tsx`, `src/pages/OperationsCenter.tsx`, `src/pages/Traceability.tsx`
+- `src/pages/portal/PortalDashboard.tsx`, `src/pages/portal/PortalShipments.tsx`
+- Badges/filtros de carga que hoje só listam pending/loading/in_transit/delivered/cancelled.
+
+Adicionar `partial_delivery`, `returned`, `refused`, `failed` em todos filtros e KPIs.
+
+### Fase 4 — Guard de portal + tenant provider
+
+- Novo componente `RequireClientPortalAccess` em `App.tsx`:
+  - Carrega `client_portal_access` ativo OU `currentRole` interno.
+  - Se nada, renderiza tela "Sem acesso ao portal" (não o layout parcial).
+- `useTenant`: garantir que o fallback para `get_user_portal_tenants()` já implementado seja efetivamente usado quando rota começa com `/portal`.
+- Aplicar `RequireClientPortalAccess` em `<Route path="/portal" …>`.
+
+### Fase 5 — Lockfile
+
+- Remover `bun.lock` se existir junto de `bun.lockb`. Manter `bun.lockb`.
+- `docs/ci.md` já lista `bun.lockb` — sem alterações.
+
+### Fase 6 — Verificação
+
+- `bun run lint`, `bun run build` (automáticos via harness).
+- Documentar matriz de testes manuais em `.lovable/plan.md` (RLS por papel, motorista, status, portal) — não implementar testes automatizados nesta rodada (escopo).
 
 ---
 
-## Onda 3 — Frontend: driver pages, route guards, portal
+### Ordem de execução
 
-### 3.1 Route guards (`src/components/auth/`)
-- `RequireInternalRole` — permite `owner/admin/operator`.
-- `RequireDriverRole` — permite `driver`.
-- `RequireClientPortalAccess` — permite usuários com pelo menos uma linha em `client_portal_access` para o tenant atual.
-- Aplicar em `App.tsx`: rotas `/driver/*` ⇒ driver; `/portal/*` ⇒ client portal; tudo administrativo ⇒ internal.
+1. Migration 1 (helpers + telemetria/torre/frota) — aguardar approval e regeneração de types.
+2. Migration 2 (operational_events + RPC + portal RPC).
+3. Frontend: helper de status, dashboards, guard `RequireClientPortalAccess`, ajustes de `useTenant`.
+4. Lockfile cleanup.
+5. Documentar matriz de testes.
 
-### 3.2 DriverDeliveries
-- Remover **todos** os `supabase.from('dispatch_events').insert/.update` e `supabase.from('dispatch_stops').update`.
-- Mapear ações:
-  - `chegada_no_cliente` → `driver_mark_arrival`
-  - `devolucao_parcial` → `driver_update_stop_status('partial_delivery', …)`
-  - `devolucao_total` → `driver_update_stop_status('returned', …)`
-  - `cliente_recusou` → `driver_update_stop_status('refused', …)`
-  - `cliente_estava_fora` → `driver_update_stop_status('failed', …)`
-  - `damaged`, demais informativos → `driver_create_event`
-  - finalizar entrega com assinatura → `driver_finalize_delivery` (já está)
-
-### 3.3 DriverStops
-- Remover botão "Concluir Parada" ou renomear para "Registrar saída" e usar `driver_register_departure`. Conclusão real fica em DriverDeliveries.
-
-### 3.4 Portal
-- `PortalPods`: usar status `uploaded` exibindo label "Recebido"; remover badge `received` se não estiver na constraint.
-- `useDownloadPortalPod` já chama a edge function — confirmar.
-
----
-
-## Onda 4 — Onboarding admin UI
-
-### 4.1 `Drivers.tsx`
-- Coluna "Usuário vinculado" (mostra email do user_id).
-- Form: select de usuários do tenant com role `driver` (de `tenant_memberships`), respeitando `uq_drivers_tenant_user`.
-
-### 4.2 `TeamManagement`
-- Bloquear criação de membership com `role='client'` (cliente externo agora é `client_portal_access`, não membership).
-- Após criar usuário com role driver, mostrar CTA "Vincular a motorista".
-- Nova aba **"Acessos do Portal"**: CRUD de `client_portal_access` com user_id, client_id, access_type e os 6 flags de permissão.
-
----
-
-## Detalhes técnicos relevantes
-
-- Migrações em SQL único por onda 1; outras ondas são frontend.
-- Não vou tocar em tipos `src/integrations/supabase/types.ts` (regenerado após migração).
-- Lista canônica de status terminais exposta em `src/lib/status/index.ts` para o frontend espelhar a função SQL.
-- Memberships virtuais para portal-only (já feito em useTenant) continuam funcionando — `RequireClientPortalAccess` valida diretamente em `client_portal_access`.
-
----
-
-## Ordem de entrega
-1. **Onda 1** primeiro (migração SQL grande; precisa de aprovação).
-2. Após aprovada e tipos regenerados ⇒ **Ondas 2, 3 e 4** em sequência rápida, sem mais aprovações.
-
-Posso começar pela Onda 1?
+Sem novas features. Sem alterações estéticas além de tokens/labels de status.
