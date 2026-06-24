@@ -214,7 +214,10 @@ export default function DriverDeliveries() {
     });
   }, [effectiveStops, search, tab]);
 
-  const completedStops = effectiveStops.filter((s) => s.status === 'completed');
+  // Considera todos os status terminais (delivered, refused, returned, partial_delivery, failed, etc.)
+  const completedStops = effectiveStops.filter(
+    (s) => isStopTerminal(s.status) || s.status === 'completed',
+  );
 
   const resetForm = () => {
     setEventForm(null);
