@@ -78,3 +78,31 @@ Adicionar `partial_delivery`, `returned`, `refused`, `failed` em todos filtros e
 5. Documentar matriz de testes.
 
 Sem novas features. Sem alterações estéticas além de tokens/labels de status.
+
+---
+
+## Matriz de verificação manual pré-beta
+
+### RLS por papel
+1. Logar como `driver` → `select * from clients` deve falhar (sem policy).
+2. Logar como `driver` → `select * from fiscal_documents` deve falhar.
+3. Logar como `driver` → `select * from drivers` retorna apenas o próprio cadastro.
+4. Logar como `driver` → `select * from vehicles` retorna só veículo da própria trip ativa.
+5. Logar como `driver` → `select * from trip_live_status` retorna só a própria trip.
+6. Logar como cliente externo (sem `tenant_memberships`) → consulta direta a `clients/orders/fiscal_documents` deve falhar; portal funciona via RPC.
+
+### Motorista — ocorrências
+1. RPC `driver_create_operational_occurrence(null,'damaged','desc')` sem trip/stop → deriva trip ativa + stop atual.
+2. Ocorrência criada com tipo `mechanical` → `visible_to_client=false`.
+3. Ocorrência com cliente derivado e tipo público → aparece em `get_client_portal_shipment_detail` apenas para o cliente vinculado.
+
+### Status operacional
+1. `driver_update_stop_status(..., 'refused')` → trip finaliza, load fecha em status terminal.
+2. Idem para `returned` e `partial_delivery`.
+3. Dashboards exibem labels PT-BR para `partial_delivery/returned/refused/failed/cancelled`.
+
+### Portal
+1. Cliente com 2 clients vê apenas seus próprios documentos em shipments/documents/pods/detail.
+2. Sem `can_view_financial` → `value/freight_value` retornam null.
+3. Sem `can_download_documents` → edge function de POD retorna 403.
+4. `/portal` sem `client_portal_access` mostra tela "Sem acesso ao portal".
