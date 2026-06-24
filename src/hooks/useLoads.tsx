@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
 
+import type { LoadStatus } from '@/lib/status/loadStatus';
 export { LOAD_STATUSES, LOAD_STATUS_LABELS } from '@/lib/status/loadStatus';
 export type { LoadStatus } from '@/lib/status/loadStatus';
 
