@@ -21,8 +21,8 @@ import {
 import { cn } from '@/lib/utils';
 import SignaturePad from '@/components/driver/SignaturePad';
 import DemoBanner from '@/components/driver/DemoBanner';
+import { canUseDriverDemo } from '@/lib/driver/demoMode';
 
-const IS_PROD = import.meta.env.PROD;
 
 // ====== Dados de demonstração ======
 const DEMO_TRIP = {
@@ -120,7 +120,7 @@ export default function DriverDeliveries() {
   const { data: trip } = useActiveTrip(driver?.id);
 
   // Em produção, nunca usar dados demo: melhor mostrar lista vazia que poluir POD.
-  const isDemo = !trip && !IS_PROD;
+  const isDemo = !trip && canUseDriverDemo;
   const [demoStops, setDemoStops] = useState<any[]>(DEMO_STOPS_INITIAL);
   const effectiveTrip: any = trip || DEMO_TRIP;
 
