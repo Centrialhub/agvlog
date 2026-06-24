@@ -71,8 +71,14 @@ async function processTrip(supabase: any, trip: any, now: Date) {
     .eq('dispatch_trip_id', trip.id)
     .order('stop_order', { ascending: true });
 
+  // Lista canônica de status terminais (espelho de public.stop_terminal_statuses()).
+  // arrived é parada ativa (não terminal); departed também é considerado em trânsito.
+  const TERMINAL_STATUSES = new Set([
+    'completed', 'delivered', 'cancelled', 'skipped',
+    'refused', 'returned', 'partial_delivery', 'failed',
+  ]);
   const nextStop = (stops || []).find(
-    (s: any) => ['pending', 'arriving', 'in_progress'].includes(s.status),
+    (s: any) => !TERMINAL_STATUSES.has(s.status),
   );
 
   // 3. Rota planejada
