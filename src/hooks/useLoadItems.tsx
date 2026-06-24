@@ -67,14 +67,21 @@ export function useCreateLoadItem() {
   return useMutation({
     mutationFn: async (values: Partial<LoadItem>) => {
       if (!values.load_id) throw new Error('load_id obrigatório');
-      if (!values.fiscal_document_id) {
-        throw new Error('useCreateLoadItem só aceita vínculo via fiscal_document_id. Use a RPC assign_fiscal_documents_to_load.');
+      // Vínculo com NF é exclusivamente via RPC oficial (sincroniza fiscal_documents.load_id + auditoria).
+      if (values.fiscal_document_id) {
+        const { data, error } = await (supabase as any).rpc('assign_fiscal_documents_to_load', {
+          _tenant_id: currentTenant!.id,
+          _load_id: values.load_id,
+          _document_ids: [values.fiscal_document_id],
+        });
+        if (error) throw error;
+        return data;
       }
-      const { data, error } = await (supabase as any).rpc('assign_fiscal_documents_to_load', {
-        _tenant_id: currentTenant!.id,
-        _load_id: values.load_id,
-        _document_ids: [values.fiscal_document_id],
-      });
+      // Itens manuais (sem NF) podem ser inseridos diretamente — não afetam composição fiscal.
+      const { data, error } = await (supabase as any).from('load_items').insert({
+        ...values,
+        tenant_id: currentTenant!.id,
+      }).select().single();
       if (error) throw error;
       return data;
     },
