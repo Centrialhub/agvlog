@@ -9,8 +9,7 @@ export interface PortalPod {
   invoice_number: string | null;
   proof_type: string;
   status: string;
-  storage_bucket: string | null;
-  storage_path: string | null;
+  has_file: boolean;
   receiver_name: string | null;
   receiver_document: string | null;
   receiver_role: string | null;

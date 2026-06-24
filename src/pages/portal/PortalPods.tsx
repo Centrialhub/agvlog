@@ -79,7 +79,7 @@ export default function PortalPods() {
                     </TableCell>
                     <TableCell><Badge variant="outline" className={STATUS_TONE[p.status] || ''}>{p.status}</Badge></TableCell>
                     <TableCell className="text-right">
-                      {p.storage_path && (
+                      {p.has_file && (
                         <Button size="sm" variant="outline" onClick={() => handleDownload(p.id)} disabled={download.isPending}>
                           <Download className="h-4 w-4 mr-1" /> Baixar
                         </Button>
