@@ -22,6 +22,8 @@ import { cn } from '@/lib/utils';
 import SignaturePad from '@/components/driver/SignaturePad';
 import DemoBanner from '@/components/driver/DemoBanner';
 
+const IS_PROD = import.meta.env.PROD;
+
 // ====== Dados de demonstração ======
 const DEMO_TRIP = {
   id: 'demo-trip',
@@ -117,7 +119,8 @@ export default function DriverDeliveries() {
   const { data: driver } = useCurrentDriver();
   const { data: trip } = useActiveTrip(driver?.id);
 
-  const isDemo = !trip;
+  // Em produção, nunca usar dados demo: melhor mostrar lista vazia que poluir POD.
+  const isDemo = !trip && !IS_PROD;
   const [demoStops, setDemoStops] = useState<any[]>(DEMO_STOPS_INITIAL);
   const effectiveTrip: any = trip || DEMO_TRIP;
 
@@ -352,6 +355,22 @@ export default function DriverDeliveries() {
         const { error } = await supabase.storage.from('receipts').upload(path, blob, { contentType: 'image/png' });
         if (error) throw error;
         signaturePath = path;
+      }
+
+      // Caminho seguro: finalizador "ENTREGUE" passa por RPC transacional.
+      if (def.finalAction === 'delivered') {
+        const { error: rpcErr } = await supabase.rpc('finalize_driver_delivery', {
+          _stop_id: eventForm.stop.id,
+          _receiver_name: receiverName.trim(),
+          _receiver_document: receiverDoc.trim() || null,
+          _receiver_role: null,
+          _signature_path: signaturePath,
+          _photo_paths: photoPaths,
+          _notes: notes || null,
+          _fiscal_document_id: eventForm.stop.fiscal_document_id || null,
+        } as any);
+        if (rpcErr) throw rpcErr;
+        return;
       }
 
       const { error: evtErr } = await supabase.from('dispatch_events').insert({
