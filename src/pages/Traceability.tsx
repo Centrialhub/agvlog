@@ -445,19 +445,20 @@ export default function Traceability() {
       if (!currentTenant || !selectedRow) return;
       const loadId = selectedRow.doc.load_id;
       if (!eventForm.description.trim()) throw new Error('Informe a descrição da ocorrência');
-      await (supabase as any).from('operational_events').insert({
-        tenant_id: currentTenant.id,
-        load_id: loadId,
-        client_id: selectedRow.doc.client_id,
-        event_type: eventForm.type,
-        severity: eventForm.severity,
-        description: eventForm.description,
-        created_by: user?.id,
+      const entityType = loadId ? 'load' : 'fiscal_document';
+      const entityId = loadId || selectedRow.doc.id;
+      const newStatus = eventForm.status === 'no_change' ? null : eventForm.status;
+      const { error } = await (supabase as any).rpc('record_operational_event_with_status', {
+        _tenant_id: currentTenant.id,
+        _entity_type: entityType,
+        _entity_id: entityId,
+        _event_type: eventForm.type,
+        _description: eventForm.description,
+        _severity: eventForm.severity,
+        _new_status: newStatus,
+        _visible_to_client: false,
       });
-      if (eventForm.status !== 'no_change') {
-        if (loadId) await supabase.from('loads').update({ status: eventForm.status, updated_at: new Date().toISOString() } as any).eq('id', loadId).eq('tenant_id', currentTenant.id);
-        if (!loadId) await supabase.from('fiscal_documents').update({ status: eventForm.status === 'delivered' ? 'confirmed' : 'pending', updated_at: new Date().toISOString() } as any).eq('id', selectedRow.doc.id).eq('tenant_id', currentTenant.id);
-      }
+      if (error) throw error;
     },
     onSuccess: () => {
       toast({ title: 'Rastreabilidade atualizada' });

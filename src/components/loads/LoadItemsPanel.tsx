@@ -243,19 +243,12 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
       try {
         const previousLoadIds = Array.from(new Set(docs.map((doc: any) => doc.load_id).filter(Boolean)));
         const docIds = docs.map((doc: any) => doc.id);
-        await (supabase as any).from('load_items').delete().eq('tenant_id', currentTenant!.id).in('fiscal_document_id', docIds);
-        await supabase.from('fiscal_documents').update({ load_id: loadId, updated_at: new Date().toISOString() } as any).in('id', docIds);
-        const { error: insertError } = await (supabase as any).from('load_items').insert(docs.map((doc: any) => ({
-          tenant_id: currentTenant!.id,
-          load_id: loadId,
-          fiscal_document_id: doc.id,
-          item_description: doc.product_summary || `NF ${doc.invoice_number || ''}`.trim(),
-          quantity: 1,
-          pallet_count: Number(doc.pallet_count) || 0,
-          weight_kg: Number(doc.weight_kg) || 0,
-          status: 'pending',
-        })));
-        if (insertError) throw insertError;
+        const { error: assignError } = await (supabase as any).rpc('assign_fiscal_documents_to_load', {
+          _tenant_id: currentTenant!.id,
+          _load_id: loadId,
+          _document_ids: docIds,
+        });
+        if (assignError) throw assignError;
         await refreshLoadTotals([...previousLoadIds, loadId]);
         setAddOpen(false);
         setSelectedDocIds(new Set());
@@ -313,9 +306,15 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
 
   const handleDelete = async (item: LoadItem) => {
     try {
-      await deleteItem.mutateAsync(item.id);
       if (item.fiscal_document_id) {
-        await supabase.from('fiscal_documents').update({ load_id: null, updated_at: new Date().toISOString() } as any).eq('id', item.fiscal_document_id);
+        const { error: removeError } = await (supabase as any).rpc('remove_fiscal_documents_from_load', {
+          _tenant_id: currentTenant!.id,
+          _load_id: loadId,
+          _document_ids: [item.fiscal_document_id],
+        });
+        if (removeError) throw removeError;
+      } else {
+        await deleteItem.mutateAsync(item.id);
       }
       await refreshLoadTotals([loadId]);
       qc.invalidateQueries({ queryKey: ['load_documents'] });

@@ -11,6 +11,7 @@ import { MapPin, Navigation, CheckCircle, Clock, ArrowRight } from 'lucide-react
 import { useState } from 'react';
 import DemoBanner from '@/components/driver/DemoBanner';
 import { canUseDriverDemo } from '@/lib/driver/demoMode';
+import { isStopTerminal, STOP_STATUS_LABELS } from '@/lib/status';
 
 const DEMO_TRIP = { id: 'demo-trip', loads: { load_number: '1042 (DEMO)' } };
 const DEMO_STOPS_INITIAL: any[] = [
@@ -20,18 +21,18 @@ const DEMO_STOPS_INITIAL: any[] = [
   { id: 'd4', stop_order: 4, status: 'completed',destination: 'Centro - Espinosa/MG',            notes: 'NF 2100050',     clients: { company_name: 'MERCADO BOM PRECO' }, actual_arrival_at: new Date(Date.now() - 4*3600000).toISOString(), actual_departure_at: new Date(Date.now() - 3*3600000).toISOString() },
 ];
 
-const STATUS_LABELS: Record<string, string> = {
-  pending: 'Pendente',
-  arrived: 'No local',
-  completed: 'Concluída',
-  skipped: 'Pulada',
-};
+const STATUS_LABELS: Record<string, string> = STOP_STATUS_LABELS as any;
 
 const STATUS_COLORS: Record<string, string> = {
   pending: 'bg-muted text-muted-foreground',
   arrived: 'bg-primary/10 text-primary',
   completed: 'bg-green-100 text-green-700',
   skipped: 'bg-destructive/10 text-destructive',
+  refused: 'bg-destructive/10 text-destructive',
+  returned: 'bg-destructive/10 text-destructive',
+  partial_delivery: 'bg-amber-100 text-amber-700',
+  failed: 'bg-destructive/10 text-destructive',
+  delivered: 'bg-green-100 text-green-700',
 };
 
 export default function DriverStops() {
@@ -198,15 +199,18 @@ export default function DriverStops() {
                       <Navigation className="h-3 w-3 mr-1" /> Navegar
                     </Button>
                   )}
-                  {stop.status === 'pending' && (
+                  {stop.status === 'pending' && !isStopTerminal(stop.status) && (
                     <Button size="sm" className="text-xs" onClick={() => handleArrival(stop.id)} disabled={updateStop.isPending}>
                       <ArrowRight className="h-3 w-3 mr-1" /> Cheguei
                     </Button>
                   )}
-                  {stop.status === 'arrived' && (
+                  {stop.status === 'arrived' && !isStopTerminal(stop.status) && (
                     <Button size="sm" variant="outline" className="text-xs" onClick={() => handleDeparture(stop.id)} disabled={updateStop.isPending}>
                       <CheckCircle className="h-3 w-3 mr-1" /> Registrar saída
                     </Button>
+                  )}
+                  {isStopTerminal(stop.status) && (
+                    <Badge variant="secondary" className="text-[10px]">Encerrada</Badge>
                   )}
                 </div>
               </CardContent>

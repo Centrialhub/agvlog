@@ -513,15 +513,12 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
       const docIds = [...selectedDocIdList, ...(manualDocId ? [manualDocId] : [])];
       if (docIds.length > 0) {
         if (selectedDocIdList.length > 0) {
-          const { error: unlinkItemsError } = await (supabase as any)
-            .from('load_items')
-            .delete()
-            .eq('tenant_id', currentTenant!.id)
-            .in('fiscal_document_id', selectedDocIdList);
-          if (unlinkItemsError) throw unlinkItemsError;
-
-          const { error: linkError } = await supabase.from('fiscal_documents').update({ load_id: load.id } as any).in('id', selectedDocIdList);
-          if (linkError) throw linkError;
+          const { error: assignError } = await (supabase as any).rpc('assign_fiscal_documents_to_load', {
+            _tenant_id: currentTenant!.id,
+            _load_id: load.id,
+            _document_ids: selectedDocIdList,
+          });
+          if (assignError) throw assignError;
           const auditEvents = selectedDocIdList.map(docId => {
             const doc: any = fiscalDocs.find((d: any) => d.id === docId);
             const autoFilledFields = docAutofillSnapshots[docId] || {};
@@ -562,21 +559,14 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
           const { error: auditError } = await (supabase as any).from('load_note_audit_events').insert(auditEvents);
           if (auditError) throw auditError;
         }
-        const items = docIds.map(id => {
-          const doc: any = fiscalDocs.find((d: any) => d.id === id);
-          return {
-            tenant_id: currentTenant!.id,
-            load_id: load.id,
-            fiscal_document_id: id,
-            item_description: doc?.product_summary || `NF ${doc?.invoice_number || form.invoice_number}`,
-            quantity: 1,
-            pallet_count: Number(doc?.pallet_count) || 0,
-            weight_kg: Number(doc?.weight_kg) || 0,
-            status: 'pending',
-          };
-        });
-        const { error: itemError } = await (supabase as any).from('load_items').insert(items);
-        if (itemError) throw itemError;
+        if (manualDocId) {
+          const { error: assignManualError } = await (supabase as any).rpc('assign_fiscal_documents_to_load', {
+            _tenant_id: currentTenant!.id,
+            _load_id: load.id,
+            _document_ids: [manualDocId],
+          });
+          if (assignManualError) throw assignManualError;
+        }
         await refreshLoadTotals([...previousLoadIds, load.id]);
       }
 
