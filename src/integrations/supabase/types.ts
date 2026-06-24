@@ -8150,6 +8150,10 @@ export type Database = {
         Returns: Json
       }
       driver_mark_arrival: { Args: { _stop_id: string }; Returns: string }
+      driver_register_departure: {
+        Args: { _notes?: string; _stop_id: string }
+        Returns: string
+      }
       driver_save_checklist: {
         Args: { _kind: string; _payload: Json; _trip_id: string }
         Returns: string
@@ -8355,6 +8359,10 @@ export type Database = {
         Args: { _fiscal_document_id: string; _tenant_id: string }
         Returns: boolean
       }
+      portal_user_can_download_fiscal_document: {
+        Args: { _fiscal_document_id: string; _tenant_id: string }
+        Returns: boolean
+      }
       portal_user_can_view_financial: {
         Args: { _fiscal_document_id: string; _tenant_id: string }
         Returns: boolean
@@ -8395,6 +8403,7 @@ export type Database = {
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      stop_terminal_statuses: { Args: never; Returns: string[] }
       upsert_geofence: {
         Args: {
           _category: string
