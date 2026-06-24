@@ -11,7 +11,7 @@ import { MapPin, Navigation, CheckCircle, Clock, ArrowRight } from 'lucide-react
 import { useState } from 'react';
 import DemoBanner from '@/components/driver/DemoBanner';
 import { canUseDriverDemo } from '@/lib/driver/demoMode';
-import { isTerminalStopStatus, STOP_STATUS_LABELS } from '@/lib/status';
+import { isStopTerminal, STOP_STATUS_LABELS } from '@/lib/status';
 
 const DEMO_TRIP = { id: 'demo-trip', loads: { load_number: '1042 (DEMO)' } };
 const DEMO_STOPS_INITIAL: any[] = [
@@ -199,17 +199,17 @@ export default function DriverStops() {
                       <Navigation className="h-3 w-3 mr-1" /> Navegar
                     </Button>
                   )}
-                  {stop.status === 'pending' && !isTerminalStopStatus(stop.status) && (
+                  {stop.status === 'pending' && !isStopTerminal(stop.status) && (
                     <Button size="sm" className="text-xs" onClick={() => handleArrival(stop.id)} disabled={updateStop.isPending}>
                       <ArrowRight className="h-3 w-3 mr-1" /> Cheguei
                     </Button>
                   )}
-                  {stop.status === 'arrived' && !isTerminalStopStatus(stop.status) && (
+                  {stop.status === 'arrived' && !isStopTerminal(stop.status) && (
                     <Button size="sm" variant="outline" className="text-xs" onClick={() => handleDeparture(stop.id)} disabled={updateStop.isPending}>
                       <CheckCircle className="h-3 w-3 mr-1" /> Registrar saída
                     </Button>
                   )}
-                  {isTerminalStopStatus(stop.status) && (
+                  {isStopTerminal(stop.status) && (
                     <Badge variant="secondary" className="text-[10px]">Encerrada</Badge>
                   )}
                 </div>
