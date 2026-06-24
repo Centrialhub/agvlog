@@ -210,6 +210,7 @@ export default function TeamManagement() {
       <Tabs defaultValue="members">
         <TabsList>
           <TabsTrigger value="members">Membros ({members.length})</TabsTrigger>
+          <TabsTrigger value="portal_access">Acessos do Portal</TabsTrigger>
         </TabsList>
         <TabsContent value="members" className="mt-4 space-y-4">
           <div className="flex items-center gap-3">
@@ -223,8 +224,7 @@ export default function TeamManagement() {
                 <SelectItem value="owner">Proprietário</SelectItem>
                 <SelectItem value="admin">Administrador</SelectItem>
                 <SelectItem value="operator">Operador</SelectItem>
-                <SelectItem value="driver">Motorista</SelectItem>
-                <SelectItem value="client">Cliente</SelectItem>
+                 <SelectItem value="driver">Motorista</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -322,6 +322,9 @@ export default function TeamManagement() {
               </Table>
             </Card>
           )}
+        </TabsContent>
+        <TabsContent value="portal_access" className="mt-4">
+          <PortalAccessTab tenantId={currentTenant?.id} />
         </TabsContent>
       </Tabs>
 
