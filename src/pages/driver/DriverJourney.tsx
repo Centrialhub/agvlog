@@ -11,6 +11,7 @@ import { Clock, Play, Coffee, Moon, CheckCircle, ClipboardCheck, AlertTriangle }
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import DemoBanner from '@/components/driver/DemoBanner';
+import { canUseDriverDemo } from '@/lib/driver/demoMode';
 
 const eventLabels: Record<string, { label: string; icon: typeof Play }> = {
   start_shift: { label: 'Início de Jornada', icon: Play },
@@ -76,7 +77,7 @@ export default function DriverJourney() {
     onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
   });
 
-  const isDemo = !trip;
+  const isDemo = !trip && canUseDriverDemo;
   const effectiveEvents = isDemo ? demoEvents : events;
 
   const handleEventClick = (eventType: string) => {
