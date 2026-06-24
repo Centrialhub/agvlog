@@ -505,14 +505,18 @@ function PortalAccessDialog({ open, onOpenChange, editing, clients, tenantId }: 
   const [perms, setPerms] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
 
-  useState(() => {
-    if (editing) {
-      setUserId(editing.user_id);
-      setClientId(editing.client_id);
-      setAccessType(editing.access_type);
-      setPerms(Object.fromEntries(PERM_FIELDS.map(([k]) => [k, (editing as any)[k]])));
+  useEffect(() => {
+    if (open) {
+      if (editing) {
+        setUserId(editing.user_id);
+        setClientId(editing.client_id);
+        setAccessType(editing.access_type);
+        setPerms(Object.fromEntries(PERM_FIELDS.map(([k]) => [k, (editing as any)[k]])));
+      } else {
+        setUserId(''); setClientId(''); setAccessType('full'); setPerms({});
+      }
     }
-  });
+  }, [open, editing]);
 
   const save = async () => {
     if (!tenantId || !userId || !clientId) { toast.error('Preencha usuário, cliente e tipo'); return; }
