@@ -983,9 +983,13 @@ export default function Ingestion() {
         const savedId = (doc as any)._savedId;
         try {
           if (savedId) {
-            // Already saved on upload — just link to load if needed
-            if (loadId) {
-              await supabase.from('fiscal_documents').update({ load_id: loadId } as any).eq('id', savedId);
+            // Já salvo no upload — vincula à carga via RPC oficial.
+            if (loadId && currentTenant) {
+              await (supabase as any).rpc('assign_fiscal_documents_to_load', {
+                _tenant_id: currentTenant.id,
+                _load_id: loadId,
+                _document_ids: [savedId],
+              });
             }
             results.push(`✅ NF ${doc.source.invoiceNumber} ${loadId ? 'vinculada à carga' : '(já salva)'}`);
           } else {
