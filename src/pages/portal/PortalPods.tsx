@@ -14,9 +14,18 @@ import { useToast } from '@/hooks/use-toast';
 
 const STATUS_TONE: Record<string, string> = {
   pending: 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-400',
-  received: 'bg-blue-500/15 text-blue-700 dark:text-blue-400',
+  uploaded: 'bg-blue-500/15 text-blue-700 dark:text-blue-400',
   validated: 'bg-green-500/15 text-green-700 dark:text-green-400',
   rejected: 'bg-red-500/15 text-red-700 dark:text-red-400',
+  missing: 'bg-muted text-muted-foreground',
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  pending: 'Pendente',
+  uploaded: 'Recebido',
+  validated: 'Validado',
+  rejected: 'Rejeitado',
+  missing: 'Não enviado',
 };
 
 export default function PortalPods() {
@@ -42,7 +51,7 @@ export default function PortalPods() {
           <SelectContent>
             <SelectItem value="all">Todos os status</SelectItem>
             <SelectItem value="pending">Pendente</SelectItem>
-            <SelectItem value="received">Recebido</SelectItem>
+            <SelectItem value="uploaded">Recebido</SelectItem>
             <SelectItem value="validated">Validado</SelectItem>
             <SelectItem value="rejected">Rejeitado</SelectItem>
           </SelectContent>
@@ -77,7 +86,7 @@ export default function PortalPods() {
                       <div className="text-sm">{p.receiver_name || '—'}</div>
                       {p.receiver_role && <div className="text-xs text-muted-foreground">{p.receiver_role}</div>}
                     </TableCell>
-                    <TableCell><Badge variant="outline" className={STATUS_TONE[p.status] || ''}>{p.status}</Badge></TableCell>
+                    <TableCell><Badge variant="outline" className={STATUS_TONE[p.status] || ''}>{STATUS_LABEL[p.status] || p.status}</Badge></TableCell>
                     <TableCell className="text-right">
                       {p.has_file && (
                         <Button size="sm" variant="outline" onClick={() => handleDownload(p.id)} disabled={download.isPending}>
