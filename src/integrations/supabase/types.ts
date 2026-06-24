@@ -8126,6 +8126,17 @@ export type Database = {
         }
         Returns: string
       }
+      driver_create_operational_occurrence: {
+        Args: {
+          _client_id?: string
+          _description: string
+          _event_type: string
+          _severity?: string
+          _stop_id?: string
+          _trip_id: string
+        }
+        Returns: string
+      }
       driver_finalize_delivery: {
         Args: {
           _notes?: string
@@ -8141,6 +8152,10 @@ export type Database = {
       driver_mark_arrival: { Args: { _stop_id: string }; Returns: string }
       driver_save_checklist: {
         Args: { _kind: string; _payload: Json; _trip_id: string }
+        Returns: string
+      }
+      driver_update_stop_status: {
+        Args: { _new_status: string; _reason?: string; _stop_id: string }
         Returns: string
       }
       finalize_driver_delivery: {
@@ -8336,6 +8351,14 @@ export type Database = {
       }
       peek_next_load_number: { Args: { _tenant_id: string }; Returns: string }
       peek_next_pickup_number: { Args: { _tenant_id: string }; Returns: string }
+      portal_user_can_access_fiscal_document: {
+        Args: { _fiscal_document_id: string; _tenant_id: string }
+        Returns: boolean
+      }
+      portal_user_can_view_financial: {
+        Args: { _fiscal_document_id: string; _tenant_id: string }
+        Returns: boolean
+      }
       preview_reimport_cleanup_counts: {
         Args: { _end_date?: string; _start_date?: string; _tenant_id: string }
         Returns: Json

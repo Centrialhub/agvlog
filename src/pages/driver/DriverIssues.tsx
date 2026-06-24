@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AlertTriangle, Plus, Clock, MessageSquare, Send } from 'lucide-react';
 import DemoBanner from '@/components/driver/DemoBanner';
+import { canUseDriverDemo } from '@/lib/driver/demoMode';
 import { useEventMessages, useSendEventMessage } from '@/hooks/useEventMessages';
 import { format } from 'date-fns';
 import { OCCURRENCE_TEMPLATES, getTemplateFields, formatOccurrenceReport } from '@/lib/occurrenceTemplate';
@@ -74,8 +75,8 @@ export default function DriverIssues() {
     mutationFn: async () => {
       const report = formatOccurrenceReport(form.event_type, form.details);
       const description = report || form.description || null;
-      if (!currentTenant || !driver) {
-        // Demo
+      if (!currentTenant || !driver || !trip) {
+        if (!canUseDriverDemo) throw new Error('Sem viagem ativa.');
         setDemoEvents((prev) => [{
           id: 'd' + Date.now(),
           event_type: form.event_type,
@@ -86,15 +87,14 @@ export default function DriverIssues() {
         }, ...prev]);
         return;
       }
-      const { error } = await supabase.from('operational_events').insert({
-        tenant_id: currentTenant!.id,
-        event_type: form.event_type,
-        severity: form.severity,
-        description,
-        report_details: form.details,
-        load_id: trip?.load_id || null,
-        driver_id: driver?.id || null,
-      } as any);
+      const { error } = await supabase.rpc('driver_create_operational_occurrence', {
+        _trip_id: trip.id,
+        _event_type: form.event_type,
+        _description: description || '',
+        _severity: form.severity,
+        _stop_id: null,
+        _client_id: null,
+      });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -106,8 +106,8 @@ export default function DriverIssues() {
     onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
   });
 
-  const isDemo = !driver;
-  const effectiveEvents = isDemo ? demoEvents : events;
+  const isDemo = !driver && canUseDriverDemo;
+  const effectiveEvents = isDemo ? demoEvents : (driver ? events : []);
   const [chatEvent, setChatEvent] = useState<any | null>(null);
 
   const severityColors: Record<string, string> = {

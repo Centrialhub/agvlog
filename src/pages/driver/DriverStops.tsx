@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { MapPin, Navigation, CheckCircle, Clock, ArrowRight } from 'lucide-react';
 import { useState } from 'react';
 import DemoBanner from '@/components/driver/DemoBanner';
+import { canUseDriverDemo } from '@/lib/driver/demoMode';
 
 const DEMO_TRIP = { id: 'demo-trip', loads: { load_number: '1042 (DEMO)' } };
 const DEMO_STOPS_INITIAL: any[] = [
@@ -78,16 +79,35 @@ export default function DriverStops() {
   });
 
   const updateStop = useMutation({
-    mutationFn: async ({ stopId, updates }: { stopId: string; updates: Record<string, any> }) => {
+    mutationFn: async ({ stopId, action, reason }: { stopId: string; action: 'arrival' | 'depart' | 'skipped' | 'refused' | 'damaged' | 'returned' | 'partial_delivery'; reason?: string }) => {
       if (!activeTrip) {
-        // Demo mode: muta em memória
-        setDemoStops((prev) => prev.map((s) => (s.id === stopId ? { ...s, ...updates } : s)));
+        if (!canUseDriverDemo) throw new Error('Sem viagem ativa.');
+        setDemoStops((prev) => prev.map((s) => {
+          if (s.id !== stopId) return s;
+          if (action === 'arrival') return { ...s, status: 'arrived', actual_arrival_at: new Date().toISOString() };
+          if (action === 'depart') return { ...s, status: 'completed', actual_departure_at: new Date().toISOString() };
+          return { ...s, status: action };
+        }));
         return;
       }
-      const { error } = await supabase
-        .from('dispatch_stops')
-        .update({ ...updates, updated_at: new Date().toISOString() })
-        .eq('id', stopId);
+      if (action === 'arrival') {
+        const { error } = await supabase.rpc('driver_mark_arrival', { _stop_id: stopId });
+        if (error) throw error;
+        return;
+      }
+      if (action === 'depart') {
+        // depart = finalize without POD info? Better: keep as 'completed' only via finalize_delivery.
+        // For now keep a generic event via driver_create_event + status change via driver_update_stop_status('skipped').
+        // Real "concluded" use case is delivery finalization in DriverDeliveries.
+        const { error } = await supabase.rpc('driver_create_event', {
+          _trip_id: activeTrip.id, _event_type: 'departure', _stop_id: stopId, _payload: {}, _notes: null,
+        });
+        if (error) throw error;
+        return;
+      }
+      const { error } = await supabase.rpc('driver_update_stop_status', {
+        _stop_id: stopId, _new_status: action, _reason: reason || null,
+      });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -98,20 +118,20 @@ export default function DriverStops() {
   });
 
   const handleArrival = (stopId: string) => {
-    updateStop.mutate({ stopId, updates: { status: 'arrived', actual_arrival_at: new Date().toISOString() } });
+    updateStop.mutate({ stopId, action: 'arrival' });
   };
 
   const handleDeparture = (stopId: string) => {
-    updateStop.mutate({ stopId, updates: { status: 'completed', actual_departure_at: new Date().toISOString() } });
+    updateStop.mutate({ stopId, action: 'depart' });
   };
 
   const openNavigation = (destination: string) => {
     window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(destination)}`, '_blank');
   };
 
-  const isDemo = !activeTrip;
+  const isDemo = !activeTrip && canUseDriverDemo;
   const effectiveTrip: any = activeTrip || DEMO_TRIP;
-  const effectiveStops: any[] = isDemo ? demoStops : (stops as any[]);
+  const effectiveStops: any[] = isDemo ? demoStops : (activeTrip ? (stops as any[]) : []);
 
   return (
     <div className="space-y-4">

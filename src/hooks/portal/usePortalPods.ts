@@ -43,20 +43,13 @@ export function useDownloadPortalPod() {
   return useMutation({
     mutationFn: async (podId: string): Promise<string> => {
       if (!currentTenant) throw new Error('Tenant não selecionado');
-      const { data: meta, error } = await supabase.rpc('get_client_pod_metadata', {
-        _tenant_id: currentTenant.id,
-        _pod_id: podId,
+      const { data, error } = await supabase.functions.invoke('get-client-pod-signed-url', {
+        body: { tenant_id: currentTenant.id, pod_id: podId },
       });
       if (error) throw error;
-      const row = (meta as any[])?.[0];
-      if (!row?.storage_bucket || !row?.storage_path) {
-        throw new Error('Arquivo indisponível');
-      }
-      const { data: signed, error: sErr } = await supabase.storage
-        .from(row.storage_bucket)
-        .createSignedUrl(row.storage_path, 300);
-      if (sErr) throw sErr;
-      return signed.signedUrl;
+      const url = (data as any)?.signed_url;
+      if (!url) throw new Error('Arquivo indisponível');
+      return url;
     },
   });
 }

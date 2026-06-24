@@ -26,6 +26,7 @@ import { printRomaneioRoutes, RomaneioDoc } from '@/lib/romaneioPrint';
 import StopDraftTable from '@/components/route-planning/StopDraftTable';
 import RouteValidationPanel from '@/components/route-planning/RouteValidationPanel';
 import { consolidateLoadsIntoStops } from '@/lib/route-planning/stopConsolidation';
+import { routeStopOrder } from '@/lib/route-planning/routeStopOrder';
 import { applySmartSequence, applyOriginalOrder, autoSequenceStops } from '@/lib/route-planning/simpleStopSequencing';
 import { simulateStopTimeline } from '@/lib/route-planning/timelineSimulation';
 import { regenerateStopsPreservingEdits } from '@/lib/route-planning/regenerateStops';
@@ -517,7 +518,7 @@ export default function RoutePlanning() {
   const moveStop = (routeId: string, stopId: string, dir: 'up' | 'down') => {
     setRoutes(prev => prev.map(r => {
       if (r.id !== routeId || !r.stops) return r;
-      const ordered = [...r.stops].sort((a, b) => (a.manual_order || 0) - (b.manual_order || 0));
+      const ordered = [...r.stops].sort((a, b) => routeStopOrder(a) - routeStopOrder(b));
       const idx = ordered.findIndex(s => s.id === stopId);
       const ni = dir === 'up' ? idx - 1 : idx + 1;
       if (idx < 0 || ni < 0 || ni >= ordered.length) return r;
@@ -534,7 +535,7 @@ export default function RoutePlanning() {
     setRoutes(prev => prev.map(r => {
       if (r.id !== routeId || !r.stops) return r;
       const next = r.stops.map(s => s.id === stopId ? { ...s, ...patch } : s);
-      const ordered = [...next].sort((a, b) => (a.manual_order || 0) - (b.manual_order || 0));
+      const ordered = [...next].sort((a, b) => routeStopOrder(a) - routeStopOrder(b));
       const sim = simulateStopTimeline(ordered, r.planned_start_at || globalStartAt, {
         initialTransitMinutes: r.initial_transit_minutes ?? 30,
       });
@@ -874,7 +875,7 @@ export default function RoutePlanning() {
                           if (r.id !== route.id) return r;
                           const stops = r.stops
                             ? simulateStopTimeline(
-                                [...r.stops].sort((a, b) => (a.manual_order || 0) - (b.manual_order || 0)),
+                                [...r.stops].sort((a, b) => routeStopOrder(a) - routeStopOrder(b)),
                                 e.target.value,
                                 { initialTransitMinutes: r.initial_transit_minutes ?? 30 },
                               )
@@ -896,7 +897,7 @@ export default function RoutePlanning() {
                               if (r.id !== route.id) return r;
                               const stops = r.stops
                                 ? simulateStopTimeline(
-                                    [...r.stops].sort((a, b) => (a.manual_order || 0) - (b.manual_order || 0)),
+                                    [...r.stops].sort((a, b) => routeStopOrder(a) - routeStopOrder(b)),
                                     r.planned_start_at || globalStartAt,
                                     { initialTransitMinutes: v },
                                   )
@@ -964,7 +965,7 @@ export default function RoutePlanning() {
                         <p className="text-[11px] text-amber-700">{route.notes}</p>
                       )}
                       <StopDraftTable
-                        stops={(route.stops || []).slice().sort((a,b) => (a.manual_order||0) - (b.manual_order||0))}
+                        stops={(route.stops || []).slice().sort((a,b) => routeStopOrder(a) - routeStopOrder(b))}
                         onMove={(id, dir) => moveStop(route.id, id, dir)}
                         onUpdate={(id, patch) => updateStop(route.id, id, patch)}
                       />

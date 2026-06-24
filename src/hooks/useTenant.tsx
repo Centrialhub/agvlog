@@ -52,11 +52,25 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         .eq('active', true);
 
       if (!error && data) {
-        const mapped = (data as any[]).map(d => ({
+        let mapped = (data as any[]).map(d => ({
           tenant_id: d.tenant_id,
           role: d.role,
           tenants: d.tenants,
         }));
+
+        // Portal-only users (no operational membership) may still belong to tenants
+        // via client_portal_access. Surface those as virtual "client" memberships
+        // so the portal layout works without an operational role.
+        if (mapped.length === 0) {
+          const { data: portalTenants } = await supabase.rpc('get_user_portal_tenants');
+          if (Array.isArray(portalTenants) && portalTenants.length > 0) {
+            mapped = (portalTenants as any[]).map((t) => ({
+              tenant_id: t.id,
+              role: 'client' as const,
+              tenants: { id: t.id, name: t.name, plan_key: t.plan_key, timezone: t.timezone },
+            }));
+          }
+        }
 
         setMemberships(mapped);
 
