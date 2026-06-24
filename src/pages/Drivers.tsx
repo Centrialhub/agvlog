@@ -50,6 +50,28 @@ export default function Drivers() {
     enabled: !!currentTenant,
   });
 
+  // Usuários da tenant que têm role 'driver' (candidatos a vincular a um motorista)
+  const { data: driverUsers = [] } = useQuery({
+    queryKey: ['driver_users_for_link', currentTenant?.id],
+    queryFn: async () => {
+      if (!currentTenant) return [];
+      const { data: m } = await supabase
+        .from('tenant_memberships')
+        .select('user_id')
+        .eq('tenant_id', currentTenant.id)
+        .eq('role', 'driver')
+        .eq('active', true);
+      const ids = (m || []).map((x: any) => x.user_id);
+      if (!ids.length) return [];
+      const { data: p } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .in('id', ids);
+      return (p || []) as Array<{ id: string; full_name: string | null }>;
+    },
+    enabled: !!currentTenant && isAdmin,
+  });
+
   const assignMutation = useMutation({
     mutationFn: async ({ driverId, vehicleId }: { driverId: string; vehicleId: string | null }) => {
       const { error } = await supabase.from('drivers')
@@ -137,6 +159,7 @@ export default function Drivers() {
                 <TableHead>Documento</TableHead>
                 <TableHead>Telefone</TableHead>
                 <TableHead>Veículo Vinculado</TableHead>
+                <TableHead>Usuário</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>SSX Sync</TableHead>
                 {isAdmin && <TableHead className="w-32">Ações</TableHead>}
@@ -144,9 +167,9 @@ export default function Drivers() {
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
               ) : drivers.length === 0 ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhum motorista cadastrado</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhum motorista cadastrado</TableCell></TableRow>
               ) : (
                 drivers.map((d: any) => (
                   <TableRow key={d.id}>
@@ -201,6 +224,13 @@ export default function Drivers() {
                       )}
                     </TableCell>
                     <TableCell>
+                      {d.user_id ? (
+                        <span className="text-xs">{driverUsers.find(u => u.id === d.user_id)?.full_name || d.user_id.slice(0, 8)}</span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground italic">Sem vínculo</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
                       <Badge variant={d.active ? 'default' : 'secondary'}>{d.active ? 'Ativo' : 'Inativo'}</Badge>
                     </TableCell>
                     <TableCell>{syncStatusBadge(d.provider_person_sync_status)}</TableCell>
@@ -234,13 +264,14 @@ export default function Drivers() {
         </CardContent>
       </Card>
 
-      <DriverDialog open={dialogOpen} onOpenChange={setDialogOpen} driver={editing} tenantId={currentTenant?.id} userId={user?.id} />
+      <DriverDialog open={dialogOpen} onOpenChange={setDialogOpen} driver={editing} tenantId={currentTenant?.id} userId={user?.id} driverUsers={driverUsers} existingDrivers={drivers as any[]} />
     </div>
   );
 }
 
-function DriverDialog({ open, onOpenChange, driver, tenantId, userId }: {
+function DriverDialog({ open, onOpenChange, driver, tenantId, userId, driverUsers, existingDrivers }: {
   open: boolean; onOpenChange: (v: boolean) => void; driver: any; tenantId?: string; userId?: string;
+  driverUsers: Array<{ id: string; full_name: string | null }>; existingDrivers: any[];
 }) {
   const queryClient = useQueryClient();
   const [form, setForm] = useState<any>({});
