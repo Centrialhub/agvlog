@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useTenant } from './useTenant';
+import { TRIP_ACTIVE_STATUSES } from '@/lib/status';
 
 export interface CurrentDriver {
   id: string;
@@ -43,7 +44,7 @@ export function useActiveTrip(driverId: string | undefined) {
         .select('*, loads(load_number, origin, destination, status), vehicles(plate, nickname)')
         .eq('tenant_id', currentTenant.id)
         .eq('driver_id', driverId)
-        .in('status', ['planned', 'in_progress'])
+        .in('status', TRIP_ACTIVE_STATUSES as unknown as string[])
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();

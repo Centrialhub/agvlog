@@ -5863,7 +5863,7 @@ export type Database = {
           {
             foreignKeyName: "proof_of_delivery_fiscal_document_id_fkey"
             columns: ["fiscal_document_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "fiscal_documents"
             referencedColumns: ["id"]
           },
@@ -8093,6 +8093,19 @@ export type Database = {
       }
       detect_payment_method: { Args: { p_text: string }; Returns: string }
       dispatch_planned_route: { Args: { _payload: Json }; Returns: string }
+      finalize_driver_delivery: {
+        Args: {
+          _fiscal_document_id?: string
+          _notes?: string
+          _photo_paths?: string[]
+          _receiver_document?: string
+          _receiver_name: string
+          _receiver_role?: string
+          _signature_path?: string
+          _stop_id: string
+        }
+        Returns: Json
+      }
       get_active_trips_live: { Args: { _tenant_id: string }; Returns: Json }
       get_client_document_download_url: {
         Args: { _proof_id: string }

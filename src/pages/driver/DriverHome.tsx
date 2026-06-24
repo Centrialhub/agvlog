@@ -11,6 +11,9 @@ import { useNavigate } from 'react-router-dom';
 import DemoBanner from '@/components/driver/DemoBanner';
 import { useState } from 'react';
 import DriverDeliveryMap, { DeliveryPoint } from '@/components/driver/DriverDeliveryMap';
+import { TRIP_ACTIVE_STATUSES, tripStatusLabel } from '@/lib/status';
+
+const IS_PROD = import.meta.env.PROD;
 
 const DEMO_TRIP = {
   id: 'demo-trip',
@@ -46,7 +49,7 @@ export default function DriverHome() {
         .select('*, loads(load_number, origin, destination, status), vehicles(plate, nickname)')
         .eq('tenant_id', currentTenant.id)
         .eq('driver_id', driver.id)
-        .in('status', ['planned', 'in_progress'])
+        .in('status', TRIP_ACTIVE_STATUSES as unknown as string[])
         .order('created_at', { ascending: false })
         .limit(5);
       if (error) throw error;
@@ -55,16 +58,14 @@ export default function DriverHome() {
     enabled: !!driver && !!currentTenant,
   });
 
-  const statusLabels: Record<string, string> = {
-    planned: 'Planejada',
-    in_progress: 'Em Andamento',
-    completed: 'Concluída',
-    cancelled: 'Cancelada',
-  };
-
   const loading = driverLoading || tripsLoading;
 
-  const isDemo = (!driver || activeTrips.length === 0) && demoActive && !loading;
+  // Em produção nunca mostra dados demo; só aparece se realmente não há viagem real.
+  const isDemo =
+    !IS_PROD &&
+    (!driver || activeTrips.length === 0) &&
+    demoActive &&
+    !loading;
   const tripsToShow: any[] = isDemo ? [DEMO_TRIP] : activeTrips;
 
   return (
@@ -118,7 +119,7 @@ export default function DriverHome() {
                     </span>
                   </div>
                   <Badge variant="secondary" className="text-[10px]">
-                    {statusLabels[trip.status] || trip.status}
+                    {tripStatusLabel(trip.status)}
                   </Badge>
                 </div>
 
@@ -148,8 +149,8 @@ export default function DriverHome() {
         </div>
       )}
 
-      {/* Delivery map dashboard */}
-      {tripsToShow.length > 0 && (
+      {/* Delivery map dashboard — somente em modo demo (placeholder visual). */}
+      {isDemo && tripsToShow.length > 0 && (
         <Card>
           <CardContent className="p-3 space-y-3">
             <div className="flex items-center justify-between">
