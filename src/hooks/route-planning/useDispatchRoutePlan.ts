@@ -20,11 +20,15 @@ export function useDispatchRoutePlan() {
 
   const dispatchOnce = useCallback(async (payload: DispatchRoutePayload): Promise<string> => {
     if (!currentTenant) throw new Error('Tenant não selecionado');
+    const orderOf = (s: RouteStopDraft) =>
+      s.manual_order ?? s.optimized_order ?? s.original_order ?? 9999;
     const stops = [...payload.stops]
-        .sort((a, b) => (a.manual_order || 0) - (b.manual_order || 0))
+        .sort((a, b) => orderOf(a) - orderOf(b))
         .map((s) => ({
           client_id: s.client_id,
           destination: s.destination,
+          latitude: s.latitude ?? null,
+          longitude: s.longitude ?? null,
           planned_arrival_at: s.planned_arrival_at,
           estimated_departure_at: s.estimated_departure_at,
           service_time_minutes: s.service_time_minutes,

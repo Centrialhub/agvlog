@@ -90,27 +90,25 @@ export default function DriverExpenses() {
         }, ...prev]);
         return;
       }
-      let receiptUrl: string | null = null;
+      if (!trip) throw new Error('Sem viagem ativa para vincular a despesa.');
 
-      if (receiptFile && currentTenant) {
+      let receiptPath: string | null = null;
+      if (receiptFile) {
         const ext = receiptFile.name.split('.').pop() || 'jpg';
-        const path = `${currentTenant.id}/${Date.now()}.${ext}`;
+        const path = `${currentTenant.id}/expenses/${trip.id}/${Date.now()}.${ext}`;
         const { error: uploadErr } = await supabase.storage
           .from('receipts')
           .upload(path, receiptFile, { contentType: receiptFile.type });
         if (uploadErr) throw uploadErr;
-        // Store the path, not a public URL (bucket is private)
-        receiptUrl = path;
+        receiptPath = path;
       }
 
-      const { error } = await supabase.from('driver_expenses').insert({
-        tenant_id: currentTenant!.id,
-        driver_id: driver?.id || null,
-        dispatch_trip_id: trip?.id || null,
-        category: form.category,
-        amount: parseFloat(form.amount) || 0,
-        notes: form.notes || null,
-        receipt_url: receiptUrl,
+      const { error } = await supabase.rpc('driver_create_expense', {
+        _trip_id: trip.id,
+        _category: form.category,
+        _amount: parseFloat(form.amount) || 0,
+        _notes: form.notes || null,
+        _receipt_path: receiptPath,
       } as any);
       if (error) throw error;
     },

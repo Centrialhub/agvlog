@@ -359,15 +359,14 @@ export default function DriverDeliveries() {
 
       // Caminho seguro: finalizador "ENTREGUE" passa por RPC transacional.
       if (def.finalAction === 'delivered') {
-        const { error: rpcErr } = await supabase.rpc('finalize_driver_delivery', {
+        const { error: rpcErr } = await supabase.rpc('driver_finalize_delivery', {
           _stop_id: eventForm.stop.id,
           _receiver_name: receiverName.trim(),
-          _receiver_document: receiverDoc.trim() || null,
-          _receiver_role: null,
           _signature_path: signaturePath,
           _photo_paths: photoPaths,
+          _receiver_document: receiverDoc.trim() || null,
+          _receiver_role: null,
           _notes: notes || null,
-          _fiscal_document_id: eventForm.stop.fiscal_document_id || null,
         } as any);
         if (rpcErr) throw rpcErr;
         return;

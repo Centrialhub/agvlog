@@ -1725,6 +1725,7 @@ export type Database = {
           tenant_id: string
           updated_at: string
           updated_by: string | null
+          user_id: string | null
           weight_kg: number | null
         }
         Insert: {
@@ -1814,6 +1815,7 @@ export type Database = {
           tenant_id: string
           updated_at?: string
           updated_by?: string | null
+          user_id?: string | null
           weight_kg?: number | null
         }
         Update: {
@@ -1903,6 +1905,7 @@ export type Database = {
           tenant_id?: string
           updated_at?: string
           updated_by?: string | null
+          user_id?: string | null
           weight_kg?: number | null
         }
         Relationships: [
@@ -7991,6 +7994,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _assert_driver_owns_trip: {
+        Args: { _trip_id: string }
+        Returns: {
+          driver_id: string
+          status: string
+          tenant_id: string
+        }[]
+      }
+      _driver_trip_ids: { Args: never; Returns: string[] }
       _portal_user_client_ids: {
         Args: { _tenant_id: string }
         Returns: string[]
@@ -8093,14 +8105,49 @@ export type Database = {
       }
       detect_payment_method: { Args: { p_text: string }; Returns: string }
       dispatch_planned_route: { Args: { _payload: Json }; Returns: string }
-      finalize_driver_delivery: {
+      driver_create_event: {
         Args: {
-          _fiscal_document_id?: string
+          _event_type: string
+          _notes?: string
+          _payload?: Json
+          _stop_id?: string
+          _trip_id: string
+        }
+        Returns: string
+      }
+      driver_create_expense: {
+        Args: {
+          _amount: number
+          _category: string
+          _expense_at?: string
+          _notes?: string
+          _receipt_path?: string
+          _trip_id: string
+        }
+        Returns: string
+      }
+      driver_finalize_delivery: {
+        Args: {
           _notes?: string
           _photo_paths?: string[]
           _receiver_document?: string
           _receiver_name: string
           _receiver_role?: string
+          _signature_path?: string
+          _stop_id: string
+        }
+        Returns: Json
+      }
+      driver_mark_arrival: { Args: { _stop_id: string }; Returns: string }
+      driver_save_checklist: {
+        Args: { _kind: string; _payload: Json; _trip_id: string }
+        Returns: string
+      }
+      finalize_driver_delivery: {
+        Args: {
+          _fiscal_document_id?: string
+          _photo_paths?: string[]
+          _receiver_name: string
           _signature_path?: string
           _stop_id: string
         }
@@ -8161,6 +8208,15 @@ export type Database = {
           can_view_financial: boolean
           can_view_vehicle_live: boolean
           client_id: string
+        }[]
+      }
+      get_user_portal_tenants: {
+        Args: never
+        Returns: {
+          id: string
+          name: string
+          plan_key: string
+          timezone: string
         }[]
       }
       get_user_tenant_ids: { Args: never; Returns: string[] }

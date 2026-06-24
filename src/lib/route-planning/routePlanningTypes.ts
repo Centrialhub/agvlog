@@ -20,6 +20,9 @@ export interface RouteStopDraft {
   total_pallet_count: number;
   total_value: number;
 
+  latitude?: number | null;
+  longitude?: number | null;
+
   original_order?: number | null;
   optimized_order?: number | null;
   manual_order?: number | null;
