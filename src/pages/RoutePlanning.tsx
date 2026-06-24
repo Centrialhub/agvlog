@@ -26,6 +26,7 @@ import { printRomaneioRoutes, RomaneioDoc } from '@/lib/romaneioPrint';
 import StopDraftTable from '@/components/route-planning/StopDraftTable';
 import RouteValidationPanel from '@/components/route-planning/RouteValidationPanel';
 import { consolidateLoadsIntoStops } from '@/lib/route-planning/stopConsolidation';
+import { routeStopOrder } from '@/lib/route-planning/routeStopOrder';
 import { applySmartSequence, applyOriginalOrder, autoSequenceStops } from '@/lib/route-planning/simpleStopSequencing';
 import { simulateStopTimeline } from '@/lib/route-planning/timelineSimulation';
 import { regenerateStopsPreservingEdits } from '@/lib/route-planning/regenerateStops';
