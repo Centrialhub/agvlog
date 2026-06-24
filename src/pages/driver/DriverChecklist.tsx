@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ClipboardCheck, Save } from 'lucide-react';
 import DemoBanner from '@/components/driver/DemoBanner';
+import { canUseDriverDemo } from '@/lib/driver/demoMode';
 
 const PRE_TRIP_ITEMS = [
   'Pneus em bom estado',
@@ -136,7 +137,7 @@ export default function DriverChecklist() {
     enabled: !!trip?.id,
   });
 
-  const isDemo = !trip;
+  const isDemo = !trip && canUseDriverDemo;
   const lastPre = savedEvents.find((e: any) => e.event_type === 'checklist_pre');
   const lastPost = savedEvents.find((e: any) => e.event_type === 'checklist_post');
   const preChecked = isDemo
