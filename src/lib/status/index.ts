@@ -61,3 +61,23 @@ export const isStopCompleted = (s: string | null | undefined) =>
 
 export const isStopPending = (s: string | null | undefined) =>
   !!s && (STOP_PENDING_STATUSES as readonly string[]).includes(s);
+
+// Re-export new helpers under namespaces to avoid clashing with legacy exports above.
+export * from './loadStatus';
+export {
+  STOP_TERMINAL_STATUSES,
+  STOP_ACTIVE_STATUSES,
+  STOP_STATUS_TONE,
+  isStopTerminal,
+  isStopActive,
+} from './stopStatus';
+export {
+  DOCUMENT_STATUSES,
+  DOCUMENT_STATUS_LABELS,
+  DOCUMENT_STATUS_TONE,
+  TERMINAL_DOCUMENT_STATUSES,
+  documentStatusLabel,
+  isDocumentTerminal,
+} from './documentStatus';
+export type { DocumentStatus } from './documentStatus';
+export type { StopTerminalStatus, StopActiveStatus } from './stopStatus';

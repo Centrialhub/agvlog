@@ -265,23 +265,29 @@ export default function LoadReallocation() {
     let errors = 0;
     const movedItems: Array<{ desc: string; pallets: number; weight: number }> = [];
 
-    for (const itemId of selectedItems) {
-      const item = sourceItems.find(i => i.id === itemId);
-      try {
-        const { error } = await (supabase as any)
-          .from('load_items')
-          .update({ load_id: targetLoadId, updated_at: new Date().toISOString() })
-          .eq('id', itemId);
-        if (error) throw error;
-        moved++;
-        if (item) movedItems.push({ desc: item.item_description, pallets: item.pallet_count || 0, weight: item.weight_kg || 0 });
-      } catch {
-        errors++;
-      }
+    const itemIds = Array.from(selectedItems);
+    for (const id of itemIds) {
+      const item = sourceItems.find(i => i.id === id);
+      if (item) movedItems.push({ desc: item.item_description, pallets: item.pallet_count || 0, weight: item.weight_kg || 0 });
+    }
+    try {
+      const tenantId = (sourceLoad as any)?.tenant_id || (targetLoad as any)?.tenant_id;
+      const { data, error } = await (supabase as any).rpc('move_load_items_between_loads', {
+        _tenant_id: tenantId,
+        _source_load_id: sourceLoadId,
+        _target_load_id: targetLoadId,
+        _item_ids: itemIds,
+      });
+      if (error) throw error;
+      moved = (data && (data as any).moved) ?? itemIds.length;
+    } catch (e: any) {
+      errors = itemIds.length;
+      toast.error(e?.message || 'Falha ao mover itens');
     }
 
     qc.invalidateQueries({ queryKey: ['load_items'] });
     qc.invalidateQueries({ queryKey: ['loads'] });
+    qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
 
     const fromLabel = sourceLoad?.load_number || '—';
     const toLabel = targetLoad?.load_number || '—';

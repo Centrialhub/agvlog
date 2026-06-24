@@ -1,108 +1,100 @@
-## Rodada final pré-beta — hardening de RLS, motorista, portal e status
 
-Objetivo: fechar a superfície de segurança e consistência operacional antes do beta externo. Sem features novas.
+# Rodada de auditoria funcional e consistência de dados
 
----
+Escopo grande e crítico — sem features novas. Foco: fonte de verdade única, RPCs transacionais, status canônicos, auditoria.
 
-### Fase 1 — Migration única de RLS (parte 1: helpers + telemetria/torre/frota)
+## Fase 1 — Documento de contrato
+- `docs/data-contract.md` documentando fontes de verdade: `load_items` (composição), `dispatch_trip_loads` (vínculo viagem-carga), `dispatch_stop_documents` (parada-documento), `dispatch_stops.status` (status operacional), função central de status público, e campos esperados em `operational_events`.
 
-Helpers SQL novos:
-- `public.is_tenant_operator_or_admin(_tenant_id uuid)` — owner/admin/operator.
-- `public.current_driver_id(_tenant_id uuid)` — `drivers.id` para `auth.uid()`.
-- `public.driver_owns_trip(_trip_id uuid)` — trip pertence ao motorista logado.
-- `public.driver_can_access_vehicle(_vehicle_id uuid)` — veículo ligado a uma trip atual/histórica do motorista.
+## Fase 2 — Migration única consolidada
+Uma única migration cobrindo:
 
-Tabelas reescritas (drop all old policies, recriar):
+### 2.1 Evolução de `operational_events`
+- Adicionar `dispatch_trip_id`, `dispatch_stop_id`, `fiscal_document_id` (nullable, FK).
 
-| Tabela | SELECT | INSERT/UPDATE/DELETE |
-|---|---|---|
-| trip_live_status | op/admin tenant; driver: própria trip | só op/admin (service_role bypass) |
-| trip_alerts | op/admin; driver: própria trip | só op/admin |
-| trip_routes | op/admin; driver: própria trip | só op/admin |
-| positions_last | op/admin; driver: veículo da trip ativa | bloqueado (só service_role) |
-| vehicles | op/admin; driver: veículo da própria trip | só op/admin |
-| drivers | op/admin; driver: próprio registro | só op/admin |
+### 2.2 Audit log
+- Criar `entity_audit_log` (tenant_id, entity_type, entity_id, action, old_data, new_data, actor_user_id, actor_role, source, request_id, created_at).
+- GRANTs + RLS (somente owner/admin lê do tenant; service_role escreve).
+- Helper `_log_entity_audit(...)`.
 
-Remove especificamente: `trip_live_status_write_member`, `trip_alerts_write_member`, `trip_routes_write_member`, "Members can…", "Tenant members can…", `*_write_member` em todas as 6 tabelas.
+### 2.3 RPCs de composição de carga (transacionais + auditoria)
+- `assign_fiscal_documents_to_load(_tenant_id, _load_id, _document_ids)` — bloqueia se carga em viagem ativa/entregue.
+- `remove_fiscal_documents_from_load(_tenant_id, _load_id, _document_ids)` — limpa `fiscal_documents.load_id` + `load_items` correspondentes.
+- `move_load_items_between_loads(_tenant_id, _source_load_id, _target_load_id, _item_ids)` — bloqueia se em viagem ativa, atualiza ambas as tabelas, recalcula totais.
+- `delete_load_safely(_tenant_id, _load_id)` — só se sem viagem ativa e sem POD.
 
-### Fase 2 — Migration parte 2: operational_events + RPC motorista + portal
+### 2.4 Correção `driver_update_stop_status`
+- Buscar docs via `dispatch_stop_documents`; mapear status parada → status fiscal_documents.
+- Quando todas paradas do trip terminais, atualizar `dispatch_trip_loads`→loads + trip status.
+- Inserir registro em `entity_audit_log`.
+- Retornar jsonb com `updated_stop_id`, `updated_document_ids`, `updated_load_ids`, `trip_completed`.
 
-1. Adicionar (se faltar) colunas em `operational_events`: `dispatch_stop_id uuid`, `fiscal_document_id uuid` (nullable, FKs com ON DELETE SET NULL).
-2. Reescrever policies de `operational_events`:
-   - op/admin: tudo do tenant.
-   - driver: apenas eventos onde `driver_id = current_driver_id` OU `dispatch_trip_id` pertence ao driver OU `dispatch_stop_id` em stop de trip do driver.
-   - cliente externo: sem acesso direto.
-3. Reescrever `driver_create_operational_occurrence` para:
-   - Validar `drivers.user_id = auth.uid()`.
-   - Derivar trip ativa, stop atual (status arrived/servicing/in_progress, senão próxima pendente), load, client, vehicle, driver, fiscal_document via `dispatch_stop_documents`.
-   - `visible_to_client = true` apenas quando vinculado a `client_id`/`fiscal_document_id` E tipo não-interno.
-4. Atualizar `get_client_portal_shipment_detail` para filtro tri-fold (NF id, stop-document, ou client+visible_to_client).
+### 2.5 Correção `request_client_pickup`
+- Trocar `c.name`/`c.cnpj_cpf` por `COALESCE(c.trade_name, c.company_name, c.legal_name)` e `c.tax_id`.
 
-### Fase 3 — Frontend: helper de status + dashboards
+### 2.6 Correção `create_client_occurrence`
+- Validar `_load_id` via `fiscal_documents.client_id` (em vez de `load_items.client_id`).
 
-Novo: `src/lib/status/loadStatus.ts` com `TERMINAL_STOP_STATUSES` e `LOAD_STATUS_LABELS` (10 status). Cores via tokens semânticos.
+### 2.7 Função central de status público
+- `get_public_shipment_status(_fiscal_document_id)` retornando status canônico considerando: ocorrência crítica → exceções terminais → delivered+POD → delivered s/ POD → arrived/in_progress → in_transit/loading → planned.
+- Atualizar `search_client_portal_shipments` e `get_client_portal_summary` para usar essa função.
 
-Substituir literais de status em:
-- `src/pages/Dashboard.tsx`, `src/pages/Loads.tsx`, `src/pages/OperationsCenter.tsx`, `src/pages/Traceability.tsx`
-- `src/pages/portal/PortalDashboard.tsx`, `src/pages/portal/PortalShipments.tsx`
-- Badges/filtros de carga que hoje só listam pending/loading/in_transit/delivered/cancelled.
+### 2.8 RPC `record_operational_event_with_status`
+- Insere evento, atualiza status da entidade (load|fiscal_document|dispatch_stop) com validação de transição, registra audit, retorna entidade.
 
-Adicionar `partial_delivery`, `returned`, `refused`, `failed` em todos filtros e KPIs.
+### 2.9 RPC `audit_data_consistency(_tenant_id)`
+- Retorna `{severity, category, entity_type, entity_id, message}[]` para todas as inconsistências listadas (load_items≠fiscal_documents.load_id, trips sem trip_loads, stops sem stop_documents, POD órfão, carga delivered c/ doc não terminal, ocorrências visíveis sem client_id, etc.).
 
-### Fase 4 — Guard de portal + tenant provider
+### 2.10 Atualizar `driver_create_operational_occurrence`
+- Já existe; garantir que preenche `dispatch_trip_id`, `dispatch_stop_id`, `fiscal_document_id` automaticamente.
 
-- Novo componente `RequireClientPortalAccess` em `App.tsx`:
-  - Carrega `client_portal_access` ativo OU `currentRole` interno.
-  - Se nada, renderiza tela "Sem acesso ao portal" (não o layout parcial).
-- `useTenant`: garantir que o fallback para `get_user_portal_tenants()` já implementado seja efetivamente usado quando rota começa com `/portal`.
-- Aplicar `RequireClientPortalAccess` em `<Route path="/portal" …>`.
+## Fase 3 — Frontend status canônico
+- Estender `src/lib/status/loadStatus.ts` (já existe parcial).
+- Criar `src/lib/status/stopStatus.ts` (terminal + active + labels + tone).
+- Criar `src/lib/status/documentStatus.ts` (labels + tone).
+- Atualizar `src/lib/status/index.ts` exportando tudo.
+- Atualizar `src/lib/portal/portalStatus.ts` para mapear via helpers se necessário.
 
-### Fase 5 — Lockfile
+## Fase 4 — Telas
+### LoadDetail
+- Remover/desabilitar fluxo legado que cria `dispatch_trips`/`dispatch_stops` diretos. Substituir por chamada a `dispatch_planned_route` (ou desabilitar botão com aviso).
 
-- Remover `bun.lock` se existir junto de `bun.lockb`. Manter `bun.lockb`.
-- `docs/ci.md` já lista `bun.lockb` — sem alterações.
+### LoadReallocation
+- Substituir update direto em `load_items` por `move_load_items_between_loads`.
 
-### Fase 6 — Verificação
+### LoadItemsPanel / NewLoadDialog / PendingDocsGrouping / useLoads / useLoadItems
+- Trocar updates diretos de composição por novas RPCs.
 
-- `bun run lint`, `bun run build` (automáticos via harness).
-- Documentar matriz de testes manuais em `.lovable/plan.md` (RLS por papel, motorista, status, portal) — não implementar testes automatizados nesta rodada (escopo).
+### DriverDeliveries / DriverStops
+- Contagem de concluídas usando `TERMINAL_STOP_STATUSES`.
+- Bloquear ações em status terminal.
+- Aba "em rota" considera `pending/arriving/arrived/in_progress/servicing/departed`.
+- Labels via helpers.
 
----
-
-### Ordem de execução
-
-1. Migration 1 (helpers + telemetria/torre/frota) — aguardar approval e regeneração de types.
-2. Migration 2 (operational_events + RPC + portal RPC).
-3. Frontend: helper de status, dashboards, guard `RequireClientPortalAccess`, ajustes de `useTenant`.
-4. Lockfile cleanup.
-5. Documentar matriz de testes.
-
-Sem novas features. Sem alterações estéticas além de tokens/labels de status.
-
----
-
-## Matriz de verificação manual pré-beta
-
-### RLS por papel
-1. Logar como `driver` → `select * from clients` deve falhar (sem policy).
-2. Logar como `driver` → `select * from fiscal_documents` deve falhar.
-3. Logar como `driver` → `select * from drivers` retorna apenas o próprio cadastro.
-4. Logar como `driver` → `select * from vehicles` retorna só veículo da própria trip ativa.
-5. Logar como `driver` → `select * from trip_live_status` retorna só a própria trip.
-6. Logar como cliente externo (sem `tenant_memberships`) → consulta direta a `clients/orders/fiscal_documents` deve falhar; portal funciona via RPC.
-
-### Motorista — ocorrências
-1. RPC `driver_create_operational_occurrence(null,'damaged','desc')` sem trip/stop → deriva trip ativa + stop atual.
-2. Ocorrência criada com tipo `mechanical` → `visible_to_client=false`.
-3. Ocorrência com cliente derivado e tipo público → aparece em `get_client_portal_shipment_detail` apenas para o cliente vinculado.
-
-### Status operacional
-1. `driver_update_stop_status(..., 'refused')` → trip finaliza, load fecha em status terminal.
-2. Idem para `returned` e `partial_delivery`.
-3. Dashboards exibem labels PT-BR para `partial_delivery/returned/refused/failed/cancelled`.
+### Traceability
+- Substituir update direto de status por `record_operational_event_with_status`. Corrigir fallback `confirmed`.
 
 ### Portal
-1. Cliente com 2 clients vê apenas seus próprios documentos em shipments/documents/pods/detail.
-2. Sem `can_view_financial` → `value/freight_value` retornam null.
-3. Sem `can_download_documents` → edge function de POD retorna 403.
-4. `/portal` sem `client_portal_access` mostra tela "Sem acesso ao portal".
+- `PortalShipments`/`PortalDashboard`/`PortalDocuments`/`PortalPods` lendo status público da RPC central.
+- `PortalDashboard`: esconder seções vazias ("Próximas entregas" placeholder) ou preencher com query real.
+
+## Fase 5 — Edge functions
+- `update-trip-live-status`: já considera terminais (verificado). Adicionar guard `is_tenant_operator_or_admin` no header e log estruturado de falhas.
+
+## Fase 6 — Tela admin de auditoria
+- `/data-audit` (rota apenas para owner/admin) chamando `audit_data_consistency`. Card simples: total crítico, total alerta, lista, botão re-rodar.
+
+## Fase 7 — Verificação
+- `bun run lint` + build automáticos.
+- Documentar matriz de testes manuais em `.lovable/plan.md` (fluxos normal, recusa, parcial, movimentação, portal, auditoria).
+
+## Detalhes técnicos importantes
+- Todas as novas RPCs: `SECURITY DEFINER`, `SET search_path = public`, validação de papel via `is_tenant_operator_or_admin`, bloqueio quando carga em viagem ativa (`status IN ('in_transit','loading','dispatched')` ou trip ativa).
+- Triggers existentes (`trg_recalc_load_totals`) continuam responsáveis por totais.
+- Sentinels Radix mantidos.
+- Sem aesthetic refactor.
+
+## Considerações
+- O contrato é AMPLO. Vou consolidar tudo em **uma** migration SQL grande para minimizar idas e voltas de aprovação.
+- Frontend será editado em paralelo, em hunks pequenos e focados, sem reescrever componentes inteiros.
+- A tela `/data-audit` será mínima (tabela + botão).

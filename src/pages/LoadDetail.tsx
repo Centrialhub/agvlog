@@ -145,44 +145,34 @@ export default function LoadDetail() {
   const createTrip = useMutation({
     mutationFn: async () => {
       if (!load || !currentTenant) throw new Error('Dados insuficientes');
-      const { data: trip, error: tripErr } = await supabase
-        .from('dispatch_trips')
-        .insert({
-          tenant_id: currentTenant.id,
-          load_id: load.id,
-          driver_id: dispatchForm.driver_id || load.driver_id || null,
-          vehicle_id: dispatchForm.vehicle_id || load.vehicle_id || null,
-          status: 'planned',
-          notes: dispatchForm.notes || null,
-        } as any)
-        .select()
-        .single();
-      if (tripErr) throw tripErr;
-
-      // Create all stops in batch
+      // Usa exclusivamente a RPC oficial — garante dispatch_trip_loads
+      // e dispatch_stop_documents consistentes com o contrato de dados.
       const validStops = dispatchStops.filter(s => s.destination.trim());
-      if (validStops.length > 0 && trip) {
-        const stopsToInsert = validStops.map((s, idx) => ({
+      if (validStops.length === 0) throw new Error('Adicione pelo menos uma parada');
+
+      // Distribui todos os documentos fiscais da carga na primeira parada por padrão;
+      // o operador refina pela tela de planejamento de rotas se quiser separar.
+      const fdIds = items.map(i => (i as any).fiscal_document_id).filter(Boolean);
+      const stopsPayload = validStops.map((s, idx) => ({
+        destination: s.destination,
+        client_id: s.client_id || null,
+        stop_order: idx + 1,
+        fiscal_document_ids: idx === 0 ? fdIds : [],
+      }));
+
+      const { data: tripId, error } = await (supabase as any).rpc('dispatch_planned_route', {
+        _payload: {
           tenant_id: currentTenant.id,
-          dispatch_trip_id: trip.id,
-          destination: s.destination,
-          client_id: s.client_id || null,
-          stop_order: idx + 1,
-          status: 'pending',
-        }));
-        const { error: stopErr } = await supabase.from('dispatch_stops').insert(stopsToInsert as any);
-        if (stopErr) console.error('Stops creation error:', stopErr);
-      }
-
-      // Update load with driver/vehicle if changed
-      const updates: any = {};
-      if (dispatchForm.driver_id) updates.driver_id = dispatchForm.driver_id;
-      if (dispatchForm.vehicle_id) updates.vehicle_id = dispatchForm.vehicle_id;
-      if (Object.keys(updates).length > 0) {
-        await supabase.from('loads').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', load.id);
-      }
-
-      return trip;
+          vehicle_id: dispatchForm.vehicle_id || load.vehicle_id,
+          driver_id: dispatchForm.driver_id || load.driver_id,
+          planned_start_at: new Date().toISOString(),
+          route_name: `Carga ${load.load_number}`,
+          load_ids: [load.id],
+          stops: stopsPayload,
+        },
+      });
+      if (error) throw error;
+      return { id: tripId };
     },
     onSuccess: () => {
       toast({ title: 'Viagem criada com sucesso' });
