@@ -19,12 +19,13 @@ import {
 import DemoBanner from '@/components/driver/DemoBanner';
 import { DEMO_EVENTS_INITIAL } from './DriverEvents';
 import { useState } from 'react';
+import { canUseDriverDemo } from '@/lib/driver/demoMode';
 
 export default function DriverEventDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [demoActive, setDemoActive] = useState(true);
-  const event = DEMO_EVENTS_INITIAL.find((e) => e.id === id);
+  const [demoActive, setDemoActive] = useState(canUseDriverDemo);
+  const event = canUseDriverDemo ? DEMO_EVENTS_INITIAL.find((e) => e.id === id) : undefined;
 
   if (!event) {
     return (
