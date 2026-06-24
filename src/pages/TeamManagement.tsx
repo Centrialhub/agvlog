@@ -277,7 +277,6 @@ export default function TeamManagement() {
                                 <SelectItem value="admin">Administrador</SelectItem>
                                 <SelectItem value="operator">Operador</SelectItem>
                                 <SelectItem value="driver">Motorista</SelectItem>
-                                <SelectItem value="client">Cliente</SelectItem>
                               </SelectContent>
                             </Select>
                           )}
