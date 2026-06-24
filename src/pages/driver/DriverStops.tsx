@@ -96,12 +96,11 @@ export default function DriverStops() {
         return;
       }
       if (action === 'depart') {
-        // depart = finalize without POD info? Better: keep as 'completed' only via finalize_delivery.
-        // For now keep a generic event via driver_create_event + status change via driver_update_stop_status('skipped').
-        // Real "concluded" use case is delivery finalization in DriverDeliveries.
-        const { error } = await supabase.rpc('driver_create_event', {
-          _trip_id: activeTrip.id, _event_type: 'departure', _stop_id: stopId, _payload: {}, _notes: null,
-        });
+        // "Registrar saída" — apenas marca actual_departure_at e gera evento de departure.
+        // A conclusão real da entrega acontece em DriverDeliveries via driver_finalize_delivery.
+        const { error } = await supabase.rpc('driver_register_departure', {
+          _stop_id: stopId, _notes: null,
+        } as any);
         if (error) throw error;
         return;
       }
@@ -205,8 +204,8 @@ export default function DriverStops() {
                     </Button>
                   )}
                   {stop.status === 'arrived' && (
-                    <Button size="sm" className="text-xs" onClick={() => handleDeparture(stop.id)} disabled={updateStop.isPending}>
-                      <CheckCircle className="h-3 w-3 mr-1" /> Concluir Parada
+                    <Button size="sm" variant="outline" className="text-xs" onClick={() => handleDeparture(stop.id)} disabled={updateStop.isPending}>
+                      <CheckCircle className="h-3 w-3 mr-1" /> Registrar saída
                     </Button>
                   )}
                 </div>

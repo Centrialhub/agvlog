@@ -372,13 +372,55 @@ export default function DriverDeliveries() {
         return;
       }
 
-      const { error: evtErr } = await supabase.from('dispatch_events').insert({
-        tenant_id: currentTenant!.id,
-        dispatch_trip_id: trip!.id,
-        dispatch_stop_id: eventForm.stop.id,
-        event_type: def.finalAction ? `delivery_${def.finalAction}` : `info_${def.key}`,
-        notes: notes || null,
-        payload: {
+      // Mapa de eventos → RPCs seguras. Nenhum write direto em tabela operacional.
+      const reason = notes?.trim() || null;
+
+      if (def.key === 'chegada_no_cliente') {
+        const { error } = await supabase.rpc('driver_mark_arrival', { _stop_id: eventForm.stop.id } as any);
+        if (error) throw error;
+        return;
+      }
+
+      // Status finalizadores via driver_update_stop_status
+      const STATUS_MAP: Record<string, string | undefined> = {
+        devolucao_parcial: 'partial_delivery',
+        devolucao_total: 'returned',
+        cliente_recusou: 'refused',
+        cliente_estava_fora: 'failed',
+      };
+      const mappedStatus = STATUS_MAP[def.key];
+      if (mappedStatus) {
+        const { error } = await supabase.rpc('driver_update_stop_status', {
+          _stop_id: eventForm.stop.id,
+          _new_status: mappedStatus,
+          _reason: reason,
+        } as any);
+        if (error) throw error;
+        // anexa evento contextual (fotos, recebedor, itens) sem alterar status
+        await supabase.rpc('driver_create_event', {
+          _trip_id: trip!.id,
+          _event_type: `info_${def.key}`,
+          _payload: {
+            event_subtype: def.key,
+            event_label: def.label,
+            receiver_name: receiverName.trim() || null,
+            receiver_document: receiverDoc.trim() || null,
+            photo_paths: photoPaths,
+            photo_count: photoPaths.length,
+            signature_path: signaturePath,
+            returned_items: returnedItems,
+          },
+          _stop_id: eventForm.stop.id,
+          _notes: reason,
+        } as any);
+        return;
+      }
+
+      // Eventos informativos (avaria, solicitar_desconto, atualizar_boleto, coleta_realizada, etc.)
+      const { error: evtErr } = await supabase.rpc('driver_create_event', {
+        _trip_id: trip!.id,
+        _event_type: `info_${def.key}`,
+        _payload: {
           event_subtype: def.key,
           event_label: def.label,
           receiver_name: receiverName.trim() || null,
@@ -386,28 +428,16 @@ export default function DriverDeliveries() {
           photo_paths: photoPaths,
           photo_count: photoPaths.length,
           signature_path: signaturePath,
+          discount_amount: discountAmount || null,
+          discount_kind: discountKind,
+          discount_reason: discountReason || null,
+          boleto_due_date: boletoDueDate || null,
+          boleto_note: boletoNote || null,
         },
+        _stop_id: eventForm.stop.id,
+        _notes: reason,
       } as any);
       if (evtErr) throw evtErr;
-
-      // Se for finalizador, atualiza o stop
-      if (def.finalAction) {
-        const { error: stopErr } = await supabase
-          .from('dispatch_stops')
-          .update({
-            status: 'completed',
-            actual_departure_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            notes: notes ? `${def.label}: ${notes}` : null,
-          })
-          .eq('id', eventForm.stop.id);
-        if (stopErr) throw stopErr;
-      } else if (def.key === 'chegada_no_cliente' && eventForm.stop.status === 'pending') {
-        await supabase
-          .from('dispatch_stops')
-          .update({ status: 'arrived', actual_arrival_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-          .eq('id', eventForm.stop.id);
-      }
     },
     onSuccess: () => {
       toast({ title: 'Evento lançado com sucesso' });

@@ -105,14 +105,35 @@ function PageLoader() {
   );
 }
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
+function RequireInternalRole({ children }: { children: React.ReactNode }) {
+  const { currentRole, loading } = useTenant();
+  if (loading) return <PageLoader />;
+  if (!currentRole) return <div className="p-6 text-sm text-muted-foreground">Sem acesso a este tenant.</div>;
+  if (!['owner', 'admin', 'operator'].includes(currentRole)) {
+    if (currentRole === 'driver') return <Navigate to="/driver" replace />;
+    if (currentRole === 'client') return <Navigate to="/portal" replace />;
+    return <Navigate to="/" replace />;
+  }
+  return <>{children}</>;
+}
+
+function RequireDriverRole({ children }: { children: React.ReactNode }) {
+  const { currentRole, loading } = useTenant();
+  if (loading) return <PageLoader />;
+  if (currentRole !== 'driver') return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
+
+function ProtectedRoute({ children, gate = 'internal' }: { children: React.ReactNode; gate?: 'internal' | 'any' }) {
   const { user, loading } = useAuth();
   if (loading) return <div className="flex h-screen items-center justify-center text-muted-foreground">Carregando...</div>;
   if (!user) return <Navigate to="/auth" replace />;
   return (
     <TenantProvider>
       <AppLayout>
-        <Suspense fallback={<PageLoader />}>{children}</Suspense>
+        <Suspense fallback={<PageLoader />}>
+          {gate === 'internal' ? <RequireInternalRole>{children}</RequireInternalRole> : children}
+        </Suspense>
       </AppLayout>
     </TenantProvider>
   );
@@ -125,7 +146,9 @@ function DriverRoute({ children }: { children: React.ReactNode }) {
   return (
     <TenantProvider>
       <DriverLayout>
-        <Suspense fallback={<PageLoader />}>{children}</Suspense>
+        <Suspense fallback={<PageLoader />}>
+          <RequireDriverRole>{children}</RequireDriverRole>
+        </Suspense>
       </DriverLayout>
     </TenantProvider>
   );
@@ -168,7 +191,7 @@ const App = () => (
             <Route path="/auth" element={<AuthRoute />} />
 
             {/* Role-based home */}
-            <Route path="/" element={<ProtectedRoute><RoleRouter /></ProtectedRoute>} />
+            <Route path="/" element={<ProtectedRoute gate="any"><RoleRouter /></ProtectedRoute>} />
 
             {/* Admin / Operations routes */}
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />

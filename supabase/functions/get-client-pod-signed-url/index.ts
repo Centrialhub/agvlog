@@ -1,5 +1,10 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -40,28 +45,17 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: 'POD not found' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // 2) check access via helper (auth context: pretend user)
+    // 2) Single check: same client_portal_access row that grants document access must also have can_download_documents=true
     const userClient = createClient(url, anonKey, { global: { headers: { Authorization: authHeader } } });
-    const { data: hasAccess, error: accessErr } = await userClient.rpc('portal_user_can_access_fiscal_document', {
+    const { data: canDownload, error: accessErr } = await userClient.rpc('portal_user_can_download_fiscal_document', {
       _tenant_id: tenant_id,
       _fiscal_document_id: pod.fiscal_document_id,
     });
-    if (accessErr || !hasAccess) {
-      return new Response(JSON.stringify({ error: 'Access denied' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-    }
-
-    // 3) require can_download_documents
-    const { data: perm } = await admin
-      .from('client_portal_access')
-      .select('can_download_documents')
-      .eq('tenant_id', tenant_id)
-      .eq('user_id', userId)
-      .eq('active', true)
-      .eq('can_download_documents', true)
-      .limit(1);
-    if (!perm || perm.length === 0) {
+    if (accessErr || !canDownload) {
       return new Response(JSON.stringify({ error: 'Download not allowed' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
+    // userId reserved for audit logging
+    void userId;
 
     // 4) sign URL
     const { data: signed, error: signErr } = await admin.storage

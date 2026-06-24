@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant, useIsAdmin } from '@/hooks/useTenant';
@@ -12,7 +12,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Users, UserPlus, ShieldCheck, Truck, Building2, UserCog, Ban, CheckCircle2, AlertTriangle, Pencil, KeyRound } from 'lucide-react';
+import { Users, UserPlus, ShieldCheck, Truck, Building2, UserCog, Ban, CheckCircle2, AlertTriangle, Pencil, KeyRound, Link2 } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const roleLabels: Record<string, string> = {
   owner: 'Proprietário',
@@ -209,6 +210,7 @@ export default function TeamManagement() {
       <Tabs defaultValue="members">
         <TabsList>
           <TabsTrigger value="members">Membros ({members.length})</TabsTrigger>
+          <TabsTrigger value="portal_access">Acessos do Portal</TabsTrigger>
         </TabsList>
         <TabsContent value="members" className="mt-4 space-y-4">
           <div className="flex items-center gap-3">
@@ -222,8 +224,7 @@ export default function TeamManagement() {
                 <SelectItem value="owner">Proprietário</SelectItem>
                 <SelectItem value="admin">Administrador</SelectItem>
                 <SelectItem value="operator">Operador</SelectItem>
-                <SelectItem value="driver">Motorista</SelectItem>
-                <SelectItem value="client">Cliente</SelectItem>
+                 <SelectItem value="driver">Motorista</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -277,7 +278,6 @@ export default function TeamManagement() {
                                 <SelectItem value="admin">Administrador</SelectItem>
                                 <SelectItem value="operator">Operador</SelectItem>
                                 <SelectItem value="driver">Motorista</SelectItem>
-                                <SelectItem value="client">Cliente</SelectItem>
                               </SelectContent>
                             </Select>
                           )}
@@ -323,6 +323,9 @@ export default function TeamManagement() {
             </Card>
           )}
         </TabsContent>
+        <TabsContent value="portal_access" className="mt-4">
+          <PortalAccessTab tenantId={currentTenant?.id} />
+        </TabsContent>
       </Tabs>
 
       <InviteDialog
@@ -339,6 +342,259 @@ export default function TeamManagement() {
         tenantId={currentTenant?.id}
       />
     </div>
+  );
+}
+
+// =====================================================================
+// Acessos do Portal — CRUD de client_portal_access
+// =====================================================================
+const ACCESS_TYPES = [
+  { value: 'full', label: 'Completo' },
+  { value: 'remitter', label: 'Remetente' },
+  { value: 'recipient', label: 'Destinatário' },
+  { value: 'payer', label: 'Pagador' },
+  { value: 'financial', label: 'Financeiro' },
+  { value: 'documents_only', label: 'Apenas documentos' },
+  { value: 'viewer', label: 'Somente leitura' },
+];
+
+const PERM_FIELDS: Array<[keyof PortalAccessRow, string]> = [
+  ['can_view_financial', 'Ver valores'],
+  ['can_download_documents', 'Baixar canhotos'],
+  ['can_open_occurrences', 'Abrir ocorrências'],
+  ['can_request_pickup', 'Solicitar coleta'],
+  ['can_view_vehicle_live', 'Ver veículo ao vivo'],
+  ['can_view_driver_contact', 'Ver contato do motorista'],
+];
+
+interface PortalAccessRow {
+  id: string;
+  user_id: string;
+  client_id: string;
+  access_type: string;
+  active: boolean;
+  can_view_financial: boolean;
+  can_download_documents: boolean;
+  can_open_occurrences: boolean;
+  can_request_pickup: boolean;
+  can_view_vehicle_live: boolean;
+  can_view_driver_contact: boolean;
+}
+
+function PortalAccessTab({ tenantId }: { tenantId?: string }) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<PortalAccessRow | null>(null);
+
+  const { data: rows = [], isLoading } = useQuery({
+    queryKey: ['client_portal_access_admin', tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [] as PortalAccessRow[];
+      const { data, error } = await supabase
+        .from('client_portal_access')
+        .select('id, user_id, client_id, access_type, active, can_view_financial, can_download_documents, can_open_occurrences, can_request_pickup, can_view_vehicle_live, can_view_driver_contact')
+        .eq('tenant_id', tenantId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data || []) as PortalAccessRow[];
+    },
+    enabled: !!tenantId,
+  });
+
+  const { data: clients = [] } = useQuery({
+    queryKey: ['clients_for_portal_access', tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data } = await supabase.from('clients').select('id, company_name').eq('tenant_id', tenantId).eq('active', true).order('company_name');
+      return data || [];
+    },
+    enabled: !!tenantId,
+  });
+
+  const toggleActive = useMutation({
+    mutationFn: async ({ id, active }: { id: string; active: boolean }) => {
+      const { error } = await supabase.from('client_portal_access').update({ active }).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['client_portal_access_admin'] }); toast.success('Acesso atualizado'); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const remove = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('client_portal_access').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['client_portal_access_admin'] }); toast.success('Acesso removido'); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const clientMap = new Map(clients.map((c: any) => [c.id, c.company_name]));
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="text-sm text-muted-foreground">
+          Conceda acesso a clientes externos. O cliente <strong>não</strong> precisa ser membro da empresa —
+          basta criar a conta dele no Supabase e adicionar uma linha aqui.
+        </div>
+        <Button size="sm" onClick={() => { setEditing(null); setOpen(true); }}>
+          <Link2 className="h-4 w-4 mr-1" /> Novo acesso
+        </Button>
+      </div>
+      <Card>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Usuário</TableHead>
+              <TableHead>Cliente</TableHead>
+              <TableHead>Tipo</TableHead>
+              <TableHead>Permissões</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Ações</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading ? (
+              <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+            ) : rows.length === 0 ? (
+              <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhum acesso de portal cadastrado.</TableCell></TableRow>
+            ) : (
+              rows.map((r) => (
+                <TableRow key={r.id} className={!r.active ? 'opacity-50' : ''}>
+                  <TableCell className="font-mono text-xs">{r.user_id.slice(0, 8)}…</TableCell>
+                  <TableCell>{clientMap.get(r.client_id) || r.client_id.slice(0, 8)}</TableCell>
+                  <TableCell><Badge variant="outline" className="text-[10px]">{r.access_type}</Badge></TableCell>
+                  <TableCell className="text-xs">
+                    {PERM_FIELDS.filter(([k]) => (r as any)[k]).map(([, l]) => l).join(' · ') || <span className="text-muted-foreground">—</span>}
+                  </TableCell>
+                  <TableCell><Badge variant={r.active ? 'default' : 'secondary'}>{r.active ? 'Ativo' : 'Inativo'}</Badge></TableCell>
+                  <TableCell className="text-right space-x-1">
+                    <Button size="sm" variant="ghost" onClick={() => { setEditing(r); setOpen(true); }}><Pencil className="h-3 w-3" /></Button>
+                    <Button size="sm" variant="ghost" onClick={() => toggleActive.mutate({ id: r.id, active: !r.active })}>
+                      {r.active ? <Ban className="h-3 w-3 text-destructive" /> : <CheckCircle2 className="h-3 w-3 text-success" />}
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => { if (confirm('Remover acesso?')) remove.mutate(r.id); }}>
+                      <AlertTriangle className="h-3 w-3 text-destructive" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </Card>
+      <PortalAccessDialog
+        open={open}
+        onOpenChange={(v) => { if (!v) setEditing(null); setOpen(v); }}
+        editing={editing}
+        clients={clients as any[]}
+        tenantId={tenantId}
+      />
+    </div>
+  );
+}
+
+function PortalAccessDialog({ open, onOpenChange, editing, clients, tenantId }: {
+  open: boolean; onOpenChange: (v: boolean) => void; editing: PortalAccessRow | null; clients: any[]; tenantId?: string;
+}) {
+  const queryClient = useQueryClient();
+  const [userId, setUserId] = useState('');
+  const [clientId, setClientId] = useState('');
+  const [accessType, setAccessType] = useState('full');
+  const [perms, setPerms] = useState<Record<string, boolean>>({});
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      if (editing) {
+        setUserId(editing.user_id);
+        setClientId(editing.client_id);
+        setAccessType(editing.access_type);
+        setPerms(Object.fromEntries(PERM_FIELDS.map(([k]) => [k, (editing as any)[k]])));
+      } else {
+        setUserId(''); setClientId(''); setAccessType('full'); setPerms({});
+      }
+    }
+  }, [open, editing]);
+
+  const save = async () => {
+    if (!tenantId || !userId || !clientId) { toast.error('Preencha usuário, cliente e tipo'); return; }
+    setLoading(true);
+    try {
+      const payload: any = {
+        tenant_id: tenantId,
+        user_id: userId.trim(),
+        client_id: clientId,
+        access_type: accessType,
+        active: true,
+        ...Object.fromEntries(PERM_FIELDS.map(([k]) => [k, !!perms[k]])),
+      };
+      if (editing) {
+        const { error } = await supabase.from('client_portal_access').update(payload).eq('id', editing.id);
+        if (error) throw error;
+        toast.success('Acesso atualizado');
+      } else {
+        const { error } = await supabase.from('client_portal_access').insert(payload);
+        if (error) throw error;
+        toast.success('Acesso criado');
+      }
+      queryClient.invalidateQueries({ queryKey: ['client_portal_access_admin'] });
+      onOpenChange(false);
+      setUserId(''); setClientId(''); setAccessType('full'); setPerms({});
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally { setLoading(false); }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{editing ? 'Editar acesso ao portal' : 'Novo acesso ao portal'}</DialogTitle>
+          <DialogDescription>Configure o que este usuário pode ver e fazer no portal do cliente.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <Label className="text-xs">ID do usuário (auth.users.id)</Label>
+            <Input value={userId} onChange={(e) => setUserId(e.target.value)} placeholder="UUID do usuário Supabase" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Cliente</Label>
+            <Select value={clientId} onValueChange={setClientId}>
+              <SelectTrigger><SelectValue placeholder="Selecione um cliente" /></SelectTrigger>
+              <SelectContent>
+                {clients.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Tipo de acesso</Label>
+            <Select value={accessType} onValueChange={setAccessType}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {ACCESS_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs">Permissões</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {PERM_FIELDS.map(([k, label]) => (
+                <label key={k} className="flex items-center gap-2 text-xs cursor-pointer">
+                  <Checkbox checked={!!perms[k as string]} onCheckedChange={(c) => setPerms((p) => ({ ...p, [k as string]: !!c }))} />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+            <Button onClick={save} disabled={loading}>{loading ? 'Salvando...' : 'Salvar'}</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -485,7 +741,7 @@ function InviteDialog({
                   <SelectItem value="admin">Administrador — acesso total</SelectItem>
                   <SelectItem value="operator">Operador — acesso operacional</SelectItem>
                   <SelectItem value="driver">Motorista — app do motorista</SelectItem>
-                  <SelectItem value="client">Cliente — portal do cliente</SelectItem>
+                  
                 </SelectContent>
               </Select>
             </div>
@@ -497,7 +753,7 @@ function InviteDialog({
                 </p>
               </div>
             )}
-            {role === 'client' && clients.length > 0 && (
+            {false && clients.length > 0 && (
               <div className="rounded-md bg-muted/50 p-3">
                 <p className="text-xs text-muted-foreground">
                   <strong>Dica:</strong> Após criar a conta, vincule o usuário ao cadastro de cliente na página de Clientes.
@@ -522,7 +778,7 @@ function InviteDialog({
                   <SelectItem value="admin">Administrador — acesso total</SelectItem>
                   <SelectItem value="operator">Operador — acesso operacional</SelectItem>
                   <SelectItem value="driver">Motorista — app do motorista</SelectItem>
-                  <SelectItem value="client">Cliente — portal do cliente</SelectItem>
+                  
                 </SelectContent>
               </Select>
             </div>
