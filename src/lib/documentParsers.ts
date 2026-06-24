@@ -120,48 +120,68 @@ function getTagText(parent: Element, tagName: string): string {
   return el?.textContent?.trim() || '';
 }
 
-export function parseNFeXml(xmlString: string): ParsedNFe {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(xmlString, 'text/xml');
-  const parseError = doc.querySelector('parsererror');
-  if (parseError) throw new Error('XML inválido: ' + parseError.textContent);
+/** Mapa tPag (NF-e v4) -> valor interno usado no sistema. */
+const TPAG_MAP: Record<string, string> = {
+  '01': 'dinheiro',
+  '02': 'cheque',
+  '03': 'cartao_credito',
+  '04': 'cartao_debito',
+  '14': 'boleto',        // duplicata mercantil
+  '15': 'boleto',
+  '16': 'transferencia', // depósito bancário
+  '17': 'pix',
+  '18': 'transferencia',
+};
 
-  const infNFe = doc.getElementsByTagName('infNFe')[0] || doc.getElementsByTagName('nfe:infNFe')[0];
-  if (!infNFe) throw new Error('Estrutura de NF-e não encontrada no XML');
+/** Rótulos amigáveis para UI a partir do paymentMethod normalizado. */
+const PAYMENT_LABELS: Record<string, string> = {
+  dinheiro: 'Dinheiro',
+  cheque: 'Cheque',
+  cartao_credito: 'Cartão de crédito',
+  cartao_debito: 'Cartão de débito',
+  pix: 'PIX',
+  transferencia: 'Transferência',
+  boleto: 'Boleto',
+  a_prazo: 'A prazo',
+  a_vista: 'À vista',
+  faturado: 'Faturado',
+};
 
-  const accessKey = (infNFe.getAttribute('Id') || '').replace(/^NFe/, '');
-  const ide = infNFe.getElementsByTagName('ide')[0];
-  const invoiceNumber = getTagText(ide || infNFe, 'nNF');
-  const series = getTagText(ide || infNFe, 'serie');
-  const issueDate = (getTagText(ide || infNFe, 'dhEmi') || getTagText(ide || infNFe, 'dEmi') || '').substring(0, 10);
+type RecipientFields = Pick<ParsedNFe,
+  'recipientName' | 'recipientCnpj' | 'recipientFantasyName' | 'recipientStateRegistration'
+  | 'recipientMunicipalRegistration' | 'recipientIeIndicator' | 'recipientPhone' | 'recipientEmail'
+  | 'recipientCity' | 'recipientCityCode' | 'recipientState' | 'recipientAddress'
+  | 'recipientAddressNumber' | 'recipientAddressComplement' | 'recipientNeighborhood'
+  | 'recipientZip' | 'recipientCountry' | 'recipientCountryCode'>;
 
-  const emit = infNFe.getElementsByTagName('emit')[0];
-  const emitterName = getTagText(emit || infNFe, 'xNome');
-  const emitterCnpj = getTagText(emit || infNFe, 'CNPJ');
-
+function extractRecipient(infNFe: Element): RecipientFields {
   const dest = infNFe.getElementsByTagName('dest')[0];
-  const recipientName = getTagText(dest || infNFe, 'xNome');
-  const recipientCnpj = getTagText(dest || infNFe, 'CNPJ') || getTagText(dest || infNFe, 'CPF');
-  const recipientFantasyName = getTagText(dest || infNFe, 'xFant');
-  const recipientStateRegistration = getTagText(dest || infNFe, 'IE');
-  const recipientMunicipalRegistration = getTagText(dest || infNFe, 'IM');
-  const recipientIeIndicator = getTagText(dest || infNFe, 'indIEDest');
-  const recipientEmail = getTagText(dest || infNFe, 'email');
-
   const enderDest = dest?.getElementsByTagName('enderDest')[0];
-  const recipientCity = getTagText(enderDest || infNFe, 'xMun');
-  const recipientCityCode = getTagText(enderDest || infNFe, 'cMun');
-  const recipientState = getTagText(enderDest || infNFe, 'UF');
-  const recipientNeighborhood = getTagText(enderDest || infNFe, 'xBairro');
-  const recipientAddress = getTagText(enderDest || infNFe, 'xLgr');
-  const recipientAddressNumber = getTagText(enderDest || infNFe, 'nro');
-  const recipientAddressComplement = getTagText(enderDest || infNFe, 'xCpl');
-  const recipientZip = getTagText(enderDest || infNFe, 'CEP');
-  const recipientCountry = getTagText(enderDest || infNFe, 'xPais') || 'BRASIL';
-  const recipientCountryCode = getTagText(enderDest || infNFe, 'cPais') || '1058';
-  const recipientPhone = getTagText(enderDest || infNFe, 'fone') || getTagText(dest || infNFe, 'fone');
+  const ctx = dest || infNFe;
+  const addr = enderDest || infNFe;
+  return {
+    recipientName: getTagText(ctx, 'xNome'),
+    recipientCnpj: getTagText(ctx, 'CNPJ') || getTagText(ctx, 'CPF'),
+    recipientFantasyName: getTagText(ctx, 'xFant'),
+    recipientStateRegistration: getTagText(ctx, 'IE'),
+    recipientMunicipalRegistration: getTagText(ctx, 'IM'),
+    recipientIeIndicator: getTagText(ctx, 'indIEDest'),
+    recipientEmail: getTagText(ctx, 'email'),
+    recipientPhone: getTagText(addr, 'fone') || getTagText(ctx, 'fone'),
+    recipientCity: getTagText(addr, 'xMun'),
+    recipientCityCode: getTagText(addr, 'cMun'),
+    recipientState: getTagText(addr, 'UF'),
+    recipientNeighborhood: getTagText(addr, 'xBairro'),
+    recipientAddress: getTagText(addr, 'xLgr'),
+    recipientAddressNumber: getTagText(addr, 'nro'),
+    recipientAddressComplement: getTagText(addr, 'xCpl'),
+    recipientZip: getTagText(addr, 'CEP'),
+    recipientCountry: getTagText(addr, 'xPais') || 'BRASIL',
+    recipientCountryCode: getTagText(addr, 'cPais') || '1058',
+  };
+}
 
-  const detElements = infNFe.getElementsByTagName('det');
+function extractItems(detElements: HTMLCollectionOf<Element>): ParsedNFeItem[] {
   const items: ParsedNFeItem[] = [];
   for (let i = 0; i < detElements.length; i++) {
     const prod = detElements[i].getElementsByTagName('prod')[0];
@@ -176,45 +196,14 @@ export function parseNFeXml(xmlString: string): ParsedNFe {
       cfop: getTagText(prod, 'CFOP'),
     });
   }
+  return items;
+}
 
-  // Extract client load number from BOTH sources, then pick the most specific (longest) one.
-  // Source 1: <xPed> (structured purchase order field on each item)
-  let xPedCandidate = '';
-  for (let i = 0; i < detElements.length; i++) {
-    const prod = detElements[i].getElementsByTagName('prod')[0];
-    if (!prod) continue;
-    const xPed = getTagText(prod, 'xPed');
-    if (xPed) { xPedCandidate = xPed.trim(); break; }
-  }
-
-  // Source 2: <infCpl>/<infAdFisco> (free-text observation) using configurable rules
-  const infAdic = infNFe.getElementsByTagName('infAdic')[0];
-  const observation = getTagText(infAdic || infNFe, 'infCpl') || getTagText(infAdic || infNFe, 'infAdFisco') || '';
-  const obsExtraction = extractClientLoadFromObservation(observation);
-  const obsCandidate = obsExtraction.value;
-
-  // Prefer the longer/more specific value; tie goes to observation (usually the official client number)
-  let clientLoadNumber = '';
-  let clientLoadSource: 'xPed' | 'observation' | 'none' = 'none';
-  let clientLoadRuleId: string | undefined;
-  let clientLoadRuleLabel: string | undefined;
-  if (obsCandidate && obsCandidate.length >= xPedCandidate.length) {
-    clientLoadNumber = obsCandidate;
-    clientLoadSource = 'observation';
-    clientLoadRuleId = obsExtraction.ruleId;
-    clientLoadRuleLabel = obsExtraction.ruleLabel;
-  } else if (xPedCandidate) {
-    clientLoadNumber = xPedCandidate;
-    clientLoadSource = 'xPed';
-  }
-
-  const total = infNFe.getElementsByTagName('ICMSTot')[0];
-  const totalValue = parseFloat(getTagText(total || infNFe, 'vNF')) || 0;
+function extractTransportTotals(infNFe: Element): { totalWeight: number; totalVolume: number } {
   const transp = infNFe.getElementsByTagName('transp')[0];
   const volElements = transp?.getElementsByTagName('vol');
   let totalWeight = 0;
   let totalVolume = 0;
-
   if (volElements && volElements.length > 0) {
     for (let i = 0; i < volElements.length; i++) {
       const v = volElements[i];
@@ -222,31 +211,68 @@ export function parseNFeXml(xmlString: string): ParsedNFe {
       totalVolume += parseFloat(getTagText(v, 'qVol')) || 0;
     }
   }
+  return { totalWeight, totalVolume };
+}
 
-  const estimatedPallets = Math.max(1, Math.ceil(totalWeight / 800));
+function extractClientLoad(
+  detElements: HTMLCollectionOf<Element>,
+  observation: string,
+): { clientLoadNumber: string; clientLoadSource: 'xPed' | 'observation' | 'none'; clientLoadRuleId?: string; clientLoadRuleLabel?: string } {
+  // Source 1: <xPed> (campo estruturado em cada item)
+  let xPedCandidate = '';
+  for (let i = 0; i < detElements.length; i++) {
+    const prod = detElements[i].getElementsByTagName('prod')[0];
+    if (!prod) continue;
+    const xPed = getTagText(prod, 'xPed');
+    if (xPed) { xPedCandidate = xPed.trim(); break; }
+  }
+  // Source 2: observação livre via regras configuráveis
+  const obsExtraction = extractClientLoadFromObservation(observation);
+  const obsCandidate = obsExtraction.value;
+  // Prefere o mais específico (mais longo); empate vai para observação.
+  if (obsCandidate && obsCandidate.length >= xPedCandidate.length) {
+    return {
+      clientLoadNumber: obsCandidate,
+      clientLoadSource: 'observation',
+      clientLoadRuleId: obsExtraction.ruleId,
+      clientLoadRuleLabel: obsExtraction.ruleLabel,
+    };
+  }
+  if (xPedCandidate) {
+    return { clientLoadNumber: xPedCandidate, clientLoadSource: 'xPed' };
+  }
+  return { clientLoadNumber: '', clientLoadSource: 'none' };
+}
 
-  // Forma de pagamento: padrão NF-e v4 <pag>/<detPag>/<tPag>
-  // Mapeia código tPag -> valor interno usado no sistema.
-  const TPAG_MAP: Record<string, string> = {
-    '01': 'dinheiro',
-    '02': 'cheque',
-    '03': 'cartao_credito',
-    '04': 'cartao_debito',
-    '15': 'boleto',
-    '16': 'transferencia', // depósito bancário
-    '17': 'pix',
-    '18': 'transferencia',
-    '14': 'boleto',        // duplicata mercantil
-  };
+type PaymentFields = Pick<ParsedNFe,
+  'paymentMethod' | 'paymentMethodCode' | 'paymentMethodSource'
+  | 'installmentCount' | 'firstDueDate' | 'averageDueDays' | 'paymentDescription'>;
+
+function buildPaymentDescription(
+  paymentMethod: string | null,
+  installmentCount: number | null,
+  averageDueDays: number | null,
+): string | null {
+  if (!paymentMethod) return null;
+  let desc = PAYMENT_LABELS[paymentMethod] || paymentMethod;
+  if (installmentCount && installmentCount >= 2) {
+    desc = `${desc === 'Boleto' ? 'Boleto a prazo' : desc} (${installmentCount} parcelas)`;
+  }
+  if (averageDueDays && averageDueDays > 0 && !desc.includes('dias')) {
+    desc += ` — ${averageDueDays} dias`;
+  }
+  return desc;
+}
+
+function extractPayment(infNFe: Element, ide: Element | undefined, observation: string, issueDate: string): PaymentFields {
   let paymentMethod: string | null = null;
   let paymentMethodCode: string | null = null;
   let paymentMethodSource: ParsedNFe['paymentMethodSource'] = null;
+
+  // Camada 1: <pag>/<detPag>/<tPag>
   const pag = infNFe.getElementsByTagName('pag')[0];
   let xPagText = '';
   if (pag) {
-    // Itera TODAS as <detPag> e prioriza a primeira com tPag mapeado (alguns
-    // emissores enviam várias formas: 99 vazio + a real). xPag agregado serve
-    // de fallback para tPag=99.
     const detPagList = Array.from(pag.getElementsByTagName('detPag'));
     const candidates = detPagList.length ? detPagList : [pag];
     const xPagPieces: string[] = [];
@@ -265,14 +291,12 @@ export function parseNFeXml(xmlString: string): ParsedNFe {
     }
     xPagText = [...xPagPieces, getTagText(pag, 'xPag')].filter(Boolean).join(' | ');
   }
-  // Camada 2: <xPag> — descrição livre quando tPag=99
+  // Camada 2: <xPag> — descrição livre (tPag=99)
   if (!paymentMethod && xPagText) {
     const r = detectPaymentMethodDetailed(xPagText);
     if (r.value) { paymentMethod = r.value; paymentMethodSource = 'xpag'; }
   }
-  // Camada 3: <cobr>/<dup> — duplicatas geram boleto/a prazo + dados de parcelas.
-  // Sempre extrai os dados de parcelas (mesmo quando paymentMethod já veio de tPag),
-  // pois servem para preencher OS/contas a receber.
+  // Camada 3: <cobr>/<dup> — duplicatas (sempre extrai parcelas)
   const cobr = infNFe.getElementsByTagName('cobr')[0];
   const dups = cobr ? Array.from(cobr.getElementsByTagName('dup')) : [];
   let installmentCount: number | null = null;
@@ -298,7 +322,7 @@ export function parseNFeXml(xmlString: string): ParsedNFe {
       paymentMethodSource = 'cobr';
     }
   }
-  // Camada 4: texto livre — observation (infCpl/infAdFisco) com regex contextual
+  // Camada 4: texto livre da observação
   if (!paymentMethod && observation) {
     const r = detectPaymentMethodDetailed(observation);
     if (r.value) {
@@ -306,50 +330,66 @@ export function parseNFeXml(xmlString: string): ParsedNFe {
       paymentMethodSource = r.source === 'context' ? 'infcpl_context' : 'infcpl_keyword';
     }
   }
-  // Camada 5 (fallback genérico antigo): indPag (0=à vista, 1=a prazo) no <ide>
+  // Camada 5: fallback genérico antigo (indPag)
   if (!paymentMethod) {
     const indPag = getTagText(ide || infNFe, 'indPag');
     if (indPag === '0') { paymentMethod = 'a_vista'; paymentMethodSource = 'indpag'; }
     else if (indPag === '1') { paymentMethod = 'a_prazo'; paymentMethodSource = 'indpag'; }
   }
 
-  // Descrição amigável para UI (não substitui paymentMethod normalizado).
-  let paymentDescription: string | null = null;
-  if (paymentMethod) {
-    const base: Record<string, string> = {
-      dinheiro: 'Dinheiro',
-      cheque: 'Cheque',
-      cartao_credito: 'Cartão de crédito',
-      cartao_debito: 'Cartão de débito',
-      pix: 'PIX',
-      transferencia: 'Transferência',
-      boleto: 'Boleto',
-      a_prazo: 'A prazo',
-      a_vista: 'À vista',
-      faturado: 'Faturado',
-    };
-    paymentDescription = base[paymentMethod] || paymentMethod;
-    if (installmentCount && installmentCount >= 2) {
-      paymentDescription = `${paymentDescription === 'Boleto' ? 'Boleto a prazo' : paymentDescription} (${installmentCount} parcelas)`;
-    }
-    if (averageDueDays && averageDueDays > 0 && !paymentDescription.includes('dias')) {
-      paymentDescription += ` — ${averageDueDays} dias`;
-    }
-  }
+  return {
+    paymentMethod,
+    paymentMethodCode,
+    paymentMethodSource,
+    installmentCount,
+    firstDueDate,
+    averageDueDays,
+    paymentDescription: buildPaymentDescription(paymentMethod, installmentCount, averageDueDays),
+  };
+}
+
+export function parseNFeXml(xmlString: string): ParsedNFe {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xmlString, 'text/xml');
+  const parseError = doc.querySelector('parsererror');
+  if (parseError) throw new Error('XML inválido: ' + parseError.textContent);
+
+  const infNFe = doc.getElementsByTagName('infNFe')[0] || doc.getElementsByTagName('nfe:infNFe')[0];
+  if (!infNFe) throw new Error('Estrutura de NF-e não encontrada no XML');
+
+  const accessKey = (infNFe.getAttribute('Id') || '').replace(/^NFe/, '');
+  const ide = infNFe.getElementsByTagName('ide')[0];
+  const invoiceNumber = getTagText(ide || infNFe, 'nNF');
+  const series = getTagText(ide || infNFe, 'serie');
+  const issueDate = (getTagText(ide || infNFe, 'dhEmi') || getTagText(ide || infNFe, 'dEmi') || '').substring(0, 10);
+
+  const emit = infNFe.getElementsByTagName('emit')[0];
+  const emitterName = getTagText(emit || infNFe, 'xNome');
+  const emitterCnpj = getTagText(emit || infNFe, 'CNPJ');
+
+  const recipient = extractRecipient(infNFe);
+  const detElements = infNFe.getElementsByTagName('det');
+  const items = extractItems(detElements);
+
+  const infAdic = infNFe.getElementsByTagName('infAdic')[0];
+  const observation = getTagText(infAdic || infNFe, 'infCpl') || getTagText(infAdic || infNFe, 'infAdFisco') || '';
+  const clientLoad = extractClientLoad(detElements, observation);
+
+  const total = infNFe.getElementsByTagName('ICMSTot')[0];
+  const totalValue = parseFloat(getTagText(total || infNFe, 'vNF')) || 0;
+  const { totalWeight, totalVolume } = extractTransportTotals(infNFe);
+  const estimatedPallets = Math.max(1, Math.ceil(totalWeight / 800));
+
+  const payment = extractPayment(infNFe, ide, observation, issueDate);
 
   return {
     invoiceNumber, series, accessKey, issueDate,
-    emitterName, emitterCnpj, recipientName, recipientCnpj,
-    recipientFantasyName, recipientStateRegistration, recipientMunicipalRegistration,
-    recipientIeIndicator, recipientPhone, recipientEmail,
-    recipientCity, recipientCityCode, recipientState,
-    recipientAddress, recipientAddressNumber, recipientAddressComplement,
-    recipientNeighborhood, recipientZip, recipientCountry, recipientCountryCode,
+    emitterName, emitterCnpj,
+    ...recipient,
     items, totalValue, totalWeight, totalVolume, estimatedPallets,
-    clientLoadNumber, observation,
-    clientLoadSource, clientLoadRuleId, clientLoadRuleLabel,
-    paymentMethod, paymentMethodCode, paymentMethodSource,
-    installmentCount, firstDueDate, averageDueDays, paymentDescription,
+    observation,
+    ...clientLoad,
+    ...payment,
   };
 }
 
