@@ -572,6 +572,32 @@ function DriverDialog({ open, onOpenChange, driver, tenantId, userId, driverUser
             </div>
           </section>
 
+          {/* Vínculo de usuário */}
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold text-foreground border-b pb-1">Vínculo de usuário (app do motorista)</h3>
+            <p className="text-[11px] text-muted-foreground">
+              Selecione o usuário que vai operar o app deste motorista. Apenas usuários com papel
+              "Motorista" na equipe aparecem aqui. Cada usuário só pode estar vinculado a um motorista.
+            </p>
+            <Select
+              value={form.user_id ?? '__none__'}
+              onValueChange={(v) => set('user_id', v === '__none__' ? null : v)}
+            >
+              <SelectTrigger className="h-9 max-w-md"><SelectValue placeholder="Sem vínculo" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Sem vínculo</SelectItem>
+                {driverUsers.map((u) => {
+                  const usedBy = existingDrivers.find((d) => d.user_id === u.id && d.id !== driver?.id);
+                  return (
+                    <SelectItem key={u.id} value={u.id} disabled={!!usedBy}>
+                      {u.full_name || u.id.slice(0, 8)} {usedBy ? `(já vinculado a ${usedBy.name})` : ''}
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+          </section>
+
           {/* Observações */}
           <section className="space-y-2">
             <h3 className="text-sm font-semibold text-foreground border-b pb-1">Observações</h3>
