@@ -983,9 +983,13 @@ export default function Ingestion() {
         const savedId = (doc as any)._savedId;
         try {
           if (savedId) {
-            // Already saved on upload — just link to load if needed
-            if (loadId) {
-              await supabase.from('fiscal_documents').update({ load_id: loadId } as any).eq('id', savedId);
+            // Já salvo no upload — vincula à carga via RPC oficial.
+            if (loadId && currentTenant) {
+              await (supabase as any).rpc('assign_fiscal_documents_to_load', {
+                _tenant_id: currentTenant.id,
+                _load_id: loadId,
+                _document_ids: [savedId],
+              });
             }
             results.push(`✅ NF ${doc.source.invoiceNumber} ${loadId ? 'vinculada à carga' : '(já salva)'}`);
           } else {
@@ -1424,52 +1428,36 @@ export default function Ingestion() {
           const loadId = createdLoad.id;
           let itemsCreated = 0;
 
-          // Create load_items from documents
-          for (const doc of suggestion.documents) {
-            const docId = createdDocIds.get(doc.source.invoiceNumber);
-            try {
-              await createLoadItem.mutateAsync({
-                load_id: loadId,
-                fiscal_document_id: docId || null,
-                item_description: `NF ${doc.source.invoiceNumber} - ${doc.source.recipientName || 'Sem dest.'}`,
-                quantity: doc.source.items.reduce((s, item) => s + item.quantity, 0),
-                pallet_count: doc.source.estimatedPallets,
-                weight_kg: doc.source.totalWeight,
-                volume_m3: doc.source.totalVolume || 0,
-              } as any);
-              itemsCreated++;
-            } catch {
-              // Continue on item creation failure
-            }
+          // Vincula documentos à carga via RPC oficial (cria load_items + atualiza fiscal_documents + auditoria)
+          const docIds = suggestion.documents
+            .map(d => createdDocIds.get(d.source.invoiceNumber))
+            .filter((id): id is string => !!id);
+          if (docIds.length > 0 && currentTenant) {
+            const { error: assignErr } = await (supabase as any).rpc('assign_fiscal_documents_to_load', {
+              _tenant_id: currentTenant.id,
+              _load_id: loadId,
+              _document_ids: docIds,
+            });
+            if (!assignErr) itemsCreated += docIds.length;
           }
 
-          // Create load_items from orders
+          // Itens de pedidos não passam por NF — usa createLoadItem que agora exige fiscal_document_id,
+          // então mantemos insert direto apenas para items derivados de pedido (sem espelho em fiscal_documents).
           for (const order of suggestion.orders) {
             const orderId = createdOrderIds.get(order.source.orderNumber);
             try {
-              await createLoadItem.mutateAsync({
+              const { error: liErr } = await (supabase as any).from('load_items').insert({
+                tenant_id: currentTenant!.id,
                 load_id: loadId,
                 order_id: orderId || null,
                 item_description: `Pedido ${order.source.orderNumber} - ${order.source.clientName || 'Sem cliente'}`,
                 quantity: order.source.quantity || 0,
                 pallet_count: order.source.palletCount || Math.ceil((order.source.quantity || 0) / 50),
                 weight_kg: order.source.weightKg || 0,
-              } as any);
-              itemsCreated++;
+              });
+              if (!liErr) itemsCreated++;
             } catch {
               // Continue
-            }
-          }
-
-          // Link fiscal documents to load
-          for (const doc of suggestion.documents) {
-            const docId = createdDocIds.get(doc.source.invoiceNumber);
-            if (docId) {
-              try {
-                await supabase.from('fiscal_documents').update({ load_id: loadId } as any).eq('id', docId);
-              } catch {
-                // Non-critical
-              }
             }
           }
 

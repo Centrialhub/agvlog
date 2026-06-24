@@ -387,12 +387,28 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
     };
     setMeta(prev => ({ ...prev, [docId]: next }));
     try {
-      // status volta para 'confirmed' e load_id é liberado para reagrupar na próxima carga
-      const { error } = await supabase
+      // status volta para 'confirmed' e load_id é liberado via RPC oficial
+      const currentLoadId = (reModal as any).loadId || (reModal as any).load_id || null;
+      const { error: metaErr } = await supabase
         .from('fiscal_documents')
-        .update({ status: 'confirmed', load_id: null, delivery_meta: next } as any)
+        .update({ status: 'confirmed', delivery_meta: next } as any)
         .eq('id', docId);
-      if (error) throw error;
+      if (metaErr) throw metaErr;
+      if (currentLoadId) {
+        const { data: fd } = await supabase
+          .from('fiscal_documents')
+          .select('tenant_id, load_id')
+          .eq('id', docId)
+          .maybeSingle();
+        if (fd?.tenant_id && fd.load_id) {
+          const { error: rmErr } = await (supabase as any).rpc('remove_fiscal_documents_from_load', {
+            _tenant_id: fd.tenant_id,
+            _load_id: fd.load_id,
+            _document_ids: [docId],
+          });
+          if (rmErr) throw rmErr;
+        }
+      }
       toast.success('Nota marcada para Reentrega — disponível para próxima carga');
       await qc.invalidateQueries({ queryKey: ['load_documents'] });
       await qc.invalidateQueries({ queryKey: ['fiscal_documents'] });

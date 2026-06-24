@@ -204,29 +204,16 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
             status: 'planned',
           } as any);
 
-          // Batch insert all load_items at once
-          const loadItems = group.docs.map(doc => ({
-            load_id: createdLoad.id,
-            tenant_id: currentTenant!.id,
-            fiscal_document_id: doc.id,
-            item_description: `NF ${doc.invoice_number || '—'} - ${doc.recipient || 'Sem dest.'}`,
-            quantity: 1,
-            pallet_count: doc.pallet_count || 0,
-            weight_kg: Number(doc.weight_kg) || 0,
-          }));
-
-          const { error: itemsError } = await (supabase as any)
-            .from('load_items')
-            .insert(loadItems);
-          if (itemsError) throw itemsError;
-
-          // Batch update all fiscal_documents to link to this load
+          // Vincula documentos à carga via RPC oficial (cria load_items + atualiza fiscal_documents + audita)
           const docIds = group.docs.map(d => d.id);
-          const { error: linkError } = await supabase
-            .from('fiscal_documents')
-            .update({ load_id: createdLoad.id } as any)
-            .in('id', docIds);
-          if (linkError) throw linkError;
+          if (docIds.length > 0) {
+            const { error: assignError } = await (supabase as any).rpc('assign_fiscal_documents_to_load', {
+              _tenant_id: currentTenant!.id,
+              _load_id: createdLoad.id,
+              _document_ids: docIds,
+            });
+            if (assignError) throw assignError;
+          }
 
           created++;
         } catch {

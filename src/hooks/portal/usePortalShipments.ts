@@ -27,6 +27,7 @@ export interface ShipmentRow {
   actual_arrival_at: string | null;
   has_pod: boolean;
   has_open_occurrence: boolean;
+  public_status: string | null;
   updated_at: string;
 }
 

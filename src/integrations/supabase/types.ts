@@ -8215,6 +8215,10 @@ export type Database = {
         Args: { _load_id: string; _tenant_id: string }
         Returns: Json
       }
+      delete_loads_safely: {
+        Args: { _load_ids: string[]; _tenant_id: string }
+        Returns: Json
+      }
       detect_payment_method: { Args: { p_text: string }; Returns: string }
       dispatch_planned_route: { Args: { _payload: Json }; Returns: string }
       driver_can_access_vehicle: {
@@ -8475,6 +8479,16 @@ export type Database = {
           status: string
           validated_at: string
         }[]
+      }
+      log_pod_access: {
+        Args: {
+          _fiscal_document_id: string
+          _pod_id: string
+          _source?: string
+          _success: boolean
+          _tenant_id: string
+        }
+        Returns: undefined
       }
       move_load_items_between_loads: {
         Args: {
