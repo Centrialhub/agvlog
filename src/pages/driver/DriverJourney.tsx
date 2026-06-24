@@ -60,11 +60,12 @@ export default function DriverJourney() {
         setDemoEvents((prev) => [...prev, { id: 'd' + Date.now(), event_type: eventType, event_at: new Date().toISOString() }]);
         return;
       }
-      const { error } = await supabase.from('dispatch_events').insert({
-        tenant_id: currentTenant.id,
-        dispatch_trip_id: trip.id,
-        event_type: eventType,
-        event_at: new Date().toISOString(),
+      const { error } = await supabase.rpc('driver_create_event', {
+        _trip_id: trip.id,
+        _event_type: eventType,
+        _payload: { source: 'driver_app' } as any,
+        _stop_id: null,
+        _notes: null,
       } as any);
       if (error) throw error;
     },

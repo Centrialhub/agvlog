@@ -64,12 +64,11 @@ function ChecklistSection({
   const saveChecklist = useMutation({
     mutationFn: async () => {
       if (!tripId || !tenantId) throw new Error('Nenhuma viagem ativa');
-      const { error } = await supabase.from('dispatch_events').insert({
-        tenant_id: tenantId,
-        dispatch_trip_id: tripId,
-        event_type: eventType,
-        payload: { checked_items: Array.from(checked), total_items: items.length },
-        event_at: new Date().toISOString(),
+      const kind = eventType === 'checklist_pre' ? 'pre' : 'post';
+      const { error } = await supabase.rpc('driver_save_checklist', {
+        _trip_id: tripId,
+        _kind: kind,
+        _payload: { checked_items: Array.from(checked), total_items: items.length } as any,
       } as any);
       if (error) throw error;
     },
