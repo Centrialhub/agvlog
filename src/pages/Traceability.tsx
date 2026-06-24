@@ -443,10 +443,11 @@ export default function Traceability() {
   const registerEvent = useMutation({
     mutationFn: async () => {
       if (!currentTenant || !selectedRow) return;
-      const loadId = selectedRow.doc.load_id;
       if (!eventForm.description.trim()) throw new Error('Informe a descrição da ocorrência');
-      const entityType = loadId ? 'load' : 'fiscal_document';
-      const entityId = loadId || selectedRow.doc.id;
+      // Entidade primária é sempre o documento fiscal selecionado.
+      // A RPC propaga o efeito para a carga quando todas as NFs estiverem terminais.
+      const entityType = 'fiscal_document';
+      const entityId = selectedRow.doc.id;
       const newStatus = eventForm.status === 'no_change' ? null : eventForm.status;
       const { error } = await (supabase as any).rpc('record_operational_event_with_status', {
         _tenant_id: currentTenant.id,
