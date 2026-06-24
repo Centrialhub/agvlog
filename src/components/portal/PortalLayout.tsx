@@ -1,10 +1,9 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useClientPortalAccess } from '@/hooks/portal/useClientPortalAccess';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   Truck,
   LayoutDashboard,
@@ -13,9 +12,6 @@ import {
   ClipboardCheck,
   AlertTriangle,
   Inbox,
-  BarChart3,
-  Settings as SettingsIcon,
-  Search,
   LogOut,
   Loader2,
 } from 'lucide-react';
@@ -28,15 +24,12 @@ const NAV = [
   { to: '/portal/documents', label: 'Documentos', icon: FileText },
   { to: '/portal/pods', label: 'Canhotos', icon: ClipboardCheck },
   { to: '/portal/occurrences', label: 'Ocorrências', icon: AlertTriangle },
-  { to: '/portal/reports', label: 'Relatórios', icon: BarChart3 },
-  { to: '/portal/settings', label: 'Conta', icon: SettingsIcon },
 ];
 
 export default function PortalLayout() {
   const { signOut } = useAuth();
   const { data: access, isLoading } = useClientPortalAccess();
   const { pathname } = useLocation();
-  const [search, setSearch] = useState('');
 
   if (isLoading) {
     return (
@@ -113,17 +106,7 @@ export default function PortalLayout() {
             </div>
             <span className="font-bold text-sm">AGVLog</span>
           </div>
-          <div className="flex-1 max-w-md ml-auto md:ml-0">
-            <div className="relative">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar NF, chave, pedido, CT-e..."
-                className="pl-8 h-9 text-sm"
-              />
-            </div>
-          </div>
+          <div className="flex-1" />
           {access.length > 1 && (
             <Badge variant="outline" className="text-[10px]">{access.length} clientes</Badge>
           )}

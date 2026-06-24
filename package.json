@@ -3,8 +3,10 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "packageManager": "bun@1.1.34",
   "scripts": {
     "dev": "vite",
+    "install:ci": "bun install --frozen-lockfile",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
