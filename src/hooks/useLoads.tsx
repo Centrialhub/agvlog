@@ -128,35 +128,15 @@ export function useUpdateLoad() {
   });
 }
 
-async function unlinkLoadDependencies(loadIds: string[]) {
-  // Unlink fiscal_documents
-  const { error: fdErr } = await supabase
-    .from('fiscal_documents')
-    .update({ load_id: null } as any)
-    .in('load_id', loadIds);
-  if (fdErr) throw fdErr;
-
-  // Unlink dispatch_trips
-  const { error: dtErr } = await supabase
-    .from('dispatch_trips')
-    .update({ load_id: null } as any)
-    .in('load_id', loadIds);
-  if (dtErr) throw dtErr;
-
-  // Delete load_items
-  const { error: liErr } = await supabase
-    .from('load_items')
-    .delete()
-    .in('load_id', loadIds);
-  if (liErr) throw liErr;
-}
-
 export function useDeleteLoad() {
+  const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      await unlinkLoadDependencies([id]);
-      const { error } = await supabase.from('loads').delete().eq('id', id);
+      const { error } = await (supabase as any).rpc('delete_load_safely', {
+        _tenant_id: currentTenant!.id,
+        _load_id: id,
+      });
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['loads'] }),
@@ -164,12 +144,22 @@ export function useDeleteLoad() {
 }
 
 export function useDeleteLoads() {
+  const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (ids: string[]) => {
-      await unlinkLoadDependencies(ids);
-      const { error } = await supabase.from('loads').delete().in('id', ids);
+      const { data, error } = await (supabase as any).rpc('delete_loads_safely', {
+        _tenant_id: currentTenant!.id,
+        _load_ids: ids,
+      });
       if (error) throw error;
+      const failed = Array.isArray(data) ? data.filter((r: any) => r && r.ok === false) : [];
+      if (failed.length > 0) {
+        throw new Error(
+          `Não foi possível excluir ${failed.length} carga(s): ` +
+            failed.map((f: any) => `${f.load_id}: ${f.error}`).join('; ')
+        );
+      }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['loads'] }),
   });
