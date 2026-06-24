@@ -22,6 +22,7 @@ import { cn } from '@/lib/utils';
 import SignaturePad from '@/components/driver/SignaturePad';
 import DemoBanner from '@/components/driver/DemoBanner';
 import { canUseDriverDemo } from '@/lib/driver/demoMode';
+import { isStopTerminal } from '@/lib/status/stopStatus';
 
 
 // ====== Dados de demonstração ======
