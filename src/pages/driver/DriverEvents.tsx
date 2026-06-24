@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Search, Package, CheckCircle2, AlertTriangle, FileText, ChevronRight, Clock, MapPin } from 'lucide-react';
 import DemoBanner from '@/components/driver/DemoBanner';
+import { canUseDriverDemo } from '@/lib/driver/demoMode';
 
 export type DemoEvent = {
   id: string;
@@ -86,8 +87,8 @@ export default function DriverEvents() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<'all' | 'finalizador' | 'informativo'>('all');
-  const [events] = useState<DemoEvent[]>(DEMO_EVENTS_INITIAL);
-  const [demoActive, setDemoActive] = useState(true);
+  const [events] = useState<DemoEvent[]>(canUseDriverDemo ? DEMO_EVENTS_INITIAL : []);
+  const [demoActive, setDemoActive] = useState(canUseDriverDemo);
 
   const filtered = useMemo(() => {
     let list = events;
