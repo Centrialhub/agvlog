@@ -8210,6 +8210,15 @@ export type Database = {
           client_id: string
         }[]
       }
+      get_user_portal_tenants: {
+        Args: never
+        Returns: {
+          id: string
+          name: string
+          plan_key: string
+          timezone: string
+        }[]
+      }
       get_user_tenant_ids: { Args: never; Returns: string[] }
       has_tenant_role: {
         Args: {
