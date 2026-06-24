@@ -1,6 +1,5 @@
 /**
- * Canonical status sets shared across UI, hooks and policies.
- * Keep these in sync with the database transitions in statusPipeline.
+ * Canonical status helpers — single source of truth for loads, stops e documents.
  */
 
 export const TRIP_ACTIVE_STATUSES = [
@@ -9,22 +8,7 @@ export const TRIP_ACTIVE_STATUSES = [
   'dispatched',
   'in_progress',
 ] as const;
-
 export type TripActiveStatus = (typeof TRIP_ACTIVE_STATUSES)[number];
-
-/** Paradas que ainda não foram visitadas. */
-export const STOP_PENDING_STATUSES = ['pending', 'planned'] as const;
-
-/** Motorista está no cliente (ou chegando). */
-export const STOP_ARRIVED_STATUSES = ['arriving', 'arrived', 'in_progress'] as const;
-
-/** Paradas finalizadas (entregues / canceladas / puladas). */
-export const STOP_COMPLETED_STATUSES = [
-  'completed',
-  'delivered',
-  'cancelled',
-  'skipped',
-] as const;
 
 export const TRIP_STATUS_LABELS: Record<string, string> = {
   planned: 'Planejada',
@@ -35,49 +19,9 @@ export const TRIP_STATUS_LABELS: Record<string, string> = {
   cancelled: 'Cancelada',
 };
 
-export const STOP_STATUS_LABELS: Record<string, string> = {
-  pending: 'Pendente',
-  planned: 'Planejada',
-  arriving: 'Chegando',
-  arrived: 'No local',
-  in_progress: 'Em atendimento',
-  completed: 'Concluída',
-  delivered: 'Entregue',
-  cancelled: 'Cancelada',
-  skipped: 'Pulada',
-};
-
 export const tripStatusLabel = (s: string | null | undefined) =>
   (s && TRIP_STATUS_LABELS[s]) || s || '—';
 
-export const stopStatusLabel = (s: string | null | undefined) =>
-  (s && STOP_STATUS_LABELS[s]) || s || '—';
-
-export const isStopArrived = (s: string | null | undefined) =>
-  !!s && (STOP_ARRIVED_STATUSES as readonly string[]).includes(s);
-
-export const isStopCompleted = (s: string | null | undefined) =>
-  !!s && (STOP_COMPLETED_STATUSES as readonly string[]).includes(s);
-
-export const isStopPending = (s: string | null | undefined) =>
-  !!s && (STOP_PENDING_STATUSES as readonly string[]).includes(s);
-
-// Re-export new helpers under namespaces to avoid clashing with legacy exports above.
 export * from './loadStatus';
-export {
-  STOP_TERMINAL_STATUSES,
-  STOP_ACTIVE_STATUSES,
-  STOP_STATUS_TONE,
-  isStopTerminal,
-  isStopActive,
-} from './stopStatus';
-export {
-  DOCUMENT_STATUSES,
-  DOCUMENT_STATUS_LABELS,
-  DOCUMENT_STATUS_TONE,
-  TERMINAL_DOCUMENT_STATUSES,
-  documentStatusLabel,
-  isDocumentTerminal,
-} from './documentStatus';
-export type { DocumentStatus } from './documentStatus';
-export type { StopTerminalStatus, StopActiveStatus } from './stopStatus';
+export * from './stopStatus';
+export * from './documentStatus';
