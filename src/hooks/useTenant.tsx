@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface Tenant {
@@ -36,7 +36,6 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     localStorage.getItem('agvlog_tenant_id')
   );
   const [loading, setLoading] = useState(true);
-  const creatingRef = useRef(false);
 
   useEffect(() => {
     const fetchMemberships = async () => {
@@ -59,55 +58,21 @@ export function TenantProvider({ children }: { children: ReactNode }) {
           tenants: d.tenants,
         }));
 
-        // Auto-create tenant if user has none (with persistent guard)
-        const guardKey = `agvlog_autocreate_tenant_done_${user.id}`;
-        if (mapped.length === 0 && !creatingRef.current && !localStorage.getItem(guardKey)) {
-          creatingRef.current = true;
-          try {
-            const { data: newTenantId, error: createErr } = await supabase.rpc('create_tenant_with_owner', {
-              _tenant_name: user.email?.split('@')[0] || 'Minha Empresa',
-            });
-            if (createErr) {
-              console.error('Auto-create tenant RPC failed:', createErr);
-              // Não gravar guard: permitir nova tentativa no próximo carregamento.
-            } else if (newTenantId) {
-              // Só gravar guard após sucesso real.
-              localStorage.setItem(guardKey, 'true');
-              const { data: newData } = await supabase
-                .from('tenant_memberships')
-                .select('tenant_id, role, tenants(id, name, plan_key, timezone)')
-                .eq('user_id', user.id)
-                .eq('active', true);
-              if (newData) {
-                const newMapped = (newData as any[]).map(d => ({
-                  tenant_id: d.tenant_id,
-                  role: d.role,
-                  tenants: d.tenants,
-                }));
-                setMemberships(newMapped);
-                if (newMapped.length > 0) {
-                  const firstId = newMapped[0].tenant_id;
-                  setCurrentTenantId(firstId);
-                  localStorage.setItem('agvlog_tenant_id', firstId);
-                }
-                setLoading(false);
-                return;
-              }
-            }
-          } catch (e) {
-            console.error('Auto-create tenant failed:', e);
-            // Não gravar guard em caso de exceção: permitir retry.
-          } finally {
-            creatingRef.current = false;
-          }
-        }
-
         setMemberships(mapped);
 
-        if (mapped.length > 0 && !currentTenantId) {
+        // Selecionar tenant: prioriza o salvo se ainda é válido, senão pega o primeiro.
+        const stored = localStorage.getItem('agvlog_tenant_id');
+        const validStored = stored && mapped.some(m => m.tenant_id === stored) ? stored : null;
+        if (validStored) {
+          if (validStored !== currentTenantId) setCurrentTenantId(validStored);
+        } else if (mapped.length > 0) {
           const firstId = mapped[0].tenant_id;
           setCurrentTenantId(firstId);
           localStorage.setItem('agvlog_tenant_id', firstId);
+        } else {
+          // Sem memberships: limpa seleção anterior.
+          if (stored) localStorage.removeItem('agvlog_tenant_id');
+          setCurrentTenantId(null);
         }
       }
       setLoading(false);
