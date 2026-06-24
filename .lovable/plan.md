@@ -1,79 +1,86 @@
+# Hardening Pré-Beta AGVLog
 
-# Portal do Cliente AGVLog — Plano de Entrega
-
-O escopo solicitado é muito grande para um único ciclo (5 migrations, 10+ RPCs, 30+ arquivos novos, mapa, exportações, área administrativa). Para manter qualidade e segurança, proponho dividir em **4 fases**. Cada fase é independente, deixa o sistema funcionando e pode ser validada antes da próxima.
-
-## Fundação que vale para todas as fases
-
-- Não tocar em `auth`/`storage`/`realtime`.
-- Toda consulta do portal via **RPC SECURITY DEFINER** filtrando por `client_portal_access` + `auth.uid()`. Nada de query direta por `tenant_id` no frontend cliente.
-- `GRANT` explícito em toda tabela nova (regra do projeto).
-- Bucket `receipts` já existe e é privado → usado para POD/canhotos via signed URL.
-- Status público unificado calculado em `src/lib/portal/portalStatus.ts` a partir de `dispatch_*`, `loads`, `pickup_orders`, `proof_of_delivery`, `operational_events` — uma única fonte de verdade no frontend.
+Esse é um trabalho grande (11 frentes). Proponho dividir em **5 fases independentes**, cada uma entregue como um conjunto fechado de migração + código + verificação. Confirme se a ordem faz sentido ou se quer reordenar/cortar algo antes de eu começar.
 
 ---
 
-## Fase 1 — Segurança, schema e dashboard (esta entrega)
+## Fase 1 — Segurança de dados (CRÍTICA, primeiro)
+Foco em vazamentos reais já presentes em produção.
 
-Objetivo: travar o acesso e ter um `/portal` funcional substituindo o atual.
+**Backend (migration única)**
+- `search_client_portal_shipments`: remover `bool_or(can_view_financial)` global. Calcular `_can_financial_clients uuid[]` (clientes com permissão) e mascarar `value`/`freight_value` por linha conforme `client_id` ∈ desse array. Fallback equivalente para acesso por `recipient_cnpj`/`remitter_cnpj`.
+- `get_client_portal_shipment_detail`: mesma lógica por documento. Substituir `row_to_jsonb(l/dt/ds/e/p)` por DTOs explícitos (apenas campos públicos). Remover `storage_path`/`storage_bucket` de `proofs` — devolver `has_file`, `id`, `proof_type`, `received_at`, `receiver_name`.
+- `list_client_documents`: mascarar `value` por documento conforme permissão do `client_id`.
+- `list_client_pods`: remover `storage_bucket`/`storage_path`. Manter `id` e usar RPC `get_client_pod_metadata` (já existe) + signed URL para download.
+- `create_client_occurrence`: validar que `_load_id` (se enviado) tem `tenant_id = _tenant_id` E (`client_id = _client_id` OU existe `fiscal_documents` da carga com esse `client_id`). Mesmo para `_order_id`. Senão `RAISE EXCEPTION 'access_denied'`.
+- **Storage `receipts`**: dropar policies amplas e recriar exigindo `(storage.foldername(name))[1]::uuid IN (SELECT public.get_user_tenant_ids())` para SELECT/INSERT/UPDATE/DELETE em `authenticated`. Cliente portal NÃO acessa o bucket diretamente — somente via `get_client_pod_metadata` + signed URL server-side.
 
-### Migration 1
-- `client_portal_access` (com `access_type`, flags `can_*`, UNIQUE por tenant+user+client+access_type).
-- `proof_of_delivery` (POD estruturado, FK para `fiscal_documents`, `loads`, `dispatch_trips`, `dispatch_stops`).
-- ALTER `operational_events` adicionando `visible_to_client`, `client_action_required`, `client_opened`, `public_status`, `client_resolution_note`.
-- Funções: `get_user_client_access(_tenant_id)`, `user_has_client_access(_client_id)`, `get_client_portal_summary(_tenant_id, _start, _end)`.
-- GRANTs + RLS + policies em todas as tabelas novas (cliente só vê suas linhas via `user_has_client_access`).
-
-### Frontend
-- Reescrita de `src/pages/ClientPortal.tsx` → estrutura `src/pages/portal/` + `src/components/portal/` + `src/hooks/portal/` + `src/lib/portal/`.
-- Rotas aninhadas em `App.tsx`:
-  - `/portal` → `PortalDashboard` (KPIs + próximas entregas + alertas + busca global)
-  - placeholders navegáveis para `shipments`, `pickups`, `documents`, `pods`, `occurrences`, `reports`, `tracking/:loadId`, `settings` (cada um com `PortalEmptyState` "em construção" para evitar 404).
-- `PortalLayout` com sidebar desktop + bottom nav mobile, header com busca global e seletor de cliente quando o usuário tem mais de um vínculo.
-- Hook `useClientPortalAccess` → bloqueia render se usuário não tem nenhum acesso.
-
-## Fase 2 — Listagem e detalhe de mercadorias
-
-- RPCs `search_client_portal_shipments` e `get_client_portal_shipment_detail` (joins respeitando access_type: remitter/recipient/payer/full).
-- View `client_portal_shipments` (ou materializada como CTE dentro da RPC se algum campo não existir no schema atual — checar primeiro).
-- `/portal/shipments` (tabela desktop + cards mobile, todos os filtros listados, exportação CSV).
-- `/portal/shipments/:documentId` (timeline, dados fiscais, operacionais, documentos, ocorrências, POD).
-- `get_client_document_download_url` → signed URL com validação dupla de escopo.
-
-## Fase 3 — Coletas, documentos, POD e ocorrências
-
-- `/portal/pickups` (+ RPC `request_client_pickup` quando `can_request_pickup`).
-- `/portal/documents` (abas NF-e/CT-e/MDF-e/romaneios/canhotos/faturas).
-- `/portal/pods` (filtros por status de POD, validação interna).
-- `/portal/occurrences` (+ RPC `create_client_occurrence` quando `can_open_occurrences`, lista filtrada por `visible_to_client`).
-
-## Fase 4 — Rastreamento, relatórios e administração
-
-- `/portal/tracking/:loadId` com mapa (`react-leaflet` 4.2.1 — limitação do projeto), mascarando paradas de terceiros via RPC dedicada.
-- `/portal/reports` com exportação CSV/Excel; bloco financeiro condicional a `can_view_financial`.
-- Aba **Portal do Cliente** em `/clients/:id` (admin interno): convidar usuário, definir `access_type`, toggles de permissões, filiais autorizadas, histórico de acesso.
+**Frontend**
+- `usePortalPods` / página PODs: parar de exibir `storage_path` e usar RPC para gerar signed URL no clique de "Baixar".
 
 ---
 
-## Detalhes técnicos relevantes
+## Fase 2 — App do motorista + finalize_driver_delivery
+**Backend**
+- Nova RPC `finalize_driver_delivery(_trip_id, _stop_id, _payload jsonb)` SECURITY DEFINER:
+  - Valida `auth.uid()` ↔ `drivers.user_id` ↔ `dispatch_trips.driver_id`.
+  - Valida `tenant_id` consistente entre trip/stop/docs.
+  - Insere `dispatch_events` (`type='delivery_completed'`).
+  - Atualiza `dispatch_stops` (status, `actual_arrival_at`, `actual_departure_at`).
+  - Upsert `proof_of_delivery` por `fiscal_document_id` da parada (`dispatch_stop_documents`).
+  - Atualiza `fiscal_documents.status='delivered'` e recalcula `loads.status` quando todas as paradas concluírem.
+  - Tudo em transação; retorna jsonb resumo.
 
-- Campos como `remitter_cnpj`, `recipient_cnpj`, `client_load_number`, `pickup_order_id`, `delivery_meta` em `fiscal_documents` precisam ser verificados antes da view — se algum não existir no schema atual, adapto a RPC para usar apenas o que existe e marco como TODO no código (sem quebrar build).
-- Status público calculado por prioridade: ocorrência crítica > entregue > POD > parada em andamento > trânsito > carregado > planejado > coleta > apenas importado.
-- Frontend nunca confia em flags locais para autorização — toda escrita passa por RPC que revalida `client_portal_access`.
-- Realtime opcional (Fase 4) só se necessário para tracking ao vivo.
+**Frontend**
+- `DriverDeliveries`: substituir as múltiplas chamadas soltas por uma única `supabase.rpc('finalize_driver_delivery', …)`.
+- `DriverHome`:
+  - `DEMO_*` e `demoActive` só sob `import.meta.env.DEV`. Em produção: nunca exibe demo.
+  - Quando houver `activeTrips.length > 0`, não renderizar `DEMO_MAP_STOPS`.
+  - Query de viagens ativas com `.in('status', ['planned','loading','dispatched','in_progress'])`.
 
 ---
 
-## Pontos que precisam de decisão antes da Fase 2
+## Fase 3 — Unificação de status
+**Frontend**
+- Criar `src/lib/status/index.ts` com:
+  - `TRIP_ACTIVE_STATUSES = ['planned','loading','dispatched','in_progress']`
+  - `STOP_ARRIVED_STATUSES` mapeando o nome canônico (decidir entre `arrived` vs `arriving`+`in_progress`).
+  - Mappers de label PT-BR.
+- Substituir literais espalhados pelas páginas (`DriverHome`, `DriverStops`, `Loads`, control-tower).
 
-1. **Vínculo remetente/destinatário**: confirmar se `fiscal_documents` tem `remitter_cnpj`/`recipient_cnpj` ou se o match é por `client_id` + tabela de filiais. Determina como o `access_type` filtra.
-2. **CT-e / MDF-e / faturas**: existem hoje (`cte_documents`, `nfse_documents`) mas o vínculo com cliente externo pode não estar mapeado — pode exigir migration adicional.
-3. **Convite de usuário cliente**: usar mesmo fluxo de `create-team-member` (Admin API) ou novo edge function dedicado a clientes externos?
+**Backend (migration)**
+- `get_client_portal_summary.pending_pickup`: trocar `('requested','scheduled','confirmed')` por status reais (`'pendente','agendado','confirmado'` conforme `pickup_orders`). Vou confirmar lendo a tabela antes.
+- Considerar CHECK constraint leve em `pickup_orders.status` (opcional, sinalizar se for arriscado com dados existentes).
+
+**Decisão necessária do usuário**: para `dispatch_stops`, o padrão canônico é `arrived` (um estado) ou `arriving`+`in_progress` (dois estados)? Vou assumir **`arriving`+`in_progress`** (já usado no backend de live status e em `dispatch_stops`) e alinhar o app driver, salvo orientação contrária.
 
 ---
 
-## Confirmação necessária
+## Fase 4 — useTenant + portal cliente UX
+**Frontend**
+- `useTenant`: remover auto-criação de tenant (mover para botão explícito em onboarding). Se `localStorage.agvlog_tenant_id` não bater com nenhuma membership ativa, limpar e selecionar a primeira válida. Não confundir com `client_portal_access` (portal continua usando seu próprio fluxo).
+- `PortalLayout`: remover busca global se não estiver ligada a nada (mais simples para beta) — OU passar `?q=` para `PortalShipments`. Vou remover por padrão; reabilitar é trivial depois.
+- Adicionar seletor de cliente quando `useClientPortalAccess().data.length > 1` (Select no header do PortalLayout, persistindo em localStorage `agvlog_portal_client_id`).
+- Esconder do menu páginas em construção (`PortalReports`, `PortalSettings` se vazias) ou marcar com badge "Em breve".
 
-Posso começar pela **Fase 1** agora (migration + dashboard + estrutura de rotas + segurança), entregar funcional, e seguir para Fase 2 na próxima rodada?
+---
 
-Se preferir um recorte diferente (ex.: priorizar shipments antes do dashboard, ou entregar tudo de schema de uma vez e UI depois), me avise antes de eu iniciar.
+## Fase 5 — package-lock + testes + build
+- `rm package-lock.json && npm install` (ou `bun install` se o projeto for bun-first — vou verificar antes; Lovable padrão é bun, então pode ser `bun install` + manter `package-lock` removido).
+- Adicionar testes vitest mínimos em `src/test/`:
+  - `portalFinancialMasking.test.ts` (mocka supabase, garante mascaramento).
+  - `statusMappers.test.ts` (helpers da Fase 3).
+  - `finalizeDelivery.test.ts` (mock supabase rpc — verifica payload).
+- Os testes de RLS/storage reais exigiriam um Supabase de teste — vou marcar como **manual checklist** documentado em `docs/hardening-checklist.md` em vez de Deno tests automáticos (mais honesto que fingir cobertura).
+
+---
+
+## Pontos que precisam de decisão sua antes de eu começar
+
+1. **Padrão de status de parada**: `arrived` único ou `arriving`+`in_progress`? (vou assumir o segundo se não responder)
+2. **Auto-criar tenant**: posso remover totalmente do `useTenant` e exigir que onboarding novo passe por uma página/botão "Criar empresa"? Ou prefere manter mas com guardas mais fortes?
+3. **Bucket `receipts`**: confirmar que o path real usado em uploads é `{tenant_id}/...` (vou verificar no código antes de aplicar a migration). Se for outro layout, ajusto.
+4. **Escopo dos testes**: ok aceitar testes unitários + checklist manual, ou quer que eu invista em testes de integração contra um Supabase efêmero?
+5. **Ordem de entrega**: começo pela Fase 1 (segurança) sozinha e te entrego para revisão antes de seguir, ou toco Fases 1+2 juntas?
+
+Responda essas 5 e eu começo pela Fase 1.
