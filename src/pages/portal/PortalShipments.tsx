@@ -16,6 +16,10 @@ import type { PublicShipmentStatus } from '@/lib/portal/portalStatus';
 
 function resolvePublicStatus(r: ShipmentRow): PublicShipmentStatus {
   if (r.has_open_occurrence) return 'exception';
+  if (r.document_status === 'returned' || r.load_status === 'returned') return 'returned';
+  if (r.document_status === 'refused' || r.load_status === 'refused') return 'not_delivered';
+  if (r.document_status === 'failed' || r.load_status === 'failed') return 'not_delivered';
+  if (r.document_status === 'partial_delivery' || r.load_status === 'partial_delivery') return 'exception';
   if (r.document_status === 'delivered') return r.has_pod ? 'pod_available' : 'pod_pending';
   if (r.stop_status === 'in_progress') return 'out_for_delivery';
   if (r.stop_status === 'arriving') return 'arrived_at_destination';
@@ -23,7 +27,7 @@ function resolvePublicStatus(r: ShipmentRow): PublicShipmentStatus {
   if (r.load_status === 'loaded') return 'loaded';
   if (r.load_status === 'loading') return 'being_prepared';
   if (r.load_status === 'planned' || r.load_status === 'assembling') return 'being_prepared';
-  if (r.document_status === 'cancelled') return 'cancelled';
+  if (r.document_status === 'cancelled' || r.load_status === 'cancelled') return 'cancelled';
   return 'received';
 }
 

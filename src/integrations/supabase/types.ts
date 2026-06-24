@@ -5068,9 +5068,12 @@ export type Database = {
           created_at: string
           created_by: string | null
           description: string | null
+          dispatch_stop_id: string | null
+          dispatch_trip_id: string | null
           driver_id: string | null
           event_type: string
           financial_impact: number | null
+          fiscal_document_id: string | null
           id: string
           load_id: string | null
           order_id: string | null
@@ -5092,9 +5095,12 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          dispatch_stop_id?: string | null
+          dispatch_trip_id?: string | null
           driver_id?: string | null
           event_type: string
           financial_impact?: number | null
+          fiscal_document_id?: string | null
           id?: string
           load_id?: string | null
           order_id?: string | null
@@ -5116,9 +5122,12 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          dispatch_stop_id?: string | null
+          dispatch_trip_id?: string | null
           driver_id?: string | null
           event_type?: string
           financial_impact?: number | null
+          fiscal_document_id?: string | null
           id?: string
           load_id?: string | null
           order_id?: string | null
@@ -5141,10 +5150,31 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "operational_events_dispatch_stop_id_fkey"
+            columns: ["dispatch_stop_id"]
+            isOneToOne: false
+            referencedRelation: "dispatch_stops"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "operational_events_dispatch_trip_id_fkey"
+            columns: ["dispatch_trip_id"]
+            isOneToOne: false
+            referencedRelation: "dispatch_trips"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "operational_events_driver_id_fkey"
             columns: ["driver_id"]
             isOneToOne: false
             referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "operational_events_fiscal_document_id_fkey"
+            columns: ["fiscal_document_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_documents"
             referencedColumns: ["id"]
           },
           {
@@ -8108,8 +8138,13 @@ export type Database = {
         Args: { _tenant_name: string }
         Returns: string
       }
+      current_driver_id: { Args: { _tenant_id: string }; Returns: string }
       detect_payment_method: { Args: { p_text: string }; Returns: string }
       dispatch_planned_route: { Args: { _payload: Json }; Returns: string }
+      driver_can_access_vehicle: {
+        Args: { _vehicle_id: string }
+        Returns: boolean
+      }
       driver_create_event: {
         Args: {
           _event_type: string
@@ -8155,6 +8190,8 @@ export type Database = {
         Returns: Json
       }
       driver_mark_arrival: { Args: { _stop_id: string }; Returns: string }
+      driver_owns_stop: { Args: { _stop_id: string }; Returns: boolean }
+      driver_owns_trip: { Args: { _trip_id: string }; Returns: boolean }
       driver_register_departure: {
         Args: { _notes?: string; _stop_id: string }
         Returns: string
@@ -8257,6 +8294,10 @@ export type Database = {
       }
       is_tenant_admin: { Args: { _tenant_id: string }; Returns: boolean }
       is_tenant_member: { Args: { _tenant_id: string }; Returns: boolean }
+      is_tenant_operator_or_admin: {
+        Args: { _tenant_id: string }
+        Returns: boolean
+      }
       is_user_internal_role: { Args: { _tenant_id: string }; Returns: boolean }
       list_client_documents: {
         Args: {

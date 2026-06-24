@@ -3,23 +3,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
 
-export const LOAD_STATUSES = [
-  'planned', 'assembling', 'ready', 'loading', 'loaded',
-  'in_transit', 'delivered', 'divergent',
-] as const;
-
-export type LoadStatus = typeof LOAD_STATUSES[number];
-
-export const LOAD_STATUS_LABELS: Record<LoadStatus, string> = {
-  planned: 'Planejada',
-  assembling: 'Montando',
-  ready: 'Pronta',
-  loading: 'Carregando',
-  loaded: 'Carregada',
-  in_transit: 'Em Trânsito',
-  delivered: 'Entregue',
-  divergent: 'Divergente',
-};
+import type { LoadStatus } from '@/lib/status/loadStatus';
+export { LOAD_STATUSES, LOAD_STATUS_LABELS } from '@/lib/status/loadStatus';
+export type { LoadStatus } from '@/lib/status/loadStatus';
 
 export interface Load {
   id: string;
