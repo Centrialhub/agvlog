@@ -1,86 +1,96 @@
-# Hardening Pré-Beta AGVLog
+## Hardening pré-beta AGVLog — Plano de execução
 
-Esse é um trabalho grande (11 frentes). Proponho dividir em **5 fases independentes**, cada uma entregue como um conjunto fechado de migração + código + verificação. Confirme se a ordem faz sentido ou se quer reordenar/cortar algo antes de eu começar.
-
----
-
-## Fase 1 — Segurança de dados (CRÍTICA, primeiro)
-Foco em vazamentos reais já presentes em produção.
-
-**Backend (migration única)**
-- `search_client_portal_shipments`: remover `bool_or(can_view_financial)` global. Calcular `_can_financial_clients uuid[]` (clientes com permissão) e mascarar `value`/`freight_value` por linha conforme `client_id` ∈ desse array. Fallback equivalente para acesso por `recipient_cnpj`/`remitter_cnpj`.
-- `get_client_portal_shipment_detail`: mesma lógica por documento. Substituir `row_to_jsonb(l/dt/ds/e/p)` por DTOs explícitos (apenas campos públicos). Remover `storage_path`/`storage_bucket` de `proofs` — devolver `has_file`, `id`, `proof_type`, `received_at`, `receiver_name`.
-- `list_client_documents`: mascarar `value` por documento conforme permissão do `client_id`.
-- `list_client_pods`: remover `storage_bucket`/`storage_path`. Manter `id` e usar RPC `get_client_pod_metadata` (já existe) + signed URL para download.
-- `create_client_occurrence`: validar que `_load_id` (se enviado) tem `tenant_id = _tenant_id` E (`client_id = _client_id` OU existe `fiscal_documents` da carga com esse `client_id`). Mesmo para `_order_id`. Senão `RAISE EXCEPTION 'access_denied'`.
-- **Storage `receipts`**: dropar policies amplas e recriar exigindo `(storage.foldername(name))[1]::uuid IN (SELECT public.get_user_tenant_ids())` para SELECT/INSERT/UPDATE/DELETE em `authenticated`. Cliente portal NÃO acessa o bucket diretamente — somente via `get_client_pod_metadata` + signed URL server-side.
-
-**Frontend**
-- `usePortalPods` / página PODs: parar de exibir `storage_path` e usar RPC para gerar signed URL no clique de "Baixar".
+Escopo grande (8 frentes). Vou entregar em **3 migrations + 1 lote de frontend**, para o usuário revisar cada migration antes do próximo passo.
 
 ---
 
-## Fase 2 — App do motorista + finalize_driver_delivery
-**Backend**
-- Nova RPC `finalize_driver_delivery(_trip_id, _stop_id, _payload jsonb)` SECURITY DEFINER:
-  - Valida `auth.uid()` ↔ `drivers.user_id` ↔ `dispatch_trips.driver_id`.
-  - Valida `tenant_id` consistente entre trip/stop/docs.
-  - Insere `dispatch_events` (`type='delivery_completed'`).
-  - Atualiza `dispatch_stops` (status, `actual_arrival_at`, `actual_departure_at`).
-  - Upsert `proof_of_delivery` por `fiscal_document_id` da parada (`dispatch_stop_documents`).
-  - Atualiza `fiscal_documents.status='delivered'` e recalcula `loads.status` quando todas as paradas concluírem.
-  - Tudo em transação; retorna jsonb resumo.
-
-**Frontend**
-- `DriverDeliveries`: substituir as múltiplas chamadas soltas por uma única `supabase.rpc('finalize_driver_delivery', …)`.
-- `DriverHome`:
-  - `DEMO_*` e `demoActive` só sob `import.meta.env.DEV`. Em produção: nunca exibe demo.
-  - Quando houver `activeTrips.length > 0`, não renderizar `DEMO_MAP_STOPS`.
-  - Query de viagens ativas com `.in('status', ['planned','loading','dispatched','in_progress'])`.
+### Fase A — Package manager (rápido, sem migration)
+- Adoção oficial **Bun** (já é o padrão Lovable, `bun.lockb` existe).
+- Adicionar em `package.json`:
+  - `"packageManager": "bun@1.x"`
+  - scripts equivalentes: `install`, `test` (vitest run), `lint`, `build`.
+- Criar `docs/ci.md` com comandos: `bun install --frozen-lockfile`, `bun run lint`, `bun run test`, `bun run build`.
+- Garantir que `package-lock.json` continua removido.
 
 ---
 
-## Fase 3 — Unificação de status
-**Frontend**
-- Criar `src/lib/status/index.ts` com:
-  - `TRIP_ACTIVE_STATUSES = ['planned','loading','dispatched','in_progress']`
-  - `STOP_ARRIVED_STATUSES` mapeando o nome canônico (decidir entre `arrived` vs `arriving`+`in_progress`).
-  - Mappers de label PT-BR.
-- Substituir literais espalhados pelas páginas (`DriverHome`, `DriverStops`, `Loads`, control-tower).
+### Fase B — Migration 1: Driver RPCs + RLS + Storage receipts
 
-**Backend (migration)**
-- `get_client_portal_summary.pending_pickup`: trocar `('requested','scheduled','confirmed')` por status reais (`'pendente','agendado','confirmado'` conforme `pickup_orders`). Vou confirmar lendo a tabela antes.
-- Considerar CHECK constraint leve em `pickup_orders.status` (opcional, sinalizar se for arriscado com dados existentes).
+**Reescrever `finalize_driver_delivery`** (priority 2):
+- Não confiar em `_fiscal_document_id` do frontend.
+- Resolver `fiscal_document_ids` via `dispatch_stop_documents` da parada.
+- Validar `auth.uid() → drivers.user_id → dispatch_trips.driver_id`.
+- Validar tenant em `dispatch_stop_documents` e `fiscal_documents`.
+- Upsert `proof_of_delivery` para cada doc (`proof_type='receiver_confirmation'`, `status='uploaded'`).
+- Retornar `pod_ids uuid[]`.
 
-**Decisão necessária do usuário**: para `dispatch_stops`, o padrão canônico é `arrived` (um estado) ou `arriving`+`in_progress` (dois estados)? Vou assumir **`arriving`+`in_progress`** (já usado no backend de live status e em `dispatch_stops`) e alinhar o app driver, salvo orientação contrária.
+**Novas RPCs SECURITY DEFINER** (priority 3), todas com guard `_assert_driver_owns_trip(trip_id)`:
+- `driver_mark_arrival(_stop_id)` → insere `dispatch_events('arrival')` + atualiza `dispatch_stops.status='arrived'`, `actual_arrival_at=now()`.
+- `driver_create_event(_trip_id, _event_type, _payload, _stop_id?)`.
+- `driver_save_checklist(_trip_id, _kind, _payload)` (`pre`|`post`).
+- `driver_create_expense(_trip_id, _category, _amount, _description, _receipt_path?)`.
+- `driver_finalize_delivery(_stop_id, _receiver_name, _signature_path, _photo_paths)` — wrapper sobre lógica de finalize.
 
----
+**Helper de portal** (`_can_view_financial_doc`) usado por todas as RPCs do portal.
 
-## Fase 4 — useTenant + portal cliente UX
-**Frontend**
-- `useTenant`: remover auto-criação de tenant (mover para botão explícito em onboarding). Se `localStorage.agvlog_tenant_id` não bater com nenhuma membership ativa, limpar e selecionar a primeira válida. Não confundir com `client_portal_access` (portal continua usando seu próprio fluxo).
-- `PortalLayout`: remover busca global se não estiver ligada a nada (mais simples para beta) — OU passar `?q=` para `PortalShipments`. Vou remover por padrão; reabilitar é trivial depois.
-- Adicionar seletor de cliente quando `useClientPortalAccess().data.length > 1` (Select no header do PortalLayout, persistindo em localStorage `agvlog_portal_client_id`).
-- Esconder do menu páginas em construção (`PortalReports`, `PortalSettings` se vazias) ou marcar com badge "Em breve".
+**RLS** (priority 4):
+- `dispatch_events`, `dispatch_stops`, `driver_expenses`: revogar insert/update direto de roles client/driver; manter SELECT apenas dentro da própria trip via `dispatch_trips.driver_id IN (SELECT id FROM drivers WHERE user_id=auth.uid())`.
+- `dispatch_planned_route`: trocar guard `is_tenant_member` por `is_tenant_admin OR has_tenant_role(_,'operator')`. Reject `role='client'` e `role='driver'`.
 
----
-
-## Fase 5 — package-lock + testes + build
-- `rm package-lock.json && npm install` (ou `bun install` se o projeto for bun-first — vou verificar antes; Lovable padrão é bun, então pode ser `bun install` + manter `package-lock` removido).
-- Adicionar testes vitest mínimos em `src/test/`:
-  - `portalFinancialMasking.test.ts` (mocka supabase, garante mascaramento).
-  - `statusMappers.test.ts` (helpers da Fase 3).
-  - `finalizeDelivery.test.ts` (mock supabase rpc — verifica payload).
-- Os testes de RLS/storage reais exigiriam um Supabase de teste — vou marcar como **manual checklist** documentado em `docs/hardening-checklist.md` em vez de Deno tests automáticos (mais honesto que fingir cobertura).
+**Storage `receipts`** (priority 4):
+- Remover policy de leitura `client`. Cliente baixa apenas via `get_client_pod_metadata` + signed URL.
+- Manter authenticated com tenant_id no path (já feito na fase anterior).
 
 ---
 
-## Pontos que precisam de decisão sua antes de eu começar
+### Fase C — Migration 2: Portal + Control Tower + Roteirização
 
-1. **Padrão de status de parada**: `arrived` único ou `arriving`+`in_progress`? (vou assumir o segundo se não responder)
-2. **Auto-criar tenant**: posso remover totalmente do `useTenant` e exigir que onboarding novo passe por uma página/botão "Criar empresa"? Ou prefere manter mas com guardas mais fortes?
-3. **Bucket `receipts`**: confirmar que o path real usado em uploads é `{tenant_id}/...` (vou verificar no código antes de aplicar a migration). Se for outro layout, ajusto.
-4. **Escopo dos testes**: ok aceitar testes unitários + checklist manual, ou quer que eu invista em testes de integração contra um Supabase efêmero?
-5. **Ordem de entrega**: começo pela Fase 1 (segurança) sozinha e te entrego para revisão antes de seguir, ou toco Fases 1+2 juntas?
+**Portal** (priority 5):
+- `get_client_portal_shipment_detail`: usar `planned_start_at`, `actual_start_at`, `planned_end_at`, `actual_end_at` (remover `started_at`/`ended_at`).
+- Criar `get_user_portal_tenants()` → tenants do usuário via `client_portal_access`.
+- Mascaramento financeiro consistente em `search_client_portal_shipments`, `list_client_documents`, `list_client_pods`, `get_client_pod_metadata`, `get_client_portal_summary`.
 
-Responda essas 5 e eu começo pela Fase 1.
+**Control Tower** (priority 6):
+- `get_active_trips_live`: `ORDER BY ps.sequence`/`pe.sequence` corretamente (subselects nomeados).
+- Próxima parada: incluir `arrived` em `('pending','arriving','arrived','in_progress')`.
+
+**Roteirização** (priority 7):
+- `dispatch_planned_route`:
+  - Validar que cada `fiscal_document_id` da stop pertence a uma `load_id` da lista despachada.
+  - RAISE EXCEPTION se documento órfão.
+  - Persistir `latitude`/`longitude` em `dispatch_stops` quando o draft trouxer coordenadas.
+
+---
+
+### Fase D — Frontend (último lote)
+
+- `RouteStopDraft`: adicionar `latitude?: number | null; longitude?: number | null`. Propagar do draft para o RPC.
+- `useDispatchRoutePlan`: incluir lat/lng nos stops, e ordenar com `manual_order ?? optimized_order ?? original_order ?? 9999`.
+- `DriverDeliveries`, `DriverHome`, `DriverChecklist`, `DriverExpenses`, `DriverJourney`, `DriverEvents`: substituir inserts diretos em `dispatch_events`/`dispatch_stops`/`driver_expenses` por `supabase.rpc('driver_*')`.
+- `PortalShipments`: debounce com `useEffect`+`setTimeout` (não `useMemo`).
+- `PortalLayout`: remover input de busca global solto.
+- `App.tsx` (router) e menu do portal: esconder rotas `PortalTracking`, `PortalReports`, `PortalSettings`. Remover duplicidade `/product-traceability`.
+- `useTenant` / novo `usePortalTenants`: portal usa `get_user_portal_tenants` quando usuário é client-only.
+
+---
+
+### Detalhes técnicos relevantes
+
+```text
+proof_of_delivery upsert key  = (fiscal_document_id, proof_type)
+driver guard                  = EXISTS(drivers d JOIN dispatch_trips t
+                                       ON t.driver_id=d.id
+                                       WHERE d.user_id=auth.uid()
+                                         AND t.id=_trip_id
+                                         AND t.status IN ('planned','loading','dispatched','in_progress'))
+operator guard (dispatch)     = is_tenant_admin(_t) OR has_tenant_role(_t,'operator')
+portal tenant resolution      = UNION DISTINCT(tenant_memberships, client_portal_access)
+```
+
+### Ordem de entrega proposta
+1. Fase A (package manager) + Fase D parcial (rotas/menu) numa única passada de frontend.
+2. Migration 1 (driver + RLS + storage) — usuário revisa.
+3. Migration 2 (portal + tower + roteirização) — usuário revisa.
+4. Frontend final (driver RPCs + portal tenants + debounce + RouteStopDraft lat/lng).
+
+Posso ir direto na ordem acima, ou prefere que eu pause em algum ponto específico?
