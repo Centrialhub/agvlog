@@ -66,16 +66,22 @@ export function useCreateLoadItem() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (values: Partial<LoadItem>) => {
-      const { data, error } = await (supabase as any).from('load_items').insert({
-        ...values,
-        tenant_id: currentTenant!.id,
-      }).select().single();
+      if (!values.load_id) throw new Error('load_id obrigatório');
+      if (!values.fiscal_document_id) {
+        throw new Error('useCreateLoadItem só aceita vínculo via fiscal_document_id. Use a RPC assign_fiscal_documents_to_load.');
+      }
+      const { data, error } = await (supabase as any).rpc('assign_fiscal_documents_to_load', {
+        _tenant_id: currentTenant!.id,
+        _load_id: values.load_id,
+        _document_ids: [values.fiscal_document_id],
+      });
       if (error) throw error;
       return data;
     },
     onSuccess: (_, variables) => {
       qc.invalidateQueries({ queryKey: ['load_items'] });
       qc.invalidateQueries({ queryKey: ['loads'] });
+      qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
     },
   });
 }
@@ -84,6 +90,14 @@ export function useUpdateLoadItem() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...values }: Partial<LoadItem> & { id: string }) => {
+      // Bloqueia mudança de load_id por write direto — use move_load_items_between_loads.
+      if ('load_id' in values) {
+        throw new Error('Mudança de load_id deve passar por move_load_items_between_loads.');
+      }
+      // Mudança de fiscal_document_id pelo write direto também é bloqueada — invalida composição.
+      if ('fiscal_document_id' in values) {
+        throw new Error('Mudança de fiscal_document_id não é permitida por update direto.');
+      }
       const { data, error } = await (supabase as any).from('load_items').update({
         ...values,
         updated_at: new Date().toISOString(),
@@ -99,15 +113,34 @@ export function useUpdateLoadItem() {
 }
 
 export function useDeleteLoadItem() {
+  const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
+      const { data: item, error: fetchErr } = await (supabase as any)
+        .from('load_items')
+        .select('id, load_id, fiscal_document_id')
+        .eq('id', id)
+        .maybeSingle();
+      if (fetchErr) throw fetchErr;
+      if (!item) return;
+      if (item.fiscal_document_id) {
+        const { error } = await (supabase as any).rpc('remove_fiscal_documents_from_load', {
+          _tenant_id: currentTenant!.id,
+          _load_id: item.load_id,
+          _document_ids: [item.fiscal_document_id],
+        });
+        if (error) throw error;
+        return;
+      }
+      // Sem documento vinculado — item manual; libera delete direto.
       const { error } = await (supabase as any).from('load_items').delete().eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['load_items'] });
       qc.invalidateQueries({ queryKey: ['loads'] });
+      qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
     },
   });
 }
