@@ -124,6 +124,25 @@ function RequireDriverRole({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function RequireClientPortalAccess({ children }: { children: React.ReactNode }) {
+  const { currentRole, loading } = useTenant();
+  if (loading) return <PageLoader />;
+  // Internal roles can preview the portal; clients/driver-of-portal-tenant get filtered by RPCs.
+  const allowed = ['client', 'owner', 'admin', 'operator'];
+  if (!currentRole || !allowed.includes(currentRole)) {
+    return (
+      <div className="flex h-screen flex-col items-center justify-center gap-3 p-6 text-center">
+        <h1 className="text-xl font-semibold">Sem acesso ao portal</h1>
+        <p className="text-sm text-muted-foreground max-w-md">
+          Sua conta não possui permissão de portal de cliente. Solicite ao administrador do tenant a
+          criação de um acesso em <strong>Equipe → Acessos do Portal</strong>.
+        </p>
+      </div>
+    );
+  }
+  return <>{children}</>;
+}
+
 function ProtectedRoute({ children, gate = 'internal' }: { children: React.ReactNode; gate?: 'internal' | 'any' }) {
   const { user, loading } = useAuth();
   if (loading) return <div className="flex h-screen items-center justify-center text-muted-foreground">Carregando...</div>;
@@ -261,7 +280,7 @@ const App = () => (
             <Route path="/routes" element={<Navigate to="/corridors" replace />} />
 
             {/* Client portal */}
-            <Route path="/portal" element={<ClientRoute><PortalLayout /></ClientRoute>}>
+            <Route path="/portal" element={<ClientRoute><RequireClientPortalAccess><PortalLayout /></RequireClientPortalAccess></ClientRoute>}>
               <Route index element={<PortalDashboard />} />
               <Route path="shipments" element={<PortalShipments />} />
               <Route path="shipments/:documentId" element={<PortalShipmentDetail />} />
