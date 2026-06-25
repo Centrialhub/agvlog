@@ -14,7 +14,7 @@ import { format } from 'date-fns';
 import {
   useDriverSettlement, useRegenerateDriverSettlement, useUpdateDriverSettlementStatus,
   useUpdateSettlementKmReview, useAddSettlementAdjustment, useRemoveSettlementAdjustment,
-  useRegisterSettlementPayment,
+  useRegisterSettlementPayment, useSettleZeroDriverSettlement,
   SETTLEMENT_STATUS_LABEL, isLocked, DriverSettlementStatus,
 } from '@/hooks/useDriverSettlements';
 import {
@@ -36,6 +36,7 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
   const addAdj = useAddSettlementAdjustment();
   const removeAdj = useRemoveSettlementAdjustment();
   const registerPay = useRegisterSettlementPayment();
+  const settleZero = useSettleZeroDriverSettlement();
 
   const s = data?.settlement;
   const items = data?.items ?? [];
@@ -82,6 +83,8 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
   const remaining = Math.max(0, Number(s?.driver_payable_amount ?? 0) - Number(s?.total_paid_amount ?? 0));
   const [payAmount, setPayAmount] = useState('');
   const [payMethod, setPayMethod] = useState('pix');
+  const [payAccount, setPayAccount] = useState<string>('caixa');
+  const [payAccountOther, setPayAccountOther] = useState('');
   const [payReference, setPayReference] = useState('');
   const [payReceipt, setPayReceipt] = useState('');
   const [payNotes, setPayNotes] = useState('');
@@ -94,6 +97,18 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
   // Approve with exception dialog
   const [approveOpen, setApproveOpen] = useState(false);
   const [exceptionReason, setExceptionReason] = useState('');
+
+  // Settle without payment (zero-balance) dialog
+  const [zeroOpen, setZeroOpen] = useState(false);
+  const [zeroReason, setZeroReason] = useState('');
+
+  // Close approved without full payment dialog
+  const [closeOpen, setCloseOpen] = useState(false);
+  const [closeReason, setCloseReason] = useState('');
+
+  const payableZero = Number(s?.driver_payable_amount ?? 0) === 0;
+  const balanceZero = Number(s?.payment_balance ?? remaining) === 0;
+  const canSettleZero = s?.status === 'approved' && (payableZero || balanceZero);
 
   const allowedTransitions = (st: DriverSettlementStatus): DriverSettlementStatus[] => {
     switch (st) {
@@ -171,9 +186,16 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
               {allowedTransitions(s.status as DriverSettlementStatus).map((next) => {
                 if (next === 'paid') {
                   return (
-                    <Button key={next} size="sm" onClick={() => setPayOpen(true)} disabled={updateStatus.isPending}>
-                      Registrar pagamento
-                    </Button>
+                    <div key={next} className="flex gap-1">
+                      <Button size="sm" onClick={() => setPayOpen(true)} disabled={updateStatus.isPending}>
+                        Registrar pagamento
+                      </Button>
+                      {canSettleZero && (
+                        <Button size="sm" variant="outline" onClick={() => setZeroOpen(true)} disabled={settleZero.isPending}>
+                          Quitar sem pagamento
+                        </Button>
+                      )}
+                    </div>
                   );
                 }
                 if (next === 'approved') {
@@ -186,6 +208,13 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                         Aprovar c/ exceção
                       </Button>
                     </div>
+                  );
+                }
+                if (next === 'closed' && s.status === 'approved') {
+                  return (
+                    <Button key={next} size="sm" variant="outline" onClick={() => setCloseOpen(true)} disabled={updateStatus.isPending}>
+                      Fechar
+                    </Button>
                   );
                 }
                 return (
