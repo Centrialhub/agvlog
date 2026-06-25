@@ -9039,6 +9039,10 @@ export type Database = {
         }
         Returns: Json
       }
+      settle_zero_driver_settlement: {
+        Args: { _reason: string; _settlement_id: string }
+        Returns: Json
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       stop_terminal_statuses: { Args: never; Returns: string[] }
