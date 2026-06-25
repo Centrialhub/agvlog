@@ -1637,6 +1637,60 @@ export type Database = {
           },
         ]
       }
+      driver_settlement_events: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          event_type: string
+          from_status: string | null
+          id: string
+          payload: Json
+          reason: string | null
+          settlement_id: string
+          tenant_id: string
+          to_status: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          event_type: string
+          from_status?: string | null
+          id?: string
+          payload?: Json
+          reason?: string | null
+          settlement_id: string
+          tenant_id: string
+          to_status?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          event_type?: string
+          from_status?: string | null
+          id?: string
+          payload?: Json
+          reason?: string | null
+          settlement_id?: string
+          tenant_id?: string
+          to_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "driver_settlement_events_settlement_id_fkey"
+            columns: ["settlement_id"]
+            isOneToOne: false
+            referencedRelation: "driver_settlements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_settlement_events_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       driver_settlement_items: {
         Row: {
           amount: number | null
@@ -1645,6 +1699,7 @@ export type Database = {
           id: string
           item_type: string
           metadata: Json
+          nature: string | null
           quantity: number | null
           settlement_id: string
           source_id: string | null
@@ -1658,6 +1713,7 @@ export type Database = {
           id?: string
           item_type: string
           metadata?: Json
+          nature?: string | null
           quantity?: number | null
           settlement_id: string
           source_id?: string | null
@@ -1671,6 +1727,7 @@ export type Database = {
           id?: string
           item_type?: string
           metadata?: Json
+          nature?: string | null
           quantity?: number | null
           settlement_id?: string
           source_id?: string | null
@@ -1694,11 +1751,72 @@ export type Database = {
           },
         ]
       }
+      driver_settlement_payments: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          notes: string | null
+          paid_at: string
+          paid_by: string | null
+          payment_account: string | null
+          payment_method: string | null
+          payment_reference: string | null
+          receipt_url: string | null
+          settlement_id: string
+          tenant_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          notes?: string | null
+          paid_at?: string
+          paid_by?: string | null
+          payment_account?: string | null
+          payment_method?: string | null
+          payment_reference?: string | null
+          receipt_url?: string | null
+          settlement_id: string
+          tenant_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          notes?: string | null
+          paid_at?: string
+          paid_by?: string | null
+          payment_account?: string | null
+          payment_method?: string | null
+          payment_reference?: string | null
+          receipt_url?: string | null
+          settlement_id?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "driver_settlement_payments_settlement_id_fkey"
+            columns: ["settlement_id"]
+            isOneToOne: false
+            referencedRelation: "driver_settlements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_settlement_payments_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       driver_settlements: {
         Row: {
           approved_at: string | null
           approved_by: string | null
           approved_expenses_total: number | null
+          approved_with_exception: boolean
           audited_km: number | null
           closed_at: string | null
           closed_by: string | null
@@ -1706,32 +1824,46 @@ export type Database = {
           created_by: string | null
           dispatch_trip_id: string
           documents_count: number | null
+          driver_credits_total: number
+          driver_debits_total: number
           driver_id: string | null
+          driver_payable_amount: number
+          driver_reimbursement_total: number
           estimated_km: number | null
+          exception_reason: string | null
           expenses_total: number | null
           final_amount: number | null
           id: string
           invoice_balance: number | null
           km_review_notes: string | null
           km_review_status: string | null
+          last_recalculated_at: string | null
           loads_count: number | null
           manual_adjustments_total: number | null
+          needs_recalculation: boolean
           operational_balance: number | null
           paid_at: string | null
           paid_by: string | null
+          payment_balance: number
           pending_expenses_total: number | null
+          recalculation_reason: string | null
           rejected_expenses_total: number | null
           reviewed_at: string | null
           reviewed_by: string | null
           route_destination: string | null
           route_name: string | null
           route_origin: string | null
+          route_result: number
           snapshot_json: Json
+          source_updated_at: string | null
           status: string
           stops_count: number | null
           tenant_id: string
+          total_freight_revenue: number
           total_freight_value: number | null
+          total_goods_value: number
           total_invoice_value: number | null
+          total_paid_amount: number
           total_weight_kg: number | null
           trip_completed_at: string | null
           trip_started_at: string | null
@@ -1742,6 +1874,7 @@ export type Database = {
           approved_at?: string | null
           approved_by?: string | null
           approved_expenses_total?: number | null
+          approved_with_exception?: boolean
           audited_km?: number | null
           closed_at?: string | null
           closed_by?: string | null
@@ -1749,32 +1882,46 @@ export type Database = {
           created_by?: string | null
           dispatch_trip_id: string
           documents_count?: number | null
+          driver_credits_total?: number
+          driver_debits_total?: number
           driver_id?: string | null
+          driver_payable_amount?: number
+          driver_reimbursement_total?: number
           estimated_km?: number | null
+          exception_reason?: string | null
           expenses_total?: number | null
           final_amount?: number | null
           id?: string
           invoice_balance?: number | null
           km_review_notes?: string | null
           km_review_status?: string | null
+          last_recalculated_at?: string | null
           loads_count?: number | null
           manual_adjustments_total?: number | null
+          needs_recalculation?: boolean
           operational_balance?: number | null
           paid_at?: string | null
           paid_by?: string | null
+          payment_balance?: number
           pending_expenses_total?: number | null
+          recalculation_reason?: string | null
           rejected_expenses_total?: number | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           route_destination?: string | null
           route_name?: string | null
           route_origin?: string | null
+          route_result?: number
           snapshot_json?: Json
+          source_updated_at?: string | null
           status?: string
           stops_count?: number | null
           tenant_id: string
+          total_freight_revenue?: number
           total_freight_value?: number | null
+          total_goods_value?: number
           total_invoice_value?: number | null
+          total_paid_amount?: number
           total_weight_kg?: number | null
           trip_completed_at?: string | null
           trip_started_at?: string | null
@@ -1785,6 +1932,7 @@ export type Database = {
           approved_at?: string | null
           approved_by?: string | null
           approved_expenses_total?: number | null
+          approved_with_exception?: boolean
           audited_km?: number | null
           closed_at?: string | null
           closed_by?: string | null
@@ -1792,32 +1940,46 @@ export type Database = {
           created_by?: string | null
           dispatch_trip_id?: string
           documents_count?: number | null
+          driver_credits_total?: number
+          driver_debits_total?: number
           driver_id?: string | null
+          driver_payable_amount?: number
+          driver_reimbursement_total?: number
           estimated_km?: number | null
+          exception_reason?: string | null
           expenses_total?: number | null
           final_amount?: number | null
           id?: string
           invoice_balance?: number | null
           km_review_notes?: string | null
           km_review_status?: string | null
+          last_recalculated_at?: string | null
           loads_count?: number | null
           manual_adjustments_total?: number | null
+          needs_recalculation?: boolean
           operational_balance?: number | null
           paid_at?: string | null
           paid_by?: string | null
+          payment_balance?: number
           pending_expenses_total?: number | null
+          recalculation_reason?: string | null
           rejected_expenses_total?: number | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           route_destination?: string | null
           route_name?: string | null
           route_origin?: string | null
+          route_result?: number
           snapshot_json?: Json
+          source_updated_at?: string | null
           status?: string
           stops_count?: number | null
           tenant_id?: string
+          total_freight_revenue?: number
           total_freight_value?: number | null
+          total_goods_value?: number
           total_invoice_value?: number | null
+          total_paid_amount?: number
           total_weight_kg?: number | null
           trip_completed_at?: string | null
           trip_started_at?: string | null
@@ -8295,6 +8457,10 @@ export type Database = {
           tenant_id: string
         }[]
       }
+      _build_driver_settlement: {
+        Args: { _dispatch_trip_id: string; _tenant_id: string }
+        Returns: string
+      }
       _driver_client_ids: { Args: never; Returns: string[] }
       _driver_fiscal_document_ids: { Args: never; Returns: string[] }
       _driver_load_ids: { Args: never; Returns: string[] }
@@ -8314,6 +8480,17 @@ export type Database = {
         }
         Returns: undefined
       }
+      _log_settlement_event: {
+        Args: {
+          _event_type: string
+          _from_status?: string
+          _payload?: Json
+          _reason?: string
+          _settlement_id: string
+          _to_status?: string
+        }
+        Returns: undefined
+      }
       _portal_user_client_ids: {
         Args: { _tenant_id: string }
         Returns: string[]
@@ -8321,6 +8498,16 @@ export type Database = {
       _portal_user_has_perm: {
         Args: { _client_id: string; _perm: string; _tenant_id: string }
         Returns: boolean
+      }
+      add_driver_settlement_adjustment: {
+        Args: {
+          _amount: number
+          _description: string
+          _nature: string
+          _reason: string
+          _settlement_id: string
+        }
+        Returns: string
       }
       assign_fiscal_documents_to_load: {
         Args: { _document_ids: string[]; _load_id: string; _tenant_id: string }
@@ -8706,6 +8893,24 @@ export type Database = {
           validated_at: string
         }[]
       }
+      list_driver_settlements: {
+        Args: {
+          _date_from?: string
+          _date_to?: string
+          _driver_id?: string
+          _only_expense_pending?: boolean
+          _only_km_pending?: boolean
+          _only_needs_recalculation?: boolean
+          _only_no_freight?: boolean
+          _page?: number
+          _page_size?: number
+          _search?: string
+          _status?: string
+          _tenant_id: string
+          _vehicle_id?: string
+        }
+        Returns: Json
+      }
       log_pod_access: {
         Args: {
           _fiscal_document_id: string
@@ -8714,6 +8919,10 @@ export type Database = {
           _success: boolean
           _tenant_id: string
         }
+        Returns: undefined
+      }
+      mark_driver_settlement_outdated: {
+        Args: { _dispatch_trip_id: string; _reason: string; _tenant_id: string }
         Returns: undefined
       }
       move_load_items_between_loads: {
@@ -8768,6 +8977,22 @@ export type Database = {
         }
         Returns: string
       }
+      register_driver_settlement_payment: {
+        Args: {
+          _amount: number
+          _notes?: string
+          _payment_account?: string
+          _payment_method?: string
+          _payment_reference?: string
+          _receipt_url?: string
+          _settlement_id: string
+        }
+        Returns: string
+      }
+      remove_driver_settlement_adjustment: {
+        Args: { _item_id: string; _reason: string; _settlement_id: string }
+        Returns: undefined
+      }
       remove_fiscal_documents_from_load: {
         Args: { _document_ids: string[]; _load_id: string; _tenant_id: string }
         Returns: Json
@@ -8805,12 +9030,18 @@ export type Database = {
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       stop_terminal_statuses: { Args: never; Returns: string[] }
-      update_driver_settlement_status: {
-        Args: { _new_status: string; _settlement_id: string }
+      update_driver_settlement_km_review: {
+        Args: {
+          _audited_km: number
+          _km_status: string
+          _notes: string
+          _settlement_id: string
+        }
         Returns: {
           approved_at: string | null
           approved_by: string | null
           approved_expenses_total: number | null
+          approved_with_exception: boolean
           audited_km: number | null
           closed_at: string | null
           closed_by: string | null
@@ -8818,32 +9049,118 @@ export type Database = {
           created_by: string | null
           dispatch_trip_id: string
           documents_count: number | null
+          driver_credits_total: number
+          driver_debits_total: number
           driver_id: string | null
+          driver_payable_amount: number
+          driver_reimbursement_total: number
           estimated_km: number | null
+          exception_reason: string | null
           expenses_total: number | null
           final_amount: number | null
           id: string
           invoice_balance: number | null
           km_review_notes: string | null
           km_review_status: string | null
+          last_recalculated_at: string | null
           loads_count: number | null
           manual_adjustments_total: number | null
+          needs_recalculation: boolean
           operational_balance: number | null
           paid_at: string | null
           paid_by: string | null
+          payment_balance: number
           pending_expenses_total: number | null
+          recalculation_reason: string | null
           rejected_expenses_total: number | null
           reviewed_at: string | null
           reviewed_by: string | null
           route_destination: string | null
           route_name: string | null
           route_origin: string | null
+          route_result: number
           snapshot_json: Json
+          source_updated_at: string | null
           status: string
           stops_count: number | null
           tenant_id: string
+          total_freight_revenue: number
           total_freight_value: number | null
+          total_goods_value: number
           total_invoice_value: number | null
+          total_paid_amount: number
+          total_weight_kg: number | null
+          trip_completed_at: string | null
+          trip_started_at: string | null
+          updated_at: string
+          vehicle_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "driver_settlements"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_driver_settlement_status: {
+        Args: {
+          _allow_exceptions?: boolean
+          _new_status: string
+          _reason?: string
+          _settlement_id: string
+        }
+        Returns: {
+          approved_at: string | null
+          approved_by: string | null
+          approved_expenses_total: number | null
+          approved_with_exception: boolean
+          audited_km: number | null
+          closed_at: string | null
+          closed_by: string | null
+          created_at: string
+          created_by: string | null
+          dispatch_trip_id: string
+          documents_count: number | null
+          driver_credits_total: number
+          driver_debits_total: number
+          driver_id: string | null
+          driver_payable_amount: number
+          driver_reimbursement_total: number
+          estimated_km: number | null
+          exception_reason: string | null
+          expenses_total: number | null
+          final_amount: number | null
+          id: string
+          invoice_balance: number | null
+          km_review_notes: string | null
+          km_review_status: string | null
+          last_recalculated_at: string | null
+          loads_count: number | null
+          manual_adjustments_total: number | null
+          needs_recalculation: boolean
+          operational_balance: number | null
+          paid_at: string | null
+          paid_by: string | null
+          payment_balance: number
+          pending_expenses_total: number | null
+          recalculation_reason: string | null
+          rejected_expenses_total: number | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          route_destination: string | null
+          route_name: string | null
+          route_origin: string | null
+          route_result: number
+          snapshot_json: Json
+          source_updated_at: string | null
+          status: string
+          stops_count: number | null
+          tenant_id: string
+          total_freight_revenue: number
+          total_freight_value: number | null
+          total_goods_value: number
+          total_invoice_value: number | null
+          total_paid_amount: number
           total_weight_kg: number | null
           trip_completed_at: string | null
           trip_started_at: string | null
@@ -8868,6 +9185,7 @@ export type Database = {
           approved_at: string | null
           approved_by: string | null
           approved_expenses_total: number | null
+          approved_with_exception: boolean
           audited_km: number | null
           closed_at: string | null
           closed_by: string | null
@@ -8875,32 +9193,46 @@ export type Database = {
           created_by: string | null
           dispatch_trip_id: string
           documents_count: number | null
+          driver_credits_total: number
+          driver_debits_total: number
           driver_id: string | null
+          driver_payable_amount: number
+          driver_reimbursement_total: number
           estimated_km: number | null
+          exception_reason: string | null
           expenses_total: number | null
           final_amount: number | null
           id: string
           invoice_balance: number | null
           km_review_notes: string | null
           km_review_status: string | null
+          last_recalculated_at: string | null
           loads_count: number | null
           manual_adjustments_total: number | null
+          needs_recalculation: boolean
           operational_balance: number | null
           paid_at: string | null
           paid_by: string | null
+          payment_balance: number
           pending_expenses_total: number | null
+          recalculation_reason: string | null
           rejected_expenses_total: number | null
           reviewed_at: string | null
           reviewed_by: string | null
           route_destination: string | null
           route_name: string | null
           route_origin: string | null
+          route_result: number
           snapshot_json: Json
+          source_updated_at: string | null
           status: string
           stops_count: number | null
           tenant_id: string
+          total_freight_revenue: number
           total_freight_value: number | null
+          total_goods_value: number
           total_invoice_value: number | null
+          total_paid_amount: number
           total_weight_kg: number | null
           trip_completed_at: string | null
           trip_started_at: string | null
