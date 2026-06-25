@@ -252,8 +252,7 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
               <TabsContent value="expenses">
                 <div className="rounded-md border">
                   <Table>
-                    <TableHeader><TableRow><TableHead>Categoria</TableHead><TableHead>Valor</TableHead><TableHead>Data</TableHead><TableHead>Status</TableHead><TableHead>Comprovante</TableHead></TableRow></TableHeader>
-                      <TableHeader><TableRow><TableHead>Categoria</TableHead><TableHead>Valor</TableHead><TableHead>Data</TableHead><TableHead>Status</TableHead><TableHead>Reembolso</TableHead><TableHead>Fonte</TableHead><TableHead>Comprovante</TableHead></TableRow></TableHeader>
+                    <TableHeader><TableRow><TableHead>Categoria</TableHead><TableHead>Valor</TableHead><TableHead>Data</TableHead><TableHead>Status</TableHead><TableHead>Reembolso</TableHead><TableHead>Fonte</TableHead><TableHead>Comprovante</TableHead></TableRow></TableHeader>
                     <TableBody>
                       {expItems.map((i: any) => (
                         <TableRow key={i.id}>
@@ -261,10 +260,12 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                           <TableCell>{fmtMoney(Number(i.amount))}</TableCell>
                           <TableCell>{fmtDate(i.metadata?.expense_at)}</TableCell>
                           <TableCell><Badge variant={i.metadata?.approval_status === 'approved' ? 'default' : i.metadata?.approval_status === 'rejected' ? 'destructive' : 'secondary'}>{i.metadata?.approval_status ?? '—'}</Badge></TableCell>
+                          <TableCell>{i.metadata?.reimbursable === false ? <Badge variant="outline" className="text-[10px]">Não</Badge> : <Badge variant="secondary" className="text-[10px]">Sim</Badge>}</TableCell>
+                          <TableCell className="text-xs">{i.metadata?.payment_source ?? 'driver'}</TableCell>
                           <TableCell>{i.metadata?.receipt_url ? <a className="text-primary inline-flex items-center gap-1" href={i.metadata.receipt_url} target="_blank" rel="noreferrer"><FileText className="h-3 w-3" /> abrir</a> : '—'}</TableCell>
                         </TableRow>
                       ))}
-                      {expItems.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">Sem despesas</TableCell></TableRow>}
+                      {expItems.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">Sem despesas</TableCell></TableRow>}
                     </TableBody>
                   </Table>
                 </div>
