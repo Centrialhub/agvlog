@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
-import { RefreshCw, Wallet, Search } from 'lucide-react';
+import { RefreshCw, Wallet, Search, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
 import {
   useDriverSettlements, useGeneratePendingDriverSettlements,
@@ -19,7 +19,6 @@ const fmtMoney = (v: number | null | undefined) => (v ?? 0).toLocaleString('pt-B
 const fmtNum = (v: number | null | undefined, d = 1) => (v ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d });
 
 export default function DriverSettlements() {
-  const { data: list = [], isLoading, refetch } = useDriverSettlements();
   const genPending = useGeneratePendingDriverSettlements();
 
   const [search, setSearch] = useState('');
@@ -31,6 +30,26 @@ export default function DriverSettlements() {
   const [onlyKmPending, setOnlyKmPending] = useState(false);
   const [onlyExpPending, setOnlyExpPending] = useState(false);
   const [onlyNoFreight, setOnlyNoFreight] = useState(false);
+  const [onlyNeedsRecalc, setOnlyNeedsRecalc] = useState(false);
+  const [page, setPage] = useState(1);
+  const pageSize = 50;
+
+  const { data, isLoading, refetch } = useDriverSettlements({
+    search,
+    driver_id: driverFilter === 'all' ? null : driverFilter,
+    vehicle_id: vehicleFilter === 'all' ? null : vehicleFilter,
+    status: status === 'all' ? null : status,
+    date_from: dateFrom || null,
+    date_to: dateTo || null,
+    only_km_pending: onlyKmPending,
+    only_expense_pending: onlyExpPending,
+    only_no_freight: onlyNoFreight,
+    only_needs_recalculation: onlyNeedsRecalc,
+    page,
+    page_size: pageSize,
+  });
+  const list = (data?.items ?? []) as any[];
+  const totalCount = data?.total_count ?? 0;
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -46,24 +65,7 @@ export default function DriverSettlements() {
     return Array.from(set, ([id, plate]) => ({ id, plate }));
   }, [list]);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return list.filter((s: any) => {
-      if (status !== 'all' && s.status !== status) return false;
-      if (driverFilter !== 'all' && s.driver_id !== driverFilter) return false;
-      if (vehicleFilter !== 'all' && s.vehicle_id !== vehicleFilter) return false;
-      if (dateFrom && (!s.trip_completed_at || s.trip_completed_at < dateFrom)) return false;
-      if (dateTo && (!s.trip_completed_at || s.trip_completed_at > dateTo + 'T23:59:59')) return false;
-      if (onlyKmPending && s.km_review_status !== 'pending') return false;
-      if (onlyExpPending && Number(s.pending_expenses_total ?? 0) === 0) return false;
-      if (onlyNoFreight && Number(s.total_freight_value ?? 0) > 0) return false;
-      if (q) {
-        const hay = [s.driver_name, s.vehicle_plate, s.route_name, s.route_origin, s.route_destination].filter(Boolean).join(' ').toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
-      return true;
-    });
-  }, [list, search, status, driverFilter, vehicleFilter, dateFrom, dateTo, onlyKmPending, onlyExpPending, onlyNoFreight]);
+  const filtered = list;
 
   const kpi = useMemo(() => {
     const byStatus = (st: DriverSettlementStatus) => list.filter((s: any) => s.status === st);
@@ -73,9 +75,12 @@ export default function DriverSettlements() {
       approved: byStatus('approved').length,
       paidClosed: list.filter((s: any) => s.status === 'paid' || s.status === 'closed').length,
       totalApprovedExp: list.reduce((a: number, s: any) => a + Number(s.approved_expenses_total ?? 0), 0),
-      totalOpBalance: list.reduce((a: number, s: any) => a + Number(s.operational_balance ?? 0), 0),
+      totalRouteResult: list.reduce((a: number, s: any) => a + Number(s.route_result ?? s.operational_balance ?? 0), 0),
+      totalPayable: list.reduce((a: number, s: any) => a + Number(s.driver_payable_amount ?? 0), 0),
+      totalPaid: list.reduce((a: number, s: any) => a + Number(s.total_paid_amount ?? 0), 0),
       kmPending: list.filter((s: any) => s.km_review_status === 'pending').length,
       expPending: list.filter((s: any) => Number(s.pending_expenses_total ?? 0) > 0).length,
+      needsRecalc: list.filter((s: any) => s.needs_recalculation === true).length,
     };
   }, [list]);
 
@@ -91,7 +96,7 @@ export default function DriverSettlements() {
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => refetch()}><RefreshCw className="h-4 w-4 mr-1" /> Atualizar</Button>
           <Button onClick={() => genPending.mutate()} disabled={genPending.isPending}>
-            Gerar acertos pendentes
+            Gerar / Recalcular pendentes
           </Button>
         </div>
       </div>
@@ -100,12 +105,12 @@ export default function DriverSettlements() {
         {[
           { label: 'Pendentes', value: kpi.pending },
           { label: 'Em conferência', value: kpi.inReview },
-          { label: 'Aprovados', value: kpi.approved },
-          { label: 'Pagos / Fechados', value: kpi.paidClosed },
+          { label: 'Desatualizados', value: kpi.needsRecalc },
           { label: 'KM pendente', value: kpi.kmPending },
           { label: 'Despesas pendentes', value: kpi.expPending },
-          { label: 'Despesas aprovadas', value: fmtMoney(kpi.totalApprovedExp) },
-          { label: 'Resultado operacional', value: fmtMoney(kpi.totalOpBalance) },
+          { label: 'A pagar motoristas', value: fmtMoney(kpi.totalPayable) },
+          { label: 'Pago', value: fmtMoney(kpi.totalPaid) },
+          { label: 'Resultado das rotas', value: fmtMoney(kpi.totalRouteResult) },
         ].map((k) => (
           <Card key={k.label}><CardHeader className="pb-2"><CardTitle className="text-xs text-muted-foreground">{k.label}</CardTitle></CardHeader>
             <CardContent className="text-lg font-semibold">{k.value}</CardContent></Card>
@@ -117,9 +122,9 @@ export default function DriverSettlements() {
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3">
             <div className="lg:col-span-2 relative">
               <Search className="h-4 w-4 absolute left-2 top-2.5 text-muted-foreground" />
-              <Input className="pl-8" placeholder="Buscar motorista, placa, rota…" value={search} onChange={(e) => setSearch(e.target.value)} />
+              <Input className="pl-8" placeholder="Motorista, placa, rota, romaneio, nota…" value={search} onChange={(e) => { setPage(1); setSearch(e.target.value); }} />
             </div>
-            <Select value={status} onValueChange={(v: any) => setStatus(v)}>
+            <Select value={status} onValueChange={(v: any) => { setPage(1); setStatus(v); }}>
               <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos status</SelectItem>
@@ -149,6 +154,7 @@ export default function DriverSettlements() {
             <Label className="flex items-center gap-2"><Checkbox checked={onlyKmPending} onCheckedChange={(v) => setOnlyKmPending(Boolean(v))} /> KM pendente</Label>
             <Label className="flex items-center gap-2"><Checkbox checked={onlyExpPending} onCheckedChange={(v) => setOnlyExpPending(Boolean(v))} /> Despesa pendente</Label>
             <Label className="flex items-center gap-2"><Checkbox checked={onlyNoFreight} onCheckedChange={(v) => setOnlyNoFreight(Boolean(v))} /> Frete ausente</Label>
+            <Label className="flex items-center gap-2"><Checkbox checked={onlyNeedsRecalc} onCheckedChange={(v) => setOnlyNeedsRecalc(Boolean(v))} /> Desatualizado</Label>
           </div>
         </CardContent>
       </Card>
@@ -168,17 +174,19 @@ export default function DriverSettlements() {
                   <TableHead className="text-right">Peso</TableHead>
                   <TableHead className="text-right">KM est.</TableHead>
                   <TableHead className="text-right">KM aud.</TableHead>
-                  <TableHead className="text-right">Notas R$</TableHead>
-                  <TableHead className="text-right">Frete</TableHead>
+                  <TableHead className="text-right">Mercadoria</TableHead>
+                  <TableHead className="text-right">Receita Frete</TableHead>
                   <TableHead className="text-right">Despesas</TableHead>
-                  <TableHead className="text-right">Result. Op.</TableHead>
+                  <TableHead className="text-right">Result. Rota</TableHead>
+                  <TableHead className="text-right">A pagar</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Pendências</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading && <TableRow><TableCell colSpan={14} className="text-center text-muted-foreground">Carregando…</TableCell></TableRow>}
+                {isLoading && <TableRow><TableCell colSpan={16} className="text-center text-muted-foreground">Carregando…</TableCell></TableRow>}
                 {!isLoading && filtered.length === 0 && (
-                  <TableRow><TableCell colSpan={14} className="text-center text-muted-foreground py-8">Nenhum acerto encontrado.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={16} className="text-center text-muted-foreground py-8">Nenhum acerto encontrado.</TableCell></TableRow>
                 )}
                 {filtered.map((s: any) => (
                   <TableRow key={s.id} className="cursor-pointer hover:bg-accent" onClick={() => openSettlement(s.id)}>
@@ -191,15 +199,38 @@ export default function DriverSettlements() {
                     <TableCell className="text-right">{fmtNum(s.total_weight_kg, 0)}</TableCell>
                     <TableCell className="text-right">{s.estimated_km != null ? fmtNum(s.estimated_km, 1) : '—'}</TableCell>
                     <TableCell className="text-right">{s.audited_km != null ? fmtNum(s.audited_km, 1) : <Badge variant="outline" className="text-xs">pendente</Badge>}</TableCell>
-                    <TableCell className="text-right">{fmtMoney(s.total_invoice_value)}</TableCell>
-                    <TableCell className="text-right">{fmtMoney(s.total_freight_value)}</TableCell>
+                    <TableCell className="text-right">{fmtMoney(s.total_goods_value ?? s.total_invoice_value)}</TableCell>
+                    <TableCell className="text-right">{fmtMoney(s.total_freight_revenue ?? s.total_freight_value)}</TableCell>
                     <TableCell className="text-right">{fmtMoney(s.approved_expenses_total)}</TableCell>
-                    <TableCell className="text-right font-semibold">{fmtMoney(s.operational_balance)}</TableCell>
+                    <TableCell className="text-right">{fmtMoney(s.route_result ?? s.operational_balance)}</TableCell>
+                    <TableCell className="text-right font-semibold">{fmtMoney(s.driver_payable_amount)}</TableCell>
                     <TableCell><Badge variant="outline">{SETTLEMENT_STATUS_LABEL[s.status as DriverSettlementStatus]}</Badge></TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {s.needs_recalculation && <Badge variant="destructive" className="text-[10px] flex items-center gap-1"><AlertTriangle className="h-3 w-3" />Desatualizado</Badge>}
+                        {s.km_review_status === 'pending' && <Badge variant="secondary" className="text-[10px]">KM</Badge>}
+                        {Number(s.pending_expenses_total ?? 0) > 0 && <Badge variant="secondary" className="text-[10px]">Despesa</Badge>}
+                        {Number(s.total_freight_value ?? 0) === 0 && <Badge variant="secondary" className="text-[10px]">Sem frete</Badge>}
+                        {Number(s.loads_count ?? 0) === 0 && <Badge variant="secondary" className="text-[10px]">Sem rom.</Badge>}
+                        {Number(s.documents_count ?? 0) === 0 && <Badge variant="secondary" className="text-[10px]">Sem doc.</Badge>}
+                        {s.approved_with_exception && <Badge variant="outline" className="text-[10px]">Exceção</Badge>}
+                        {s.status === 'approved' && Number(s.total_paid_amount ?? 0) > 0 && Number(s.total_paid_amount ?? 0) < Number(s.driver_payable_amount ?? 0) && (
+                          <Badge variant="outline" className="text-[10px]">Pag. parcial</Badge>
+                        )}
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
+          </div>
+          <div className="flex justify-between items-center mt-3 text-sm text-muted-foreground">
+            <span>{totalCount} acerto(s)</span>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Anterior</Button>
+              <span className="px-2 self-center">Página {page}</span>
+              <Button variant="outline" size="sm" disabled={page * pageSize >= totalCount} onClick={() => setPage(p => p + 1)}>Próxima</Button>
+            </div>
           </div>
         </CardContent>
       </Card>
