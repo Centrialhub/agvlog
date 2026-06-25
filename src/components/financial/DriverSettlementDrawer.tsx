@@ -424,19 +424,20 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                 </div>
                 <div className="rounded-md border">
                   <Table>
-                    <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Método</TableHead><TableHead>Referência</TableHead><TableHead className="text-right">Valor</TableHead><TableHead>Notas</TableHead><TableHead>Comprovante</TableHead></TableRow></TableHeader>
+                    <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Método</TableHead><TableHead>Conta/origem</TableHead><TableHead>Referência</TableHead><TableHead className="text-right">Valor</TableHead><TableHead>Notas</TableHead><TableHead>Comprovante</TableHead></TableRow></TableHeader>
                     <TableBody>
                       {payments.map((p: any) => (
                         <TableRow key={p.id}>
                           <TableCell>{fmtDate(p.paid_at)}</TableCell>
                           <TableCell>{p.payment_method ?? '—'}</TableCell>
+                          <TableCell className="text-xs">{p.payment_account ?? '—'}</TableCell>
                           <TableCell>{p.payment_reference ?? '—'}</TableCell>
                           <TableCell className="text-right">{fmtMoney(Number(p.amount))}</TableCell>
                           <TableCell className="text-xs text-muted-foreground">{p.notes ?? '—'}</TableCell>
                           <TableCell>{p.receipt_url ? <a className="text-primary text-xs" href={p.receipt_url} target="_blank" rel="noreferrer">abrir</a> : '—'}</TableCell>
                         </TableRow>
                       ))}
-                      {payments.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground">Nenhum pagamento registrado</TableCell></TableRow>}
+                      {payments.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">Nenhum pagamento registrado</TableCell></TableRow>}
                     </TableBody>
                   </Table>
                 </div>
