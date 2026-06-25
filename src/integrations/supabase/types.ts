@@ -1637,6 +1637,224 @@ export type Database = {
           },
         ]
       }
+      driver_settlement_items: {
+        Row: {
+          amount: number | null
+          created_at: string
+          description: string | null
+          id: string
+          item_type: string
+          metadata: Json
+          quantity: number | null
+          settlement_id: string
+          source_id: string | null
+          source_table: string | null
+          tenant_id: string
+        }
+        Insert: {
+          amount?: number | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          item_type: string
+          metadata?: Json
+          quantity?: number | null
+          settlement_id: string
+          source_id?: string | null
+          source_table?: string | null
+          tenant_id: string
+        }
+        Update: {
+          amount?: number | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          item_type?: string
+          metadata?: Json
+          quantity?: number | null
+          settlement_id?: string
+          source_id?: string | null
+          source_table?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "driver_settlement_items_settlement_id_fkey"
+            columns: ["settlement_id"]
+            isOneToOne: false
+            referencedRelation: "driver_settlements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_settlement_items_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      driver_settlements: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          approved_expenses_total: number | null
+          audited_km: number | null
+          closed_at: string | null
+          closed_by: string | null
+          created_at: string
+          created_by: string | null
+          dispatch_trip_id: string
+          documents_count: number | null
+          driver_id: string | null
+          estimated_km: number | null
+          expenses_total: number | null
+          final_amount: number | null
+          id: string
+          invoice_balance: number | null
+          km_review_notes: string | null
+          km_review_status: string | null
+          loads_count: number | null
+          manual_adjustments_total: number | null
+          operational_balance: number | null
+          paid_at: string | null
+          paid_by: string | null
+          pending_expenses_total: number | null
+          rejected_expenses_total: number | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          route_destination: string | null
+          route_name: string | null
+          route_origin: string | null
+          snapshot_json: Json
+          status: string
+          stops_count: number | null
+          tenant_id: string
+          total_freight_value: number | null
+          total_invoice_value: number | null
+          total_weight_kg: number | null
+          trip_completed_at: string | null
+          trip_started_at: string | null
+          updated_at: string
+          vehicle_id: string | null
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          approved_expenses_total?: number | null
+          audited_km?: number | null
+          closed_at?: string | null
+          closed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          dispatch_trip_id: string
+          documents_count?: number | null
+          driver_id?: string | null
+          estimated_km?: number | null
+          expenses_total?: number | null
+          final_amount?: number | null
+          id?: string
+          invoice_balance?: number | null
+          km_review_notes?: string | null
+          km_review_status?: string | null
+          loads_count?: number | null
+          manual_adjustments_total?: number | null
+          operational_balance?: number | null
+          paid_at?: string | null
+          paid_by?: string | null
+          pending_expenses_total?: number | null
+          rejected_expenses_total?: number | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          route_destination?: string | null
+          route_name?: string | null
+          route_origin?: string | null
+          snapshot_json?: Json
+          status?: string
+          stops_count?: number | null
+          tenant_id: string
+          total_freight_value?: number | null
+          total_invoice_value?: number | null
+          total_weight_kg?: number | null
+          trip_completed_at?: string | null
+          trip_started_at?: string | null
+          updated_at?: string
+          vehicle_id?: string | null
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          approved_expenses_total?: number | null
+          audited_km?: number | null
+          closed_at?: string | null
+          closed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          dispatch_trip_id?: string
+          documents_count?: number | null
+          driver_id?: string | null
+          estimated_km?: number | null
+          expenses_total?: number | null
+          final_amount?: number | null
+          id?: string
+          invoice_balance?: number | null
+          km_review_notes?: string | null
+          km_review_status?: string | null
+          loads_count?: number | null
+          manual_adjustments_total?: number | null
+          operational_balance?: number | null
+          paid_at?: string | null
+          paid_by?: string | null
+          pending_expenses_total?: number | null
+          rejected_expenses_total?: number | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          route_destination?: string | null
+          route_name?: string | null
+          route_origin?: string | null
+          snapshot_json?: Json
+          status?: string
+          stops_count?: number | null
+          tenant_id?: string
+          total_freight_value?: number | null
+          total_invoice_value?: number | null
+          total_weight_kg?: number | null
+          trip_completed_at?: string | null
+          trip_started_at?: string | null
+          updated_at?: string
+          vehicle_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "driver_settlements_dispatch_trip_id_fkey"
+            columns: ["dispatch_trip_id"]
+            isOneToOne: false
+            referencedRelation: "dispatch_trips"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_settlements_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_settlements_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_settlements_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       drivers: {
         Row: {
           active: boolean
@@ -8294,6 +8512,14 @@ export type Database = {
         }
         Returns: Json
       }
+      generate_driver_settlement: {
+        Args: { _dispatch_trip_id: string; _tenant_id: string }
+        Returns: string
+      }
+      generate_pending_driver_settlements: {
+        Args: { _tenant_id: string }
+        Returns: Json
+      }
       get_active_trips_live: { Args: { _tenant_id: string }; Returns: Json }
       get_client_document_download_url: {
         Args: { _proof_id: string }
@@ -8579,6 +8805,115 @@ export type Database = {
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       stop_terminal_statuses: { Args: never; Returns: string[] }
+      update_driver_settlement_status: {
+        Args: { _new_status: string; _settlement_id: string }
+        Returns: {
+          approved_at: string | null
+          approved_by: string | null
+          approved_expenses_total: number | null
+          audited_km: number | null
+          closed_at: string | null
+          closed_by: string | null
+          created_at: string
+          created_by: string | null
+          dispatch_trip_id: string
+          documents_count: number | null
+          driver_id: string | null
+          estimated_km: number | null
+          expenses_total: number | null
+          final_amount: number | null
+          id: string
+          invoice_balance: number | null
+          km_review_notes: string | null
+          km_review_status: string | null
+          loads_count: number | null
+          manual_adjustments_total: number | null
+          operational_balance: number | null
+          paid_at: string | null
+          paid_by: string | null
+          pending_expenses_total: number | null
+          rejected_expenses_total: number | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          route_destination: string | null
+          route_name: string | null
+          route_origin: string | null
+          snapshot_json: Json
+          status: string
+          stops_count: number | null
+          tenant_id: string
+          total_freight_value: number | null
+          total_invoice_value: number | null
+          total_weight_kg: number | null
+          trip_completed_at: string | null
+          trip_started_at: string | null
+          updated_at: string
+          vehicle_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "driver_settlements"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_settlement_km_review: {
+        Args: {
+          _audited_km: number
+          _km_status: string
+          _notes: string
+          _settlement_id: string
+        }
+        Returns: {
+          approved_at: string | null
+          approved_by: string | null
+          approved_expenses_total: number | null
+          audited_km: number | null
+          closed_at: string | null
+          closed_by: string | null
+          created_at: string
+          created_by: string | null
+          dispatch_trip_id: string
+          documents_count: number | null
+          driver_id: string | null
+          estimated_km: number | null
+          expenses_total: number | null
+          final_amount: number | null
+          id: string
+          invoice_balance: number | null
+          km_review_notes: string | null
+          km_review_status: string | null
+          loads_count: number | null
+          manual_adjustments_total: number | null
+          operational_balance: number | null
+          paid_at: string | null
+          paid_by: string | null
+          pending_expenses_total: number | null
+          rejected_expenses_total: number | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          route_destination: string | null
+          route_name: string | null
+          route_origin: string | null
+          snapshot_json: Json
+          status: string
+          stops_count: number | null
+          tenant_id: string
+          total_freight_value: number | null
+          total_invoice_value: number | null
+          total_weight_kg: number | null
+          trip_completed_at: string | null
+          trip_started_at: string | null
+          updated_at: string
+          vehicle_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "driver_settlements"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       upsert_geofence: {
         Args: {
           _category: string
