@@ -11,6 +11,7 @@ import { RefreshCw, Wallet, Search, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
 import {
   useDriverSettlements, useGeneratePendingDriverSettlements,
+  useDriverSettlementFilterOptions,
   SETTLEMENT_STATUS_LABEL, DriverSettlementStatus,
 } from '@/hooks/useDriverSettlements';
 import DriverSettlementDrawer from '@/components/financial/DriverSettlementDrawer';
@@ -50,39 +51,27 @@ export default function DriverSettlements() {
   });
   const list = (data?.items ?? []) as any[];
   const totalCount = data?.total_count ?? 0;
+  const summary = data?.summary ?? null;
+  const { data: filterOpts } = useDriverSettlementFilterOptions();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const drivers = useMemo(() => {
-    const set = new Map<string, string>();
-    list.forEach((s: any) => s.driver_id && set.set(s.driver_id, s.driver_name ?? '—'));
-    return Array.from(set, ([id, name]) => ({ id, name }));
-  }, [list]);
-  const vehicles = useMemo(() => {
-    const set = new Map<string, string>();
-    list.forEach((s: any) => s.vehicle_id && set.set(s.vehicle_id, s.vehicle_plate ?? '—'));
-    return Array.from(set, ([id, plate]) => ({ id, plate }));
-  }, [list]);
+  const drivers = filterOpts?.drivers ?? [];
+  const vehicles = filterOpts?.vehicles ?? [];
 
   const filtered = list;
 
-  const kpi = useMemo(() => {
-    const byStatus = (st: DriverSettlementStatus) => list.filter((s: any) => s.status === st);
-    return {
-      pending: byStatus('pending_review').length,
-      inReview: byStatus('in_review').length,
-      approved: byStatus('approved').length,
-      paidClosed: list.filter((s: any) => s.status === 'paid' || s.status === 'closed').length,
-      totalApprovedExp: list.reduce((a: number, s: any) => a + Number(s.approved_expenses_total ?? 0), 0),
-      totalRouteResult: list.reduce((a: number, s: any) => a + Number(s.route_result ?? s.operational_balance ?? 0), 0),
-      totalPayable: list.reduce((a: number, s: any) => a + Number(s.driver_payable_amount ?? 0), 0),
-      totalPaid: list.reduce((a: number, s: any) => a + Number(s.total_paid_amount ?? 0), 0),
-      kmPending: list.filter((s: any) => s.km_review_status === 'pending').length,
-      expPending: list.filter((s: any) => Number(s.pending_expenses_total ?? 0) > 0).length,
-      needsRecalc: list.filter((s: any) => s.needs_recalculation === true).length,
-    };
-  }, [list]);
+  const kpi = {
+    pending: Number(summary?.pending_count ?? 0),
+    inReview: Number(summary?.in_review_count ?? 0),
+    needsRecalc: Number(summary?.needs_recalculation_count ?? 0),
+    kmPending: Number(summary?.km_pending_count ?? 0),
+    expPending: Number(summary?.expense_pending_count ?? 0),
+    totalPayable: Number(summary?.total_payable ?? 0),
+    totalPaid: Number(summary?.total_paid ?? 0),
+    totalRouteResult: Number(summary?.route_result_total ?? 0),
+  };
 
   const openSettlement = (id: string) => { setSelectedId(id); setDrawerOpen(true); };
 
