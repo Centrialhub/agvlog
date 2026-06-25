@@ -484,16 +484,30 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                     <Label>Observações</Label>
                     <Textarea value={payNotes} onChange={(e) => setPayNotes(e.target.value)} />
                   </div>
+                  {isOverpayment && (
+                    <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm space-y-2">
+                      <div className="flex items-center gap-2"><AlertTriangle className="h-4 w-4" /> Valor maior que o saldo restante ({fmtMoney(remaining)}).</div>
+                      <label className="flex items-center gap-2 text-xs">
+                        <input type="checkbox" checked={payAllowOver} onChange={(e) => setPayAllowOver(e.target.checked)} />
+                        Permitir sobrepagamento (requer admin/owner e justificativa)
+                      </label>
+                      {payAllowOver && (
+                        <Textarea value={payOverReason} onChange={(e) => setPayOverReason(e.target.value)} placeholder="Justificativa do sobrepagamento" />
+                      )}
+                    </div>
+                  )}
                 </div>
                 <DialogFooter>
                   <Button variant="outline" onClick={() => setPayOpen(false)}>Cancelar</Button>
-                  <Button disabled={!payAmount || !payMethod || registerPay.isPending}
+                  <Button disabled={!payAmount || !payMethod || registerPay.isPending || (isOverpayment && (!payAllowOver || !payOverReason.trim()))}
                     onClick={async () => {
                       await registerPay.mutateAsync({
                         id: s.id, amount: Number(payAmount), method: payMethod,
                         reference: payReference || null, receipt_url: payReceipt || null, notes: payNotes || null,
+                        allow_overpayment: isOverpayment ? payAllowOver : false,
+                        overpayment_reason: isOverpayment ? payOverReason : null,
                       });
-                      setPayOpen(false); setPayReference(''); setPayReceipt(''); setPayNotes('');
+                      setPayOpen(false); setPayReference(''); setPayReceipt(''); setPayNotes(''); setPayAllowOver(false); setPayOverReason('');
                     }}>Registrar</Button>
                 </DialogFooter>
               </DialogContent>
