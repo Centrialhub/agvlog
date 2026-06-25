@@ -14,7 +14,7 @@ import { format } from 'date-fns';
 import {
   useDriverSettlement, useRegenerateDriverSettlement, useUpdateDriverSettlementStatus,
   useUpdateSettlementKmReview, useAddSettlementAdjustment, useRemoveSettlementAdjustment,
-  useRegisterSettlementPayment,
+  useRegisterSettlementPayment, useSettleZeroDriverSettlement,
   SETTLEMENT_STATUS_LABEL, isLocked, DriverSettlementStatus,
 } from '@/hooks/useDriverSettlements';
 import {
@@ -36,6 +36,7 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
   const addAdj = useAddSettlementAdjustment();
   const removeAdj = useRemoveSettlementAdjustment();
   const registerPay = useRegisterSettlementPayment();
+  const settleZero = useSettleZeroDriverSettlement();
 
   const s = data?.settlement;
   const items = data?.items ?? [];
@@ -82,6 +83,8 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
   const remaining = Math.max(0, Number(s?.driver_payable_amount ?? 0) - Number(s?.total_paid_amount ?? 0));
   const [payAmount, setPayAmount] = useState('');
   const [payMethod, setPayMethod] = useState('pix');
+  const [payAccount, setPayAccount] = useState<string>('caixa');
+  const [payAccountOther, setPayAccountOther] = useState('');
   const [payReference, setPayReference] = useState('');
   const [payReceipt, setPayReceipt] = useState('');
   const [payNotes, setPayNotes] = useState('');
@@ -94,6 +97,18 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
   // Approve with exception dialog
   const [approveOpen, setApproveOpen] = useState(false);
   const [exceptionReason, setExceptionReason] = useState('');
+
+  // Settle without payment (zero-balance) dialog
+  const [zeroOpen, setZeroOpen] = useState(false);
+  const [zeroReason, setZeroReason] = useState('');
+
+  // Close approved without full payment dialog
+  const [closeOpen, setCloseOpen] = useState(false);
+  const [closeReason, setCloseReason] = useState('');
+
+  const payableZero = Number(s?.driver_payable_amount ?? 0) === 0;
+  const balanceZero = Number(s?.payment_balance ?? remaining) === 0;
+  const canSettleZero = s?.status === 'approved' && (payableZero || balanceZero);
 
   const allowedTransitions = (st: DriverSettlementStatus): DriverSettlementStatus[] => {
     switch (st) {
@@ -171,9 +186,16 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
               {allowedTransitions(s.status as DriverSettlementStatus).map((next) => {
                 if (next === 'paid') {
                   return (
-                    <Button key={next} size="sm" onClick={() => setPayOpen(true)} disabled={updateStatus.isPending}>
-                      Registrar pagamento
-                    </Button>
+                    <div key={next} className="flex gap-1">
+                      <Button size="sm" onClick={() => setPayOpen(true)} disabled={updateStatus.isPending}>
+                        Registrar pagamento
+                      </Button>
+                      {canSettleZero && (
+                        <Button size="sm" variant="outline" onClick={() => setZeroOpen(true)} disabled={settleZero.isPending}>
+                          Quitar sem pagamento
+                        </Button>
+                      )}
+                    </div>
                   );
                 }
                 if (next === 'approved') {
@@ -186,6 +208,13 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                         Aprovar c/ exceção
                       </Button>
                     </div>
+                  );
+                }
+                if (next === 'closed' && s.status === 'approved') {
+                  return (
+                    <Button key={next} size="sm" variant="outline" onClick={() => setCloseOpen(true)} disabled={updateStatus.isPending}>
+                      Fechar
+                    </Button>
                   );
                 }
                 return (
@@ -395,19 +424,20 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                 </div>
                 <div className="rounded-md border">
                   <Table>
-                    <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Método</TableHead><TableHead>Referência</TableHead><TableHead className="text-right">Valor</TableHead><TableHead>Notas</TableHead><TableHead>Comprovante</TableHead></TableRow></TableHeader>
+                    <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Método</TableHead><TableHead>Conta/origem</TableHead><TableHead>Referência</TableHead><TableHead className="text-right">Valor</TableHead><TableHead>Notas</TableHead><TableHead>Comprovante</TableHead></TableRow></TableHeader>
                     <TableBody>
                       {payments.map((p: any) => (
                         <TableRow key={p.id}>
                           <TableCell>{fmtDate(p.paid_at)}</TableCell>
                           <TableCell>{p.payment_method ?? '—'}</TableCell>
+                          <TableCell className="text-xs">{p.payment_account ?? '—'}</TableCell>
                           <TableCell>{p.payment_reference ?? '—'}</TableCell>
                           <TableCell className="text-right">{fmtMoney(Number(p.amount))}</TableCell>
                           <TableCell className="text-xs text-muted-foreground">{p.notes ?? '—'}</TableCell>
                           <TableCell>{p.receipt_url ? <a className="text-primary text-xs" href={p.receipt_url} target="_blank" rel="noreferrer">abrir</a> : '—'}</TableCell>
                         </TableRow>
                       ))}
-                      {payments.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground">Nenhum pagamento registrado</TableCell></TableRow>}
+                      {payments.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">Nenhum pagamento registrado</TableCell></TableRow>}
                     </TableBody>
                   </Table>
                 </div>
@@ -473,6 +503,23 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                     </Select>
                   </div>
                   <div>
+                    <Label>Conta/origem do pagamento</Label>
+                    <Select value={payAccount} onValueChange={setPayAccount}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="caixa">Caixa</SelectItem>
+                        <SelectItem value="banco">Banco</SelectItem>
+                        <SelectItem value="pix">Pix</SelectItem>
+                        <SelectItem value="conta_operacional">Conta operacional</SelectItem>
+                        <SelectItem value="cartao_empresa">Cartão empresa</SelectItem>
+                        <SelectItem value="other">Outro</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {payAccount === 'other' && (
+                      <Input className="mt-2" value={payAccountOther} onChange={(e) => setPayAccountOther(e.target.value)} placeholder="Informe a conta/origem" />
+                    )}
+                  </div>
+                  <div>
                     <Label>Referência / comprovante</Label>
                     <Input value={payReference} onChange={(e) => setPayReference(e.target.value)} placeholder="ID da transação" />
                   </div>
@@ -501,14 +548,60 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                   <Button variant="outline" onClick={() => setPayOpen(false)}>Cancelar</Button>
                   <Button disabled={!payAmount || !payMethod || registerPay.isPending || (isOverpayment && (!payAllowOver || !payOverReason.trim()))}
                     onClick={async () => {
+                      const accountValue = payAccount === 'other' ? (payAccountOther.trim() || null) : payAccount;
                       await registerPay.mutateAsync({
                         id: s.id, amount: Number(payAmount), method: payMethod,
+                        account: accountValue,
                         reference: payReference || null, receipt_url: payReceipt || null, notes: payNotes || null,
                         allow_overpayment: isOverpayment ? payAllowOver : false,
                         overpayment_reason: isOverpayment ? payOverReason : null,
                       });
-                      setPayOpen(false); setPayReference(''); setPayReceipt(''); setPayNotes(''); setPayAllowOver(false); setPayOverReason('');
+                      setPayOpen(false); setPayReference(''); setPayReceipt(''); setPayNotes(''); setPayAllowOver(false); setPayOverReason(''); setPayAccountOther('');
                     }}>Registrar</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* Settle without payment (zero balance) */}
+            <Dialog open={zeroOpen} onOpenChange={setZeroOpen}>
+              <DialogContent>
+                <DialogHeader><DialogTitle>Quitar sem pagamento</DialogTitle></DialogHeader>
+                <p className="text-sm text-muted-foreground">
+                  Este acerto não possui saldo a pagar. Use esta ação apenas quando não há transferência financeira a ser feita ao motorista. A operação ficará registrada no histórico.
+                </p>
+                <div>
+                  <Label>Motivo *</Label>
+                  <Textarea value={zeroReason} onChange={(e) => setZeroReason(e.target.value)} placeholder="Ex.: acerto sem saldo a pagar, todas as despesas via cartão empresa" />
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setZeroOpen(false)}>Cancelar</Button>
+                  <Button disabled={!zeroReason.trim() || settleZero.isPending}
+                    onClick={async () => {
+                      await settleZero.mutateAsync({ id: s.id, reason: zeroReason.trim() });
+                      setZeroOpen(false); setZeroReason('');
+                    }}>Quitar</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* Close approved without full payment */}
+            <Dialog open={closeOpen} onOpenChange={setCloseOpen}>
+              <DialogContent>
+                <DialogHeader><DialogTitle>Fechar acerto sem pagamento</DialogTitle></DialogHeader>
+                <p className="text-sm text-muted-foreground">
+                  Este acerto ainda não foi marcado como pago. Fechar sem pagamento deve ser usado apenas para cancelamento, baixa administrativa ou exceção operacional. Informe o motivo.
+                </p>
+                <div>
+                  <Label>Motivo *</Label>
+                  <Textarea value={closeReason} onChange={(e) => setCloseReason(e.target.value)} placeholder="Justificativa do fechamento excepcional" />
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setCloseOpen(false)}>Cancelar</Button>
+                  <Button disabled={!closeReason.trim() || updateStatus.isPending}
+                    onClick={async () => {
+                      await updateStatus.mutateAsync({ id: s.id, status: 'closed', reason: closeReason.trim() });
+                      setCloseOpen(false); setCloseReason('');
+                    }}>Fechar</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>

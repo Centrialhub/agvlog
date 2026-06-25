@@ -325,6 +325,25 @@ export function useRegisterSettlementPayment() {
   });
 }
 
+export function useSettleZeroDriverSettlement() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (p: { id: string; reason: string }) => {
+      const { data, error } = await supabase.rpc('settle_zero_driver_settlement' as any, {
+        _settlement_id: p.id, _reason: p.reason,
+      });
+      if (error) throw error;
+      return data as any;
+    },
+    onSuccess: () => {
+      toast({ title: 'Acerto quitado sem pagamento' });
+      qc.invalidateQueries({ queryKey: ['driver_settlements'] });
+      qc.invalidateQueries({ queryKey: ['driver_settlement'] });
+    },
+    onError: (e: any) => toast({ title: 'Falha ao quitar acerto', description: e.message, variant: 'destructive' }),
+  });
+}
+
 export const SETTLEMENT_STATUS_LABEL: Record<DriverSettlementStatus, string> = {
   pending_review: 'Pendente',
   in_review: 'Em conferência',
