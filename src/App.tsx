@@ -53,6 +53,7 @@ const PortalOccurrences = lazy(() => import("@/pages/portal/PortalOccurrences"))
 const RoutePlanning = lazy(() => import("@/pages/RoutePlanning"));
 const Receivables = lazy(() => import("@/pages/Receivables"));
 const Financial = lazy(() => import("@/pages/Financial"));
+const DriverSettlements = lazy(() => import("@/pages/DriverSettlements"));
 const OperationalRoutesPage = lazy(() => import("@/pages/OperationalRoutesPage"));
 const Employees = lazy(() => import("@/pages/Employees"));
 const Incidents = lazy(() => import("@/pages/Incidents"));
@@ -248,6 +249,7 @@ const App = () => (
             <Route path="/route-planning" element={<ProtectedRoute><RoutePlanning /></ProtectedRoute>} />
             <Route path="/receivables" element={<ProtectedRoute><Receivables /></ProtectedRoute>} />
             <Route path="/financial" element={<ProtectedRoute><Financial /></ProtectedRoute>} />
+            <Route path="/driver-settlements" element={<ProtectedRoute><DriverSettlements /></ProtectedRoute>} />
             <Route path="/operational-routes" element={<ProtectedRoute><OperationalRoutesPage /></ProtectedRoute>} />
             <Route path="/employees" element={<ProtectedRoute><Employees /></ProtectedRoute>} />
             <Route path="/incidents" element={<ProtectedRoute><Incidents /></ProtectedRoute>} />
