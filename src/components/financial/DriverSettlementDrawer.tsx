@@ -93,6 +93,9 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
   const [payOverReason, setPayOverReason] = useState('');
   const payNumeric = Number(payAmount || 0);
   const isOverpayment = payNumeric > 0 && payNumeric > remaining;
+  const isOtherAccount = payAccount === 'other';
+  const otherAccountFilled = payAccountOther.trim().length > 0;
+  const accountInvalid = isOtherAccount && !otherAccountFilled;
 
   // Approve with exception dialog
   const [approveOpen, setApproveOpen] = useState(false);
@@ -454,7 +457,17 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                           <TableCell><Badge variant="outline" className="text-[10px]">{ev.event_type}</Badge></TableCell>
                           <TableCell>{ev.from_status ?? '—'}</TableCell>
                           <TableCell>{ev.to_status ?? '—'}</TableCell>
-                          <TableCell className="text-xs text-muted-foreground">{ev.reason ?? '—'}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {ev.event_type === 'payment_registered' && ev.payload ? (
+                              <div className="space-y-0.5">
+                                {ev.payload.payment_account && <div>Conta/origem: <span className="font-medium">{ev.payload.payment_account}</span></div>}
+                                {ev.payload.amount != null && <div>Valor: {fmtMoney(Number(ev.payload.amount))}</div>}
+                                {ev.payload.payment_method && <div>Método: {ev.payload.payment_method}</div>}
+                                {ev.payload.payment_reference && <div>Ref.: {ev.payload.payment_reference}</div>}
+                                {ev.reason && <div className="text-muted-foreground">Obs.: {ev.reason}</div>}
+                              </div>
+                            ) : (ev.reason ?? '—')}
+                          </TableCell>
                         </TableRow>
                       ))}
                       {events.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">Sem eventos</TableCell></TableRow>}
@@ -515,8 +528,18 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                         <SelectItem value="other">Outro</SelectItem>
                       </SelectContent>
                     </Select>
-                    {payAccount === 'other' && (
-                      <Input className="mt-2" value={payAccountOther} onChange={(e) => setPayAccountOther(e.target.value)} placeholder="Informe a conta/origem" />
+                    {isOtherAccount && (
+                      <div className="mt-2 space-y-1">
+                        <Label className="text-xs">Descreva a conta/origem *</Label>
+                        <Input
+                          value={payAccountOther}
+                          onChange={(e) => setPayAccountOther(e.target.value)}
+                          placeholder="Ex.: Banco Sicoob Eventos, Caixa físico filial 2"
+                        />
+                        {!otherAccountFilled && (
+                          <p className="text-xs text-destructive">Informe a conta/origem do pagamento.</p>
+                        )}
+                      </div>
                     )}
                   </div>
                   <div>
@@ -546,9 +569,15 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                 </div>
                 <DialogFooter>
                   <Button variant="outline" onClick={() => setPayOpen(false)}>Cancelar</Button>
-                  <Button disabled={!payAmount || !payMethod || registerPay.isPending || (isOverpayment && (!payAllowOver || !payOverReason.trim()))}
+                  <Button disabled={!payAmount || !payMethod || accountInvalid || registerPay.isPending || (isOverpayment && (!payAllowOver || !payOverReason.trim()))}
                     onClick={async () => {
-                      const accountValue = payAccount === 'other' ? (payAccountOther.trim() || null) : payAccount;
+                      const accountLabelMap: Record<string, string> = {
+                        caixa: 'Caixa', banco: 'Banco', pix: 'Pix',
+                        conta_operacional: 'Conta operacional', cartao_empresa: 'Cartão empresa',
+                      };
+                      const accountValue = isOtherAccount
+                        ? payAccountOther.trim()
+                        : (accountLabelMap[payAccount] ?? payAccount);
                       await registerPay.mutateAsync({
                         id: s.id, amount: Number(payAmount), method: payMethod,
                         account: accountValue,
