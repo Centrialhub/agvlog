@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -9,12 +9,17 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AlertCircle, RefreshCw, FileText } from 'lucide-react';
+import { AlertCircle, RefreshCw, FileText, Plus, Trash2, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
 import {
   useDriverSettlement, useRegenerateDriverSettlement, useUpdateDriverSettlementStatus,
-  useUpdateSettlementKmReview, SETTLEMENT_STATUS_LABEL, isLocked, DriverSettlementStatus,
+  useUpdateSettlementKmReview, useAddSettlementAdjustment, useRemoveSettlementAdjustment,
+  useRegisterSettlementPayment,
+  SETTLEMENT_STATUS_LABEL, isLocked, DriverSettlementStatus,
 } from '@/hooks/useDriverSettlements';
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
+} from '@/components/ui/dialog';
 
 const fmtMoney = (v: number | null | undefined) =>
   (v ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -28,9 +33,14 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
   const regen = useRegenerateDriverSettlement();
   const updateStatus = useUpdateDriverSettlementStatus();
   const updateKm = useUpdateSettlementKmReview();
+  const addAdj = useAddSettlementAdjustment();
+  const removeAdj = useRemoveSettlementAdjustment();
+  const registerPay = useRegisterSettlementPayment();
 
   const s = data?.settlement;
   const items = data?.items ?? [];
+  const events = data?.events ?? [];
+  const payments = data?.payments ?? [];
 
   const [auditedKm, setAuditedKm] = useState<string>('');
   const [kmStatus, setKmStatus] = useState<'pending' | 'reviewed' | 'disputed'>('pending');
@@ -47,9 +57,39 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
   const loadItems = items.filter((i: any) => i.item_type === 'load');
   const docItems = items.filter((i: any) => i.item_type === 'fiscal_document');
   const expItems = items.filter((i: any) => i.item_type === 'expense');
+  const adjItems = items.filter((i: any) => i.item_type === 'adjustment');
   const hasPendingExpenses = (s?.pending_expenses_total ?? 0) > 0;
   const noFreight = (s?.total_freight_value ?? 0) === 0;
   const locked = s ? isLocked(s.status as DriverSettlementStatus) : false;
+  const needsRecalc = !!s?.needs_recalculation;
+
+  const kmDiff = useMemo(() => {
+    if (!s?.estimated_km || s.audited_km == null) return null;
+    const abs = Number(s.audited_km) - Number(s.estimated_km);
+    const pct = (abs / Number(s.estimated_km)) * 100;
+    return { abs, pct };
+  }, [s?.estimated_km, s?.audited_km]);
+
+  // Adjustment dialog
+  const [adjOpen, setAdjOpen] = useState(false);
+  const [adjNature, setAdjNature] = useState<'credit' | 'debit'>('credit');
+  const [adjAmount, setAdjAmount] = useState('');
+  const [adjDesc, setAdjDesc] = useState('');
+  const [adjReason, setAdjReason] = useState('');
+
+  // Payment dialog
+  const [payOpen, setPayOpen] = useState(false);
+  const remaining = Math.max(0, Number(s?.driver_payable_amount ?? 0) - Number(s?.total_paid_amount ?? 0));
+  const [payAmount, setPayAmount] = useState('');
+  const [payMethod, setPayMethod] = useState('pix');
+  const [payReference, setPayReference] = useState('');
+  const [payReceipt, setPayReceipt] = useState('');
+  const [payNotes, setPayNotes] = useState('');
+  useEffect(() => { if (payOpen) setPayAmount(remaining > 0 ? String(remaining.toFixed(2)) : ''); }, [payOpen, remaining]);
+
+  // Approve with exception dialog
+  const [approveOpen, setApproveOpen] = useState(false);
+  const [exceptionReason, setExceptionReason] = useState('');
 
   const allowedTransitions = (st: DriverSettlementStatus): DriverSettlementStatus[] => {
     switch (st) {
@@ -70,6 +110,8 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
           <SheetTitle className="flex items-center gap-2">
             Acerto do Motorista
             {s && <Badge variant="outline">{SETTLEMENT_STATUS_LABEL[s.status as DriverSettlementStatus]}</Badge>}
+            {s?.approved_with_exception && <Badge variant="outline" className="text-[10px]">Aprovado c/ exceção</Badge>}
+            {needsRecalc && <Badge variant="destructive" className="text-[10px] flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Desatualizado</Badge>}
           </SheetTitle>
         </SheetHeader>
 
@@ -77,7 +119,6 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
           <div className="py-12 text-center text-muted-foreground">Carregando…</div>
         ) : (
           <div className="space-y-4 mt-4">
-            {/* Resumo */}
             <Card>
               <CardHeader className="pb-3"><CardTitle className="text-base">Resumo</CardTitle></CardHeader>
               <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
@@ -89,18 +130,28 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                 <div><div className="text-muted-foreground text-xs">KM auditado</div><div>{s.audited_km != null ? `${fmtNum(s.audited_km, 1)} km` : '—'}</div></div>
                 <div><div className="text-muted-foreground text-xs">Peso total</div><div>{fmtNum(s.total_weight_kg, 0)} kg</div></div>
                 <div><div className="text-muted-foreground text-xs">Romaneios / Notas</div><div>{s.loads_count} / {s.documents_count}</div></div>
-                <div><div className="text-muted-foreground text-xs">Valor de notas</div><div>{fmtMoney(s.total_invoice_value)}</div></div>
-                <div><div className="text-muted-foreground text-xs">Frete (CT-e)</div><div className={noFreight ? 'text-destructive' : ''}>{fmtMoney(s.total_freight_value)}</div></div>
+                <div><div className="text-muted-foreground text-xs">Valor da mercadoria</div><div>{fmtMoney(s.total_goods_value ?? s.total_invoice_value)}</div></div>
+                <div><div className="text-muted-foreground text-xs">Receita de frete</div><div className={noFreight ? 'text-destructive' : ''}>{fmtMoney(s.total_freight_revenue ?? s.total_freight_value)}</div></div>
                 <div><div className="text-muted-foreground text-xs">Despesas aprovadas</div><div>{fmtMoney(s.approved_expenses_total)}</div></div>
                 <div><div className="text-muted-foreground text-xs">Despesas pendentes</div><div>{fmtMoney(s.pending_expenses_total)}</div></div>
-                <div className="col-span-2"><div className="text-muted-foreground text-xs">Balanço (valor de notas)</div><div className="font-semibold">{fmtMoney(s.invoice_balance)}</div></div>
-                <div className="col-span-2"><div className="text-muted-foreground text-xs">Resultado operacional</div><div className="font-semibold">{fmtMoney(s.operational_balance)}</div></div>
+                <div><div className="text-muted-foreground text-xs">Resultado da rota</div><div className="font-semibold">{fmtMoney(s.route_result ?? s.operational_balance)}</div></div>
+                <div><div className="text-muted-foreground text-xs">Créditos motorista</div><div>{fmtMoney(s.driver_credits_total)}</div></div>
+                <div><div className="text-muted-foreground text-xs">Débitos motorista</div><div>{fmtMoney(s.driver_debits_total)}</div></div>
+                <div><div className="text-muted-foreground text-xs">Reembolso (despesas)</div><div>{fmtMoney(s.driver_reimbursement_total)}</div></div>
+                <div><div className="text-muted-foreground text-xs">A pagar motorista</div><div className="font-semibold">{fmtMoney(s.driver_payable_amount)}</div></div>
+                <div><div className="text-muted-foreground text-xs">Já pago</div><div>{fmtMoney(s.total_paid_amount)}</div></div>
+                <div><div className="text-muted-foreground text-xs">Saldo restante</div><div className="font-semibold">{fmtMoney(s.payment_balance ?? remaining)}</div></div>
               </CardContent>
             </Card>
 
+            {needsRecalc && (
+              <div className="flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
+                <AlertTriangle className="h-4 w-4" /> Acerto desatualizado{s.recalculation_reason ? `: ${s.recalculation_reason}` : ''}. Recalcule antes de aprovar.
+              </div>
+            )}
             {noFreight && (
               <div className="flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
-                <AlertCircle className="h-4 w-4" /> Frete (CT-e) ausente. O resultado operacional pode estar subestimado.
+                <AlertCircle className="h-4 w-4" /> Receita de frete (CT-e) ausente. O resultado da rota pode estar subestimado.
               </div>
             )}
             {hasPendingExpenses && (
@@ -113,11 +164,32 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
               <Button size="sm" variant="outline" onClick={() => regen.mutate(s.dispatch_trip_id)} disabled={locked || regen.isPending}>
                 <RefreshCw className="h-4 w-4 mr-1" /> Recalcular
               </Button>
-              {allowedTransitions(s.status as DriverSettlementStatus).map((next) => (
-                <Button key={next} size="sm" onClick={() => updateStatus.mutate({ id: s.id, status: next })} disabled={updateStatus.isPending}>
-                  {SETTLEMENT_STATUS_LABEL[next]}
-                </Button>
-              ))}
+              {allowedTransitions(s.status as DriverSettlementStatus).map((next) => {
+                if (next === 'paid') {
+                  return (
+                    <Button key={next} size="sm" onClick={() => setPayOpen(true)} disabled={updateStatus.isPending}>
+                      Registrar pagamento
+                    </Button>
+                  );
+                }
+                if (next === 'approved') {
+                  return (
+                    <div key={next} className="flex gap-1">
+                      <Button size="sm" onClick={() => updateStatus.mutate({ id: s.id, status: next })} disabled={updateStatus.isPending}>
+                        Aprovar
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => setApproveOpen(true)}>
+                        Aprovar c/ exceção
+                      </Button>
+                    </div>
+                  );
+                }
+                return (
+                  <Button key={next} size="sm" onClick={() => updateStatus.mutate({ id: s.id, status: next })} disabled={updateStatus.isPending}>
+                    {SETTLEMENT_STATUS_LABEL[next]}
+                  </Button>
+                );
+              })}
             </div>
 
             <Tabs defaultValue="loads">
@@ -125,7 +197,10 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                 <TabsTrigger value="loads">Romaneios ({loadItems.length})</TabsTrigger>
                 <TabsTrigger value="docs">Notas ({docItems.length})</TabsTrigger>
                 <TabsTrigger value="expenses">Despesas ({expItems.length})</TabsTrigger>
-                <TabsTrigger value="km">Conferência de KM</TabsTrigger>
+                <TabsTrigger value="km">KM</TabsTrigger>
+                <TabsTrigger value="adjustments">Ajustes ({adjItems.length})</TabsTrigger>
+                <TabsTrigger value="payments">Pagamentos ({payments.length})</TabsTrigger>
+                <TabsTrigger value="history">Histórico ({events.length})</TabsTrigger>
               </TabsList>
 
               <TabsContent value="loads">
@@ -151,11 +226,12 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
               <TabsContent value="docs">
                 <div className="rounded-md border">
                   <Table>
-                    <TableHeader><TableRow><TableHead>NF</TableHead><TableHead>Destinatário</TableHead><TableHead>Cidade/UF</TableHead><TableHead>Valor</TableHead><TableHead>Peso</TableHead><TableHead>Frete</TableHead></TableRow></TableHeader>
+                    <TableHeader><TableRow><TableHead>Doc</TableHead><TableHead>Tipo</TableHead><TableHead>Destinatário</TableHead><TableHead>Cidade/UF</TableHead><TableHead>Valor</TableHead><TableHead>Peso</TableHead><TableHead>Frete</TableHead></TableRow></TableHeader>
                     <TableBody>
                       {docItems.map((i: any) => (
                         <TableRow key={i.id}>
                           <TableCell>{i.description}</TableCell>
+                          <TableCell><Badge variant="outline" className="text-[10px] uppercase">{i.metadata?.document_type ?? 'nfe'}</Badge></TableCell>
                           <TableCell>{i.metadata?.recipient ?? '—'}</TableCell>
                           <TableCell>{[i.metadata?.recipient_city, i.metadata?.recipient_state].filter(Boolean).join('/') || '—'}</TableCell>
                           <TableCell>{fmtMoney(Number(i.amount))}</TableCell>
@@ -163,7 +239,7 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                           <TableCell>{fmtMoney(Number(i.metadata?.freight_value ?? 0))}</TableCell>
                         </TableRow>
                       ))}
-                      {docItems.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground">Sem documentos</TableCell></TableRow>}
+                      {docItems.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">Sem documentos</TableCell></TableRow>}
                     </TableBody>
                   </Table>
                 </div>
@@ -190,6 +266,11 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
               </TabsContent>
 
               <TabsContent value="km" className="space-y-3">
+                {kmDiff && Math.abs(kmDiff.pct) > 10 && (
+                  <div className="flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+                    <AlertTriangle className="h-4 w-4" /> Diferença relevante entre KM estimado e auditado ({kmDiff.abs > 0 ? '+' : ''}{fmtNum(kmDiff.abs, 1)} km · {fmtNum(kmDiff.pct, 1)}%). Justificativa recomendada.
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label>KM estimado (mapa)</Label>
@@ -228,7 +309,189 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                   Salvar conferência de KM
                 </Button>
               </TabsContent>
+
+              <TabsContent value="adjustments" className="space-y-3">
+                <div className="flex justify-end">
+                  <Dialog open={adjOpen} onOpenChange={setAdjOpen}>
+                    <DialogTrigger asChild>
+                      <Button size="sm" disabled={locked}><Plus className="h-4 w-4 mr-1" /> Novo ajuste</Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader><DialogTitle>Adicionar ajuste manual</DialogTitle></DialogHeader>
+                      <div className="space-y-3">
+                        <div>
+                          <Label>Tipo</Label>
+                          <Select value={adjNature} onValueChange={(v: any) => setAdjNature(v)}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="credit">Crédito (aumenta valor ao motorista)</SelectItem>
+                              <SelectItem value="debit">Débito (reduz valor ao motorista)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label>Valor</Label>
+                          <Input type="number" step="0.01" min="0" value={adjAmount} onChange={(e) => setAdjAmount(e.target.value)} />
+                        </div>
+                        <div>
+                          <Label>Descrição</Label>
+                          <Input value={adjDesc} onChange={(e) => setAdjDesc(e.target.value)} placeholder="Ex.: adiantamento, diária, pedágio sem comprovante" />
+                        </div>
+                        <div>
+                          <Label>Motivo *</Label>
+                          <Textarea value={adjReason} onChange={(e) => setAdjReason(e.target.value)} />
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button variant="outline" onClick={() => setAdjOpen(false)}>Cancelar</Button>
+                        <Button
+                          disabled={!adjAmount || !adjReason || addAdj.isPending}
+                          onClick={async () => {
+                            await addAdj.mutateAsync({ id: s.id, nature: adjNature, amount: Number(adjAmount), description: adjDesc, reason: adjReason });
+                            setAdjOpen(false); setAdjAmount(''); setAdjDesc(''); setAdjReason('');
+                          }}
+                        >Salvar</Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader><TableRow><TableHead>Tipo</TableHead><TableHead>Descrição</TableHead><TableHead>Motivo</TableHead><TableHead className="text-right">Valor</TableHead><TableHead>Data</TableHead><TableHead></TableHead></TableRow></TableHeader>
+                    <TableBody>
+                      {adjItems.map((i: any) => (
+                        <TableRow key={i.id}>
+                          <TableCell><Badge variant={i.nature === 'credit' ? 'default' : 'destructive'}>{i.nature === 'credit' ? 'Crédito' : 'Débito'}</Badge></TableCell>
+                          <TableCell>{i.description ?? '—'}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{i.metadata?.reason ?? '—'}</TableCell>
+                          <TableCell className="text-right">{fmtMoney(Number(i.amount))}</TableCell>
+                          <TableCell>{fmtDate(i.created_at)}</TableCell>
+                          <TableCell>
+                            <Button size="icon" variant="ghost" disabled={locked || removeAdj.isPending}
+                              onClick={() => {
+                                const reason = window.prompt('Motivo da remoção:');
+                                if (reason) removeAdj.mutate({ settlement_id: s.id, item_id: i.id, reason });
+                              }}><Trash2 className="h-4 w-4" /></Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {adjItems.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground">Sem ajustes manuais</TableCell></TableRow>}
+                    </TableBody>
+                  </Table>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="payments" className="space-y-3">
+                <div className="grid grid-cols-3 gap-3 text-sm">
+                  <div><div className="text-muted-foreground text-xs">A pagar</div><div className="font-semibold">{fmtMoney(s.driver_payable_amount)}</div></div>
+                  <div><div className="text-muted-foreground text-xs">Pago</div><div className="font-semibold">{fmtMoney(s.total_paid_amount)}</div></div>
+                  <div><div className="text-muted-foreground text-xs">Saldo</div><div className="font-semibold">{fmtMoney(s.payment_balance ?? remaining)}</div></div>
+                </div>
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Método</TableHead><TableHead>Referência</TableHead><TableHead className="text-right">Valor</TableHead><TableHead>Notas</TableHead><TableHead>Comprovante</TableHead></TableRow></TableHeader>
+                    <TableBody>
+                      {payments.map((p: any) => (
+                        <TableRow key={p.id}>
+                          <TableCell>{fmtDate(p.paid_at)}</TableCell>
+                          <TableCell>{p.payment_method ?? '—'}</TableCell>
+                          <TableCell>{p.payment_reference ?? '—'}</TableCell>
+                          <TableCell className="text-right">{fmtMoney(Number(p.amount))}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{p.notes ?? '—'}</TableCell>
+                          <TableCell>{p.receipt_url ? <a className="text-primary text-xs" href={p.receipt_url} target="_blank" rel="noreferrer">abrir</a> : '—'}</TableCell>
+                        </TableRow>
+                      ))}
+                      {payments.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground">Nenhum pagamento registrado</TableCell></TableRow>}
+                    </TableBody>
+                  </Table>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="history">
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Evento</TableHead><TableHead>De</TableHead><TableHead>Para</TableHead><TableHead>Motivo</TableHead></TableRow></TableHeader>
+                    <TableBody>
+                      {events.map((ev: any) => (
+                        <TableRow key={ev.id}>
+                          <TableCell>{fmtDate(ev.created_at)}</TableCell>
+                          <TableCell><Badge variant="outline" className="text-[10px]">{ev.event_type}</Badge></TableCell>
+                          <TableCell>{ev.from_status ?? '—'}</TableCell>
+                          <TableCell>{ev.to_status ?? '—'}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{ev.reason ?? '—'}</TableCell>
+                        </TableRow>
+                      ))}
+                      {events.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">Sem eventos</TableCell></TableRow>}
+                    </TableBody>
+                  </Table>
+                </div>
+              </TabsContent>
             </Tabs>
+
+            {/* Approve with exception */}
+            <Dialog open={approveOpen} onOpenChange={setApproveOpen}>
+              <DialogContent>
+                <DialogHeader><DialogTitle>Aprovar com exceção</DialogTitle></DialogHeader>
+                <p className="text-sm text-muted-foreground">Informe a justificativa para aprovar mesmo com pendências. Requer perfil admin/owner.</p>
+                <Textarea value={exceptionReason} onChange={(e) => setExceptionReason(e.target.value)} placeholder="Motivo da aprovação com exceção" />
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setApproveOpen(false)}>Cancelar</Button>
+                  <Button disabled={!exceptionReason || updateStatus.isPending}
+                    onClick={async () => {
+                      await updateStatus.mutateAsync({ id: s.id, status: 'approved', reason: exceptionReason, allow_exceptions: true });
+                      setApproveOpen(false); setExceptionReason('');
+                    }}>Aprovar</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* Register payment */}
+            <Dialog open={payOpen} onOpenChange={setPayOpen}>
+              <DialogContent>
+                <DialogHeader><DialogTitle>Registrar pagamento</DialogTitle></DialogHeader>
+                <div className="space-y-3">
+                  <div>
+                    <Label>Valor pago * (saldo {fmtMoney(remaining)})</Label>
+                    <Input type="number" step="0.01" min="0" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label>Método *</Label>
+                    <Select value={payMethod} onValueChange={setPayMethod}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pix">PIX</SelectItem>
+                        <SelectItem value="ted">TED</SelectItem>
+                        <SelectItem value="cash">Dinheiro</SelectItem>
+                        <SelectItem value="other">Outro</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Referência / comprovante</Label>
+                    <Input value={payReference} onChange={(e) => setPayReference(e.target.value)} placeholder="ID da transação" />
+                  </div>
+                  <div>
+                    <Label>URL do comprovante</Label>
+                    <Input value={payReceipt} onChange={(e) => setPayReceipt(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label>Observações</Label>
+                    <Textarea value={payNotes} onChange={(e) => setPayNotes(e.target.value)} />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setPayOpen(false)}>Cancelar</Button>
+                  <Button disabled={!payAmount || !payMethod || registerPay.isPending}
+                    onClick={async () => {
+                      await registerPay.mutateAsync({
+                        id: s.id, amount: Number(payAmount), method: payMethod,
+                        reference: payReference || null, receipt_url: payReceipt || null, notes: payNotes || null,
+                      });
+                      setPayOpen(false); setPayReference(''); setPayReceipt(''); setPayNotes('');
+                    }}>Registrar</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         )}
       </SheetContent>
