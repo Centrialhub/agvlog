@@ -86,6 +86,10 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
   const [payReceipt, setPayReceipt] = useState('');
   const [payNotes, setPayNotes] = useState('');
   useEffect(() => { if (payOpen) setPayAmount(remaining > 0 ? String(remaining.toFixed(2)) : ''); }, [payOpen, remaining]);
+  const [payAllowOver, setPayAllowOver] = useState(false);
+  const [payOverReason, setPayOverReason] = useState('');
+  const payNumeric = Number(payAmount || 0);
+  const isOverpayment = payNumeric > 0 && payNumeric > remaining;
 
   // Approve with exception dialog
   const [approveOpen, setApproveOpen] = useState(false);
@@ -249,6 +253,7 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                 <div className="rounded-md border">
                   <Table>
                     <TableHeader><TableRow><TableHead>Categoria</TableHead><TableHead>Valor</TableHead><TableHead>Data</TableHead><TableHead>Status</TableHead><TableHead>Comprovante</TableHead></TableRow></TableHeader>
+                      <TableHeader><TableRow><TableHead>Categoria</TableHead><TableHead>Valor</TableHead><TableHead>Data</TableHead><TableHead>Status</TableHead><TableHead>Reembolso</TableHead><TableHead>Fonte</TableHead><TableHead>Comprovante</TableHead></TableRow></TableHeader>
                     <TableBody>
                       {expItems.map((i: any) => (
                         <TableRow key={i.id}>
