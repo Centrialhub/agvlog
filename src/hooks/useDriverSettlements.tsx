@@ -62,7 +62,7 @@ export function useDriverSettlements() {
       if (!currentTenant) return [];
       const { data, error } = await supabase
         .from('driver_settlements' as any)
-        .select('*, drivers(name), vehicles(license_plate)')
+        .select('*, drivers(name), vehicles(plate)')
         .eq('tenant_id', currentTenant.id)
         .order('trip_completed_at', { ascending: false, nullsFirst: false })
         .limit(500);
@@ -70,7 +70,7 @@ export function useDriverSettlements() {
       return (data as any[]).map((s) => ({
         ...s,
         driver_name: s.drivers?.name ?? null,
-        vehicle_plate: s.vehicles?.license_plate ?? null,
+        vehicle_plate: s.vehicles?.plate ?? null,
       })) as any;
     },
   });
@@ -83,7 +83,7 @@ export function useDriverSettlement(id: string | null) {
     queryFn: async () => {
       if (!id) return null;
       const [{ data: settlement, error: e1 }, { data: items, error: e2 }] = await Promise.all([
-        supabase.from('driver_settlements' as any).select('*, drivers(name, cpf), vehicles(license_plate, brand, model)').eq('id', id).maybeSingle(),
+        supabase.from('driver_settlements' as any).select('*, drivers(name, cpf), vehicles(plate, brand, model)').eq('id', id).maybeSingle(),
         supabase.from('driver_settlement_items' as any).select('*').eq('settlement_id', id).order('item_type'),
       ]);
       if (e1) throw e1;
