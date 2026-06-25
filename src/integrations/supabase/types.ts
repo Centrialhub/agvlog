@@ -1577,7 +1577,9 @@ export type Database = {
           expense_at: string
           id: string
           notes: string | null
+          payment_source: string
           receipt_url: string | null
+          reimbursable: boolean
           tenant_id: string
           updated_at: string
         }
@@ -1593,7 +1595,9 @@ export type Database = {
           expense_at?: string
           id?: string
           notes?: string | null
+          payment_source?: string
           receipt_url?: string | null
+          reimbursable?: boolean
           tenant_id: string
           updated_at?: string
         }
@@ -1609,7 +1613,9 @@ export type Database = {
           expense_at?: string
           id?: string
           notes?: string | null
+          payment_source?: string
           receipt_url?: string | null
+          reimbursable?: boolean
           tenant_id?: string
           updated_at?: string
         }
@@ -8893,6 +8899,10 @@ export type Database = {
           validated_at: string
         }[]
       }
+      list_driver_settlement_filter_options: {
+        Args: { _tenant_id: string }
+        Returns: Json
+      }
       list_driver_settlements: {
         Args: {
           _date_from?: string
@@ -8979,8 +8989,10 @@ export type Database = {
       }
       register_driver_settlement_payment: {
         Args: {
+          _allow_overpayment?: boolean
           _amount: number
           _notes?: string
+          _overpayment_reason?: string
           _payment_account?: string
           _payment_method?: string
           _payment_reference?: string
@@ -9107,78 +9119,6 @@ export type Database = {
           _allow_exceptions?: boolean
           _new_status: string
           _reason?: string
-          _settlement_id: string
-        }
-        Returns: {
-          approved_at: string | null
-          approved_by: string | null
-          approved_expenses_total: number | null
-          approved_with_exception: boolean
-          audited_km: number | null
-          closed_at: string | null
-          closed_by: string | null
-          created_at: string
-          created_by: string | null
-          dispatch_trip_id: string
-          documents_count: number | null
-          driver_credits_total: number
-          driver_debits_total: number
-          driver_id: string | null
-          driver_payable_amount: number
-          driver_reimbursement_total: number
-          estimated_km: number | null
-          exception_reason: string | null
-          expenses_total: number | null
-          final_amount: number | null
-          id: string
-          invoice_balance: number | null
-          km_review_notes: string | null
-          km_review_status: string | null
-          last_recalculated_at: string | null
-          loads_count: number | null
-          manual_adjustments_total: number | null
-          needs_recalculation: boolean
-          operational_balance: number | null
-          paid_at: string | null
-          paid_by: string | null
-          payment_balance: number
-          pending_expenses_total: number | null
-          recalculation_reason: string | null
-          rejected_expenses_total: number | null
-          reviewed_at: string | null
-          reviewed_by: string | null
-          route_destination: string | null
-          route_name: string | null
-          route_origin: string | null
-          route_result: number
-          snapshot_json: Json
-          source_updated_at: string | null
-          status: string
-          stops_count: number | null
-          tenant_id: string
-          total_freight_revenue: number
-          total_freight_value: number | null
-          total_goods_value: number
-          total_invoice_value: number | null
-          total_paid_amount: number
-          total_weight_kg: number | null
-          trip_completed_at: string | null
-          trip_started_at: string | null
-          updated_at: string
-          vehicle_id: string | null
-        }
-        SetofOptions: {
-          from: "*"
-          to: "driver_settlements"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      update_settlement_km_review: {
-        Args: {
-          _audited_km: number
-          _km_status: string
-          _notes: string
           _settlement_id: string
         }
         Returns: {

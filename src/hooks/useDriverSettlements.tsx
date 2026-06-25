@@ -91,7 +91,7 @@ export function useDriverSettlements(filters: ListSettlementsFilters = {}) {
     queryKey: ['driver_settlements', currentTenant?.id, filters],
     enabled: !!currentTenant,
     queryFn: async () => {
-      if (!currentTenant) return { items: [], total_count: 0, page: 1, page_size: 50 };
+      if (!currentTenant) return { items: [], total_count: 0, page: 1, page_size: 50, summary: null as any };
       const { data, error } = await supabase.rpc('list_driver_settlements' as any, {
         _tenant_id: currentTenant.id,
         _search: filters.search?.trim() || null,
@@ -114,6 +114,39 @@ export function useDriverSettlements(filters: ListSettlementsFilters = {}) {
         total_count: Number(d.total_count ?? 0),
         page: Number(d.page ?? 1),
         page_size: Number(d.page_size ?? 50),
+        summary: (d.summary ?? null) as null | {
+          total_count: number;
+          pending_count: number;
+          in_review_count: number;
+          approved_count: number;
+          paid_closed_count: number;
+          needs_recalculation_count: number;
+          km_pending_count: number;
+          expense_pending_count: number;
+          total_payable: number;
+          total_paid: number;
+          payment_balance: number;
+          route_result_total: number;
+          approved_expenses_total: number;
+        },
+      };
+    },
+  });
+}
+
+export function useDriverSettlementFilterOptions() {
+  const { currentTenant } = useTenant();
+  return useQuery({
+    queryKey: ['driver_settlement_filter_options', currentTenant?.id],
+    enabled: !!currentTenant,
+    queryFn: async () => {
+      if (!currentTenant) return { drivers: [], vehicles: [] };
+      const { data, error } = await supabase.rpc('list_driver_settlement_filter_options' as any, { _tenant_id: currentTenant.id });
+      if (error) throw error;
+      const d = (data ?? {}) as any;
+      return {
+        drivers: (d.drivers ?? []) as { id: string; name: string }[],
+        vehicles: (d.vehicles ?? []) as { id: string; plate: string }[],
       };
     },
   });
@@ -270,12 +303,15 @@ export function useRegisterSettlementPayment() {
       id: string; amount: number;
       method?: string | null; account?: string | null; reference?: string | null;
       receipt_url?: string | null; notes?: string | null;
+      allow_overpayment?: boolean; overpayment_reason?: string | null;
     }) => {
       const { data, error } = await supabase.rpc('register_driver_settlement_payment' as any, {
         _settlement_id: p.id, _amount: p.amount,
         _payment_method: p.method ?? null, _payment_account: p.account ?? null,
         _payment_reference: p.reference ?? null, _receipt_url: p.receipt_url ?? null,
         _notes: p.notes ?? null,
+        _allow_overpayment: p.allow_overpayment ?? false,
+        _overpayment_reason: p.overpayment_reason ?? null,
       });
       if (error) throw error;
       return data as string;

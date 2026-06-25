@@ -86,6 +86,10 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
   const [payReceipt, setPayReceipt] = useState('');
   const [payNotes, setPayNotes] = useState('');
   useEffect(() => { if (payOpen) setPayAmount(remaining > 0 ? String(remaining.toFixed(2)) : ''); }, [payOpen, remaining]);
+  const [payAllowOver, setPayAllowOver] = useState(false);
+  const [payOverReason, setPayOverReason] = useState('');
+  const payNumeric = Number(payAmount || 0);
+  const isOverpayment = payNumeric > 0 && payNumeric > remaining;
 
   // Approve with exception dialog
   const [approveOpen, setApproveOpen] = useState(false);
@@ -248,7 +252,7 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
               <TabsContent value="expenses">
                 <div className="rounded-md border">
                   <Table>
-                    <TableHeader><TableRow><TableHead>Categoria</TableHead><TableHead>Valor</TableHead><TableHead>Data</TableHead><TableHead>Status</TableHead><TableHead>Comprovante</TableHead></TableRow></TableHeader>
+                    <TableHeader><TableRow><TableHead>Categoria</TableHead><TableHead>Valor</TableHead><TableHead>Data</TableHead><TableHead>Status</TableHead><TableHead>Reembolso</TableHead><TableHead>Fonte</TableHead><TableHead>Comprovante</TableHead></TableRow></TableHeader>
                     <TableBody>
                       {expItems.map((i: any) => (
                         <TableRow key={i.id}>
@@ -256,10 +260,12 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                           <TableCell>{fmtMoney(Number(i.amount))}</TableCell>
                           <TableCell>{fmtDate(i.metadata?.expense_at)}</TableCell>
                           <TableCell><Badge variant={i.metadata?.approval_status === 'approved' ? 'default' : i.metadata?.approval_status === 'rejected' ? 'destructive' : 'secondary'}>{i.metadata?.approval_status ?? '—'}</Badge></TableCell>
+                          <TableCell>{i.metadata?.reimbursable === false ? <Badge variant="outline" className="text-[10px]">Não</Badge> : <Badge variant="secondary" className="text-[10px]">Sim</Badge>}</TableCell>
+                          <TableCell className="text-xs">{i.metadata?.payment_source ?? 'driver'}</TableCell>
                           <TableCell>{i.metadata?.receipt_url ? <a className="text-primary inline-flex items-center gap-1" href={i.metadata.receipt_url} target="_blank" rel="noreferrer"><FileText className="h-3 w-3" /> abrir</a> : '—'}</TableCell>
                         </TableRow>
                       ))}
-                      {expItems.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">Sem despesas</TableCell></TableRow>}
+                      {expItems.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">Sem despesas</TableCell></TableRow>}
                     </TableBody>
                   </Table>
                 </div>
@@ -478,16 +484,30 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                     <Label>Observações</Label>
                     <Textarea value={payNotes} onChange={(e) => setPayNotes(e.target.value)} />
                   </div>
+                  {isOverpayment && (
+                    <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm space-y-2">
+                      <div className="flex items-center gap-2"><AlertTriangle className="h-4 w-4" /> Valor maior que o saldo restante ({fmtMoney(remaining)}).</div>
+                      <label className="flex items-center gap-2 text-xs">
+                        <input type="checkbox" checked={payAllowOver} onChange={(e) => setPayAllowOver(e.target.checked)} />
+                        Permitir sobrepagamento (requer admin/owner e justificativa)
+                      </label>
+                      {payAllowOver && (
+                        <Textarea value={payOverReason} onChange={(e) => setPayOverReason(e.target.value)} placeholder="Justificativa do sobrepagamento" />
+                      )}
+                    </div>
+                  )}
                 </div>
                 <DialogFooter>
                   <Button variant="outline" onClick={() => setPayOpen(false)}>Cancelar</Button>
-                  <Button disabled={!payAmount || !payMethod || registerPay.isPending}
+                  <Button disabled={!payAmount || !payMethod || registerPay.isPending || (isOverpayment && (!payAllowOver || !payOverReason.trim()))}
                     onClick={async () => {
                       await registerPay.mutateAsync({
                         id: s.id, amount: Number(payAmount), method: payMethod,
                         reference: payReference || null, receipt_url: payReceipt || null, notes: payNotes || null,
+                        allow_overpayment: isOverpayment ? payAllowOver : false,
+                        overpayment_reason: isOverpayment ? payOverReason : null,
                       });
-                      setPayOpen(false); setPayReference(''); setPayReceipt(''); setPayNotes('');
+                      setPayOpen(false); setPayReference(''); setPayReceipt(''); setPayNotes(''); setPayAllowOver(false); setPayOverReason('');
                     }}>Registrar</Button>
                 </DialogFooter>
               </DialogContent>
