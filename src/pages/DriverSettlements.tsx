@@ -122,28 +122,28 @@ export default function DriverSettlements() {
                 ))}
               </SelectContent>
             </Select>
-            <Select value={driverFilter} onValueChange={setDriverFilter}>
+            <Select value={driverFilter} onValueChange={(v) => { setPage(1); setDriverFilter(v); }}>
               <SelectTrigger><SelectValue placeholder="Motorista" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos motoristas</SelectItem>
                 {drivers.map((d) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Select value={vehicleFilter} onValueChange={setVehicleFilter}>
+            <Select value={vehicleFilter} onValueChange={(v) => { setPage(1); setVehicleFilter(v); }}>
               <SelectTrigger><SelectValue placeholder="Veículo" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos veículos</SelectItem>
                 {vehicles.map((v) => <SelectItem key={v.id} value={v.id}>{v.plate}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} placeholder="De" />
-            <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} placeholder="Até" />
+            <Input type="date" value={dateFrom} onChange={(e) => { setPage(1); setDateFrom(e.target.value); }} placeholder="De" />
+            <Input type="date" value={dateTo} onChange={(e) => { setPage(1); setDateTo(e.target.value); }} placeholder="Até" />
           </div>
           <div className="flex flex-wrap gap-4 text-sm">
-            <Label className="flex items-center gap-2"><Checkbox checked={onlyKmPending} onCheckedChange={(v) => setOnlyKmPending(Boolean(v))} /> KM pendente</Label>
-            <Label className="flex items-center gap-2"><Checkbox checked={onlyExpPending} onCheckedChange={(v) => setOnlyExpPending(Boolean(v))} /> Despesa pendente</Label>
-            <Label className="flex items-center gap-2"><Checkbox checked={onlyNoFreight} onCheckedChange={(v) => setOnlyNoFreight(Boolean(v))} /> Frete ausente</Label>
-            <Label className="flex items-center gap-2"><Checkbox checked={onlyNeedsRecalc} onCheckedChange={(v) => setOnlyNeedsRecalc(Boolean(v))} /> Desatualizado</Label>
+            <Label className="flex items-center gap-2"><Checkbox checked={onlyKmPending} onCheckedChange={(v) => { setPage(1); setOnlyKmPending(Boolean(v)); }} /> KM pendente</Label>
+            <Label className="flex items-center gap-2"><Checkbox checked={onlyExpPending} onCheckedChange={(v) => { setPage(1); setOnlyExpPending(Boolean(v)); }} /> Despesa pendente</Label>
+            <Label className="flex items-center gap-2"><Checkbox checked={onlyNoFreight} onCheckedChange={(v) => { setPage(1); setOnlyNoFreight(Boolean(v)); }} /> Frete ausente</Label>
+            <Label className="flex items-center gap-2"><Checkbox checked={onlyNeedsRecalc} onCheckedChange={(v) => { setPage(1); setOnlyNeedsRecalc(Boolean(v)); }} /> Desatualizado</Label>
           </div>
         </CardContent>
       </Card>
