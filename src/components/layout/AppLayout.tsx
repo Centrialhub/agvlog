@@ -78,6 +78,7 @@ const navSections: NavSection[] = [
       { label: 'Contas a Receber', href: '/receivables', icon: <DollarSign className="h-4 w-4" /> },
       { label: 'Aprovação Despesas', href: '/expense-approval', icon: <Receipt className="h-4 w-4" /> },
       { label: 'Acerto de Motoristas', href: '/driver-settlements', icon: <Receipt className="h-4 w-4" /> },
+      { label: 'Conciliação Bancária', href: '/bank-reconciliation', icon: <Wallet className="h-4 w-4" /> },
     ],
   },
   {
