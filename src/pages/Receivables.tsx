@@ -12,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Search, Plus, DollarSign, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
+import FiscalXmlUpload from '@/components/financial/FiscalXmlUpload';
+import type { ParsedFiscalXml } from '@/lib/nfeXmlParser';
 
 export default function Receivables() {
   const { data: receivables = [], isLoading } = useReceivables();
@@ -59,6 +61,30 @@ export default function Receivables() {
       status: r.status || 'pending',
     });
     setDialogOpen(true);
+  };
+
+  const applyXmlToForm = (data: ParsedFiscalXml) => {
+    // Match client by CNPJ if possible (recipient of NFe = customer)
+    const cnpj = data.recipient.tax_id;
+    const match = cnpj
+      ? clients.find((c: any) => (c.tax_id || '').replace(/\D/g, '') === cnpj)
+      : null;
+    setForm(prev => ({
+      ...prev,
+      description: data.description || prev.description,
+      client_id: match?.id || prev.client_id,
+      amount: data.amount ? String(data.amount) : prev.amount,
+      due_date: data.first_due_date || data.issue_date || prev.due_date,
+      invoice_number: data.document_number
+        ? (data.series ? `${data.document_number}/${data.series}` : data.document_number)
+        : prev.invoice_number,
+      notes: [
+        prev.notes,
+        data.access_key ? `Chave NFe: ${data.access_key}` : null,
+        !match && data.recipient.name ? `Cliente do XML: ${data.recipient.name}${cnpj ? ` (CNPJ ${cnpj})` : ''}` : null,
+      ].filter(Boolean).join('\n'),
+    }));
+    if (cnpj && !match) toast.warning('Cliente do XML não encontrado no cadastro. Selecione manualmente.');
   };
 
   const handleSave = async () => {
