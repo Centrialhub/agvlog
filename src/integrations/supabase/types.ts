@@ -3674,13 +3674,17 @@ export type Database = {
           client_id: string | null
           client_load_number: string | null
           client_load_source: Json | null
+          control_lot: string | null
           created_at: string
           created_by: string | null
           delivery_meta: Json
           document_type: string
+          dynamic_lot: string | null
           freight_breakdown: Json | null
+          freight_cif_value: number | null
           freight_confirmed_at: string | null
           freight_confirmed_by: string | null
+          freight_fob_value: number | null
           freight_overridden: boolean
           freight_overridden_at: string | null
           freight_overridden_by: string | null
@@ -3692,11 +3696,16 @@ export type Database = {
           ibs_rate: number | null
           ibs_value: number | null
           id: string
+          import_batch_id: string | null
+          imported_at: string | null
+          imported_note_status: string | null
           invoice_number: string | null
           issue_date: string | null
           load_id: string | null
           operation_type: Database["public"]["Enums"]["operation_type"] | null
           order_id: string | null
+          origin_city: string | null
+          origin_state: string | null
           pallet_count: number | null
           pickup_order_id: string | null
           product_summary: string | null
@@ -3712,6 +3721,7 @@ export type Database = {
           tenant_id: string
           updated_at: string
           value: number | null
+          volume_count: number | null
           weight_kg: number | null
         }
         Insert: {
@@ -3722,13 +3732,17 @@ export type Database = {
           client_id?: string | null
           client_load_number?: string | null
           client_load_source?: Json | null
+          control_lot?: string | null
           created_at?: string
           created_by?: string | null
           delivery_meta?: Json
           document_type?: string
+          dynamic_lot?: string | null
           freight_breakdown?: Json | null
+          freight_cif_value?: number | null
           freight_confirmed_at?: string | null
           freight_confirmed_by?: string | null
+          freight_fob_value?: number | null
           freight_overridden?: boolean
           freight_overridden_at?: string | null
           freight_overridden_by?: string | null
@@ -3740,11 +3754,16 @@ export type Database = {
           ibs_rate?: number | null
           ibs_value?: number | null
           id?: string
+          import_batch_id?: string | null
+          imported_at?: string | null
+          imported_note_status?: string | null
           invoice_number?: string | null
           issue_date?: string | null
           load_id?: string | null
           operation_type?: Database["public"]["Enums"]["operation_type"] | null
           order_id?: string | null
+          origin_city?: string | null
+          origin_state?: string | null
           pallet_count?: number | null
           pickup_order_id?: string | null
           product_summary?: string | null
@@ -3760,6 +3779,7 @@ export type Database = {
           tenant_id: string
           updated_at?: string
           value?: number | null
+          volume_count?: number | null
           weight_kg?: number | null
         }
         Update: {
@@ -3770,13 +3790,17 @@ export type Database = {
           client_id?: string | null
           client_load_number?: string | null
           client_load_source?: Json | null
+          control_lot?: string | null
           created_at?: string
           created_by?: string | null
           delivery_meta?: Json
           document_type?: string
+          dynamic_lot?: string | null
           freight_breakdown?: Json | null
+          freight_cif_value?: number | null
           freight_confirmed_at?: string | null
           freight_confirmed_by?: string | null
+          freight_fob_value?: number | null
           freight_overridden?: boolean
           freight_overridden_at?: string | null
           freight_overridden_by?: string | null
@@ -3788,11 +3812,16 @@ export type Database = {
           ibs_rate?: number | null
           ibs_value?: number | null
           id?: string
+          import_batch_id?: string | null
+          imported_at?: string | null
+          imported_note_status?: string | null
           invoice_number?: string | null
           issue_date?: string | null
           load_id?: string | null
           operation_type?: Database["public"]["Enums"]["operation_type"] | null
           order_id?: string | null
+          origin_city?: string | null
+          origin_state?: string | null
           pallet_count?: number | null
           pickup_order_id?: string | null
           product_summary?: string | null
@@ -3808,6 +3837,7 @@ export type Database = {
           tenant_id?: string
           updated_at?: string
           value?: number | null
+          volume_count?: number | null
           weight_kg?: number | null
         }
         Relationships: [
@@ -4573,6 +4603,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      imported_note_summary_reports: {
+        Row: {
+          created_at: string
+          filters: Json
+          generated_at: string
+          generated_by: string | null
+          grouped: boolean
+          id: string
+          pdf_snapshot: Json
+          report_type: string
+          row_count: number
+          tenant_id: string
+          total_invoice_value: number
+          total_volume: number
+          total_weight_kg: number
+        }
+        Insert: {
+          created_at?: string
+          filters?: Json
+          generated_at?: string
+          generated_by?: string | null
+          grouped?: boolean
+          id?: string
+          pdf_snapshot?: Json
+          report_type: string
+          row_count?: number
+          tenant_id: string
+          total_invoice_value?: number
+          total_volume?: number
+          total_weight_kg?: number
+        }
+        Update: {
+          created_at?: string
+          filters?: Json
+          generated_at?: string
+          generated_by?: string | null
+          grouped?: boolean
+          id?: string
+          pdf_snapshot?: Json
+          report_type?: string
+          row_count?: number
+          tenant_id?: string
+          total_invoice_value?: number
+          total_volume?: number
+          total_weight_kg?: number
+        }
+        Relationships: []
       }
       incident_attachments: {
         Row: {
