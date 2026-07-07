@@ -206,6 +206,9 @@ export default function Receivables() {
         <DialogContent>
           <DialogHeader><DialogTitle>{editingId ? 'Editar Título' : 'Novo Título'}</DialogTitle></DialogHeader>
           <div className="space-y-4">
+            <div className="rounded-md border bg-muted/30 p-3">
+              <FiscalXmlUpload perspective="receiver" onExtracted={(d) => applyXmlToForm(d)} />
+            </div>
             <div><Label>Descrição</Label><Input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} /></div>
             <div className="grid grid-cols-2 gap-3">
               <div>
