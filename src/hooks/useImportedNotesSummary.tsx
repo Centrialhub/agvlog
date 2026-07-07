@@ -128,23 +128,14 @@ export function useImportedNotes(filters: ImportedNoteFilters) {
       const ids = rows.map(r => r.id);
       let cteMap = new Map<string, any>();
       if (ids.length > 0) {
-        const { data: ctes } = await supabase
-          .from('cte_documents')
-          .select('id, cte_number, freight_value, issued_at, status, fiscal_document_ids')
-          .eq('tenant_id', currentTenant!.id)
-          .not('cancelled_at', 'is', null as any)
-          .order('issued_at', { ascending: false })
-          .limit(2000);
-        // Refetch sem filtro de cancelled (não temos que filtrar aqui, apenas priorizar issued mais recente)
         const { data: allCtes } = await supabase
           .from('cte_documents')
           .select('id, cte_number, freight_value, issued_at, status, fiscal_document_ids, cancelled_at')
           .eq('tenant_id', currentTenant!.id)
-          .in('fiscal_document_ids', ids as any)
+          .overlaps('fiscal_document_ids', ids as any)
           .order('issued_at', { ascending: false })
           .limit(2000);
-        const list = (allCtes && allCtes.length > 0) ? allCtes : ctes || [];
-        for (const c of list) {
+        for (const c of allCtes || []) {
           const fids = Array.isArray(c.fiscal_document_ids) ? c.fiscal_document_ids : [];
           for (const fid of fids) {
             if (!cteMap.has(fid)) cteMap.set(fid, c); // primeiro é o mais recente
