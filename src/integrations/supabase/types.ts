@@ -648,6 +648,267 @@ export type Database = {
           },
         ]
       }
+      billing_edi_export_items: {
+        Row: {
+          amount: number
+          client_invoice_id: string
+          created_at: string
+          due_date: string | null
+          export_id: string
+          id: string
+          invoice_number: string | null
+          issue_date: string | null
+          receivable_id: string | null
+          status: string
+          tenant_id: string
+          validation_messages: Json
+          validation_status: string
+        }
+        Insert: {
+          amount?: number
+          client_invoice_id: string
+          created_at?: string
+          due_date?: string | null
+          export_id: string
+          id?: string
+          invoice_number?: string | null
+          issue_date?: string | null
+          receivable_id?: string | null
+          status?: string
+          tenant_id: string
+          validation_messages?: Json
+          validation_status?: string
+        }
+        Update: {
+          amount?: number
+          client_invoice_id?: string
+          created_at?: string
+          due_date?: string | null
+          export_id?: string
+          id?: string
+          invoice_number?: string | null
+          issue_date?: string | null
+          receivable_id?: string | null
+          status?: string
+          tenant_id?: string
+          validation_messages?: Json
+          validation_status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_edi_export_items_client_invoice_id_fkey"
+            columns: ["client_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "client_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "billing_edi_export_items_export_id_fkey"
+            columns: ["export_id"]
+            isOneToOne: false
+            referencedRelation: "billing_edi_exports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "billing_edi_export_items_receivable_id_fkey"
+            columns: ["receivable_id"]
+            isOneToOne: false
+            referencedRelation: "receivables"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      billing_edi_exports: {
+        Row: {
+          cancellation_reason: string | null
+          cancelled_at: string | null
+          charge_count: number
+          client_id: string | null
+          content_hash: string | null
+          created_at: string
+          detail_count: number
+          downloaded_at: string | null
+          error_message: string | null
+          file_date: string
+          file_name: string
+          format: string
+          generated_at: string
+          generated_by: string | null
+          generated_content: string | null
+          id: string
+          invoice_count: number
+          profile_id: string | null
+          record_count: number
+          reprocess_reason: string | null
+          sent_at: string | null
+          sent_channel: string | null
+          sent_to: string | null
+          status: string
+          storage_path: string | null
+          tenant_id: string
+          total_amount: number
+          updated_at: string
+        }
+        Insert: {
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          charge_count?: number
+          client_id?: string | null
+          content_hash?: string | null
+          created_at?: string
+          detail_count?: number
+          downloaded_at?: string | null
+          error_message?: string | null
+          file_date?: string
+          file_name: string
+          format?: string
+          generated_at?: string
+          generated_by?: string | null
+          generated_content?: string | null
+          id?: string
+          invoice_count?: number
+          profile_id?: string | null
+          record_count?: number
+          reprocess_reason?: string | null
+          sent_at?: string | null
+          sent_channel?: string | null
+          sent_to?: string | null
+          status?: string
+          storage_path?: string | null
+          tenant_id: string
+          total_amount?: number
+          updated_at?: string
+        }
+        Update: {
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          charge_count?: number
+          client_id?: string | null
+          content_hash?: string | null
+          created_at?: string
+          detail_count?: number
+          downloaded_at?: string | null
+          error_message?: string | null
+          file_date?: string
+          file_name?: string
+          format?: string
+          generated_at?: string
+          generated_by?: string | null
+          generated_content?: string | null
+          id?: string
+          invoice_count?: number
+          profile_id?: string | null
+          record_count?: number
+          reprocess_reason?: string | null
+          sent_at?: string | null
+          sent_channel?: string | null
+          sent_to?: string | null
+          status?: string
+          storage_path?: string | null
+          tenant_id?: string
+          total_amount?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_edi_exports_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "billing_edi_exports_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "billing_edi_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      billing_edi_profiles: {
+        Row: {
+          api_integration_id: string | null
+          bank_account: string | null
+          bank_account_id: string | null
+          bank_agency: string | null
+          bank_name: string | null
+          branch_code: string | null
+          client_id: string | null
+          company_code: string | null
+          created_at: string
+          created_by: string | null
+          destination_name: string | null
+          document_type: string | null
+          enabled: boolean
+          file_name_pattern: string | null
+          format: string
+          id: string
+          layout_version: string | null
+          metadata: Json
+          name: string
+          tenant_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          api_integration_id?: string | null
+          bank_account?: string | null
+          bank_account_id?: string | null
+          bank_agency?: string | null
+          bank_name?: string | null
+          branch_code?: string | null
+          client_id?: string | null
+          company_code?: string | null
+          created_at?: string
+          created_by?: string | null
+          destination_name?: string | null
+          document_type?: string | null
+          enabled?: boolean
+          file_name_pattern?: string | null
+          format?: string
+          id?: string
+          layout_version?: string | null
+          metadata?: Json
+          name: string
+          tenant_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          api_integration_id?: string | null
+          bank_account?: string | null
+          bank_account_id?: string | null
+          bank_agency?: string | null
+          bank_name?: string | null
+          branch_code?: string | null
+          client_id?: string | null
+          company_code?: string | null
+          created_at?: string
+          created_by?: string | null
+          destination_name?: string | null
+          document_type?: string | null
+          enabled?: boolean
+          file_name_pattern?: string | null
+          format?: string
+          id?: string
+          layout_version?: string | null
+          metadata?: Json
+          name?: string
+          tenant_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_edi_profiles_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       checklist_executions: {
         Row: {
           blocked_operation: boolean | null
@@ -932,12 +1193,16 @@ export type Database = {
           created_by: string | null
           discount_amount: number
           due_date: string | null
+          edi_generated_at: string | null
+          edi_sent_at: string | null
+          edi_status: string
           gross_amount: number
           id: string
           installment_number: number
           interest_amount: number
           invoice_number: string
           issue_date: string
+          last_edi_export_id: string | null
           notes: string | null
           payer_snapshot: Json
           pdf_url: string | null
@@ -961,12 +1226,16 @@ export type Database = {
           created_by?: string | null
           discount_amount?: number
           due_date?: string | null
+          edi_generated_at?: string | null
+          edi_sent_at?: string | null
+          edi_status?: string
           gross_amount?: number
           id?: string
           installment_number?: number
           interest_amount?: number
           invoice_number: string
           issue_date?: string
+          last_edi_export_id?: string | null
           notes?: string | null
           payer_snapshot?: Json
           pdf_url?: string | null
@@ -990,12 +1259,16 @@ export type Database = {
           created_by?: string | null
           discount_amount?: number
           due_date?: string | null
+          edi_generated_at?: string | null
+          edi_sent_at?: string | null
+          edi_status?: string
           gross_amount?: number
           id?: string
           installment_number?: number
           interest_amount?: number
           invoice_number?: string
           issue_date?: string
+          last_edi_export_id?: string | null
           notes?: string | null
           payer_snapshot?: Json
           pdf_url?: string | null
@@ -9480,6 +9753,10 @@ export type Database = {
         Args: { _invoice_id: string; _reason: string }
         Returns: undefined
       }
+      cancel_doccob_export: {
+        Args: { _export_id: string; _reason: string; _tenant_id: string }
+        Returns: undefined
+      }
       clear_reimport_batch_data:
         | { Args: { _tenant_id: string }; Returns: Json }
         | {
@@ -9920,6 +10197,19 @@ export type Database = {
         }
         Returns: undefined
       }
+      mark_doccob_downloaded: {
+        Args: { _export_id: string; _tenant_id: string }
+        Returns: undefined
+      }
+      mark_doccob_sent: {
+        Args: {
+          _channel?: string
+          _export_id: string
+          _sent_to?: string
+          _tenant_id: string
+        }
+        Returns: undefined
+      }
       mark_driver_settlement_outdated: {
         Args: { _dispatch_trip_id: string; _reason: string; _tenant_id: string }
         Returns: undefined
@@ -9983,6 +10273,24 @@ export type Database = {
           _visible_to_client?: boolean
         }
         Returns: string
+      }
+      register_doccob_export: {
+        Args: {
+          _charge_count: number
+          _client_id: string
+          _client_invoice_ids: string[]
+          _content_hash: string
+          _detail_count: number
+          _file_date: string
+          _file_name: string
+          _generated_content: string
+          _profile_id: string
+          _record_count: number
+          _reprocess_reason?: string
+          _tenant_id: string
+          _total_amount: number
+        }
+        Returns: Json
       }
       register_driver_settlement_payment: {
         Args: {
