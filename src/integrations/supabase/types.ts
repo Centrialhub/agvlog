@@ -9086,6 +9086,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _apply_match_amounts: {
+        Args: {
+          _delta: number
+          _obligation_id: string
+          _transaction_id: string
+        }
+        Returns: undefined
+      }
       _assert_driver_owns_trip: {
         Args: { _trip_id: string }
         Returns: {
@@ -9136,6 +9144,10 @@ export type Database = {
         Args: { _client_id: string; _perm: string; _tenant_id: string }
         Returns: boolean
       }
+      accept_financial_match: {
+        Args: { _match_id: string }
+        Returns: undefined
+      }
       add_driver_settlement_adjustment: {
         Args: {
           _amount: number
@@ -9170,6 +9182,10 @@ export type Database = {
             }
             Returns: Json
           }
+      close_reconciliation_session: {
+        Args: { _session_id: string }
+        Returns: undefined
+      }
       count_points_in_geofence: {
         Args: { _geofence_id: string; _points: Json }
         Returns: Json
@@ -9247,6 +9263,16 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      create_manual_financial_match: {
+        Args: {
+          _amount_matched: number
+          _bank_transaction_id: string
+          _financial_obligation_id: string
+          _reason?: string
+          _tenant_id: string
+        }
+        Returns: string
       }
       create_tenant_with_owner: {
         Args: { _tenant_name: string }
@@ -9645,6 +9671,10 @@ export type Database = {
         }
         Returns: string
       }
+      reject_financial_match: {
+        Args: { _match_id: string; _reason: string }
+        Returns: undefined
+      }
       remove_driver_settlement_adjustment: {
         Args: { _item_id: string; _reason: string; _settlement_id: string }
         Returns: undefined
@@ -9652,6 +9682,10 @@ export type Database = {
       remove_fiscal_documents_from_load: {
         Args: { _document_ids: string[]; _load_id: string; _tenant_id: string }
         Returns: Json
+      }
+      reopen_reconciliation_session: {
+        Args: { _reason: string; _session_id: string }
+        Returns: undefined
       }
       request_client_pickup: {
         Args: {
@@ -9663,8 +9697,21 @@ export type Database = {
         }
         Returns: string
       }
+      reverse_financial_match: {
+        Args: { _match_id: string; _reason: string }
+        Returns: undefined
+      }
       revert_xml_loads_to_available: {
         Args: { _tenant_id: string }
+        Returns: Json
+      }
+      run_bank_reconciliation: {
+        Args: {
+          _bank_account_id: string
+          _period_end: string
+          _period_start: string
+          _tenant_id: string
+        }
         Returns: Json
       }
       search_client_portal_shipments: {
