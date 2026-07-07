@@ -1919,15 +1919,23 @@ export type Database = {
           approved_at: string | null
           approved_by: string | null
           category: string
+          city: string | null
           created_at: string
           dispatch_trip_id: string | null
+          document_number: string | null
           driver_id: string | null
           expense_at: string
           id: string
+          no_receipt: boolean
+          no_receipt_reason: string | null
           notes: string | null
+          odometer: number | null
+          paid_with_advance: boolean
           payment_source: string
           receipt_url: string | null
           reimbursable: boolean
+          state: string | null
+          supplier_name: string | null
           tenant_id: string
           updated_at: string
         }
@@ -1937,15 +1945,23 @@ export type Database = {
           approved_at?: string | null
           approved_by?: string | null
           category?: string
+          city?: string | null
           created_at?: string
           dispatch_trip_id?: string | null
+          document_number?: string | null
           driver_id?: string | null
           expense_at?: string
           id?: string
+          no_receipt?: boolean
+          no_receipt_reason?: string | null
           notes?: string | null
+          odometer?: number | null
+          paid_with_advance?: boolean
           payment_source?: string
           receipt_url?: string | null
           reimbursable?: boolean
+          state?: string | null
+          supplier_name?: string | null
           tenant_id: string
           updated_at?: string
         }
@@ -1955,15 +1971,23 @@ export type Database = {
           approved_at?: string | null
           approved_by?: string | null
           category?: string
+          city?: string | null
           created_at?: string
           dispatch_trip_id?: string | null
+          document_number?: string | null
           driver_id?: string | null
           expense_at?: string
           id?: string
+          no_receipt?: boolean
+          no_receipt_reason?: string | null
           notes?: string | null
+          odometer?: number | null
+          paid_with_advance?: boolean
           payment_source?: string
           receipt_url?: string | null
           reimbursable?: boolean
+          state?: string | null
+          supplier_name?: string | null
           tenant_id?: string
           updated_at?: string
         }
@@ -9307,9 +9331,19 @@ export type Database = {
         Args: {
           _amount: number
           _category: string
+          _city?: string
+          _document_number?: string
           _expense_at?: string
+          _no_receipt?: boolean
+          _no_receipt_reason?: string
           _notes?: string
+          _odometer?: number
+          _paid_with_advance?: boolean
+          _payment_source?: string
           _receipt_path?: string
+          _reimbursable?: boolean
+          _state?: string
+          _supplier_name?: string
           _trip_id: string
         }
         Returns: string
