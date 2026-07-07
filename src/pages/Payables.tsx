@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import {
   usePayables, useCreatePayable, useUpdatePayable,
   PAYABLE_STATUSES, PAYABLE_STATUS_LABELS,
-  PAYABLE_CATEGORIES, PAYABLE_CATEGORY_LABELS, type Payable,
+  PAYABLE_CATEGORIES, PAYABLE_CATEGORY_LABELS, type Payable, type PayableStatus,
 } from '@/hooks/usePayables';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
