@@ -743,6 +743,283 @@ export type Database = {
           },
         ]
       }
+      client_invoice_charges: {
+        Row: {
+          cancelled_at: string | null
+          created_at: string
+          description: string | null
+          discount_amount: number
+          gross_amount: number
+          id: string
+          interest_amount: number
+          invoice_id: string
+          ir_amount: number
+          issue_date: string | null
+          metadata: Json
+          net_amount: number
+          reference_number: string | null
+          sort_order: number
+          source_id: string | null
+          source_number: string | null
+          source_series: string | null
+          source_type: string
+          tenant_id: string
+        }
+        Insert: {
+          cancelled_at?: string | null
+          created_at?: string
+          description?: string | null
+          discount_amount?: number
+          gross_amount?: number
+          id?: string
+          interest_amount?: number
+          invoice_id: string
+          ir_amount?: number
+          issue_date?: string | null
+          metadata?: Json
+          net_amount?: number
+          reference_number?: string | null
+          sort_order?: number
+          source_id?: string | null
+          source_number?: string | null
+          source_series?: string | null
+          source_type: string
+          tenant_id: string
+        }
+        Update: {
+          cancelled_at?: string | null
+          created_at?: string
+          description?: string | null
+          discount_amount?: number
+          gross_amount?: number
+          id?: string
+          interest_amount?: number
+          invoice_id?: string
+          ir_amount?: number
+          issue_date?: string | null
+          metadata?: Json
+          net_amount?: number
+          reference_number?: string | null
+          sort_order?: number
+          source_id?: string | null
+          source_number?: string | null
+          source_series?: string | null
+          source_type?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_invoice_charges_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "client_invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_invoice_details: {
+        Row: {
+          cargo_value: number | null
+          charge_id: string
+          created_at: string
+          destination: string | null
+          displayed_freight_value: number | null
+          document_label: string | null
+          document_number: string | null
+          emission_date: string | null
+          id: string
+          invoice_id: string
+          metadata: Json
+          notes: string | null
+          ort_number: string | null
+          recipient: string | null
+          remitter: string | null
+          sort_order: number
+          source_id: string | null
+          source_type: string | null
+          tenant_id: string
+          weight_kg: number | null
+        }
+        Insert: {
+          cargo_value?: number | null
+          charge_id: string
+          created_at?: string
+          destination?: string | null
+          displayed_freight_value?: number | null
+          document_label?: string | null
+          document_number?: string | null
+          emission_date?: string | null
+          id?: string
+          invoice_id: string
+          metadata?: Json
+          notes?: string | null
+          ort_number?: string | null
+          recipient?: string | null
+          remitter?: string | null
+          sort_order?: number
+          source_id?: string | null
+          source_type?: string | null
+          tenant_id: string
+          weight_kg?: number | null
+        }
+        Update: {
+          cargo_value?: number | null
+          charge_id?: string
+          created_at?: string
+          destination?: string | null
+          displayed_freight_value?: number | null
+          document_label?: string | null
+          document_number?: string | null
+          emission_date?: string | null
+          id?: string
+          invoice_id?: string
+          metadata?: Json
+          notes?: string | null
+          ort_number?: string | null
+          recipient?: string | null
+          remitter?: string | null
+          sort_order?: number
+          source_id?: string | null
+          source_type?: string | null
+          tenant_id?: string
+          weight_kg?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_invoice_details_charge_id_fkey"
+            columns: ["charge_id"]
+            isOneToOne: false
+            referencedRelation: "client_invoice_charges"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_invoice_details_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "client_invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_invoice_sequences: {
+        Row: {
+          next_number: number
+          sequence_year: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          next_number?: number
+          sequence_year: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          next_number?: number
+          sequence_year?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      client_invoices: {
+        Row: {
+          cancellation_reason: string | null
+          cancelled_at: string | null
+          client_id: string
+          company_snapshot: Json
+          created_at: string
+          created_by: string | null
+          discount_amount: number
+          due_date: string | null
+          gross_amount: number
+          id: string
+          installment_number: number
+          interest_amount: number
+          invoice_number: string
+          issue_date: string
+          notes: string | null
+          payer_snapshot: Json
+          pdf_url: string | null
+          receivable_id: string | null
+          sent_at: string | null
+          sent_channel: string | null
+          sent_to: string | null
+          sequence_number: number | null
+          status: string
+          tenant_id: string
+          total_amount: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          client_id: string
+          company_snapshot?: Json
+          created_at?: string
+          created_by?: string | null
+          discount_amount?: number
+          due_date?: string | null
+          gross_amount?: number
+          id?: string
+          installment_number?: number
+          interest_amount?: number
+          invoice_number: string
+          issue_date?: string
+          notes?: string | null
+          payer_snapshot?: Json
+          pdf_url?: string | null
+          receivable_id?: string | null
+          sent_at?: string | null
+          sent_channel?: string | null
+          sent_to?: string | null
+          sequence_number?: number | null
+          status?: string
+          tenant_id: string
+          total_amount?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          client_id?: string
+          company_snapshot?: Json
+          created_at?: string
+          created_by?: string | null
+          discount_amount?: number
+          due_date?: string | null
+          gross_amount?: number
+          id?: string
+          installment_number?: number
+          interest_amount?: number
+          invoice_number?: string
+          issue_date?: string
+          notes?: string | null
+          payer_snapshot?: Json
+          pdf_url?: string | null
+          receivable_id?: string | null
+          sent_at?: string | null
+          sent_channel?: string | null
+          sent_to?: string | null
+          sequence_number?: number | null
+          status?: string
+          tenant_id?: string
+          total_amount?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_invoices_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_portal_access: {
         Row: {
           access_type: string
@@ -7060,6 +7337,7 @@ export type Database = {
         Row: {
           amount: number
           client_id: string | null
+          client_invoice_id: string | null
           created_at: string
           created_by: string | null
           description: string | null
@@ -7080,6 +7358,7 @@ export type Database = {
         Insert: {
           amount?: number
           client_id?: string | null
+          client_invoice_id?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -7100,6 +7379,7 @@ export type Database = {
         Update: {
           amount?: number
           client_id?: string | null
+          client_invoice_id?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -9196,6 +9476,10 @@ export type Database = {
           severity: string
         }[]
       }
+      cancel_client_invoice: {
+        Args: { _invoice_id: string; _reason: string }
+        Returns: undefined
+      }
       clear_reimport_batch_data:
         | { Args: { _tenant_id: string }; Returns: Json }
         | {
@@ -9214,6 +9498,7 @@ export type Database = {
         Args: { _geofence_id: string; _points: Json }
         Returns: Json
       }
+      create_client_invoice: { Args: { payload: Json }; Returns: string }
       create_client_occurrence: {
         Args: {
           _client_id: string
@@ -9647,6 +9932,14 @@ export type Database = {
           _tenant_id: string
         }
         Returns: Json
+      }
+      next_client_invoice_number: {
+        Args: {
+          _installment?: number
+          _issue_date?: string
+          _tenant_id: string
+        }
+        Returns: string
       }
       next_nfse_number: {
         Args: { _branch_code?: string; _series?: string; _tenant_id: string }
