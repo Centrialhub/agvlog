@@ -7,7 +7,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Receipt, Fuel, UtensilsCrossed, Car, Wrench, ParkingCircle, Camera, Image } from 'lucide-react';
+import { Plus, Receipt, Fuel, UtensilsCrossed, Car, Wrench, ParkingCircle, Camera, Image, AlertTriangle } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import DemoBanner from '@/components/driver/DemoBanner';
 import { canUseDriverDemo } from '@/lib/driver/demoMode';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -45,7 +46,20 @@ export default function DriverExpenses() {
   const { data: driver } = useCurrentDriver();
   const { data: trip } = useActiveTrip(driver?.id);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ category: 'fuel', amount: '', notes: '' });
+  const [form, setForm] = useState({
+    category: 'fuel',
+    amount: '',
+    notes: '',
+    supplier_name: '',
+    document_number: '',
+    city: '',
+    state: '',
+    odometer: '',
+    payment_source: 'driver',
+    paid_with_advance: false,
+    no_receipt: false,
+    no_receipt_reason: '',
+  });
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -110,13 +124,27 @@ export default function DriverExpenses() {
         _amount: parseFloat(form.amount) || 0,
         _notes: form.notes || null,
         _receipt_path: receiptPath,
+        _supplier_name: form.supplier_name || null,
+        _document_number: form.document_number || null,
+        _city: form.city || null,
+        _state: form.state || null,
+        _odometer: form.odometer ? parseFloat(form.odometer) : null,
+        _no_receipt: form.no_receipt,
+        _no_receipt_reason: form.no_receipt ? (form.no_receipt_reason || null) : null,
+        _paid_with_advance: form.paid_with_advance,
+        _payment_source: form.payment_source,
       } as any);
       if (error) throw error;
     },
     onSuccess: () => {
       toast({ title: 'Despesa registrada' });
       setOpen(false);
-      setForm({ category: 'fuel', amount: '', notes: '' });
+      setForm({
+        category: 'fuel', amount: '', notes: '',
+        supplier_name: '', document_number: '', city: '', state: '', odometer: '',
+        payment_source: 'driver', paid_with_advance: false,
+        no_receipt: false, no_receipt_reason: '',
+      });
       setReceiptFile(null);
       setReceiptPreview(null);
       qc.invalidateQueries({ queryKey: ['driver_expenses'] });
@@ -137,7 +165,7 @@ export default function DriverExpenses() {
           <DialogTrigger asChild>
             <Button size="sm"><Plus className="h-3.5 w-3.5 mr-1" /> Nova</Button>
           </DialogTrigger>
-          <DialogContent className="max-w-sm">
+          <DialogContent className="max-w-sm max-h-[85vh] overflow-y-auto">
             <DialogHeader><DialogTitle>Nova Despesa</DialogTitle></DialogHeader>
             <div className="space-y-3">
               <div>
@@ -152,6 +180,43 @@ export default function DriverExpenses() {
               <div>
                 <Label className="text-xs">Valor (R$)</Label>
                 <Input type="number" step="0.01" placeholder="0,00" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} className="h-9" />
+              </div>
+              <div>
+                <Label className="text-xs">Origem do pagamento</Label>
+                <Select value={form.payment_source} onValueChange={v => setForm(f => ({ ...f, payment_source: v, paid_with_advance: v === 'advance' ? true : f.paid_with_advance }))}>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="driver">Motorista (reembolsável)</SelectItem>
+                    <SelectItem value="advance">Adiantamento</SelectItem>
+                    <SelectItem value="company_card">Cartão da empresa</SelectItem>
+                    <SelectItem value="company_account">Conta da empresa</SelectItem>
+                    <SelectItem value="other">Outro</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-xs">Fornecedor</Label>
+                  <Input value={form.supplier_name} onChange={e => setForm(f => ({ ...f, supplier_name: e.target.value }))} className="h-9" placeholder="Ex: Posto Shell" />
+                </div>
+                <div>
+                  <Label className="text-xs">Nº documento</Label>
+                  <Input value={form.document_number} onChange={e => setForm(f => ({ ...f, document_number: e.target.value }))} className="h-9" placeholder="Cupom / NF" />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="col-span-2">
+                  <Label className="text-xs">Cidade</Label>
+                  <Input value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} className="h-9" />
+                </div>
+                <div>
+                  <Label className="text-xs">UF</Label>
+                  <Input maxLength={2} value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value.toUpperCase() }))} className="h-9" />
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs">Hodômetro (km)</Label>
+                <Input type="number" step="0.1" value={form.odometer} onChange={e => setForm(f => ({ ...f, odometer: e.target.value }))} className="h-9" placeholder="Opcional" />
               </div>
               <div>
                 <Label className="text-xs">Observação</Label>
@@ -173,13 +238,30 @@ export default function DriverExpenses() {
                 {receiptPreview && (
                   <img src={receiptPreview} alt="Comprovante" className="mt-2 rounded-md max-h-32 object-cover" />
                 )}
+                <div className="flex items-center gap-2 mt-2">
+                  <Checkbox id="no_receipt" checked={form.no_receipt} onCheckedChange={(v) => setForm(f => ({ ...f, no_receipt: !!v }))} />
+                  <label htmlFor="no_receipt" className="text-xs text-muted-foreground">Sem comprovante</label>
+                </div>
+                {form.no_receipt && (
+                  <div className="mt-1">
+                    <Label className="text-xs flex items-center gap-1 text-amber-600">
+                      <AlertTriangle className="h-3 w-3" /> Motivo (obrigatório)
+                    </Label>
+                    <Input value={form.no_receipt_reason} onChange={e => setForm(f => ({ ...f, no_receipt_reason: e.target.value }))} className="h-9" placeholder="Ex: cupom perdido" />
+                  </div>
+                )}
               </div>
               {trip && (
                 <p className="text-[10px] text-muted-foreground">
                   Vinculada à viagem da carga {(trip as any).loads?.load_number || ''}
                 </p>
               )}
-              <Button className="w-full" size="sm" onClick={() => createExpense.mutate()} disabled={!form.amount || createExpense.isPending}>
+              <Button
+                className="w-full"
+                size="sm"
+                onClick={() => createExpense.mutate()}
+                disabled={!form.amount || createExpense.isPending || (form.no_receipt && !form.no_receipt_reason.trim())}
+              >
                 {createExpense.isPending ? 'Salvando...' : 'Registrar'}
               </Button>
             </div>
