@@ -75,6 +75,7 @@ const OrtManagement = lazy(() => import("@/pages/OrtManagement"));
 const CteHub = lazy(() => import("@/pages/CteHub"));
 const ProductTraceability = lazy(() => import("@/pages/ProductTraceability"));
 const ProductHistory = lazy(() => import("@/pages/ProductHistory"));
+const ImportedNotesSummary = lazy(() => import("@/pages/ImportedNotesSummary"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
 // Driver pages
@@ -275,6 +276,7 @@ const App = () => (
             <Route path="/ort-management" element={<ProtectedRoute><OrtManagement /></ProtectedRoute>} />
             <Route path="/product-traceability" element={<ProtectedRoute><ProductTraceability /></ProtectedRoute>} />
             <Route path="/product-history" element={<ProtectedRoute><ProductHistory /></ProtectedRoute>} />
+            <Route path="/imported-notes-summary" element={<ProtectedRoute><ImportedNotesSummary /></ProtectedRoute>} />
 
             {/* Driver routes */}
             <Route path="/driver" element={<DriverRoute><DriverHome /></DriverRoute>} />
