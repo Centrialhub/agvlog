@@ -9422,6 +9422,19 @@ export type Database = {
         }
         Returns: boolean
       }
+      import_bank_statement: {
+        Args: {
+          _bank_account_id: string
+          _file_hash: string
+          _file_name: string
+          _period_end: string
+          _period_start: string
+          _raw_metadata?: Json
+          _rows: Json
+          _tenant_id: string
+        }
+        Returns: Json
+      }
       is_point_in_geofence: {
         Args: { _geofence_id: string; _lat: number; _lng: number }
         Returns: boolean
@@ -9677,6 +9690,10 @@ export type Database = {
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       stop_terminal_statuses: { Args: never; Returns: string[] }
+      sync_financial_obligations: {
+        Args: { _date_from?: string; _date_to?: string; _tenant_id: string }
+        Returns: Json
+      }
       update_driver_settlement_km_review: {
         Args: {
           _audited_km: number
