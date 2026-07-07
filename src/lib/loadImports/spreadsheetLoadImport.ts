@@ -28,6 +28,13 @@ function locateHeader(rows: any[][], keywords: string[]): number {
 
 function indexOfHeader(header: string[], keywords: string[]): number {
   const up = header.map(h => String(h ?? '').toUpperCase().trim());
+  // Prefer exact / starts-with matches, then fall back to substring.
+  for (let i = 0; i < up.length; i++) {
+    if (keywords.some(k => up[i] === k)) return i;
+  }
+  for (let i = 0; i < up.length; i++) {
+    if (keywords.some(k => up[i].startsWith(k))) return i;
+  }
   for (let i = 0; i < up.length; i++) {
     if (keywords.some(k => up[i].includes(k))) return i;
   }

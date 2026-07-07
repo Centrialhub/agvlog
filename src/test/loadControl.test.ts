@@ -14,7 +14,7 @@ describe('loadImportNormalizer helpers', () => {
     expect(splitMultiValue(null)).toEqual([]);
   });
   it('converts Excel serial numbers to ISO', () => {
-    expect(excelSerialToIso(45992)).toBe('2025-11-14'); // 2025-11-14 in Excel
+    expect(excelSerialToIso(45992)).toBe('2025-12-01');
   });
   it('reads Date objects and dd/mm/yyyy strings', () => {
     expect(excelSerialToIso(new Date(Date.UTC(2026, 0, 23)))).toBe('2026-01-23');
