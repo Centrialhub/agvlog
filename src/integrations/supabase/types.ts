@@ -5331,27 +5331,88 @@ export type Database = {
       }
       load_documents: {
         Row: {
+          access_key: string | null
+          cargo_value: number
           created_at: string
+          cte_document_id: string | null
+          destination_city: string | null
+          destination_state: string | null
+          document_number: string | null
+          document_type: string
           fiscal_document_id: string
+          freight_value: number
           id: string
+          issue_date: string | null
+          issuer_cnpj: string | null
+          issuer_name: string | null
           load_id: string
+          metadata: Json
+          origin_city: string | null
+          origin_state: string | null
+          recipient_cnpj: string | null
+          recipient_name: string | null
           tenant_id: string
+          volume_count: number
+          weight_kg: number
         }
         Insert: {
+          access_key?: string | null
+          cargo_value?: number
           created_at?: string
+          cte_document_id?: string | null
+          destination_city?: string | null
+          destination_state?: string | null
+          document_number?: string | null
+          document_type?: string
           fiscal_document_id: string
+          freight_value?: number
           id?: string
+          issue_date?: string | null
+          issuer_cnpj?: string | null
+          issuer_name?: string | null
           load_id: string
+          metadata?: Json
+          origin_city?: string | null
+          origin_state?: string | null
+          recipient_cnpj?: string | null
+          recipient_name?: string | null
           tenant_id: string
+          volume_count?: number
+          weight_kg?: number
         }
         Update: {
+          access_key?: string | null
+          cargo_value?: number
           created_at?: string
+          cte_document_id?: string | null
+          destination_city?: string | null
+          destination_state?: string | null
+          document_number?: string | null
+          document_type?: string
           fiscal_document_id?: string
+          freight_value?: number
           id?: string
+          issue_date?: string | null
+          issuer_cnpj?: string | null
+          issuer_name?: string | null
           load_id?: string
+          metadata?: Json
+          origin_city?: string | null
+          origin_state?: string | null
+          recipient_cnpj?: string | null
+          recipient_name?: string | null
           tenant_id?: string
+          volume_count?: number
+          weight_kg?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "load_documents_cte_document_id_fkey"
+            columns: ["cte_document_id"]
+            isOneToOne: false
+            referencedRelation: "cte_documents"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "load_documents_fiscal_document_id_fkey"
             columns: ["fiscal_document_id"]
@@ -5374,6 +5435,57 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      load_import_batches: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          duplicated_count: number
+          error_count: number
+          errors: Json
+          file_count: number
+          file_name: string | null
+          id: string
+          imported_count: number
+          metadata: Json
+          parsed_count: number
+          source_type: string
+          status: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          duplicated_count?: number
+          error_count?: number
+          errors?: Json
+          file_count?: number
+          file_name?: string | null
+          id?: string
+          imported_count?: number
+          metadata?: Json
+          parsed_count?: number
+          source_type: string
+          status?: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          duplicated_count?: number
+          error_count?: number
+          errors?: Json
+          file_count?: number
+          file_name?: string | null
+          id?: string
+          imported_count?: number
+          metadata?: Json
+          parsed_count?: number
+          source_type?: string
+          status?: string
+          tenant_id?: string
+        }
+        Relationships: []
       }
       load_items: {
         Row: {
@@ -5649,22 +5761,215 @@ export type Database = {
           },
         ]
       }
+      load_payments: {
+        Row: {
+          amount: number
+          bank_account_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          load_id: string
+          notes: string | null
+          payment_date: string
+          payment_method: string | null
+          receivable_id: string | null
+          tenant_id: string
+        }
+        Insert: {
+          amount: number
+          bank_account_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          load_id: string
+          notes?: string | null
+          payment_date: string
+          payment_method?: string | null
+          receivable_id?: string | null
+          tenant_id: string
+        }
+        Update: {
+          amount?: number
+          bank_account_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          load_id?: string
+          notes?: string | null
+          payment_date?: string
+          payment_method?: string | null
+          receivable_id?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "load_payments_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "load_payments_receivable_id_fkey"
+            columns: ["receivable_id"]
+            isOneToOne: false
+            referencedRelation: "receivables"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      load_status_history: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          field_name: string
+          id: string
+          load_id: string
+          new_value: string | null
+          old_value: string | null
+          reason: string | null
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          field_name: string
+          id?: string
+          load_id: string
+          new_value?: string | null
+          old_value?: string | null
+          reason?: string | null
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          field_name?: string
+          id?: string
+          load_id?: string
+          new_value?: string | null
+          old_value?: string | null
+          reason?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "load_status_history_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      load_unloading_charges: {
+        Row: {
+          amount: number
+          city: string | null
+          client_name: string | null
+          created_at: string
+          created_by: string | null
+          fiscal_document_id: string | null
+          id: string
+          import_batch_id: string | null
+          invoice_number: string | null
+          load_id: string | null
+          metadata: Json
+          service_date: string | null
+          status: string
+          supplier_name: string | null
+          tenant_id: string
+        }
+        Insert: {
+          amount?: number
+          city?: string | null
+          client_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          fiscal_document_id?: string | null
+          id?: string
+          import_batch_id?: string | null
+          invoice_number?: string | null
+          load_id?: string | null
+          metadata?: Json
+          service_date?: string | null
+          status?: string
+          supplier_name?: string | null
+          tenant_id: string
+        }
+        Update: {
+          amount?: number
+          city?: string | null
+          client_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          fiscal_document_id?: string | null
+          id?: string
+          import_batch_id?: string | null
+          invoice_number?: string | null
+          load_id?: string | null
+          metadata?: Json
+          service_date?: string | null
+          status?: string
+          supplier_name?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "load_unloading_charges_fiscal_document_id_fkey"
+            columns: ["fiscal_document_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "load_unloading_charges_import_batch_id_fkey"
+            columns: ["import_batch_id"]
+            isOneToOne: false
+            referencedRelation: "load_import_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "load_unloading_charges_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       loads: {
         Row: {
           actual_load_at: string | null
           arrival_at: string | null
+          arrival_date: string | null
+          billing_status: string | null
           cash_to_receive: number
           ciot: string | null
+          client_invoice_id: string | null
+          closed_at: string | null
+          control_load_number: string | null
           created_at: string
           created_by: string | null
+          cte_count: number
           dedicated_vehicle: boolean
           destination: string | null
           distribution_manifest: string | null
+          doccob_export_id: string | null
           driver_id: string | null
           driver_type: string | null
           estimated_arrival_at: string | null
+          expected_payment_date: string | null
+          external_load_number: string | null
+          freight_amount: number
+          freight_percent: number | null
           gate_departure_at: string | null
+          gross_cargo_value: number
           id: string
+          invoice_count: number
+          last_import_batch_id: string | null
+          legacy_status_text: string | null
+          load_date: string | null
           load_number: string
           merchandise_value: number | null
           monitor_responsible: string | null
@@ -5674,16 +5979,22 @@ export type Database = {
           occurrence_notes: string | null
           occurrence_responsible: string | null
           operation_type: Database["public"]["Enums"]["operation_type"] | null
+          operational_status: string | null
           origin: string | null
           origin_manifest: string | null
           os_number: string | null
+          payment_date: string | null
           payment_method: string | null
+          payment_status: string
           pix_to_receive: number
+          receivable_id: string | null
+          received_amount: number
           schedule_at: string | null
           scheduled_load_at: string | null
           shipment_manifest: string | null
           sm_manager: string | null
           sm_release: string | null
+          source_origin: string | null
           status: string
           supplier_manifest: string | null
           tenant_id: string
@@ -5698,18 +6009,34 @@ export type Database = {
         Insert: {
           actual_load_at?: string | null
           arrival_at?: string | null
+          arrival_date?: string | null
+          billing_status?: string | null
           cash_to_receive?: number
           ciot?: string | null
+          client_invoice_id?: string | null
+          closed_at?: string | null
+          control_load_number?: string | null
           created_at?: string
           created_by?: string | null
+          cte_count?: number
           dedicated_vehicle?: boolean
           destination?: string | null
           distribution_manifest?: string | null
+          doccob_export_id?: string | null
           driver_id?: string | null
           driver_type?: string | null
           estimated_arrival_at?: string | null
+          expected_payment_date?: string | null
+          external_load_number?: string | null
+          freight_amount?: number
+          freight_percent?: number | null
           gate_departure_at?: string | null
+          gross_cargo_value?: number
           id?: string
+          invoice_count?: number
+          last_import_batch_id?: string | null
+          legacy_status_text?: string | null
+          load_date?: string | null
           load_number: string
           merchandise_value?: number | null
           monitor_responsible?: string | null
@@ -5719,16 +6046,22 @@ export type Database = {
           occurrence_notes?: string | null
           occurrence_responsible?: string | null
           operation_type?: Database["public"]["Enums"]["operation_type"] | null
+          operational_status?: string | null
           origin?: string | null
           origin_manifest?: string | null
           os_number?: string | null
+          payment_date?: string | null
           payment_method?: string | null
+          payment_status?: string
           pix_to_receive?: number
+          receivable_id?: string | null
+          received_amount?: number
           schedule_at?: string | null
           scheduled_load_at?: string | null
           shipment_manifest?: string | null
           sm_manager?: string | null
           sm_release?: string | null
+          source_origin?: string | null
           status?: string
           supplier_manifest?: string | null
           tenant_id: string
@@ -5743,18 +6076,34 @@ export type Database = {
         Update: {
           actual_load_at?: string | null
           arrival_at?: string | null
+          arrival_date?: string | null
+          billing_status?: string | null
           cash_to_receive?: number
           ciot?: string | null
+          client_invoice_id?: string | null
+          closed_at?: string | null
+          control_load_number?: string | null
           created_at?: string
           created_by?: string | null
+          cte_count?: number
           dedicated_vehicle?: boolean
           destination?: string | null
           distribution_manifest?: string | null
+          doccob_export_id?: string | null
           driver_id?: string | null
           driver_type?: string | null
           estimated_arrival_at?: string | null
+          expected_payment_date?: string | null
+          external_load_number?: string | null
+          freight_amount?: number
+          freight_percent?: number | null
           gate_departure_at?: string | null
+          gross_cargo_value?: number
           id?: string
+          invoice_count?: number
+          last_import_batch_id?: string | null
+          legacy_status_text?: string | null
+          load_date?: string | null
           load_number?: string
           merchandise_value?: number | null
           monitor_responsible?: string | null
@@ -5764,16 +6113,22 @@ export type Database = {
           occurrence_notes?: string | null
           occurrence_responsible?: string | null
           operation_type?: Database["public"]["Enums"]["operation_type"] | null
+          operational_status?: string | null
           origin?: string | null
           origin_manifest?: string | null
           os_number?: string | null
+          payment_date?: string | null
           payment_method?: string | null
+          payment_status?: string
           pix_to_receive?: number
+          receivable_id?: string | null
+          received_amount?: number
           schedule_at?: string | null
           scheduled_load_at?: string | null
           shipment_manifest?: string | null
           sm_manager?: string | null
           sm_release?: string | null
+          source_origin?: string | null
           status?: string
           supplier_manifest?: string | null
           tenant_id?: string
@@ -9879,18 +10234,34 @@ export type Database = {
         Returns: {
           actual_load_at: string | null
           arrival_at: string | null
+          arrival_date: string | null
+          billing_status: string | null
           cash_to_receive: number
           ciot: string | null
+          client_invoice_id: string | null
+          closed_at: string | null
+          control_load_number: string | null
           created_at: string
           created_by: string | null
+          cte_count: number
           dedicated_vehicle: boolean
           destination: string | null
           distribution_manifest: string | null
+          doccob_export_id: string | null
           driver_id: string | null
           driver_type: string | null
           estimated_arrival_at: string | null
+          expected_payment_date: string | null
+          external_load_number: string | null
+          freight_amount: number
+          freight_percent: number | null
           gate_departure_at: string | null
+          gross_cargo_value: number
           id: string
+          invoice_count: number
+          last_import_batch_id: string | null
+          legacy_status_text: string | null
+          load_date: string | null
           load_number: string
           merchandise_value: number | null
           monitor_responsible: string | null
@@ -9900,16 +10271,22 @@ export type Database = {
           occurrence_notes: string | null
           occurrence_responsible: string | null
           operation_type: Database["public"]["Enums"]["operation_type"] | null
+          operational_status: string | null
           origin: string | null
           origin_manifest: string | null
           os_number: string | null
+          payment_date: string | null
           payment_method: string | null
+          payment_status: string
           pix_to_receive: number
+          receivable_id: string | null
+          received_amount: number
           schedule_at: string | null
           scheduled_load_at: string | null
           shipment_manifest: string | null
           sm_manager: string | null
           sm_release: string | null
+          source_origin: string | null
           status: string
           supplier_manifest: string | null
           tenant_id: string
