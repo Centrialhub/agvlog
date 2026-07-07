@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Receipt, CheckCircle, XCircle, Clock, ExternalLink, ImageIcon } from 'lucide-react';
+import { Receipt, CheckCircle, XCircle, Clock, ExternalLink, ImageIcon, AlertTriangle, Wallet, Building2 } from 'lucide-react';
 
 const CATEGORIES: Record<string, string> = {
   fuel: 'Combustível',
@@ -17,6 +17,14 @@ const CATEGORIES: Record<string, string> = {
   toll: 'Pedágio',
   maintenance: 'Manutenção',
   parking: 'Estacionamento',
+  other: 'Outro',
+};
+
+const PAYMENT_SOURCE_LABELS: Record<string, string> = {
+  driver: 'Motorista (reembolsável)',
+  advance: 'Adiantamento',
+  company_card: 'Cartão da empresa',
+  company_account: 'Conta da empresa',
   other: 'Outro',
 };
 
@@ -90,11 +98,35 @@ export default function ExpenseApproval() {
               >
                 {exp.approval_status === 'pending' ? 'Pendente' : exp.approval_status === 'approved' ? 'Aprovada' : 'Rejeitada'}
               </Badge>
+              {exp.payment_source && exp.payment_source !== 'driver' && (
+                <Badge variant="outline" className="text-[10px] gap-1">
+                  <Building2 className="h-3 w-3" />
+                  {PAYMENT_SOURCE_LABELS[exp.payment_source] || exp.payment_source}
+                </Badge>
+              )}
+              {exp.paid_with_advance && (
+                <Badge variant="outline" className="text-[10px] gap-1">
+                  <Wallet className="h-3 w-3" /> Adiantamento
+                </Badge>
+              )}
             </div>
             <p className="text-xs text-muted-foreground">
               {(exp as any).drivers?.name || 'Motorista'} · {new Date(exp.expense_at).toLocaleDateString('pt-BR')}
+              {(exp.city || exp.state) && ` · ${[exp.city, exp.state].filter(Boolean).join('/')}`}
             </p>
+            {(exp.supplier_name || exp.document_number) && (
+              <p className="text-xs text-muted-foreground">
+                {exp.supplier_name || '—'}{exp.document_number ? ` · Doc ${exp.document_number}` : ''}
+                {exp.odometer ? ` · ${Number(exp.odometer).toLocaleString('pt-BR')} km` : ''}
+              </p>
+            )}
             {exp.notes && <p className="text-xs text-muted-foreground">{exp.notes}</p>}
+            {exp.no_receipt && (
+              <div className="flex items-start gap-1 text-[11px] text-amber-600">
+                <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
+                <span>Sem comprovante — {exp.no_receipt_reason || 'sem motivo informado'}</span>
+              </div>
+            )}
           </div>
           <div className="text-right shrink-0">
             <p className="text-base font-bold">R$ {Number(exp.amount).toFixed(2)}</p>
@@ -105,6 +137,9 @@ export default function ExpenseApproval() {
               >
                 <ImageIcon className="h-3 w-3" /> Ver comprovante
               </button>
+            )}
+            {exp.reimbursable === false && (
+              <p className="text-[10px] text-muted-foreground mt-1">Não reembolsável</p>
             )}
           </div>
         </div>
