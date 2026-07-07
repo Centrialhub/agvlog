@@ -67,6 +67,7 @@ const navSections: NavSection[] = [
           { label: 'Resumo NF Importadas', href: '/imported-notes-summary', icon: <FileSpreadsheet className="h-4 w-4" /> },
         ],
       },
+      { label: 'Controle de Cargas', href: '/load-control', icon: <PackageCheck className="h-4 w-4" /> },
       { label: 'Ocorrências', href: '/events', icon: <AlertOctagon className="h-4 w-4" /> },
       { label: 'Checklists', href: '/checklists', icon: <ClipboardCheck className="h-4 w-4" /> },
       { label: 'Produtividade', href: '/productivity', icon: <TrendingUp className="h-4 w-4" /> },
