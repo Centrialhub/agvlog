@@ -1,100 +1,53 @@
+# Conciliação Bancária — Plano de entrega faseado
 
-# Rodada de auditoria funcional e consistência de dados
+O escopo é grande (7+ tabelas novas, ~10 RPCs, importador de extrato, tela de conciliação, refactor de despesas do motorista, contas a pagar, relatórios). Para preservar o AGVLog em produção, proponho entregar em **6 PRs incrementais**, cada um com migration própria, sem tocar migrations antigas e sem alterar RPCs/tabelas atuais além do estritamente necessário.
 
-Escopo grande e crítico — sem features novas. Foco: fonte de verdade única, RPCs transacionais, status canônicos, auditoria.
+Antes de começar, preciso confirmar o escopo desta primeira rodada — o pedido inteiro num único turno vira um patch gigante e frágil.
 
-## Fase 1 — Documento de contrato
-- `docs/data-contract.md` documentando fontes de verdade: `load_items` (composição), `dispatch_trip_loads` (vínculo viagem-carga), `dispatch_stop_documents` (parada-documento), `dispatch_stops.status` (status operacional), função central de status público, e campos esperados em `operational_events`.
+## Fases propostas
 
-## Fase 2 — Migration única consolidada
-Uma única migration cobrindo:
+### PR 1 — Fundação de dados (backend puro, sem UI)
+Migration única criando as tabelas com RLS + GRANTs + índices:
+- `bank_accounts`
+- `bank_statement_imports` (uniq `tenant_id + bank_account_id + file_hash`)
+- `bank_transactions` (índices em tenant/conta/data/valor/status/normalized_key)
+- `financial_obligations` (uniq lógica `source_table + source_id + obligation_type`)
+- `payables`
+- `financial_matches`
+- `bank_reconciliation_sessions`
+- `bank_reconciliation_audit`
 
-### 2.1 Evolução de `operational_events`
-- Adicionar `dispatch_trip_id`, `dispatch_stop_id`, `fiscal_document_id` (nullable, FK).
+RLS reaproveita `is_tenant_member`, `is_tenant_operator_or_admin`, `is_tenant_admin`. Nada em `driver_*`, `receivables`, `loads` etc. é alterado ainda.
 
-### 2.2 Audit log
-- Criar `entity_audit_log` (tenant_id, entity_type, entity_id, action, old_data, new_data, actor_user_id, actor_role, source, request_id, created_at).
-- GRANTs + RLS (somente owner/admin lê do tenant; service_role escreve).
-- Helper `_log_entity_audit(...)`.
+### PR 2 — RPCs de geração de obrigações + import
+- `sync_financial_obligations(_tenant_id, _date_from, _date_to)` — projeta `receivables`, `driver_settlements` aprovadas, `driver_settlement_payments`, `driver_expenses` (pagas pela empresa) e `payables` em `financial_obligations`, idempotente pela chave lógica.
+- `import_bank_statement(...)` — insere `bank_statement_imports` + `bank_transactions` com dedupe por `file_hash` e `normalized_key`.
+- Trigger opcional em `driver_settlements`/`receivables`/`payables` chamando `sync_financial_obligations` de forma pontual (linha a linha, escopo restrito) para manter o livro vivo. **Sem alterar RPCs financeiras existentes**; apenas trigger AFTER.
 
-### 2.3 RPCs de composição de carga (transacionais + auditoria)
-- `assign_fiscal_documents_to_load(_tenant_id, _load_id, _document_ids)` — bloqueia se carga em viagem ativa/entregue.
-- `remove_fiscal_documents_from_load(_tenant_id, _load_id, _document_ids)` — limpa `fiscal_documents.load_id` + `load_items` correspondentes.
-- `move_load_items_between_loads(_tenant_id, _source_load_id, _target_load_id, _item_ids)` — bloqueia se em viagem ativa, atualiza ambas as tabelas, recalcula totais.
-- `delete_load_safely(_tenant_id, _load_id)` — só se sem viagem ativa e sem POD.
+### PR 3 — Motor de matching + sessões
+- `run_bank_reconciliation(...)` com scoring (valor exato, data ±3d, contraparte, documento, direction). ≥90 + sem ambiguidade = auto-match; 70–89 = sugestão; <70 = unmatched. Múltiplos candidatos parecidos nunca auto-aceitam.
+- `accept_financial_match`, `reject_financial_match`, `create_manual_financial_match` (1:1, 1:N, N:1, parcial), `reverse_financial_match`.
+- `close_reconciliation_session` / `reopen_reconciliation_session` (admin/owner + motivo).
+- Toda RPC grava em `bank_reconciliation_audit`.
 
-### 2.4 Correção `driver_update_stop_status`
-- Buscar docs via `dispatch_stop_documents`; mapear status parada → status fiscal_documents.
-- Quando todas paradas do trip terminais, atualizar `dispatch_trip_loads`→loads + trip status.
-- Inserir registro em `entity_audit_log`.
-- Retornar jsonb com `updated_stop_id`, `updated_document_ids`, `updated_load_ids`, `trip_completed`.
+### PR 4 — UI: importação + tela de conciliação
+- `src/pages/BankReconciliation.tsx` no menu financeiro.
+- Upload CSV/XLSX (usa `xlsx`) + parser BR (`1.234,56` / `-1234.56`), mapeamento de colunas, preview, hash do arquivo no cliente.
+- Abas: Extrato, Títulos do sistema, Divergências, Motoristas. KPIs no topo.
+- OFX fica marcado como TODO (aceite não exige na primeira iteração — “se viável”).
 
-### 2.5 Correção `request_client_pickup`
-- Trocar `c.name`/`c.cnpj_cpf` por `COALESCE(c.trade_name, c.company_name, c.legal_name)` e `c.tax_id`.
+### PR 5 — Despesas do motorista + integração com acerto
+- Migration aditiva em `driver_expenses`: `payment_source`, `supplier_name`, `document_number`, `city`, `state`, `odometer`, `no_receipt`, `no_receipt_reason`, `paid_with_advance`. Default preserva comportamento atual; `reimbursable` derivado quando não informado.
+- `driver_create_expense` atualizado (novos parâmetros opcionais, back-compat).
+- `DriverExpenses.tsx` e tela de aprovação (`ExpenseApproval.tsx`) recebem novos campos e alertas (sem comprovante, possível duplicidade, marcação indevida).
+- Ajuste na geração/recalculo de `driver_settlements`: reembolsáveis → `driver_reimbursement_total`; company-paid → custo da rota sem afetar `driver_payable_amount`; adiantamento reduz payable. Ao aprovar acerto e ao registrar pagamento, sincroniza `financial_obligations`.
 
-### 2.6 Correção `create_client_occurrence`
-- Validar `_load_id` via `fiscal_documents.client_id` (em vez de `load_items.client_id`).
+### PR 6 — Contas a pagar + relatórios
+- `src/pages/Payables.tsx` (CRUD, aprovar, cancelar, filtros). Baixa só via conciliação ou baixa manual auditada.
+- Exports CSV/XLSX dos relatórios pedidos.
 
-### 2.7 Função central de status público
-- `get_public_shipment_status(_fiscal_document_id)` retornando status canônico considerando: ocorrência crítica → exceções terminais → delivered+POD → delivered s/ POD → arrived/in_progress → in_transit/loading → planned.
-- Atualizar `search_client_portal_shipments` e `get_client_portal_summary` para usar essa função.
+## Como quero prosseguir
 
-### 2.8 RPC `record_operational_event_with_status`
-- Insere evento, atualiza status da entidade (load|fiscal_document|dispatch_stop) com validação de transição, registra audit, retorna entidade.
+Se você aprovar, começo **agora pelo PR 1 (migration de fundação) + PR 2 (RPCs de sync + import)** num único turno, já que são backend puro e não mexem em nada em produção. UI e refactor de despesas/acerto vão em turnos seguintes para eu conseguir validar build/lint entre eles.
 
-### 2.9 RPC `audit_data_consistency(_tenant_id)`
-- Retorna `{severity, category, entity_type, entity_id, message}[]` para todas as inconsistências listadas (load_items≠fiscal_documents.load_id, trips sem trip_loads, stops sem stop_documents, POD órfão, carga delivered c/ doc não terminal, ocorrências visíveis sem client_id, etc.).
-
-### 2.10 Atualizar `driver_create_operational_occurrence`
-- Já existe; garantir que preenche `dispatch_trip_id`, `dispatch_stop_id`, `fiscal_document_id` automaticamente.
-
-## Fase 3 — Frontend status canônico
-- Estender `src/lib/status/loadStatus.ts` (já existe parcial).
-- Criar `src/lib/status/stopStatus.ts` (terminal + active + labels + tone).
-- Criar `src/lib/status/documentStatus.ts` (labels + tone).
-- Atualizar `src/lib/status/index.ts` exportando tudo.
-- Atualizar `src/lib/portal/portalStatus.ts` para mapear via helpers se necessário.
-
-## Fase 4 — Telas
-### LoadDetail
-- Remover/desabilitar fluxo legado que cria `dispatch_trips`/`dispatch_stops` diretos. Substituir por chamada a `dispatch_planned_route` (ou desabilitar botão com aviso).
-
-### LoadReallocation
-- Substituir update direto em `load_items` por `move_load_items_between_loads`.
-
-### LoadItemsPanel / NewLoadDialog / PendingDocsGrouping / useLoads / useLoadItems
-- Trocar updates diretos de composição por novas RPCs.
-
-### DriverDeliveries / DriverStops
-- Contagem de concluídas usando `TERMINAL_STOP_STATUSES`.
-- Bloquear ações em status terminal.
-- Aba "em rota" considera `pending/arriving/arrived/in_progress/servicing/departed`.
-- Labels via helpers.
-
-### Traceability
-- Substituir update direto de status por `record_operational_event_with_status`. Corrigir fallback `confirmed`.
-
-### Portal
-- `PortalShipments`/`PortalDashboard`/`PortalDocuments`/`PortalPods` lendo status público da RPC central.
-- `PortalDashboard`: esconder seções vazias ("Próximas entregas" placeholder) ou preencher com query real.
-
-## Fase 5 — Edge functions
-- `update-trip-live-status`: já considera terminais (verificado). Adicionar guard `is_tenant_operator_or_admin` no header e log estruturado de falhas.
-
-## Fase 6 — Tela admin de auditoria
-- `/data-audit` (rota apenas para owner/admin) chamando `audit_data_consistency`. Card simples: total crítico, total alerta, lista, botão re-rodar.
-
-## Fase 7 — Verificação
-- `bun run lint` + build automáticos.
-- Documentar matriz de testes manuais em `.lovable/plan.md` (fluxos normal, recusa, parcial, movimentação, portal, auditoria).
-
-## Detalhes técnicos importantes
-- Todas as novas RPCs: `SECURITY DEFINER`, `SET search_path = public`, validação de papel via `is_tenant_operator_or_admin`, bloqueio quando carga em viagem ativa (`status IN ('in_transit','loading','dispatched')` ou trip ativa).
-- Triggers existentes (`trg_recalc_load_totals`) continuam responsáveis por totais.
-- Sentinels Radix mantidos.
-- Sem aesthetic refactor.
-
-## Considerações
-- O contrato é AMPLO. Vou consolidar tudo em **uma** migration SQL grande para minimizar idas e voltas de aprovação.
-- Frontend será editado em paralelo, em hunks pequenos e focados, sem reescrever componentes inteiros.
-- A tela `/data-audit` será mínima (tabela + botão).
+Confirma essa ordem (PR1+PR2 primeiro), ou prefere outra sequência — por exemplo despesas do motorista antes, ou tudo backend (PR1–3) de uma vez sem UI?
