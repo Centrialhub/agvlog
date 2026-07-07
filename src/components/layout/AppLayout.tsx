@@ -64,6 +64,7 @@ const navSections: NavSection[] = [
           { label: 'Rastreab. Produto', href: '/product-traceability', icon: <Package className="h-4 w-4" /> },
           { label: 'Histórico do Produto', href: '/product-history', icon: <FileSearch className="h-4 w-4" /> },
           { label: 'Auditoria de Carga', href: '/load-extraction-audit', icon: <FileSearch className="h-4 w-4" /> },
+          { label: 'Resumo NF Importadas', href: '/imported-notes-summary', icon: <FileSpreadsheet className="h-4 w-4" /> },
         ],
       },
       { label: 'Ocorrências', href: '/events', icon: <AlertOctagon className="h-4 w-4" /> },
