@@ -15,6 +15,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Search, Plus, Wallet, Download, CheckCircle, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import FiscalXmlUpload from '@/components/financial/FiscalXmlUpload';
+import { supabase } from '@/integrations/supabase/client';
+import { useTenant } from '@/hooks/useTenant';
+import type { ParsedFiscalXml } from '@/lib/nfeXmlParser';
 
 const emptyForm = {
   supplier_name: '',
@@ -36,6 +40,7 @@ function isOverdue(p: Payable) {
 
 export default function Payables() {
   const { data: payables = [], isLoading } = usePayables();
+  const { currentTenant } = useTenant();
   const createMut = useCreatePayable();
   const updateMut = useUpdatePayable();
   const [search, setSearch] = useState('');
@@ -44,6 +49,7 @@ export default function Payables() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ ...emptyForm });
+  const [pendingReceipt, setPendingReceipt] = useState<File | null>(null);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -70,6 +76,7 @@ export default function Payables() {
   const resetForm = () => {
     setForm({ ...emptyForm });
     setEditingId(null);
+    setPendingReceipt(null);
     setDialogOpen(false);
   };
 
@@ -86,7 +93,37 @@ export default function Payables() {
       status: p.status || 'pending',
       notes: p.notes || '',
     });
+    setPendingReceipt(null);
     setDialogOpen(true);
+  };
+
+  const applyXmlToForm = async (data: ParsedFiscalXml, file: File) => {
+    setPendingReceipt(file);
+    setForm(prev => ({
+      ...prev,
+      supplier_name: data.emitter.name || prev.supplier_name,
+      description: data.description || prev.description,
+      amount: data.amount ? String(data.amount) : prev.amount,
+      due_date: data.first_due_date || data.issue_date || prev.due_date,
+      competence_date: data.issue_date || prev.competence_date,
+      document_number: data.document_number
+        ? (data.series ? `${data.document_number}/${data.series}` : data.document_number)
+        : prev.document_number,
+      notes: [
+        prev.notes,
+        data.access_key ? `Chave NFe: ${data.access_key}` : null,
+        data.emitter.tax_id ? `CNPJ: ${data.emitter.tax_id}` : null,
+      ].filter(Boolean).join('\n'),
+    }));
+  };
+
+  const uploadReceipt = async (file: File): Promise<string | null> => {
+    if (!currentTenant) return null;
+    const ext = file.name.split('.').pop() || 'xml';
+    const path = `${currentTenant.id}/payables/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+    const { error } = await supabase.storage.from('receipts').upload(path, file, { contentType: file.type || 'application/xml' });
+    if (error) throw error;
+    return path;
   };
 
   const handleSave = async () => {
@@ -99,6 +136,11 @@ export default function Payables() {
       return;
     }
     try {
+      let receiptPath: string | undefined;
+      if (pendingReceipt) {
+        try { receiptPath = (await uploadReceipt(pendingReceipt)) || undefined; }
+        catch (e: any) { toast.error('Falha ao anexar XML: ' + e.message); }
+      }
       const values: any = {
         supplier_name: form.supplier_name.trim(),
         category: form.category,
@@ -110,6 +152,7 @@ export default function Payables() {
         status: form.status,
         notes: form.notes || null,
       };
+      if (receiptPath) values.receipt_url = receiptPath;
       if (editingId) {
         await updateMut.mutateAsync({ id: editingId, ...values });
         toast.success('Conta atualizada');
@@ -292,6 +335,9 @@ export default function Payables() {
         <DialogContent>
           <DialogHeader><DialogTitle>{editingId ? 'Editar conta' : 'Nova conta a pagar'}</DialogTitle></DialogHeader>
           <div className="space-y-4">
+            <div className="rounded-md border bg-muted/30 p-3">
+              <FiscalXmlUpload perspective="payer" onExtracted={applyXmlToForm} />
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Fornecedor *</Label>
