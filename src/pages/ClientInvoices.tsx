@@ -284,7 +284,7 @@ function NewInvoiceWizard({ open, onClose, clients, onGenerated }: { open: boole
     }
 
     for (const n of nfses.filter((x: any) => selectedNfses.has(x.id))) {
-      const items: any[] = Array.isArray(n.items) ? n.items : [];
+      const items: any[] = Array.isArray((n as any).items) ? (n as any).items : [];
       const details = items.length ? items.map((it: any, idx: number) => ({
         source_type: 'nfse_item',
         emission_date: n.issue_date,
