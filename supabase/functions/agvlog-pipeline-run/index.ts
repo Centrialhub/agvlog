@@ -35,7 +35,7 @@ Deno.serve(async (req) => {
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
     let callerId: string | null = null;
-    let authHeader = req.headers.get("Authorization") || "";
+    const authHeader = req.headers.get("Authorization") || "";
 
     const cronSecret = req.headers.get("x-agvlog-cron-secret");
     const expectedCronSecret = Deno.env.get("AGVLOG_CRON_SECRET");

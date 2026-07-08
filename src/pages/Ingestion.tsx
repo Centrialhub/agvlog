@@ -434,7 +434,7 @@ export default function Ingestion() {
     };
 
     const merged = new Map<string, OrtReviewDocument>();
-    let batchDuplicates = 0;
+    const batchDuplicates = 0;
     let mergedScans = 0;
 
     docs.forEach(doc => {
