@@ -22,6 +22,32 @@ export const RESPONSIBILITY_LABELS: Record<string,string> = {
   operational:'Operacional', patrimonial:'Patrimonial', financial:'Financeira', disciplinary:'Disciplinar',
 };
 
+export const INCIDENT_CATEGORY_LABELS: Record<string,string> = {
+  operational: 'Operacional',
+  fleet: 'Frota',
+  hr: 'RH',
+  safety: 'Segurança',
+  customer: 'Cliente',
+};
+
+export const INCIDENT_ACTION_TYPES = [
+  'note','verbal_warning','written_warning','suspension',
+  'training_required','payroll_discount','document_request',
+  'termination_recommendation','other',
+] as const;
+
+export const INCIDENT_ACTION_LABELS: Record<string,string> = {
+  note: 'Anotação',
+  verbal_warning: 'Advertência verbal',
+  written_warning: 'Advertência escrita',
+  suspension: 'Suspensão',
+  training_required: 'Treinamento requerido',
+  payroll_discount: 'Desconto em folha',
+  document_request: 'Solicitação de documento',
+  termination_recommendation: 'Recomendação de desligamento',
+  other: 'Outra',
+};
+
 export interface Incident {
   id: string; tenant_id: string; incident_number: string;
   incident_type: string; category: string | null; severity: string; status: string;
@@ -126,5 +152,67 @@ export function useAddIncidentResponsible() {
       return data;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['incident_responsible'] }),
+  });
+}
+
+export interface EmployeeIncidentAction {
+  id: string;
+  tenant_id: string;
+  incident_id: string;
+  employee_id: string;
+  action_type: string;
+  description: string | null;
+  amount: number;
+  effective_date: string | null;
+  status: string;
+  created_at: string;
+  employees?: { name: string } | null;
+}
+
+export function useIncidentActions(incidentId?: string) {
+  return useQuery({
+    queryKey: ['employee_incident_actions', incidentId],
+    queryFn: async () => {
+      if (!incidentId) return [];
+      const { data, error } = await (supabase as any)
+        .from('employee_incident_actions')
+        .select('*, employees(name)')
+        .eq('incident_id', incidentId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data || []) as EmployeeIncidentAction[];
+    },
+    enabled: !!incidentId,
+  });
+}
+
+export interface AddIncidentActionInput {
+  incident_id: string;
+  employee_id: string;
+  action_type: string;
+  description?: string | null;
+  amount?: number;
+  effective_date?: string | null;
+}
+
+export function useAddEmployeeIncidentAction() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (values: AddIncidentActionInput) => {
+      const { data, error } = await (supabase as any).rpc('add_employee_incident_action', {
+        _incident_id: values.incident_id,
+        _employee_id: values.employee_id,
+        _action_type: values.action_type,
+        _description: values.description ?? null,
+        _amount: values.amount ?? 0,
+        _effective_date: values.effective_date ?? null,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['employee_incident_actions', vars.incident_id] });
+      qc.invalidateQueries({ queryKey: ['employee_incident_actions'] });
+    },
   });
 }
