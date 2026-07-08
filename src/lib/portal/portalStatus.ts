@@ -19,12 +19,12 @@ export type PublicShipmentStatus =
   | 'exception';
 
 export const PUBLIC_STATUS_LABELS: Record<PublicShipmentStatus, string> = {
-  received: 'Recebido no sistema',
+  received: 'Recebido pela transportadora',
   pickup_requested: 'Coleta solicitada',
   pickup_scheduled: 'Coleta agendada',
   picked_up: 'Coletado',
   at_origin_warehouse: 'No CD de origem',
-  being_prepared: 'Em separação',
+  being_prepared: 'Em preparação',
   loaded: 'Carregado',
   in_transit: 'Em trânsito',
   out_for_delivery: 'Saiu para entrega',
@@ -33,7 +33,7 @@ export const PUBLIC_STATUS_LABELS: Record<PublicShipmentStatus, string> = {
   pod_pending: 'Entregue, aguardando canhoto',
   pod_available: 'Canhoto disponível',
   not_delivered: 'Não entregue',
-  redelivery_scheduled: 'Reentrega agendada',
+  redelivery_scheduled: 'Reentrega programada',
   returned: 'Devolvido',
   cancelled: 'Cancelado',
   exception: 'Com ocorrência',
