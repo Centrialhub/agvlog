@@ -10612,6 +10612,9 @@ export type Database = {
           notes: string | null
           paid_at: string | null
           receipt_url: string | null
+          source_id: string | null
+          source_metadata: Json
+          source_table: string | null
           status: string
           supplier_id: string | null
           supplier_name: string
@@ -10637,6 +10640,9 @@ export type Database = {
           notes?: string | null
           paid_at?: string | null
           receipt_url?: string | null
+          source_id?: string | null
+          source_metadata?: Json
+          source_table?: string | null
           status?: string
           supplier_id?: string | null
           supplier_name: string
@@ -10662,6 +10668,9 @@ export type Database = {
           notes?: string | null
           paid_at?: string | null
           receipt_url?: string | null
+          source_id?: string | null
+          source_metadata?: Json
+          source_table?: string | null
           status?: string
           supplier_id?: string | null
           supplier_name?: string
@@ -10919,6 +10928,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      payroll_generation_issues: {
+        Row: {
+          created_at: string
+          driver_id: string | null
+          employee_id: string | null
+          id: string
+          issue_type: string
+          message: string
+          payroll_period_id: string | null
+          resolved: boolean
+          resolved_at: string | null
+          severity: string
+          source_id: string | null
+          source_table: string | null
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          driver_id?: string | null
+          employee_id?: string | null
+          id?: string
+          issue_type: string
+          message: string
+          payroll_period_id?: string | null
+          resolved?: boolean
+          resolved_at?: string | null
+          severity?: string
+          source_id?: string | null
+          source_table?: string | null
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          driver_id?: string | null
+          employee_id?: string | null
+          id?: string
+          issue_type?: string
+          message?: string
+          payroll_period_id?: string | null
+          resolved?: boolean
+          resolved_at?: string | null
+          severity?: string
+          source_id?: string | null
+          source_table?: string | null
+          tenant_id?: string
+        }
+        Relationships: []
       }
       payroll_periods: {
         Row: {
@@ -13616,6 +13673,16 @@ export type Database = {
         }
         Returns: string
       }
+      add_payroll_manual_item: {
+        Args: {
+          _amount: number
+          _description: string
+          _entry_id: string
+          _nature: string
+          _reason: string
+        }
+        Returns: string
+      }
       approve_payroll_period: {
         Args: { _period_id: string }
         Returns: undefined
@@ -13632,6 +13699,17 @@ export type Database = {
           entity_type: string
           message: string
           severity: string
+        }[]
+      }
+      audit_data_consistency_v2: {
+        Args: { _tenant_id: string }
+        Returns: {
+          domain: string
+          entity_id: string
+          entity_type: string
+          message: string
+          severity: string
+          suggested_action: string
         }[]
       }
       cancel_client_invoice: {
@@ -13816,6 +13894,10 @@ export type Database = {
         Args: { _load_ids: string[]; _tenant_id: string }
         Returns: Json
       }
+      delete_payroll_entry_item: {
+        Args: { _item_id: string; _reason: string }
+        Returns: undefined
+      }
       detect_payment_method: { Args: { p_text: string }; Returns: string }
       dispatch_planned_route: { Args: { _payload: Json }; Returns: string }
       driver_can_access_vehicle: {
@@ -13970,7 +14052,7 @@ export type Database = {
         Returns: Json
       }
       get_client_portal_tracking: {
-        Args: { _tenant_id: string }
+        Args: { _client_id?: string; _tenant_id: string }
         Returns: Json
       }
       get_client_portal_upcoming_deliveries: {
