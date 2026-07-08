@@ -266,7 +266,7 @@ export function useAddProgressUpdate() {
       const total = Number(monitor.total_deliveries || 0);
       const remaining = calculateRemainingDeliveries(total, completed);
       const newStatus = calculateDriverStatus(
-        { ...monitor, completed_deliveries: completed, last_update_at: new Date().toISOString() },
+        { ...(monitor as any), completed_deliveries: completed, last_update_at: new Date().toISOString(), remaining_cities: [] },
         (updates || []) as any,
       );
       await supabase.from('driver_route_monitors').update({
