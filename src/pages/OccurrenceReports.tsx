@@ -454,7 +454,7 @@ export default function OccurrenceReports() {
   );
 }
 
-function RowTable({ rows, emptyLabel }: { rows: Array<Record<string, unknown>>; emptyLabel: string }) {
+function RowTable({ rows, emptyLabel }: { rows: Array<Record<string, any>>; emptyLabel: string }) {
   return (
     <Card><CardContent className="p-0">
       <Table>
