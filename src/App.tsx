@@ -80,6 +80,7 @@ const LoadControl = lazy(() => import("@/pages/LoadControl"));
 const ClosingReports = lazy(() => import("@/pages/ClosingReports"));
 const RuralClients = lazy(() => import("@/pages/RuralClients"));
 const DriverMonitoring = lazy(() => import("@/pages/DriverMonitoring"));
+const OccurrenceReports = lazy(() => import("@/pages/OccurrenceReports"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
 // Driver pages
