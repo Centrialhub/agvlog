@@ -286,6 +286,7 @@ const App = () => (
             <Route path="/closing-reports" element={<ProtectedRoute><ClosingReports /></ProtectedRoute>} />
             <Route path="/rural-clients" element={<ProtectedRoute><RuralClients /></ProtectedRoute>} />
             <Route path="/driver-monitoring" element={<ProtectedRoute><DriverMonitoring /></ProtectedRoute>} />
+            <Route path="/occurrence-reports" element={<ProtectedRoute><OccurrenceReports /></ProtectedRoute>} />
 
             {/* Driver routes */}
             <Route path="/driver" element={<DriverRoute><DriverHome /></DriverRoute>} />
