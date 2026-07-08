@@ -25,14 +25,21 @@ function resolvePublicStatus(r: ShipmentRow): PublicShipmentStatus {
 const fmtDate = (d?: string | null) => (d ? new Date(d).toLocaleDateString('pt-BR') : '—');
 const fmtDateTime = (d?: string | null) => (d ? new Date(d).toLocaleString('pt-BR') : '—');
 
-const QUICK_CHIPS = [
-  { id: 'in_transit', label: 'Em trânsito', status: ['in_transit', 'loading', 'loaded'] as string[] | undefined },
-  { id: 'delayed', label: 'Atrasadas', delayed: true as boolean | undefined },
-  { id: 'out_for_delivery', label: 'Saiu para entrega', status: ['out_for_delivery'] as string[] | undefined },
-  { id: 'delivered', label: 'Entregues', status: ['delivered'] as string[] | undefined },
-  { id: 'pod_pending', label: 'Canhoto pendente', hasPod: false as boolean | undefined, deliveredOnly: true },
-  { id: 'occurrence', label: 'Com ocorrência', hasOccurrence: true as boolean | undefined },
-] as const;
+type QuickChip = {
+  id: string;
+  label: string;
+  status?: string[];
+  hasPod?: boolean;
+  hasOccurrence?: boolean;
+};
+
+const QUICK_CHIPS: QuickChip[] = [
+  { id: 'in_transit', label: 'Em trânsito', status: ['in_transit', 'loading', 'loaded'] },
+  { id: 'out_for_delivery', label: 'Saiu para entrega', status: ['out_for_delivery'] },
+  { id: 'delivered', label: 'Entregues', status: ['delivered'] },
+  { id: 'pod_pending', label: 'Canhoto pendente', status: ['delivered'], hasPod: false },
+  { id: 'occurrence', label: 'Com ocorrência', hasOccurrence: true },
+];
 
 export default function PortalShipments() {
   const { selectedClientId } = usePortalClientScope();
