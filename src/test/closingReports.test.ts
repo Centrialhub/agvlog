@@ -9,9 +9,10 @@ import * as XLSX from 'xlsx';
 import { buildDetailedCsv } from '@/lib/closingReports/closingReportCsv';
 import { buildWorkbook } from '@/lib/closingReports/closingReportExcel';
 
+let __nfSeq = 0;
 const nf = (o: Partial<RawFiscalDoc> = {}): RawFiscalDoc => ({
-  id: 'f' + Math.random().toString(36).slice(2, 8),
-  invoice_number: '1',
+  id: 'f' + (++__nfSeq),
+  invoice_number: String(1000 + __nfSeq),
   access_key: null,
   issue_date: '2026-06-05',
   origin_city: 'BH', origin_state: 'MG',
@@ -121,8 +122,8 @@ describe('computeClosingPaymentStatus', () => {
 });
 
 describe('excelSerialToIso', () => {
-  it('converte serial 46195 (2026-07-01)', () => {
-    expect(excelSerialToIso(46204)).toBe('2026-07-10');
+  it('converte serial 46204 para 2026-07-01', () => {
+    expect(excelSerialToIso(46204)).toBe('2026-07-01');
   });
 });
 
