@@ -318,12 +318,11 @@ export function useAttachPalletProof() {
       const path = `${currentTenant.id}/${args.protocolId}/${Date.now()}-${args.file.name}`;
       const { error: upErr } = await supabase.storage.from('pallet-return-proofs').upload(path, args.file, { upsert: true });
       if (upErr) throw upErr;
-      const { data: urlData } = supabase.storage.from('pallet-return-proofs').getPublicUrl(path);
       const { error } = await rpc('update_pallet_return_status', {
         _protocol_id: args.protocolId,
         _status: 'awaiting_signature',
         _payload: {
-          signed_proof_url: urlData.publicUrl,
+          signed_proof_url: path,
           receiver_name: args.receiverName || null,
           receiver_document: args.receiverDocument || null,
           signature_date: args.signatureDate || new Date().toISOString().slice(0, 10),
@@ -333,4 +332,11 @@ export function useAttachPalletProof() {
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['pallet_return_protocols'] }),
   });
+}
+
+/** Gera URL assinada temporária para visualizar o comprovante privado. */
+export async function getPalletProofSignedUrl(path: string, expiresIn = 300): Promise<string | null> {
+  const { data, error } = await supabase.storage.from('pallet-return-proofs').createSignedUrl(path, expiresIn);
+  if (error) return null;
+  return data.signedUrl;
 }
