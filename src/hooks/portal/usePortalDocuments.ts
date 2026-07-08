@@ -25,6 +25,8 @@ export function usePortalDocuments(filters?: {
   search?: string;
   start?: string;
   end?: string;
+  limit?: number;
+  offset?: number;
 }) {
   const { currentTenant } = useTenant();
   return useQuery({
@@ -37,8 +39,8 @@ export function usePortalDocuments(filters?: {
         _search: filters?.search || null,
         _start_date: filters?.start || null,
         _end_date: filters?.end || null,
-        _limit: 200,
-        _offset: 0,
+        _limit: filters?.limit ?? 50,
+        _offset: filters?.offset ?? 0,
       });
       if (error) throw error;
       return (data as any[]) as PortalDocument[];
