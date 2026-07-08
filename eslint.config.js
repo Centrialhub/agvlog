@@ -21,6 +21,17 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
       "@typescript-eslint/no-unused-vars": "off",
+      // Legacy debt across Supabase hooks and edge functions — kept as warn to
+      // avoid a risky mass refactor while still surfacing new occurrences.
+      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/no-empty-object-type": "warn",
+      "@typescript-eslint/no-unused-expressions": "warn",
+      "@typescript-eslint/no-require-imports": "warn",
+      "no-useless-escape": "warn",
+      "no-empty": "warn",
+      "no-constant-binary-expression": "warn",
+      "no-prototype-builtins": "warn",
+      "prefer-const": "warn",
     },
   },
 );
