@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
+import { usePortalClientScope } from '@/hooks/portal/usePortalClientScope';
 
 export interface ShipmentRow {
   fiscal_document_id: string;
@@ -46,12 +47,14 @@ export interface ShipmentFilters {
 
 export function usePortalShipments(filters: ShipmentFilters = {}) {
   const { currentTenant } = useTenant();
+  const { selectedClientId } = usePortalClientScope();
   return useQuery({
-    queryKey: ['portal_shipments', currentTenant?.id, filters],
+    queryKey: ['portal_shipments', currentTenant?.id, selectedClientId, filters],
     queryFn: async (): Promise<{ rows: ShipmentRow[]; total: number }> => {
       if (!currentTenant) return { rows: [], total: 0 };
-      const { data, error } = await supabase.rpc('search_client_portal_shipments', {
+      const { data, error } = await (supabase as any).rpc('search_client_portal_shipments_v2', {
         _tenant_id: currentTenant.id,
+        _client_id: selectedClientId,
         _search: filters.search ?? null,
         _status: filters.status ?? null,
         _start_date: filters.startDate ?? null,
