@@ -77,6 +77,7 @@ const ProductTraceability = lazy(() => import("@/pages/ProductTraceability"));
 const ProductHistory = lazy(() => import("@/pages/ProductHistory"));
 const ImportedNotesSummary = lazy(() => import("@/pages/ImportedNotesSummary"));
 const LoadControl = lazy(() => import("@/pages/LoadControl"));
+const ClosingReports = lazy(() => import("@/pages/ClosingReports"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
 // Driver pages
