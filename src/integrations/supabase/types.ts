@@ -3173,6 +3173,78 @@ export type Database = {
           },
         ]
       }
+      driver_arrival_forecasts: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          current_city: string | null
+          current_state: string | null
+          driver_id: string | null
+          forecast_arrival_at: string | null
+          forecast_date: string
+          forecast_text: string | null
+          forecast_time: string | null
+          id: string
+          monitor_id: string
+          observation: string | null
+          remaining_cities: Json
+          remaining_cities_text: string | null
+          status: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          current_city?: string | null
+          current_state?: string | null
+          driver_id?: string | null
+          forecast_arrival_at?: string | null
+          forecast_date: string
+          forecast_text?: string | null
+          forecast_time?: string | null
+          id?: string
+          monitor_id: string
+          observation?: string | null
+          remaining_cities?: Json
+          remaining_cities_text?: string | null
+          status?: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          current_city?: string | null
+          current_state?: string | null
+          driver_id?: string | null
+          forecast_arrival_at?: string | null
+          forecast_date?: string
+          forecast_text?: string | null
+          forecast_time?: string | null
+          id?: string
+          monitor_id?: string
+          observation?: string | null
+          remaining_cities?: Json
+          remaining_cities_text?: string | null
+          status?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "driver_arrival_forecasts_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_arrival_forecasts_monitor_id_fkey"
+            columns: ["monitor_id"]
+            isOneToOne: false
+            referencedRelation: "driver_route_monitors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       driver_direct_messages: {
         Row: {
           attachment_url: string | null
@@ -3308,6 +3380,340 @@ export type Database = {
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      driver_monitoring_history: {
+        Row: {
+          action: string
+          created_at: string
+          created_by: string | null
+          field_name: string | null
+          id: string
+          metadata: Json
+          monitor_id: string
+          new_value: string | null
+          old_value: string | null
+          reason: string | null
+          tenant_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          created_by?: string | null
+          field_name?: string | null
+          id?: string
+          metadata?: Json
+          monitor_id: string
+          new_value?: string | null
+          old_value?: string | null
+          reason?: string | null
+          tenant_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          created_by?: string | null
+          field_name?: string | null
+          id?: string
+          metadata?: Json
+          monitor_id?: string
+          new_value?: string | null
+          old_value?: string | null
+          reason?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "driver_monitoring_history_monitor_id_fkey"
+            columns: ["monitor_id"]
+            isOneToOne: false
+            referencedRelation: "driver_route_monitors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      driver_monitoring_import_batches: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          duplicated_count: number
+          error_count: number
+          errors: Json
+          file_name: string | null
+          id: string
+          imported_forecasts: number
+          imported_monitors: number
+          imported_updates: number
+          metadata: Json
+          row_count: number
+          status: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          duplicated_count?: number
+          error_count?: number
+          errors?: Json
+          file_name?: string | null
+          id?: string
+          imported_forecasts?: number
+          imported_monitors?: number
+          imported_updates?: number
+          metadata?: Json
+          row_count?: number
+          status?: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          duplicated_count?: number
+          error_count?: number
+          errors?: Json
+          file_name?: string | null
+          id?: string
+          imported_forecasts?: number
+          imported_monitors?: number
+          imported_updates?: number
+          metadata?: Json
+          row_count?: number
+          status?: string
+          tenant_id?: string
+        }
+        Relationships: []
+      }
+      driver_route_monitors: {
+        Row: {
+          actual_returned_at: string | null
+          arrival_forecast_at: string | null
+          arrival_forecast_text: string | null
+          completed_deliveries: number
+          created_at: string
+          created_by: string | null
+          current_city: string | null
+          current_state: string | null
+          driver_id: string | null
+          driver_name_snapshot: string | null
+          expected_return_date: string | null
+          id: string
+          import_batch_id: string | null
+          last_update_at: string | null
+          load_id: string | null
+          monitor_number: string
+          next_city: string | null
+          next_state: string | null
+          notes: string | null
+          planned_cities: Json
+          planned_route_text: string | null
+          remaining_cities: Json
+          remaining_deliveries: number
+          return_deadline_days: number | null
+          route_id: string | null
+          source_type: string
+          started_at: string | null
+          status: string
+          tenant_id: string
+          total_deliveries: number
+          updated_at: string
+          updated_by: string | null
+          vehicle_id: string | null
+          vehicle_plate_snapshot: string | null
+        }
+        Insert: {
+          actual_returned_at?: string | null
+          arrival_forecast_at?: string | null
+          arrival_forecast_text?: string | null
+          completed_deliveries?: number
+          created_at?: string
+          created_by?: string | null
+          current_city?: string | null
+          current_state?: string | null
+          driver_id?: string | null
+          driver_name_snapshot?: string | null
+          expected_return_date?: string | null
+          id?: string
+          import_batch_id?: string | null
+          last_update_at?: string | null
+          load_id?: string | null
+          monitor_number: string
+          next_city?: string | null
+          next_state?: string | null
+          notes?: string | null
+          planned_cities?: Json
+          planned_route_text?: string | null
+          remaining_cities?: Json
+          remaining_deliveries?: number
+          return_deadline_days?: number | null
+          route_id?: string | null
+          source_type?: string
+          started_at?: string | null
+          status?: string
+          tenant_id: string
+          total_deliveries?: number
+          updated_at?: string
+          updated_by?: string | null
+          vehicle_id?: string | null
+          vehicle_plate_snapshot?: string | null
+        }
+        Update: {
+          actual_returned_at?: string | null
+          arrival_forecast_at?: string | null
+          arrival_forecast_text?: string | null
+          completed_deliveries?: number
+          created_at?: string
+          created_by?: string | null
+          current_city?: string | null
+          current_state?: string | null
+          driver_id?: string | null
+          driver_name_snapshot?: string | null
+          expected_return_date?: string | null
+          id?: string
+          import_batch_id?: string | null
+          last_update_at?: string | null
+          load_id?: string | null
+          monitor_number?: string
+          next_city?: string | null
+          next_state?: string | null
+          notes?: string | null
+          planned_cities?: Json
+          planned_route_text?: string | null
+          remaining_cities?: Json
+          remaining_deliveries?: number
+          return_deadline_days?: number | null
+          route_id?: string | null
+          source_type?: string
+          started_at?: string | null
+          status?: string
+          tenant_id?: string
+          total_deliveries?: number
+          updated_at?: string
+          updated_by?: string | null
+          vehicle_id?: string | null
+          vehicle_plate_snapshot?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "driver_route_monitors_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_route_monitors_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_route_monitors_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      driver_route_progress_updates: {
+        Row: {
+          city: string | null
+          city_finished_at: string | null
+          city_total_deliveries: number | null
+          created_at: string
+          created_by: string | null
+          deadline_to_finish: string | null
+          deliveries_completed_in_city: number
+          driver_id: string | null
+          id: string
+          load_id: string | null
+          monitor_id: string
+          next_city: string | null
+          next_city_deliveries: number | null
+          next_city_finished_at: string | null
+          next_deadline_to_finish: string | null
+          next_state: string | null
+          observation: string | null
+          source_type: string
+          state: string | null
+          status: string | null
+          tenant_id: string
+          update_date: string
+          update_time: string | null
+        }
+        Insert: {
+          city?: string | null
+          city_finished_at?: string | null
+          city_total_deliveries?: number | null
+          created_at?: string
+          created_by?: string | null
+          deadline_to_finish?: string | null
+          deliveries_completed_in_city?: number
+          driver_id?: string | null
+          id?: string
+          load_id?: string | null
+          monitor_id: string
+          next_city?: string | null
+          next_city_deliveries?: number | null
+          next_city_finished_at?: string | null
+          next_deadline_to_finish?: string | null
+          next_state?: string | null
+          observation?: string | null
+          source_type?: string
+          state?: string | null
+          status?: string | null
+          tenant_id: string
+          update_date: string
+          update_time?: string | null
+        }
+        Update: {
+          city?: string | null
+          city_finished_at?: string | null
+          city_total_deliveries?: number | null
+          created_at?: string
+          created_by?: string | null
+          deadline_to_finish?: string | null
+          deliveries_completed_in_city?: number
+          driver_id?: string | null
+          id?: string
+          load_id?: string | null
+          monitor_id?: string
+          next_city?: string | null
+          next_city_deliveries?: number | null
+          next_city_finished_at?: string | null
+          next_deadline_to_finish?: string | null
+          next_state?: string | null
+          observation?: string | null
+          source_type?: string
+          state?: string | null
+          status?: string | null
+          tenant_id?: string
+          update_date?: string
+          update_time?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "driver_route_progress_updates_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_route_progress_updates_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_route_progress_updates_monitor_id_fkey"
+            columns: ["monitor_id"]
+            isOneToOne: false
+            referencedRelation: "driver_route_monitors"
             referencedColumns: ["id"]
           },
         ]
