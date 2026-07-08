@@ -262,16 +262,18 @@ export default function Incidents() {
   );
 }
 
-function HrActionsSection({ incidentId, defaultEmployeeId }: { incidentId: string; defaultEmployeeId?: string }) {
+function HrActionsSection({ incidentId, defaultEmployeeId, savedEmployeeId }: { incidentId: string; defaultEmployeeId?: string; savedEmployeeId?: string }) {
   const { data: actions = [] } = useIncidentActions(incidentId);
   const addAction = useAddEmployeeIncidentAction();
   const [actionType, setActionType] = useState<string>('note');
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [effectiveDate, setEffectiveDate] = useState('');
+  const employeeMismatch = !!savedEmployeeId && defaultEmployeeId !== savedEmployeeId;
 
   const handleAdd = async () => {
     if (!defaultEmployeeId) { toast.error('Vincule um funcionário à ocorrência antes'); return; }
+    if (employeeMismatch) { toast.error('Salve a alteração do funcionário antes de adicionar ações de RH.'); return; }
     if (actionType === 'payroll_discount' && !(Number(amount) > 0)) {
       toast.error('Desconto em folha requer valor maior que zero'); return;
     }
@@ -318,8 +320,11 @@ function HrActionsSection({ incidentId, defaultEmployeeId }: { incidentId: strin
           </div>
         )}
       </div>
-      <div className="flex justify-end">
-        <Button size="sm" onClick={handleAdd} disabled={addAction.isPending}>
+      <div className="flex justify-end items-center gap-2">
+        {employeeMismatch && (
+          <span className="text-[10px] text-destructive">Salve a alteração do funcionário antes de adicionar ações de RH.</span>
+        )}
+        <Button size="sm" onClick={handleAdd} disabled={addAction.isPending || employeeMismatch}>
           <Plus className="h-3 w-3 mr-1" /> Adicionar ação
         </Button>
       </div>
