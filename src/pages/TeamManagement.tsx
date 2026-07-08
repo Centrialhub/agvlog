@@ -360,7 +360,7 @@ const ACCESS_TYPES = [
 
 const PERM_FIELDS: Array<[keyof PortalAccessRow, string]> = [
   ['can_view_financial', 'Ver valores'],
-  ['can_download_documents', 'Baixar canhotos'],
+  ['can_download_documents', 'Baixar documentos/canhotos'],
   ['can_open_occurrences', 'Abrir ocorrências'],
   ['can_request_pickup', 'Solicitar coleta'],
   ['can_view_vehicle_live', 'Ver veículo ao vivo'],
@@ -473,6 +473,18 @@ function PortalAccessTab({ tenantId }: { tenantId?: string }) {
                     <Button size="sm" variant="ghost" onClick={() => { setEditing(r); setOpen(true); }}><Pencil className="h-3 w-3" /></Button>
                     <Button size="sm" variant="ghost" onClick={() => toggleActive.mutate({ id: r.id, active: !r.active })}>
                       {r.active ? <Ban className="h-3 w-3 text-destructive" /> : <CheckCircle2 className="h-3 w-3 text-success" />}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      title="Copiar link do portal"
+                      onClick={() => {
+                        const url = `${window.location.origin}/portal`;
+                        navigator.clipboard.writeText(url);
+                        toast.success('Link do portal copiado');
+                      }}
+                    >
+                      <Link2 className="h-3 w-3" />
                     </Button>
                     <Button size="sm" variant="ghost" onClick={() => { if (confirm('Remover acesso?')) remove.mutate(r.id); }}>
                       <AlertTriangle className="h-3 w-3 text-destructive" />
