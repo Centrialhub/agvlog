@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PortalSection } from '@/components/portal/PortalLayout';
 import { PortalEmptyState } from '@/components/portal/PortalEmptyState';
 import { PortalStatusBadge } from '@/components/portal/PortalStatusBadge';
 import { usePortalShipments, type ShipmentRow } from '@/hooks/portal/usePortalShipments';
+import { usePortalClientScope } from '@/hooks/portal/usePortalClientScope';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -11,11 +12,10 @@ import { Badge } from '@/components/ui/badge';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { Loader2, Search, ChevronRight, ClipboardCheck, AlertTriangle } from 'lucide-react';
+import { Loader2, Search, ChevronRight, ClipboardCheck, AlertTriangle, X } from 'lucide-react';
 import type { PublicShipmentStatus } from '@/lib/portal/portalStatus';
 
 function resolvePublicStatus(r: ShipmentRow): PublicShipmentStatus {
-  // Fonte de verdade: get_public_shipment_status (SQL) via search_client_portal_shipments.
   if (r.public_status) return r.public_status as PublicShipmentStatus;
   if (r.has_open_occurrence) return 'exception';
   if (r.document_status === 'delivered') return r.has_pod ? 'pod_available' : 'pod_pending';
@@ -25,42 +25,110 @@ function resolvePublicStatus(r: ShipmentRow): PublicShipmentStatus {
 const fmtDate = (d?: string | null) => (d ? new Date(d).toLocaleDateString('pt-BR') : '—');
 const fmtDateTime = (d?: string | null) => (d ? new Date(d).toLocaleString('pt-BR') : '—');
 
+type QuickChip = {
+  id: string;
+  label: string;
+  status?: string[];
+  hasPod?: boolean;
+  hasOccurrence?: boolean;
+};
+
+const QUICK_CHIPS: QuickChip[] = [
+  { id: 'in_transit', label: 'Em trânsito', status: ['in_transit', 'loading', 'loaded'] },
+  { id: 'out_for_delivery', label: 'Saiu para entrega', status: ['out_for_delivery'] },
+  { id: 'delivered', label: 'Entregues', status: ['delivered'] },
+  { id: 'pod_pending', label: 'Canhoto pendente', status: ['delivered'], hasPod: false },
+  { id: 'occurrence', label: 'Com ocorrência', hasOccurrence: true },
+];
+
 export default function PortalShipments() {
+  const { selectedClientId } = usePortalClientScope();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(0);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [city, setCity] = useState('');
+  const [state, setState] = useState('');
+  const [chip, setChip] = useState<string | null>(null);
+  const [hasPodFilter, setHasPodFilter] = useState<boolean | undefined>(undefined);
+  const [hasOccurrenceFilter, setHasOccurrenceFilter] = useState<boolean | undefined>(undefined);
   const limit = 50;
 
-  // simple debounce
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 300);
     return () => clearTimeout(t);
   }, [search]);
 
-  const { data, isLoading } = usePortalShipments({
+  const activeChip = useMemo(() => QUICK_CHIPS.find((c) => c.id === chip), [chip]);
+
+  const filters = useMemo(() => ({
     search: debouncedSearch || undefined,
+    startDate: startDate || undefined,
+    endDate: endDate || undefined,
+    city: city || undefined,
+    state: state || undefined,
+    status: activeChip?.status,
+    hasPod: activeChip?.hasPod ?? hasPodFilter,
+    hasOccurrence: activeChip?.hasOccurrence ?? hasOccurrenceFilter,
     limit,
     offset: page * limit,
-  });
+  }), [debouncedSearch, startDate, endDate, city, state, activeChip, hasPodFilter, hasOccurrenceFilter, page, selectedClientId]);
+
+  const { data, isLoading } = usePortalShipments(filters);
 
   const rows = data?.rows ?? [];
   const total = data?.total ?? 0;
 
+  const clearFilters = () => {
+    setSearch(''); setDebouncedSearch('');
+    setStartDate(''); setEndDate(''); setCity(''); setState('');
+    setChip(null); setHasPodFilter(undefined); setHasOccurrenceFilter(undefined);
+    setPage(0);
+  };
+
+  const anyFilter = !!(debouncedSearch || startDate || endDate || city || state || chip || hasPodFilter !== undefined || hasOccurrenceFilter !== undefined);
+
   return (
     <PortalSection title="Mercadorias" description="Documentos fiscais e cargas vinculados ao seu acesso.">
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[220px] max-w-md">
-          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => { setPage(0); setSearch(e.target.value); }}
-            placeholder="Buscar NF, chave, pedido, carga, destinatário, CNPJ..."
-            className="pl-8 h-9 text-sm"
-          />
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[220px] max-w-md">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => { setPage(0); setSearch(e.target.value); }}
+              placeholder="Buscar NF, chave, pedido, carga, destinatário, CNPJ..."
+              className="pl-8 h-9 text-sm"
+            />
+          </div>
+          <Input type="date" value={startDate} onChange={(e) => { setPage(0); setStartDate(e.target.value); }} className="h-9 text-sm w-[140px]" />
+          <Input type="date" value={endDate} onChange={(e) => { setPage(0); setEndDate(e.target.value); }} className="h-9 text-sm w-[140px]" />
+          <Input value={city} onChange={(e) => { setPage(0); setCity(e.target.value); }} placeholder="Cidade" className="h-9 text-sm w-[140px]" />
+          <Input value={state} onChange={(e) => { setPage(0); setState(e.target.value.toUpperCase().slice(0,2)); }} placeholder="UF" className="h-9 text-sm w-[70px]" />
+          {anyFilter && (
+            <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9">
+              <X className="h-3.5 w-3.5 mr-1" /> Limpar
+            </Button>
+          )}
+          <Badge variant="outline" className="text-[10px] ml-auto">
+            {isLoading ? '...' : `${total} documento(s)`}
+          </Badge>
         </div>
-        <Badge variant="outline" className="text-[10px] ml-auto">
-          {isLoading ? '...' : `${total} documento(s)`}
-        </Badge>
+
+        <div className="flex flex-wrap gap-1.5">
+          {QUICK_CHIPS.map((c) => (
+            <Button
+              key={c.id}
+              size="sm"
+              variant={chip === c.id ? 'default' : 'outline'}
+              onClick={() => { setPage(0); setChip(chip === c.id ? null : c.id); }}
+              className="h-7 text-xs rounded-full"
+            >
+              {c.label}
+            </Button>
+          ))}
+        </div>
       </div>
 
       {isLoading ? (
@@ -139,6 +207,11 @@ export default function PortalShipments() {
                     <p className="text-[11px] text-muted-foreground">
                       {r.recipient_city || '—'}{r.recipient_state ? `/${r.recipient_state}` : ''} · Previsão {fmtDateTime(r.planned_arrival_at)}
                     </p>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {r.load_number && <Badge variant="outline" className="text-[9px]">Carga {r.load_number}</Badge>}
+                      {r.has_pod && <Badge variant="outline" className="text-[9px] bg-emerald-500/10 text-emerald-700"><ClipboardCheck className="h-2.5 w-2.5 mr-0.5" />Canhoto</Badge>}
+                      {r.has_open_occurrence && <Badge variant="destructive" className="text-[9px]"><AlertTriangle className="h-2.5 w-2.5 mr-0.5" />Ocorrência</Badge>}
+                    </div>
                   </CardContent>
                 </Card>
               </Link>

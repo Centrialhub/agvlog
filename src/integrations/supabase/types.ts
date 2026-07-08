@@ -13899,6 +13899,10 @@ export type Database = {
         Args: { _fiscal_document_id: string }
         Returns: Json
       }
+      get_client_portal_shipment_detail_v2: {
+        Args: { _fiscal_document_id: string }
+        Returns: Json
+      }
       get_client_portal_summary: {
         Args: { _end_date?: string; _start_date?: string; _tenant_id: string }
         Returns: Json
