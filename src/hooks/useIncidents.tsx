@@ -213,6 +213,9 @@ export function useAddEmployeeIncidentAction() {
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ['employee_incident_actions', vars.incident_id] });
       qc.invalidateQueries({ queryKey: ['employee_incident_actions'] });
+      qc.invalidateQueries({ queryKey: ['incidents'] });
+      qc.invalidateQueries({ queryKey: ['employees'] });
+      qc.invalidateQueries({ queryKey: ['payroll_entries'] });
     },
   });
 }
