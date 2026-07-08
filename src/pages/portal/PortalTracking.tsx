@@ -6,7 +6,8 @@ import { usePortalClientScope } from '@/hooks/portal/usePortalClientScope';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Loader2, MapPin, Truck, Phone, Clock, Navigation, Info } from 'lucide-react';
+import { Loader2, MapPin, Truck, Phone, Clock, Navigation, Info, FileText, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -171,6 +172,52 @@ function TrackingCard({
         <div className="mt-1.5 text-[10px] text-muted-foreground flex items-center gap-1">
           <Clock className="h-3 w-3" />
           Última posição há {formatDistanceToNow(new Date(item.captured_at), { locale: ptBR })}
+        </div>
+      )}
+
+      {item.documents && item.documents.length > 0 && (
+        <div className="mt-2 pt-2 border-t border-border space-y-1">
+          <div className="text-[10px] uppercase text-muted-foreground flex items-center gap-1">
+            <FileText className="h-3 w-3" /> Notas ({item.documents.length})
+          </div>
+          {item.documents.slice(0, 3).map((d) => (
+            <Link
+              key={d.fiscal_document_id}
+              to={`/portal/shipments/${d.fiscal_document_id}`}
+              onClick={(e) => e.stopPropagation()}
+              className="block text-xs rounded-sm px-1.5 py-1 hover:bg-muted/60"
+            >
+              <div className="flex items-center gap-1 min-w-0">
+                <span className="font-medium truncate">NF {d.invoice_number || '—'}</span>
+                {d.public_status && (
+                  <Badge variant="outline" className="text-[9px] ml-auto shrink-0">
+                    {d.public_status}
+                  </Badge>
+                )}
+              </div>
+              <div className="text-[10px] text-muted-foreground truncate">
+                {d.recipient || '—'}
+                {d.recipient_city && ` · ${d.recipient_city}${d.recipient_state ? '/' + d.recipient_state : ''}`}
+              </div>
+              <div className="flex items-center gap-2 mt-0.5">
+                {d.has_open_occurrence && (
+                  <span className="inline-flex items-center gap-0.5 text-[10px] text-amber-600">
+                    <AlertTriangle className="h-3 w-3" /> ocorrência
+                  </span>
+                )}
+                {d.has_pod && (
+                  <span className="inline-flex items-center gap-0.5 text-[10px] text-emerald-600">
+                    <CheckCircle2 className="h-3 w-3" /> canhoto
+                  </span>
+                )}
+              </div>
+            </Link>
+          ))}
+          {item.documents.length > 3 && (
+            <div className="text-[10px] text-muted-foreground pl-1.5">
+              +{item.documents.length - 3} outras notas
+            </div>
+          )}
         </div>
       )}
     </button>
