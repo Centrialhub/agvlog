@@ -2836,6 +2836,229 @@ export type Database = {
           },
         ]
       }
+      delivery_occurrence_items: {
+        Row: {
+          created_at: string
+          fiscal_document_id: string | null
+          id: string
+          invoice_number: string | null
+          item_value: number | null
+          metadata: Json
+          notes: string | null
+          occurrence_id: string
+          product_code: string | null
+          product_description: string | null
+          quantity: number | null
+          quantity_text: string | null
+          reason: string | null
+          return_type: string | null
+          tenant_id: string
+          unit: string | null
+        }
+        Insert: {
+          created_at?: string
+          fiscal_document_id?: string | null
+          id?: string
+          invoice_number?: string | null
+          item_value?: number | null
+          metadata?: Json
+          notes?: string | null
+          occurrence_id: string
+          product_code?: string | null
+          product_description?: string | null
+          quantity?: number | null
+          quantity_text?: string | null
+          reason?: string | null
+          return_type?: string | null
+          tenant_id: string
+          unit?: string | null
+        }
+        Update: {
+          created_at?: string
+          fiscal_document_id?: string | null
+          id?: string
+          invoice_number?: string | null
+          item_value?: number | null
+          metadata?: Json
+          notes?: string | null
+          occurrence_id?: string
+          product_code?: string | null
+          product_description?: string | null
+          quantity?: number | null
+          quantity_text?: string | null
+          reason?: string | null
+          return_type?: string | null
+          tenant_id?: string
+          unit?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "delivery_occurrence_items_fiscal_document_id_fkey"
+            columns: ["fiscal_document_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_occurrence_items_occurrence_id_fkey"
+            columns: ["occurrence_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_occurrences"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      delivery_occurrences: {
+        Row: {
+          city: string | null
+          client_id: string | null
+          closed_at: string | null
+          created_at: string
+          created_by: string | null
+          cte_document_id: string | null
+          cte_number: string | null
+          customer_name: string | null
+          driver_id: string | null
+          fiscal_document_id: string | null
+          id: string
+          invoice_number: string | null
+          legacy_status_text: string | null
+          load_id: string | null
+          metadata: Json
+          occurrence_date: string | null
+          occurrence_description: string | null
+          occurrence_number: string | null
+          occurrence_reason: string | null
+          occurrence_time: string | null
+          occurrence_type: string
+          password_or_authorization: string | null
+          resolution_notes: string | null
+          resolution_type: string | null
+          resolved_at: string | null
+          responsible_user_id: string | null
+          state: string | null
+          status: string
+          supplier_id: string | null
+          supplier_name: string | null
+          tenant_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          city?: string | null
+          client_id?: string | null
+          closed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          cte_document_id?: string | null
+          cte_number?: string | null
+          customer_name?: string | null
+          driver_id?: string | null
+          fiscal_document_id?: string | null
+          id?: string
+          invoice_number?: string | null
+          legacy_status_text?: string | null
+          load_id?: string | null
+          metadata?: Json
+          occurrence_date?: string | null
+          occurrence_description?: string | null
+          occurrence_number?: string | null
+          occurrence_reason?: string | null
+          occurrence_time?: string | null
+          occurrence_type: string
+          password_or_authorization?: string | null
+          resolution_notes?: string | null
+          resolution_type?: string | null
+          resolved_at?: string | null
+          responsible_user_id?: string | null
+          state?: string | null
+          status?: string
+          supplier_id?: string | null
+          supplier_name?: string | null
+          tenant_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          city?: string | null
+          client_id?: string | null
+          closed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          cte_document_id?: string | null
+          cte_number?: string | null
+          customer_name?: string | null
+          driver_id?: string | null
+          fiscal_document_id?: string | null
+          id?: string
+          invoice_number?: string | null
+          legacy_status_text?: string | null
+          load_id?: string | null
+          metadata?: Json
+          occurrence_date?: string | null
+          occurrence_description?: string | null
+          occurrence_number?: string | null
+          occurrence_reason?: string | null
+          occurrence_time?: string | null
+          occurrence_type?: string
+          password_or_authorization?: string | null
+          resolution_notes?: string | null
+          resolution_type?: string | null
+          resolved_at?: string | null
+          responsible_user_id?: string | null
+          state?: string | null
+          status?: string
+          supplier_id?: string | null
+          supplier_name?: string | null
+          tenant_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "delivery_occurrences_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_occurrences_cte_document_id_fkey"
+            columns: ["cte_document_id"]
+            isOneToOne: false
+            referencedRelation: "cte_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_occurrences_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_occurrences_fiscal_document_id_fkey"
+            columns: ["fiscal_document_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_occurrences_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_occurrences_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dispatch_events: {
         Row: {
           created_at: string
@@ -8084,6 +8307,271 @@ export type Database = {
           series?: string
           tenant_id?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      occurrence_report_export_items: {
+        Row: {
+          city: string | null
+          created_at: string
+          cte_number: string | null
+          customer_name: string | null
+          export_id: string
+          fiscal_document_id: string | null
+          id: string
+          invoice_issue_date: string | null
+          invoice_number: string | null
+          invoice_value: number
+          metadata: Json
+          notes: string | null
+          occurrence_date: string | null
+          occurrence_id: string | null
+          occurrence_number: string | null
+          occurrence_type: string | null
+          password_or_authorization: string | null
+          product_description: string | null
+          quantity_text: string | null
+          reason: string | null
+          resolution_type: string | null
+          sort_order: number
+          state: string | null
+          supplier_name: string | null
+          tenant_id: string
+        }
+        Insert: {
+          city?: string | null
+          created_at?: string
+          cte_number?: string | null
+          customer_name?: string | null
+          export_id: string
+          fiscal_document_id?: string | null
+          id?: string
+          invoice_issue_date?: string | null
+          invoice_number?: string | null
+          invoice_value?: number
+          metadata?: Json
+          notes?: string | null
+          occurrence_date?: string | null
+          occurrence_id?: string | null
+          occurrence_number?: string | null
+          occurrence_type?: string | null
+          password_or_authorization?: string | null
+          product_description?: string | null
+          quantity_text?: string | null
+          reason?: string | null
+          resolution_type?: string | null
+          sort_order?: number
+          state?: string | null
+          supplier_name?: string | null
+          tenant_id: string
+        }
+        Update: {
+          city?: string | null
+          created_at?: string
+          cte_number?: string | null
+          customer_name?: string | null
+          export_id?: string
+          fiscal_document_id?: string | null
+          id?: string
+          invoice_issue_date?: string | null
+          invoice_number?: string | null
+          invoice_value?: number
+          metadata?: Json
+          notes?: string | null
+          occurrence_date?: string | null
+          occurrence_id?: string | null
+          occurrence_number?: string | null
+          occurrence_type?: string | null
+          password_or_authorization?: string | null
+          product_description?: string | null
+          quantity_text?: string | null
+          reason?: string | null
+          resolution_type?: string | null
+          sort_order?: number
+          state?: string | null
+          supplier_name?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "occurrence_report_export_items_export_id_fkey"
+            columns: ["export_id"]
+            isOneToOne: false
+            referencedRelation: "occurrence_report_exports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "occurrence_report_export_items_fiscal_document_id_fkey"
+            columns: ["fiscal_document_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "occurrence_report_export_items_occurrence_id_fkey"
+            columns: ["occurrence_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_occurrences"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      occurrence_report_exports: {
+        Row: {
+          cancellation_reason: string | null
+          cancelled_at: string | null
+          client_id: string | null
+          created_at: string
+          csv_url: string | null
+          excel_url: string | null
+          filters_snapshot: Json
+          generated_by: string | null
+          generated_snapshot: Json
+          id: string
+          invoice_count: number
+          occurrence_count: number
+          pdf_url: string | null
+          period_end: string | null
+          period_start: string | null
+          report_type: string
+          row_count: number
+          sent_at: string | null
+          sent_channel: string | null
+          sent_notes: string | null
+          sent_to: string | null
+          status: string
+          supplier_id: string | null
+          tenant_id: string
+          title: string
+          total_invoice_value: number
+          total_quantity: number
+        }
+        Insert: {
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          client_id?: string | null
+          created_at?: string
+          csv_url?: string | null
+          excel_url?: string | null
+          filters_snapshot?: Json
+          generated_by?: string | null
+          generated_snapshot?: Json
+          id?: string
+          invoice_count?: number
+          occurrence_count?: number
+          pdf_url?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          report_type: string
+          row_count?: number
+          sent_at?: string | null
+          sent_channel?: string | null
+          sent_notes?: string | null
+          sent_to?: string | null
+          status?: string
+          supplier_id?: string | null
+          tenant_id: string
+          title: string
+          total_invoice_value?: number
+          total_quantity?: number
+        }
+        Update: {
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          client_id?: string | null
+          created_at?: string
+          csv_url?: string | null
+          excel_url?: string | null
+          filters_snapshot?: Json
+          generated_by?: string | null
+          generated_snapshot?: Json
+          id?: string
+          invoice_count?: number
+          occurrence_count?: number
+          pdf_url?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          report_type?: string
+          row_count?: number
+          sent_at?: string | null
+          sent_channel?: string | null
+          sent_notes?: string | null
+          sent_to?: string | null
+          status?: string
+          supplier_id?: string | null
+          tenant_id?: string
+          title?: string
+          total_invoice_value?: number
+          total_quantity?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "occurrence_report_exports_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "occurrence_report_exports_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      occurrence_report_import_batches: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          detected_model: string | null
+          error_count: number
+          errors: Json
+          file_name: string | null
+          id: string
+          imported_count: number
+          metadata: Json
+          row_count: number
+          source_type: string
+          status: string
+          tenant_id: string
+          unmatched_count: number
+          updated_count: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          detected_model?: string | null
+          error_count?: number
+          errors?: Json
+          file_name?: string | null
+          id?: string
+          imported_count?: number
+          metadata?: Json
+          row_count?: number
+          source_type?: string
+          status?: string
+          tenant_id: string
+          unmatched_count?: number
+          updated_count?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          detected_model?: string | null
+          error_count?: number
+          errors?: Json
+          file_name?: string | null
+          id?: string
+          imported_count?: number
+          metadata?: Json
+          row_count?: number
+          source_type?: string
+          status?: string
+          tenant_id?: string
+          unmatched_count?: number
+          updated_count?: number
         }
         Relationships: []
       }
