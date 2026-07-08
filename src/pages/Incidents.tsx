@@ -68,7 +68,7 @@ export default function Incidents() {
   const openEdit = (i: Incident) => {
     setEditing(i);
     setForm({
-      title: i.title, incident_type: i.incident_type, category: i.category || 'operational',
+      title: i.title, incident_type: i.incident_type, category: i.category === 'rh' ? 'hr' : (i.category || 'operational'),
       severity: i.severity, description: i.description || '', employee_id: i.employee_id || '',
       vehicle_id: i.vehicle_id || '', client_id: i.client_id || '',
       estimated_cost: String(i.estimated_cost || ''), action_plan: i.action_plan || '',
