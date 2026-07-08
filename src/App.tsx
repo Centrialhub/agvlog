@@ -61,6 +61,7 @@ const BillingEdi = lazy(() => import("@/pages/BillingEdi"));
 const OperationalRoutesPage = lazy(() => import("@/pages/OperationalRoutesPage"));
 const Employees = lazy(() => import("@/pages/Employees"));
 const Incidents = lazy(() => import("@/pages/Incidents"));
+const Payroll = lazy(() => import("@/pages/Payroll"));
 const AssetsPage = lazy(() => import("@/pages/Assets"));
 const MaintenanceOrders = lazy(() => import("@/pages/MaintenanceOrders"));
 const StockPage = lazy(() => import("@/pages/Stock"));
