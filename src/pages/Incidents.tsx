@@ -332,9 +332,21 @@ function HrActionsSection({ incidentId, defaultEmployeeId }: { incidentId: strin
                 {a.description && <span className="text-muted-foreground"> — {a.description}</span>}
                 {a.effective_date && <span className="text-muted-foreground"> · {a.effective_date}</span>}
               </div>
-              {a.action_type === 'payroll_discount' && (
-                <span className="font-mono text-destructive">R$ {Number(a.amount).toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>
-              )}
+              <div className="flex items-center gap-2">
+                {a.action_type === 'payroll_discount' && (
+                  <span className="font-mono text-destructive">R$ {Number(a.amount).toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>
+                )}
+                <Badge
+                  variant="outline"
+                  className={`text-[10px] ${
+                    a.status === 'completed' ? 'bg-emerald-500/10 text-emerald-600' :
+                    a.status === 'cancelled' ? 'bg-muted text-muted-foreground' :
+                    'bg-yellow-500/10 text-yellow-700'
+                  }`}
+                >
+                  {a.status === 'completed' ? 'Concluída' : a.status === 'cancelled' ? 'Cancelada' : 'Aberta'}
+                </Badge>
+              </div>
             </div>
           ))}
         </div>
