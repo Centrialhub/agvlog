@@ -249,3 +249,84 @@ export default function Incidents() {
     </div>
   );
 }
+
+function HrActionsSection({ incidentId, defaultEmployeeId }: { incidentId: string; defaultEmployeeId?: string }) {
+  const { data: actions = [] } = useIncidentActions(incidentId);
+  const addAction = useAddEmployeeIncidentAction();
+  const [actionType, setActionType] = useState<string>('note');
+  const [description, setDescription] = useState('');
+  const [amount, setAmount] = useState('');
+  const [effectiveDate, setEffectiveDate] = useState('');
+
+  const handleAdd = async () => {
+    if (!defaultEmployeeId) { toast.error('Vincule um funcionário à ocorrência antes'); return; }
+    if (actionType === 'payroll_discount' && !(Number(amount) > 0)) {
+      toast.error('Desconto em folha requer valor maior que zero'); return;
+    }
+    if (actionType === 'payroll_discount' && !effectiveDate) {
+      toast.error('Desconto em folha requer data efetiva'); return;
+    }
+    try {
+      await addAction.mutateAsync({
+        incident_id: incidentId,
+        employee_id: defaultEmployeeId,
+        action_type: actionType,
+        description: description || null,
+        amount: amount ? Number(amount) : 0,
+        effective_date: effectiveDate || null,
+      });
+      toast.success('Ação de RH registrada');
+      setDescription(''); setAmount(''); setEffectiveDate(''); setActionType('note');
+    } catch (e: any) { toast.error(e.message); }
+  };
+
+  return (
+    <div className="border rounded-md p-3 space-y-3 bg-muted/30">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold">Ações de RH</p>
+        <Badge variant="outline" className="text-[10px]">{actions.length}</Badge>
+      </div>
+      <Separator />
+      <div className="grid grid-cols-2 gap-2">
+        <div><Label className="text-xs">Tipo de ação</Label>
+          <Select value={actionType} onValueChange={setActionType}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>{INCIDENT_ACTION_TYPES.map(t => <SelectItem key={t} value={t}>{INCIDENT_ACTION_LABELS[t]}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+        <div><Label className="text-xs">Data efetiva {actionType === 'payroll_discount' && <span className="text-destructive">*</span>}</Label>
+          <Input type="date" value={effectiveDate} onChange={e => setEffectiveDate(e.target.value)} />
+        </div>
+        <div className="col-span-2"><Label className="text-xs">Descrição</Label>
+          <Textarea rows={2} value={description} onChange={e => setDescription(e.target.value)} />
+        </div>
+        {actionType === 'payroll_discount' && (
+          <div><Label className="text-xs">Valor do desconto (R$) *</Label>
+            <Input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} />
+          </div>
+        )}
+      </div>
+      <div className="flex justify-end">
+        <Button size="sm" onClick={handleAdd} disabled={addAction.isPending}>
+          <Plus className="h-3 w-3 mr-1" /> Adicionar ação
+        </Button>
+      </div>
+      {actions.length > 0 && (
+        <div className="space-y-1 pt-2">
+          {actions.map(a => (
+            <div key={a.id} className="flex items-center justify-between text-xs border rounded px-2 py-1 bg-background">
+              <div className="flex-1">
+                <span className="font-medium">{INCIDENT_ACTION_LABELS[a.action_type] || a.action_type}</span>
+                {a.description && <span className="text-muted-foreground"> — {a.description}</span>}
+                {a.effective_date && <span className="text-muted-foreground"> · {a.effective_date}</span>}
+              </div>
+              {a.action_type === 'payroll_discount' && (
+                <span className="font-mono text-destructive">R$ {Number(a.amount).toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
