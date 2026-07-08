@@ -22,6 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Search, Plus, AlertOctagon, Edit } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
+import { Separator } from '@/components/ui/separator';
 
 export default function Incidents() {
   const { data: incidents = [], isLoading } = useIncidents();
