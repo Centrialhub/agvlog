@@ -280,6 +280,7 @@ const App = () => (
             <Route path="/product-history" element={<ProtectedRoute><ProductHistory /></ProtectedRoute>} />
             <Route path="/imported-notes-summary" element={<ProtectedRoute><ImportedNotesSummary /></ProtectedRoute>} />
             <Route path="/load-control" element={<ProtectedRoute><LoadControl /></ProtectedRoute>} />
+            <Route path="/closing-reports" element={<ProtectedRoute><ClosingReports /></ProtectedRoute>} />
 
             {/* Driver routes */}
             <Route path="/driver" element={<DriverRoute><DriverHome /></DriverRoute>} />
