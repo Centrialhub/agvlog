@@ -455,13 +455,14 @@ export default function OccurrenceReports() {
 }
 
 function RowTable({ rows, emptyLabel }: { rows: Array<Record<string, any>>; emptyLabel: string }) {
+  const navigate = useNavigateRR();
   return (
     <Card><CardContent className="p-0">
       <Table>
         <TableHeader><TableRow>
           <TableHead>Data</TableHead><TableHead>NF</TableHead><TableHead>Cliente</TableHead>
           <TableHead>Cidade</TableHead><TableHead>Fornecedor</TableHead><TableHead>Tipo</TableHead>
-          <TableHead>Resolução</TableHead><TableHead>Motivo</TableHead>
+          <TableHead>Resolução</TableHead><TableHead>Motivo</TableHead><TableHead>Folha</TableHead>
         </TableRow></TableHeader>
         <TableBody>
           {rows.map((o) => (
@@ -474,9 +475,14 @@ function RowTable({ rows, emptyLabel }: { rows: Array<Record<string, any>>; empt
               <TableCell>{(o.occurrence_type as string) ?? '—'}</TableCell>
               <TableCell>{resolutionTypeLabels[(o.resolution_type as string) ?? ''] ?? '—'}</TableCell>
               <TableCell className="max-w-[280px] truncate">{(o.occurrence_reason as string) ?? (o.resolution_notes as string) ?? '—'}</TableCell>
+              <TableCell>
+                <Button size="sm" variant="ghost" onClick={() => navigate(`/occurrences/${o.id}/return-sheet`)}>
+                  Folha
+                </Button>
+              </TableCell>
             </TableRow>
           ))}
-          {!rows.length && <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground">{emptyLabel}</TableCell></TableRow>}
+          {!rows.length && <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground">{emptyLabel}</TableCell></TableRow>}
         </TableBody>
       </Table>
     </CardContent></Card>
