@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { PortalSection } from '@/components/portal/PortalLayout';
 import { PortalEmptyState } from '@/components/portal/PortalEmptyState';
-import { usePortalPickups, useRequestPortalPickup } from '@/hooks/portal/usePortalPickups';
+import { usePortalPickups, useRequestPortalPickup, useCancelPortalPickup } from '@/hooks/portal/usePortalPickups';
 import { useClientPortalAccess, hasAnyPermission } from '@/hooks/portal/useClientPortalAccess';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Loader2 } from 'lucide-react';
+import { Plus, Loader2, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
@@ -35,7 +35,23 @@ export default function PortalPickups() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ client_id: '', pickup_at: '', recipient_name: '', notes: '' });
   const requestMut = useRequestPortalPickup();
+  const cancelMut = useCancelPortalPickup();
   const { toast } = useToast();
+
+  const clientLabel = (id: string) => {
+    const a = access.find((c) => c.client_id === id);
+    return a?.client_name || id.slice(0, 8);
+  };
+
+  const handleCancel = async (id: string) => {
+    if (!window.confirm('Deseja cancelar esta coleta?')) return;
+    try {
+      await cancelMut.mutateAsync(id);
+      toast({ title: 'Coleta cancelada' });
+    } catch (e: any) {
+      toast({ title: 'Erro ao cancelar', description: e.message, variant: 'destructive' });
+    }
+  };
 
   const submit = async () => {
     if (!form.client_id || !form.pickup_at) {
@@ -87,7 +103,7 @@ export default function PortalPickups() {
                     <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                     <SelectContent>
                       {requestableClients.map(c => (
-                        <SelectItem key={c.client_id} value={c.client_id}>{c.client_id.slice(0, 8)}</SelectItem>
+                        <SelectItem key={c.client_id} value={c.client_id}>{c.client_name || c.client_id.slice(0, 8)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -133,6 +149,7 @@ export default function PortalPickups() {
                   <TableHead>Destinatário</TableHead>
                   <TableHead>XMLs</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead className="w-[80px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -145,6 +162,19 @@ export default function PortalPickups() {
                     <TableCell>{p.linked_docs_count || 0}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className={STATUS_TONE[p.status] || ''}>{p.status}</Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {p.status === 'pendente' && canRequest && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleCancel(p.id)}
+                          disabled={cancelMut.isPending}
+                          title="Cancelar coleta"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
