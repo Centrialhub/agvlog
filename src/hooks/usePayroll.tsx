@@ -223,25 +223,18 @@ export function useClosePayrollPeriod() {
 
 // ---------------- Manual item ops ----------------
 export function useAddPayrollManualItem() {
-  const { currentTenant } = useTenant();
-  const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (args: { entry: PayrollEntry; nature: 'credit'|'debit'; description: string; amount: number }) => {
-      const { data, error } = await (supabase as any).from('payroll_entry_items').insert({
-        tenant_id: currentTenant!.id,
-        payroll_period_id: args.entry.payroll_period_id,
-        payroll_entry_id: args.entry.id,
-        employee_id: args.entry.employee_id,
-        driver_id: args.entry.driver_id,
-        item_type: args.nature === 'credit' ? 'manual_credit' : 'manual_debit',
-        nature: args.nature,
-        description: args.description,
-        amount: args.amount,
-        created_by: user?.id,
-      }).select().single();
+    mutationFn: async (args: { entry: PayrollEntry; nature: 'credit'|'debit'; description: string; amount: number; reason: string }) => {
+      if (!args.reason || !args.reason.trim()) throw new Error('Motivo obrigatório para ajuste manual');
+      const { data, error } = await (supabase as any).rpc('add_payroll_manual_item', {
+        _entry_id: args.entry.id,
+        _nature: args.nature,
+        _description: args.description,
+        _amount: args.amount,
+        _reason: args.reason,
+      });
       if (error) throw error;
-      await (supabase as any).rpc('recalculate_payroll_entry', { _entry_id: args.entry.id });
       return data;
     },
     onSuccess: (_d, args) => {
@@ -254,11 +247,14 @@ export function useAddPayrollManualItem() {
 export function useDeletePayrollItem() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (item: PayrollEntryItem) => {
-      const { error } = await (supabase as any).from('payroll_entry_items').delete().eq('id', item.id);
+    mutationFn: async (args: { item: PayrollEntryItem; reason: string }) => {
+      if (!args.reason || !args.reason.trim()) throw new Error('Motivo obrigatório para exclusão');
+      const { error } = await (supabase as any).rpc('delete_payroll_entry_item', {
+        _item_id: args.item.id,
+        _reason: args.reason,
+      });
       if (error) throw error;
-      await (supabase as any).rpc('recalculate_payroll_entry', { _entry_id: item.payroll_entry_id });
-      return item;
+      return args.item;
     },
     onSuccess: (item) => {
       qc.invalidateQueries({ queryKey: ['payroll_entries'] });
