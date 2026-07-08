@@ -207,6 +207,11 @@ export default function PortalShipments() {
                     <p className="text-[11px] text-muted-foreground">
                       {r.recipient_city || '—'}{r.recipient_state ? `/${r.recipient_state}` : ''} · Previsão {fmtDateTime(r.planned_arrival_at)}
                     </p>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {r.load_number && <Badge variant="outline" className="text-[9px]">Carga {r.load_number}</Badge>}
+                      {r.has_pod && <Badge variant="outline" className="text-[9px] bg-emerald-500/10 text-emerald-700"><ClipboardCheck className="h-2.5 w-2.5 mr-0.5" />Canhoto</Badge>}
+                      {r.has_open_occurrence && <Badge variant="destructive" className="text-[9px]"><AlertTriangle className="h-2.5 w-2.5 mr-0.5" />Ocorrência</Badge>}
+                    </div>
                   </CardContent>
                 </Card>
               </Link>
