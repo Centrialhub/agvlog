@@ -13944,6 +13944,10 @@ export type Database = {
         Args: { _client_id?: string; _limit?: number; _tenant_id: string }
         Returns: Json
       }
+      get_client_portal_reports_summary: {
+        Args: { _end_date?: string; _start_date?: string; _tenant_id: string }
+        Returns: Json
+      }
       get_client_portal_shipment_detail: {
         Args: { _fiscal_document_id: string }
         Returns: Json
