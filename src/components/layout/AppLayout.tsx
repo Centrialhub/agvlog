@@ -17,7 +17,7 @@ import {
   PackageCheck, AlertOctagon, Upload, TrendingUp, ChevronDown, Plug,
   Radio, ShieldCheck, Receipt, DollarSign, UserCog, Package, Wrench,
   Boxes, ClipboardCheck, ArrowRightLeft, Wallet, FileSearch, FileSpreadsheet,
-  PackageOpen, MonitorPlay,
+  PackageOpen, MonitorPlay, Sprout,
 } from 'lucide-react';
 
 type NavLeaf = { label: string; href: string; icon: ReactNode };
@@ -98,6 +98,7 @@ const navSections: NavSection[] = [
       { label: 'Documentos Fiscais', href: '/fiscal-documents', icon: <FileText className="h-4 w-4" /> },
       { label: 'Rotas Operacionais', href: '/operational-routes', icon: <FileText className="h-4 w-4" /> },
       { label: 'Frete Automático', href: '/freight', icon: <DollarSign className="h-4 w-4" /> },
+      { label: 'Clientes Zona Rural', href: '/rural-clients', icon: <Sprout className="h-4 w-4" /> },
     ],
   },
   {
