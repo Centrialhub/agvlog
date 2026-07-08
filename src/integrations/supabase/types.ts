@@ -4609,6 +4609,207 @@ export type Database = {
           },
         ]
       }
+      employee_advances: {
+        Row: {
+          advance_date: string
+          amount: number
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          created_by: string | null
+          driver_id: string | null
+          employee_id: string
+          financial_obligation_id: string | null
+          id: string
+          paid_at: string | null
+          paid_by: string | null
+          payable_id: string | null
+          payment_method: string | null
+          payment_reference: string | null
+          reason: string | null
+          status: string
+          tenant_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          advance_date?: string
+          amount: number
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          driver_id?: string | null
+          employee_id: string
+          financial_obligation_id?: string | null
+          id?: string
+          paid_at?: string | null
+          paid_by?: string | null
+          payable_id?: string | null
+          payment_method?: string | null
+          payment_reference?: string | null
+          reason?: string | null
+          status?: string
+          tenant_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          advance_date?: string
+          amount?: number
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          driver_id?: string | null
+          employee_id?: string
+          financial_obligation_id?: string | null
+          id?: string
+          paid_at?: string | null
+          paid_by?: string | null
+          payable_id?: string | null
+          payment_method?: string | null
+          payment_reference?: string | null
+          reason?: string | null
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_advances_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_advances_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_advances_financial_obligation_id_fkey"
+            columns: ["financial_obligation_id"]
+            isOneToOne: false
+            referencedRelation: "financial_obligations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_advances_payable_id_fkey"
+            columns: ["payable_id"]
+            isOneToOne: false
+            referencedRelation: "payables"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_advances_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employee_contracts: {
+        Row: {
+          active: boolean
+          bank_info: Json
+          base_salary: number
+          branch: string | null
+          commission_rate: number
+          contract_type: string
+          cost_center: string | null
+          created_at: string
+          created_by: string | null
+          daily_rate: number
+          department: string | null
+          employee_id: string
+          employment_regime: string | null
+          end_date: string | null
+          hourly_rate: number
+          id: string
+          notes: string | null
+          payment_cycle: string
+          payment_method: string | null
+          position_title: string | null
+          start_date: string
+          tenant_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          active?: boolean
+          bank_info?: Json
+          base_salary?: number
+          branch?: string | null
+          commission_rate?: number
+          contract_type?: string
+          cost_center?: string | null
+          created_at?: string
+          created_by?: string | null
+          daily_rate?: number
+          department?: string | null
+          employee_id: string
+          employment_regime?: string | null
+          end_date?: string | null
+          hourly_rate?: number
+          id?: string
+          notes?: string | null
+          payment_cycle?: string
+          payment_method?: string | null
+          position_title?: string | null
+          start_date: string
+          tenant_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          active?: boolean
+          bank_info?: Json
+          base_salary?: number
+          branch?: string | null
+          commission_rate?: number
+          contract_type?: string
+          cost_center?: string | null
+          created_at?: string
+          created_by?: string | null
+          daily_rate?: number
+          department?: string | null
+          employee_id?: string
+          employment_regime?: string | null
+          end_date?: string | null
+          hourly_rate?: number
+          id?: string
+          notes?: string | null
+          payment_cycle?: string
+          payment_method?: string | null
+          position_title?: string | null
+          start_date?: string
+          tenant_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_contracts_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_contracts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employee_documents: {
         Row: {
           attachment_url: string | null
@@ -4664,6 +4865,76 @@ export type Database = {
             columns: ["employee_id"]
             isOneToOne: false
             referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      employee_incident_actions: {
+        Row: {
+          action_type: string
+          amount: number
+          completed_at: string | null
+          completed_by: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          effective_date: string | null
+          employee_id: string
+          id: string
+          incident_id: string
+          status: string
+          tenant_id: string
+        }
+        Insert: {
+          action_type: string
+          amount?: number
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          effective_date?: string | null
+          employee_id: string
+          id?: string
+          incident_id: string
+          status?: string
+          tenant_id: string
+        }
+        Update: {
+          action_type?: string
+          amount?: number
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          effective_date?: string | null
+          employee_id?: string
+          id?: string
+          incident_id?: string
+          status?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_incident_actions_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_incident_actions_incident_id_fkey"
+            columns: ["incident_id"]
+            isOneToOne: false
+            referencedRelation: "incidents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_incident_actions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -10391,6 +10662,293 @@ export type Database = {
           },
         ]
       }
+      payroll_entries: {
+        Row: {
+          already_paid_amount: number
+          amount_to_pay: number
+          carryover_amount: number
+          contract_id: string | null
+          created_at: string
+          created_by: string | null
+          discount_amount: number
+          driver_id: string | null
+          employee_id: string
+          entry_type: string
+          gross_amount: number
+          id: string
+          net_amount: number
+          notes: string | null
+          payment_status: string
+          payroll_period_id: string
+          source_summary: Json
+          status: string
+          tenant_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          already_paid_amount?: number
+          amount_to_pay?: number
+          carryover_amount?: number
+          contract_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          discount_amount?: number
+          driver_id?: string | null
+          employee_id: string
+          entry_type?: string
+          gross_amount?: number
+          id?: string
+          net_amount?: number
+          notes?: string | null
+          payment_status?: string
+          payroll_period_id: string
+          source_summary?: Json
+          status?: string
+          tenant_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          already_paid_amount?: number
+          amount_to_pay?: number
+          carryover_amount?: number
+          contract_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          discount_amount?: number
+          driver_id?: string | null
+          employee_id?: string
+          entry_type?: string
+          gross_amount?: number
+          id?: string
+          net_amount?: number
+          notes?: string | null
+          payment_status?: string
+          payroll_period_id?: string
+          source_summary?: Json
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payroll_entries_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "employee_contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_entries_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_entries_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_entries_payroll_period_id_fkey"
+            columns: ["payroll_period_id"]
+            isOneToOne: false
+            referencedRelation: "payroll_periods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_entries_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payroll_entry_items: {
+        Row: {
+          amount: number
+          competence_date: string | null
+          created_at: string
+          created_by: string | null
+          description: string
+          driver_id: string | null
+          employee_id: string
+          id: string
+          item_type: string
+          locked: boolean
+          nature: string
+          occurred_at: string | null
+          payroll_entry_id: string
+          payroll_period_id: string
+          quantity: number | null
+          source_id: string | null
+          source_metadata: Json
+          source_table: string | null
+          tenant_id: string
+          unit_value: number | null
+        }
+        Insert: {
+          amount?: number
+          competence_date?: string | null
+          created_at?: string
+          created_by?: string | null
+          description: string
+          driver_id?: string | null
+          employee_id: string
+          id?: string
+          item_type: string
+          locked?: boolean
+          nature: string
+          occurred_at?: string | null
+          payroll_entry_id: string
+          payroll_period_id: string
+          quantity?: number | null
+          source_id?: string | null
+          source_metadata?: Json
+          source_table?: string | null
+          tenant_id: string
+          unit_value?: number | null
+        }
+        Update: {
+          amount?: number
+          competence_date?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          driver_id?: string | null
+          employee_id?: string
+          id?: string
+          item_type?: string
+          locked?: boolean
+          nature?: string
+          occurred_at?: string | null
+          payroll_entry_id?: string
+          payroll_period_id?: string
+          quantity?: number | null
+          source_id?: string | null
+          source_metadata?: Json
+          source_table?: string | null
+          tenant_id?: string
+          unit_value?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payroll_entry_items_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_entry_items_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_entry_items_payroll_entry_id_fkey"
+            columns: ["payroll_entry_id"]
+            isOneToOne: false
+            referencedRelation: "payroll_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_entry_items_payroll_period_id_fkey"
+            columns: ["payroll_period_id"]
+            isOneToOne: false
+            referencedRelation: "payroll_periods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_entry_items_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payroll_periods: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          closed_at: string | null
+          closed_by: string | null
+          competence_month: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          include_drivers: boolean
+          include_non_drivers: boolean
+          notes: string | null
+          payment_status: string
+          period_end: string
+          period_name: string
+          period_start: string
+          status: string
+          tenant_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          closed_at?: string | null
+          closed_by?: string | null
+          competence_month?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          include_drivers?: boolean
+          include_non_drivers?: boolean
+          notes?: string | null
+          payment_status?: string
+          period_end: string
+          period_name: string
+          period_start: string
+          status?: string
+          tenant_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          closed_at?: string | null
+          closed_by?: string | null
+          competence_month?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          include_drivers?: boolean
+          include_non_drivers?: boolean
+          notes?: string | null
+          payment_status?: string
+          period_end?: string
+          period_name?: string
+          period_start?: string
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payroll_periods_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pickup_orders: {
         Row: {
           created_at: string
@@ -13013,6 +13571,10 @@ export type Database = {
         }
         Returns: string
       }
+      approve_payroll_period: {
+        Args: { _period_id: string }
+        Returns: undefined
+      }
       assign_fiscal_documents_to_load: {
         Args: { _document_ids: string[]; _load_id: string; _tenant_id: string }
         Returns: Json
@@ -13060,6 +13622,10 @@ export type Database = {
       client_is_rural: { Args: { _client_id: string }; Returns: boolean }
       close_closing_report: {
         Args: { _closing_report_id: string }
+        Returns: undefined
+      }
+      close_payroll_period: {
+        Args: { _period_id: string; _reason?: string }
         Returns: undefined
       }
       close_reconciliation_session: {
@@ -13297,6 +13863,17 @@ export type Database = {
           _regeneration_reason?: string
         }
         Returns: Json
+      }
+      generate_payroll_period: {
+        Args: {
+          _include_drivers?: boolean
+          _include_non_drivers?: boolean
+          _period_end: string
+          _period_name?: string
+          _period_start: string
+          _tenant_id: string
+        }
+        Returns: string
       }
       generate_pending_driver_settlements: {
         Args: { _tenant_id: string }
@@ -13613,6 +14190,14 @@ export type Database = {
         Args: { _end_date?: string; _start_date?: string; _tenant_id: string }
         Returns: Json
       }
+      recalculate_payroll_entry: {
+        Args: { _entry_id: string }
+        Returns: undefined
+      }
+      recompute_payroll_entry_totals: {
+        Args: { _entry_id: string }
+        Returns: undefined
+      }
       record_operational_event_with_status: {
         Args: {
           _description: string
@@ -13663,6 +14248,20 @@ export type Database = {
           _payment_reference?: string
           _receipt_url?: string
           _settlement_id: string
+        }
+        Returns: string
+      }
+      register_employee_advance: {
+        Args: {
+          _advance_date?: string
+          _amount: number
+          _create_payable?: boolean
+          _employee_id: string
+          _mark_paid?: boolean
+          _payment_method?: string
+          _payment_reference?: string
+          _reason?: string
+          _tenant_id: string
         }
         Returns: string
       }
