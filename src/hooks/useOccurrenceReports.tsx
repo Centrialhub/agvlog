@@ -48,7 +48,7 @@ export interface OccurrenceFilters {
 }
 
 export function useOccurrences(filters: OccurrenceFilters = {}) {
-  const { activeTenantId } = useTenant();
+  const { currentTenant } = useTenant(); const activeTenantId = currentTenant?.id ?? null;
   return useQuery({
     queryKey: ['delivery-occurrences', activeTenantId, filters],
     enabled: !!activeTenantId,
@@ -101,7 +101,7 @@ export interface ExportRow {
 }
 
 export function useReportExports() {
-  const { activeTenantId } = useTenant();
+  const { currentTenant } = useTenant(); const activeTenantId = currentTenant?.id ?? null;
   return useQuery({
     queryKey: ['occurrence-report-exports', activeTenantId],
     enabled: !!activeTenantId,
@@ -119,7 +119,7 @@ export function useReportExports() {
 }
 
 export function useImportBatches() {
-  const { activeTenantId } = useTenant();
+  const { currentTenant } = useTenant(); const activeTenantId = currentTenant?.id ?? null;
   return useQuery({
     queryKey: ['occurrence-import-batches', activeTenantId],
     enabled: !!activeTenantId,
@@ -137,7 +137,7 @@ export function useImportBatches() {
 }
 
 export function useCreateOccurrence() {
-  const { activeTenantId } = useTenant();
+  const { currentTenant } = useTenant(); const activeTenantId = currentTenant?.id ?? null;
   const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
@@ -162,7 +162,7 @@ export function useCreateOccurrence() {
 }
 
 export function useFinalizeOccurrence() {
-  const { activeTenantId } = useTenant();
+  const { currentTenant } = useTenant(); const activeTenantId = currentTenant?.id ?? null;
   const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
@@ -204,7 +204,7 @@ export interface CreateExportPayload {
 }
 
 export function useCreateExport() {
-  const { activeTenantId } = useTenant();
+  const { currentTenant } = useTenant(); const activeTenantId = currentTenant?.id ?? null;
   const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
@@ -259,7 +259,7 @@ export function useCreateExport() {
 }
 
 export function useMarkExportSent() {
-  const { activeTenantId } = useTenant();
+  const { currentTenant } = useTenant(); const activeTenantId = currentTenant?.id ?? null;
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (params: { id: string; sent_channel: string; sent_to: string; sent_notes?: string }) => {
@@ -283,7 +283,7 @@ export function useMarkExportSent() {
 }
 
 export function useImportLegacyBatch() {
-  const { activeTenantId } = useTenant();
+  const { currentTenant } = useTenant(); const activeTenantId = currentTenant?.id ?? null;
   const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
