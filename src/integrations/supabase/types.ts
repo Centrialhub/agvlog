@@ -1617,6 +1617,543 @@ export type Database = {
           },
         ]
       }
+      closing_report_history: {
+        Row: {
+          action: string
+          closing_report_id: string
+          created_at: string
+          created_by: string | null
+          field_name: string | null
+          id: string
+          metadata: Json
+          new_value: string | null
+          old_value: string | null
+          reason: string | null
+          tenant_id: string
+        }
+        Insert: {
+          action: string
+          closing_report_id: string
+          created_at?: string
+          created_by?: string | null
+          field_name?: string | null
+          id?: string
+          metadata?: Json
+          new_value?: string | null
+          old_value?: string | null
+          reason?: string | null
+          tenant_id: string
+        }
+        Update: {
+          action?: string
+          closing_report_id?: string
+          created_at?: string
+          created_by?: string | null
+          field_name?: string | null
+          id?: string
+          metadata?: Json
+          new_value?: string | null
+          old_value?: string | null
+          reason?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "closing_report_history_closing_report_id_fkey"
+            columns: ["closing_report_id"]
+            isOneToOne: false
+            referencedRelation: "closing_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      closing_report_items: {
+        Row: {
+          arrival_date: string | null
+          closing_report_id: string
+          created_at: string
+          cte_document_id: string | null
+          cte_key: string | null
+          cte_number: string | null
+          delivery_date: string | null
+          delivery_status: string | null
+          destination_city: string | null
+          destination_state: string | null
+          fiscal_document_id: string | null
+          freight_cif_value: number
+          freight_fob_value: number
+          freight_value: number
+          id: string
+          invoice_key: string | null
+          invoice_number: string | null
+          invoice_value: number
+          issue_date: string | null
+          legacy_status_text: string | null
+          load_document_id: string | null
+          load_id: string | null
+          load_number: string | null
+          metadata: Json
+          observation: string | null
+          origin_city: string | null
+          origin_state: string | null
+          payment_status: string | null
+          recipient_cnpj: string | null
+          recipient_name: string | null
+          remitter_cnpj: string | null
+          remitter_name: string | null
+          sort_order: number
+          source_type: string
+          tenant_id: string
+          volume_count: number
+          weight_kg: number
+        }
+        Insert: {
+          arrival_date?: string | null
+          closing_report_id: string
+          created_at?: string
+          cte_document_id?: string | null
+          cte_key?: string | null
+          cte_number?: string | null
+          delivery_date?: string | null
+          delivery_status?: string | null
+          destination_city?: string | null
+          destination_state?: string | null
+          fiscal_document_id?: string | null
+          freight_cif_value?: number
+          freight_fob_value?: number
+          freight_value?: number
+          id?: string
+          invoice_key?: string | null
+          invoice_number?: string | null
+          invoice_value?: number
+          issue_date?: string | null
+          legacy_status_text?: string | null
+          load_document_id?: string | null
+          load_id?: string | null
+          load_number?: string | null
+          metadata?: Json
+          observation?: string | null
+          origin_city?: string | null
+          origin_state?: string | null
+          payment_status?: string | null
+          recipient_cnpj?: string | null
+          recipient_name?: string | null
+          remitter_cnpj?: string | null
+          remitter_name?: string | null
+          sort_order?: number
+          source_type?: string
+          tenant_id: string
+          volume_count?: number
+          weight_kg?: number
+        }
+        Update: {
+          arrival_date?: string | null
+          closing_report_id?: string
+          created_at?: string
+          cte_document_id?: string | null
+          cte_key?: string | null
+          cte_number?: string | null
+          delivery_date?: string | null
+          delivery_status?: string | null
+          destination_city?: string | null
+          destination_state?: string | null
+          fiscal_document_id?: string | null
+          freight_cif_value?: number
+          freight_fob_value?: number
+          freight_value?: number
+          id?: string
+          invoice_key?: string | null
+          invoice_number?: string | null
+          invoice_value?: number
+          issue_date?: string | null
+          legacy_status_text?: string | null
+          load_document_id?: string | null
+          load_id?: string | null
+          load_number?: string | null
+          metadata?: Json
+          observation?: string | null
+          origin_city?: string | null
+          origin_state?: string | null
+          payment_status?: string | null
+          recipient_cnpj?: string | null
+          recipient_name?: string | null
+          remitter_cnpj?: string | null
+          remitter_name?: string | null
+          sort_order?: number
+          source_type?: string
+          tenant_id?: string
+          volume_count?: number
+          weight_kg?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "closing_report_items_closing_report_id_fkey"
+            columns: ["closing_report_id"]
+            isOneToOne: false
+            referencedRelation: "closing_reports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "closing_report_items_cte_document_id_fkey"
+            columns: ["cte_document_id"]
+            isOneToOne: false
+            referencedRelation: "cte_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "closing_report_items_fiscal_document_id_fkey"
+            columns: ["fiscal_document_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "closing_report_items_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      closing_report_payments: {
+        Row: {
+          amount: number
+          bank_account_id: string | null
+          closing_report_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          notes: string | null
+          payment_date: string
+          payment_method: string | null
+          receivable_id: string | null
+          tenant_id: string
+        }
+        Insert: {
+          amount: number
+          bank_account_id?: string | null
+          closing_report_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          payment_date: string
+          payment_method?: string | null
+          receivable_id?: string | null
+          tenant_id: string
+        }
+        Update: {
+          amount?: number
+          bank_account_id?: string | null
+          closing_report_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          payment_date?: string
+          payment_method?: string | null
+          receivable_id?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "closing_report_payments_closing_report_id_fkey"
+            columns: ["closing_report_id"]
+            isOneToOne: false
+            referencedRelation: "closing_reports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "closing_report_payments_receivable_id_fkey"
+            columns: ["receivable_id"]
+            isOneToOne: false
+            referencedRelation: "receivables"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      closing_report_sequences: {
+        Row: {
+          next_number: number
+          sequence_year: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          next_number?: number
+          sequence_year: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          next_number?: number
+          sequence_year?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      closing_report_summary_lines: {
+        Row: {
+          arrival_date: string | null
+          billing_period_label: string | null
+          closing_report_id: string
+          created_at: string
+          cte_count: number
+          fiscal_document_count: number
+          group_label: string
+          group_type: string
+          id: string
+          load_count: number
+          notes: string | null
+          sort_order: number
+          tenant_id: string
+          total_freight_value: number
+          total_invoice_value: number
+          total_volume: number
+          total_weight_kg: number
+        }
+        Insert: {
+          arrival_date?: string | null
+          billing_period_label?: string | null
+          closing_report_id: string
+          created_at?: string
+          cte_count?: number
+          fiscal_document_count?: number
+          group_label: string
+          group_type: string
+          id?: string
+          load_count?: number
+          notes?: string | null
+          sort_order?: number
+          tenant_id: string
+          total_freight_value?: number
+          total_invoice_value?: number
+          total_volume?: number
+          total_weight_kg?: number
+        }
+        Update: {
+          arrival_date?: string | null
+          billing_period_label?: string | null
+          closing_report_id?: string
+          created_at?: string
+          cte_count?: number
+          fiscal_document_count?: number
+          group_label?: string
+          group_type?: string
+          id?: string
+          load_count?: number
+          notes?: string | null
+          sort_order?: number
+          tenant_id?: string
+          total_freight_value?: number
+          total_invoice_value?: number
+          total_volume?: number
+          total_weight_kg?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "closing_report_summary_lines_closing_report_id_fkey"
+            columns: ["closing_report_id"]
+            isOneToOne: false
+            referencedRelation: "closing_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      closing_reports: {
+        Row: {
+          arrival_date_end: string | null
+          arrival_date_start: string | null
+          cancellation_reason: string | null
+          cancelled_at: string | null
+          client_id: string | null
+          client_invoice_id: string | null
+          client_snapshot: Json
+          closed_at: string | null
+          closed_by: string | null
+          closing_number: string
+          company_snapshot: Json
+          created_at: string
+          created_by: string | null
+          csv_url: string | null
+          cte_count: number
+          delivery_date_end: string | null
+          delivery_date_start: string | null
+          discount_amount: number
+          doccob_export_id: string | null
+          excel_url: string | null
+          expected_payment_date: string | null
+          filters_snapshot: Json
+          fiscal_document_count: number
+          gross_amount: number
+          id: string
+          interest_amount: number
+          invoice_status: string
+          issue_date_end: string | null
+          issue_date_start: string | null
+          load_count: number
+          notes: string | null
+          open_amount: number
+          payer_client_id: string | null
+          payment_date: string | null
+          payment_status: string
+          pdf_url: string | null
+          period_end: string
+          period_start: string
+          receivable_id: string | null
+          received_amount: number
+          report_model: string
+          report_type: string
+          sent_at: string | null
+          sent_channel: string | null
+          sent_to: string | null
+          status: string
+          tenant_id: string
+          title: string
+          total_amount: number
+          total_freight_value: number
+          total_invoice_value: number
+          total_volume: number
+          total_weight_kg: number
+          totals_snapshot: Json
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          arrival_date_end?: string | null
+          arrival_date_start?: string | null
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          client_id?: string | null
+          client_invoice_id?: string | null
+          client_snapshot?: Json
+          closed_at?: string | null
+          closed_by?: string | null
+          closing_number: string
+          company_snapshot?: Json
+          created_at?: string
+          created_by?: string | null
+          csv_url?: string | null
+          cte_count?: number
+          delivery_date_end?: string | null
+          delivery_date_start?: string | null
+          discount_amount?: number
+          doccob_export_id?: string | null
+          excel_url?: string | null
+          expected_payment_date?: string | null
+          filters_snapshot?: Json
+          fiscal_document_count?: number
+          gross_amount?: number
+          id?: string
+          interest_amount?: number
+          invoice_status?: string
+          issue_date_end?: string | null
+          issue_date_start?: string | null
+          load_count?: number
+          notes?: string | null
+          open_amount?: number
+          payer_client_id?: string | null
+          payment_date?: string | null
+          payment_status?: string
+          pdf_url?: string | null
+          period_end: string
+          period_start: string
+          receivable_id?: string | null
+          received_amount?: number
+          report_model?: string
+          report_type: string
+          sent_at?: string | null
+          sent_channel?: string | null
+          sent_to?: string | null
+          status?: string
+          tenant_id: string
+          title: string
+          total_amount?: number
+          total_freight_value?: number
+          total_invoice_value?: number
+          total_volume?: number
+          total_weight_kg?: number
+          totals_snapshot?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          arrival_date_end?: string | null
+          arrival_date_start?: string | null
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          client_id?: string | null
+          client_invoice_id?: string | null
+          client_snapshot?: Json
+          closed_at?: string | null
+          closed_by?: string | null
+          closing_number?: string
+          company_snapshot?: Json
+          created_at?: string
+          created_by?: string | null
+          csv_url?: string | null
+          cte_count?: number
+          delivery_date_end?: string | null
+          delivery_date_start?: string | null
+          discount_amount?: number
+          doccob_export_id?: string | null
+          excel_url?: string | null
+          expected_payment_date?: string | null
+          filters_snapshot?: Json
+          fiscal_document_count?: number
+          gross_amount?: number
+          id?: string
+          interest_amount?: number
+          invoice_status?: string
+          issue_date_end?: string | null
+          issue_date_start?: string | null
+          load_count?: number
+          notes?: string | null
+          open_amount?: number
+          payer_client_id?: string | null
+          payment_date?: string | null
+          payment_status?: string
+          pdf_url?: string | null
+          period_end?: string
+          period_start?: string
+          receivable_id?: string | null
+          received_amount?: number
+          report_model?: string
+          report_type?: string
+          sent_at?: string | null
+          sent_channel?: string | null
+          sent_to?: string | null
+          status?: string
+          tenant_id?: string
+          title?: string
+          total_amount?: number
+          total_freight_value?: number
+          total_invoice_value?: number
+          total_volume?: number
+          total_weight_kg?: number
+          totals_snapshot?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "closing_reports_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "closing_reports_payer_client_id_fkey"
+            columns: ["payer_client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       consumption_alerts: {
         Row: {
           acknowledged_at: string | null
@@ -5948,6 +6485,9 @@ export type Database = {
           ciot: string | null
           client_invoice_id: string | null
           closed_at: string | null
+          closing_report_id: string | null
+          closing_report_number: string | null
+          closing_status: string | null
           control_load_number: string | null
           created_at: string
           created_by: string | null
@@ -6015,6 +6555,9 @@ export type Database = {
           ciot?: string | null
           client_invoice_id?: string | null
           closed_at?: string | null
+          closing_report_id?: string | null
+          closing_report_number?: string | null
+          closing_status?: string | null
           control_load_number?: string | null
           created_at?: string
           created_by?: string | null
@@ -6082,6 +6625,9 @@ export type Database = {
           ciot?: string | null
           client_invoice_id?: string | null
           closed_at?: string | null
+          closing_report_id?: string | null
+          closing_report_number?: string | null
+          closing_status?: string | null
           control_load_number?: string | null
           created_at?: string
           created_by?: string | null
@@ -8044,6 +8590,7 @@ export type Database = {
           amount: number
           client_id: string | null
           client_invoice_id: string | null
+          closing_report_id: string | null
           created_at: string
           created_by: string | null
           description: string | null
@@ -8065,6 +8612,7 @@ export type Database = {
           amount?: number
           client_id?: string | null
           client_invoice_id?: string | null
+          closing_report_id?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -8086,6 +8634,7 @@ export type Database = {
           amount?: number
           client_id?: string | null
           client_invoice_id?: string | null
+          closing_report_id?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -10186,6 +10735,10 @@ export type Database = {
         Args: { _invoice_id: string; _reason: string }
         Returns: undefined
       }
+      cancel_closing_report: {
+        Args: { _closing_report_id: string; _reason: string }
+        Returns: undefined
+      }
       cancel_doccob_export: {
         Args: { _export_id: string; _reason: string; _tenant_id: string }
         Returns: undefined
@@ -10200,6 +10753,10 @@ export type Database = {
             }
             Returns: Json
           }
+      close_closing_report: {
+        Args: { _closing_report_id: string }
+        Returns: undefined
+      }
       close_reconciliation_session: {
         Args: { _session_id: string }
         Returns: undefined
@@ -10240,6 +10797,9 @@ export type Database = {
           ciot: string | null
           client_invoice_id: string | null
           closed_at: string | null
+          closing_report_id: string | null
+          closing_report_number: string | null
+          closing_status: string | null
           control_load_number: string | null
           created_at: string
           created_by: string | null
@@ -10686,6 +11246,10 @@ export type Database = {
         }
         Returns: string
       }
+      next_closing_report_number: {
+        Args: { _date?: string; _tenant_id: string }
+        Returns: string
+      }
       next_nfse_number: {
         Args: { _branch_code?: string; _series?: string; _tenant_id: string }
         Returns: number
@@ -10727,6 +11291,14 @@ export type Database = {
           _tenant_id: string
           _visible_to_client?: boolean
         }
+        Returns: string
+      }
+      refresh_closing_report_overdue: {
+        Args: { _tenant_id: string }
+        Returns: number
+      }
+      register_closing_report_payment: {
+        Args: { _closing_report_id: string; _payment: Json }
         Returns: string
       }
       register_doccob_export: {
@@ -10772,6 +11344,10 @@ export type Database = {
       remove_fiscal_documents_from_load: {
         Args: { _document_ids: string[]; _load_id: string; _tenant_id: string }
         Returns: Json
+      }
+      reopen_closing_report: {
+        Args: { _closing_report_id: string; _reason: string }
+        Returns: undefined
       }
       reopen_reconciliation_session: {
         Args: { _reason: string; _session_id: string }

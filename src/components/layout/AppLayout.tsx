@@ -81,6 +81,7 @@ const navSections: NavSection[] = [
       { label: 'Contas a Pagar', href: '/payables', icon: <DollarSign className="h-4 w-4" /> },
       { label: 'Faturas por Cliente', href: '/client-invoices', icon: <FileText className="h-4 w-4" /> },
       { label: 'Arquivo de Cobrança / DOCCOB', href: '/billing-edi', icon: <FileText className="h-4 w-4" /> },
+      { label: 'Relatórios de Fechamento', href: '/closing-reports', icon: <FileSpreadsheet className="h-4 w-4" /> },
       { label: 'Aprovação Despesas', href: '/expense-approval', icon: <Receipt className="h-4 w-4" /> },
       { label: 'Acerto de Motoristas', href: '/driver-settlements', icon: <Receipt className="h-4 w-4" /> },
       { label: 'Conciliação Bancária', href: '/bank-reconciliation', icon: <Wallet className="h-4 w-4" /> },
