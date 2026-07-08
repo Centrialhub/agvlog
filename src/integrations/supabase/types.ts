@@ -13677,6 +13677,17 @@ export type Database = {
         }
         Returns: string
       }
+      add_employee_incident_action: {
+        Args: {
+          _action_type: string
+          _amount?: number
+          _description?: string
+          _effective_date?: string
+          _employee_id: string
+          _incident_id: string
+        }
+        Returns: string
+      }
       add_payroll_manual_item: {
         Args: {
           _amount: number
