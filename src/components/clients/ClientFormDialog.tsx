@@ -31,6 +31,9 @@ const empty = {
   blocked: false, billed: false, taxes_enabled: false,
   tax_code: '', tax_description: '',
   service_notes: '', payment_notes: '', notes: '',
+  is_rural: false, rural_notes: '', rural_driver_instructions: '',
+  rural_requires_contact: false, rural_contact_name: '', rural_contact_phone: '',
+  rural_access_type: '', rural_delivery_difficulty: '',
 };
 
 type FormState = typeof empty;
@@ -163,12 +166,13 @@ export function ClientFormDialog({
         </DialogHeader>
 
         <Tabs defaultValue="geral" className="w-full">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="geral">Geral</TabsTrigger>
             <TabsTrigger value="endereco">Endereço</TabsTrigger>
             <TabsTrigger value="contato">Contato</TabsTrigger>
             <TabsTrigger value="tributario">Tributário</TabsTrigger>
             <TabsTrigger value="cobranca">Cobrança / Frete</TabsTrigger>
+            <TabsTrigger value="rural">Zona Rural</TabsTrigger>
             <TabsTrigger value="obs">Observações</TabsTrigger>
           </TabsList>
 
