@@ -4,6 +4,8 @@ import { useTenant } from '@/hooks/useTenant';
 
 export interface PortalAccess {
   client_id: string;
+  client_name?: string;
+  client_tax_id?: string | null;
   access_type: 'full' | 'remitter' | 'recipient' | 'payer' | 'viewer' | 'financial' | 'documents_only';
   can_view_financial: boolean;
   can_download_documents: boolean;
@@ -11,6 +13,7 @@ export interface PortalAccess {
   can_request_pickup: boolean;
   can_view_vehicle_live: boolean;
   can_view_driver_contact: boolean;
+  active?: boolean;
 }
 
 export function useClientPortalAccess() {
@@ -20,6 +23,13 @@ export function useClientPortalAccess() {
     queryKey: ['client_portal_access', currentTenant?.id],
     queryFn: async (): Promise<PortalAccess[]> => {
       if (!currentTenant) return [];
+      // Prefer detailed RPC (includes client name/tax_id). Fallback to legacy.
+      const detailed = await supabase.rpc('get_user_client_access_detailed' as any, {
+        _tenant_id: currentTenant.id,
+      });
+      if (!detailed.error && detailed.data) {
+        return (detailed.data as PortalAccess[]) || [];
+      }
       const { data, error } = await supabase.rpc('get_user_client_access', {
         _tenant_id: currentTenant.id,
       });
