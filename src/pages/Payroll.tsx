@@ -231,6 +231,7 @@ function EntryDrawer({ entry, period, onClose }: { entry: PayrollEntry | null; p
   const delItem = useDeletePayrollItem();
   const [manualDesc, setManualDesc] = useState('');
   const [manualAmt, setManualAmt] = useState('');
+  const [manualReason, setManualReason] = useState('');
   const [manualNature, setManualNature] = useState<'credit'|'debit'>('debit');
 
   const locked = !period || period.status === 'approved' || period.status === 'closed' || period.status === 'cancelled';
@@ -239,10 +240,20 @@ function EntryDrawer({ entry, period, onClose }: { entry: PayrollEntry | null; p
     if (!entry) return;
     const amt = Number(manualAmt);
     if (!manualDesc.trim() || !amt || amt <= 0) { toast.error('Descrição e valor obrigatórios'); return; }
+    if (!manualReason.trim()) { toast.error('Motivo do ajuste obrigatório'); return; }
     try {
-      await addItem.mutateAsync({ entry, nature: manualNature, description: manualDesc, amount: amt });
-      setManualDesc(''); setManualAmt('');
+      await addItem.mutateAsync({ entry, nature: manualNature, description: manualDesc, amount: amt, reason: manualReason });
+      setManualDesc(''); setManualAmt(''); setManualReason('');
       toast.success('Ajuste adicionado');
+    } catch (e: any) { toast.error(e.message); }
+  };
+
+  const handleDelete = async (item: PayrollEntryItem) => {
+    const reason = prompt('Motivo da exclusão (obrigatório):');
+    if (!reason || !reason.trim()) { toast.error('Motivo obrigatório'); return; }
+    try {
+      await delItem.mutateAsync({ item, reason });
+      toast.success('Item removido');
     } catch (e: any) { toast.error(e.message); }
   };
 
@@ -276,7 +287,7 @@ function EntryDrawer({ entry, period, onClose }: { entry: PayrollEntry | null; p
                       <TableCell className="text-right text-xs">{fmtBRL(Number(i.amount))}</TableCell>
                       <TableCell>
                         {!locked && !i.locked && (
-                          <Button variant="ghost" size="icon" onClick={() => delItem.mutate(i)}>
+                          <Button variant="ghost" size="icon" onClick={() => handleDelete(i)}>
                             <Trash2 className="h-3 w-3" />
                           </Button>
                         )}
@@ -298,9 +309,10 @@ function EntryDrawer({ entry, period, onClose }: { entry: PayrollEntry | null; p
                       <SelectItem value="debit">Débito</SelectItem>
                     </SelectContent>
                   </Select>
-                  <Input className="col-span-2" placeholder="Descrição/motivo *" value={manualDesc} onChange={e => setManualDesc(e.target.value)} />
+                  <Input className="col-span-2" placeholder="Descrição *" value={manualDesc} onChange={e => setManualDesc(e.target.value)} />
                   <Input type="number" step="0.01" placeholder="Valor" value={manualAmt} onChange={e => setManualAmt(e.target.value)} />
                 </div>
+                <Textarea rows={2} placeholder="Motivo (obrigatório, será registrado em auditoria) *" value={manualReason} onChange={e => setManualReason(e.target.value)} />
                 <div className="flex justify-between">
                   <Button size="sm" variant="outline" onClick={() => recalc.mutate(entry.id)} disabled={recalc.isPending}>
                     <RefreshCw className="h-4 w-4 mr-1" /> Recalcular
