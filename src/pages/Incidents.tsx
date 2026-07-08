@@ -93,9 +93,21 @@ export default function Incidents() {
     if (form.status === 'closed' && !editing?.closed_at) payload.closed_at = new Date().toISOString();
     try {
       if (editing) await updateIncident.mutateAsync({ id: editing.id, ...payload });
-      else await createIncident.mutateAsync(payload);
+      else {
+        const created = await createIncident.mutateAsync(payload);
+        toast.success('Ocorrência registrada');
+        // Para ocorrências de RH, manter o modal aberto para permitir cadastrar
+        // ações de RH imediatamente sem reabrir a tela.
+        if (form.category === 'hr' && created) {
+          setEditing(created as Incident);
+          setForm(f => ({ ...f, status: (created as Incident).status || f.status }));
+          return;
+        }
+        setDialogOpen(false);
+        return;
+      }
       setDialogOpen(false);
-      toast.success(editing ? 'Ocorrência atualizada' : 'Ocorrência registrada');
+      toast.success('Ocorrência atualizada');
     } catch (e: any) { toast.error(e.message); }
   };
 
@@ -320,9 +332,21 @@ function HrActionsSection({ incidentId, defaultEmployeeId }: { incidentId: strin
                 {a.description && <span className="text-muted-foreground"> — {a.description}</span>}
                 {a.effective_date && <span className="text-muted-foreground"> · {a.effective_date}</span>}
               </div>
-              {a.action_type === 'payroll_discount' && (
-                <span className="font-mono text-destructive">R$ {Number(a.amount).toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>
-              )}
+              <div className="flex items-center gap-2">
+                {a.action_type === 'payroll_discount' && (
+                  <span className="font-mono text-destructive">R$ {Number(a.amount).toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>
+                )}
+                <Badge
+                  variant="outline"
+                  className={`text-[10px] ${
+                    a.status === 'completed' ? 'bg-emerald-500/10 text-emerald-600' :
+                    a.status === 'cancelled' ? 'bg-muted text-muted-foreground' :
+                    'bg-yellow-500/10 text-yellow-700'
+                  }`}
+                >
+                  {a.status === 'completed' ? 'Concluída' : a.status === 'cancelled' ? 'Cancelada' : 'Aberta'}
+                </Badge>
+              </div>
             </div>
           ))}
         </div>
