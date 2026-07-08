@@ -23,11 +23,15 @@ export interface CsvRow {
   [k: string]: unknown;
 }
 
-export function toCsvBlob(headers: string[], rows: CsvRow[], keys: string[]): Blob {
+export function toCsvString(headers: string[], rows: CsvRow[], keys: string[]): string {
   const bom = '\uFEFF';
   const head = headers.map(esc).join(';');
   const body = rows.map((r) => keys.map((k) => esc(r[k])).join(';')).join('\n');
-  return new Blob([bom + head + '\n' + body], { type: 'text/csv;charset=utf-8' });
+  return bom + head + '\n' + body;
+}
+
+export function toCsvBlob(headers: string[], rows: CsvRow[], keys: string[]): Blob {
+  return new Blob([toCsvString(headers, rows, keys)], { type: 'text/csv;charset=utf-8' });
 }
 
 export function returnedNotesCsv(rows: Array<{
