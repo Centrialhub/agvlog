@@ -249,7 +249,7 @@ export default function Incidents() {
             <div><Label className="text-xs">Plano de Ação</Label><Textarea rows={2} value={form.action_plan} onChange={e => setForm(f => ({ ...f, action_plan: e.target.value }))} /></div>
             <div><Label className="text-xs">Conclusão / Parecer Final</Label><Textarea rows={2} value={form.conclusion} onChange={e => setForm(f => ({ ...f, conclusion: e.target.value }))} /></div>
             {editing && form.category === 'hr' && (
-              <HrActionsSection incidentId={editing.id} defaultEmployeeId={form.employee_id} />
+              <HrActionsSection incidentId={editing.id} defaultEmployeeId={form.employee_id} savedEmployeeId={editing.employee_id || undefined} />
             )}
           </div>
           <div className="flex justify-end gap-2 mt-4">
