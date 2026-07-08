@@ -78,6 +78,7 @@ const ProductHistory = lazy(() => import("@/pages/ProductHistory"));
 const ImportedNotesSummary = lazy(() => import("@/pages/ImportedNotesSummary"));
 const LoadControl = lazy(() => import("@/pages/LoadControl"));
 const ClosingReports = lazy(() => import("@/pages/ClosingReports"));
+const RuralClients = lazy(() => import("@/pages/RuralClients"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
 // Driver pages
@@ -281,6 +282,7 @@ const App = () => (
             <Route path="/imported-notes-summary" element={<ProtectedRoute><ImportedNotesSummary /></ProtectedRoute>} />
             <Route path="/load-control" element={<ProtectedRoute><LoadControl /></ProtectedRoute>} />
             <Route path="/closing-reports" element={<ProtectedRoute><ClosingReports /></ProtectedRoute>} />
+            <Route path="/rural-clients" element={<ProtectedRoute><RuralClients /></ProtectedRoute>} />
 
             {/* Driver routes */}
             <Route path="/driver" element={<DriverRoute><DriverHome /></DriverRoute>} />

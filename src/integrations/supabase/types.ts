@@ -1413,6 +1413,189 @@ export type Database = {
           },
         ]
       }
+      client_rural_delivery_profile_history: {
+        Row: {
+          action: string
+          client_id: string
+          created_at: string
+          created_by: string | null
+          field_name: string | null
+          id: string
+          new_value: string | null
+          old_value: string | null
+          profile_id: string
+          reason: string | null
+          tenant_id: string
+        }
+        Insert: {
+          action: string
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          field_name?: string | null
+          id?: string
+          new_value?: string | null
+          old_value?: string | null
+          profile_id: string
+          reason?: string | null
+          tenant_id: string
+        }
+        Update: {
+          action?: string
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          field_name?: string | null
+          id?: string
+          new_value?: string | null
+          old_value?: string | null
+          profile_id?: string
+          reason?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_rural_delivery_profile_history_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_rural_delivery_profile_history_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "client_rural_delivery_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_rural_delivery_profiles: {
+        Row: {
+          access_type: string | null
+          active: boolean
+          can_deliver_in_city: boolean
+          city: string | null
+          city_delivery_instructions: string | null
+          client_id: string
+          contact_name: string | null
+          contact_phone: string | null
+          created_at: string
+          created_by: string | null
+          delivery_mode: string
+          driver_instructions: string | null
+          id: string
+          internal_notes: string | null
+          last_used_at: string | null
+          locality: string | null
+          neighborhood: string | null
+          origin_city: string | null
+          origin_state: string | null
+          recipient_name_snapshot: string | null
+          related_remitter_id: string | null
+          requires_contact_before_delivery: boolean
+          round_trip_km: number | null
+          source_reference: string | null
+          source_type: string
+          state: string | null
+          supplier_name_snapshot: string | null
+          taxi_contact_name: string | null
+          taxi_contact_phone: string | null
+          taxi_estimated_cost: number | null
+          taxi_required: boolean
+          tenant_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          access_type?: string | null
+          active?: boolean
+          can_deliver_in_city?: boolean
+          city?: string | null
+          city_delivery_instructions?: string | null
+          client_id: string
+          contact_name?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          created_by?: string | null
+          delivery_mode?: string
+          driver_instructions?: string | null
+          id?: string
+          internal_notes?: string | null
+          last_used_at?: string | null
+          locality?: string | null
+          neighborhood?: string | null
+          origin_city?: string | null
+          origin_state?: string | null
+          recipient_name_snapshot?: string | null
+          related_remitter_id?: string | null
+          requires_contact_before_delivery?: boolean
+          round_trip_km?: number | null
+          source_reference?: string | null
+          source_type?: string
+          state?: string | null
+          supplier_name_snapshot?: string | null
+          taxi_contact_name?: string | null
+          taxi_contact_phone?: string | null
+          taxi_estimated_cost?: number | null
+          taxi_required?: boolean
+          tenant_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          access_type?: string | null
+          active?: boolean
+          can_deliver_in_city?: boolean
+          city?: string | null
+          city_delivery_instructions?: string | null
+          client_id?: string
+          contact_name?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          created_by?: string | null
+          delivery_mode?: string
+          driver_instructions?: string | null
+          id?: string
+          internal_notes?: string | null
+          last_used_at?: string | null
+          locality?: string | null
+          neighborhood?: string | null
+          origin_city?: string | null
+          origin_state?: string | null
+          recipient_name_snapshot?: string | null
+          related_remitter_id?: string | null
+          requires_contact_before_delivery?: boolean
+          round_trip_km?: number | null
+          source_reference?: string | null
+          source_type?: string
+          state?: string | null
+          supplier_name_snapshot?: string | null
+          taxi_contact_name?: string | null
+          taxi_contact_phone?: string | null
+          taxi_estimated_cost?: number | null
+          taxi_required?: boolean
+          tenant_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_rural_delivery_profiles_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_rural_delivery_profiles_related_remitter_id_fkey"
+            columns: ["related_remitter_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clients: {
         Row: {
           accounting_code_client: string | null
@@ -1450,6 +1633,7 @@ export type Database = {
           id: string
           ie_indicator: string | null
           internal_code: string | null
+          is_rural: boolean
           legal_name: string | null
           mobile: string | null
           municipal_registration: string | null
@@ -1463,6 +1647,14 @@ export type Database = {
           provider_person_integration_account_id: string | null
           provider_person_sync_status: string | null
           provider_person_synced_at: string | null
+          rural_access_type: string | null
+          rural_contact_name: string | null
+          rural_contact_phone: string | null
+          rural_delivery_difficulty: string | null
+          rural_driver_instructions: string | null
+          rural_notes: string | null
+          rural_requires_contact: boolean
+          rural_updated_at: string | null
           service_notes: string | null
           sigla: string | null
           state_registration: string | null
@@ -1512,6 +1704,7 @@ export type Database = {
           id?: string
           ie_indicator?: string | null
           internal_code?: string | null
+          is_rural?: boolean
           legal_name?: string | null
           mobile?: string | null
           municipal_registration?: string | null
@@ -1525,6 +1718,14 @@ export type Database = {
           provider_person_integration_account_id?: string | null
           provider_person_sync_status?: string | null
           provider_person_synced_at?: string | null
+          rural_access_type?: string | null
+          rural_contact_name?: string | null
+          rural_contact_phone?: string | null
+          rural_delivery_difficulty?: string | null
+          rural_driver_instructions?: string | null
+          rural_notes?: string | null
+          rural_requires_contact?: boolean
+          rural_updated_at?: string | null
           service_notes?: string | null
           sigla?: string | null
           state_registration?: string | null
@@ -1574,6 +1775,7 @@ export type Database = {
           id?: string
           ie_indicator?: string | null
           internal_code?: string | null
+          is_rural?: boolean
           legal_name?: string | null
           mobile?: string | null
           municipal_registration?: string | null
@@ -1587,6 +1789,14 @@ export type Database = {
           provider_person_integration_account_id?: string | null
           provider_person_sync_status?: string | null
           provider_person_synced_at?: string | null
+          rural_access_type?: string | null
+          rural_contact_name?: string | null
+          rural_contact_phone?: string | null
+          rural_delivery_difficulty?: string | null
+          rural_driver_instructions?: string | null
+          rural_notes?: string | null
+          rural_requires_contact?: boolean
+          rural_updated_at?: string | null
           service_notes?: string | null
           sigla?: string | null
           state_registration?: string | null
@@ -9123,6 +9333,54 @@ export type Database = {
           },
         ]
       }
+      rural_delivery_import_batches: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          error_count: number
+          errors: Json
+          file_name: string | null
+          id: string
+          imported_count: number
+          metadata: Json
+          row_count: number
+          status: string
+          tenant_id: string
+          unmatched_count: number
+          updated_count: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          error_count?: number
+          errors?: Json
+          file_name?: string | null
+          id?: string
+          imported_count?: number
+          metadata?: Json
+          row_count?: number
+          status?: string
+          tenant_id: string
+          unmatched_count?: number
+          updated_count?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          error_count?: number
+          errors?: Json
+          file_name?: string | null
+          id?: string
+          imported_count?: number
+          metadata?: Json
+          row_count?: number
+          status?: string
+          tenant_id?: string
+          unmatched_count?: number
+          updated_count?: number
+        }
+        Relationships: []
+      }
       stock_items: {
         Row: {
           active: boolean | null
@@ -10753,6 +11011,7 @@ export type Database = {
             }
             Returns: Json
           }
+      client_is_rural: { Args: { _client_id: string }; Returns: boolean }
       close_closing_report: {
         Args: { _closing_report_id: string }
         Returns: undefined

@@ -31,6 +31,9 @@ const empty = {
   blocked: false, billed: false, taxes_enabled: false,
   tax_code: '', tax_description: '',
   service_notes: '', payment_notes: '', notes: '',
+  is_rural: false, rural_notes: '', rural_driver_instructions: '',
+  rural_requires_contact: false, rural_contact_name: '', rural_contact_phone: '',
+  rural_access_type: '', rural_delivery_difficulty: '',
 };
 
 type FormState = typeof empty;
@@ -163,12 +166,13 @@ export function ClientFormDialog({
         </DialogHeader>
 
         <Tabs defaultValue="geral" className="w-full">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="geral">Geral</TabsTrigger>
             <TabsTrigger value="endereco">Endereço</TabsTrigger>
             <TabsTrigger value="contato">Contato</TabsTrigger>
             <TabsTrigger value="tributario">Tributário</TabsTrigger>
             <TabsTrigger value="cobranca">Cobrança / Frete</TabsTrigger>
+            <TabsTrigger value="rural">Zona Rural</TabsTrigger>
             <TabsTrigger value="obs">Observações</TabsTrigger>
           </TabsList>
 
@@ -474,6 +478,73 @@ export function ClientFormDialog({
               <Label>Observações Gerais</Label>
               <Textarea rows={3} value={form.notes} onChange={e => set('notes', e.target.value)} />
             </div>
+          </TabsContent>
+          {/* ZONA RURAL */}
+          <TabsContent value="rural" className="space-y-4 pt-4">
+            <div className="flex items-center gap-3 rounded-md border p-3 bg-muted/30">
+              <Switch checked={form.is_rural} onCheckedChange={v => set('is_rural', v)} />
+              <div>
+                <Label className="cursor-pointer">Cliente de Zona Rural</Label>
+                <p className="text-xs text-muted-foreground">Ao marcar, a carga/viagem exibirá alertas e instruções ao motorista.</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-12 gap-3">
+              <div className="col-span-4">
+                <Label>Tipo de Acesso</Label>
+                <Select value={form.rural_access_type || ''} onValueChange={v => set('rural_access_type', v)}>
+                  <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="paved">Asfalto</SelectItem>
+                    <SelectItem value="dirt_road">Estrada de terra</SelectItem>
+                    <SelectItem value="mixed">Misto</SelectItem>
+                    <SelectItem value="unknown">Desconhecido</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="col-span-4">
+                <Label>Dificuldade</Label>
+                <Select value={form.rural_delivery_difficulty || ''} onValueChange={v => set('rural_delivery_difficulty', v)}>
+                  <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Baixa</SelectItem>
+                    <SelectItem value="medium">Média</SelectItem>
+                    <SelectItem value="high">Alta</SelectItem>
+                    <SelectItem value="critical">Crítica</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="col-span-4 flex items-center gap-3 pt-6">
+                <Switch checked={form.rural_requires_contact} onCheckedChange={v => set('rural_requires_contact', v)} />
+                <Label className="cursor-pointer">Precisa ligar antes</Label>
+              </div>
+              <div className="col-span-6">
+                <Label>Nome do Contato Rural</Label>
+                <Input value={form.rural_contact_name} onChange={e => set('rural_contact_name', e.target.value)} />
+              </div>
+              <div className="col-span-6">
+                <Label>Telefone do Contato Rural</Label>
+                <Input value={form.rural_contact_phone} onChange={e => set('rural_contact_phone', e.target.value)} placeholder="(00) 00000-0000" />
+              </div>
+              <div className="col-span-12">
+                <Label>Observações visíveis ao motorista</Label>
+                <Textarea rows={3} value={form.rural_driver_instructions}
+                  onChange={e => set('rural_driver_instructions', e.target.value)}
+                  placeholder="Ex.: Ligar antes; entrega em Mamonas; estrada de terra 12km após o trevo." />
+                <p className="text-xs text-muted-foreground mt-1">Estas instruções aparecem no app do motorista, romaneio e manifesto.</p>
+              </div>
+              <div className="col-span-12">
+                <Label>Observações internas (não vão para o motorista)</Label>
+                <Textarea rows={2} value={form.rural_notes}
+                  onChange={e => set('rural_notes', e.target.value)}
+                  placeholder="Ex.: cliente sempre demora a pagar táxi." />
+              </div>
+            </div>
+            {form.is_rural && form.rural_requires_contact && !form.rural_contact_phone.trim() && (
+              <p className="text-xs text-destructive">⚠️ Marcado "ligar antes" mas sem telefone.</p>
+            )}
+            {form.is_rural && !form.rural_driver_instructions.trim() && (
+              <p className="text-xs text-warning">⚠️ Recomendado preencher instrução para o motorista.</p>
+            )}
           </TabsContent>
         </Tabs>
 
