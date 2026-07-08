@@ -38,11 +38,6 @@ export default function PortalPickups() {
   const cancelMut = useCancelPortalPickup();
   const { toast } = useToast();
 
-  const clientLabel = (id: string) => {
-    const a = access.find((c) => c.client_id === id);
-    return a?.client_name || id.slice(0, 8);
-  };
-
   const handleCancel = async (id: string) => {
     if (!window.confirm('Deseja cancelar esta coleta?')) return;
     try {
