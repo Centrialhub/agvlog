@@ -187,25 +187,16 @@ function parseEntregasSheet(ws: XLSX.WorkSheet, errors: string[]): ParsedMonitor
         observation: headerIdx.obs != null ? cellStr(row[headerIdx.obs]) : null,
         status: headerIdx.status != null ? cellStr(row[headerIdx.status]) : null,
       };
-      if (upd.date_invalid_marker(row, headerIdx, errors) === false) {
-        current.updates.push(upd);
+      if (!dateVal && headerIdx.date != null && row[headerIdx.date] != null && row[headerIdx.date] !== '') {
+        errors.push(`Data inválida na aba Entregas: ${row[headerIdx.date]}`);
       }
+      current.updates.push(upd);
       if (upd.status) current.legacy_status_notes.push(upd.status);
     }
   }
   if (current) monitors.push(current);
   return monitors;
 }
-
-// Small helper attached indirectly to avoid unused warning; declared as prototype extension via any.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-(ParsedProgressUpdateCarry as any);
-function ParsedProgressUpdateCarry() {/* placeholder */}
-// Replace helper: augment via module-level function since inline attachment above is not valid.
-// We instead validate inside push:
-
-// The validation call above is intentionally simple; but TS won't allow method on plain object.
-// So we override: reimplement without that call.
 
 function parseChegadaSheet(ws: XLSX.WorkSheet, errors: string[]): ParsedForecast[] {
   const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
