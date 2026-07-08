@@ -82,6 +82,7 @@ const RuralClients = lazy(() => import("@/pages/RuralClients"));
 const DriverMonitoring = lazy(() => import("@/pages/DriverMonitoring"));
 const OccurrenceReports = lazy(() => import("@/pages/OccurrenceReports"));
 const PalletReturns = lazy(() => import("@/pages/PalletReturns"));
+const MerchandiseShortages = lazy(() => import("@/pages/MerchandiseShortages"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
 // Driver pages
@@ -289,6 +290,7 @@ const App = () => (
             <Route path="/driver-monitoring" element={<ProtectedRoute><DriverMonitoring /></ProtectedRoute>} />
             <Route path="/occurrence-reports" element={<ProtectedRoute><OccurrenceReports /></ProtectedRoute>} />
             <Route path="/pallet-returns" element={<ProtectedRoute><PalletReturns /></ProtectedRoute>} />
+            <Route path="/merchandise-shortages" element={<ProtectedRoute><MerchandiseShortages /></ProtectedRoute>} />
 
             {/* Driver routes */}
             <Route path="/driver" element={<DriverRoute><DriverHome /></DriverRoute>} />
