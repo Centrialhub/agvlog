@@ -1,5 +1,12 @@
 import { useState, useMemo } from 'react';
-import { useIncidents, useCreateIncident, useUpdateIncident, Incident, INCIDENT_TYPES, INCIDENT_TYPE_LABELS, INCIDENT_STATUSES, INCIDENT_STATUS_LABELS, SEVERITY_LABELS, INCIDENT_SEVERITIES } from '@/hooks/useIncidents';
+import {
+  useIncidents, useCreateIncident, useUpdateIncident, Incident,
+  INCIDENT_TYPES, INCIDENT_TYPE_LABELS, INCIDENT_STATUSES, INCIDENT_STATUS_LABELS,
+  SEVERITY_LABELS, INCIDENT_SEVERITIES,
+  INCIDENT_CATEGORIES, INCIDENT_CATEGORY_LABELS,
+  INCIDENT_ACTION_TYPES, INCIDENT_ACTION_LABELS,
+  useIncidentActions, useAddEmployeeIncidentAction,
+} from '@/hooks/useIncidents';
 import { useEmployees } from '@/hooks/useEmployees';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useClients } from '@/hooks/useClients';
@@ -15,6 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Search, Plus, AlertOctagon, Edit } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
+import { Separator } from '@/components/ui/separator';
 
 export default function Incidents() {
   const { data: incidents = [], isLoading } = useIncidents();
@@ -26,6 +34,7 @@ export default function Incidents() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [severityFilter, setSeverityFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState('all');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Incident | undefined>();
 
@@ -39,12 +48,16 @@ export default function Incidents() {
     let list = incidents;
     if (statusFilter !== 'all') list = list.filter(i => i.status === statusFilter);
     if (severityFilter !== 'all') list = list.filter(i => i.severity === severityFilter);
+    if (categoryFilter !== 'all') {
+      list = list.filter(i => (i.category || 'operational') === categoryFilter
+        || (categoryFilter === 'hr' && i.category === 'rh'));
+    }
     if (search) {
       const s = search.toLowerCase();
       list = list.filter(i => i.title.toLowerCase().includes(s) || i.incident_number.toLowerCase().includes(s));
     }
     return list;
-  }, [incidents, search, statusFilter, severityFilter]);
+  }, [incidents, search, statusFilter, severityFilter, categoryFilter]);
 
   const openCreate = () => {
     setEditing(undefined);
@@ -66,6 +79,9 @@ export default function Incidents() {
 
   const handleSave = async () => {
     if (!form.title.trim()) { toast.error('Título obrigatório'); return; }
+    if (form.category === 'hr' && !form.employee_id) {
+      toast.error('Ocorrência de RH exige um funcionário vinculado'); return;
+    }
     // Critical incidents need responsible + conclusion to close
     if (['resolved','closed'].includes(form.status) && ['high','critical'].includes(form.severity) && !form.conclusion.trim()) {
       toast.error('Ocorrências críticas precisam de conclusão/parecer final para encerrar');
@@ -125,22 +141,34 @@ export default function Incidents() {
           <SelectTrigger className="w-32 h-9"><SelectValue /></SelectTrigger>
           <SelectContent><SelectItem value="all">Gravidade</SelectItem>{INCIDENT_SEVERITIES.map(s => <SelectItem key={s} value={s}>{SEVERITY_LABELS[s]}</SelectItem>)}</SelectContent>
         </Select>
+        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+          <SelectTrigger className="w-36 h-9"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Categoria</SelectItem>
+            {INCIDENT_CATEGORIES.map(c => <SelectItem key={c} value={c}>{INCIDENT_CATEGORY_LABELS[c]}</SelectItem>)}
+          </SelectContent>
+        </Select>
       </div>
 
       <Card><CardContent className="p-0">
         <Table>
           <TableHeader><TableRow>
-            <TableHead>Nº</TableHead><TableHead>Título</TableHead><TableHead>Tipo</TableHead>
+            <TableHead>Nº</TableHead><TableHead>Título</TableHead><TableHead>Categoria</TableHead><TableHead>Tipo</TableHead>
             <TableHead>Gravidade</TableHead><TableHead>Funcionário</TableHead><TableHead>Custo</TableHead>
             <TableHead>Status</TableHead><TableHead className="w-10"></TableHead>
           </TableRow></TableHeader>
           <TableBody>
-            {isLoading ? <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
-            : filtered.length === 0 ? <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhuma ocorrência</TableCell></TableRow>
+            {isLoading ? <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+            : filtered.length === 0 ? <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Nenhuma ocorrência</TableCell></TableRow>
             : filtered.map(i => (
               <TableRow key={i.id}>
                 <TableCell className="font-mono text-xs">{i.incident_number}</TableCell>
                 <TableCell className="font-medium text-sm max-w-[200px] truncate">{i.title}</TableCell>
+                <TableCell className="text-xs">
+                  <Badge variant="outline" className="text-[10px]">
+                    {INCIDENT_CATEGORY_LABELS[i.category === 'rh' ? 'hr' : (i.category || 'operational')] || i.category}
+                  </Badge>
+                </TableCell>
                 <TableCell className="text-sm">{INCIDENT_TYPE_LABELS[i.incident_type] || i.incident_type}</TableCell>
                 <TableCell><Badge variant="outline" className={`text-[10px] ${severityColor(i.severity)}`}>{SEVERITY_LABELS[i.severity]}</Badge></TableCell>
                 <TableCell className="text-sm text-muted-foreground">{i.employees?.name || '—'}</TableCell>
@@ -159,6 +187,12 @@ export default function Incidents() {
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2"><Label className="text-xs">Título *</Label><Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} /></div>
+              <div><Label className="text-xs">Categoria</Label>
+                <Select value={form.category} onValueChange={v => setForm(f => ({ ...f, category: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{INCIDENT_CATEGORIES.map(c => <SelectItem key={c} value={c}>{INCIDENT_CATEGORY_LABELS[c]}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
               <div><Label className="text-xs">Tipo</Label>
                 <Select value={form.incident_type} onValueChange={v => setForm(f => ({ ...f, incident_type: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
@@ -171,9 +205,9 @@ export default function Incidents() {
                   <SelectContent>{INCIDENT_SEVERITIES.map(s => <SelectItem key={s} value={s}>{SEVERITY_LABELS[s]}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              <div><Label className="text-xs">Funcionário</Label>
+              <div className={form.category === 'hr' ? 'col-span-2' : ''}><Label className="text-xs">Funcionário {form.category === 'hr' && <span className="text-destructive">*</span>}</Label>
                 <Select value={form.employee_id} onValueChange={v => setForm(f => ({ ...f, employee_id: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectTrigger className={form.category === 'hr' && !form.employee_id ? 'border-destructive' : ''}><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>{employees.map(e => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
@@ -202,6 +236,9 @@ export default function Incidents() {
             <div><Label className="text-xs">Descrição</Label><Textarea rows={3} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} /></div>
             <div><Label className="text-xs">Plano de Ação</Label><Textarea rows={2} value={form.action_plan} onChange={e => setForm(f => ({ ...f, action_plan: e.target.value }))} /></div>
             <div><Label className="text-xs">Conclusão / Parecer Final</Label><Textarea rows={2} value={form.conclusion} onChange={e => setForm(f => ({ ...f, conclusion: e.target.value }))} /></div>
+            {editing && form.category === 'hr' && (
+              <HrActionsSection incidentId={editing.id} defaultEmployeeId={form.employee_id} />
+            )}
           </div>
           <div className="flex justify-end gap-2 mt-4">
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
@@ -209,6 +246,87 @@ export default function Incidents() {
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function HrActionsSection({ incidentId, defaultEmployeeId }: { incidentId: string; defaultEmployeeId?: string }) {
+  const { data: actions = [] } = useIncidentActions(incidentId);
+  const addAction = useAddEmployeeIncidentAction();
+  const [actionType, setActionType] = useState<string>('note');
+  const [description, setDescription] = useState('');
+  const [amount, setAmount] = useState('');
+  const [effectiveDate, setEffectiveDate] = useState('');
+
+  const handleAdd = async () => {
+    if (!defaultEmployeeId) { toast.error('Vincule um funcionário à ocorrência antes'); return; }
+    if (actionType === 'payroll_discount' && !(Number(amount) > 0)) {
+      toast.error('Desconto em folha requer valor maior que zero'); return;
+    }
+    if (actionType === 'payroll_discount' && !effectiveDate) {
+      toast.error('Desconto em folha requer data efetiva'); return;
+    }
+    try {
+      await addAction.mutateAsync({
+        incident_id: incidentId,
+        employee_id: defaultEmployeeId,
+        action_type: actionType,
+        description: description || null,
+        amount: amount ? Number(amount) : 0,
+        effective_date: effectiveDate || null,
+      });
+      toast.success('Ação de RH registrada');
+      setDescription(''); setAmount(''); setEffectiveDate(''); setActionType('note');
+    } catch (e: any) { toast.error(e.message); }
+  };
+
+  return (
+    <div className="border rounded-md p-3 space-y-3 bg-muted/30">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold">Ações de RH</p>
+        <Badge variant="outline" className="text-[10px]">{actions.length}</Badge>
+      </div>
+      <Separator />
+      <div className="grid grid-cols-2 gap-2">
+        <div><Label className="text-xs">Tipo de ação</Label>
+          <Select value={actionType} onValueChange={setActionType}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>{INCIDENT_ACTION_TYPES.map(t => <SelectItem key={t} value={t}>{INCIDENT_ACTION_LABELS[t]}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+        <div><Label className="text-xs">Data efetiva {actionType === 'payroll_discount' && <span className="text-destructive">*</span>}</Label>
+          <Input type="date" value={effectiveDate} onChange={e => setEffectiveDate(e.target.value)} />
+        </div>
+        <div className="col-span-2"><Label className="text-xs">Descrição</Label>
+          <Textarea rows={2} value={description} onChange={e => setDescription(e.target.value)} />
+        </div>
+        {actionType === 'payroll_discount' && (
+          <div><Label className="text-xs">Valor do desconto (R$) *</Label>
+            <Input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} />
+          </div>
+        )}
+      </div>
+      <div className="flex justify-end">
+        <Button size="sm" onClick={handleAdd} disabled={addAction.isPending}>
+          <Plus className="h-3 w-3 mr-1" /> Adicionar ação
+        </Button>
+      </div>
+      {actions.length > 0 && (
+        <div className="space-y-1 pt-2">
+          {actions.map(a => (
+            <div key={a.id} className="flex items-center justify-between text-xs border rounded px-2 py-1 bg-background">
+              <div className="flex-1">
+                <span className="font-medium">{INCIDENT_ACTION_LABELS[a.action_type] || a.action_type}</span>
+                {a.description && <span className="text-muted-foreground"> — {a.description}</span>}
+                {a.effective_date && <span className="text-muted-foreground"> · {a.effective_date}</span>}
+              </div>
+              {a.action_type === 'payroll_discount' && (
+                <span className="font-mono text-destructive">R$ {Number(a.amount).toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
