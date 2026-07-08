@@ -45,9 +45,8 @@ describe('splitInvoiceNumbers', () => {
 
 describe('toIsoDate & parseBrCurrency', () => {
   it('converts Excel serial numbers', () => {
-    // 45870 ≈ 2025-08-05 (Excel serial)
     const iso = toIsoDate(45870);
-    expect(iso).toBe('2025-08-05');
+    expect(iso).toBe('2025-08-01');
   });
   it('converts dd/MM/yyyy', () => {
     expect(toIsoDate('11/06/2026')).toBe('2026-06-11');
@@ -132,7 +131,7 @@ describe('CSV writers', () => {
         password_or_authorization: '615632',
       },
     ]);
-    const text = await blob.text();
+    const text = await new Response(blob).text();
     expect(text.charCodeAt(0)).toBe(0xfeff);
     expect(text).toContain('Cliente;Cidade');
     expect(text).toContain('NOVO MILENIO;JANUARIA');
@@ -149,7 +148,7 @@ describe('CSV writers', () => {
         notes: 'QUINZENAL',
       },
     ]);
-    const text = await blob.text();
+    const text = await new Response(blob).text();
     expect(text).toContain('578712;ANTONIO WELLINGTON');
     expect(text).toContain('03/07/2026');
   });
