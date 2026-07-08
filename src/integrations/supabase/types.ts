@@ -13891,12 +13891,29 @@ export type Database = {
           storage_path: string
         }[]
       }
+      get_client_portal_alerts: {
+        Args: { _client_id?: string; _limit?: number; _tenant_id: string }
+        Returns: Json
+      }
       get_client_portal_shipment_detail: {
         Args: { _fiscal_document_id: string }
         Returns: Json
       }
       get_client_portal_summary: {
         Args: { _end_date?: string; _start_date?: string; _tenant_id: string }
+        Returns: Json
+      }
+      get_client_portal_summary_v2: {
+        Args: {
+          _client_id?: string
+          _end_date?: string
+          _start_date?: string
+          _tenant_id: string
+        }
+        Returns: Json
+      }
+      get_client_portal_upcoming_deliveries: {
+        Args: { _client_id?: string; _limit?: number; _tenant_id: string }
         Returns: Json
       }
       get_open_trip_alerts: {
@@ -13938,6 +13955,22 @@ export type Database = {
           can_view_financial: boolean
           can_view_vehicle_live: boolean
           client_id: string
+        }[]
+      }
+      get_user_client_access_detailed: {
+        Args: { _tenant_id: string }
+        Returns: {
+          access_type: string
+          active: boolean
+          can_download_documents: boolean
+          can_open_occurrences: boolean
+          can_request_pickup: boolean
+          can_view_driver_contact: boolean
+          can_view_financial: boolean
+          can_view_vehicle_live: boolean
+          client_id: string
+          client_name: string
+          client_tax_id: string
         }[]
       }
       get_user_portal_tenants: {
