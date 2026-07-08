@@ -61,6 +61,7 @@ const BillingEdi = lazy(() => import("@/pages/BillingEdi"));
 const OperationalRoutesPage = lazy(() => import("@/pages/OperationalRoutesPage"));
 const Employees = lazy(() => import("@/pages/Employees"));
 const Incidents = lazy(() => import("@/pages/Incidents"));
+const Payroll = lazy(() => import("@/pages/Payroll"));
 const AssetsPage = lazy(() => import("@/pages/Assets"));
 const MaintenanceOrders = lazy(() => import("@/pages/MaintenanceOrders"));
 const StockPage = lazy(() => import("@/pages/Stock"));
@@ -270,6 +271,7 @@ const App = () => (
             <Route path="/operational-routes" element={<ProtectedRoute><OperationalRoutesPage /></ProtectedRoute>} />
             <Route path="/employees" element={<ProtectedRoute><Employees /></ProtectedRoute>} />
             <Route path="/incidents" element={<ProtectedRoute><Incidents /></ProtectedRoute>} />
+            <Route path="/payroll" element={<ProtectedRoute><Payroll /></ProtectedRoute>} />
             <Route path="/assets" element={<ProtectedRoute><AssetsPage /></ProtectedRoute>} />
             <Route path="/maintenance-orders" element={<ProtectedRoute><MaintenanceOrders /></ProtectedRoute>} />
             <Route path="/stock" element={<ProtectedRoute><StockPage /></ProtectedRoute>} />
