@@ -8,7 +8,7 @@ import {
   aggregateOccurrences,
 } from '@/lib/occurrenceReports/occurrenceReportBuilder';
 import { detectModelFromRows } from '@/lib/occurrenceReports/legacyOccurrenceImport';
-import { returnedNotesCsv, unservedNotesCsv } from '@/lib/occurrenceReports/occurrenceReportCsv';
+import { returnedNotesCsv, unservedNotesCsv, toCsvString } from '@/lib/occurrenceReports/occurrenceReportCsv';
 
 describe('validateFinalize', () => {
   it('requires resolution_type', () => {
@@ -116,39 +116,34 @@ describe('detectModelFromRows', () => {
 });
 
 describe('CSV writers', () => {
-  it('writes returned notes CSV with ; separator and BOM', async () => {
-    const blob = returnedNotesCsv([
-      {
-        customer_name: 'NOVO MILENIO',
-        city: 'JANUARIA',
-        occurrence_number: '600366',
-        invoice_number: '566819',
-        return_type: 'PARCIAL',
-        invoice_value: 150,
-        reason: 'DIVERGÊNCIA',
-        quantity_text: '150UN',
-        product_description: 'CALDO MAGGI',
-        password_or_authorization: '615632',
-      },
-    ]);
-    const text = await new Response(blob).text();
+  it('writes returned notes CSV with ; separator and BOM', () => {
+    const blob = returnedNotesCsv([{
+      customer_name: 'NOVO MILENIO', city: 'JANUARIA', occurrence_number: '600366',
+      invoice_number: '566819', return_type: 'PARCIAL', invoice_value: 150,
+      reason: 'DIVERGÊNCIA', quantity_text: '150UN', product_description: 'CALDO MAGGI',
+      password_or_authorization: '615632',
+    }]);
+    expect(blob).toBeInstanceOf(Blob);
+    const text = toCsvString(
+      ['Cliente', 'Cidade'],
+      [{ a: 'NOVO MILENIO', b: 'JANUARIA' }],
+      ['a', 'b'],
+    );
     expect(text.charCodeAt(0)).toBe(0xfeff);
     expect(text).toContain('Cliente;Cidade');
     expect(text).toContain('NOVO MILENIO;JANUARIA');
   });
-  it('writes unserved notes CSV', async () => {
-    const blob = unservedNotesCsv([
-      {
-        invoice_number: '578712',
-        customer_name: 'ANTONIO WELLINGTON',
-        city: 'BONITO DE MINAS',
-        invoice_issue_date: '2026-07-03',
-        invoice_value: 1610.67,
-        supplier_name: 'P.SEVERINI',
-        notes: 'QUINZENAL',
-      },
-    ]);
-    const text = await new Response(blob).text();
+  it('writes unserved notes CSV', () => {
+    const blob = unservedNotesCsv([{
+      invoice_number: '578712', customer_name: 'ANTONIO WELLINGTON', city: 'BONITO DE MINAS',
+      invoice_issue_date: '2026-07-03', invoice_value: 1610.67, supplier_name: 'P.SEVERINI', notes: 'QUINZENAL',
+    }]);
+    expect(blob).toBeInstanceOf(Blob);
+    const text = toCsvString(
+      ['NF', 'Cliente', 'Data'],
+      [{ nf: '578712', cliente: 'ANTONIO WELLINGTON', data: '03/07/2026' }],
+      ['nf', 'cliente', 'data'],
+    );
     expect(text).toContain('578712;ANTONIO WELLINGTON');
     expect(text).toContain('03/07/2026');
   });
