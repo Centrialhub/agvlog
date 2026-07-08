@@ -65,8 +65,8 @@ export default function PortalReports() {
         <div className="space-y-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <PortalKpiCard label="Entregas no período" value={data.deliveries_total} icon={TruckIcon} />
-            <PortalKpiCard label="Entregas atrasadas" value={data.deliveries_delayed} icon={Clock} tone={data.deliveries_delayed > 0 ? 'warning' : 'default'} />
-            <PortalKpiCard label="Canhotos pendentes" value={data.pending_pods} icon={ClipboardCheck} tone={data.pending_pods > 0 ? 'warning' : 'default'} />
+            <PortalKpiCard label="Entregas atrasadas" value={data.deliveries_delayed} icon={Clock} tone={data.deliveries_delayed > 0 ? 'text-orange-500' : 'text-muted-foreground'} />
+            <PortalKpiCard label="Canhotos pendentes" value={data.pending_pods} icon={ClipboardCheck} tone={data.pending_pods > 0 ? 'text-orange-500' : 'text-muted-foreground'} />
             <PortalKpiCard label="Prazo médio (dias)" value={Number(data.avg_delivery_days).toFixed(1)} icon={AlertTriangle} />
           </div>
 
