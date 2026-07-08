@@ -466,7 +466,18 @@ export function ClientFormDialog({
 
           {/* OBSERVAÇÕES */}
           <TabsContent value="obs" className="space-y-4 pt-4">
-            {null}
+            <div>
+              <Label>Notas de Serviço</Label>
+              <Textarea rows={3} value={form.service_notes} onChange={e => set('service_notes', e.target.value)} />
+            </div>
+            <div>
+              <Label>Notas de Pagamento / Prazo</Label>
+              <Textarea rows={3} value={form.payment_notes} onChange={e => set('payment_notes', e.target.value)} />
+            </div>
+            <div>
+              <Label>Observações Gerais</Label>
+              <Textarea rows={3} value={form.notes} onChange={e => set('notes', e.target.value)} />
+            </div>
           </TabsContent>
           {/* ZONA RURAL */}
           <TabsContent value="rural" className="space-y-4 pt-4">
@@ -534,20 +545,6 @@ export function ClientFormDialog({
             {form.is_rural && !form.rural_driver_instructions.trim() && (
               <p className="text-xs text-warning">⚠️ Recomendado preencher instrução para o motorista.</p>
             )}
-          </TabsContent>
-          <TabsContent value="obs-real" className="space-y-4 pt-4">
-            <div>
-              <Label>Notas de Serviço</Label>
-              <Textarea rows={3} value={form.service_notes} onChange={e => set('service_notes', e.target.value)} />
-            </div>
-            <div>
-              <Label>Notas de Pagamento / Prazo</Label>
-              <Textarea rows={3} value={form.payment_notes} onChange={e => set('payment_notes', e.target.value)} />
-            </div>
-            <div>
-              <Label>Observações Gerais</Label>
-              <Textarea rows={3} value={form.notes} onChange={e => set('notes', e.target.value)} />
-            </div>
           </TabsContent>
         </Tabs>
 
