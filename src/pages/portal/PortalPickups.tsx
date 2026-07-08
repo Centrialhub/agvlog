@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { PortalSection } from '@/components/portal/PortalLayout';
 import { PortalEmptyState } from '@/components/portal/PortalEmptyState';
 import { usePortalPickups, useRequestPortalPickup, useCancelPortalPickup } from '@/hooks/portal/usePortalPickups';
 import { useClientPortalAccess, hasAnyPermission } from '@/hooks/portal/useClientPortalAccess';
+import { usePortalClientScope } from '@/hooks/portal/usePortalClientScope';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -26,6 +27,7 @@ const STATUS_TONE: Record<string, string> = {
 
 export default function PortalPickups() {
   const { data: access = [] } = useClientPortalAccess();
+  const { selectedClientId } = usePortalClientScope();
   const canRequest = hasAnyPermission(access, 'can_request_pickup');
   const requestableClients = access.filter(a => a.can_request_pickup);
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -34,6 +36,14 @@ export default function PortalPickups() {
   });
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ client_id: '', pickup_at: '', recipient_name: '', notes: '' });
+  // Pré-selecionar cliente quando escopo estiver reduzido a um único cliente
+  useEffect(() => {
+    if (open && !form.client_id) {
+      const preselect = selectedClientId
+        || (requestableClients.length === 1 ? requestableClients[0].client_id : '');
+      if (preselect) setForm(f => ({ ...f, client_id: preselect }));
+    }
+  }, [open, selectedClientId, requestableClients, form.client_id]);
   const requestMut = useRequestPortalPickup();
   const cancelMut = useCancelPortalPickup();
   const { toast } = useToast();

@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
+import { usePortalClientScope } from '@/hooks/portal/usePortalClientScope';
 
 export interface PortalDocument {
   id: string;
@@ -29,12 +30,14 @@ export function usePortalDocuments(filters?: {
   offset?: number;
 }) {
   const { currentTenant } = useTenant();
+  const { selectedClientId } = usePortalClientScope();
   return useQuery({
-    queryKey: ['portal_documents', currentTenant?.id, filters],
+    queryKey: ['portal_documents', currentTenant?.id, selectedClientId, filters],
     queryFn: async (): Promise<PortalDocument[]> => {
       if (!currentTenant) return [];
-      const { data, error } = await supabase.rpc('list_client_documents', {
+      const { data, error } = await (supabase as any).rpc('list_client_documents_v2', {
         _tenant_id: currentTenant.id,
+        _client_id: selectedClientId,
         _document_type: filters?.document_type || null,
         _search: filters?.search || null,
         _start_date: filters?.start || null,

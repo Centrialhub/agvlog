@@ -1,5 +1,14 @@
 import { useState, useMemo } from 'react';
 import { useEmployees, useCreateEmployee, useUpdateEmployee, Employee, EMPLOYEE_STATUSES, EMPLOYEE_STATUS_LABELS } from '@/hooks/useEmployees';
+import {
+  useEmployeeContracts, useCreateEmployeeContract, useUpdateEmployeeContract,
+  useEmployeeAdvances, useEmployeeIncidentActions,
+  CONTRACT_TYPES, CONTRACT_TYPE_LABELS, EMPLOYMENT_REGIMES, EMPLOYMENT_REGIME_LABELS,
+  PAYMENT_CYCLES, PAYMENT_CYCLE_LABELS, ADVANCE_STATUS_LABELS,
+} from '@/hooks/usePayroll';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery } from '@tanstack/react-query';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,7 +19,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, Plus, Users, Edit, AlertTriangle } from 'lucide-react';
+import { Search, Plus, Users, Edit, AlertTriangle, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, differenceInDays, parseISO } from 'date-fns';
 
@@ -22,6 +31,7 @@ export default function Employees() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Employee | undefined>();
+  const [detailEmployee, setDetailEmployee] = useState<Employee | null>(null);
 
   const [form, setForm] = useState({
     name: '', doc_cpf: '', role_title: '', department: '', branch: '',
@@ -166,7 +176,12 @@ export default function Employees() {
                       ) : '—'}
                     </TableCell>
                     <TableCell><Badge variant="outline" className={`text-[10px] ${statusColor(e.status)}`}>{EMPLOYEE_STATUS_LABELS[e.status]}</Badge></TableCell>
-                    <TableCell><Button variant="ghost" size="icon" onClick={() => openEdit(e)}><Edit className="h-4 w-4" /></Button></TableCell>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => setDetailEmployee(e)} title="Ver detalhes"><Eye className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" onClick={() => openEdit(e)} title="Editar"><Edit className="h-4 w-4" /></Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 );
               })}
@@ -218,6 +233,307 @@ export default function Employees() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <EmployeeDetailSheet employee={detailEmployee} onClose={() => setDetailEmployee(null)} />
+    </div>
+  );
+}
+
+// ============================================================
+// Employee detail sheet with tabs (Dados / Contrato / Docs /
+// Ocorrências / Folha / Motorista)
+// ============================================================
+function EmployeeDetailSheet({ employee, onClose }: { employee: Employee | null; onClose: () => void }) {
+  return (
+    <Sheet open={!!employee} onOpenChange={(o) => !o && onClose()}>
+      <SheetContent className="w-full sm:max-w-3xl overflow-y-auto">
+        {employee && <EmployeeDetail employee={employee} />}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function EmployeeDetail({ employee }: { employee: Employee }) {
+  const { data: contracts = [] } = useEmployeeContracts(employee.id);
+  const { data: advances = [] } = useEmployeeAdvances({ employeeId: employee.id });
+  const { data: incidentActions = [] } = useEmployeeIncidentActions(employee.id);
+  const { data: payrollEntries = [] } = useQuery({
+    queryKey: ['employee_payroll_entries', employee.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('payroll_entries')
+        .select('*, payroll_periods(period_name, period_start, period_end, status)')
+        .eq('employee_id', employee.id)
+        .order('created_at', { ascending: false }).limit(20);
+      if (error) throw error;
+      return data as any[];
+    },
+  });
+  const { data: driverInfo } = useQuery({
+    queryKey: ['employee_driver_info', employee.driver_id],
+    queryFn: async () => {
+      if (!employee.driver_id) return null;
+      const { data, error } = await supabase.from('drivers')
+        .select('id, name, cnh_number, phone, active')
+        .eq('id', employee.driver_id).maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!employee.driver_id,
+  });
+  const { data: driverSettlements = [] } = useQuery({
+    queryKey: ['employee_driver_settlements', employee.driver_id],
+    queryFn: async () => {
+      if (!employee.driver_id) return [];
+      const { data, error } = await supabase.from('driver_settlements')
+        .select('id, period_start, period_end, status, driver_payable_amount, total_paid_amount')
+        .eq('driver_id', employee.driver_id)
+        .order('period_end', { ascending: false }).limit(10);
+      if (error) throw error;
+      return data as any[];
+    },
+    enabled: !!employee.driver_id,
+  });
+
+  const fmtBRL = (n: number) => (n ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  return (
+    <>
+      <SheetHeader>
+        <SheetTitle>{employee.name}</SheetTitle>
+        <p className="text-xs text-muted-foreground">{employee.role_title || 'Sem cargo'} · {employee.branch || 'Sem filial'}</p>
+      </SheetHeader>
+      <Tabs defaultValue="dados" className="mt-4">
+        <TabsList className="w-full flex-wrap h-auto">
+          <TabsTrigger value="dados">Dados</TabsTrigger>
+          <TabsTrigger value="contrato">Contrato</TabsTrigger>
+          <TabsTrigger value="ocorrencias">Ocorrências</TabsTrigger>
+          <TabsTrigger value="folha">Folha</TabsTrigger>
+          <TabsTrigger value="motorista">Motorista</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="dados" className="space-y-2 text-sm">
+          <div className="grid grid-cols-2 gap-2">
+            <div><p className="text-[10px] uppercase text-muted-foreground">CPF</p><p>{employee.doc_cpf || '—'}</p></div>
+            <div><p className="text-[10px] uppercase text-muted-foreground">Telefone</p><p>{employee.phone || '—'}</p></div>
+            <div><p className="text-[10px] uppercase text-muted-foreground">Email</p><p>{employee.email || '—'}</p></div>
+            <div><p className="text-[10px] uppercase text-muted-foreground">Admissão</p><p>{employee.hire_date ? format(parseISO(employee.hire_date), 'dd/MM/yyyy') : '—'}</p></div>
+            <div><p className="text-[10px] uppercase text-muted-foreground">Centro de custo</p><p>{employee.cost_center || '—'}</p></div>
+            <div><p className="text-[10px] uppercase text-muted-foreground">Status</p><p>{EMPLOYEE_STATUS_LABELS[employee.status]}</p></div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="contrato">
+          <ContractTab employeeId={employee.id} contracts={contracts} />
+        </TabsContent>
+
+        <TabsContent value="ocorrencias" className="space-y-2">
+          {incidentActions.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">Sem ocorrências registradas.</p>
+          ) : (
+            <Table>
+              <TableHeader><TableRow>
+                <TableHead>Data</TableHead><TableHead>Ocorrência</TableHead>
+                <TableHead>Ação</TableHead><TableHead className="text-right">Desconto</TableHead>
+              </TableRow></TableHeader>
+              <TableBody>
+                {incidentActions.map((a: any) => (
+                  <TableRow key={a.id} className={a.discount_amount > 0 ? 'bg-red-500/5' : ''}>
+                    <TableCell className="text-xs">{a.created_at ? format(new Date(a.created_at), 'dd/MM/yyyy') : '—'}</TableCell>
+                    <TableCell className="text-xs">{a.incidents?.title || '—'}</TableCell>
+                    <TableCell className="text-xs">{a.action_type || a.description || '—'}</TableCell>
+                    <TableCell className="text-right text-xs">{a.discount_amount ? fmtBRL(Number(a.discount_amount)) : '—'}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </TabsContent>
+
+        <TabsContent value="folha" className="space-y-2">
+          {payrollEntries.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">Sem entradas de folha.</p>
+          ) : (
+            <Table>
+              <TableHeader><TableRow>
+                <TableHead>Período</TableHead>
+                <TableHead className="text-right">Bruto</TableHead>
+                <TableHead className="text-right">Descontos</TableHead>
+                <TableHead className="text-right">Já pago</TableHead>
+                <TableHead className="text-right">A pagar</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow></TableHeader>
+              <TableBody>
+                {payrollEntries.map((e: any) => (
+                  <TableRow key={e.id}>
+                    <TableCell className="text-xs">{e.payroll_periods?.period_name || '—'}</TableCell>
+                    <TableCell className="text-right text-xs">{fmtBRL(Number(e.gross_amount))}</TableCell>
+                    <TableCell className="text-right text-xs text-red-600">{fmtBRL(Number(e.discount_amount))}</TableCell>
+                    <TableCell className="text-right text-xs">{fmtBRL(Number(e.already_paid_amount))}</TableCell>
+                    <TableCell className="text-right text-xs font-medium">{fmtBRL(Number(e.amount_to_pay))}</TableCell>
+                    <TableCell><Badge variant="outline" className="text-[10px]">{e.payroll_periods?.status || e.status}</Badge></TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+          <div className="mt-3">
+            <p className="text-xs font-semibold mb-1">Adiantamentos</p>
+            {advances.length === 0 ? (
+              <p className="text-xs text-muted-foreground">Sem adiantamentos.</p>
+            ) : (
+              <Table>
+                <TableHeader><TableRow>
+                  <TableHead>Data</TableHead>
+                  <TableHead className="text-right">Valor</TableHead>
+                  <TableHead>Motivo</TableHead><TableHead>Status</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>
+                  {advances.map(a => (
+                    <TableRow key={a.id}>
+                      <TableCell className="text-xs">{format(parseISO(a.advance_date), 'dd/MM/yyyy')}</TableCell>
+                      <TableCell className="text-right text-xs">{fmtBRL(Number(a.amount))}</TableCell>
+                      <TableCell className="text-xs">{a.reason || '—'}</TableCell>
+                      <TableCell><Badge variant="outline" className="text-[10px]">{ADVANCE_STATUS_LABELS[a.status] ?? a.status}</Badge></TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="motorista" className="space-y-2 text-sm">
+          {!employee.driver_id ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">Sem motorista vinculado.</p>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-2">
+                <div><p className="text-[10px] uppercase text-muted-foreground">Motorista</p><p>{driverInfo?.name || '—'}</p></div>
+                <div><p className="text-[10px] uppercase text-muted-foreground">CNH</p><p>{driverInfo?.cnh_number || '—'}</p></div>
+                <div><p className="text-[10px] uppercase text-muted-foreground">Telefone</p><p>{driverInfo?.phone || '—'}</p></div>
+                <div><p className="text-[10px] uppercase text-muted-foreground">Ativo</p><p>{driverInfo?.active ? 'Sim' : 'Não'}</p></div>
+              </div>
+              <p className="text-xs font-semibold mt-4 mb-1">Acertos recentes</p>
+              {driverSettlements.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Sem acertos.</p>
+              ) : (
+                <Table>
+                  <TableHeader><TableRow>
+                    <TableHead>Período</TableHead>
+                    <TableHead className="text-right">A pagar</TableHead>
+                    <TableHead className="text-right">Pago</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow></TableHeader>
+                  <TableBody>
+                    {driverSettlements.map((s: any) => (
+                      <TableRow key={s.id}>
+                        <TableCell className="text-xs">{s.period_start} → {s.period_end}</TableCell>
+                        <TableCell className="text-right text-xs">{fmtBRL(Number(s.driver_payable_amount))}</TableCell>
+                        <TableCell className="text-right text-xs">{fmtBRL(Number(s.total_paid_amount))}</TableCell>
+                        <TableCell><Badge variant="outline" className="text-[10px]">{s.status}</Badge></TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </>
+          )}
+        </TabsContent>
+      </Tabs>
+    </>
+  );
+}
+
+function ContractTab({ employeeId, contracts }: { employeeId: string; contracts: any[] }) {
+  const create = useCreateEmployeeContract();
+  const update = useUpdateEmployeeContract();
+  const [showNew, setShowNew] = useState(false);
+  const [form, setForm] = useState({
+    contract_type: 'employee', employment_regime: 'clt', payment_cycle: 'monthly',
+    position_title: '', base_salary: '', start_date: format(new Date(), 'yyyy-MM-dd'),
+  });
+  const handleCreate = async () => {
+    if (!form.start_date) { toast.error('Data de início obrigatória'); return; }
+    try {
+      await create.mutateAsync({
+        employee_id: employeeId,
+        contract_type: form.contract_type,
+        employment_regime: form.employment_regime,
+        payment_cycle: form.payment_cycle,
+        position_title: form.position_title || null,
+        base_salary: Number(form.base_salary) || 0,
+        start_date: form.start_date,
+        active: true,
+      } as any);
+      toast.success('Contrato criado (anterior desativado automaticamente)');
+      setShowNew(false);
+    } catch (e: any) { toast.error(e.message); }
+  };
+  return (
+    <div className="space-y-3">
+      <div className="flex justify-between items-center">
+        <p className="text-sm font-medium">Contratos ({contracts.length})</p>
+        <Button size="sm" onClick={() => setShowNew(v => !v)}>{showNew ? 'Cancelar' : 'Novo contrato ativo'}</Button>
+      </div>
+      {showNew && (
+        <Card><CardContent className="p-3 space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <div><Label className="text-xs">Tipo</Label>
+              <Select value={form.contract_type} onValueChange={v => setForm(f => ({ ...f, contract_type: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{CONTRACT_TYPES.map(t => <SelectItem key={t} value={t}>{CONTRACT_TYPE_LABELS[t]}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div><Label className="text-xs">Regime</Label>
+              <Select value={form.employment_regime} onValueChange={v => setForm(f => ({ ...f, employment_regime: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{EMPLOYMENT_REGIMES.map(r => <SelectItem key={r} value={r}>{EMPLOYMENT_REGIME_LABELS[r]}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div><Label className="text-xs">Ciclo</Label>
+              <Select value={form.payment_cycle} onValueChange={v => setForm(f => ({ ...f, payment_cycle: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{PAYMENT_CYCLES.map(c => <SelectItem key={c} value={c}>{PAYMENT_CYCLE_LABELS[c]}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div><Label className="text-xs">Início</Label><Input type="date" value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} /></div>
+            <div><Label className="text-xs">Cargo</Label><Input value={form.position_title} onChange={e => setForm(f => ({ ...f, position_title: e.target.value }))} /></div>
+            <div><Label className="text-xs">Salário base</Label><Input type="number" step="0.01" value={form.base_salary} onChange={e => setForm(f => ({ ...f, base_salary: e.target.value }))} /></div>
+          </div>
+          <div className="flex justify-end"><Button size="sm" onClick={handleCreate} disabled={create.isPending}>Salvar</Button></div>
+        </CardContent></Card>
+      )}
+      {contracts.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-4 text-center">Sem contratos cadastrados.</p>
+      ) : (
+        <Table>
+          <TableHeader><TableRow>
+            <TableHead>Ativo</TableHead><TableHead>Tipo</TableHead><TableHead>Cargo</TableHead>
+            <TableHead>Início</TableHead><TableHead>Fim</TableHead>
+            <TableHead className="text-right">Salário</TableHead>
+            <TableHead></TableHead>
+          </TableRow></TableHeader>
+          <TableBody>
+            {contracts.map((c: any) => (
+              <TableRow key={c.id}>
+                <TableCell>{c.active ? <Badge className="text-[10px]">Ativo</Badge> : <span className="text-xs text-muted-foreground">—</span>}</TableCell>
+                <TableCell className="text-xs">{CONTRACT_TYPE_LABELS[c.contract_type] || c.contract_type}</TableCell>
+                <TableCell className="text-xs">{c.position_title || '—'}</TableCell>
+                <TableCell className="text-xs">{c.start_date}</TableCell>
+                <TableCell className="text-xs">{c.end_date || '—'}</TableCell>
+                <TableCell className="text-right text-xs">{Number(c.base_salary || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
+                <TableCell>
+                  {c.active && (
+                    <Button size="sm" variant="ghost" onClick={() => update.mutate({ id: c.id, active: false, end_date: format(new Date(), 'yyyy-MM-dd') })}>
+                      Desativar
+                    </Button>
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
     </div>
   );
 }

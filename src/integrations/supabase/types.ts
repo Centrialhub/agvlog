@@ -13651,6 +13651,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      _portal_assert_client_access: {
+        Args: { _client_id: string; _tenant_id: string }
+        Returns: undefined
+      }
       _portal_user_client_ids: {
         Args: { _tenant_id: string }
         Returns: string[]
@@ -14030,6 +14034,15 @@ export type Database = {
         Args: { _end_date?: string; _start_date?: string; _tenant_id: string }
         Returns: Json
       }
+      get_client_portal_reports_summary_v2: {
+        Args: {
+          _client_id?: string
+          _end_date?: string
+          _start_date?: string
+          _tenant_id: string
+        }
+        Returns: Json
+      }
       get_client_portal_shipment_detail: {
         Args: { _fiscal_document_id: string }
         Returns: Json
@@ -14185,6 +14198,35 @@ export type Database = {
           weight_kg: number
         }[]
       }
+      list_client_documents_v2: {
+        Args: {
+          _client_id?: string
+          _document_type?: string
+          _end_date?: string
+          _limit?: number
+          _offset?: number
+          _search?: string
+          _start_date?: string
+          _tenant_id: string
+        }
+        Returns: {
+          access_key: string
+          client_id: string
+          document_type: string
+          has_pod: boolean
+          id: string
+          invoice_number: string
+          issue_date: string
+          load_id: string
+          recipient: string
+          recipient_city: string
+          recipient_state: string
+          remitter: string
+          status: string
+          value: number
+          weight_kg: number
+        }[]
+      }
       list_client_occurrence_messages: {
         Args: { _occurrence_id: string; _tenant_id: string }
         Returns: {
@@ -14197,6 +14239,31 @@ export type Database = {
       }
       list_client_occurrences: {
         Args: {
+          _limit?: number
+          _offset?: number
+          _resolved?: boolean
+          _severity?: string
+          _tenant_id: string
+        }
+        Returns: {
+          client_action_required: boolean
+          client_opened: boolean
+          client_resolution_note: string
+          created_at: string
+          description: string
+          event_type: string
+          id: string
+          load_id: string
+          order_id: string
+          public_status: string
+          resolution: string
+          resolved_at: string
+          severity: string
+        }[]
+      }
+      list_client_occurrences_v2: {
+        Args: {
+          _client_id?: string
           _limit?: number
           _offset?: number
           _resolved?: boolean
@@ -14240,8 +14307,55 @@ export type Database = {
           status: string
         }[]
       }
+      list_client_pickups_v2: {
+        Args: {
+          _client_id?: string
+          _end_date?: string
+          _limit?: number
+          _offset?: number
+          _start_date?: string
+          _status?: string
+          _tenant_id: string
+        }
+        Returns: {
+          id: string
+          linked_docs_count: number
+          notes: string
+          pickup_at: string
+          pickup_number: string
+          recipient_name: string
+          remitter_cnpj: string
+          remitter_name: string
+          status: string
+        }[]
+      }
       list_client_pods: {
         Args: {
+          _end_date?: string
+          _limit?: number
+          _offset?: number
+          _start_date?: string
+          _status?: string
+          _tenant_id: string
+        }
+        Returns: {
+          fiscal_document_id: string
+          has_file: boolean
+          id: string
+          invoice_number: string
+          load_id: string
+          proof_type: string
+          received_at: string
+          receiver_document: string
+          receiver_name: string
+          receiver_role: string
+          status: string
+          validated_at: string
+        }[]
+      }
+      list_client_pods_v2: {
+        Args: {
+          _client_id?: string
           _end_date?: string
           _limit?: number
           _offset?: number
@@ -14505,6 +14619,23 @@ export type Database = {
       search_client_portal_shipments: {
         Args: {
           _city?: string
+          _end_date?: string
+          _has_occurrence?: boolean
+          _has_pod?: boolean
+          _limit?: number
+          _offset?: number
+          _search?: string
+          _start_date?: string
+          _state?: string
+          _status?: string[]
+          _tenant_id: string
+        }
+        Returns: Json
+      }
+      search_client_portal_shipments_v2: {
+        Args: {
+          _city?: string
+          _client_id?: string
           _end_date?: string
           _has_occurrence?: boolean
           _has_pod?: boolean

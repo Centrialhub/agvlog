@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
+import { usePortalClientScope } from '@/hooks/portal/usePortalClientScope';
 
 export interface PortalReportsSummary {
   period_start: string;
@@ -17,12 +18,14 @@ export interface PortalReportsSummary {
 
 export function usePortalReports(range: { start?: string; end?: string }) {
   const { currentTenant } = useTenant();
+  const { selectedClientId } = usePortalClientScope();
   return useQuery({
-    queryKey: ['portal_reports_summary', currentTenant?.id, range.start, range.end],
+    queryKey: ['portal_reports_summary', currentTenant?.id, selectedClientId, range.start, range.end],
     queryFn: async (): Promise<PortalReportsSummary | null> => {
       if (!currentTenant) return null;
-      const { data, error } = await supabase.rpc('get_client_portal_reports_summary' as any, {
+      const { data, error } = await (supabase as any).rpc('get_client_portal_reports_summary_v2', {
         _tenant_id: currentTenant.id,
+        _client_id: selectedClientId,
         _start_date: range.start || null,
         _end_date: range.end || null,
       });
