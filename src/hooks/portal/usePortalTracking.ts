@@ -36,9 +36,7 @@ export interface PortalTrackingItem {
 
 export function usePortalTracking() {
   const { currentTenant } = useTenant();
-  const scope = (() => {
-    try { return usePortalClientScope(); } catch { return { selectedClientId: null } as any; }
-  })();
+  const scope = usePortalClientScope();
   return useQuery({
     queryKey: ['portal_tracking', currentTenant?.id, scope.selectedClientId ?? null],
     queryFn: async (): Promise<PortalTrackingItem[]> => {
