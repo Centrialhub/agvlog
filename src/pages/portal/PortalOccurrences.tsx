@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { PortalSection } from '@/components/portal/PortalLayout';
 import { PortalEmptyState } from '@/components/portal/PortalEmptyState';
 import { usePortalOccurrences, useCreatePortalOccurrence } from '@/hooks/portal/usePortalOccurrences';
 import { usePortalOccurrenceMessages, useReplyPortalOccurrence } from '@/hooks/portal/usePortalOccurrenceMessages';
 import { useClientPortalAccess, hasAnyPermission } from '@/hooks/portal/useClientPortalAccess';
+import { usePortalClientScope } from '@/hooks/portal/usePortalClientScope';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -26,6 +27,7 @@ const SEVERITY_TONE: Record<string, string> = {
 
 export default function PortalOccurrences() {
   const { data: access = [] } = useClientPortalAccess();
+  const { selectedClientId } = usePortalClientScope();
   const canOpen = hasAnyPermission(access, 'can_open_occurrences');
   const openableClients = access.filter(a => a.can_open_occurrences);
   const [severity, setSeverity] = useState<string>('all');
@@ -36,6 +38,13 @@ export default function PortalOccurrences() {
   });
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ client_id: '', event_type: '', severity: 'medium', description: '' });
+  useEffect(() => {
+    if (open && !form.client_id) {
+      const preselect = selectedClientId
+        || (openableClients.length === 1 ? openableClients[0].client_id : '');
+      if (preselect) setForm(f => ({ ...f, client_id: preselect }));
+    }
+  }, [open, selectedClientId, openableClients, form.client_id]);
   const createMut = useCreatePortalOccurrence();
   const { toast } = useToast();
   const [threadId, setThreadId] = useState<string | null>(null);
