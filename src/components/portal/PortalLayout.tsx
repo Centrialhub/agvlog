@@ -2,6 +2,9 @@ import { ReactNode } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useClientPortalAccess } from '@/hooks/portal/useClientPortalAccess';
+import { PortalClientScopeProvider } from '@/hooks/portal/usePortalClientScope';
+import { PortalClientSelector } from '@/components/portal/PortalClientSelector';
+import { PortalMoreMenu } from '@/components/portal/PortalMoreMenu';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,19 +17,41 @@ import {
   Inbox,
   LogOut,
   Loader2,
+  MapPin,
+  BarChart3,
+  Settings,
+  MoreHorizontal,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const NAV = [
   { to: '/portal', label: 'Início', icon: LayoutDashboard, end: true },
   { to: '/portal/shipments', label: 'Mercadorias', icon: Package },
+  { to: '/portal/tracking', label: 'Tracking', icon: MapPin },
   { to: '/portal/pickups', label: 'Coletas', icon: Inbox },
   { to: '/portal/documents', label: 'Documentos', icon: FileText },
   { to: '/portal/pods', label: 'Canhotos', icon: ClipboardCheck },
   { to: '/portal/occurrences', label: 'Ocorrências', icon: AlertTriangle },
+  { to: '/portal/reports', label: 'Relatórios', icon: BarChart3 },
+  { to: '/portal/settings', label: 'Configurações', icon: Settings },
+];
+
+const MOBILE_NAV = [
+  { to: '/portal', label: 'Início', icon: LayoutDashboard, end: true },
+  { to: '/portal/shipments', label: 'Mercadorias', icon: Package },
+  { to: '/portal/tracking', label: 'Tracking', icon: MapPin },
+  { to: '/portal/pickups', label: 'Coletas', icon: Inbox },
 ];
 
 export default function PortalLayout() {
+  return (
+    <PortalClientScopeProvider>
+      <PortalLayoutInner />
+    </PortalClientScopeProvider>
+  );
+}
+
+function PortalLayoutInner() {
   const { signOut } = useAuth();
   const { data: access, isLoading } = useClientPortalAccess();
   const { pathname } = useLocation();
@@ -107,9 +132,7 @@ export default function PortalLayout() {
             <span className="font-bold text-sm">AGVLog</span>
           </div>
           <div className="flex-1" />
-          {access.length > 1 && (
-            <Badge variant="outline" className="text-[10px]">{access.length} clientes</Badge>
-          )}
+          <PortalClientSelector />
         </header>
 
         <main className="flex-1 overflow-auto p-4 md:p-6 pb-20 md:pb-6">
@@ -118,7 +141,7 @@ export default function PortalLayout() {
 
         {/* Bottom nav mobile */}
         <nav className="md:hidden fixed bottom-0 inset-x-0 border-t border-border bg-card grid grid-cols-5 z-30">
-          {NAV.slice(0, 5).map((item) => {
+          {MOBILE_NAV.map((item) => {
             const Icon = item.icon;
             const active = item.end ? pathname === item.to : pathname.startsWith(item.to);
             return (
@@ -135,6 +158,7 @@ export default function PortalLayout() {
               </NavLink>
             );
           })}
+          <PortalMoreMenu />
         </nav>
       </div>
     </div>
