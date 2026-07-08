@@ -93,9 +93,21 @@ export default function Incidents() {
     if (form.status === 'closed' && !editing?.closed_at) payload.closed_at = new Date().toISOString();
     try {
       if (editing) await updateIncident.mutateAsync({ id: editing.id, ...payload });
-      else await createIncident.mutateAsync(payload);
+      else {
+        const created = await createIncident.mutateAsync(payload);
+        toast.success('Ocorrência registrada');
+        // Para ocorrências de RH, manter o modal aberto para permitir cadastrar
+        // ações de RH imediatamente sem reabrir a tela.
+        if (form.category === 'hr' && created) {
+          setEditing(created as Incident);
+          setForm(f => ({ ...f, status: (created as Incident).status || f.status }));
+          return;
+        }
+        setDialogOpen(false);
+        return;
+      }
       setDialogOpen(false);
-      toast.success(editing ? 'Ocorrência atualizada' : 'Ocorrência registrada');
+      toast.success('Ocorrência atualizada');
     } catch (e: any) { toast.error(e.message); }
   };
 
