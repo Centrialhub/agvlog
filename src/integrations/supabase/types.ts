@@ -9187,6 +9187,183 @@ export type Database = {
         }
         Relationships: []
       }
+      occurrence_return_sheet_history: {
+        Row: {
+          action: string
+          created_at: string
+          created_by: string | null
+          field_name: string | null
+          id: string
+          metadata: Json
+          new_value: string | null
+          occurrence_id: string
+          old_value: string | null
+          reason: string | null
+          return_sheet_id: string
+          tenant_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          created_by?: string | null
+          field_name?: string | null
+          id?: string
+          metadata?: Json
+          new_value?: string | null
+          occurrence_id: string
+          old_value?: string | null
+          reason?: string | null
+          return_sheet_id: string
+          tenant_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          created_by?: string | null
+          field_name?: string | null
+          id?: string
+          metadata?: Json
+          new_value?: string | null
+          occurrence_id?: string
+          old_value?: string | null
+          reason?: string | null
+          return_sheet_id?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "occurrence_return_sheet_history_occurrence_id_fkey"
+            columns: ["occurrence_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_occurrences"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "occurrence_return_sheet_history_return_sheet_id_fkey"
+            columns: ["return_sheet_id"]
+            isOneToOne: false
+            referencedRelation: "occurrence_return_sheets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      occurrence_return_sheet_sequences: {
+        Row: {
+          next_number: number
+          sequence_year: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          next_number?: number
+          sequence_year: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          next_number?: number
+          sequence_year?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      occurrence_return_sheets: {
+        Row: {
+          cancellation_reason: string | null
+          cancelled_at: string | null
+          company_snapshot: Json
+          created_at: string
+          generated_at: string
+          generated_by: string | null
+          id: string
+          invoice_snapshot: Json
+          occurrence_id: string
+          occurrence_snapshot: Json
+          pdf_url: string | null
+          printed_at: string | null
+          product_snapshot: Json
+          receiver_document: string | null
+          receiver_name: string | null
+          sac_number: string | null
+          sheet_number: string
+          signed_at: string | null
+          signed_proof_url: string | null
+          status: string
+          superseded_by: string | null
+          tenant_id: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          company_snapshot?: Json
+          created_at?: string
+          generated_at?: string
+          generated_by?: string | null
+          id?: string
+          invoice_snapshot?: Json
+          occurrence_id: string
+          occurrence_snapshot?: Json
+          pdf_url?: string | null
+          printed_at?: string | null
+          product_snapshot?: Json
+          receiver_document?: string | null
+          receiver_name?: string | null
+          sac_number?: string | null
+          sheet_number: string
+          signed_at?: string | null
+          signed_proof_url?: string | null
+          status?: string
+          superseded_by?: string | null
+          tenant_id: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          company_snapshot?: Json
+          created_at?: string
+          generated_at?: string
+          generated_by?: string | null
+          id?: string
+          invoice_snapshot?: Json
+          occurrence_id?: string
+          occurrence_snapshot?: Json
+          pdf_url?: string | null
+          printed_at?: string | null
+          product_snapshot?: Json
+          receiver_document?: string | null
+          receiver_name?: string | null
+          sac_number?: string | null
+          sheet_number?: string
+          signed_at?: string | null
+          signed_proof_url?: string | null
+          status?: string
+          superseded_by?: string | null
+          tenant_id?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "occurrence_return_sheets_occurrence_id_fkey"
+            columns: ["occurrence_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_occurrences"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "occurrence_return_sheets_superseded_by_fkey"
+            columns: ["superseded_by"]
+            isOneToOne: false
+            referencedRelation: "occurrence_return_sheets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       operational_checklists: {
         Row: {
           active: boolean | null
@@ -12862,6 +13039,10 @@ export type Database = {
         Args: { _export_id: string; _reason: string; _tenant_id: string }
         Returns: undefined
       }
+      cancel_occurrence_return_sheet: {
+        Args: { _reason: string; _return_sheet_id: string }
+        Returns: undefined
+      }
       cancel_pallet_return_protocol: {
         Args: { _protocol_id: string; _reason: string }
         Returns: undefined
@@ -13108,6 +13289,14 @@ export type Database = {
       generate_driver_settlement: {
         Args: { _dispatch_trip_id: string; _tenant_id: string }
         Returns: string
+      }
+      generate_occurrence_return_sheet: {
+        Args: {
+          _occurrence_id: string
+          _regenerate?: boolean
+          _regeneration_reason?: string
+        }
+        Returns: Json
       }
       generate_pending_driver_settlements: {
         Args: { _tenant_id: string }
@@ -13389,6 +13578,10 @@ export type Database = {
       next_nfse_number: {
         Args: { _branch_code?: string; _series?: string; _tenant_id: string }
         Returns: number
+      }
+      next_occurrence_return_sheet_number: {
+        Args: { _date?: string; _tenant_id: string }
+        Returns: string
       }
       next_pallet_return_protocol_number: {
         Args: { _date?: string; _tenant_id: string }

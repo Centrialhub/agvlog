@@ -81,6 +81,7 @@ const ClosingReports = lazy(() => import("@/pages/ClosingReports"));
 const RuralClients = lazy(() => import("@/pages/RuralClients"));
 const DriverMonitoring = lazy(() => import("@/pages/DriverMonitoring"));
 const OccurrenceReports = lazy(() => import("@/pages/OccurrenceReports"));
+const OccurrenceReturnSheet = lazy(() => import("@/pages/OccurrenceReturnSheet"));
 const PalletReturns = lazy(() => import("@/pages/PalletReturns"));
 const MerchandiseShortages = lazy(() => import("@/pages/MerchandiseShortages"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
@@ -289,6 +290,7 @@ const App = () => (
             <Route path="/rural-clients" element={<ProtectedRoute><RuralClients /></ProtectedRoute>} />
             <Route path="/driver-monitoring" element={<ProtectedRoute><DriverMonitoring /></ProtectedRoute>} />
             <Route path="/occurrence-reports" element={<ProtectedRoute><OccurrenceReports /></ProtectedRoute>} />
+            <Route path="/occurrences/:id/return-sheet" element={<ProtectedRoute><OccurrenceReturnSheet /></ProtectedRoute>} />
             <Route path="/pallet-returns" element={<ProtectedRoute><PalletReturns /></ProtectedRoute>} />
             <Route path="/merchandise-shortages" element={<ProtectedRoute><MerchandiseShortages /></ProtectedRoute>} />
 
