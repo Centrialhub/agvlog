@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
+import { usePortalClientScope } from '@/hooks/portal/usePortalClientScope';
 
 export interface PortalOccurrence {
   id: string;
@@ -20,12 +21,14 @@ export interface PortalOccurrence {
 
 export function usePortalOccurrences(filters?: { severity?: string; resolved?: boolean }) {
   const { currentTenant } = useTenant();
+  const { selectedClientId } = usePortalClientScope();
   return useQuery({
-    queryKey: ['portal_occurrences', currentTenant?.id, filters],
+    queryKey: ['portal_occurrences', currentTenant?.id, selectedClientId, filters],
     queryFn: async (): Promise<PortalOccurrence[]> => {
       if (!currentTenant) return [];
-      const { data, error } = await supabase.rpc('list_client_occurrences', {
+      const { data, error } = await (supabase as any).rpc('list_client_occurrences_v2', {
         _tenant_id: currentTenant.id,
+        _client_id: selectedClientId,
         _severity: filters?.severity || null,
         _resolved: filters?.resolved ?? null,
         _limit: 200,
