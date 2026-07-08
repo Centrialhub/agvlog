@@ -285,9 +285,9 @@ function EmployeeDetail({ employee }: { employee: Employee }) {
     queryFn: async () => {
       if (!employee.driver_id) return [];
       const { data, error } = await supabase.from('driver_settlements')
-        .select('id, period_start, period_end, status, driver_payable_amount, total_paid_amount')
+        .select('id, trip_started_at, trip_completed_at, created_at, status, driver_payable_amount, total_paid_amount')
         .eq('driver_id', employee.driver_id)
-        .order('period_end', { ascending: false }).limit(10);
+        .order('trip_completed_at', { ascending: false, nullsFirst: false }).limit(10);
       if (error) throw error;
       return data as any[];
     },
@@ -337,11 +337,11 @@ function EmployeeDetail({ employee }: { employee: Employee }) {
               </TableRow></TableHeader>
               <TableBody>
                 {incidentActions.map((a: any) => (
-                  <TableRow key={a.id} className={a.discount_amount > 0 ? 'bg-red-500/5' : ''}>
+                  <TableRow key={a.id} className={Number(a.amount) > 0 ? 'bg-red-500/5' : ''}>
                     <TableCell className="text-xs">{a.created_at ? format(new Date(a.created_at), 'dd/MM/yyyy') : '—'}</TableCell>
                     <TableCell className="text-xs">{a.incidents?.title || '—'}</TableCell>
                     <TableCell className="text-xs">{a.action_type || a.description || '—'}</TableCell>
-                    <TableCell className="text-right text-xs">{a.discount_amount ? fmtBRL(Number(a.discount_amount)) : '—'}</TableCell>
+                    <TableCell className="text-right text-xs">{a.amount ? fmtBRL(Number(a.amount)) : '—'}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -425,14 +425,20 @@ function EmployeeDetail({ employee }: { employee: Employee }) {
                     <TableHead>Status</TableHead>
                   </TableRow></TableHeader>
                   <TableBody>
-                    {driverSettlements.map((s: any) => (
+                    {driverSettlements.map((s: any) => {
+                      const start = s.trip_started_at || s.created_at;
+                      const end = s.trip_completed_at || s.created_at;
+                      const fmtDate = (d: string | null | undefined) =>
+                        d ? format(new Date(d), 'dd/MM/yyyy') : '—';
+                      return (
                       <TableRow key={s.id}>
-                        <TableCell className="text-xs">{s.period_start} → {s.period_end}</TableCell>
+                        <TableCell className="text-xs">{fmtDate(start)} → {fmtDate(end)}</TableCell>
                         <TableCell className="text-right text-xs">{fmtBRL(Number(s.driver_payable_amount))}</TableCell>
                         <TableCell className="text-right text-xs">{fmtBRL(Number(s.total_paid_amount))}</TableCell>
                         <TableCell><Badge variant="outline" className="text-[10px]">{s.status}</Badge></TableCell>
                       </TableRow>
-                    ))}
+                      );
+                    })}
                   </TableBody>
                 </Table>
               )}
