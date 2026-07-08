@@ -1293,6 +1293,51 @@ export type Database = {
           },
         ]
       }
+      client_occurrence_messages: {
+        Row: {
+          author_role: string
+          author_user_id: string | null
+          created_at: string
+          id: string
+          message: string
+          occurrence_id: string
+          tenant_id: string
+        }
+        Insert: {
+          author_role: string
+          author_user_id?: string | null
+          created_at?: string
+          id?: string
+          message: string
+          occurrence_id: string
+          tenant_id: string
+        }
+        Update: {
+          author_role?: string
+          author_user_id?: string | null
+          created_at?: string
+          id?: string
+          message?: string
+          occurrence_id?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_occurrence_messages_occurrence_id_fkey"
+            columns: ["occurrence_id"]
+            isOneToOne: false
+            referencedRelation: "operational_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_occurrence_messages_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_portal_access: {
         Row: {
           access_type: string
@@ -13593,6 +13638,10 @@ export type Database = {
         Args: { _invoice_id: string; _reason: string }
         Returns: undefined
       }
+      cancel_client_pickup: {
+        Args: { _pickup_id: string; _tenant_id: string }
+        Returns: undefined
+      }
       cancel_closing_report: {
         Args: { _closing_report_id: string; _reason: string }
         Returns: undefined
@@ -13916,6 +13965,10 @@ export type Database = {
         }
         Returns: Json
       }
+      get_client_portal_tracking: {
+        Args: { _tenant_id: string }
+        Returns: Json
+      }
       get_client_portal_upcoming_deliveries: {
         Args: { _client_id?: string; _limit?: number; _tenant_id: string }
         Returns: Json
@@ -14044,6 +14097,16 @@ export type Database = {
           status: string
           value: number
           weight_kg: number
+        }[]
+      }
+      list_client_occurrence_messages: {
+        Args: { _occurrence_id: string; _tenant_id: string }
+        Returns: {
+          author_name: string
+          author_role: string
+          created_at: string
+          id: string
+          message: string
         }[]
       }
       list_client_occurrences: {
@@ -14321,6 +14384,10 @@ export type Database = {
       reopen_reconciliation_session: {
         Args: { _reason: string; _session_id: string }
         Returns: undefined
+      }
+      reply_client_occurrence: {
+        Args: { _message: string; _occurrence_id: string; _tenant_id: string }
+        Returns: string
       }
       request_client_pickup: {
         Args: {
