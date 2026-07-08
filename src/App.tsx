@@ -50,6 +50,9 @@ const PortalPickups = lazy(() => import("@/pages/portal/PortalPickups"));
 const PortalDocuments = lazy(() => import("@/pages/portal/PortalDocuments"));
 const PortalPods = lazy(() => import("@/pages/portal/PortalPods"));
 const PortalOccurrences = lazy(() => import("@/pages/portal/PortalOccurrences"));
+const PortalTracking = lazy(() => import("@/pages/portal/PortalTracking"));
+const PortalReports = lazy(() => import("@/pages/portal/PortalReports"));
+const PortalSettings = lazy(() => import("@/pages/portal/PortalSettings"));
 const RoutePlanning = lazy(() => import("@/pages/RoutePlanning"));
 const Receivables = lazy(() => import("@/pages/Receivables"));
 const Financial = lazy(() => import("@/pages/Financial"));
@@ -320,6 +323,9 @@ const App = () => (
               <Route path="documents" element={<PortalDocuments />} />
               <Route path="pods" element={<PortalPods />} />
               <Route path="occurrences" element={<PortalOccurrences />} />
+              <Route path="tracking" element={<PortalTracking />} />
+              <Route path="reports" element={<PortalReports />} />
+              <Route path="settings" element={<PortalSettings />} />
             </Route>
 
             <Route path="*" element={<Suspense fallback={<PageLoader />}><NotFound /></Suspense>} />
