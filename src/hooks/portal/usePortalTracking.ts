@@ -12,6 +12,18 @@ export interface PortalTrackingNextStop {
   planned_arrival_at: string | null;
 }
 
+export interface PortalTrackingDocument {
+  fiscal_document_id: string;
+  invoice_number: string | null;
+  recipient: string | null;
+  recipient_city: string | null;
+  recipient_state: string | null;
+  public_status: string | null;
+  planned_arrival_at: string | null;
+  has_pod: boolean;
+  has_open_occurrence: boolean;
+}
+
 export interface PortalTrackingItem {
   load_id: string;
   load_number: string;
@@ -30,6 +42,7 @@ export interface PortalTrackingItem {
   actual_start_at: string | null;
   planned_end_at: string | null;
   next_stop: PortalTrackingNextStop | null;
+  documents: PortalTrackingDocument[];
   can_view_vehicle_live: boolean;
   can_view_driver_contact: boolean;
 }
