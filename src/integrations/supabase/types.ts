@@ -9133,6 +9133,361 @@ export type Database = {
           },
         ]
       }
+      pallet_return_history: {
+        Row: {
+          action: string
+          created_at: string
+          created_by: string | null
+          field_name: string | null
+          id: string
+          metadata: Json
+          new_value: string | null
+          old_value: string | null
+          protocol_id: string
+          reason: string | null
+          tenant_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          created_by?: string | null
+          field_name?: string | null
+          id?: string
+          metadata?: Json
+          new_value?: string | null
+          old_value?: string | null
+          protocol_id: string
+          reason?: string | null
+          tenant_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          created_by?: string | null
+          field_name?: string | null
+          id?: string
+          metadata?: Json
+          new_value?: string | null
+          old_value?: string | null
+          protocol_id?: string
+          reason?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pallet_return_history_protocol_id_fkey"
+            columns: ["protocol_id"]
+            isOneToOne: false
+            referencedRelation: "pallet_return_protocols"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pallet_return_import_batches: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          error_count: number
+          errors: Json
+          file_name: string | null
+          id: string
+          imported_count: number
+          metadata: Json
+          row_count: number
+          status: string
+          tenant_id: string
+          unmatched_count: number
+          updated_count: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          error_count?: number
+          errors?: Json
+          file_name?: string | null
+          id?: string
+          imported_count?: number
+          metadata?: Json
+          row_count?: number
+          status?: string
+          tenant_id: string
+          unmatched_count?: number
+          updated_count?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          error_count?: number
+          errors?: Json
+          file_name?: string | null
+          id?: string
+          imported_count?: number
+          metadata?: Json
+          row_count?: number
+          status?: string
+          tenant_id?: string
+          unmatched_count?: number
+          updated_count?: number
+        }
+        Relationships: []
+      }
+      pallet_return_items: {
+        Row: {
+          created_at: string
+          id: string
+          notes: string | null
+          pallet_color: string | null
+          pallet_type_code: string
+          pallet_type_id: string | null
+          pallet_type_name: string
+          protocol_id: string
+          quantity: number
+          sort_order: number
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          pallet_color?: string | null
+          pallet_type_code: string
+          pallet_type_id?: string | null
+          pallet_type_name: string
+          protocol_id: string
+          quantity: number
+          sort_order?: number
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          pallet_color?: string | null
+          pallet_type_code?: string
+          pallet_type_id?: string | null
+          pallet_type_name?: string
+          protocol_id?: string
+          quantity?: number
+          sort_order?: number
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pallet_return_items_pallet_type_id_fkey"
+            columns: ["pallet_type_id"]
+            isOneToOne: false
+            referencedRelation: "pallet_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pallet_return_items_protocol_id_fkey"
+            columns: ["protocol_id"]
+            isOneToOne: false
+            referencedRelation: "pallet_return_protocols"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pallet_return_protocols: {
+        Row: {
+          cancellation_reason: string | null
+          cancelled_at: string | null
+          company_snapshot: Json
+          confirmed_at: string | null
+          confirmed_by: string | null
+          created_at: string
+          created_by: string | null
+          driver_id: string | null
+          driver_name_snapshot: string | null
+          expected_return_date: string | null
+          id: string
+          issue_date: string
+          load_id: string | null
+          notes: string | null
+          pdf_url: string | null
+          protocol_number: string
+          receiver_document: string | null
+          receiver_name: string | null
+          receiver_phone: string | null
+          returned_at: string | null
+          signature_date: string | null
+          signed_proof_url: string | null
+          status: string
+          supplier_document_snapshot: string | null
+          supplier_id: string | null
+          supplier_name_snapshot: string
+          tenant_id: string
+          total_quantity: number
+          updated_at: string
+          updated_by: string | null
+          vehicle_id: string | null
+          vehicle_plate_snapshot: string | null
+        }
+        Insert: {
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          company_snapshot?: Json
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          driver_id?: string | null
+          driver_name_snapshot?: string | null
+          expected_return_date?: string | null
+          id?: string
+          issue_date?: string
+          load_id?: string | null
+          notes?: string | null
+          pdf_url?: string | null
+          protocol_number: string
+          receiver_document?: string | null
+          receiver_name?: string | null
+          receiver_phone?: string | null
+          returned_at?: string | null
+          signature_date?: string | null
+          signed_proof_url?: string | null
+          status?: string
+          supplier_document_snapshot?: string | null
+          supplier_id?: string | null
+          supplier_name_snapshot: string
+          tenant_id: string
+          total_quantity?: number
+          updated_at?: string
+          updated_by?: string | null
+          vehicle_id?: string | null
+          vehicle_plate_snapshot?: string | null
+        }
+        Update: {
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          company_snapshot?: Json
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          driver_id?: string | null
+          driver_name_snapshot?: string | null
+          expected_return_date?: string | null
+          id?: string
+          issue_date?: string
+          load_id?: string | null
+          notes?: string | null
+          pdf_url?: string | null
+          protocol_number?: string
+          receiver_document?: string | null
+          receiver_name?: string | null
+          receiver_phone?: string | null
+          returned_at?: string | null
+          signature_date?: string | null
+          signed_proof_url?: string | null
+          status?: string
+          supplier_document_snapshot?: string | null
+          supplier_id?: string | null
+          supplier_name_snapshot?: string
+          tenant_id?: string
+          total_quantity?: number
+          updated_at?: string
+          updated_by?: string | null
+          vehicle_id?: string | null
+          vehicle_plate_snapshot?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pallet_return_protocols_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pallet_return_protocols_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pallet_return_protocols_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pallet_return_protocols_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pallet_return_sequences: {
+        Row: {
+          next_number: number
+          sequence_year: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          next_number?: number
+          sequence_year: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          next_number?: number
+          sequence_year?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      pallet_types: {
+        Row: {
+          code: string
+          color: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_active: boolean
+          metadata: Json
+          name: string
+          tenant_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          code: string
+          color?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          metadata?: Json
+          name: string
+          tenant_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          code?: string
+          color?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          metadata?: Json
+          name?: string
+          tenant_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       payables: {
         Row: {
           amount: number
@@ -11895,6 +12250,10 @@ export type Database = {
         Args: { _export_id: string; _reason: string; _tenant_id: string }
         Returns: undefined
       }
+      cancel_pallet_return_protocol: {
+        Args: { _protocol_id: string; _reason: string }
+        Returns: undefined
+      }
       clear_reimport_batch_data:
         | { Args: { _tenant_id: string }; Returns: Json }
         | {
@@ -12027,6 +12386,10 @@ export type Database = {
           _tenant_id: string
         }
         Returns: string
+      }
+      create_pallet_return_protocol: {
+        Args: { _payload: Json; _tenant_id: string }
+        Returns: Json
       }
       create_tenant_with_owner: {
         Args: { _tenant_name: string }
@@ -12407,6 +12770,10 @@ export type Database = {
         Args: { _branch_code?: string; _series?: string; _tenant_id: string }
         Returns: number
       }
+      next_pallet_return_protocol_number: {
+        Args: { _date?: string; _tenant_id: string }
+        Returns: string
+      }
       peek_next_load_number: { Args: { _tenant_id: string }; Returns: string }
       peek_next_pickup_number: { Args: { _tenant_id: string }; Returns: string }
       portal_user_can_access_fiscal_document: {
@@ -12703,6 +13070,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      update_pallet_return_status: {
+        Args: { _payload?: Json; _protocol_id: string; _status: string }
+        Returns: undefined
       }
       upsert_geofence: {
         Args: {
