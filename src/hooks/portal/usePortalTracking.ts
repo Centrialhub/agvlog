@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
+import { usePortalClientScope } from '@/hooks/portal/usePortalClientScope';
 
 export interface PortalTrackingNextStop {
   id: string;
@@ -35,12 +36,14 @@ export interface PortalTrackingItem {
 
 export function usePortalTracking() {
   const { currentTenant } = useTenant();
+  const scope = usePortalClientScope();
   return useQuery({
-    queryKey: ['portal_tracking', currentTenant?.id],
+    queryKey: ['portal_tracking', currentTenant?.id, scope.selectedClientId ?? null],
     queryFn: async (): Promise<PortalTrackingItem[]> => {
       if (!currentTenant) return [];
       const { data, error } = await supabase.rpc('get_client_portal_tracking' as any, {
         _tenant_id: currentTenant.id,
+        _client_id: scope.selectedClientId ?? null,
       });
       if (error) throw error;
       const payload = (data as any) || {};
