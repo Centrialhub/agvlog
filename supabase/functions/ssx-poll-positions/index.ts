@@ -467,7 +467,7 @@ async function updatePositionsLast(
 
   // Compute speed from position delta (haversine)
   let computedSpeed: number | null = ln.speed;
-  let speedSource: "provider" | "computed" = ln.speed != null ? "provider" : "computed";
+  const speedSource: "provider" | "computed" = ln.speed != null ? "provider" : "computed";
   let distanceFromPreviousM: number | null = null;
   let timeSincePreviousS: number | null = null;
   let movementState: "moving" | "stopped" = "stopped";
@@ -590,7 +590,7 @@ async function legacyPerUnitPoll(params: {
     const cursorMemo = (cursor?.poll_memo || {}) as Record<string, any>;
     const memoValid = cursorMemo.memo_version === POLL_MEMO_VERSION && !force_rediscovery;
 
-    let unitResult = await pollSingleUnit({
+    const unitResult = await pollSingleUnit({
       unit, mapping, identifierCandidates, timeProps, positionUrls,
       config, supabase, timeStart, now,
       cursorMemo: memoValid ? cursorMemo : null,

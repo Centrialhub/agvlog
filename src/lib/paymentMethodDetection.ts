@@ -80,7 +80,7 @@ export function detectPaymentMethodDetailed(...texts: Array<string | null | unde
   if (!joined) return { value: null, source: 'none' };
 
   // Normalizar: maiúsculas, sem acentos, sem espaços excessivos
-  let t = ' ' + expandAbbreviations(stripDiacritics(joined.toUpperCase()).replace(/\s+/g, ' ')) + ' ';
+  const t = ' ' + expandAbbreviations(stripDiacritics(joined.toUpperCase()).replace(/\s+/g, ' ')) + ' ';
 
   // 1) Casamento contextual: para cada gatilho, olhar até 60 chars seguintes
   const contextMatches: string[] = [];

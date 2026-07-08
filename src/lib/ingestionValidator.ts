@@ -115,7 +115,7 @@ export function validateNFe(
         message: `Número da carga do cliente não encontrado. Observação (trecho): "${obsSnippet}${nfe.observation.length > 200 ? '…' : ''}" — ajuste as regras em CLIENT_LOAD_OBSERVATION_RULES se necessário.`,
         severity: 'info',
       });
-      // eslint-disable-next-line no-console
+       
       console.warn('[ingestion] Carga do cliente NÃO extraída', {
         invoiceNumber: nfe.invoiceNumber,
         accessKey: nfe.accessKey,

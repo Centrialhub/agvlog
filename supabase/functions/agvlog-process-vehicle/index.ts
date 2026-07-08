@@ -81,7 +81,7 @@ Deno.serve(async (req) => {
     const defaultFrom = from || new Date(Date.now() - 24 * 3600 * 1000).toISOString();
     const defaultTo = to || new Date().toISOString();
 
-    let posQuery = supabase
+    const posQuery = supabase
       .from("positions_raw")
       .select("*")
       .eq("tenant_id", tenant_id)
@@ -541,7 +541,7 @@ async function checkGeofences(
 
   if (!geofences || geofences.length === 0) return { data: 0 };
 
-  let eventsCreated = 0;
+  const eventsCreated = 0;
 
   // For each geofence, check first and last point to detect enter/exit
   // Simple approach: check if first point is inside and last point is outside (or vice versa)

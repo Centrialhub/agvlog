@@ -296,7 +296,7 @@ export default function OperationalEvents() {
         ? new Date(Math.min(...baseRows.map((e: any) => +new Date(e.created_at))))
         : startOfMonth(new Date()));
       const periodTo = dateTo || new Date();
-      let loadsByDriver: Record<string, { entregas: number; notas: number; valor: number }> = {};
+      const loadsByDriver: Record<string, { entregas: number; notas: number; valor: number }> = {};
       if (currentTenant) {
         let lq = supabase
           .from('loads')
@@ -403,7 +403,7 @@ export default function OperationalEvents() {
       ]);
 
       // Linhas dos motoristas
-      let totals = {
+      const totals = {
         entregas: 0, notas: 0, valor: 0, ocorrencias: 0,
         nao_efetuada_motorista: 0, nao_efetuada: 0, baixa: 0, comp: 0, devol: 0,
         dq: 0, dv: 0, fq: 0, fv: 0,

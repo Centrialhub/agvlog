@@ -126,7 +126,7 @@ export function useImportedNotes(filters: ImportedNoteFilters) {
 
       // Cross com CT-e via cte_documents.fiscal_document_ids
       const ids = rows.map(r => r.id);
-      let cteMap = new Map<string, any>();
+      const cteMap = new Map<string, any>();
       if (ids.length > 0) {
         const { data: allCtes } = await supabase
           .from('cte_documents')

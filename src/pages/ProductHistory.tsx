@@ -80,7 +80,7 @@ export default function ProductHistory() {
       if (!currentTenant || !product) return [];
 
       // 1) load_items matching product (with rich joins)
-      let q = (supabase as any)
+      const q = (supabase as any)
         .from('load_items')
         .select(`
           id, item_description, quantity, pallet_count, weight_kg, status, created_at,

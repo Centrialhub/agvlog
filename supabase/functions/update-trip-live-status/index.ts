@@ -96,7 +96,7 @@ async function processTrip(supabase: any, trip: any, now: Date) {
   let delayMinutes: number | null = null;
   let stoppedMinutes: number | null = null;
   let etaNext: string | null = null;
-  let lastSignalAt: string | null = pos?.captured_at ?? null;
+  const lastSignalAt: string | null = pos?.captured_at ?? null;
   let lastSignalAgeSec: number | null = null;
 
   if (!pos) {

@@ -126,7 +126,7 @@ export function parseShortageWorkbook(buffer: ArrayBuffer, fileName = 'legacy.xl
     let sheetYear: number | null = null;
     let inTable = false;
     // Column indexes discovered from header row
-    let idx = { data: 1, empresa: 2, motorista: 3, nf: 4, cidade: 5, cliente: 6, produto: 7, qtd: 8, custo: 9, total: 10, obs: 11 };
+    const idx = { data: 1, empresa: 2, motorista: 3, nf: 4, cidade: 5, cliente: 6, produto: 7, qtd: 8, custo: 9, total: 10, obs: 11 };
 
     // Detect month header (first 6 rows)
     for (let i = 0; i < Math.min(rows.length, 6); i++) {
