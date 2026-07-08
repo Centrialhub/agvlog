@@ -54,3 +54,19 @@ export function useRequestPortalPickup() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['portal_pickups'] }),
   });
 }
+
+export function useCancelPortalPickup() {
+  const { currentTenant } = useTenant();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (pickup_id: string) => {
+      if (!currentTenant) throw new Error('Tenant não selecionado');
+      const { error } = await supabase.rpc('cancel_client_pickup' as any, {
+        _tenant_id: currentTenant.id,
+        _pickup_id: pickup_id,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['portal_pickups'] }),
+  });
+}

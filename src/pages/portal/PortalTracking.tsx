@@ -1,10 +1,178 @@
+import { useMemo, useState } from 'react';
 import { PortalSection } from '@/components/portal/PortalLayout';
 import { PortalEmptyState } from '@/components/portal/PortalEmptyState';
+import { usePortalTracking, type PortalTrackingItem } from '@/hooks/portal/usePortalTracking';
+import { usePortalClientScope } from '@/hooks/portal/usePortalClientScope';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Loader2, MapPin, Truck, Phone, Clock, Navigation, Info } from 'lucide-react';
+import { format, formatDistanceToNow } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
+import PortalTrackingMap from '@/components/portal/PortalTrackingMap';
+
+const STATUS_LABEL: Record<string, string> = {
+  planned: 'Planejada',
+  loading: 'Em carregamento',
+  in_transit: 'Em trânsito',
+  arrived: 'Chegou ao destino',
+  out_for_delivery: 'Saiu para entrega',
+};
 
 export default function PortalTracking() {
+  const { data: items = [], isLoading } = usePortalTracking();
+  const { selectedClientId, can } = usePortalClientScope();
+  const [selected, setSelected] = useState<string | null>(null);
+
+  const filtered = useMemo(
+    () => (selectedClientId ? items.filter((i) => i.client_id === selectedClientId) : items),
+    [items, selectedClientId],
+  );
+
+  const withPosition = filtered.filter((i) => typeof i.lat === 'number');
+  const canLive = can('can_view_vehicle_live');
+
   return (
-    <PortalSection title="Tracking" description="Esta área será habilitada nas próximas fases do portal.">
-      <PortalEmptyState title="Em construção" description="Disponível em breve com filtros, busca e exportação." />
+    <PortalSection
+      title="Tracking"
+      description="Acompanhe em tempo real as cargas em trânsito com sua mercadoria."
+    >
+      {!canLive && (
+        <div className="mb-3 flex items-start gap-2 rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+          <Info className="h-4 w-4 mt-0.5 shrink-0" />
+          <span>
+            A visualização de posição em tempo real do veículo está desabilitada para a sua conta. Você continua vendo o status e a próxima parada de cada carga.
+          </span>
+        </div>
+      )}
+
+      {isLoading ? (
+        <div className="p-8 text-center">
+          <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
+        </div>
+      ) : filtered.length === 0 ? (
+        <PortalEmptyState
+          title="Nenhuma carga em trânsito"
+          description="Você não tem cargas ativas para acompanhamento no momento."
+        />
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4">
+          <div className="min-w-0">
+            {canLive && withPosition.length > 0 ? (
+              <PortalTrackingMap
+                items={filtered}
+                selectedLoadId={selected}
+                onSelect={(i) => setSelected(i.load_id)}
+              />
+            ) : (
+              <Card>
+                <CardContent className="p-8 text-center text-sm text-muted-foreground">
+                  {canLive
+                    ? 'Nenhuma carga com posição atualizada no momento.'
+                    : 'Mapa em tempo real indisponível conforme a sua permissão.'}
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+          <div className="space-y-2 lg:max-h-[420px] lg:overflow-auto lg:pr-1">
+            {filtered.map((item) => (
+              <TrackingCard
+                key={item.load_id}
+                item={item}
+                selected={selected === item.load_id}
+                onSelect={() => setSelected(item.load_id)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </PortalSection>
+  );
+}
+
+function TrackingCard({
+  item,
+  selected,
+  onSelect,
+}: {
+  item: PortalTrackingItem;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={cn(
+        'w-full text-left rounded-md border border-border bg-card p-3 transition-colors',
+        selected ? 'border-primary ring-1 ring-primary/40' : 'hover:bg-muted/40',
+      )}
+    >
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <div className="flex items-center gap-2 min-w-0">
+          <Truck className="h-4 w-4 text-muted-foreground shrink-0" />
+          <span className="font-medium text-sm truncate">Carga {item.load_number}</span>
+        </div>
+        <Badge variant="outline" className="text-[10px] shrink-0">
+          {STATUS_LABEL[item.status] || item.status}
+        </Badge>
+      </div>
+
+      {item.plate ? (
+        <div className="text-xs text-muted-foreground flex items-center gap-1">
+          <span className="font-mono">{item.plate}</span>
+          {item.vehicle_nickname && <span>· {item.vehicle_nickname}</span>}
+          {typeof item.speed === 'number' && (
+            <span className="ml-auto flex items-center gap-1">
+              <Navigation className="h-3 w-3" />
+              {Math.round(item.speed)} km/h
+            </span>
+          )}
+        </div>
+      ) : (
+        <div className="text-xs text-muted-foreground">Veículo não disponível</div>
+      )}
+
+      {item.next_stop && (
+        <div className="mt-2 text-xs flex items-start gap-1">
+          <MapPin className="h-3 w-3 mt-0.5 text-muted-foreground shrink-0" />
+          <div className="min-w-0">
+            <div className="truncate">
+              {item.next_stop.destination || `${item.next_stop.city || ''}${item.next_stop.state ? '/' + item.next_stop.state : ''}`}
+            </div>
+            {item.next_stop.planned_arrival_at && (
+              <div className="text-muted-foreground">
+                Prev.: {format(new Date(item.next_stop.planned_arrival_at), 'dd/MM HH:mm', { locale: ptBR })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {item.driver_name && (
+        <div className="mt-2 text-xs flex items-center gap-1 text-muted-foreground">
+          <span className="truncate">Motorista: {item.driver_name}</span>
+          {item.driver_phone && (
+            <a
+              href={`tel:${item.driver_phone}`}
+              className="ml-auto inline-flex items-center gap-1 text-primary"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Phone className="h-3 w-3" />
+              {item.driver_phone}
+            </a>
+          )}
+        </div>
+      )}
+
+      {item.captured_at && (
+        <div className="mt-1.5 text-[10px] text-muted-foreground flex items-center gap-1">
+          <Clock className="h-3 w-3" />
+          Última posição há {formatDistanceToNow(new Date(item.captured_at), { locale: ptBR })}
+        </div>
+      )}
+    </button>
   );
 }
