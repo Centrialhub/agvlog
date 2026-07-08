@@ -7837,6 +7837,618 @@ export type Database = {
           },
         ]
       }
+      merchandise_shortage_cases: {
+        Row: {
+          amount_reimbursed: number
+          amount_to_charge: number
+          amount_written_off: number
+          cancellation_reason: string | null
+          cancelled_at: string | null
+          city: string | null
+          closed_at: string | null
+          company_client_id: string | null
+          company_name_snapshot: string | null
+          created_at: string
+          created_by: string | null
+          cte_document_id: string | null
+          cte_number: string | null
+          customer_id: string | null
+          customer_name_snapshot: string | null
+          driver_id: string | null
+          driver_name_snapshot: string | null
+          fiscal_document_id: string | null
+          id: string
+          import_batch_id: string | null
+          investigation_notes: string | null
+          invoice_number: string | null
+          load_id: string | null
+          load_number: string | null
+          metadata: Json
+          observation: string | null
+          occurrence_date: string
+          occurrence_id: string | null
+          resolved_at: string | null
+          responsibility_notes: string | null
+          responsible_client_id: string | null
+          responsible_driver_id: string | null
+          responsible_party_type: string | null
+          responsible_supplier_id: string | null
+          shortage_number: string | null
+          shortage_type: string | null
+          source_type: string
+          state: string | null
+          status: string
+          supplier_id: string | null
+          supplier_name_snapshot: string | null
+          tenant_id: string
+          total_amount: number
+          updated_at: string
+          updated_by: string | null
+          vehicle_id: string | null
+          vehicle_plate_snapshot: string | null
+        }
+        Insert: {
+          amount_reimbursed?: number
+          amount_to_charge?: number
+          amount_written_off?: number
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          city?: string | null
+          closed_at?: string | null
+          company_client_id?: string | null
+          company_name_snapshot?: string | null
+          created_at?: string
+          created_by?: string | null
+          cte_document_id?: string | null
+          cte_number?: string | null
+          customer_id?: string | null
+          customer_name_snapshot?: string | null
+          driver_id?: string | null
+          driver_name_snapshot?: string | null
+          fiscal_document_id?: string | null
+          id?: string
+          import_batch_id?: string | null
+          investigation_notes?: string | null
+          invoice_number?: string | null
+          load_id?: string | null
+          load_number?: string | null
+          metadata?: Json
+          observation?: string | null
+          occurrence_date: string
+          occurrence_id?: string | null
+          resolved_at?: string | null
+          responsibility_notes?: string | null
+          responsible_client_id?: string | null
+          responsible_driver_id?: string | null
+          responsible_party_type?: string | null
+          responsible_supplier_id?: string | null
+          shortage_number?: string | null
+          shortage_type?: string | null
+          source_type?: string
+          state?: string | null
+          status?: string
+          supplier_id?: string | null
+          supplier_name_snapshot?: string | null
+          tenant_id: string
+          total_amount?: number
+          updated_at?: string
+          updated_by?: string | null
+          vehicle_id?: string | null
+          vehicle_plate_snapshot?: string | null
+        }
+        Update: {
+          amount_reimbursed?: number
+          amount_to_charge?: number
+          amount_written_off?: number
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          city?: string | null
+          closed_at?: string | null
+          company_client_id?: string | null
+          company_name_snapshot?: string | null
+          created_at?: string
+          created_by?: string | null
+          cte_document_id?: string | null
+          cte_number?: string | null
+          customer_id?: string | null
+          customer_name_snapshot?: string | null
+          driver_id?: string | null
+          driver_name_snapshot?: string | null
+          fiscal_document_id?: string | null
+          id?: string
+          import_batch_id?: string | null
+          investigation_notes?: string | null
+          invoice_number?: string | null
+          load_id?: string | null
+          load_number?: string | null
+          metadata?: Json
+          observation?: string | null
+          occurrence_date?: string
+          occurrence_id?: string | null
+          resolved_at?: string | null
+          responsibility_notes?: string | null
+          responsible_client_id?: string | null
+          responsible_driver_id?: string | null
+          responsible_party_type?: string | null
+          responsible_supplier_id?: string | null
+          shortage_number?: string | null
+          shortage_type?: string | null
+          source_type?: string
+          state?: string | null
+          status?: string
+          supplier_id?: string | null
+          supplier_name_snapshot?: string | null
+          tenant_id?: string
+          total_amount?: number
+          updated_at?: string
+          updated_by?: string | null
+          vehicle_id?: string | null
+          vehicle_plate_snapshot?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "merchandise_shortage_cases_company_client_id_fkey"
+            columns: ["company_client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "merchandise_shortage_cases_cte_document_id_fkey"
+            columns: ["cte_document_id"]
+            isOneToOne: false
+            referencedRelation: "cte_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "merchandise_shortage_cases_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "merchandise_shortage_cases_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "merchandise_shortage_cases_fiscal_document_id_fkey"
+            columns: ["fiscal_document_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "merchandise_shortage_cases_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "merchandise_shortage_cases_occurrence_id_fkey"
+            columns: ["occurrence_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_occurrences"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "merchandise_shortage_cases_responsible_client_id_fkey"
+            columns: ["responsible_client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "merchandise_shortage_cases_responsible_driver_id_fkey"
+            columns: ["responsible_driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "merchandise_shortage_cases_responsible_supplier_id_fkey"
+            columns: ["responsible_supplier_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "merchandise_shortage_cases_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "merchandise_shortage_cases_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      merchandise_shortage_history: {
+        Row: {
+          action: string
+          created_at: string
+          created_by: string | null
+          field_name: string | null
+          id: string
+          metadata: Json
+          new_value: string | null
+          old_value: string | null
+          reason: string | null
+          shortage_case_id: string
+          tenant_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          created_by?: string | null
+          field_name?: string | null
+          id?: string
+          metadata?: Json
+          new_value?: string | null
+          old_value?: string | null
+          reason?: string | null
+          shortage_case_id: string
+          tenant_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          created_by?: string | null
+          field_name?: string | null
+          id?: string
+          metadata?: Json
+          new_value?: string | null
+          old_value?: string | null
+          reason?: string | null
+          shortage_case_id?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "merchandise_shortage_history_shortage_case_id_fkey"
+            columns: ["shortage_case_id"]
+            isOneToOne: false
+            referencedRelation: "merchandise_shortage_cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      merchandise_shortage_import_batches: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          error_count: number
+          errors: Json
+          file_name: string | null
+          id: string
+          imported_count: number
+          metadata: Json
+          row_count: number
+          status: string
+          tenant_id: string
+          unmatched_count: number
+          updated_count: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          error_count?: number
+          errors?: Json
+          file_name?: string | null
+          id?: string
+          imported_count?: number
+          metadata?: Json
+          row_count?: number
+          status?: string
+          tenant_id: string
+          unmatched_count?: number
+          updated_count?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          error_count?: number
+          errors?: Json
+          file_name?: string | null
+          id?: string
+          imported_count?: number
+          metadata?: Json
+          row_count?: number
+          status?: string
+          tenant_id?: string
+          unmatched_count?: number
+          updated_count?: number
+        }
+        Relationships: []
+      }
+      merchandise_shortage_items: {
+        Row: {
+          created_at: string
+          id: string
+          item_observation: string | null
+          metadata: Json
+          occurrence_item_id: string | null
+          product_code: string | null
+          product_description: string
+          quantity: number | null
+          quantity_text: string | null
+          shortage_case_id: string
+          sort_order: number
+          tenant_id: string
+          total_amount: number
+          unit: string | null
+          unit_cost: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          item_observation?: string | null
+          metadata?: Json
+          occurrence_item_id?: string | null
+          product_code?: string | null
+          product_description: string
+          quantity?: number | null
+          quantity_text?: string | null
+          shortage_case_id: string
+          sort_order?: number
+          tenant_id: string
+          total_amount?: number
+          unit?: string | null
+          unit_cost?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          item_observation?: string | null
+          metadata?: Json
+          occurrence_item_id?: string | null
+          product_code?: string | null
+          product_description?: string
+          quantity?: number | null
+          quantity_text?: string | null
+          shortage_case_id?: string
+          sort_order?: number
+          tenant_id?: string
+          total_amount?: number
+          unit?: string | null
+          unit_cost?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "merchandise_shortage_items_shortage_case_id_fkey"
+            columns: ["shortage_case_id"]
+            isOneToOne: false
+            referencedRelation: "merchandise_shortage_cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      merchandise_shortage_report_items: {
+        Row: {
+          city: string | null
+          company_name: string | null
+          created_at: string
+          customer_name: string | null
+          driver_name: string | null
+          id: string
+          invoice_number: string | null
+          metadata: Json
+          observation: string | null
+          occurrence_date: string | null
+          product_description: string | null
+          quantity: number | null
+          quantity_text: string | null
+          report_id: string
+          responsible_party_type: string | null
+          shortage_case_id: string | null
+          shortage_item_id: string | null
+          sort_order: number
+          status: string | null
+          tenant_id: string
+          total_amount: number | null
+          unit: string | null
+          unit_cost: number | null
+        }
+        Insert: {
+          city?: string | null
+          company_name?: string | null
+          created_at?: string
+          customer_name?: string | null
+          driver_name?: string | null
+          id?: string
+          invoice_number?: string | null
+          metadata?: Json
+          observation?: string | null
+          occurrence_date?: string | null
+          product_description?: string | null
+          quantity?: number | null
+          quantity_text?: string | null
+          report_id: string
+          responsible_party_type?: string | null
+          shortage_case_id?: string | null
+          shortage_item_id?: string | null
+          sort_order?: number
+          status?: string | null
+          tenant_id: string
+          total_amount?: number | null
+          unit?: string | null
+          unit_cost?: number | null
+        }
+        Update: {
+          city?: string | null
+          company_name?: string | null
+          created_at?: string
+          customer_name?: string | null
+          driver_name?: string | null
+          id?: string
+          invoice_number?: string | null
+          metadata?: Json
+          observation?: string | null
+          occurrence_date?: string | null
+          product_description?: string | null
+          quantity?: number | null
+          quantity_text?: string | null
+          report_id?: string
+          responsible_party_type?: string | null
+          shortage_case_id?: string | null
+          shortage_item_id?: string | null
+          sort_order?: number
+          status?: string | null
+          tenant_id?: string
+          total_amount?: number | null
+          unit?: string | null
+          unit_cost?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "merchandise_shortage_report_items_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "merchandise_shortage_reports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "merchandise_shortage_report_items_shortage_case_id_fkey"
+            columns: ["shortage_case_id"]
+            isOneToOne: false
+            referencedRelation: "merchandise_shortage_cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "merchandise_shortage_report_items_shortage_item_id_fkey"
+            columns: ["shortage_item_id"]
+            isOneToOne: false
+            referencedRelation: "merchandise_shortage_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      merchandise_shortage_reports: {
+        Row: {
+          cancellation_reason: string | null
+          cancelled_at: string | null
+          closed_at: string | null
+          created_at: string
+          csv_url: string | null
+          excel_url: string | null
+          filters_snapshot: Json
+          generated_by: string | null
+          generated_snapshot: Json
+          id: string
+          pdf_url: string | null
+          period_end: string
+          period_start: string
+          report_month: number
+          report_number: string
+          report_year: number
+          sent_at: string | null
+          sent_channel: string | null
+          sent_notes: string | null
+          sent_to: string | null
+          status: string
+          tenant_id: string
+          title: string
+          total_amount: number
+          total_cases: number
+          total_items: number
+          total_reimbursed: number
+          total_to_charge: number
+          total_written_off: number
+        }
+        Insert: {
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          closed_at?: string | null
+          created_at?: string
+          csv_url?: string | null
+          excel_url?: string | null
+          filters_snapshot?: Json
+          generated_by?: string | null
+          generated_snapshot?: Json
+          id?: string
+          pdf_url?: string | null
+          period_end: string
+          period_start: string
+          report_month: number
+          report_number: string
+          report_year: number
+          sent_at?: string | null
+          sent_channel?: string | null
+          sent_notes?: string | null
+          sent_to?: string | null
+          status?: string
+          tenant_id: string
+          title: string
+          total_amount?: number
+          total_cases?: number
+          total_items?: number
+          total_reimbursed?: number
+          total_to_charge?: number
+          total_written_off?: number
+        }
+        Update: {
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          closed_at?: string | null
+          created_at?: string
+          csv_url?: string | null
+          excel_url?: string | null
+          filters_snapshot?: Json
+          generated_by?: string | null
+          generated_snapshot?: Json
+          id?: string
+          pdf_url?: string | null
+          period_end?: string
+          period_start?: string
+          report_month?: number
+          report_number?: string
+          report_year?: number
+          sent_at?: string | null
+          sent_channel?: string | null
+          sent_notes?: string | null
+          sent_to?: string | null
+          status?: string
+          tenant_id?: string
+          title?: string
+          total_amount?: number
+          total_cases?: number
+          total_items?: number
+          total_reimbursed?: number
+          total_to_charge?: number
+          total_written_off?: number
+        }
+        Relationships: []
+      }
+      merchandise_shortage_sequences: {
+        Row: {
+          next_number: number
+          sequence_year: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          next_number?: number
+          sequence_year: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          next_number?: number
+          sequence_year?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       metrics_daily: {
         Row: {
           avg_speed_kmh: number | null
@@ -12387,6 +12999,10 @@ export type Database = {
         }
         Returns: string
       }
+      create_merchandise_shortage_case: {
+        Args: { _payload: Json; _tenant_id: string }
+        Returns: string
+      }
       create_pallet_return_protocol: {
         Args: { _payload: Json; _tenant_id: string }
         Returns: Json
@@ -12766,6 +13382,10 @@ export type Database = {
         Args: { _date?: string; _tenant_id: string }
         Returns: string
       }
+      next_merchandise_shortage_number: {
+        Args: { _date?: string; _tenant_id: string }
+        Returns: string
+      }
       next_nfse_number: {
         Args: { _branch_code?: string; _series?: string; _tenant_id: string }
         Returns: number
@@ -13070,6 +13690,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      update_merchandise_shortage_status: {
+        Args: { _case_id: string; _payload?: Json; _status: string }
+        Returns: undefined
       }
       update_pallet_return_status: {
         Args: { _payload?: Json; _protocol_id: string; _status: string }
