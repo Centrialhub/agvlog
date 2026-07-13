@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { LoadControlRow, UnloadingChargeRow } from '@/hooks/useLoadControl';
+import { drawCompanyHeader, type CompanyPdfInfo } from '@/lib/pdf/companyHeader';
 
 const dt = (v?: string | null) => v ? v.slice(0, 10).split('-').reverse().join('/') : '';
 const money = (v?: number | null) => v == null ? '' : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -18,20 +19,23 @@ export interface LoadReportOptions {
   kind: LoadReportKind;
   title?: string;
   carrierName?: string;
+  company?: CompanyPdfInfo;
   filtersText?: string;
   rows: LoadControlRow[];
   unloading?: UnloadingChargeRow[];
 }
 
-function header(doc: jsPDF, opts: LoadReportOptions) {
-  doc.setFontSize(12); doc.setFont('helvetica', 'bold');
-  doc.text(opts.carrierName || 'Transportadora', 14, 12);
-  doc.setFontSize(14);
+function header(doc: jsPDF, opts: LoadReportOptions): number {
+  const info: CompanyPdfInfo = opts.company ?? { name: opts.carrierName || 'Transportadora' };
+  const y = drawCompanyHeader(doc, info, { y: 10 });
+  doc.setFontSize(13); doc.setFont('helvetica', 'bold'); doc.setTextColor(0);
   doc.text(opts.title || 'Relatório de Cargas', doc.internal.pageSize.getWidth() / 2, 12, { align: 'center' });
   doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(120);
   doc.text(`Gerado em ${new Date().toLocaleString('pt-BR')}`, doc.internal.pageSize.getWidth() - 14, 12, { align: 'right' });
-  if (opts.filtersText) doc.text(opts.filtersText, 14, 18);
+  let ty = y;
+  if (opts.filtersText) { doc.text(opts.filtersText, 14, ty + 2); ty += 4; }
   doc.setTextColor(0);
+  return ty + 4;
 }
 
 function footer(doc: jsPDF) {
@@ -45,7 +49,7 @@ function footer(doc: jsPDF) {
 
 export function downloadLoadControlPdf(opts: LoadReportOptions, filename = 'controle-cargas.pdf') {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-  header(doc, opts);
+  const startY = header(doc, opts);
 
   if (opts.kind === 'unloading' && opts.unloading) {
     const body = opts.unloading.map(u => [
@@ -55,7 +59,7 @@ export function downloadLoadControlPdf(opts: LoadReportOptions, filename = 'cont
     ]);
     const total = opts.unloading.reduce((s, u) => s + Number(u.amount || 0), 0);
     autoTable(doc, {
-      startY: 24,
+      startY,
       head: [['NF', 'Cliente', 'Fornecedor', 'Cidade', 'Data', 'Valor', 'Carga', 'Status']],
       body, styles: { fontSize: 8, cellPadding: 2 },
       headStyles: { fillColor: [37, 99, 235], textColor: 255 },
@@ -76,7 +80,7 @@ export function downloadLoadControlPdf(opts: LoadReportOptions, filename = 'cont
   const heads = HEADS[opts.kind];
   const body = opts.rows.map(r => buildRow(opts.kind, r));
   autoTable(doc, {
-    startY: 24,
+    startY,
     head: [heads], body,
     styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak' },
     headStyles: { fillColor: [37, 99, 235], textColor: 255, fontSize: 8 },
