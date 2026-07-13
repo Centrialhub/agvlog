@@ -12,28 +12,60 @@ function fmtDate(v: string | null | undefined): string {
 export interface PalletProtocolPdfOptions {
   companyName?: string;
   tenantName?: string;
+  companyLegalName?: string;
+  companyTradeName?: string;
+  companyTaxId?: string;
+  companyAddress?: string;
+  companyPhone?: string;
+  companyEmail?: string;
+  logoDataUrl?: string;
 }
 
 /** Gera o PDF do protocolo, seguindo o layout da planilha legada. */
 export function generatePalletReturnProtocolPdf(protocol: PalletProtocol, options: PalletProtocolPdfOptions = {}): Blob {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const company = options.companyName || options.tenantName || 'AGV DISTRIBUIÇÃO E LOGÍSTICA';
+  const company =
+    options.companyLegalName ||
+    options.companyTradeName ||
+    options.companyName ||
+    options.tenantName ||
+    'AGV DISTRIBUIÇÃO E LOGÍSTICA';
   const supplier = protocol.supplier_name_snapshot || '';
+
+  // Logo (opcional)
+  if (options.logoDataUrl) {
+    try {
+      const fmt = options.logoDataUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+      doc.addImage(options.logoDataUrl, fmt, 14, 10, 28, 20, undefined, 'FAST');
+    } catch { /* ignore logo failure */ }
+  }
 
   doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
-  doc.text(`DEVOLUÇÃO PALETES P/ ${supplier.toUpperCase()}`, 105, 22, { align: 'center' });
+  doc.text(`DEVOLUÇÃO DE PALETES P/ ${supplier.toUpperCase()}`, 105, 18, { align: 'center' });
 
   doc.setFontSize(11);
   doc.setFont('helvetica', 'normal');
-  doc.text(`DEVOLUÇÃO DA ${company.toUpperCase()} P/ ${supplier.toUpperCase()}`, 105, 30, { align: 'center' });
+  doc.text(`DEVOLUÇÃO DA ${company.toUpperCase()} P/ ${supplier.toUpperCase()}`, 105, 26, { align: 'center' });
+
+  // Linha com dados da empresa emissora
+  doc.setFontSize(8);
+  doc.setTextColor(90);
+  const companyMeta = [
+    options.companyTaxId ? `CNPJ ${options.companyTaxId}` : '',
+    options.companyAddress || '',
+    options.companyPhone || '',
+    options.companyEmail || '',
+  ].filter(Boolean).join('  •  ');
+  if (companyMeta) doc.text(companyMeta, 105, 32, { align: 'center', maxWidth: 180 });
+  doc.setTextColor(0);
 
   doc.setFontSize(10);
-  doc.text(`Protocolo: ${protocol.protocol_number}`, 14, 42);
-  doc.text(`Data: ${fmtDate(protocol.issue_date)}`, 160, 42);
-  if (protocol.returned_at) doc.text(`Data devolução: ${fmtDate(protocol.returned_at)}`, 14, 48);
+  doc.text(`Protocolo: ${protocol.protocol_number}`, 14, 44);
+  doc.text(`Data: ${fmtDate(protocol.issue_date)}`, 160, 44);
+  if (protocol.returned_at) doc.text(`Data devolução: ${fmtDate(protocol.returned_at)}`, 14, 50);
 
-  const bodyStart = 54;
+  const bodyStart = 56;
 
   autoTable(doc, {
     startY: bodyStart,

@@ -19,6 +19,7 @@ import {
   Plug, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Clock, Plus, Trash2,
   Activity, Wifi, Link2, Unlink, Radio,
 } from 'lucide-react';
+import { CompanySettings } from '@/components/settings/CompanySettings';
 
 export default function Settings() {
   return (
@@ -27,8 +28,9 @@ export default function Settings() {
         <h1 className="text-2xl font-bold text-foreground">Configurações</h1>
         <p className="text-sm text-muted-foreground">Gerencie integrações e parâmetros do sistema</p>
       </div>
-      <Tabs defaultValue="integration">
+      <Tabs defaultValue="company">
         <TabsList className="flex-wrap">
+          <TabsTrigger value="company">Empresa</TabsTrigger>
           <TabsTrigger value="integration">Integração SSX</TabsTrigger>
           <TabsTrigger value="units">Rastreadores</TabsTrigger>
           <TabsTrigger value="telemetry">Catálogo Telemetria</TabsTrigger>
@@ -36,6 +38,7 @@ export default function Settings() {
           <TabsTrigger value="logs">Logs</TabsTrigger>
           <TabsTrigger value="maintenance">Manutenção</TabsTrigger>
         </TabsList>
+        <TabsContent value="company" className="mt-4"><CompanySettings /></TabsContent>
         <TabsContent value="integration" className="mt-4"><IntegrationSection /></TabsContent>
         <TabsContent value="units" className="mt-4"><UnitsSection /></TabsContent>
         <TabsContent value="telemetry" className="mt-4"><TelemetryCatalogSection /></TabsContent>
