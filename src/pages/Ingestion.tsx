@@ -735,6 +735,7 @@ export default function Ingestion() {
       const parsed: ParsedNFe = {
         invoiceNumber: ort.invoiceNumber,
         series: 'ORT',
+        model: '55',
         accessKey,
         issueDate: ort.issueDate,
         emitterName: ort.emitterName,
