@@ -2,10 +2,12 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { RuralProfile } from '@/hooks/useRuralClients';
 import { accessTypeLabel, deliveryModeLabel } from './ruralDeliveryReports';
+import { drawCompanyHeader, type CompanyPdfInfo } from '@/lib/pdf/companyHeader';
 
 export interface RuralReportOptions {
   title?: string;
   tenantName?: string;
+  company?: CompanyPdfInfo;
   filters?: Record<string, string>;
   groupByCity?: boolean;
 }
@@ -15,16 +17,19 @@ export function generateRuralClientsPdf(rows: RuralProfile[], options: RuralRepo
   const title = options.title || 'Relatório de Clientes Zona Rural';
   const now = new Date().toLocaleString('pt-BR');
 
-  doc.setFontSize(14);
-  doc.text(title, 14, 14);
-  doc.setFontSize(9);
-  doc.setTextColor(90);
-  doc.text(`${options.tenantName || ''}  •  Emitido em ${now}  •  ${rows.length} registro(s)`, 14, 20);
-
+  const info: CompanyPdfInfo = options.company ?? { name: options.tenantName };
+  const afterHeader = drawCompanyHeader(doc, info, { y: 10 });
+  doc.setFontSize(13); doc.setFont('helvetica', 'bold'); doc.setTextColor(0);
+  doc.text(title, 14, afterHeader + 4);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9); doc.setTextColor(90);
+  doc.text(`Emitido em ${now}  •  ${rows.length} registro(s)`, 14, afterHeader + 10);
+  let filtersLineY = afterHeader + 16;
   if (options.filters) {
     const chunks = Object.entries(options.filters).filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`);
-    if (chunks.length) doc.text('Filtros: ' + chunks.join(' | '), 14, 26);
+    if (chunks.length) { doc.text('Filtros: ' + chunks.join(' | '), 14, filtersLineY); filtersLineY += 6; }
   }
+  doc.setTextColor(0);
 
   const groups = options.groupByCity
     ? Object.entries(rows.reduce<Record<string, RuralProfile[]>>((acc, r) => {
@@ -33,7 +38,7 @@ export function generateRuralClientsPdf(rows: RuralProfile[], options: RuralRepo
       }, {})).sort(([a], [b]) => a.localeCompare(b))
     : [['Todos', rows] as [string, RuralProfile[]]];
 
-  let startY = options.filters ? 32 : 28;
+  let startY = filtersLineY;
   for (const [cityName, group] of groups) {
     doc.setFontSize(11); doc.setTextColor(20);
     doc.text(cityName, 14, startY);
