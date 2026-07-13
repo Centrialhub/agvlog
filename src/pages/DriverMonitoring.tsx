@@ -21,6 +21,9 @@ import { STATUS_LABELS, type DriverMonitorStatus } from '@/lib/driverMonitoring/
 import { parseDriverMonitoringWorkbook, type ParsedDriverMonitoringWorkbook } from '@/lib/driverMonitoring/driverMonitoringSpreadsheetImport';
 import { driversInRouteCsv, deliveriesByDriverCsv, arrivalForecastsCsv, downloadCsv } from '@/lib/driverMonitoring/driverMonitoringCsv';
 import { driversInRoutePdf, deliveriesByDriverPdf, arrivalForecastsPdf, delaysPdf, productivityPdf, downloadPdf } from '@/lib/driverMonitoring/driverMonitoringPdf';
+import { useCompanyProfile } from '@/hooks/useCompanyProfile';
+import { useTenant } from '@/hooks/useTenant';
+import { toCompanyPdfInfo } from '@/lib/pdf/companyHeader';
 
 const dt = (v?: string | null) => (v ? v.slice(0, 10).split('-').reverse().join('/') : '—');
 
