@@ -20,6 +20,8 @@ import {
 } from '@/hooks/useRuralClients';
 import { ruralProfilesToCsv, accessTypeLabel, deliveryModeLabel } from '@/lib/ruralClients/ruralDeliveryReports';
 import { generateRuralClientsPdf } from '@/lib/ruralClients/ruralDeliveryPdf';
+import { useCompanyProfile } from '@/hooks/useCompanyProfile';
+import { toCompanyPdfInfo } from '@/lib/pdf/companyHeader';
 
 function download(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob);
