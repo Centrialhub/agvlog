@@ -5,6 +5,12 @@ import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { parseNFeXml } from '@/lib/documentParsers';
 import { buildValidationIndexes, validateNFe } from '@/lib/ingestionValidator';
+import {
+  buildFiscalDocumentIdentity,
+  DuplicateFiscalDocumentError,
+  formatDuplicateFiscalDocumentMessage,
+  isUniqueViolation,
+} from '@/lib/fiscalDocuments/fiscalIdentity';
 import { cn } from '@/lib/utils';
 import { useClients } from '@/hooks/useClients';
 import { useTenant } from '@/hooks/useTenant';
@@ -51,6 +57,9 @@ interface DedupEntry {
 
 interface ExistingFiscalDocument {
   invoice_number: string | null;
+  invoice_series?: string | null;
+  fiscal_model?: string | null;
+  remitter_cnpj?: string | null;
   access_key: string | null;
   remitter: string | null;
   recipient: string | null;
@@ -265,8 +274,8 @@ export default function BatchReimportDialog() {
       const indexes = buildValidationIndexes([], clients);
       let successCount = 0;
       const importErrors: ImportError[] = [];
-      const seenAccessKeys = new Map<string, string>();
-      const seenInvoiceNumbers = new Map<string, string>();
+      // Composite identity dedupe (tenant + cnpj + model + série + número, or access key)
+      const seenIdentities = new Map<string, string>();
       const dedup = buildDedupSnapshot(EMPTY_DEDUP_REPORT);
 
       for (let i = 0; i < files.length; i++) {
@@ -287,11 +296,20 @@ export default function BatchReimportDialog() {
             continue;
           }
 
-          const duplicateKey = validated.source.accessKey && seenAccessKeys.get(validated.source.accessKey);
-          const duplicateNumber = !duplicateKey && validated.source.invoiceNumber && seenInvoiceNumbers.get(validated.source.invoiceNumber);
-          if (duplicateKey || duplicateNumber) {
-            const identifier = duplicateKey ? `Chave de acesso: ${validated.source.accessKey}` : `Número da NF: ${validated.source.invoiceNumber}`;
-            const reason = duplicateKey ? `${identifier} já importada no arquivo ${duplicateKey}` : `${identifier} já importado no arquivo ${duplicateNumber}`;
+          const identity = buildFiscalDocumentIdentity({
+            tenantId: currentTenant.id,
+            accessKey: validated.source.accessKey,
+            emitterCnpj: validated.source.emitterCnpj,
+            model: (validated.source as any).model || '55',
+            series: validated.source.series,
+            invoiceNumber: validated.source.invoiceNumber,
+          });
+          const previousFile = identity ? seenIdentities.get(identity) : undefined;
+          if (previousFile) {
+            const identifier = validated.source.accessKey
+              ? `Chave de acesso: ${validated.source.accessKey}`
+              : `Fornecedor ${validated.source.emitterCnpj || '—'} / NF ${validated.source.invoiceNumber || '—'} / série ${validated.source.series || '0'}`;
+            const reason = `${identifier} já presente no arquivo ${previousFile}`;
             dedup.ignored.push({ fileName: file.name, invoiceNumber: validated.source.invoiceNumber || '—', identifier, reason });
             setDedupReport(buildDedupSnapshot(dedup));
             setFileStatus(file.name, { state: 'ignored', invoiceNumber: validated.source.invoiceNumber, message: reason });
@@ -300,6 +318,9 @@ export default function BatchReimportDialog() {
 
           const nextDoc: ExistingFiscalDocument = {
             invoice_number: validated.source.invoiceNumber,
+            invoice_series: validated.source.series || null,
+            fiscal_model: (validated.source as any).model || '55',
+            remitter_cnpj: validated.source.emitterCnpj || null,
             access_key: validated.source.accessKey,
             remitter: validated.source.emitterName,
             recipient: validated.source.recipientName,
@@ -321,11 +342,22 @@ export default function BatchReimportDialog() {
             ...nextDoc,
             status: 'confirmed',
           } as any);
-          if (error) throw error;
+          if (error) {
+            if (isUniqueViolation(error)) {
+              throw new DuplicateFiscalDocumentError({
+                invoice_number: nextDoc.invoice_number,
+                invoice_series: nextDoc.invoice_series,
+                fiscal_model: nextDoc.fiscal_model,
+                remitter: nextDoc.remitter,
+                remitter_cnpj: nextDoc.remitter_cnpj,
+                access_key: nextDoc.access_key,
+              });
+            }
+            throw error;
+          }
           successCount++;
           setImported(successCount);
-          if (validated.source.accessKey) seenAccessKeys.set(validated.source.accessKey, file.name);
-          if (validated.source.invoiceNumber) seenInvoiceNumbers.set(validated.source.invoiceNumber, file.name);
+          if (identity) seenIdentities.set(identity, file.name);
           const entry = { fileName: file.name, invoiceNumber: validated.source.invoiceNumber || '—', identifier: validated.source.accessKey ? `Chave de acesso: ${validated.source.accessKey}` : `Número da NF: ${validated.source.invoiceNumber || '—'}` };
           const state: FileImportState = !existingDoc ? 'imported' : hasFiscalDocumentChanges(existingDoc, nextDoc) ? 'updated' : 'unchanged';
           const reason = state === 'imported' ? 'Novo registro importado; não havia fiscal_document correspondente antes da limpeza' : state === 'updated' ? 'Registro existente tinha alterações em campos fiscais relevantes' : 'Registro reimportado sem alterações nos campos fiscais relevantes';
@@ -337,7 +369,9 @@ export default function BatchReimportDialog() {
             message: `NF ${validated.source.invoiceNumber || 'sem número'} importada`,
           });
         } catch (error: any) {
-          const message = error?.message || 'Erro desconhecido ao importar';
+          const message = error instanceof DuplicateFiscalDocumentError
+            ? formatDuplicateFiscalDocumentMessage(error.existingDocument as any)
+            : (error?.message || 'Erro desconhecido ao importar');
           importErrors.push({ fileName: file.name, message });
           setErrors([...importErrors]);
           setFileStatus(file.name, { state: 'error', message });
