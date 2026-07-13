@@ -3,6 +3,12 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
 import { calculateFreight, logFreightCalculation } from './useFreightCalculator';
+import {
+  DuplicateFiscalDocumentError,
+  isUniqueViolation,
+  normalizeTaxId,
+  normalizeFiscalNumber,
+} from '@/lib/fiscalDocuments/fiscalIdentity';
 
 const FREIGHT_TRIGGER_FIELDS = [
   'recipient',
@@ -36,6 +42,8 @@ export interface FiscalDocument {
   tenant_id: string;
   document_type: DocType;
   invoice_number: string | null;
+  invoice_series: string | null;
+  fiscal_model: string | null;
   access_key: string | null;
   client_id: string | null;
   remitter: string | null;
@@ -99,11 +107,79 @@ export function useCreateFiscalDocument() {
         tenant_id: currentTenant!.id,
         created_by: user?.id,
       } as any).select().single();
-      if (error) throw error;
+      if (error) {
+        if (isUniqueViolation(error) && values.document_type === 'inbound') {
+          const existing = await findExistingFiscalDocument({
+            tenantId: currentTenant!.id,
+            accessKey: values.access_key,
+            remitterCnpj: (values as any).remitter_cnpj,
+            invoiceNumber: values.invoice_number,
+            invoiceSeries: (values as any).invoice_series,
+            fiscalModel: (values as any).fiscal_model,
+          });
+          throw new DuplicateFiscalDocumentError(existing, (error as any).constraint);
+        }
+        throw error;
+      }
       return data;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['fiscal_documents'] }),
   });
+}
+
+/**
+ * Look up a fiscal document (inbound) that matches either the access key or
+ * the composite fiscal identity. Used to enrich duplicate errors.
+ */
+export async function findExistingFiscalDocument(input: {
+  tenantId: string;
+  accessKey?: string | null;
+  remitterCnpj?: string | null;
+  invoiceNumber?: string | null;
+  invoiceSeries?: string | null;
+  fiscalModel?: string | null;
+}): Promise<FiscalDocument | null> {
+  const accessKey = normalizeTaxId(input.accessKey);
+  if (accessKey) {
+    const { data } = await supabase
+      .from('fiscal_documents')
+      .select('*')
+      .eq('tenant_id', input.tenantId)
+      .eq('document_type', 'inbound')
+      .eq('access_key', accessKey)
+      .maybeSingle();
+    if (data) return data as FiscalDocument;
+  }
+  const cnpj = normalizeTaxId(input.remitterCnpj);
+  const number = normalizeFiscalNumber(input.invoiceNumber);
+  if (cnpj && number) {
+    const series = normalizeFiscalNumber(input.invoiceSeries) || '0';
+    const model = normalizeFiscalNumber(input.fiscalModel) || '55';
+    const { data } = await supabase
+      .from('fiscal_documents')
+      .select('*')
+      .eq('tenant_id', input.tenantId)
+      .eq('document_type', 'inbound')
+      .eq('remitter_cnpj', cnpj)
+      .eq('invoice_number', input.invoiceNumber as string)
+      .maybeSingle();
+    if (data) return data as FiscalDocument;
+    // Fallback: broader search, since stored values may differ in formatting
+    const { data: broad } = await supabase
+      .from('fiscal_documents')
+      .select('*')
+      .eq('tenant_id', input.tenantId)
+      .eq('document_type', 'inbound')
+      .limit(50);
+    const match = (broad || []).find((d: any) =>
+      normalizeTaxId(d.remitter_cnpj) === cnpj &&
+      normalizeFiscalNumber(d.invoice_number) === number &&
+      (normalizeFiscalNumber(d.invoice_series) || '0') === series &&
+      (normalizeFiscalNumber(d.fiscal_model) || '55') === model,
+    );
+    return (match as FiscalDocument) || null;
+  }
+  return null;
 }
 
 export function useUpdateFiscalDocument() {
