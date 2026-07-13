@@ -82,10 +82,25 @@ export default function TeamManagement() {
       }
       const profileMap = new Map(profiles.map(p => [p.id, p]));
 
+      // Get emails and metadata names via edge function (Admin API)
+      const emailMap = new Map<string, { email: string | null; full_name: string | null }>();
+      try {
+        const { data: fnData } = await supabase.functions.invoke('list-tenant-members', {
+          body: { tenant_id: currentTenant.id },
+        });
+        const list = (fnData as any)?.users || [];
+        for (const u of list) emailMap.set(u.id, { email: u.email, full_name: u.full_name });
+      } catch {
+        // ignore — falls back to profile name only
+      }
+
       return (memberships || []).map(m => ({
         ...m,
-        profile_name: profileMap.get(m.user_id)?.full_name || null,
-        profile_email: null, // email only available via admin API
+        profile_name:
+          profileMap.get(m.user_id)?.full_name ||
+          emailMap.get(m.user_id)?.full_name ||
+          null,
+        profile_email: emailMap.get(m.user_id)?.email || null,
       }));
     },
     enabled: !!currentTenant,
@@ -255,8 +270,14 @@ export default function TeamManagement() {
                       <TableRow key={m.id} className={!m.active ? 'opacity-50' : ''}>
                         <TableCell>
                           <div>
-                            <p className="font-medium text-foreground">{m.profile_name || 'Usuário'}</p>
-                            <p className="text-xs text-muted-foreground font-mono">{m.user_id.slice(0, 8)}...</p>
+                            <p className="font-medium text-foreground">
+                              {m.profile_name || m.profile_email || 'Usuário sem nome'}
+                            </p>
+                            {m.profile_email ? (
+                              <p className="text-xs text-muted-foreground">{m.profile_email}</p>
+                            ) : (
+                              <p className="text-xs text-muted-foreground font-mono">{m.user_id.slice(0, 8)}...</p>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell>
