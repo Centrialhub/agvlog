@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { drawCompanyHeader, type CompanyPdfInfo } from '@/lib/pdf/companyHeader';
 
 const brl = (n?: number | null) =>
   n == null ? '' : 'R$ ' + Number(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -26,16 +27,18 @@ export interface UnservedPdfOptions {
   clientName?: string | null;
   supplierName?: string | null;
   companyName?: string;
+  company?: CompanyPdfInfo;
   filtersLabel?: string;
   rows: UnservedRowPdf[];
 }
 
 export function generateUnservedNotesPdf(opts: UnservedPdfOptions): jsPDF {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-  doc.setFontSize(14);
-  doc.text(opts.companyName || 'AGVLog', 14, 14);
-  doc.setFontSize(12);
-  doc.text(opts.title, 14, 21);
+  const info: CompanyPdfInfo = opts.company ?? { name: opts.companyName || 'AGVLog' };
+  const afterHeader = drawCompanyHeader(doc, info, { y: 10 });
+  doc.setFontSize(12); doc.setFont('helvetica', 'bold');
+  doc.text(opts.title, 14, afterHeader + 4);
+  doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
   const sub = [
     opts.clientName ? `Cliente: ${opts.clientName}` : null,
@@ -43,10 +46,11 @@ export function generateUnservedNotesPdf(opts: UnservedPdfOptions): jsPDF {
     opts.periodStart && opts.periodEnd ? `Semana: ${dt(opts.periodStart)} a ${dt(opts.periodEnd)}` : null,
     opts.filtersLabel,
   ].filter(Boolean).join('   |   ');
-  if (sub) doc.text(sub, 14, 27);
+  if (sub) doc.text(sub, 14, afterHeader + 10);
+  const tableStart = afterHeader + 14;
 
   autoTable(doc, {
-    startY: 32,
+    startY: tableStart,
     head: [['NF', 'Cliente', 'Cidade', 'Data NF', 'Valor', 'Fornecedor', 'Zona Rural', 'Observação']],
     body: opts.rows.map((r) => [
       r.invoice_number ?? '',
