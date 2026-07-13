@@ -5372,6 +5372,7 @@ export type Database = {
           delivery_meta: Json
           document_type: string
           dynamic_lot: string | null
+          fiscal_model: string | null
           freight_breakdown: Json | null
           freight_cif_value: number | null
           freight_confirmed_at: string | null
@@ -5392,6 +5393,7 @@ export type Database = {
           imported_at: string | null
           imported_note_status: string | null
           invoice_number: string | null
+          invoice_series: string | null
           issue_date: string | null
           load_id: string | null
           operation_type: Database["public"]["Enums"]["operation_type"] | null
@@ -5430,6 +5432,7 @@ export type Database = {
           delivery_meta?: Json
           document_type?: string
           dynamic_lot?: string | null
+          fiscal_model?: string | null
           freight_breakdown?: Json | null
           freight_cif_value?: number | null
           freight_confirmed_at?: string | null
@@ -5450,6 +5453,7 @@ export type Database = {
           imported_at?: string | null
           imported_note_status?: string | null
           invoice_number?: string | null
+          invoice_series?: string | null
           issue_date?: string | null
           load_id?: string | null
           operation_type?: Database["public"]["Enums"]["operation_type"] | null
@@ -5488,6 +5492,7 @@ export type Database = {
           delivery_meta?: Json
           document_type?: string
           dynamic_lot?: string | null
+          fiscal_model?: string | null
           freight_breakdown?: Json | null
           freight_cif_value?: number | null
           freight_confirmed_at?: string | null
@@ -5508,6 +5513,7 @@ export type Database = {
           imported_at?: string | null
           imported_note_status?: string | null
           invoice_number?: string | null
+          invoice_series?: string | null
           issue_date?: string | null
           load_id?: string | null
           operation_type?: Database["public"]["Enums"]["operation_type"] | null
@@ -14475,6 +14481,8 @@ export type Database = {
         Args: { _date?: string; _tenant_id: string }
         Returns: string
       }
+      normalize_fiscal_number: { Args: { value: string }; Returns: string }
+      normalize_tax_id: { Args: { value: string }; Returns: string }
       peek_next_load_number: { Args: { _tenant_id: string }; Returns: string }
       peek_next_pickup_number: { Args: { _tenant_id: string }; Returns: string }
       portal_user_can_access_fiscal_document: {
