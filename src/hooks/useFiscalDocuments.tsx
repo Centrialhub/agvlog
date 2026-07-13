@@ -47,6 +47,7 @@ export interface FiscalDocument {
   access_key: string | null;
   client_id: string | null;
   remitter: string | null;
+  remitter_cnpj: string | null;
   recipient: string | null;
   recipient_city: string | null;
   recipient_state: string | null;
