@@ -735,6 +735,7 @@ export default function Ingestion() {
       const parsed: ParsedNFe = {
         invoiceNumber: ort.invoiceNumber,
         series: 'ORT',
+        model: '55',
         accessKey,
         issueDate: ort.issueDate,
         emitterName: ort.emitterName,
@@ -1022,8 +1023,11 @@ export default function Ingestion() {
             const created = await createDoc.mutateAsync({
               document_type: 'inbound',
               invoice_number: doc.source.invoiceNumber,
+              invoice_series: doc.source.series || null,
+              fiscal_model: doc.source.model || '55',
               access_key: doc.source.accessKey,
               remitter: doc.source.emitterName,
+              remitter_cnpj: doc.source.emitterCnpj || null,
               recipient: doc.source.recipientName,
               recipient_city: doc.source.recipientCity || null,
               recipient_state: doc.source.recipientState || null,
@@ -1189,8 +1193,11 @@ export default function Ingestion() {
         const created = await createDoc.mutateAsync({
           document_type: 'inbound',
           invoice_number: doc.source.invoiceNumber,
+          invoice_series: doc.source.series || null,
+          fiscal_model: doc.source.model || '55',
           access_key: doc.source.accessKey,
           remitter: doc.source.emitterName,
+          remitter_cnpj: doc.source.emitterCnpj || null,
           recipient: doc.source.recipientName,
           recipient_city: doc.source.recipientCity || null,
           recipient_state: doc.source.recipientState || null,
@@ -1316,8 +1323,11 @@ export default function Ingestion() {
             const created = await createDoc.mutateAsync({
               document_type: 'inbound',
               invoice_number: doc.source.invoiceNumber,
+              invoice_series: doc.source.series || null,
+              fiscal_model: doc.source.model || '55',
               access_key: doc.source.accessKey,
               remitter: doc.source.emitterName,
+              remitter_cnpj: doc.source.emitterCnpj || null,
               recipient: doc.source.recipientName,
               recipient_city: doc.source.recipientCity || null,
               recipient_state: doc.source.recipientState || null,
