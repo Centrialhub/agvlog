@@ -67,7 +67,26 @@ export default function Drivers() {
         .from('profiles')
         .select('id, full_name')
         .in('id', ids);
-      return (p || []) as Array<{ id: string; full_name: string | null }>;
+      const profileMap = new Map((p || []).map((x: any) => [x.id, x.full_name as string | null]));
+
+      // Enrich with email/metadata name via edge function (Admin API).
+      const emailMap = new Map<string, { email: string | null; full_name: string | null }>();
+      try {
+        const { data: fn } = await supabase.functions.invoke('list-tenant-members', {
+          body: { tenant_id: currentTenant.id },
+        });
+        for (const u of ((fn as any)?.users ?? [])) {
+          emailMap.set(u.id, { email: u.email, full_name: u.full_name });
+        }
+      } catch {
+        // fallback silently
+      }
+
+      return ids.map((id) => {
+        const email = emailMap.get(id)?.email ?? null;
+        const name = profileMap.get(id) || emailMap.get(id)?.full_name || email || null;
+        return { id, full_name: name };
+      }) as Array<{ id: string; full_name: string | null }>;
     },
     enabled: !!currentTenant && isAdmin,
   });
