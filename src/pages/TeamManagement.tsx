@@ -270,8 +270,14 @@ export default function TeamManagement() {
                       <TableRow key={m.id} className={!m.active ? 'opacity-50' : ''}>
                         <TableCell>
                           <div>
-                            <p className="font-medium text-foreground">{m.profile_name || 'Usuário'}</p>
-                            <p className="text-xs text-muted-foreground font-mono">{m.user_id.slice(0, 8)}...</p>
+                            <p className="font-medium text-foreground">
+                              {m.profile_name || m.profile_email || 'Usuário sem nome'}
+                            </p>
+                            {m.profile_email ? (
+                              <p className="text-xs text-muted-foreground">{m.profile_email}</p>
+                            ) : (
+                              <p className="text-xs text-muted-foreground font-mono">{m.user_id.slice(0, 8)}...</p>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell>
