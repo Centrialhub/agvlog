@@ -82,10 +82,25 @@ export default function TeamManagement() {
       }
       const profileMap = new Map(profiles.map(p => [p.id, p]));
 
+      // Get emails and metadata names via edge function (Admin API)
+      const emailMap = new Map<string, { email: string | null; full_name: string | null }>();
+      try {
+        const { data: fnData } = await supabase.functions.invoke('list-tenant-members', {
+          body: { tenant_id: currentTenant.id },
+        });
+        const list = (fnData as any)?.users || [];
+        for (const u of list) emailMap.set(u.id, { email: u.email, full_name: u.full_name });
+      } catch {
+        // ignore — falls back to profile name only
+      }
+
       return (memberships || []).map(m => ({
         ...m,
-        profile_name: profileMap.get(m.user_id)?.full_name || null,
-        profile_email: null, // email only available via admin API
+        profile_name:
+          profileMap.get(m.user_id)?.full_name ||
+          emailMap.get(m.user_id)?.full_name ||
+          null,
+        profile_email: emailMap.get(m.user_id)?.email || null,
       }));
     },
     enabled: !!currentTenant,
