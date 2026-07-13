@@ -56,6 +56,7 @@ export default function MerchandiseShortages() {
   const createCase = useCreateShortageCase();
   const updateStatus = useUpdateShortageStatus();
   const { currentTenant } = useTenant();
+  const { data: companyProfile } = useCompanyProfile();
 
   // "Nova Falta" state
   const [form, setForm] = useState({
