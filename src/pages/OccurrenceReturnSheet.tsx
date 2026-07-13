@@ -27,7 +27,6 @@ import {
 import { OccurrenceReturnSheetPreview } from '@/components/occurrences/OccurrenceReturnSheetPreview';
 import { downloadReturnSheetPdf, openReturnSheetPdfPrint } from '@/lib/occurrences/occurrenceReturnSheetPdf';
 import { useCompanyProfile } from '@/hooks/useCompanyProfile';
-import { useTenant } from '@/hooks/useTenant';
 import { toCompanyPdfInfo } from '@/lib/pdf/companyHeader';
 
 export default function OccurrenceReturnSheetPage() {
