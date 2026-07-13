@@ -34,6 +34,9 @@ import { returnedNotesCsv, unservedNotesCsv } from '@/lib/occurrenceReports/occu
 import { generateReturnedNotesPdf } from '@/lib/occurrenceReports/returnedNotesReportPdf';
 import { generateUnservedNotesPdf } from '@/lib/occurrenceReports/unservedNotesReportPdf';
 import { buildOccurrenceReportExcel } from '@/lib/occurrenceReports/occurrenceReportExcel';
+import { useCompanyProfile } from '@/hooks/useCompanyProfile';
+import { useTenant } from '@/hooks/useTenant';
+import { toCompanyPdfInfo } from '@/lib/pdf/companyHeader';
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -67,6 +70,9 @@ export default function OccurrenceReports() {
   };
 
   const { data: occurrences = [], isLoading } = useOccurrences(filters);
+  const { currentTenant } = useTenant();
+  const { data: companyProfile } = useCompanyProfile();
+  const companyInfo = useMemo(() => toCompanyPdfInfo(companyProfile, currentTenant?.name), [companyProfile, currentTenant?.name]);
   const { data: exportsRows = [] } = useReportExports();
   const { data: batches = [] } = useImportBatches();
   const createExport = useCreateExport();
@@ -103,7 +109,7 @@ export default function OccurrenceReports() {
     }));
     const title = `PROTOCOLO DE DEVOLUÇÃO${customer ? ' - ' + customer : ''}`;
     if (format === 'pdf') {
-      const pdf = generateReturnedNotesPdf({ title, clientName: customer || null, supplierName: supplier || null, periodStart, periodEnd, rows });
+      const pdf = generateReturnedNotesPdf({ title, clientName: customer || null, supplierName: supplier || null, periodStart, periodEnd, rows, company: companyInfo });
       pdf.save(`${title}.pdf`);
     } else if (format === 'csv') {
       downloadBlob(returnedNotesCsv(rows), `${title}.csv`);
@@ -150,7 +156,7 @@ export default function OccurrenceReports() {
     }));
     const title = `Notas sem saída - ${periodStart || 'período'} a ${periodEnd || ''}`;
     if (format === 'pdf') {
-      const pdf = generateUnservedNotesPdf({ title, periodStart, periodEnd, clientName: customer, supplierName: supplier, rows });
+      const pdf = generateUnservedNotesPdf({ title, periodStart, periodEnd, clientName: customer, supplierName: supplier, rows, company: companyInfo });
       pdf.save(`${title}.pdf`);
     } else if (format === 'csv') {
       downloadBlob(unservedNotesCsv(rows), `${title}.csv`);

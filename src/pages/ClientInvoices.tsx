@@ -21,6 +21,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Plus, FileText, Download, Send, XCircle, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { generateClientInvoicePdf, type InvoiceCharge, computeInvoiceTotals } from '@/lib/clientInvoicePdf';
+import { useCompanyProfile } from '@/hooks/useCompanyProfile';
 
 const brl = (n: number) => 'R$ ' + Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const dt = (s?: string | null) => s ? new Date(s.length <= 10 ? s + 'T00:00:00' : s).toLocaleDateString('pt-BR') : '-';
@@ -34,6 +35,7 @@ const statusVariant = (s: string) => {
 
 export default function ClientInvoices() {
   const { currentTenant } = useTenant();
+  const { data: companyProfile } = useCompanyProfile();
   const { data: invoices = [], isLoading } = useClientInvoices();
   const { data: clients = [] } = useClients();
   const cancelMut = useCancelClientInvoice();
@@ -85,7 +87,19 @@ export default function ClientInvoices() {
         interest_amount: Number(inv.interest_amount),
         total_amount: Number(inv.total_amount),
         notes: inv.notes,
-        company: { name: currentTenant?.name || 'Transportadora' },
+        company: {
+          name: companyProfile?.legal_name || companyProfile?.trade_name || currentTenant?.name || 'Transportadora',
+          tax_id: companyProfile?.tax_id,
+          state_registration: companyProfile?.state_registration,
+          address: companyProfile?.address,
+          city: companyProfile?.city,
+          state: companyProfile?.state,
+          zip: companyProfile?.zip,
+          phone: companyProfile?.phone,
+          email: companyProfile?.email,
+          website: companyProfile?.website,
+          logo_data_url: companyProfile?.logo_data_url,
+        },
         payer: { name: inv.clients?.company_name, tax_id: inv.clients?.tax_id || undefined },
         charges: charges as any,
       });

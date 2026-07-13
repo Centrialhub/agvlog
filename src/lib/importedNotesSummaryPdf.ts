@@ -9,6 +9,11 @@ export interface CarrierInfo {
   ie?: string;
   address?: string;
   phone?: string;
+  city?: string;
+  state?: string;
+  email?: string;
+  website?: string;
+  logo_data_url?: string;
 }
 
 export interface ManifestInfo {
@@ -66,15 +71,27 @@ export function generateImportedNotesSummaryPdf(opts: ReportOptions) {
   const generatedAt = opts.generatedAt ?? new Date();
 
   const drawHeader = () => {
+    let textX = 14;
+    if (carrier.logo_data_url) {
+      try {
+        const fmt = carrier.logo_data_url.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+        doc.addImage(carrier.logo_data_url, fmt, 14, 6, 18, 14, undefined, 'FAST');
+        textX = 34;
+      } catch { /* ignore */ }
+    }
     doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
-    doc.text(carrier.name || 'Transportadora', 14, 12);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
-    const infoLines = [
-      carrier.address, carrier.phone,
-      carrier.cnpj ? `CNPJ: ${carrier.cnpj}` : null,
-      carrier.ie ? `IE: ${carrier.ie}` : null,
+    doc.text(carrier.name || 'Transportadora', textX, 12);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(80);
+    const cityUf = [carrier.city, carrier.state].filter(Boolean).join('/');
+    const infoLine1 = [
+      carrier.cnpj ? `CNPJ ${carrier.cnpj}` : null,
+      carrier.ie ? `IE ${carrier.ie}` : null,
+      carrier.address, cityUf,
     ].filter(Boolean).join(' • ');
-    if (infoLines) doc.text(infoLines, 14, 17);
+    const infoLine2 = [carrier.phone, carrier.email, carrier.website].filter(Boolean).join(' • ');
+    if (infoLine1) doc.text(infoLine1, textX, 16, { maxWidth: 180 });
+    if (infoLine2) doc.text(infoLine2, textX, 19, { maxWidth: 180 });
+    doc.setTextColor(0);
 
     doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
     doc.text('Manifesto de Carga', doc.internal.pageSize.getWidth() / 2, 12, { align: 'center' });

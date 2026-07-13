@@ -21,6 +21,9 @@ import { STATUS_LABELS, type DriverMonitorStatus } from '@/lib/driverMonitoring/
 import { parseDriverMonitoringWorkbook, type ParsedDriverMonitoringWorkbook } from '@/lib/driverMonitoring/driverMonitoringSpreadsheetImport';
 import { driversInRouteCsv, deliveriesByDriverCsv, arrivalForecastsCsv, downloadCsv } from '@/lib/driverMonitoring/driverMonitoringCsv';
 import { driversInRoutePdf, deliveriesByDriverPdf, arrivalForecastsPdf, delaysPdf, productivityPdf, downloadPdf } from '@/lib/driverMonitoring/driverMonitoringPdf';
+import { useCompanyProfile } from '@/hooks/useCompanyProfile';
+import { useTenant } from '@/hooks/useTenant';
+import { toCompanyPdfInfo } from '@/lib/pdf/companyHeader';
 
 const dt = (v?: string | null) => (v ? v.slice(0, 10).split('-').reverse().join('/') : '—');
 
@@ -35,6 +38,9 @@ export default function DriverMonitoring() {
   const [applied, setApplied] = useState<DriverMonitoringFilters>({});
   const { data: rows = [], isLoading } = useDriverMonitorsList(applied);
   const { data: forecasts = [] } = useMonitorForecasts();
+  const { currentTenant } = useTenant();
+  const { data: companyProfile } = useCompanyProfile();
+  const companyInfo = toCompanyPdfInfo(companyProfile, currentTenant?.name);
 
   const [openRow, setOpenRow] = useState<DriverMonitorRow | null>(null);
   const { data: openUpdates = [] } = useMonitorUpdates(openRow?.id);
@@ -199,7 +205,7 @@ export default function DriverMonitoring() {
               <CardTitle className="text-base">Previsões de Chegada em Montes Claros</CardTitle>
               <div className="flex gap-2">
                 <Button size="sm" variant="outline" onClick={() => downloadCsv('previsoes.csv', arrivalForecastsCsv(forecasts))}><Download className="h-4 w-4 mr-1" />CSV</Button>
-                <Button size="sm" variant="outline" onClick={() => downloadPdf(arrivalForecastsPdf(forecasts), 'previsoes.pdf')}><Download className="h-4 w-4 mr-1" />PDF</Button>
+                <Button size="sm" variant="outline" onClick={() => downloadPdf(arrivalForecastsPdf(forecasts, undefined, companyInfo), 'previsoes.pdf')}><Download className="h-4 w-4 mr-1" />PDF</Button>
               </div>
             </CardHeader>
             <CardContent>
@@ -230,11 +236,11 @@ export default function DriverMonitoring() {
 
         <TabsContent value="reports" className="space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <ReportCard title="Motoristas em Rota" onCsv={() => downloadCsv('motoristas-em-rota.csv', driversInRouteCsv(rows))} onPdf={() => downloadPdf(driversInRoutePdf(rows, filterSummary), 'motoristas-em-rota.pdf')} />
-            <ReportCard title="Entregas por Motorista" onCsv={() => downloadCsv('entregas-por-motorista.csv', deliveriesByDriverCsv(openUpdates))} onPdf={() => downloadPdf(deliveriesByDriverPdf(openUpdates, filterSummary), 'entregas-por-motorista.pdf')} disabled={!openRow} disabledHint="Abra uma rota para exportar suas entregas." />
-            <ReportCard title="Chegada de Veículos" onCsv={() => downloadCsv('chegadas.csv', arrivalForecastsCsv(forecasts))} onPdf={() => downloadPdf(arrivalForecastsPdf(forecasts, filterSummary), 'chegadas.pdf')} />
-            <ReportCard title="Atrasos" onCsv={() => downloadCsv('atrasos.csv', driversInRouteCsv(rows.filter((r) => r.status === 'delayed')))} onPdf={() => downloadPdf(delaysPdf(rows.filter((r) => r.status === 'delayed'), filterSummary), 'atrasos.pdf')} />
-            <ReportCard title="Produtividade" onCsv={() => downloadCsv('produtividade.csv', driversInRouteCsv(rows))} onPdf={() => downloadPdf(productivityPdf(rows, filterSummary), 'produtividade.pdf')} />
+            <ReportCard title="Motoristas em Rota" onCsv={() => downloadCsv('motoristas-em-rota.csv', driversInRouteCsv(rows))} onPdf={() => downloadPdf(driversInRoutePdf(rows, filterSummary, companyInfo), 'motoristas-em-rota.pdf')} />
+            <ReportCard title="Entregas por Motorista" onCsv={() => downloadCsv('entregas-por-motorista.csv', deliveriesByDriverCsv(openUpdates))} onPdf={() => downloadPdf(deliveriesByDriverPdf(openUpdates, filterSummary, companyInfo), 'entregas-por-motorista.pdf')} disabled={!openRow} disabledHint="Abra uma rota para exportar suas entregas." />
+            <ReportCard title="Chegada de Veículos" onCsv={() => downloadCsv('chegadas.csv', arrivalForecastsCsv(forecasts))} onPdf={() => downloadPdf(arrivalForecastsPdf(forecasts, filterSummary, companyInfo), 'chegadas.pdf')} />
+            <ReportCard title="Atrasos" onCsv={() => downloadCsv('atrasos.csv', driversInRouteCsv(rows.filter((r) => r.status === 'delayed')))} onPdf={() => downloadPdf(delaysPdf(rows.filter((r) => r.status === 'delayed'), filterSummary, companyInfo), 'atrasos.pdf')} />
+            <ReportCard title="Produtividade" onCsv={() => downloadCsv('produtividade.csv', driversInRouteCsv(rows))} onPdf={() => downloadPdf(productivityPdf(rows, filterSummary, companyInfo), 'produtividade.pdf')} />
           </div>
         </TabsContent>
 

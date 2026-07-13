@@ -24,6 +24,9 @@ import { downloadClosingReportPdf } from '@/lib/closingReports/closingReportPdf'
 import { buildWorkbook, downloadWorkbook } from '@/lib/closingReports/closingReportExcel';
 import { buildDetailedCsv, downloadCsv } from '@/lib/closingReports/closingReportCsv';
 import { parseLegacyWorkbook, legacyDetailedToItems, type LegacyImport } from '@/lib/closingReports/closingReportImporter';
+import { useCompanyProfile } from '@/hooks/useCompanyProfile';
+import { useTenant } from '@/hooks/useTenant';
+import { toCompanyPdfInfo } from '@/lib/pdf/companyHeader';
 
 const brl = (n: any) => 'R$ ' + Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const kg = (n: any) => Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 3 }) + ' kg';
@@ -38,6 +41,8 @@ export default function ClosingReports() {
   const [filters, setFilters] = useState<ClosingFilters>({});
   const [applied, setApplied] = useState<ClosingFilters>({});
   const { data: rows = [], isLoading } = useClosingReportsList(applied);
+  const { currentTenant } = useTenant();
+  const { data: companyProfile } = useCompanyProfile();
   const { data: clients = [] } = useClients();
   const [openReport, setOpenReport] = useState<ClosingReportRow | null>(null);
   const [payDlg, setPayDlg] = useState<ClosingReportRow | null>(null);
@@ -125,6 +130,7 @@ export default function ClosingReports() {
       downloadClosingReportPdf(`${r.closing_number}.pdf`, {
         title: r.title, clientName: r.client?.name, periodStart: r.period_start, periodEnd: r.period_end,
         closingNumber: r.closing_number, items: (items ?? []) as any, model,
+        company: toCompanyPdfInfo(companyProfile, currentTenant?.name),
       });
     })();
   };

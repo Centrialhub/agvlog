@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { ReturnSheet } from '@/hooks/useOccurrenceReturnSheet';
+import type { CompanyPdfInfo } from '@/lib/pdf/companyHeader';
 
 function fmtDate(v: unknown): string {
   if (!v) return '—';
@@ -35,9 +36,10 @@ function s(v: unknown, fallback = '—'): string {
 export interface BuildReturnSheetPdfOptions {
   sheet: ReturnSheet;
   companyName?: string;
+  company?: CompanyPdfInfo;
 }
 
-export function buildReturnSheetPdf({ sheet, companyName }: BuildReturnSheetPdfOptions): jsPDF {
+export function buildReturnSheetPdf({ sheet, companyName, company: companyInfo }: BuildReturnSheetPdfOptions): jsPDF {
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
   const occ = (sheet.occurrence_snapshot ?? {}) as Record<string, any>;
   const load = ((sheet.company_snapshot as any)?.load ?? {}) as Record<string, any>;
@@ -50,13 +52,29 @@ export function buildReturnSheetPdf({ sheet, companyName }: BuildReturnSheetPdfO
     doc.rect(margin, margin, pageWidth - margin * 2, 12);
     // divisor for SAC block
     doc.line(pageWidth - margin - 45, margin, pageWidth - margin - 45, margin + 12);
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
-    doc.text(
-      s(companyName || company.name, 'AGV DISTRIBUIÇÃO E LOGÍSTICA LTDA'),
-      margin + 3,
-      margin + 8,
-    );
+    let textX = margin + 3;
+    if (companyInfo?.logoDataUrl) {
+      try {
+        const fmt = companyInfo.logoDataUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+        doc.addImage(companyInfo.logoDataUrl, fmt, margin + 1, margin + 1, 12, 10, undefined, 'FAST');
+        textX = margin + 15;
+      } catch { /* ignore */ }
+    }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+    const displayName = companyInfo?.name || companyInfo?.legalName || companyName || company.name || 'AGV DISTRIBUIÇÃO E LOGÍSTICA LTDA';
+    doc.text(s(displayName), textX, margin + 6);
+    const metaParts = [
+      companyInfo?.taxId ? `CNPJ ${companyInfo.taxId}` : '',
+      [companyInfo?.city, companyInfo?.state].filter(Boolean).join('/'),
+      companyInfo?.phone || '',
+    ].filter(Boolean).join(' • ');
+    if (metaParts) {
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(80);
+      doc.text(metaParts, textX, margin + 10, { maxWidth: pageWidth - margin * 2 - 60 });
+      doc.setTextColor(0);
+    }
     doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
     doc.text(`SAC ${s(sheet.sac_number || sheet.sheet_number, '-')}`, pageWidth - margin - 42, margin + 8);
   };
 
@@ -188,14 +206,14 @@ export function buildReturnSheetPdf({ sheet, companyName }: BuildReturnSheetPdfO
   return doc;
 }
 
-export function downloadReturnSheetPdf(sheet: ReturnSheet, companyName?: string): void {
-  const doc = buildReturnSheetPdf({ sheet, companyName });
+export function downloadReturnSheetPdf(sheet: ReturnSheet, companyName?: string, company?: CompanyPdfInfo): void {
+  const doc = buildReturnSheetPdf({ sheet, companyName, company });
   const filename = `folha-devolucao-${sheet.sheet_number}.pdf`;
   doc.save(filename);
 }
 
-export function openReturnSheetPdfPrint(sheet: ReturnSheet, companyName?: string): void {
-  const doc = buildReturnSheetPdf({ sheet, companyName });
+export function openReturnSheetPdfPrint(sheet: ReturnSheet, companyName?: string, company?: CompanyPdfInfo): void {
+  const doc = buildReturnSheetPdf({ sheet, companyName, company });
   const blob = doc.output('blob');
   const url = URL.createObjectURL(blob);
   const w = window.open(url, '_blank');

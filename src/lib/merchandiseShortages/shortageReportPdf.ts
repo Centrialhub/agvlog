@@ -3,9 +3,11 @@ import autoTable from 'jspdf-autotable';
 import type { ShortageReportRow, GroupedShortageReport } from './shortageReportBuilder';
 import { groupReport, totalOf } from './shortageReportBuilder';
 import { monthLabel, formatBRL } from './shortageCalculator';
+import { drawCompanyHeader, type CompanyPdfInfo } from '@/lib/pdf/companyHeader';
 
 export interface ShortagePdfOptions {
   companyName?: string;
+  company?: CompanyPdfInfo;
   month?: number;
   year?: number;
   groupBy?: 'company' | 'driver' | 'observation' | 'week' | 'none';
@@ -24,23 +26,23 @@ function fmtBR(n: number | null | undefined): string {
 
 export function generateMonthlyShortageReportPdf(rows: ShortageReportRow[], options: ShortagePdfOptions = {}): Blob {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-  const company = options.companyName || 'AGV DISTRIBUIÇÃO E LOGÍSTICA';
+  const info: CompanyPdfInfo = options.company ?? { name: options.companyName || 'AGV DISTRIBUIÇÃO E LOGÍSTICA' };
   const title = 'CONTROLE MENSAL - FALTA DE MERCADORIA';
   const period = options.month && options.year ? monthLabel(options.month, options.year) : '';
 
-  doc.setFontSize(11);
+  const afterHeader = drawCompanyHeader(doc, info, { y: 10 });
   doc.setFont('helvetica', 'bold');
-  doc.text(company.toUpperCase(), 14, 14);
   doc.setFontSize(13);
   doc.text(title, 148, 14, { align: 'center' });
   if (period) {
     doc.setFontSize(11);
     doc.text(period, 148, 20, { align: 'center' });
   }
+  doc.setFont('helvetica', 'normal');
 
   const groups: GroupedShortageReport[] = groupReport(rows, options.groupBy ?? 'none');
   const head = [['Data','Empresa','Motorista','NF','Cidade','Cliente','Descrição do Produto','Qtd','Custo Un.','Total (R$)','Observação']];
-  let startY = 26;
+  let startY = Math.max(afterHeader + 4, 26);
   for (const g of groups) {
     if (options.groupBy && options.groupBy !== 'none') {
       doc.setFontSize(10);

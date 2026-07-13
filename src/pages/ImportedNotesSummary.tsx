@@ -20,6 +20,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Printer, Download, Search, RefreshCw, X, FileText, PackageCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { downloadImportedNotesSummaryPdf, type SummaryReportType } from '@/lib/importedNotesSummaryPdf';
+import { useCompanyProfile } from '@/hooks/useCompanyProfile';
 
 const dt = (s?: any) => s ? new Date(String(s).length <= 10 ? s + 'T00:00:00' : s).toLocaleDateString('pt-BR') : '—';
 const brl = (n: any) => 'R$ ' + Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -41,6 +42,7 @@ const emptyFilters: ImportedNoteFilters = {
 export default function ImportedNotesSummary() {
   const navigate = useNavigate();
   const { currentTenant } = useTenant();
+  const { data: companyProfile } = useCompanyProfile();
   const { data: clients = [] } = useClients();
   const [filters, setFilters] = useState<ImportedNoteFilters>(emptyFilters);
   const [applied, setApplied] = useState<ImportedNoteFilters>(emptyFilters);
@@ -64,7 +66,18 @@ export default function ImportedNotesSummary() {
     try {
       downloadImportedNotesSummaryPdf({
         reportType,
-        carrier: { name: currentTenant?.name || 'Transportadora' },
+        carrier: {
+          name: companyProfile?.legal_name || companyProfile?.trade_name || currentTenant?.name || 'Transportadora',
+          cnpj: companyProfile?.tax_id,
+          ie: companyProfile?.state_registration,
+          address: companyProfile?.address,
+          city: companyProfile?.city,
+          state: companyProfile?.state,
+          phone: companyProfile?.phone,
+          email: companyProfile?.email,
+          website: companyProfile?.website,
+          logo_data_url: companyProfile?.logo_data_url,
+        },
         manifest: null,
         rows,
       });

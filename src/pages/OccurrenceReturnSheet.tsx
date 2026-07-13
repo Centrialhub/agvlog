@@ -26,12 +26,16 @@ import {
 } from '@/hooks/useOccurrenceReturnSheet';
 import { OccurrenceReturnSheetPreview } from '@/components/occurrences/OccurrenceReturnSheetPreview';
 import { downloadReturnSheetPdf, openReturnSheetPdfPrint } from '@/lib/occurrences/occurrenceReturnSheetPdf';
+import { useCompanyProfile } from '@/hooks/useCompanyProfile';
+import { toCompanyPdfInfo } from '@/lib/pdf/companyHeader';
 
 export default function OccurrenceReturnSheetPage() {
   const { id: occurrenceId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { currentTenant } = useTenant();
   const isAdmin = useIsAdmin();
+  const { data: companyProfile } = useCompanyProfile();
+  const companyInfo = toCompanyPdfInfo(companyProfile, currentTenant?.name);
 
   const { data: occurrence, isLoading: loadingOcc } = useQuery({
     queryKey: ['delivery-occurrence-detail', occurrenceId],
@@ -167,10 +171,10 @@ export default function OccurrenceReturnSheetPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex flex-wrap gap-2">
-                <Button size="sm" variant="outline" onClick={() => downloadReturnSheetPdf(activeSheet, (activeSheet.company_snapshot as any)?.name)}>
+                <Button size="sm" variant="outline" onClick={() => downloadReturnSheetPdf(activeSheet, (activeSheet.company_snapshot as any)?.name, companyInfo)}>
                   <Download className="w-4 h-4 mr-1" /> Baixar PDF
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => openReturnSheetPdfPrint(activeSheet, (activeSheet.company_snapshot as any)?.name)}>
+                <Button size="sm" variant="outline" onClick={() => openReturnSheetPdfPrint(activeSheet, (activeSheet.company_snapshot as any)?.name, companyInfo)}>
                   <Printer className="w-4 h-4 mr-1" /> Imprimir
                 </Button>
                 {activeSheet.status !== 'printed' && activeSheet.status !== 'signed' && (
@@ -261,7 +265,7 @@ export default function OccurrenceReturnSheetPage() {
             {(sheetsQuery.data ?? []).slice(1).map((s) => (
               <div key={s.id} className="flex justify-between border-b py-1">
                 <span>v{s.version} · {s.sheet_number} · {s.status}</span>
-                <Button size="sm" variant="ghost" onClick={() => downloadReturnSheetPdf(s, (s.company_snapshot as any)?.name)}>
+                <Button size="sm" variant="ghost" onClick={() => downloadReturnSheetPdf(s, (s.company_snapshot as any)?.name, companyInfo)}>
                   <Download className="w-3 h-3 mr-1" /> PDF
                 </Button>
               </div>

@@ -27,6 +27,8 @@ import { generateMonthlyShortageReportPdf } from '@/lib/merchandiseShortages/sho
 import { shortageReportToExcelBlob } from '@/lib/merchandiseShortages/shortageReportExcel';
 import { shortageReportToCsvBlob } from '@/lib/merchandiseShortages/shortageReportCsv';
 import { driverBreakdown, companyBreakdown, observationBreakdown, totalOf } from '@/lib/merchandiseShortages/shortageReportBuilder';
+import { useCompanyProfile } from '@/hooks/useCompanyProfile';
+import { toCompanyPdfInfo } from '@/lib/pdf/companyHeader';
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -54,6 +56,7 @@ export default function MerchandiseShortages() {
   const createCase = useCreateShortageCase();
   const updateStatus = useUpdateShortageStatus();
   const { currentTenant } = useTenant();
+  const { data: companyProfile } = useCompanyProfile();
 
   // "Nova Falta" state
   const [form, setForm] = useState({
@@ -181,7 +184,11 @@ export default function MerchandiseShortages() {
   };
 
   const exportPdf = () => {
-    const blob = generateMonthlyShortageReportPdf(reports.rows, { month, year, companyName: currentTenant?.name });
+    const blob = generateMonthlyShortageReportPdf(reports.rows, {
+      month, year,
+      companyName: currentTenant?.name,
+      company: toCompanyPdfInfo(companyProfile, currentTenant?.name),
+    });
     downloadBlob(blob, `faltas-${year}-${String(month).padStart(2, '0')}.pdf`);
   };
   const exportXlsx = () => {

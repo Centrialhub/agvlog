@@ -22,6 +22,8 @@ import { parseLoadSpreadsheet } from '@/lib/loadImports/spreadsheetLoadImport';
 import { parseFiscalXml, type ParsedNfe, type ParsedCte } from '@/lib/loadImports/xmlLoadImport';
 import { downloadLoadControlPdf, type LoadReportKind } from '@/lib/loadReports/loadControlPdf';
 import { exportLoadControlCsv } from '@/lib/loadReports/loadControlCsv';
+import { useCompanyProfile } from '@/hooks/useCompanyProfile';
+import { toCompanyPdfInfo } from '@/lib/pdf/companyHeader';
 
 const brl = (n: any) => 'R$ ' + Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const dt = (v?: string | null) => v ? v.slice(0, 10).split('-').reverse().join('/') : '—';
@@ -33,6 +35,7 @@ const STATUS_VARIANT: Record<string, any> = {
 
 export default function LoadControl() {
   const { currentTenant } = useTenant();
+  const { data: companyProfile } = useCompanyProfile();
   const [filters, setFilters] = useState<LoadControlFilters>({});
   const [applied, setApplied] = useState<LoadControlFilters>({});
   const { data: rows = [], isLoading, refetch } = useLoadControlList(applied);
@@ -86,6 +89,7 @@ export default function LoadControl() {
     if (rows.length > 5000 && !window.confirm(`${rows.length} linhas. Continuar?`)) return;
     downloadLoadControlPdf({
       kind: reportKind, rows, carrierName: currentTenant?.name || 'Transportadora',
+      company: toCompanyPdfInfo(companyProfile, currentTenant?.name),
       title: REPORT_TITLES[reportKind],
       filtersText: JSON.stringify(applied),
     });

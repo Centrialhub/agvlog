@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { BuiltItem, SummaryLine } from './closingReportBuilder';
+import { drawCompanyHeader, type CompanyPdfInfo } from '@/lib/pdf/companyHeader';
 
 const brl = (n: number) => 'R$ ' + Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const kg = (n: number) => Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
@@ -9,6 +10,7 @@ const dt = (v?: string | null) => (v ? v.slice(0, 10).split('-').reverse().join(
 export interface PdfOptions {
   title: string;
   companyName?: string;
+  company?: CompanyPdfInfo;
   clientName?: string | null;
   periodStart: string;
   periodEnd: string;
@@ -24,29 +26,32 @@ export function generateClosingReportPdf(opts: PdfOptions): jsPDF {
   const doc = new jsPDF({ orientation: model === 'summary' ? 'portrait' : 'landscape', unit: 'mm', format: 'a4' });
 
   // Header
-  doc.setFontSize(14);
-  doc.text(opts.companyName || 'AGVLog', 14, 15);
+  const info: CompanyPdfInfo = opts.company ?? { name: opts.companyName || 'AGVLog' };
+  const headerY = drawCompanyHeader(doc, info, { y: 12 });
   doc.setFontSize(11);
-  doc.text(opts.title, 14, 22);
+  doc.setFont('helvetica', 'bold');
+  doc.text(opts.title, 14, headerY + 4);
+  doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
   const sub = [
     opts.closingNumber ? `Nº ${opts.closingNumber}` : null,
     `Período: ${dt(opts.periodStart)} a ${dt(opts.periodEnd)}`,
     opts.clientName ? `Cliente: ${opts.clientName}` : null,
   ].filter(Boolean).join('   |   ');
-  doc.text(sub, 14, 28);
+  doc.text(sub, 14, headerY + 10);
 
   const totalValor = opts.items.reduce((s, i) => s + i.invoice_value, 0);
   const totalPeso = opts.items.reduce((s, i) => s + i.weight_kg, 0);
   const totalFrete = opts.items.reduce((s, i) => s + i.freight_value, 0);
 
   doc.setFontSize(9);
-  doc.text(`Peso: ${kg(totalPeso)} kg   Valor NF: ${brl(totalValor)}   Frete: ${brl(totalFrete)}   Notas: ${opts.items.length}`, 14, 34);
+  doc.text(`Peso: ${kg(totalPeso)} kg   Valor NF: ${brl(totalValor)}   Frete: ${brl(totalFrete)}   Notas: ${opts.items.length}`, 14, headerY + 16);
+  const tableStart = headerY + 22;
 
   if (model === 'summary') {
     const summary = opts.summaryLines ?? [];
     autoTable(doc, {
-      startY: 40,
+      startY: tableStart,
       head: [['Data Chegada', 'Faturamento', 'Peso Manifesto', 'Valor Faturado']],
       body: summary.map(s => [
         s.group_label,
@@ -62,7 +67,7 @@ export function generateClosingReportPdf(opts: PdfOptions): jsPDF {
     });
   } else {
     autoTable(doc, {
-      startY: 40,
+      startY: tableStart,
       head: [['Origem', 'Remetente', 'Destinatário', 'Destino', 'Emissão', 'Nota', 'CT-e', 'Valor NF', 'Peso', 'Frete', 'Entrega', 'Obs.']],
       body: opts.items.map(i => [
         i.origin_city ?? '',

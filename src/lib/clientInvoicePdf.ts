@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { drawCompanyHeader, type CompanyPdfInfo } from '@/lib/pdf/companyHeader';
 
 export interface InvoiceDetail {
   emission_date?: string | null;
@@ -42,6 +43,12 @@ export interface InvoicePayload {
     address?: string;
     phone?: string;
     email?: string;
+    state_registration?: string;
+    city?: string;
+    state?: string;
+    zip?: string;
+    website?: string;
+    logo_data_url?: string;
   };
   payer: {
     name?: string;
@@ -72,16 +79,21 @@ export function generateClientInvoicePdf(payload: InvoicePayload): jsPDF {
   const margin = 12;
   let y = 14;
 
-  // Header
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(16);
-  doc.text(payload.company.name || 'Transportadora', margin, y);
-  y += 6;
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  const companyLine = [payload.company.address, payload.company.tax_id ? `CNPJ: ${payload.company.tax_id}` : null, payload.company.phone, payload.company.email]
-    .filter(Boolean).join(' • ');
-  if (companyLine) { doc.text(companyLine, margin, y); y += 5; }
+  // Header (padronizado)
+  const info: CompanyPdfInfo = {
+    name: payload.company.name,
+    taxId: payload.company.tax_id,
+    stateRegistration: payload.company.state_registration,
+    address: payload.company.address,
+    city: payload.company.city,
+    state: payload.company.state,
+    zip: payload.company.zip,
+    phone: payload.company.phone,
+    email: payload.company.email,
+    website: payload.company.website,
+    logoDataUrl: payload.company.logo_data_url,
+  };
+  y = drawCompanyHeader(doc, info, { x: margin, y });
 
   // Invoice info box
   y += 2;
