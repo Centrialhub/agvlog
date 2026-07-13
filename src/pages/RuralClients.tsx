@@ -31,6 +31,7 @@ function download(blob: Blob, name: string) {
 
 export default function RuralClients() {
   const { currentTenant } = useTenant();
+  const { data: companyProfile } = useCompanyProfile();
   const { toast } = useToast();
   const [filters, setFilters] = useState<RuralClientsFilters>({ active: true });
   const { data: profiles = [], isLoading } = useRuralProfiles(filters);
@@ -297,7 +298,7 @@ export default function RuralClients() {
               <Button variant="outline" onClick={() => download(new Blob([ruralProfilesToCsv(profiles)], { type: 'text/csv;charset=utf-8;' }), 'clientes-zona-rural.csv')}>
                 <Download className="h-4 w-4 mr-2"/> CSV
               </Button>
-              <Button onClick={() => download(generateRuralClientsPdf(profiles, { tenantName: currentTenant?.name, groupByCity: true }), 'clientes-zona-rural.pdf')}>
+              <Button onClick={() => download(generateRuralClientsPdf(profiles, { tenantName: currentTenant?.name, company: toCompanyPdfInfo(companyProfile, currentTenant?.name), groupByCity: true }), 'clientes-zona-rural.pdf')}>
                 <Download className="h-4 w-4 mr-2"/> PDF por cidade
               </Button>
             </div>
