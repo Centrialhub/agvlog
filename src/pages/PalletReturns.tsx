@@ -13,6 +13,7 @@ import { Boxes, Download, Upload, FileText, Plus, Trash2, CheckCircle2, XCircle,
 import { useToast } from '@/hooks/use-toast';
 import { useTenant } from '@/hooks/useTenant';
 import { useClients } from '@/hooks/useClients';
+import { useCompanyProfile } from '@/hooks/useCompanyProfile';
 import {
   usePalletTypes, usePalletProtocols, useCreatePalletProtocol,
   useUpdatePalletStatus, useCancelPalletProtocol, useUpsertPalletType,
@@ -55,6 +56,7 @@ interface NewItem { pallet_type_id?: string; code: string; name: string; color?:
 export default function PalletReturns() {
   const { toast } = useToast();
   const { currentTenant } = useTenant();
+  const { data: company } = useCompanyProfile();
   const [filters, setFilters] = useState<PalletFilters>({});
   const { data: types = [] } = usePalletTypes(false);
   const { data: activeTypes = [] } = usePalletTypes(true);
@@ -186,7 +188,17 @@ export default function PalletReturns() {
   const [proofFile, setProofFile] = useState<File | null>(null);
 
   const printProtocol = (p: PalletProtocol) => {
-    const blob = generatePalletReturnProtocolPdf(p, { companyName: currentTenant?.name, tenantName: currentTenant?.name });
+    const blob = generatePalletReturnProtocolPdf(p, {
+      companyName: company?.legal_name || company?.trade_name || currentTenant?.name,
+      tenantName: currentTenant?.name,
+      companyLegalName: company?.legal_name,
+      companyTradeName: company?.trade_name,
+      companyTaxId: company?.tax_id,
+      companyAddress: [company?.address, company?.city, company?.state].filter(Boolean).join(' - '),
+      companyPhone: company?.phone,
+      companyEmail: company?.email,
+      logoDataUrl: company?.logo_data_url,
+    });
     downloadBlob(blob, `${p.protocol_number}.pdf`);
   };
 
