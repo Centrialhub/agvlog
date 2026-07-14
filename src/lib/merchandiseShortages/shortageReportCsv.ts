@@ -1,5 +1,6 @@
 import type { ShortageReportRow } from './shortageReportBuilder';
 import { formatBRL, monthLabel } from './shortageCalculator';
+import { fmtDateSafe } from '@/lib/utils/formatDate';
 
 const BOM = '\uFEFF';
 
@@ -9,10 +10,7 @@ function esc(v: unknown): string {
   return s;
 }
 function fmtDate(v: string | null | undefined): string {
-  if (!v) return '';
-  const d = new Date(v);
-  if (isNaN(d.getTime())) return String(v);
-  return d.toLocaleDateString('pt-BR');
+  return fmtDateSafe(v, '');
 }
 function fmtBR(n: number | null | undefined): string {
   if (n == null) return '';
