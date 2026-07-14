@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Boxes, Download, Upload, FileText, Plus, Trash2, CheckCircle2, XCircle, RefreshCw, Package } from 'lucide-react';
+import { Boxes, Download, Upload, FileText, Plus, Trash2, CheckCircle2, XCircle, RefreshCw, Package, Pencil } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useTenant } from '@/hooks/useTenant';
 import { useClients } from '@/hooks/useClients';
@@ -18,6 +18,7 @@ import {
   usePalletTypes, usePalletProtocols, useCreatePalletProtocol,
   useUpdatePalletStatus, useCancelPalletProtocol, useUpsertPalletType,
   useImportPalletReturns, useAttachPalletProof, getPalletProofSignedUrl,
+  useEditPalletProtocol,
   type PalletFilters, type PalletProtocol,
 } from '@/hooks/usePalletReturns';
 import {
@@ -68,6 +69,7 @@ export default function PalletReturns() {
   const upsertType = useUpsertPalletType();
   const importMut = useImportPalletReturns();
   const attachMut = useAttachPalletProof();
+  const editMut = useEditPalletProtocol();
 
   // ---- New protocol form ----
   const [supplierId, setSupplierId] = useState<string>('');
@@ -187,6 +189,68 @@ export default function PalletReturns() {
   const [signatureDate, setSignatureDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [proofFile, setProofFile] = useState<File | null>(null);
 
+  // Edit dialog state
+  const [editTarget, setEditTarget] = useState<PalletProtocol | null>(null);
+  const [editSupplierName, setEditSupplierName] = useState('');
+  const [editIssueDate, setEditIssueDate] = useState('');
+  const [editReturnDate, setEditReturnDate] = useState('');
+  const [editDriver, setEditDriver] = useState('');
+  const [editPlate, setEditPlate] = useState('');
+  const [editNotes, setEditNotes] = useState('');
+  const [editReason, setEditReason] = useState('');
+  const [editItems, setEditItems] = useState<NewItem[]>([]);
+
+  const openEdit = (p: PalletProtocol) => {
+    setEditTarget(p);
+    setEditSupplierName(p.supplier_name_snapshot || '');
+    setEditIssueDate(p.issue_date?.slice(0, 10) || '');
+    setEditReturnDate(p.returned_at?.slice(0, 10) || '');
+    setEditDriver(p.driver_name_snapshot || '');
+    setEditPlate(p.vehicle_plate_snapshot || '');
+    setEditNotes(p.notes || '');
+    setEditReason('');
+    setEditItems((p.items || []).map((i) => ({
+      pallet_type_id: i.pallet_type_id || undefined,
+      code: i.pallet_type_code, name: i.pallet_type_name,
+      color: i.pallet_color || undefined, quantity: i.quantity, notes: i.notes || undefined,
+    })));
+  };
+
+  const editTotal = editItems.reduce((s, i) => s + (Number(i.quantity) || 0), 0);
+
+  const submitEdit = async () => {
+    if (!editTarget) return;
+    if (!editSupplierName.trim()) { toast({ title: 'Fornecedor obrigatório', variant: 'destructive' }); return; }
+    if (!editIssueDate) { toast({ title: 'Data obrigatória', variant: 'destructive' }); return; }
+    if (editItems.length === 0) { toast({ title: 'Adicione ao menos 1 item', variant: 'destructive' }); return; }
+    if (editItems.some((i) => !i.code || !i.name || !i.quantity || i.quantity <= 0)) {
+      toast({ title: 'Itens inválidos', variant: 'destructive' }); return;
+    }
+    try {
+      await editMut.mutateAsync({
+        protocolId: editTarget.id,
+        patch: {
+          supplier_name_snapshot: editSupplierName,
+          issue_date: editIssueDate,
+          returned_at: editReturnDate || null,
+          driver_name_snapshot: editDriver || null,
+          vehicle_plate_snapshot: editPlate || null,
+          notes: editNotes || null,
+        },
+        items: editItems.map((i, idx) => ({
+          pallet_type_id: i.pallet_type_id || null,
+          pallet_type_code: i.code, pallet_type_name: i.name,
+          pallet_color: i.color || null, quantity: Number(i.quantity), notes: i.notes || null, sort_order: idx,
+        })),
+        reason: editReason || null,
+      });
+      toast({ title: 'Protocolo atualizado' });
+      setEditTarget(null);
+    } catch (e: any) {
+      toast({ title: 'Erro', description: e?.message || String(e), variant: 'destructive' });
+    }
+  };
+
   const printProtocol = (p: PalletProtocol) => {
     const blob = generatePalletReturnProtocolPdf(p, {
       companyName: company?.legal_name || company?.trade_name || currentTenant?.name,
@@ -294,6 +358,9 @@ export default function PalletReturns() {
                     <TableCell className="text-xs">{[p.driver_name_snapshot, p.vehicle_plate_snapshot].filter(Boolean).join(' • ')}</TableCell>
                     <TableCell className="text-right space-x-1" onClick={(e) => e.stopPropagation()}>
                       <Button variant="ghost" size="sm" onClick={() => printProtocol(p)} title="PDF"><FileText className="h-4 w-4" /></Button>
+                      {p.status !== 'confirmed' && p.status !== 'cancelled' && (
+                        <Button variant="ghost" size="sm" onClick={() => openEdit(p)} title="Editar"><Pencil className="h-4 w-4" /></Button>
+                      )}
                       {p.status !== 'confirmed' && p.status !== 'cancelled' && (
                         <Button variant="ghost" size="sm" onClick={() => changeStatus(p, 'returned')} title="Marcar devolvido"><RefreshCw className="h-4 w-4" /></Button>
                       )}
