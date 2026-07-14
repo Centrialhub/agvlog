@@ -4,9 +4,22 @@ import type { PalletProtocol } from '@/hooks/usePalletReturns';
 
 function fmtDate(v: string | null | undefined): string {
   if (!v) return '';
-  const d = new Date(v);
-  if (isNaN(d.getTime())) return String(v);
-  return d.toLocaleDateString('pt-BR');
+  const s = String(v);
+  // Datas apenas (YYYY-MM-DD) — evita shift de fuso horário
+  const isoDay = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoDay) {
+    const [, y, m, d] = isoDay;
+    return `${d}/${m}/${y}`;
+  }
+  // Datas com horário (ISO completo) — usa componentes locais
+  const isoFull = s.match(/^(\d{4})-(\d{2})-(\d{2})T/);
+  if (isoFull) {
+    const [, y, m, d] = isoFull;
+    return `${d}/${m}/${y}`;
+  }
+  const d2 = new Date(s);
+  if (isNaN(d2.getTime())) return s;
+  return d2.toLocaleDateString('pt-BR');
 }
 
 export interface PalletProtocolPdfOptions {
@@ -32,21 +45,26 @@ export function generatePalletReturnProtocolPdf(protocol: PalletProtocol, option
     'AGV DISTRIBUIÇÃO E LOGÍSTICA';
   const supplier = protocol.supplier_name_snapshot || '';
 
-  // Logo (opcional)
-  if (options.logoDataUrl) {
+  // Cabeçalho: logo à esquerda + títulos deslocados para não sobrepor
+  const hasLogo = !!options.logoDataUrl;
+  const titleLeftMargin = hasLogo ? 46 : 14; // espaço reservado para o logo
+  const titleCenterX = hasLogo ? (titleLeftMargin + 196) / 2 : 105;
+  const titleMaxWidth = 196 - titleLeftMargin;
+
+  if (hasLogo) {
     try {
-      const fmt = options.logoDataUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG';
-      doc.addImage(options.logoDataUrl, fmt, 14, 10, 28, 20, undefined, 'FAST');
+      const fmt = options.logoDataUrl!.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+      doc.addImage(options.logoDataUrl!, fmt, 14, 12, 28, 20, undefined, 'FAST');
     } catch { /* ignore logo failure */ }
   }
 
-  doc.setFontSize(14);
+  doc.setFontSize(13);
   doc.setFont('helvetica', 'bold');
-  doc.text(`DEVOLUÇÃO DE PALETES P/ ${supplier.toUpperCase()}`, 105, 18, { align: 'center' });
+  doc.text(`DEVOLUÇÃO DE PALETES P/ ${supplier.toUpperCase()}`, titleCenterX, 18, { align: 'center', maxWidth: titleMaxWidth });
 
-  doc.setFontSize(11);
+  doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
-  doc.text(`DEVOLUÇÃO DA ${company.toUpperCase()} P/ ${supplier.toUpperCase()}`, 105, 26, { align: 'center' });
+  doc.text(`DEVOLUÇÃO DA ${company.toUpperCase()} P/ ${supplier.toUpperCase()}`, titleCenterX, 25, { align: 'center', maxWidth: titleMaxWidth });
 
   // Linha com dados da empresa emissora
   doc.setFontSize(8);
@@ -57,15 +75,20 @@ export function generatePalletReturnProtocolPdf(protocol: PalletProtocol, option
     options.companyPhone || '',
     options.companyEmail || '',
   ].filter(Boolean).join('  •  ');
-  if (companyMeta) doc.text(companyMeta, 105, 32, { align: 'center', maxWidth: 180 });
+  if (companyMeta) doc.text(companyMeta, titleCenterX, 31, { align: 'center', maxWidth: titleMaxWidth });
   doc.setTextColor(0);
 
-  doc.setFontSize(10);
-  doc.text(`Protocolo: ${protocol.protocol_number}`, 14, 44);
-  doc.text(`Data: ${fmtDate(protocol.issue_date)}`, 160, 44);
-  if (protocol.returned_at) doc.text(`Data devolução: ${fmtDate(protocol.returned_at)}`, 14, 50);
+  // Linha divisória
+  doc.setDrawColor(180);
+  doc.line(14, 38, 196, 38);
+  doc.setDrawColor(0);
 
-  const bodyStart = 56;
+  doc.setFontSize(10);
+  doc.text(`Protocolo: ${protocol.protocol_number}`, 14, 46);
+  if (protocol.returned_at) doc.text(`Data devolução: ${fmtDate(protocol.returned_at)}`, 14, 52);
+  doc.text(`Data: ${fmtDate(protocol.issue_date)}`, 196, 46, { align: 'right' });
+
+  const bodyStart = protocol.returned_at ? 58 : 54;
 
   autoTable(doc, {
     startY: bodyStart,
