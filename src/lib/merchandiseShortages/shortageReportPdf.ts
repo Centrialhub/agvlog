@@ -4,6 +4,7 @@ import type { ShortageReportRow, GroupedShortageReport } from './shortageReportB
 import { groupReport, totalOf } from './shortageReportBuilder';
 import { monthLabel, formatBRL } from './shortageCalculator';
 import { drawCompanyHeader, type CompanyPdfInfo } from '@/lib/pdf/companyHeader';
+import { fmtDateSafe } from '@/lib/utils/formatDate';
 
 export interface ShortagePdfOptions {
   companyName?: string;
@@ -14,10 +15,7 @@ export interface ShortagePdfOptions {
 }
 
 function fmtDate(v: string | null | undefined): string {
-  if (!v) return '';
-  const d = new Date(v);
-  if (isNaN(d.getTime())) return String(v);
-  return d.toLocaleDateString('pt-BR');
+  return fmtDateSafe(v, '');
 }
 function fmtBR(n: number | null | undefined): string {
   if (n == null) return '-';

@@ -1,16 +1,14 @@
 import type { ReturnSheet } from '@/hooks/useOccurrenceReturnSheet';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { fmtDateSafe } from '@/lib/utils/formatDate';
 
 interface Props {
   sheet: ReturnSheet;
 }
 
 function fmtDate(v: unknown): string {
-  if (!v) return '—';
-  const d = new Date(v as string);
-  if (isNaN(d.getTime())) return String(v);
-  return d.toLocaleDateString('pt-BR');
+  return fmtDateSafe(v);
 }
 
 export function OccurrenceReturnSheetPreview({ sheet }: Props) {

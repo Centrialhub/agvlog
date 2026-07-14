@@ -2,26 +2,13 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { ReturnSheet } from '@/hooks/useOccurrenceReturnSheet';
 import type { CompanyPdfInfo } from '@/lib/pdf/companyHeader';
+import { fmtDateSafe, fmtDateTimeSafe } from '@/lib/utils/formatDate';
 
 function fmtDate(v: unknown): string {
-  if (!v) return '—';
-  try {
-    const d = new Date(v as string);
-    if (isNaN(d.getTime())) return String(v);
-    return d.toLocaleDateString('pt-BR');
-  } catch {
-    return String(v);
-  }
+  return fmtDateSafe(v);
 }
 function fmtDateTime(v: unknown): string {
-  if (!v) return '—';
-  try {
-    const d = new Date(v as string);
-    if (isNaN(d.getTime())) return String(v);
-    return d.toLocaleString('pt-BR');
-  } catch {
-    return String(v);
-  }
+  return fmtDateTimeSafe(v);
 }
 function fmtBRL(v: unknown): string {
   const n = typeof v === 'number' ? v : v ? Number(v) : NaN;

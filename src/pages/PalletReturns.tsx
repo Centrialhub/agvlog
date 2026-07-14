@@ -28,6 +28,7 @@ import { generatePalletReturnProtocolPdf, generatePalletReportPdf, downloadBlob 
 import { protocolsToCsv, rowsToCsv, downloadCsv } from '@/lib/palletReturns/palletReturnCsv';
 import { protocolsToExcel } from '@/lib/palletReturns/palletReturnExcel';
 import { buildSupplierReport, buildMonthlyReport, buildPalletTypeRanking, pendingProtocols, daysSince, totalsByPalletType } from '@/lib/palletReturns/palletReturnReports';
+import { fmtDateSafe } from '@/lib/utils/formatDate';
 
 const STATUS_LABEL: Record<PalletProtocol['status'], string> = {
   draft: 'Rascunho',
@@ -349,8 +350,8 @@ export default function PalletReturns() {
                 {protocols.map((p) => (
                   <TableRow key={p.id} className="cursor-pointer" onClick={() => setDetail(p)}>
                     <TableCell className="font-mono text-xs">{p.protocol_number}</TableCell>
-                    <TableCell>{p.issue_date ? new Date(p.issue_date).toLocaleDateString('pt-BR') : ''}</TableCell>
-                    <TableCell>{p.returned_at ? new Date(p.returned_at).toLocaleDateString('pt-BR') : '—'}</TableCell>
+                    <TableCell>{p.issue_date ? fmtDateSafe(p.issue_date) : ''}</TableCell>
+                    <TableCell>{p.returned_at ? fmtDateSafe(p.returned_at) : '—'}</TableCell>
                     <TableCell>{p.supplier_name_snapshot}</TableCell>
                     <TableCell className="font-semibold">{p.total_quantity}</TableCell>
                     <TableCell className="text-xs">{(p.items || []).map((i) => `${i.pallet_type_code}:${i.quantity}`).join(' · ')}</TableCell>
@@ -473,10 +474,10 @@ export default function PalletReturns() {
                   <TableRow key={p.id}>
                     <TableCell className="font-mono text-xs">{p.protocol_number}</TableCell>
                     <TableCell>{p.supplier_name_snapshot}</TableCell>
-                    <TableCell>{p.issue_date ? new Date(p.issue_date).toLocaleDateString('pt-BR') : ''}</TableCell>
+                    <TableCell>{p.issue_date ? fmtDateSafe(p.issue_date) : ''}</TableCell>
                     <TableCell>{p.total_quantity}</TableCell>
                     <TableCell><StatusBadge status={p.status} /></TableCell>
-                    <TableCell>{p.confirmed_at ? new Date(p.confirmed_at).toLocaleDateString('pt-BR') : '—'}</TableCell>
+                    <TableCell>{p.confirmed_at ? fmtDateSafe(p.confirmed_at) : '—'}</TableCell>
                     <TableCell className="text-right"><Button variant="ghost" size="sm" onClick={() => printProtocol(p)}><FileText className="h-4 w-4" /></Button></TableCell>
                   </TableRow>
                 ))}
@@ -503,7 +504,7 @@ export default function PalletReturns() {
                     <TableCell>{r.supplierName}</TableCell><TableCell>{r.totalProtocols}</TableCell>
                     <TableCell className="font-semibold">{r.totalPallets}</TableCell>
                     <TableCell>{r.pbr}</TableCell><TableCell>{r.chep}</TableCell><TableCell>{r.others}</TableCell>
-                    <TableCell>{r.lastReturnAt ? new Date(r.lastReturnAt).toLocaleDateString('pt-BR') : '—'}</TableCell>
+                    <TableCell>{r.lastReturnAt ? fmtDateSafe(r.lastReturnAt) : '—'}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -533,7 +534,7 @@ export default function PalletReturns() {
             <div className="flex justify-between items-center"><h3 className="font-semibold">Protocolos pendentes</h3></div>
             <Table>
               <TableHeader><TableRow><TableHead>Protocolo</TableHead><TableHead>Fornecedor</TableHead><TableHead>Data prevista</TableHead><TableHead>Total</TableHead><TableHead>Status</TableHead><TableHead>Dias pendente</TableHead></TableRow></TableHeader>
-              <TableBody>{pendingRep.map((p) => (<TableRow key={p.id}><TableCell className="font-mono text-xs">{p.protocol_number}</TableCell><TableCell>{p.supplier_name_snapshot}</TableCell><TableCell>{p.expected_return_date ? new Date(p.expected_return_date).toLocaleDateString('pt-BR') : '—'}</TableCell><TableCell>{p.total_quantity}</TableCell><TableCell><StatusBadge status={p.status} /></TableCell><TableCell>{daysSince(p.issue_date) ?? '—'}</TableCell></TableRow>))}</TableBody>
+              <TableBody>{pendingRep.map((p) => (<TableRow key={p.id}><TableCell className="font-mono text-xs">{p.protocol_number}</TableCell><TableCell>{p.supplier_name_snapshot}</TableCell><TableCell>{p.expected_return_date ? fmtDateSafe(p.expected_return_date) : '—'}</TableCell><TableCell>{p.total_quantity}</TableCell><TableCell><StatusBadge status={p.status} /></TableCell><TableCell>{daysSince(p.issue_date) ?? '—'}</TableCell></TableRow>))}</TableBody>
             </Table>
           </CardContent></Card>
         </TabsContent>
@@ -582,8 +583,8 @@ export default function PalletReturns() {
               <div className="grid grid-cols-2 gap-2">
                 <div><strong>Fornecedor:</strong> {detail.supplier_name_snapshot}</div>
                 <div><strong>Status:</strong> <StatusBadge status={detail.status} /></div>
-                <div><strong>Data lançamento:</strong> {new Date(detail.issue_date).toLocaleDateString('pt-BR')}</div>
-                <div><strong>Devolução:</strong> {detail.returned_at ? new Date(detail.returned_at).toLocaleDateString('pt-BR') : '—'}</div>
+                <div><strong>Data lançamento:</strong> {fmtDateSafe(detail.issue_date)}</div>
+                <div><strong>Devolução:</strong> {detail.returned_at ? fmtDateSafe(detail.returned_at) : '—'}</div>
                 <div><strong>Motorista:</strong> {detail.driver_name_snapshot || '—'}</div>
                 <div><strong>Placa:</strong> {detail.vehicle_plate_snapshot || '—'}</div>
               </div>
