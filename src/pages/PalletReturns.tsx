@@ -28,6 +28,7 @@ import { generatePalletReturnProtocolPdf, generatePalletReportPdf, downloadBlob 
 import { protocolsToCsv, rowsToCsv, downloadCsv } from '@/lib/palletReturns/palletReturnCsv';
 import { protocolsToExcel } from '@/lib/palletReturns/palletReturnExcel';
 import { buildSupplierReport, buildMonthlyReport, buildPalletTypeRanking, pendingProtocols, daysSince, totalsByPalletType } from '@/lib/palletReturns/palletReturnReports';
+import { fmtDateSafe } from '@/lib/utils/formatDate';
 
 const STATUS_LABEL: Record<PalletProtocol['status'], string> = {
   draft: 'Rascunho',
