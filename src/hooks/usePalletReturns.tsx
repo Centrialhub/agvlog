@@ -266,7 +266,7 @@ export function useEditPalletProtocol() {
         protocol_id: args.protocolId,
         action: 'edited',
         reason: args.reason || null,
-        payload: { patch: args.patch, items_replaced: !!args.items } as any,
+        metadata: { patch: args.patch, items_replaced: !!args.items } as any,
         created_by: user?.id ?? null,
       });
     },
