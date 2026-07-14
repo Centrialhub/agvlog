@@ -204,6 +204,76 @@ export function useCancelPalletProtocol() {
   });
 }
 
+export interface EditProtocolInput {
+  protocolId: string;
+  patch: Partial<Pick<PalletProtocol,
+    'supplier_id' | 'supplier_name_snapshot' | 'issue_date' | 'expected_return_date' |
+    'returned_at' | 'driver_name_snapshot' | 'vehicle_plate_snapshot' | 'notes' |
+    'receiver_name' | 'receiver_document'>>;
+  items?: Array<{ pallet_type_id?: string | null; pallet_type_code: string; pallet_type_name: string; pallet_color?: string | null; quantity: number; notes?: string | null; sort_order?: number }>;
+  reason?: string | null;
+}
+
+export function useEditPalletProtocol() {
+  const { currentTenant } = useTenant();
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: EditProtocolInput) => {
+      if (!currentTenant) throw new Error('no_tenant');
+
+      // Fetch existing to guard status
+      const { data: existing, error: exErr } = await t('pallet_return_protocols')
+        .select('id, status, tenant_id').eq('id', args.protocolId).maybeSingle();
+      if (exErr) throw exErr;
+      if (!existing) throw new Error('protocol_not_found');
+      if (['confirmed', 'cancelled'].includes(existing.status)) {
+        throw new Error('Protocolo confirmado ou cancelado não pode ser editado.');
+      }
+
+      const updates: Record<string, unknown> = { ...args.patch, updated_at: new Date().toISOString() };
+
+      if (args.items) {
+        const total = args.items.reduce((s, i) => s + (Number(i.quantity) || 0), 0);
+        updates.total_quantity = total;
+      }
+
+      const { error: upErr } = await t('pallet_return_protocols')
+        .update(updates).eq('id', args.protocolId);
+      if (upErr) throw upErr;
+
+      if (args.items) {
+        const { error: delErr } = await t('pallet_return_items').delete().eq('protocol_id', args.protocolId);
+        if (delErr) throw delErr;
+        const rows = args.items.map((i, idx) => ({
+          tenant_id: currentTenant.id,
+          protocol_id: args.protocolId,
+          pallet_type_id: i.pallet_type_id || null,
+          pallet_type_code: i.pallet_type_code,
+          pallet_type_name: i.pallet_type_name,
+          pallet_color: i.pallet_color || null,
+          quantity: Number(i.quantity),
+          notes: i.notes || null,
+          sort_order: i.sort_order ?? idx,
+        }));
+        const { error: insErr } = await t('pallet_return_items').insert(rows);
+        if (insErr) throw insErr;
+      }
+
+      // Audit trail
+      await t('pallet_return_history').insert({
+        tenant_id: currentTenant.id,
+        protocol_id: args.protocolId,
+        action: 'edited',
+        reason: args.reason || null,
+        metadata: { patch: args.patch, items_replaced: !!args.items } as any,
+        created_by: user?.id ?? null,
+      });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['pallet_return_protocols'] }),
+  });
+}
+
 export function useUpsertPalletType() {
   const { currentTenant } = useTenant();
   const { user } = useAuth();

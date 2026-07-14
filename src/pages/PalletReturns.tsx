@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Boxes, Download, Upload, FileText, Plus, Trash2, CheckCircle2, XCircle, RefreshCw, Package } from 'lucide-react';
+import { Boxes, Download, Upload, FileText, Plus, Trash2, CheckCircle2, XCircle, RefreshCw, Package, Pencil } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useTenant } from '@/hooks/useTenant';
 import { useClients } from '@/hooks/useClients';
@@ -18,6 +18,7 @@ import {
   usePalletTypes, usePalletProtocols, useCreatePalletProtocol,
   useUpdatePalletStatus, useCancelPalletProtocol, useUpsertPalletType,
   useImportPalletReturns, useAttachPalletProof, getPalletProofSignedUrl,
+  useEditPalletProtocol,
   type PalletFilters, type PalletProtocol,
 } from '@/hooks/usePalletReturns';
 import {
@@ -68,6 +69,7 @@ export default function PalletReturns() {
   const upsertType = useUpsertPalletType();
   const importMut = useImportPalletReturns();
   const attachMut = useAttachPalletProof();
+  const editMut = useEditPalletProtocol();
 
   // ---- New protocol form ----
   const [supplierId, setSupplierId] = useState<string>('');
@@ -187,6 +189,68 @@ export default function PalletReturns() {
   const [signatureDate, setSignatureDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [proofFile, setProofFile] = useState<File | null>(null);
 
+  // Edit dialog state
+  const [editTarget, setEditTarget] = useState<PalletProtocol | null>(null);
+  const [editSupplierName, setEditSupplierName] = useState('');
+  const [editIssueDate, setEditIssueDate] = useState('');
+  const [editReturnDate, setEditReturnDate] = useState('');
+  const [editDriver, setEditDriver] = useState('');
+  const [editPlate, setEditPlate] = useState('');
+  const [editNotes, setEditNotes] = useState('');
+  const [editReason, setEditReason] = useState('');
+  const [editItems, setEditItems] = useState<NewItem[]>([]);
+
+  const openEdit = (p: PalletProtocol) => {
+    setEditTarget(p);
+    setEditSupplierName(p.supplier_name_snapshot || '');
+    setEditIssueDate(p.issue_date?.slice(0, 10) || '');
+    setEditReturnDate(p.returned_at?.slice(0, 10) || '');
+    setEditDriver(p.driver_name_snapshot || '');
+    setEditPlate(p.vehicle_plate_snapshot || '');
+    setEditNotes(p.notes || '');
+    setEditReason('');
+    setEditItems((p.items || []).map((i) => ({
+      pallet_type_id: i.pallet_type_id || undefined,
+      code: i.pallet_type_code, name: i.pallet_type_name,
+      color: i.pallet_color || undefined, quantity: i.quantity, notes: i.notes || undefined,
+    })));
+  };
+
+  const editTotal = editItems.reduce((s, i) => s + (Number(i.quantity) || 0), 0);
+
+  const submitEdit = async () => {
+    if (!editTarget) return;
+    if (!editSupplierName.trim()) { toast({ title: 'Fornecedor obrigatório', variant: 'destructive' }); return; }
+    if (!editIssueDate) { toast({ title: 'Data obrigatória', variant: 'destructive' }); return; }
+    if (editItems.length === 0) { toast({ title: 'Adicione ao menos 1 item', variant: 'destructive' }); return; }
+    if (editItems.some((i) => !i.code || !i.name || !i.quantity || i.quantity <= 0)) {
+      toast({ title: 'Itens inválidos', variant: 'destructive' }); return;
+    }
+    try {
+      await editMut.mutateAsync({
+        protocolId: editTarget.id,
+        patch: {
+          supplier_name_snapshot: editSupplierName,
+          issue_date: editIssueDate,
+          returned_at: editReturnDate || null,
+          driver_name_snapshot: editDriver || null,
+          vehicle_plate_snapshot: editPlate || null,
+          notes: editNotes || null,
+        },
+        items: editItems.map((i, idx) => ({
+          pallet_type_id: i.pallet_type_id || null,
+          pallet_type_code: i.code, pallet_type_name: i.name,
+          pallet_color: i.color || null, quantity: Number(i.quantity), notes: i.notes || null, sort_order: idx,
+        })),
+        reason: editReason || null,
+      });
+      toast({ title: 'Protocolo atualizado' });
+      setEditTarget(null);
+    } catch (e: any) {
+      toast({ title: 'Erro', description: e?.message || String(e), variant: 'destructive' });
+    }
+  };
+
   const printProtocol = (p: PalletProtocol) => {
     const blob = generatePalletReturnProtocolPdf(p, {
       companyName: company?.legal_name || company?.trade_name || currentTenant?.name,
@@ -294,6 +358,9 @@ export default function PalletReturns() {
                     <TableCell className="text-xs">{[p.driver_name_snapshot, p.vehicle_plate_snapshot].filter(Boolean).join(' • ')}</TableCell>
                     <TableCell className="text-right space-x-1" onClick={(e) => e.stopPropagation()}>
                       <Button variant="ghost" size="sm" onClick={() => printProtocol(p)} title="PDF"><FileText className="h-4 w-4" /></Button>
+                      {p.status !== 'confirmed' && p.status !== 'cancelled' && (
+                        <Button variant="ghost" size="sm" onClick={() => openEdit(p)} title="Editar"><Pencil className="h-4 w-4" /></Button>
+                      )}
                       {p.status !== 'confirmed' && p.status !== 'cancelled' && (
                         <Button variant="ghost" size="sm" onClick={() => changeStatus(p, 'returned')} title="Marcar devolvido"><RefreshCw className="h-4 w-4" /></Button>
                       )}
@@ -560,6 +627,79 @@ export default function PalletReturns() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setAttachTarget(null)}>Cancelar</Button>
             <Button onClick={async () => { if (!attachTarget || !proofFile) { toast({ title: 'Selecione um arquivo', variant: 'destructive' }); return; } try { await attachMut.mutateAsync({ protocolId: attachTarget.id, file: proofFile, receiverName, signatureDate }); toast({ title: 'Comprovante anexado' }); setAttachTarget(null); setProofFile(null); } catch (e: any) { toast({ title: 'Erro', description: e?.message, variant: 'destructive' }); } }}>Anexar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit */}
+      <Dialog open={!!editTarget} onOpenChange={(o) => !o && setEditTarget(null)}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Editar protocolo {editTarget?.protocol_number}</DialogTitle></DialogHeader>
+          {editTarget && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="md:col-span-2"><Label>Fornecedor</Label><Input value={editSupplierName} onChange={(e) => setEditSupplierName(e.target.value)} /></div>
+                <div><Label>Data lançamento</Label><Input type="date" value={editIssueDate} onChange={(e) => setEditIssueDate(e.target.value)} /></div>
+                <div><Label>Data devolução</Label><Input type="date" value={editReturnDate} onChange={(e) => setEditReturnDate(e.target.value)} /></div>
+                <div><Label>Motorista</Label><Input value={editDriver} onChange={(e) => setEditDriver(e.target.value)} /></div>
+                <div><Label>Placa</Label><Input value={editPlate} onChange={(e) => setEditPlate(e.target.value)} /></div>
+                <div className="md:col-span-3"><Label>Observações</Label><Textarea value={editNotes} onChange={(e) => setEditNotes(e.target.value)} rows={2} /></div>
+              </div>
+
+              <div className="border rounded-md">
+                <div className="p-3 flex items-center justify-between border-b">
+                  <div className="font-semibold flex items-center gap-2"><Package className="h-4 w-4" /> Itens</div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-muted-foreground">Total: <strong>{editTotal}</strong></span>
+                    <Button size="sm" onClick={() => {
+                      const t0 = activeTypes[0];
+                      setEditItems((p) => [...p, { pallet_type_id: t0?.id, code: t0?.code || '', name: t0?.name || '', color: t0?.color || undefined, quantity: 1 }]);
+                    }}><Plus className="h-4 w-4 mr-1" />Adicionar</Button>
+                  </div>
+                </div>
+                <Table>
+                  <TableHeader><TableRow><TableHead>Tipo</TableHead><TableHead>Cor</TableHead><TableHead>Qtd</TableHead><TableHead>Obs</TableHead><TableHead></TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {editItems.length === 0 && (<TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-4">Nenhum item</TableCell></TableRow>)}
+                    {editItems.map((it, idx) => (
+                      <TableRow key={idx}>
+                        <TableCell>
+                          <Select value={it.pallet_type_id || '__manual__'} onValueChange={(v) => {
+                            const t0 = activeTypes.find((x) => x.id === v);
+                            setEditItems((p) => p.map((x, i) => i === idx ? ({ ...x, pallet_type_id: t0?.id, code: t0?.code || x.code, name: t0?.name || x.name, color: t0?.color || x.color }) : x));
+                          }}>
+                            <SelectTrigger><SelectValue placeholder="Tipo" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__manual__">— Manual —</SelectItem>
+                              {activeTypes.map((t0) => (<SelectItem key={t0.id} value={t0.id}>{t0.code} — {t0.name}</SelectItem>))}
+                            </SelectContent>
+                          </Select>
+                          {!it.pallet_type_id && (
+                            <div className="flex gap-1 mt-1">
+                              <Input placeholder="Código" value={it.code} onChange={(e) => setEditItems((p) => p.map((x, i) => i === idx ? { ...x, code: e.target.value.toUpperCase() } : x))} />
+                              <Input placeholder="Nome" value={it.name} onChange={(e) => setEditItems((p) => p.map((x, i) => i === idx ? { ...x, name: e.target.value } : x))} />
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell><Input value={it.color || ''} onChange={(e) => setEditItems((p) => p.map((x, i) => i === idx ? { ...x, color: e.target.value } : x))} /></TableCell>
+                        <TableCell className="w-24"><Input type="number" min={1} value={it.quantity} onChange={(e) => setEditItems((p) => p.map((x, i) => i === idx ? { ...x, quantity: Number(e.target.value) } : x))} /></TableCell>
+                        <TableCell><Input value={it.notes || ''} onChange={(e) => setEditItems((p) => p.map((x, i) => i === idx ? { ...x, notes: e.target.value } : x))} /></TableCell>
+                        <TableCell className="text-right"><Button variant="ghost" size="sm" onClick={() => setEditItems((p) => p.filter((_, i) => i !== idx))}><Trash2 className="h-4 w-4" /></Button></TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              <div>
+                <Label>Motivo da edição (opcional, registrado no histórico)</Label>
+                <Textarea value={editReason} onChange={(e) => setEditReason(e.target.value)} rows={2} placeholder="Ex: correção de quantidade informada errada" />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditTarget(null)}>Cancelar</Button>
+            <Button onClick={submitEdit} disabled={editMut.isPending}>Salvar alterações</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
