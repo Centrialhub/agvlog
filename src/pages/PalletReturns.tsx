@@ -630,6 +630,79 @@ export default function PalletReturns() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Edit */}
+      <Dialog open={!!editTarget} onOpenChange={(o) => !o && setEditTarget(null)}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Editar protocolo {editTarget?.protocol_number}</DialogTitle></DialogHeader>
+          {editTarget && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="md:col-span-2"><Label>Fornecedor</Label><Input value={editSupplierName} onChange={(e) => setEditSupplierName(e.target.value)} /></div>
+                <div><Label>Data lançamento</Label><Input type="date" value={editIssueDate} onChange={(e) => setEditIssueDate(e.target.value)} /></div>
+                <div><Label>Data devolução</Label><Input type="date" value={editReturnDate} onChange={(e) => setEditReturnDate(e.target.value)} /></div>
+                <div><Label>Motorista</Label><Input value={editDriver} onChange={(e) => setEditDriver(e.target.value)} /></div>
+                <div><Label>Placa</Label><Input value={editPlate} onChange={(e) => setEditPlate(e.target.value)} /></div>
+                <div className="md:col-span-3"><Label>Observações</Label><Textarea value={editNotes} onChange={(e) => setEditNotes(e.target.value)} rows={2} /></div>
+              </div>
+
+              <div className="border rounded-md">
+                <div className="p-3 flex items-center justify-between border-b">
+                  <div className="font-semibold flex items-center gap-2"><Package className="h-4 w-4" /> Itens</div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-muted-foreground">Total: <strong>{editTotal}</strong></span>
+                    <Button size="sm" onClick={() => {
+                      const t0 = activeTypes[0];
+                      setEditItems((p) => [...p, { pallet_type_id: t0?.id, code: t0?.code || '', name: t0?.name || '', color: t0?.color || undefined, quantity: 1 }]);
+                    }}><Plus className="h-4 w-4 mr-1" />Adicionar</Button>
+                  </div>
+                </div>
+                <Table>
+                  <TableHeader><TableRow><TableHead>Tipo</TableHead><TableHead>Cor</TableHead><TableHead>Qtd</TableHead><TableHead>Obs</TableHead><TableHead></TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {editItems.length === 0 && (<TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-4">Nenhum item</TableCell></TableRow>)}
+                    {editItems.map((it, idx) => (
+                      <TableRow key={idx}>
+                        <TableCell>
+                          <Select value={it.pallet_type_id || '__manual__'} onValueChange={(v) => {
+                            const t0 = activeTypes.find((x) => x.id === v);
+                            setEditItems((p) => p.map((x, i) => i === idx ? ({ ...x, pallet_type_id: t0?.id, code: t0?.code || x.code, name: t0?.name || x.name, color: t0?.color || x.color }) : x));
+                          }}>
+                            <SelectTrigger><SelectValue placeholder="Tipo" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__manual__">— Manual —</SelectItem>
+                              {activeTypes.map((t0) => (<SelectItem key={t0.id} value={t0.id}>{t0.code} — {t0.name}</SelectItem>))}
+                            </SelectContent>
+                          </Select>
+                          {!it.pallet_type_id && (
+                            <div className="flex gap-1 mt-1">
+                              <Input placeholder="Código" value={it.code} onChange={(e) => setEditItems((p) => p.map((x, i) => i === idx ? { ...x, code: e.target.value.toUpperCase() } : x))} />
+                              <Input placeholder="Nome" value={it.name} onChange={(e) => setEditItems((p) => p.map((x, i) => i === idx ? { ...x, name: e.target.value } : x))} />
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell><Input value={it.color || ''} onChange={(e) => setEditItems((p) => p.map((x, i) => i === idx ? { ...x, color: e.target.value } : x))} /></TableCell>
+                        <TableCell className="w-24"><Input type="number" min={1} value={it.quantity} onChange={(e) => setEditItems((p) => p.map((x, i) => i === idx ? { ...x, quantity: Number(e.target.value) } : x))} /></TableCell>
+                        <TableCell><Input value={it.notes || ''} onChange={(e) => setEditItems((p) => p.map((x, i) => i === idx ? { ...x, notes: e.target.value } : x))} /></TableCell>
+                        <TableCell className="text-right"><Button variant="ghost" size="sm" onClick={() => setEditItems((p) => p.filter((_, i) => i !== idx))}><Trash2 className="h-4 w-4" /></Button></TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              <div>
+                <Label>Motivo da edição (opcional, registrado no histórico)</Label>
+                <Textarea value={editReason} onChange={(e) => setEditReason(e.target.value)} rows={2} placeholder="Ex: correção de quantidade informada errada" />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditTarget(null)}>Cancelar</Button>
+            <Button onClick={submitEdit} disabled={editMut.isPending}>Salvar alterações</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
