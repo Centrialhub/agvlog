@@ -64,6 +64,8 @@ export interface ClosingFilters {
   closingNumber?: string | null;
   periodFrom?: string | null;
   periodTo?: string | null;
+  plate?: string | null;
+  driverName?: string | null;
 }
 
 export const STATUS_LABELS: Record<string, string> = {
@@ -96,6 +98,8 @@ export function useClosingReportsList(filters: ClosingFilters = {}) {
       if (filters.closingNumber) q = q.ilike('closing_number', `%${filters.closingNumber}%`);
       if (filters.periodFrom) q = q.gte('period_end', filters.periodFrom);
       if (filters.periodTo) q = q.lte('period_start', filters.periodTo);
+      if (filters.plate) q = q.contains('vehicle_plates_snapshot', [filters.plate.toUpperCase()]);
+      if (filters.driverName) q = q.contains('driver_names_snapshot', [filters.driverName.toUpperCase()]);
       const { data, error } = await q;
       if (error) throw error;
       return (data ?? []) as ClosingReportRow[];
@@ -129,6 +133,8 @@ export interface PreviewInputs {
   onlyWithCte?: boolean;
   onlyDelivered?: boolean;
   freightAllocation?: FreightAllocation;
+  vehicleId?: string | null;
+  driverId?: string | null;
 }
 
 export function useBuildPreview() {
@@ -151,7 +157,7 @@ export function useBuildPreview() {
           .select('id, cte_number, access_key, freight_value, weight_kg, fiscal_document_ids, issued_at')
           .eq('tenant_id', currentTenant.id)
           .overlaps('load_ids', loadIds) : Promise.resolve({ data: [], error: null }),
-        loadIds.length ? sb.from('loads').select('id, load_number, external_load_number, arrival_date, load_date').in('id', loadIds) : Promise.resolve({ data: [], error: null }),
+        loadIds.length ? sb.from('loads').select('id, load_number, external_load_number, arrival_date, load_date, gate_departure_at, arrival_at, vehicle_id, driver_id, vehicle:vehicle_id(plate), driver:driver_id(name)').in('id', loadIds) : Promise.resolve({ data: [], error: null }),
       ]);
       if (ce || le) throw (ce || le);
 
@@ -163,7 +169,15 @@ export function useBuildPreview() {
       }
       if (inp.onlyDelivered) filtered = filtered.filter(d => d.delivery_meta?.delivered_at);
 
-      const input: BuilderInput = { fiscalDocs: filtered, ctes: (ctes ?? []) as any[], loads: (loads ?? []) as any[], freightAllocation: inp.freightAllocation };
+      let filteredLoads = (loads ?? []) as any[];
+      if (inp.vehicleId) filteredLoads = filteredLoads.filter(l => l.vehicle_id === inp.vehicleId);
+      if (inp.driverId) filteredLoads = filteredLoads.filter(l => l.driver_id === inp.driverId);
+      if (inp.vehicleId || inp.driverId) {
+        const okLoadIds = new Set(filteredLoads.map(l => l.id));
+        filtered = filtered.filter(d => d.load_id && okLoadIds.has(d.load_id));
+      }
+
+      const input: BuilderInput = { fiscalDocs: filtered, ctes: (ctes ?? []) as any[], loads: filteredLoads, freightAllocation: inp.freightAllocation };
       return buildPreview(input);
     },
   });
@@ -205,6 +219,13 @@ export function useCreateClosingReport() {
       }, { total_invoice_value: 0, total_freight_value: 0, total_weight_kg: 0, total_volume: 0 });
       const totalAmount = totals.total_freight_value;
 
+      const plates = Array.from(new Set(items.map(i => (i.vehicle_plate || '').toUpperCase()).filter(Boolean)));
+      const driverNames = Array.from(new Set(items.map(i => (i.driver_name || '').toUpperCase()).filter(Boolean)));
+      const totalKm = items.reduce((s, i) => s + Number(i.km_driven || 0), 0);
+      const totalLiters = items.reduce((s, i) => s + Number(i.fuel_liters || 0), 0);
+      const totalFuelCost = items.reduce((s, i) => s + Number(i.fuel_total || 0), 0);
+      const avgConsumption = totalLiters > 0 ? totalKm / totalLiters : 0;
+
       const { data: header, error: hErr } = await sb.from('closing_reports').insert({
         tenant_id: currentTenant.id,
         client_id: p.clientId ?? null,
@@ -233,6 +254,12 @@ export function useCreateClosingReport() {
         totals_snapshot: p.preview.totals,
         status: 'draft',
         payment_status: computeClosingPaymentStatus({ totalAmount, receivedAmount: 0, expectedPaymentDate: p.expectedPaymentDate }),
+        vehicle_plates_snapshot: plates,
+        driver_names_snapshot: driverNames,
+        total_km_driven: totalKm,
+        total_liters: totalLiters,
+        total_fuel_cost: totalFuelCost,
+        avg_consumption_km_l: avgConsumption,
       }).select('*').single();
       if (hErr) throw hErr;
 
@@ -328,5 +355,74 @@ export function useGenerateInvoiceFromClosing() {
       return inv;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['closing-reports'] }),
+  });
+}
+
+// ------- UPDATE TRIP FIELDS ON ITEM (KMs, litros, preço) -------
+export interface ItemTripUpdate {
+  km_initial?: number | null;
+  km_final?: number | null;
+  fuel_liters?: number | null;
+  fuel_unit_price?: number | null;
+  vehicle_plate?: string | null;
+  driver_name?: string | null;
+  departure_at?: string | null;
+  arrival_at_ts?: string | null;
+  route_label?: string | null;
+  route_complement?: string | null;
+}
+
+function computeTripDerived(u: ItemTripUpdate) {
+  const kmi = u.km_initial != null ? Number(u.km_initial) : null;
+  const kmf = u.km_final != null ? Number(u.km_final) : null;
+  const km_driven = kmi != null && kmf != null && kmf >= kmi ? kmf - kmi : null;
+  const liters = u.fuel_liters != null ? Number(u.fuel_liters) : null;
+  const price = u.fuel_unit_price != null ? Number(u.fuel_unit_price) : null;
+  const fuel_total = liters != null && price != null ? liters * price : null;
+  const consumption_km_l = km_driven != null && liters != null && liters > 0 ? km_driven / liters : null;
+  let days_count: number | null = null;
+  if (u.departure_at && u.arrival_at_ts) {
+    const dep = new Date(u.departure_at).getTime();
+    const arr = new Date(u.arrival_at_ts).getTime();
+    if (Number.isFinite(dep) && Number.isFinite(arr) && arr >= dep) {
+      days_count = Math.max(0, Math.ceil((arr - dep) / 86400000));
+    }
+  }
+  return { km_driven, fuel_total, consumption_km_l, days_count };
+}
+
+export function useUpdateClosingReportItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ itemId, closingReportId, patch }: { itemId: string; closingReportId: string; patch: ItemTripUpdate }) => {
+      const derived = computeTripDerived(patch);
+      const { error } = await sb.from('closing_report_items').update({ ...patch, ...derived }).eq('id', itemId);
+      if (error) throw error;
+
+      // Recalc header aggregates from items
+      const { data: items, error: e2 } = await sb.from('closing_report_items')
+        .select('vehicle_plate, driver_name, km_driven, fuel_liters, fuel_total')
+        .eq('closing_report_id', closingReportId);
+      if (e2) throw e2;
+      const plates = Array.from(new Set((items ?? []).map((i: any) => (i.vehicle_plate || '').toUpperCase()).filter(Boolean)));
+      const driverNames = Array.from(new Set((items ?? []).map((i: any) => (i.driver_name || '').toUpperCase()).filter(Boolean)));
+      const totalKm = (items ?? []).reduce((s: number, i: any) => s + Number(i.km_driven || 0), 0);
+      const totalLiters = (items ?? []).reduce((s: number, i: any) => s + Number(i.fuel_liters || 0), 0);
+      const totalFuelCost = (items ?? []).reduce((s: number, i: any) => s + Number(i.fuel_total || 0), 0);
+      const avg = totalLiters > 0 ? totalKm / totalLiters : 0;
+      await sb.from('closing_reports').update({
+        vehicle_plates_snapshot: plates,
+        driver_names_snapshot: driverNames,
+        total_km_driven: totalKm,
+        total_liters: totalLiters,
+        total_fuel_cost: totalFuelCost,
+        avg_consumption_km_l: avg,
+        updated_at: new Date().toISOString(),
+      }).eq('id', closingReportId);
+    },
+    onSuccess: (_r, v) => {
+      qc.invalidateQueries({ queryKey: ['closing-reports'] });
+      qc.invalidateQueries({ queryKey: ['closing-report', v.closingReportId] });
+    },
   });
 }

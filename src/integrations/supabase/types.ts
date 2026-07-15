@@ -1924,25 +1924,37 @@ export type Database = {
       }
       closing_report_items: {
         Row: {
+          arrival_at_ts: string | null
           arrival_date: string | null
           closing_report_id: string
+          consumption_km_l: number | null
           created_at: string
           cte_document_id: string | null
           cte_key: string | null
           cte_number: string | null
+          days_count: number | null
           delivery_date: string | null
           delivery_status: string | null
+          departure_at: string | null
           destination_city: string | null
           destination_state: string | null
+          driver_id: string | null
+          driver_name: string | null
           fiscal_document_id: string | null
           freight_cif_value: number
           freight_fob_value: number
           freight_value: number
+          fuel_liters: number | null
+          fuel_total: number | null
+          fuel_unit_price: number | null
           id: string
           invoice_key: string | null
           invoice_number: string | null
           invoice_value: number
           issue_date: string | null
+          km_driven: number | null
+          km_final: number | null
+          km_initial: number | null
           legacy_status_text: string | null
           load_document_id: string | null
           load_id: string | null
@@ -1956,32 +1968,48 @@ export type Database = {
           recipient_name: string | null
           remitter_cnpj: string | null
           remitter_name: string | null
+          route_complement: string | null
+          route_label: string | null
           sort_order: number
           source_type: string
           tenant_id: string
+          vehicle_id: string | null
+          vehicle_plate: string | null
           volume_count: number
           weight_kg: number
         }
         Insert: {
+          arrival_at_ts?: string | null
           arrival_date?: string | null
           closing_report_id: string
+          consumption_km_l?: number | null
           created_at?: string
           cte_document_id?: string | null
           cte_key?: string | null
           cte_number?: string | null
+          days_count?: number | null
           delivery_date?: string | null
           delivery_status?: string | null
+          departure_at?: string | null
           destination_city?: string | null
           destination_state?: string | null
+          driver_id?: string | null
+          driver_name?: string | null
           fiscal_document_id?: string | null
           freight_cif_value?: number
           freight_fob_value?: number
           freight_value?: number
+          fuel_liters?: number | null
+          fuel_total?: number | null
+          fuel_unit_price?: number | null
           id?: string
           invoice_key?: string | null
           invoice_number?: string | null
           invoice_value?: number
           issue_date?: string | null
+          km_driven?: number | null
+          km_final?: number | null
+          km_initial?: number | null
           legacy_status_text?: string | null
           load_document_id?: string | null
           load_id?: string | null
@@ -1995,32 +2023,48 @@ export type Database = {
           recipient_name?: string | null
           remitter_cnpj?: string | null
           remitter_name?: string | null
+          route_complement?: string | null
+          route_label?: string | null
           sort_order?: number
           source_type?: string
           tenant_id: string
+          vehicle_id?: string | null
+          vehicle_plate?: string | null
           volume_count?: number
           weight_kg?: number
         }
         Update: {
+          arrival_at_ts?: string | null
           arrival_date?: string | null
           closing_report_id?: string
+          consumption_km_l?: number | null
           created_at?: string
           cte_document_id?: string | null
           cte_key?: string | null
           cte_number?: string | null
+          days_count?: number | null
           delivery_date?: string | null
           delivery_status?: string | null
+          departure_at?: string | null
           destination_city?: string | null
           destination_state?: string | null
+          driver_id?: string | null
+          driver_name?: string | null
           fiscal_document_id?: string | null
           freight_cif_value?: number
           freight_fob_value?: number
           freight_value?: number
+          fuel_liters?: number | null
+          fuel_total?: number | null
+          fuel_unit_price?: number | null
           id?: string
           invoice_key?: string | null
           invoice_number?: string | null
           invoice_value?: number
           issue_date?: string | null
+          km_driven?: number | null
+          km_final?: number | null
+          km_initial?: number | null
           legacy_status_text?: string | null
           load_document_id?: string | null
           load_id?: string | null
@@ -2034,9 +2078,13 @@ export type Database = {
           recipient_name?: string | null
           remitter_cnpj?: string | null
           remitter_name?: string | null
+          route_complement?: string | null
+          route_label?: string | null
           sort_order?: number
           source_type?: string
           tenant_id?: string
+          vehicle_id?: string | null
+          vehicle_plate?: string | null
           volume_count?: number
           weight_kg?: number
         }
@@ -2221,6 +2269,7 @@ export type Database = {
         Row: {
           arrival_date_end: string | null
           arrival_date_start: string | null
+          avg_consumption_km_l: number | null
           cancellation_reason: string | null
           cancelled_at: string | null
           client_id: string | null
@@ -2238,6 +2287,7 @@ export type Database = {
           delivery_date_start: string | null
           discount_amount: number
           doccob_export_id: string | null
+          driver_names_snapshot: string[] | null
           excel_url: string | null
           expected_payment_date: string | null
           filters_snapshot: Json
@@ -2269,16 +2319,21 @@ export type Database = {
           title: string
           total_amount: number
           total_freight_value: number
+          total_fuel_cost: number | null
           total_invoice_value: number
+          total_km_driven: number | null
+          total_liters: number | null
           total_volume: number
           total_weight_kg: number
           totals_snapshot: Json
           updated_at: string
           updated_by: string | null
+          vehicle_plates_snapshot: string[] | null
         }
         Insert: {
           arrival_date_end?: string | null
           arrival_date_start?: string | null
+          avg_consumption_km_l?: number | null
           cancellation_reason?: string | null
           cancelled_at?: string | null
           client_id?: string | null
@@ -2296,6 +2351,7 @@ export type Database = {
           delivery_date_start?: string | null
           discount_amount?: number
           doccob_export_id?: string | null
+          driver_names_snapshot?: string[] | null
           excel_url?: string | null
           expected_payment_date?: string | null
           filters_snapshot?: Json
@@ -2327,16 +2383,21 @@ export type Database = {
           title: string
           total_amount?: number
           total_freight_value?: number
+          total_fuel_cost?: number | null
           total_invoice_value?: number
+          total_km_driven?: number | null
+          total_liters?: number | null
           total_volume?: number
           total_weight_kg?: number
           totals_snapshot?: Json
           updated_at?: string
           updated_by?: string | null
+          vehicle_plates_snapshot?: string[] | null
         }
         Update: {
           arrival_date_end?: string | null
           arrival_date_start?: string | null
+          avg_consumption_km_l?: number | null
           cancellation_reason?: string | null
           cancelled_at?: string | null
           client_id?: string | null
@@ -2354,6 +2415,7 @@ export type Database = {
           delivery_date_start?: string | null
           discount_amount?: number
           doccob_export_id?: string | null
+          driver_names_snapshot?: string[] | null
           excel_url?: string | null
           expected_payment_date?: string | null
           filters_snapshot?: Json
@@ -2385,12 +2447,16 @@ export type Database = {
           title?: string
           total_amount?: number
           total_freight_value?: number
+          total_fuel_cost?: number | null
           total_invoice_value?: number
+          total_km_driven?: number | null
+          total_liters?: number | null
           total_volume?: number
           total_weight_kg?: number
           totals_snapshot?: Json
           updated_at?: string
           updated_by?: string | null
+          vehicle_plates_snapshot?: string[] | null
         }
         Relationships: [
           {
