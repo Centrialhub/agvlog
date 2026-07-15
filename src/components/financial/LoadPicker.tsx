@@ -1,0 +1,89 @@
+import { useMemo, useState } from 'react';
+import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { Search } from 'lucide-react';
+import { useAvailableLoadsForSettlement } from '@/hooks/useDriverSettlements';
+
+const fmtNum = (v: number | null | undefined, d = 0) =>
+  (v ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d });
+const fmtMoney = (v: number | null | undefined) =>
+  (v ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+interface Props {
+  driverId?: string | null;
+  includeSettlementId?: string | null;
+  selectedIds: string[];
+  onChange: (ids: string[]) => void;
+}
+
+export default function LoadPicker({ driverId, includeSettlementId, selectedIds, onChange }: Props) {
+  const [search, setSearch] = useState('');
+  const { data: loads = [], isLoading } = useAvailableLoadsForSettlement({
+    driver_id: driverId ?? null,
+    search,
+    include_settlement_id: includeSettlementId ?? null,
+  });
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const toggle = (id: string) => {
+    if (selectedSet.has(id)) onChange(selectedIds.filter((x) => x !== id));
+    else onChange([...selectedIds, id]);
+  };
+  const toggleAll = () => {
+    if (loads.every((l) => selectedSet.has(l.id))) onChange(selectedIds.filter((id) => !loads.find((l) => l.id === id)));
+    else onChange(Array.from(new Set([...selectedIds, ...loads.map((l) => l.id)])));
+  };
+  const allSelected = loads.length > 0 && loads.every((l) => selectedSet.has(l.id));
+
+  return (
+    <div className="space-y-2">
+      <div className="relative">
+        <Search className="h-4 w-4 absolute left-2 top-2.5 text-muted-foreground" />
+        <Input className="pl-8" placeholder="Buscar por número, origem, destino…" value={search} onChange={(e) => setSearch(e.target.value)} />
+      </div>
+      <div className="text-xs text-muted-foreground">
+        {isLoading ? 'Carregando romaneios…' : `${loads.length} romaneio(s) disponível(is) · ${selectedIds.length} selecionado(s)`}
+      </div>
+      <div className="rounded-md border max-h-[380px] overflow-y-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-8"><Checkbox checked={allSelected} onCheckedChange={toggleAll} /></TableHead>
+              <TableHead>Romaneio</TableHead>
+              <TableHead>Data</TableHead>
+              <TableHead>Origem → Destino</TableHead>
+              <TableHead>Motorista</TableHead>
+              <TableHead className="text-right">Notas</TableHead>
+              <TableHead className="text-right">Peso</TableHead>
+              <TableHead className="text-right">Valor</TableHead>
+              <TableHead className="text-right">Frete</TableHead>
+              <TableHead>Status</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loads.length === 0 && !isLoading && (
+              <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-6">Nenhum romaneio disponível.</TableCell></TableRow>
+            )}
+            {loads.map((l) => (
+              <TableRow key={l.id} className="cursor-pointer hover:bg-accent" onClick={() => toggle(l.id)}>
+                <TableCell onClick={(e) => e.stopPropagation()}>
+                  <Checkbox checked={selectedSet.has(l.id)} onCheckedChange={() => toggle(l.id)} />
+                </TableCell>
+                <TableCell className="font-medium">{l.load_number ?? '—'}</TableCell>
+                <TableCell>{l.load_date ?? '—'}</TableCell>
+                <TableCell className="max-w-xs truncate">{[l.origin, l.destination].filter(Boolean).join(' → ') || '—'}</TableCell>
+                <TableCell>{l.driver_name ?? '—'}</TableCell>
+                <TableCell className="text-right">{l.invoice_count ?? 0}</TableCell>
+                <TableCell className="text-right">{fmtNum(l.total_weight_kg, 0)} kg</TableCell>
+                <TableCell className="text-right">{fmtMoney(l.gross_cargo_value)}</TableCell>
+                <TableCell className="text-right">{fmtMoney(l.freight_amount)}</TableCell>
+                <TableCell><Badge variant="outline" className="text-[10px]">{l.status ?? '—'}</Badge></TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
+}

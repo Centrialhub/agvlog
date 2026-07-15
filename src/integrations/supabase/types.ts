@@ -4100,6 +4100,55 @@ export type Database = {
           },
         ]
       }
+      driver_settlement_loads: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          load_id: string
+          settlement_id: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          load_id: string
+          settlement_id: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          load_id?: string
+          settlement_id?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "driver_settlement_loads_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: true
+            referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_settlement_loads_settlement_id_fkey"
+            columns: ["settlement_id"]
+            isOneToOne: false
+            referencedRelation: "driver_settlements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_settlement_loads_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       driver_settlement_payments: {
         Row: {
           amount: number
@@ -4171,7 +4220,7 @@ export type Database = {
           closed_by: string | null
           created_at: string
           created_by: string | null
-          dispatch_trip_id: string
+          dispatch_trip_id: string | null
           documents_count: number | null
           driver_credits_total: number
           driver_debits_total: number
@@ -4184,11 +4233,13 @@ export type Database = {
           final_amount: number | null
           id: string
           invoice_balance: number | null
+          is_manual: boolean
           km_review_notes: string | null
           km_review_status: string | null
           last_recalculated_at: string | null
           loads_count: number | null
           manual_adjustments_total: number | null
+          manual_reference_date: string | null
           needs_recalculation: boolean
           operational_balance: number | null
           paid_at: string | null
@@ -4229,7 +4280,7 @@ export type Database = {
           closed_by?: string | null
           created_at?: string
           created_by?: string | null
-          dispatch_trip_id: string
+          dispatch_trip_id?: string | null
           documents_count?: number | null
           driver_credits_total?: number
           driver_debits_total?: number
@@ -4242,11 +4293,13 @@ export type Database = {
           final_amount?: number | null
           id?: string
           invoice_balance?: number | null
+          is_manual?: boolean
           km_review_notes?: string | null
           km_review_status?: string | null
           last_recalculated_at?: string | null
           loads_count?: number | null
           manual_adjustments_total?: number | null
+          manual_reference_date?: string | null
           needs_recalculation?: boolean
           operational_balance?: number | null
           paid_at?: string | null
@@ -4287,7 +4340,7 @@ export type Database = {
           closed_by?: string | null
           created_at?: string
           created_by?: string | null
-          dispatch_trip_id?: string
+          dispatch_trip_id?: string | null
           documents_count?: number | null
           driver_credits_total?: number
           driver_debits_total?: number
@@ -4300,11 +4353,13 @@ export type Database = {
           final_amount?: number | null
           id?: string
           invoice_balance?: number | null
+          is_manual?: boolean
           km_review_notes?: string | null
           km_review_status?: string | null
           last_recalculated_at?: string | null
           loads_count?: number | null
           manual_adjustments_total?: number | null
+          manual_reference_date?: string | null
           needs_recalculation?: boolean
           operational_balance?: number | null
           paid_at?: string | null
@@ -13627,12 +13682,24 @@ export type Database = {
         Args: { _dispatch_trip_id: string; _tenant_id: string }
         Returns: string
       }
+      _build_manual_driver_settlement: {
+        Args: { _settlement_id: string }
+        Returns: string
+      }
       _driver_client_ids: { Args: never; Returns: string[] }
       _driver_fiscal_document_ids: { Args: never; Returns: string[] }
       _driver_load_ids: { Args: never; Returns: string[] }
       _driver_order_ids: { Args: never; Returns: string[] }
       _driver_pickup_order_ids: { Args: never; Returns: string[] }
       _driver_trip_ids: { Args: never; Returns: string[] }
+      _load_available_for_settlement: {
+        Args: {
+          _allow_settlement_id?: string
+          _load_id: string
+          _tenant_id: string
+        }
+        Returns: boolean
+      }
       _load_is_locked: { Args: { _load_id: string }; Returns: boolean }
       _log_entity_audit: {
         Args: {
@@ -13711,6 +13778,10 @@ export type Database = {
       assign_fiscal_documents_to_load: {
         Args: { _document_ids: string[]; _load_id: string; _tenant_id: string }
         Returns: Json
+      }
+      attach_loads_to_driver_settlement: {
+        Args: { _load_ids: string[]; _settlement_id: string }
+        Returns: undefined
       }
       audit_data_consistency: {
         Args: { _tenant_id: string }
@@ -13884,6 +13955,16 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_manual_driver_settlement: {
+        Args: {
+          _driver_id: string
+          _load_ids: string[]
+          _reference_date: string
+          _tenant_id: string
+          _vehicle_id: string
+        }
+        Returns: string
+      }
       create_manual_financial_match: {
         Args: {
           _amount_matched: number
@@ -13917,6 +13998,10 @@ export type Database = {
       }
       delete_payroll_entry_item: {
         Args: { _item_id: string; _reason: string }
+        Returns: undefined
+      }
+      detach_load_from_driver_settlement: {
+        Args: { _load_id: string; _settlement_id: string }
         Returns: undefined
       }
       detect_payment_method: { Args: { p_text: string }; Returns: string }
@@ -14187,6 +14272,16 @@ export type Database = {
         Returns: boolean
       }
       is_user_internal_role: { Args: { _tenant_id: string }; Returns: boolean }
+      list_available_loads_for_settlement: {
+        Args: {
+          _driver_id?: string
+          _include_settlement_id?: string
+          _limit?: number
+          _search?: string
+          _tenant_id: string
+        }
+        Returns: Json
+      }
       list_client_documents: {
         Args: {
           _document_type?: string
@@ -14696,7 +14791,7 @@ export type Database = {
           closed_by: string | null
           created_at: string
           created_by: string | null
-          dispatch_trip_id: string
+          dispatch_trip_id: string | null
           documents_count: number | null
           driver_credits_total: number
           driver_debits_total: number
@@ -14709,11 +14804,13 @@ export type Database = {
           final_amount: number | null
           id: string
           invoice_balance: number | null
+          is_manual: boolean
           km_review_notes: string | null
           km_review_status: string | null
           last_recalculated_at: string | null
           loads_count: number | null
           manual_adjustments_total: number | null
+          manual_reference_date: string | null
           needs_recalculation: boolean
           operational_balance: number | null
           paid_at: string | null
@@ -14768,7 +14865,7 @@ export type Database = {
           closed_by: string | null
           created_at: string
           created_by: string | null
-          dispatch_trip_id: string
+          dispatch_trip_id: string | null
           documents_count: number | null
           driver_credits_total: number
           driver_debits_total: number
@@ -14781,11 +14878,13 @@ export type Database = {
           final_amount: number | null
           id: string
           invoice_balance: number | null
+          is_manual: boolean
           km_review_notes: string | null
           km_review_status: string | null
           last_recalculated_at: string | null
           loads_count: number | null
           manual_adjustments_total: number | null
+          manual_reference_date: string | null
           needs_recalculation: boolean
           operational_balance: number | null
           paid_at: string | null

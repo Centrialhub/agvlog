@@ -9,14 +9,16 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AlertCircle, RefreshCw, FileText, Plus, Trash2, AlertTriangle } from 'lucide-react';
+import { AlertCircle, RefreshCw, FileText, Plus, Trash2, AlertTriangle, X } from 'lucide-react';
 import { format } from 'date-fns';
 import {
   useDriverSettlement, useRegenerateDriverSettlement, useUpdateDriverSettlementStatus,
   useUpdateSettlementKmReview, useAddSettlementAdjustment, useRemoveSettlementAdjustment,
   useRegisterSettlementPayment, useSettleZeroDriverSettlement,
   SETTLEMENT_STATUS_LABEL, isLocked, DriverSettlementStatus,
+  useDetachLoadFromSettlement,
 } from '@/hooks/useDriverSettlements';
+import AttachLoadsDialog from './AttachLoadsDialog';
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog';
@@ -37,6 +39,8 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
   const removeAdj = useRemoveSettlementAdjustment();
   const registerPay = useRegisterSettlementPayment();
   const settleZero = useSettleZeroDriverSettlement();
+  const detachLoad = useDetachLoadFromSettlement();
+  const [attachOpen, setAttachOpen] = useState(false);
 
   const s = data?.settlement;
   const items = data?.items ?? [];
@@ -183,9 +187,11 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
             )}
 
             <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="outline" onClick={() => regen.mutate(s.dispatch_trip_id)} disabled={locked || regen.isPending}>
-                <RefreshCw className="h-4 w-4 mr-1" /> Recalcular
-              </Button>
+              {!s.is_manual && (
+                <Button size="sm" variant="outline" onClick={() => regen.mutate(s.dispatch_trip_id)} disabled={locked || regen.isPending}>
+                  <RefreshCw className="h-4 w-4 mr-1" /> Recalcular
+                </Button>
+              )}
               {allowedTransitions(s.status as DriverSettlementStatus).map((next) => {
                 if (next === 'paid') {
                   return (
@@ -240,9 +246,16 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
               </TabsList>
 
               <TabsContent value="loads">
+                {s.is_manual && !locked && (
+                  <div className="flex justify-end mb-2">
+                    <Button size="sm" variant="outline" onClick={() => setAttachOpen(true)}>
+                      <Plus className="h-4 w-4 mr-1" /> Adicionar romaneio
+                    </Button>
+                  </div>
+                )}
                 <div className="rounded-md border">
                   <Table>
-                    <TableHeader><TableRow><TableHead>Romaneio</TableHead><TableHead>Origem</TableHead><TableHead>Destino</TableHead><TableHead>Peso</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                    <TableHeader><TableRow><TableHead>Romaneio</TableHead><TableHead>Origem</TableHead><TableHead>Destino</TableHead><TableHead>Peso</TableHead><TableHead>Status</TableHead>{s.is_manual && !locked && <TableHead className="w-10" />}</TableRow></TableHeader>
                     <TableBody>
                       {loadItems.map((i: any) => (
                         <TableRow key={i.id}>
@@ -251,9 +264,26 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                           <TableCell>{i.metadata?.destination ?? '—'}</TableCell>
                           <TableCell>{i.quantity ? `${fmtNum(i.quantity, 0)} kg` : '—'}</TableCell>
                           <TableCell><Badge variant="outline">{i.metadata?.status ?? '—'}</Badge></TableCell>
+                          {s.is_manual && !locked && (
+                            <TableCell>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                title="Remover romaneio"
+                                disabled={detachLoad.isPending || !i.source_id}
+                                onClick={() => {
+                                  if (i.source_id && confirm('Remover este romaneio do acerto?')) {
+                                    detachLoad.mutate({ settlement_id: s.id, load_id: i.source_id });
+                                  }
+                                }}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          )}
                         </TableRow>
                       ))}
-                      {loadItems.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">Sem cargas vinculadas</TableCell></TableRow>}
+                      {loadItems.length === 0 && <TableRow><TableCell colSpan={s.is_manual && !locked ? 6 : 5} className="text-center text-muted-foreground">Sem cargas vinculadas</TableCell></TableRow>}
                     </TableBody>
                   </Table>
                 </div>
@@ -635,6 +665,14 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
               </DialogContent>
             </Dialog>
           </div>
+        )}
+        {s && s.is_manual && (
+          <AttachLoadsDialog
+            open={attachOpen}
+            onOpenChange={setAttachOpen}
+            settlementId={s.id}
+            driverId={s.driver_id}
+          />
         )}
       </SheetContent>
     </Sheet>

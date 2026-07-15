@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
-import { RefreshCw, Wallet, Search, AlertTriangle } from 'lucide-react';
+import { RefreshCw, Wallet, Search, AlertTriangle, Plus } from 'lucide-react';
 import { format } from 'date-fns';
 import {
   useDriverSettlements, useGeneratePendingDriverSettlements,
@@ -15,6 +15,7 @@ import {
   SETTLEMENT_STATUS_LABEL, DriverSettlementStatus,
 } from '@/hooks/useDriverSettlements';
 import DriverSettlementDrawer from '@/components/financial/DriverSettlementDrawer';
+import NewManualSettlementDialog from '@/components/financial/NewManualSettlementDialog';
 
 const fmtMoney = (v: number | null | undefined) => (v ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const fmtNum = (v: number | null | undefined, d = 1) => (v ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -56,6 +57,7 @@ export default function DriverSettlements() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
 
   const drivers = filterOpts?.drivers ?? [];
   const vehicles = filterOpts?.vehicles ?? [];
@@ -84,6 +86,9 @@ export default function DriverSettlements() {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => refetch()}><RefreshCw className="h-4 w-4 mr-1" /> Atualizar</Button>
+          <Button variant="outline" onClick={() => setManualOpen(true)}>
+            <Plus className="h-4 w-4 mr-1" /> Novo acerto manual
+          </Button>
           <Button onClick={() => genPending.mutate()} disabled={genPending.isPending}>
             Gerar / Recalcular pendentes
           </Button>
@@ -225,6 +230,11 @@ export default function DriverSettlements() {
       </Card>
 
       <DriverSettlementDrawer settlementId={selectedId} open={drawerOpen} onOpenChange={setDrawerOpen} />
+      <NewManualSettlementDialog
+        open={manualOpen}
+        onOpenChange={setManualOpen}
+        onCreated={(id) => { setSelectedId(id); setDrawerOpen(true); }}
+      />
     </div>
   );
 }
