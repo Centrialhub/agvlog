@@ -141,7 +141,7 @@ export default function ClosingReports() {
     setForm(f => ({ ...f, reportType: t, periodStart: p.period_start, periodEnd: p.period_end }));
   };
 
-  const exportPdf = (r: ClosingReportRow, model: 'summary' | 'detailed' = 'detailed') => {
+  const exportPdf = (r: ClosingReportRow, model: 'summary' | 'detailed' | 'trips' = 'detailed') => {
     // Reload items to build snapshot pdf
     (async () => {
       const { data: items } = await (await import('@/integrations/supabase/client')).supabase
@@ -337,6 +337,7 @@ export default function ClosingReports() {
                             <Button size="sm" onClick={() => closeMut.mutate(r.id, { onSuccess: () => toast.success('Fechado') })}><CheckCircle2 className="h-3 w-3" /></Button>
                           )}
                           <Button size="sm" variant="outline" onClick={() => exportPdf(r, 'detailed')} title="PDF detalhado"><FileText className="h-3 w-3" /></Button>
+                          <Button size="sm" variant="outline" onClick={() => exportPdf(r, 'trips' as any)} title="PDF controle de viagens"><FileText className="h-3 w-3" />V</Button>
                           <Button size="sm" variant="outline" onClick={() => exportExcel(r)} title="Excel"><FileSpreadsheet className="h-3 w-3" /></Button>
                           <Button size="sm" variant="outline" onClick={() => exportCsv(r)} title="CSV"><Download className="h-3 w-3" /></Button>
                           <Button size="sm" variant="outline" onClick={() => setEditTripsFor(r)} title="Editar KMs por viagem">KM</Button>

@@ -6,6 +6,19 @@ import { drawCompanyHeader, type CompanyPdfInfo } from '@/lib/pdf/companyHeader'
 const brl = (n: number) => 'R$ ' + Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const kg = (n: number) => Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 const dt = (v?: string | null) => (v ? v.slice(0, 10).split('-').reverse().join('/') : '—');
+const dtTs = (v?: string | null) => {
+  if (!v) return '';
+  const s = String(v);
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10).split('-').reverse().join('/');
+  return '';
+};
+const tm = (v?: string | null) => {
+  if (!v) return '';
+  const s = String(v);
+  if (s.includes('T') && s.length >= 16) return s.slice(11, 16);
+  return '';
+};
+const n2 = (n: any) => Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export interface PdfOptions {
   title: string;
@@ -17,7 +30,7 @@ export interface PdfOptions {
   closingNumber?: string;
   items: BuiltItem[];
   summaryLines?: SummaryLine[];
-  model?: 'summary' | 'detailed';
+  model?: 'summary' | 'detailed' | 'trips';
   notes?: string | null;
 }
 
@@ -66,6 +79,59 @@ export function generateClosingReportPdf(opts: PdfOptions): jsPDF {
       showHead: 'everyPage',
     });
   } else {
+    if (model === 'trips') {
+      // Deduplicate by load_id (one row per viagem)
+      const seen = new Set<string>();
+      const trips: any[] = [];
+      for (const i of opts.items as any[]) {
+        const k = i.load_id || `nf-${i.fiscal_document_id}`;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        trips.push(i);
+      }
+      const tot = { km: 0, l: 0, val: 0 };
+      const body = trips.map((i: any) => {
+        const km = Number(i.km_driven || 0);
+        const l = Number(i.fuel_liters || 0);
+        const v = Number(i.fuel_total || 0);
+        tot.km += km; tot.l += l; tot.val += v;
+        return [
+          i.route_label ?? i.destination_city ?? '',
+          i.route_complement ?? i.origin_city ?? '',
+          i.driver_name ?? '',
+          i.vehicle_plate ?? '',
+          dtTs(i.departure_at), tm(i.departure_at),
+          dtTs(i.arrival_at_ts ?? i.arrival_date), tm(i.arrival_at_ts),
+          i.days_count ?? '',
+          i.km_initial != null ? n2(i.km_initial) : '',
+          i.km_final != null ? n2(i.km_final) : '',
+          km ? n2(km) : '',
+          l ? n2(l) : '',
+          i.fuel_unit_price != null ? n2(i.fuel_unit_price) : '',
+          v ? n2(v) : '',
+          i.consumption_km_l ? n2(i.consumption_km_l) : '',
+        ];
+      });
+      autoTable(doc, {
+        startY: tableStart,
+        head: [[
+          'Rota', 'Complemento', 'Motorista', 'Placa',
+          'Data Saída', 'H. Saída', 'Data Chegada', 'H. Chegada',
+          'Dias', 'KM Ini', 'KM Fim', 'KM Rodado',
+          'Litros', 'R$/L', 'Total Comb.', 'km/L',
+        ]],
+        body,
+        foot: [[
+          'TOTAIS', '', '', '', '', '', '', '', '', '', '',
+          tot.km ? n2(tot.km) : '', tot.l ? n2(tot.l) : '', '', tot.val ? n2(tot.val) : '',
+          tot.l > 0 ? n2(tot.km / tot.l) : '',
+        ]],
+        styles: { fontSize: 7, cellPadding: 1, overflow: 'linebreak' },
+        headStyles: { fillColor: [30, 41, 59] },
+        footStyles: { fillColor: [226, 232, 240], textColor: 20, fontStyle: 'bold' },
+        showHead: 'everyPage',
+      });
+    } else {
     autoTable(doc, {
       startY: tableStart,
       head: [['Origem', 'Remetente', 'Destinatário', 'Destino', 'Emissão', 'Nota', 'CT-e', 'Valor NF', 'Peso', 'Frete', 'Entrega', 'Obs.']],
@@ -95,6 +161,7 @@ export function generateClosingReportPdf(opts: PdfOptions): jsPDF {
         10: { cellWidth: 16 }, 11: { cellWidth: 30 },
       },
     });
+    }
   }
 
   if (opts.notes) {
