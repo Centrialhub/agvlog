@@ -48,6 +48,12 @@ export interface RawLoad {
   external_load_number?: string | null;
   arrival_date?: string | null;
   load_date?: string | null;
+  gate_departure_at?: string | null;
+  arrival_at?: string | null;
+  vehicle_id?: string | null;
+  driver_id?: string | null;
+  vehicle?: { plate?: string | null } | null;
+  driver?: { name?: string | null } | null;
 }
 
 export interface BuilderInput {
@@ -87,6 +93,22 @@ export interface BuiltItem {
   observation: string | null;
   source_type: 'system' | 'xml_import' | 'spreadsheet_import' | 'manual_adjustment';
   sort_order: number;
+  vehicle_id?: string | null;
+  vehicle_plate?: string | null;
+  driver_id?: string | null;
+  driver_name?: string | null;
+  departure_at?: string | null;
+  arrival_at_ts?: string | null;
+  days_count?: number | null;
+  km_initial?: number | null;
+  km_final?: number | null;
+  km_driven?: number | null;
+  fuel_liters?: number | null;
+  fuel_unit_price?: number | null;
+  fuel_total?: number | null;
+  consumption_km_l?: number | null;
+  route_label?: string | null;
+  route_complement?: string | null;
 }
 
 export interface Divergence {
@@ -188,6 +210,17 @@ export function buildPreview(input: BuilderInput): BuiltPreview {
     const deliveryDate = d.delivery_meta?.delivered_at ?? null;
     const freight = allocatedFreight.has(d.id) ? allocatedFreight.get(d.id)! : num(d.freight_value);
 
+    const departureAt = load?.gate_departure_at ?? null;
+    const arrivalAtTs = load?.arrival_at ?? null;
+    let daysCount: number | null = null;
+    if (departureAt && arrivalAtTs) {
+      const dep = new Date(departureAt).getTime();
+      const arr = new Date(arrivalAtTs).getTime();
+      if (Number.isFinite(dep) && Number.isFinite(arr) && arr >= dep) {
+        daysCount = Math.max(0, Math.ceil((arr - dep) / 86400000));
+      }
+    }
+
     if (!cte) divergences.push({ severity: 'info', code: 'nf_without_cte', description: 'NF sem CT-e vinculado', fiscal_document_id: d.id, invoice_number: d.invoice_number ?? null });
     if (!num(d.weight_kg)) divergences.push({ severity: 'warning', code: 'nf_without_weight', description: 'NF sem peso', fiscal_document_id: d.id });
     if (!num(d.value)) divergences.push({ severity: 'warning', code: 'nf_without_value', description: 'NF sem valor', fiscal_document_id: d.id });
@@ -228,6 +261,15 @@ export function buildPreview(input: BuilderInput): BuiltPreview {
       observation: null,
       source_type: 'system',
       sort_order: order++,
+      vehicle_id: load?.vehicle_id ?? null,
+      vehicle_plate: load?.vehicle?.plate ?? null,
+      driver_id: load?.driver_id ?? null,
+      driver_name: load?.driver?.name ?? null,
+      departure_at: departureAt,
+      arrival_at_ts: arrivalAtTs,
+      days_count: daysCount,
+      route_label: d.recipient_city ?? null,
+      route_complement: d.origin_city ?? null,
     });
   }
 
