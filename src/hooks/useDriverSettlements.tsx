@@ -344,6 +344,112 @@ export function useSettleZeroDriverSettlement() {
   });
 }
 
+export interface AvailableLoad {
+  id: string;
+  load_number: string | null;
+  origin: string | null;
+  destination: string | null;
+  status: string | null;
+  total_weight_kg: number | null;
+  total_pallet_count: number | null;
+  gross_cargo_value: number | null;
+  freight_amount: number | null;
+  invoice_count: number | null;
+  load_date: string | null;
+  driver_id: string | null;
+  driver_name: string | null;
+  vehicle_plate: string | null;
+}
+
+export function useAvailableLoadsForSettlement(params: {
+  driver_id?: string | null;
+  search?: string | null;
+  include_settlement_id?: string | null;
+  enabled?: boolean;
+}) {
+  const { currentTenant } = useTenant();
+  const { driver_id = null, search = null, include_settlement_id = null, enabled = true } = params;
+  return useQuery({
+    queryKey: ['available_loads_for_settlement', currentTenant?.id, driver_id, search, include_settlement_id],
+    enabled: !!currentTenant && enabled,
+    queryFn: async () => {
+      if (!currentTenant) return [] as AvailableLoad[];
+      const { data, error } = await supabase.rpc('list_available_loads_for_settlement' as any, {
+        _tenant_id: currentTenant.id,
+        _driver_id: driver_id,
+        _search: (search ?? '').trim() || null,
+        _include_settlement_id: include_settlement_id,
+        _limit: 200,
+      });
+      if (error) throw error;
+      return (data ?? []) as AvailableLoad[];
+    },
+  });
+}
+
+export function useCreateManualDriverSettlement() {
+  const qc = useQueryClient();
+  const { currentTenant } = useTenant();
+  return useMutation({
+    mutationFn: async (p: { driver_id: string; vehicle_id?: string | null; reference_date?: string | null; load_ids: string[] }) => {
+      if (!currentTenant) throw new Error('no_tenant');
+      const { data, error } = await supabase.rpc('create_manual_driver_settlement' as any, {
+        _tenant_id: currentTenant.id,
+        _driver_id: p.driver_id,
+        _vehicle_id: p.vehicle_id ?? null,
+        _reference_date: p.reference_date ?? null,
+        _load_ids: p.load_ids,
+      });
+      if (error) throw error;
+      return data as string;
+    },
+    onSuccess: () => {
+      toast({ title: 'Acerto manual criado' });
+      qc.invalidateQueries({ queryKey: ['driver_settlements'] });
+      qc.invalidateQueries({ queryKey: ['available_loads_for_settlement'] });
+    },
+    onError: (e: any) => toast({ title: 'Falha ao criar acerto', description: e.message, variant: 'destructive' }),
+  });
+}
+
+export function useAttachLoadsToSettlement() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (p: { settlement_id: string; load_ids: string[] }) => {
+      const { error } = await supabase.rpc('attach_loads_to_driver_settlement' as any, {
+        _settlement_id: p.settlement_id, _load_ids: p.load_ids,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: 'Romaneios vinculados' });
+      qc.invalidateQueries({ queryKey: ['driver_settlements'] });
+      qc.invalidateQueries({ queryKey: ['driver_settlement'] });
+      qc.invalidateQueries({ queryKey: ['available_loads_for_settlement'] });
+    },
+    onError: (e: any) => toast({ title: 'Falha ao vincular', description: e.message, variant: 'destructive' }),
+  });
+}
+
+export function useDetachLoadFromSettlement() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (p: { settlement_id: string; load_id: string }) => {
+      const { error } = await supabase.rpc('detach_load_from_driver_settlement' as any, {
+        _settlement_id: p.settlement_id, _load_id: p.load_id,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: 'Romaneio removido do acerto' });
+      qc.invalidateQueries({ queryKey: ['driver_settlements'] });
+      qc.invalidateQueries({ queryKey: ['driver_settlement'] });
+      qc.invalidateQueries({ queryKey: ['available_loads_for_settlement'] });
+    },
+    onError: (e: any) => toast({ title: 'Falha ao remover romaneio', description: e.message, variant: 'destructive' }),
+  });
+}
+
 export const SETTLEMENT_STATUS_LABEL: Record<DriverSettlementStatus, string> = {
   pending_review: 'Pendente',
   in_review: 'Em conferência',
