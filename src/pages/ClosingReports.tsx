@@ -141,7 +141,7 @@ export default function ClosingReports() {
     setForm(f => ({ ...f, reportType: t, periodStart: p.period_start, periodEnd: p.period_end }));
   };
 
-  const exportPdf = (r: ClosingReportRow, model: 'summary' | 'detailed' = 'detailed') => {
+  const exportPdf = (r: ClosingReportRow, model: 'summary' | 'detailed' | 'trips' = 'detailed') => {
     // Reload items to build snapshot pdf
     (async () => {
       const { data: items } = await (await import('@/integrations/supabase/client')).supabase
