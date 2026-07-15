@@ -566,6 +566,7 @@ export default function ClosingReports() {
   );
 }
 
+
 function TripEditorDialog({ report, onClose, onSaveItem }: { report: ClosingReportRow; onClose: () => void; onSaveItem: (itemId: string, patch: any) => Promise<void> | void }) {
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
