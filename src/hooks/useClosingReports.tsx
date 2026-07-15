@@ -357,3 +357,72 @@ export function useGenerateInvoiceFromClosing() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['closing-reports'] }),
   });
 }
+
+// ------- UPDATE TRIP FIELDS ON ITEM (KMs, litros, preço) -------
+export interface ItemTripUpdate {
+  km_initial?: number | null;
+  km_final?: number | null;
+  fuel_liters?: number | null;
+  fuel_unit_price?: number | null;
+  vehicle_plate?: string | null;
+  driver_name?: string | null;
+  departure_at?: string | null;
+  arrival_at_ts?: string | null;
+  route_label?: string | null;
+  route_complement?: string | null;
+}
+
+function computeTripDerived(u: ItemTripUpdate) {
+  const kmi = u.km_initial != null ? Number(u.km_initial) : null;
+  const kmf = u.km_final != null ? Number(u.km_final) : null;
+  const km_driven = kmi != null && kmf != null && kmf >= kmi ? kmf - kmi : null;
+  const liters = u.fuel_liters != null ? Number(u.fuel_liters) : null;
+  const price = u.fuel_unit_price != null ? Number(u.fuel_unit_price) : null;
+  const fuel_total = liters != null && price != null ? liters * price : null;
+  const consumption_km_l = km_driven != null && liters != null && liters > 0 ? km_driven / liters : null;
+  let days_count: number | null = null;
+  if (u.departure_at && u.arrival_at_ts) {
+    const dep = new Date(u.departure_at).getTime();
+    const arr = new Date(u.arrival_at_ts).getTime();
+    if (Number.isFinite(dep) && Number.isFinite(arr) && arr >= dep) {
+      days_count = Math.max(0, Math.ceil((arr - dep) / 86400000));
+    }
+  }
+  return { km_driven, fuel_total, consumption_km_l, days_count };
+}
+
+export function useUpdateClosingReportItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ itemId, closingReportId, patch }: { itemId: string; closingReportId: string; patch: ItemTripUpdate }) => {
+      const derived = computeTripDerived(patch);
+      const { error } = await sb.from('closing_report_items').update({ ...patch, ...derived }).eq('id', itemId);
+      if (error) throw error;
+
+      // Recalc header aggregates from items
+      const { data: items, error: e2 } = await sb.from('closing_report_items')
+        .select('vehicle_plate, driver_name, km_driven, fuel_liters, fuel_total')
+        .eq('closing_report_id', closingReportId);
+      if (e2) throw e2;
+      const plates = Array.from(new Set((items ?? []).map((i: any) => (i.vehicle_plate || '').toUpperCase()).filter(Boolean)));
+      const driverNames = Array.from(new Set((items ?? []).map((i: any) => (i.driver_name || '').toUpperCase()).filter(Boolean)));
+      const totalKm = (items ?? []).reduce((s: number, i: any) => s + Number(i.km_driven || 0), 0);
+      const totalLiters = (items ?? []).reduce((s: number, i: any) => s + Number(i.fuel_liters || 0), 0);
+      const totalFuelCost = (items ?? []).reduce((s: number, i: any) => s + Number(i.fuel_total || 0), 0);
+      const avg = totalLiters > 0 ? totalKm / totalLiters : 0;
+      await sb.from('closing_reports').update({
+        vehicle_plates_snapshot: plates,
+        driver_names_snapshot: driverNames,
+        total_km_driven: totalKm,
+        total_liters: totalLiters,
+        total_fuel_cost: totalFuelCost,
+        avg_consumption_km_l: avg,
+        updated_at: new Date().toISOString(),
+      }).eq('id', closingReportId);
+    },
+    onSuccess: (_r, v) => {
+      qc.invalidateQueries({ queryKey: ['closing-reports'] });
+      qc.invalidateQueries({ queryKey: ['closing-report', v.closingReportId] });
+    },
+  });
+}
