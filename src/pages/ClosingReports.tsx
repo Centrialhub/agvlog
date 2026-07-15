@@ -15,10 +15,14 @@ import {
   useClosingReportsList, useBuildPreview, useCreateClosingReport,
   useCloseClosingReport, useCancelClosingReport, useRegisterClosingPayment,
   useMarkClosingSent, useGenerateInvoiceFromClosing,
+  useUpdateClosingReportItem,
   STATUS_LABELS, PAYMENT_LABELS, REPORT_TYPE_LABELS,
   type ClosingFilters, type ClosingReportRow,
 } from '@/hooks/useClosingReports';
 import { useClients } from '@/hooks/useClients';
+import { useVehicles } from '@/hooks/useVehicles';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { periodFromType, type BuiltPreview, type FreightAllocation, type ReportType } from '@/lib/closingReports/closingReportBuilder';
 import { downloadClosingReportPdf } from '@/lib/closingReports/closingReportPdf';
 import { buildWorkbook, downloadWorkbook } from '@/lib/closingReports/closingReportExcel';
@@ -44,20 +48,33 @@ export default function ClosingReports() {
   const { currentTenant } = useTenant();
   const { data: companyProfile } = useCompanyProfile();
   const { data: clients = [] } = useClients();
+  const { data: vehicles = [] } = useVehicles();
+  const { data: drivers = [] } = useQuery({
+    queryKey: ['drivers-min', currentTenant?.id],
+    enabled: !!currentTenant?.id,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).from('drivers').select('id, name').eq('tenant_id', currentTenant!.id).order('name');
+      if (error) throw error;
+      return (data ?? []) as { id: string; name: string }[];
+    },
+  });
   const [openReport, setOpenReport] = useState<ClosingReportRow | null>(null);
   const [payDlg, setPayDlg] = useState<ClosingReportRow | null>(null);
   const [payForm, setPayForm] = useState({ amount: '', date: new Date().toISOString().slice(0, 10), method: 'pix', notes: '' });
+  const [editTripsFor, setEditTripsFor] = useState<ClosingReportRow | null>(null);
   const closeMut = useCloseClosingReport();
   const cancelMut = useCancelClosingReport();
   const regPay = useRegisterClosingPayment();
   const sendMut = useMarkClosingSent();
   const invoiceMut = useGenerateInvoiceFromClosing();
+  const updateItem = useUpdateClosingReportItem();
 
   // New closing form
   const [form, setForm] = useState({
     clientId: '', payerId: '', title: '', reportType: 'ten_day' as ReportType,
     periodStart: '', periodEnd: '', freightAllocation: 'per_nf' as FreightAllocation,
     onlyWithCte: false, onlyDelivered: false, expectedPay: '', notes: '',
+    vehicleId: '', driverId: '',
   });
   const previewMut = useBuildPreview();
   const createMut = useCreateClosingReport();
@@ -92,6 +109,8 @@ export default function ClosingReports() {
       onlyWithCte: form.onlyWithCte,
       onlyDelivered: form.onlyDelivered,
       freightAllocation: form.freightAllocation,
+      vehicleId: form.vehicleId || null,
+      driverId: form.driverId || null,
     });
     setPreview(result);
     toast.success(`${result.items.length} notas encontradas`);
