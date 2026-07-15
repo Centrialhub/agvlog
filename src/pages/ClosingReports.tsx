@@ -417,6 +417,24 @@ export default function ClosingReports() {
                 <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.onlyWithCte} onChange={e => setForm({ ...form, onlyWithCte: e.target.checked })} />Só com CT-e</label>
                 <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.onlyDelivered} onChange={e => setForm({ ...form, onlyDelivered: e.target.checked })} />Só entregues</label>
               </div>
+              <div><Label>Filtrar por placa</Label>
+                <Select value={form.vehicleId || '__none__'} onValueChange={v => setForm({ ...form, vehicleId: v === '__none__' ? '' : v })}>
+                  <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Todas</SelectItem>
+                    {vehicles.map(v => <SelectItem key={v.id} value={v.id}>{v.plate}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div><Label>Filtrar por motorista</Label>
+                <Select value={form.driverId || '__none__'} onValueChange={v => setForm({ ...form, driverId: v === '__none__' ? '' : v })}>
+                  <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Todos</SelectItem>
+                    {drivers.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="md:col-span-3"><Label>Observação</Label><Textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
               <div className="md:col-span-3 flex gap-2">
                 <Button onClick={doPreview} disabled={previewMut.isPending}><Play className="h-4 w-4 mr-2" />Gerar prévia</Button>
