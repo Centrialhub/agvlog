@@ -337,6 +337,7 @@ export default function ClosingReports() {
                             <Button size="sm" onClick={() => closeMut.mutate(r.id, { onSuccess: () => toast.success('Fechado') })}><CheckCircle2 className="h-3 w-3" /></Button>
                           )}
                           <Button size="sm" variant="outline" onClick={() => exportPdf(r, 'detailed')} title="PDF detalhado"><FileText className="h-3 w-3" /></Button>
+                          <Button size="sm" variant="outline" onClick={() => exportPdf(r, 'trips' as any)} title="PDF controle de viagens"><FileText className="h-3 w-3" />V</Button>
                           <Button size="sm" variant="outline" onClick={() => exportExcel(r)} title="Excel"><FileSpreadsheet className="h-3 w-3" /></Button>
                           <Button size="sm" variant="outline" onClick={() => exportCsv(r)} title="CSV"><Download className="h-3 w-3" /></Button>
                           <Button size="sm" variant="outline" onClick={() => setEditTripsFor(r)} title="Editar KMs por viagem">KM</Button>
