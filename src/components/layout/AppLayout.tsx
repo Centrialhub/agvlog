@@ -2,20 +2,14 @@ import { ReactNode, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useTenant } from '@/hooks/useTenant';
+import { useCompanyProfile } from '@/hooks/useCompanyProfile';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import {
   LayoutDashboard, Map, Truck, Users, Bell, Settings, LogOut,
   ChevronLeft, ChevronRight, Hexagon, FileText, Building2, Warehouse,
   PackageCheck, AlertOctagon, Upload, TrendingUp, ChevronDown, Plug,
-  Radio, ShieldCheck, Receipt, DollarSign, UserCog, Package, Wrench,
+  Radio, Receipt, DollarSign, UserCog, Package, Wrench,
   Boxes, ClipboardCheck, ArrowRightLeft, Wallet, FileSearch, FileSpreadsheet,
   PackageOpen, MonitorPlay, Sprout,
 } from 'lucide-react';
@@ -138,7 +132,8 @@ const navSections: NavSection[] = [
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const { signOut } = useAuth();
-  const { currentTenant, currentRole, memberships, setCurrentTenantId } = useTenant();
+  const { currentTenant } = useTenant();
+  const { data: companyProfile } = useCompanyProfile();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
@@ -179,14 +174,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     return location.pathname.startsWith(href);
   };
 
-  // Role badge
-  const roleLabels: Record<string, string> = {
-    owner: 'Proprietário',
-    admin: 'Administrador',
-    operator: 'Operador',
-    client: 'Cliente',
-    driver: 'Motorista',
-  };
+  const logoUrl = companyProfile?.logo_data_url || null;
+  const brandName = companyProfile?.trade_name || companyProfile?.legal_name || currentTenant?.name || 'AGVLog';
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -196,37 +185,21 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       )}>
         {/* Logo */}
         <div className="flex h-12 items-center gap-2 px-3 border-b border-sidebar-border">
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-sidebar-primary">
-            <Truck className="h-3.5 w-3.5 text-sidebar-primary-foreground" />
-          </div>
-          {!collapsed && <span className="font-bold text-sm text-sidebar-primary-foreground tracking-tight">AGVLog</span>}
+          {logoUrl ? (
+            <img
+              src={logoUrl}
+              alt={brandName}
+              className="h-7 w-7 shrink-0 rounded-md object-contain bg-sidebar-primary/10"
+            />
+          ) : (
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-sidebar-primary">
+              <Truck className="h-3.5 w-3.5 text-sidebar-primary-foreground" />
+            </div>
+          )}
+          {!collapsed && (
+            <span className="font-bold text-sm text-sidebar-primary-foreground tracking-tight truncate">{brandName}</span>
+          )}
         </div>
-
-        {/* Tenant switcher + role */}
-        {!collapsed && (
-          <div className="px-2 py-2 border-b border-sidebar-border space-y-1">
-            {memberships.length > 1 ? (
-              <Select value={currentTenant?.id} onValueChange={setCurrentTenantId}>
-                <SelectTrigger className="h-7 bg-sidebar-accent border-sidebar-border text-sidebar-foreground text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {memberships.map(m => (
-                    <SelectItem key={m.tenant_id} value={m.tenant_id}>{m.tenants.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : currentTenant ? (
-              <p className="text-[10px] text-sidebar-foreground/50 truncate px-1">{currentTenant.name}</p>
-            ) : null}
-            {currentRole && (
-              <div className="flex items-center gap-1 px-1">
-                <ShieldCheck className="h-3 w-3 text-sidebar-foreground/40" />
-                <span className="text-[10px] text-sidebar-foreground/40">{roleLabels[currentRole] || currentRole}</span>
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Nav sections */}
         <nav className="flex-1 overflow-y-auto py-2 space-y-1">
