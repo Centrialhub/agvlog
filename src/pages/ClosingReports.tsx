@@ -271,6 +271,26 @@ export default function ClosingReports() {
                 </Select>
               </div>
               <div><Label>Nº fechamento</Label><Input value={filters.closingNumber ?? ''} onChange={e => setFilters({ ...filters, closingNumber: e.target.value || null })} /></div>
+              <div><Label>Período de</Label><Input type="date" value={filters.periodFrom ?? ''} onChange={e => setFilters({ ...filters, periodFrom: e.target.value || null })} /></div>
+              <div><Label>Período até</Label><Input type="date" value={filters.periodTo ?? ''} onChange={e => setFilters({ ...filters, periodTo: e.target.value || null })} /></div>
+              <div><Label>Placa</Label>
+                <Select value={filters.plate ?? '__all__'} onValueChange={v => setFilters({ ...filters, plate: v === '__all__' ? null : v })}>
+                  <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">Todas</SelectItem>
+                    {vehicles.map(v => <SelectItem key={v.id} value={(v.plate || '').toUpperCase()}>{v.plate}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div><Label>Motorista</Label>
+                <Select value={filters.driverName ?? '__all__'} onValueChange={v => setFilters({ ...filters, driverName: v === '__all__' ? null : v })}>
+                  <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">Todos</SelectItem>
+                    {drivers.map(d => <SelectItem key={d.id} value={(d.name || '').toUpperCase()}>{d.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="flex items-end gap-2">
                 <Button onClick={() => setApplied(filters)} className="w-full"><RefreshCw className="h-4 w-4 mr-2" />Aplicar</Button>
               </div>
