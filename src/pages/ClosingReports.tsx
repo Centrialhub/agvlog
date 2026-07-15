@@ -562,6 +562,13 @@ export default function ClosingReports() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {editTripsFor && (
+        <TripEditorDialog
+          report={editTripsFor}
+          onClose={() => setEditTripsFor(null)}
+          onSaveItem={(itemId, patch) => updateItem.mutateAsync({ itemId, closingReportId: editTripsFor.id, patch })}
+        />
+      )}
     </div>
   );
 }
