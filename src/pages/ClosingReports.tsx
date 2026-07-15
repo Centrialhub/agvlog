@@ -339,6 +339,7 @@ export default function ClosingReports() {
                           <Button size="sm" variant="outline" onClick={() => exportPdf(r, 'detailed')} title="PDF detalhado"><FileText className="h-3 w-3" /></Button>
                           <Button size="sm" variant="outline" onClick={() => exportExcel(r)} title="Excel"><FileSpreadsheet className="h-3 w-3" /></Button>
                           <Button size="sm" variant="outline" onClick={() => exportCsv(r)} title="CSV"><Download className="h-3 w-3" /></Button>
+                          <Button size="sm" variant="outline" onClick={() => setEditTripsFor(r)} title="Editar KMs por viagem">KM</Button>
                           {['closed', 'sent'].includes(r.status) && !r.client_invoice_id && (
                             <Button size="sm" variant="secondary" onClick={() => invoiceMut.mutate(r.id, { onSuccess: () => toast.success('Fatura gerada'), onError: (e: any) => toast.error(e.message) })}>
                               <FileText className="h-3 w-3 mr-1" />Fatura
