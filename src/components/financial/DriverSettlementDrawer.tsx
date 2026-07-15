@@ -187,9 +187,11 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
             )}
 
             <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="outline" onClick={() => regen.mutate(s.dispatch_trip_id)} disabled={locked || regen.isPending}>
-                <RefreshCw className="h-4 w-4 mr-1" /> Recalcular
-              </Button>
+              {!s.is_manual && (
+                <Button size="sm" variant="outline" onClick={() => regen.mutate(s.dispatch_trip_id)} disabled={locked || regen.isPending}>
+                  <RefreshCw className="h-4 w-4 mr-1" /> Recalcular
+                </Button>
+              )}
               {allowedTransitions(s.status as DriverSettlementStatus).map((next) => {
                 if (next === 'paid') {
                   return (
