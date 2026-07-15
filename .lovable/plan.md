@@ -1,57 +1,52 @@
-# Evolução do Portal do Cliente AGVLog
 
-Escopo enorme (19 seções, ~15 RPCs novas, ~10 componentes, tabelas novas). Impossível entregar tudo com qualidade em uma única iteração sem risco de quebra. Proposta: **4 fases incrementais**, cada uma entregando valor utilizável, com build/lint/testes verdes ao fim de cada fase.
+## Objetivo
 
-## Fase 1 — Navegação, escopo de cliente e Dashboard real
+Permitir criar um **acerto de motorista manual** (fora do fluxo automático baseado em viagem), vinculando **um ou mais romaneios (loads)** ao acerto, com a garantia de que cada romaneio só pode estar em **um único acerto ao mesmo tempo**. Manter possibilidade de correção (adicionar/remover romaneios) enquanto o acerto não estiver aprovado/pago/fechado.
 
-**Objetivo:** Cliente entra no portal e vê status real, sem placeholders.
+## O que muda para o usuário
 
-- `PortalLayout`: menu desktop com Início, Mercadorias, Tracking, Coletas, Documentos, Canhotos, Ocorrências, Relatórios, Configurações. Bottom nav mobile com 5 itens + botão "Mais" (Sheet).
-- Rotas em `App.tsx`: `/portal/tracking`, `/portal/reports`, `/portal/settings`.
-- **RPC nova:** `get_user_client_access_detailed` (nome + tax_id + permissões).
-- **Componente novo:** `PortalClientSelector` no header (aparece se >1 cliente). Contexto `PortalClientScopeProvider` + hook `usePortalClientScope` com `can(permission)`.
-- **RPCs novas:** `get_client_portal_summary_v2`, `get_client_portal_upcoming_deliveries`, `get_client_portal_alerts` (respeitando permissões driver/vehicle).
-- `PortalDashboard`: KPIs expandidos, lista real de próximas entregas, lista real de alertas com link direto.
-- Componentes reutilizáveis: `PortalKpiCard`, `PortalAlertList`, `PortalPermissionGate`.
+Na página **Acerto de Motoristas**:
 
-## Fase 2 — Mercadorias, Detalhe e Canhotos
+1. Novo botão **"Novo acerto manual"** ao lado de "Gerar / Recalcular pendentes".
+2. Diálogo de criação: escolher **motorista**, **veículo** (opcional), **data**, e selecionar **romaneios elegíveis** (finalizados/entregues e ainda não vinculados a nenhum outro acerto). Busca por nº do romaneio, origem, destino.
+3. Ao confirmar, o acerto é criado e recalcula automaticamente totais (peso, notas, frete, mercadoria, despesas, KM, resultado da rota) a partir dos romaneios selecionados.
+4. No drawer do acerto (aba **Romaneios**), enquanto o acerto **não estiver** aprovado/pago/fechado:
+   - Botão **"Adicionar romaneio"** — abre picker mostrando apenas romaneios ainda livres.
+   - Botão **"Remover"** por linha — desvincula o romaneio, liberando-o para outro acerto.
+   - Cada alteração dispara **recálculo** dos totais.
+5. Regra de exclusividade: se um romaneio já está em outro acerto ativo (não `reopened` sem vínculo), ele **não aparece** na lista de disponíveis. Tentativa direta retorna erro claro ("Romaneio já vinculado ao acerto #X").
 
-- `PortalShipments`: filtros expandidos (período, cidade, UF, com/sem canhoto, com ocorrência, atrasadas, hoje/amanhã), chips rápidos, cards mobile enriquecidos, ações rápidas por permissão.
-- `PUBLIC_STATUS_LABELS`: revisar labels amigáveis em `src/lib/portal/portalStatus.ts`.
-- **RPC nova:** `get_client_portal_shipment_detail_v2` retornando `timeline[]` unificada.
-- `PortalShipmentDetail`: cabeçalho executivo com CTAs, abas (Visão geral / Timeline / Documentos / Canhotos / Ocorrências / Tracking), timeline vertical.
-- Componentes: `PortalShipmentCard`, `PortalShipmentTimeline`, `PortalFilterBar`, `PortalDownloadButton`.
-- `PortalPods`: busca por NF, filtros de período/status/pendentes, cards mobile, mensagens de "arquivo pendente".
-- `PortalDocuments`: paginação, filtros, link para detalhe da mercadoria. Download seguro apenas se arquivo existir (senão botão desabilitado com tooltip). Edge Function `get-client-document-signed-url` **só se** verificarmos que há coluna `storage_path` em `fiscal_documents`; caso contrário, adiar.
+## Como funciona por dentro (técnico)
 
-## Fase 3 — Tracking, Coletas, Ocorrências
+### Banco de dados (migração)
 
-- **RPC nova:** `get_client_portal_tracking` sanitizando lat/lng/plate/driver por permissão.
-- `PortalTracking`: mapa Leaflet (react-leaflet 4.2.1 já no projeto) + lista lateral + filtros. Modo "sem live tracking" (timeline pública) quando permissão ausente.
-- **Migration aditiva:** tabela `client_pickup_requests` + grants + RLS.
-- **RPC nova:** `request_client_pickup_v2`.
-- `PortalPickups`: formulário expandido, lista com status detalhado, cancelamento restrito a `requested/under_review`.
-- **Migration aditiva:** tabela `client_occurrence_messages`.
-- **RPCs novas:** `create_client_occurrence_v2` (com `_fiscal_document_id`, `_pickup_order_id`, `_pod_id`, `_dispatch_stop_id`), `list_client_occurrence_messages`, `reply_client_occurrence`.
-- `PortalOccurrences`: abrir ocorrência a partir de NF/coleta/canhoto/carga, resposta do cliente quando `client_action_required`.
+- Nova tabela **`driver_settlement_loads`** (link N:N entre acerto e load) com:
+  - `settlement_id uuid NOT NULL REFERENCES driver_settlements(id) ON DELETE CASCADE`
+  - `load_id uuid NOT NULL REFERENCES loads(id) ON DELETE CASCADE`
+  - `tenant_id uuid NOT NULL`, `created_at`, `created_by`
+  - **`UNIQUE(load_id)` parcial** (exclusividade global do romaneio em qualquer acerto ativo). Como remoção é hard-delete da linha, o unique simples resolve.
+  - RLS + GRANTs padrão do projeto.
+- Tornar `dispatch_trip_id` **nullable** em `driver_settlements` (necessário para acertos manuais). Ajustar constraint única existente (`UNIQUE(dispatch_trip_id)`) para permitir múltiplos nulls (Postgres já permite) ou converter em unique parcial `WHERE dispatch_trip_id IS NOT NULL`.
+- Novo campo `is_manual boolean NOT NULL DEFAULT false` para diferenciar origem.
 
-## Fase 4 — Relatórios, Configurações, TeamManagement
+### Funções RPC (novas)
 
-- **RPC nova:** `get_client_portal_reports_summary`.
-- `PortalReports`: entregas por período, atrasadas, canhotos pendentes, ocorrências por tipo, coletas, ranking cidades, prazo médio. Exportação CSV client-side.
-- `PortalSettings`: informativo (clientes vinculados, permissões, preferências locais em `localStorage`).
-- `TeamManagement` aba portal: exibir nome/e-mail do usuário e nome do cliente, tipo em pt-BR, botão "copiar link", status ativo/inativo, renomear "Baixar canhotos" → "Baixar documentos/canhotos", texto explicativo.
+- `create_manual_driver_settlement(_tenant_id, _driver_id, _vehicle_id, _reference_date, _load_ids uuid[])`
+  - Valida motorista/tenant, checa que nenhum `load_id` está em outro acerto (via `driver_settlement_loads` ou via `dispatch_trip_id` do trip que já gerou acerto), cria settlement `pending_review`, insere links e chama recálculo.
+- `attach_loads_to_driver_settlement(_settlement_id, _load_ids uuid[])` — só em status editável; valida exclusividade; recalcula.
+- `detach_load_from_driver_settlement(_settlement_id, _load_id)` — só em status editável; recalcula.
+- `recalculate_manual_driver_settlement(_settlement_id)` — agrega totais a partir dos loads vinculados + despesas do motorista no período (mesma lógica dos automáticos, mas fonte = links, não trip).
+- `list_available_loads_for_settlement(_tenant_id, _driver_id, _search, _limit)` — retorna romaneios finalizados e ainda não vinculados a nenhum acerto ativo.
 
-## Regras transversais
+### Front-end
 
-- Migrations apenas aditivas, com `GRANT` para `authenticated` e `service_role`.
-- RPCs `SECURITY DEFINER` reutilizando helpers existentes (`_portal_user_client_ids`, `_portal_user_has_perm`, `portal_user_can_*`).
-- Nunca queries diretas a tabelas sensíveis no frontend do portal.
-- Estados de loading/vazio/erro consistentes; datas pt-BR; valores BRL; debounce em buscas; paginação; "limpar filtros".
-- Ao final de cada fase: `bun run test` + `bun run build` verdes.
+- `src/hooks/useDriverSettlements.tsx`: novos hooks `useCreateManualSettlement`, `useAttachLoadsToSettlement`, `useDetachLoadFromSettlement`, `useAvailableLoadsForSettlement`.
+- `src/components/financial/NewManualSettlementDialog.tsx` (novo): motorista + veículo + data + tabela multi-select de romaneios disponíveis.
+- `src/components/financial/AttachLoadsDialog.tsx` (novo): reutilizado dentro do drawer para adicionar romaneios a um acerto existente.
+- `src/pages/DriverSettlements.tsx`: botão "Novo acerto manual".
+- `src/components/financial/DriverSettlementDrawer.tsx`: na aba Romaneios, adicionar botões Adicionar/Remover quando `!isLocked(status)`.
 
-## Confirmação
+## Fora do escopo
 
-Este plano é grande mesmo dividido. Recomendo executar **fase a fase**, com sua validação entre uma e outra — a primeira fase (Navegação + Dashboard) já entrega um salto perceptível ao cliente final.
-
-**Devo começar pela Fase 1?** Se preferir outra ordem (ex.: priorizar Tracking, ou Coletas), me avise antes que eu comece a codar.
+- Redesenho da lógica de cálculo automática já existente para viagens.
+- Regras novas de contabilidade/aprovação — reaproveitamos o pipeline atual de status.
