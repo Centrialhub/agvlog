@@ -566,6 +566,95 @@ export default function ClosingReports() {
   );
 }
 
+function TripEditorDialog({ report, onClose, onSaveItem }: { report: ClosingReportRow; onClose: () => void; onSaveItem: (itemId: string, patch: any) => Promise<void> | void }) {
+  const [rows, setRows] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    (async () => {
+      setLoading(true);
+      const { data } = await (supabase as any).from('closing_report_items')
+        .select('id, load_id, load_number, route_label, route_complement, destination_city, origin_city, vehicle_plate, driver_name, departure_at, arrival_at_ts, km_initial, km_final, km_driven, fuel_liters, fuel_unit_price, fuel_total, consumption_km_l, sort_order')
+        .eq('closing_report_id', report.id).order('sort_order');
+      // dedupe by load_id (keep first)
+      const seen = new Set<string>();
+      const uniq: any[] = [];
+      for (const r of (data ?? [])) {
+        const k = r.load_id || `nf-${r.id}`;
+        if (seen.has(k)) continue;
+        seen.add(k); uniq.push(r);
+      }
+      setRows(uniq);
+      setLoading(false);
+    })();
+  }, [report.id]);
+
+  const setField = (id: string, field: string, value: any) => {
+    setRows(rs => rs.map(r => r.id === id ? { ...r, [field]: value } : r));
+  };
+
+  const saveRow = async (r: any) => {
+    setSaving(r.id);
+    try {
+      await onSaveItem(r.id, {
+        km_initial: r.km_initial !== '' && r.km_initial != null ? Number(r.km_initial) : null,
+        km_final: r.km_final !== '' && r.km_final != null ? Number(r.km_final) : null,
+        fuel_liters: r.fuel_liters !== '' && r.fuel_liters != null ? Number(r.fuel_liters) : null,
+        fuel_unit_price: r.fuel_unit_price !== '' && r.fuel_unit_price != null ? Number(r.fuel_unit_price) : null,
+        vehicle_plate: r.vehicle_plate || null,
+        driver_name: r.driver_name || null,
+        departure_at: r.departure_at || null,
+        arrival_at_ts: r.arrival_at_ts || null,
+        route_label: r.route_label || null,
+        route_complement: r.route_complement || null,
+      });
+      toast.success('Viagem atualizada');
+    } finally { setSaving(null); }
+  };
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-6xl">
+        <DialogHeader><DialogTitle>Editar viagens — {report.closing_number}</DialogTitle></DialogHeader>
+        <div className="max-h-[70vh] overflow-auto">
+          {loading ? <p className="text-sm">Carregando…</p> : (
+            <Table>
+              <TableHeader><TableRow>
+                <TableHead>Carga</TableHead><TableHead>Rota</TableHead><TableHead>Placa</TableHead><TableHead>Motorista</TableHead>
+                <TableHead>Saída</TableHead><TableHead>Chegada</TableHead>
+                <TableHead>KM Ini</TableHead><TableHead>KM Fim</TableHead><TableHead>KM</TableHead>
+                <TableHead>Litros</TableHead><TableHead>R$/L</TableHead><TableHead>km/L</TableHead>
+                <TableHead></TableHead>
+              </TableRow></TableHeader>
+              <TableBody>
+                {rows.map(r => (
+                  <TableRow key={r.id}>
+                    <TableCell className="text-xs">{r.load_number ?? '—'}</TableCell>
+                    <TableCell><Input className="w-32 h-8" value={r.route_label ?? r.destination_city ?? ''} onChange={e => setField(r.id, 'route_label', e.target.value)} /></TableCell>
+                    <TableCell><Input className="w-24 h-8" value={r.vehicle_plate ?? ''} onChange={e => setField(r.id, 'vehicle_plate', e.target.value.toUpperCase())} /></TableCell>
+                    <TableCell><Input className="w-32 h-8" value={r.driver_name ?? ''} onChange={e => setField(r.id, 'driver_name', e.target.value.toUpperCase())} /></TableCell>
+                    <TableCell><Input className="w-40 h-8" type="datetime-local" value={r.departure_at ? String(r.departure_at).slice(0, 16) : ''} onChange={e => setField(r.id, 'departure_at', e.target.value ? new Date(e.target.value).toISOString() : null)} /></TableCell>
+                    <TableCell><Input className="w-40 h-8" type="datetime-local" value={r.arrival_at_ts ? String(r.arrival_at_ts).slice(0, 16) : ''} onChange={e => setField(r.id, 'arrival_at_ts', e.target.value ? new Date(e.target.value).toISOString() : null)} /></TableCell>
+                    <TableCell><Input className="w-24 h-8" type="number" value={r.km_initial ?? ''} onChange={e => setField(r.id, 'km_initial', e.target.value)} /></TableCell>
+                    <TableCell><Input className="w-24 h-8" type="number" value={r.km_final ?? ''} onChange={e => setField(r.id, 'km_final', e.target.value)} /></TableCell>
+                    <TableCell className="text-xs">{(Number(r.km_final || 0) - Number(r.km_initial || 0)) || '—'}</TableCell>
+                    <TableCell><Input className="w-20 h-8" type="number" step="0.01" value={r.fuel_liters ?? ''} onChange={e => setField(r.id, 'fuel_liters', e.target.value)} /></TableCell>
+                    <TableCell><Input className="w-20 h-8" type="number" step="0.01" value={r.fuel_unit_price ?? ''} onChange={e => setField(r.id, 'fuel_unit_price', e.target.value)} /></TableCell>
+                    <TableCell className="text-xs">{r.consumption_km_l ? Number(r.consumption_km_l).toFixed(2) : '—'}</TableCell>
+                    <TableCell><Button size="sm" disabled={saving === r.id} onClick={() => saveRow(r)}>{saving === r.id ? '…' : 'Salvar'}</Button></TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </div>
+        <DialogFooter><Button variant="outline" onClick={onClose}>Fechar</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function Kpi({ label, value, tone }: { label: string; value: any; tone?: string }) {
   return (
     <Card><CardContent className="p-3">
