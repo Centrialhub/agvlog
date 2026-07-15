@@ -666,6 +666,14 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
             </Dialog>
           </div>
         )}
+        {s && s.is_manual && (
+          <AttachLoadsDialog
+            open={attachOpen}
+            onOpenChange={setAttachOpen}
+            settlementId={s.id}
+            driverId={s.driver_id}
+          />
+        )}
       </SheetContent>
     </Sheet>
   );
