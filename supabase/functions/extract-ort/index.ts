@@ -10,6 +10,32 @@ const jsonResp = (body: unknown, status = 200) => new Response(JSON.stringify(bo
   headers: { ...corsHeaders, "Content-Type": "application/json" },
 });
 
+const parseGatewayError = (raw: string) => {
+  try {
+    const parsed = JSON.parse(raw);
+    const type = typeof parsed?.type === "string" ? parsed.type : "";
+    const message = typeof parsed?.message === "string" ? parsed.message : "";
+    const details = typeof parsed?.details === "string" ? parsed.details : "";
+
+    if (type === "credit_limit_reached") {
+      return {
+        status: 402,
+        error: "Limite de créditos do workspace para IA atingido. Peça ao proprietário do workspace para ajustar o limite ou adicionar créditos antes de tentar ler a ORT novamente.",
+      };
+    }
+
+    return {
+      status: Number(parsed?.status) || 500,
+      error: details || message || "Falha no gateway de IA ao extrair a ORT.",
+    };
+  } catch {
+    return {
+      status: 500,
+      error: raw ? `Falha no gateway de IA ao extrair a ORT: ${raw.slice(0, 220)}` : "Falha no gateway de IA ao extrair a ORT.",
+    };
+  }
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -177,11 +203,11 @@ Deno.serve(async (req) => {
     });
 
     if (aiResp.status === 429) return jsonResp({ error: "Limite da IA atingido, tente novamente em instantes." }, 429);
-    if (aiResp.status === 402) return jsonResp({ error: "Créditos da Lovable AI insuficientes." }, 402);
     if (!aiResp.ok) {
       const errText = await aiResp.text().catch(() => "");
       console.error("[extract-ort] AI gateway error", aiResp.status, errText.slice(0, 800));
-      return jsonResp({ error: `Falha ao extrair a ORT (${aiResp.status}): ${errText.slice(0, 300)}` }, 500);
+      const parsedError = parseGatewayError(errText);
+      return jsonResp({ error: parsedError.error }, parsedError.status);
     }
 
     const aiJson = await aiResp.json();

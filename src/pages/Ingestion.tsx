@@ -57,6 +57,33 @@ function useDrivers() {
   });
 }
 
+async function getEdgeFunctionErrorMessage(error: any): Promise<string> {
+  const fallback = error?.message || 'Erro ao chamar a função de extração da ORT.';
+  const context = error?.context;
+
+  try {
+    if (context && typeof context.clone === 'function') {
+      const cloned = context.clone();
+      const body = await cloned.json().catch(() => null);
+      if (typeof body?.error === 'string' && body.error.trim()) return body.error;
+      if (typeof body?.message === 'string' && body.message.trim()) return body.message;
+    }
+    if (context && typeof context.json === 'function') {
+      const body = await context.json().catch(() => null);
+      if (typeof body?.error === 'string' && body.error.trim()) return body.error;
+      if (typeof body?.message === 'string' && body.message.trim()) return body.message;
+    }
+  } catch {
+    // Keep the original Supabase message when the response body is unavailable.
+  }
+
+  if (/non-2xx/i.test(fallback)) {
+    return 'A extração da ORT retornou erro no servidor, mas sem detalhe legível. Tente novamente e, se persistir, verifique os créditos/limites da IA do workspace.';
+  }
+
+  return fallback;
+}
+
 export default function Ingestion() {
   const { data: existingDocs = [] } = useFiscalDocuments();
   const { data: clients = [] } = useClients();
@@ -602,7 +629,7 @@ export default function Ingestion() {
       })));
 
       const { data, error } = await supabase.functions.invoke('extract-ort', { body: { files: payload } });
-      if (error) throw error;
+      if (error) throw new Error(await getEdgeFunctionErrorMessage(error));
       if ((data as any)?.error) throw new Error((data as any).error);
 
       const docs: OrtReviewDocument[] = ((data as any)?.documents || []).map((ort: any, idx: number) => {
