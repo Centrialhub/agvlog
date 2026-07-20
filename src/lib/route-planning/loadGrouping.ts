@@ -17,7 +17,12 @@ export interface LoadGroup {
   operational_route_id?: string | null;
 }
 
-const norm = (v?: string | null) => (v || '').trim().toUpperCase();
+const norm = (v?: string | null) =>
+  (v || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toUpperCase();
 
 function predominantCity(load: ConsolidationLoad): string | null {
   const counts = new Map<string, number>();

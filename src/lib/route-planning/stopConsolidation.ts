@@ -26,7 +26,12 @@ export interface ConsolidationLoad {
   items: ConsolidationLoadItem[];
 }
 
-const norm = (v?: string | null) => (v || '').trim().toUpperCase();
+const norm = (v?: string | null) =>
+  (v || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toUpperCase();
 
 /**
  * Consolida cargas + NF-es em paradas operacionais.
