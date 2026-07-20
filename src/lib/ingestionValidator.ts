@@ -2,6 +2,7 @@ import { ParsedNFe } from '@/lib/documentParsers';
 import { ParsedOrderRow } from '@/lib/documentParsers';
 import { FiscalDocument } from '@/hooks/useFiscalDocuments';
 import { Client } from '@/hooks/useClients';
+import { normalizeFiscalNumber, normalizeTaxId } from '@/lib/fiscalDocuments/fiscalIdentity';
 
 export type ValidationSeverity = 'error' | 'warning' | 'info';
 
@@ -50,6 +51,26 @@ export interface ValidationIndexes {
   docByAccessKey: Map<string, FiscalDocument>;
   /** existing doc por número de nota (fallback quando falta a chave) */
   docByInvoiceNumber: Map<string, FiscalDocument>;
+  /** existing doc por identidade fiscal composta: fornecedor + modelo + série + número */
+  docByCompositeIdentity: Map<string, FiscalDocument>;
+}
+
+function fiscalCompositeKey(input: {
+  emitterCnpj?: string | null;
+  remitterCnpj?: string | null;
+  model?: string | null;
+  fiscal_model?: string | null;
+  series?: string | null;
+  invoice_series?: string | null;
+  invoiceNumber?: string | null;
+  invoice_number?: string | null;
+}): string | null {
+  const cnpj = normalizeTaxId(input.emitterCnpj || input.remitterCnpj);
+  const number = normalizeFiscalNumber(input.invoiceNumber || input.invoice_number);
+  if (!cnpj || !number) return null;
+  const model = normalizeFiscalNumber(input.model || input.fiscal_model) || '55';
+  const series = normalizeFiscalNumber(input.series || input.invoice_series) || '0';
+  return [cnpj, model, series, number].join(':');
 }
 
 export function buildValidationIndexes(existingDocs: FiscalDocument[], clients: Client[]): ValidationIndexes {
@@ -57,10 +78,15 @@ export function buildValidationIndexes(existingDocs: FiscalDocument[], clients: 
   const invoiceNumberSet = new Set<string>();
   const docByAccessKey = new Map<string, FiscalDocument>();
   const docByInvoiceNumber = new Map<string, FiscalDocument>();
+  const docByCompositeIdentity = new Map<string, FiscalDocument>();
   for (const d of existingDocs) {
     if (d.access_key) {
       accessKeySet.add(d.access_key);
       docByAccessKey.set(d.access_key, d);
+    }
+    const compositeKey = fiscalCompositeKey(d);
+    if (compositeKey && !docByCompositeIdentity.has(compositeKey)) {
+      docByCompositeIdentity.set(compositeKey, d);
     }
     if (d.invoice_number) {
       invoiceNumberSet.add(d.invoice_number);
@@ -74,7 +100,7 @@ export function buildValidationIndexes(existingDocs: FiscalDocument[], clients: 
     if (tax) clientByTaxId.set(tax, c);
     if (c.company_name) clientByNameLower.set(c.company_name.toLowerCase(), c);
   }
-  return { accessKeySet, invoiceNumberSet, clientByTaxId, clientByNameLower, docByAccessKey, docByInvoiceNumber };
+  return { accessKeySet, invoiceNumberSet, clientByTaxId, clientByNameLower, docByAccessKey, docByInvoiceNumber, docByCompositeIdentity };
 }
 
 // Validate a parsed NF-e against existing data
@@ -90,8 +116,10 @@ export function validateNFe(
 
   const hasDuplicateAccessKey = !!nfe.accessKey && idx.accessKeySet.has(nfe.accessKey);
   const existingByKey = nfe.accessKey ? idx.docByAccessKey.get(nfe.accessKey) : undefined;
-  const existingByNumber = !existingByKey && nfe.invoiceNumber ? idx.docByInvoiceNumber.get(nfe.invoiceNumber) : undefined;
-  const existing = existingByKey || existingByNumber;
+  const nfeCompositeKey = fiscalCompositeKey(nfe);
+  const existingByComposite = !existingByKey && nfeCompositeKey ? idx.docByCompositeIdentity.get(nfeCompositeKey) : undefined;
+  const existingByNumber = !existingByKey && !existingByComposite && nfe.invoiceNumber ? idx.docByInvoiceNumber.get(nfe.invoiceNumber) : undefined;
+  const existing = existingByKey || existingByComposite || existingByNumber;
   const existingDocumentId = existing?.id || null;
   // Órfão reutilizável: NF já existe no banco mas ainda não foi vinculada a
   // uma carga (load_id === null) e não foi cancelada. Nesse caso não é erro:
@@ -108,18 +136,29 @@ export function validateNFe(
     });
   }
 
-  const duplicateByNumber = !hasDuplicateAccessKey && !!nfe.invoiceNumber && idx.invoiceNumberSet.has(nfe.invoiceNumber);
-  if (duplicateByNumber) {
+  const duplicateByComposite = !hasDuplicateAccessKey && !!existingByComposite;
+  if (duplicateByComposite) {
     validations.push({
-      field: 'invoiceNumber',
+      field: 'fiscalIdentity',
       message: isOrphanReusable
-        ? `Nota fiscal nº ${nfe.invoiceNumber} já existe (sem carga) — será reaproveitada.`
-        : `Nota fiscal nº ${nfe.invoiceNumber} já existe no sistema e não pode ser importada novamente`,
+        ? `Nota fiscal nº ${nfe.invoiceNumber} já existe para o mesmo fornecedor/série/modelo (sem carga) — será reaproveitada.`
+        : `Nota fiscal nº ${nfe.invoiceNumber} já existe para o mesmo fornecedor/série/modelo e não pode ser importada novamente`,
       severity: isOrphanReusable ? 'info' : 'error',
     });
   }
 
-  const isDuplicate = hasDuplicateAccessKey || duplicateByNumber;
+  const duplicateByLegacyNumber = !hasDuplicateAccessKey && !duplicateByComposite && !!existingByNumber;
+  if (duplicateByLegacyNumber) {
+    validations.push({
+      field: 'invoiceNumber',
+      message: isOrphanReusable
+        ? `Nota fiscal nº ${nfe.invoiceNumber} já existe sem carga — será reaproveitada.`
+        : `Nota fiscal nº ${nfe.invoiceNumber} já existe, mas sem chave/identidade fiscal completa para confirmar duplicidade.`,
+      severity: isOrphanReusable ? 'info' : 'warning',
+    });
+  }
+
+  const isDuplicate = hasDuplicateAccessKey || duplicateByComposite || duplicateByLegacyNumber;
 
   if (!nfe.invoiceNumber) {
     validations.push({ field: 'invoiceNumber', message: 'Número da NF não encontrado', severity: 'error' });
