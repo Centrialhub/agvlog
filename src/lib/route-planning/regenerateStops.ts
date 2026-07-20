@@ -3,7 +3,12 @@ import { consolidateLoadsIntoStops, type ConsolidationLoad } from './stopConsoli
 import { applySmartSequence, applyOriginalOrder, autoSequenceStops } from './simpleStopSequencing';
 import { simulateStopTimeline } from './timelineSimulation';
 
-const norm = (v?: string | null) => (v || '').trim().toUpperCase();
+const norm = (v?: string | null) =>
+  (v || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toUpperCase();
 
 const keyFor = (s: Pick<RouteStopDraft, 'client_id' | 'recipient_name' | 'city' | 'neighborhood'>) => [
   s.client_id ? `c:${s.client_id}` : `r:${norm(s.recipient_name)}`,
