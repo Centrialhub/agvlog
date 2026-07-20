@@ -582,6 +582,17 @@ export default function Ingestion() {
 
   const handleOrtFiles = useCallback(async (fileList: FileList) => {
     const files = Array.from(fileList);
+    // Limite razoável: PDFs muito grandes estouram o AI Gateway.
+    const MAX_PER_FILE = 3 * 1024 * 1024; // 3 MB por arquivo (recomendação Gemini inline)
+    const oversized = files.find(f => f.size > MAX_PER_FILE);
+    if (oversized) {
+      toast({
+        title: 'Arquivo muito grande',
+        description: `"${oversized.name}" tem ${(oversized.size / 1024 / 1024).toFixed(1)} MB. Reduza a resolução do scan ou envie páginas separadas (máx. 3 MB por arquivo).`,
+        variant: 'destructive',
+      });
+      return;
+    }
     setOrtProcessing(true);
     try {
       const payload = await Promise.all(files.map(async file => ({
@@ -592,6 +603,7 @@ export default function Ingestion() {
 
       const { data, error } = await supabase.functions.invoke('extract-ort', { body: { files: payload } });
       if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
 
       const docs: OrtReviewDocument[] = ((data as any)?.documents || []).map((ort: any, idx: number) => {
         const reviewDoc: OrtReviewDocument = {

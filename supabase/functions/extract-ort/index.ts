@@ -30,6 +30,25 @@ Deno.serve(async (req) => {
     const files = Array.isArray(body?.files) ? body.files : [];
     if (files.length === 0 || files.length > 5) return jsonResp({ error: "Envie de 1 a 5 imagens/PDFs da ORT" }, 400);
 
+    // Guard rails para o AI Gateway: rejeita cedo se o payload for grande demais
+    // (a Gemini via chat-completions aceita ~4 MB por parte inline). Base64 =
+    // ~1.37 × tamanho binário. 4 MB base64 ≈ 3 MB de arquivo original.
+    const PER_FILE_LIMIT = 4 * 1024 * 1024;
+    const TOTAL_LIMIT = 8 * 1024 * 1024;
+    let totalBytes = 0;
+    for (const f of files) {
+      const size = typeof f?.base64 === "string" ? f.base64.length : 0;
+      totalBytes += size;
+      if (size > PER_FILE_LIMIT) {
+        return jsonResp({
+          error: `Arquivo "${f?.name || "sem nome"}" muito grande para leitura por IA (limite ~3 MB). Reduza a resolução do scan ou envie páginas separadas.`,
+        }, 413);
+      }
+    }
+    if (totalBytes > TOTAL_LIMIT) {
+      return jsonResp({ error: "Conjunto de arquivos maior que ~6 MB. Envie em lotes menores." }, 413);
+    }
+
     const content: any[] = [{
       type: "text",
       text: [
@@ -48,7 +67,13 @@ Deno.serve(async (req) => {
     for (const file of files) {
       if (!file?.base64 || !file?.mimeType || !file?.name) return jsonResp({ error: "Arquivo ORT inválido" }, 400);
       content.push({ type: "text", text: `Arquivo: ${file.name}` });
-      content.push({ type: "image_url", image_url: { url: `data:${file.mimeType};base64,${file.base64}` } });
+      const isPdf = String(file.mimeType).toLowerCase() === "application/pdf"
+        || String(file.name).toLowerCase().endsWith(".pdf");
+      const mime = isPdf ? "application/pdf" : file.mimeType;
+      // Gemini via Lovable AI Gateway (formato compatível OpenAI) aceita PDFs
+      // e imagens usando `image_url` com data URL. Para PDFs, o gateway repassa
+      // como inlineData para o Gemini.
+      content.push({ type: "image_url", image_url: { url: `data:${mime};base64,${file.base64}` } });
     }
 
     const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -153,12 +178,18 @@ Deno.serve(async (req) => {
 
     if (aiResp.status === 429) return jsonResp({ error: "Limite da IA atingido, tente novamente em instantes." }, 429);
     if (aiResp.status === 402) return jsonResp({ error: "Créditos da Lovable AI insuficientes." }, 402);
-    if (!aiResp.ok) return jsonResp({ error: "Falha ao extrair a ORT" }, 500);
+    if (!aiResp.ok) {
+      const errText = await aiResp.text().catch(() => "");
+      console.error("[extract-ort] AI gateway error", aiResp.status, errText.slice(0, 800));
+      return jsonResp({ error: `Falha ao extrair a ORT (${aiResp.status}): ${errText.slice(0, 300)}` }, 500);
+    }
 
     const aiJson = await aiResp.json();
     const args = aiJson?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
+    if (!args) console.warn("[extract-ort] Resposta sem tool_call", JSON.stringify(aiJson).slice(0, 500));
     return jsonResp(args ? JSON.parse(args) : { documents: [] });
   } catch (e) {
+    console.error("[extract-ort] exception", e);
     return jsonResp({ error: e instanceof Error ? e.message : "Erro ao processar ORT" }, 500);
   }
 });
