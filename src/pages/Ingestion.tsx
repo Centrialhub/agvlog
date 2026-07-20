@@ -629,7 +629,7 @@ export default function Ingestion() {
       })));
 
       const { data, error } = await supabase.functions.invoke('extract-ort', { body: { files: payload } });
-      if (error) throw error;
+      if (error) throw new Error(await getEdgeFunctionErrorMessage(error));
       if ((data as any)?.error) throw new Error((data as any).error);
 
       const docs: OrtReviewDocument[] = ((data as any)?.documents || []).map((ort: any, idx: number) => {
