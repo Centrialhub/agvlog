@@ -107,7 +107,7 @@ export default function ValidationStep({
   const totalErrors = docs.filter(d => d.hasErrors).length + orders.filter(o => o.hasErrors).length;
   const totalWarnings = docs.filter(d => d.hasWarnings && !d.hasErrors).length + orders.filter(o => o.hasWarnings && !o.hasErrors).length;
   const totalValid = docs.filter(d => !d.hasErrors && (!d.isDuplicate || d.isOrphanReusable)).length + orders.filter(o => !o.hasErrors).length;
-  const totalReusable = docs.filter(d => d.isDuplicate && d.isOrphanReusable).length;
+  const totalReusable = docs.filter(d => d.isOrphanReusable).length;
   const totalBlocked = docs.filter(d => d.isDuplicate && !d.isOrphanReusable).length;
 
   const summaryStats = useMemo(() => {

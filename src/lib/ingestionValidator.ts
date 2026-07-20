@@ -88,7 +88,7 @@ export function validateNFe(
   const idx = indexes || buildValidationIndexes(existingDocs, clients);
   const validations: ValidationResult[] = [];
 
-  const isDuplicate = !!nfe.accessKey && idx.accessKeySet.has(nfe.accessKey);
+  const hasDuplicateAccessKey = !!nfe.accessKey && idx.accessKeySet.has(nfe.accessKey);
   const existingByKey = nfe.accessKey ? idx.docByAccessKey.get(nfe.accessKey) : undefined;
   const existingByNumber = !existingByKey && nfe.invoiceNumber ? idx.docByInvoiceNumber.get(nfe.invoiceNumber) : undefined;
   const existing = existingByKey || existingByNumber;
@@ -98,7 +98,7 @@ export function validateNFe(
   // é uma retomada de importação parcial anterior.
   const isOrphanReusable = !!existing && !existing.load_id && existing.status !== 'cancelled';
 
-  if (isDuplicate) {
+  if (hasDuplicateAccessKey) {
     validations.push({
       field: 'accessKey',
       message: isOrphanReusable
@@ -108,16 +108,18 @@ export function validateNFe(
     });
   }
 
-  const duplicateByNumber = !isDuplicate && !!nfe.invoiceNumber && idx.invoiceNumberSet.has(nfe.invoiceNumber);
+  const duplicateByNumber = !hasDuplicateAccessKey && !!nfe.invoiceNumber && idx.invoiceNumberSet.has(nfe.invoiceNumber);
   if (duplicateByNumber) {
     validations.push({
       field: 'invoiceNumber',
       message: isOrphanReusable
         ? `Nota fiscal nº ${nfe.invoiceNumber} já existe (sem carga) — será reaproveitada.`
-        : `Nota fiscal nº ${nfe.invoiceNumber} já existe no sistema`,
-      severity: isOrphanReusable ? 'info' : 'warning',
+        : `Nota fiscal nº ${nfe.invoiceNumber} já existe no sistema e não pode ser importada novamente`,
+      severity: isOrphanReusable ? 'info' : 'error',
     });
   }
+
+  const isDuplicate = hasDuplicateAccessKey || duplicateByNumber;
 
   if (!nfe.invoiceNumber) {
     validations.push({ field: 'invoiceNumber', message: 'Número da NF não encontrado', severity: 'error' });
