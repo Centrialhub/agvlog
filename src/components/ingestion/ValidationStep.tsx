@@ -65,7 +65,7 @@ export default function ValidationStep({
   };
 
   const missingStats = useMemo(() => {
-    const considered = docs.filter(d => !d.hasErrors && !d.isDuplicate);
+    const considered = docs.filter(d => !d.hasErrors && (!d.isDuplicate || d.isOrphanReusable));
     const total = considered.length;
     const missing = considered.filter(d => !d.source.clientLoadNumber);
     const missingCount = missing.length;
@@ -102,12 +102,13 @@ export default function ValidationStep({
 
   const missingExceeds = missingStats.total > 0 && missingStats.ratePct >= missingThreshold;
 
-  const validDocs = docs.filter(d => !d.hasErrors && !d.isDuplicate);
+  const validDocs = docs.filter(d => !d.hasErrors && (!d.isDuplicate || d.isOrphanReusable));
 
   const totalErrors = docs.filter(d => d.hasErrors).length + orders.filter(o => o.hasErrors).length;
   const totalWarnings = docs.filter(d => d.hasWarnings && !d.hasErrors).length + orders.filter(o => o.hasWarnings && !o.hasErrors).length;
-  const totalValid = docs.filter(d => !d.hasErrors).length + orders.filter(o => !o.hasErrors).length;
-  const totalBlocked = docs.filter(d => d.isDuplicate).length;
+  const totalValid = docs.filter(d => !d.hasErrors && (!d.isDuplicate || d.isOrphanReusable)).length + orders.filter(o => !o.hasErrors).length;
+  const totalReusable = docs.filter(d => d.isDuplicate && d.isOrphanReusable).length;
+  const totalBlocked = docs.filter(d => d.isDuplicate && !d.isOrphanReusable).length;
 
   const summaryStats = useMemo(() => {
     const weight = validDocs.reduce((s, d) => s + (d.source.totalWeight || 0), 0);
@@ -167,6 +168,11 @@ export default function ValidationStep({
             {f.label}
           </button>
         ))}
+        {totalReusable > 0 && (
+          <span className="px-3 py-1.5 rounded-full text-xs font-medium border border-success/30 bg-success/5 text-success">
+            {totalReusable} reaproveitáveis
+          </span>
+        )}
         {totalBlocked > 0 && (
           <span className="px-3 py-1.5 rounded-full text-xs font-medium border border-destructive/30 bg-destructive/5 text-destructive">
             {totalBlocked} duplicadas (bloqueadas)
@@ -374,14 +380,15 @@ export default function ValidationStep({
             const i = docs.indexOf(doc);
             const isEditing = editingDocIdx === i;
             return (
-              <Card key={i} className={doc.hasErrors ? 'border-destructive/30' : doc.isDuplicate ? 'border-destructive/20 opacity-60' : doc.hasWarnings ? 'border-warning/30' : ''}>
+              <Card key={i} className={doc.hasErrors ? 'border-destructive/30' : doc.isDuplicate && !doc.isOrphanReusable ? 'border-destructive/20 opacity-60' : doc.isOrphanReusable ? 'border-success/30' : doc.hasWarnings ? 'border-warning/30' : ''}>
                 <CardContent className="py-3 px-4">
                   <div className="flex items-start gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="font-medium text-sm">NF {doc.source.invoiceNumber || '—'}</span>
                         <span className="text-[10px] text-muted-foreground font-mono">{doc.fileName}</span>
-                        {doc.isDuplicate && <Badge variant="outline" className="bg-destructive/10 text-destructive text-[10px]">Duplicada</Badge>}
+                        {doc.isOrphanReusable && <Badge variant="outline" className="bg-success/10 text-success text-[10px]">Reaproveitável</Badge>}
+                        {doc.isDuplicate && !doc.isOrphanReusable && <Badge variant="outline" className="bg-destructive/10 text-destructive text-[10px]">Duplicada</Badge>}
                         {doc.hasErrors && !doc.isDuplicate && <Badge variant="outline" className="bg-destructive/10 text-destructive text-[10px]">Erro</Badge>}
                         {doc.hasWarnings && !doc.hasErrors && <Badge variant="outline" className="bg-warning/10 text-warning text-[10px]">Aviso</Badge>}
                         {!doc.hasErrors && !doc.hasWarnings && <Badge variant="outline" className="bg-success/10 text-success text-[10px]">OK</Badge>}
@@ -403,7 +410,7 @@ export default function ValidationStep({
                       </div>
 
                       {/* Client matching for unmatched */}
-                      {!doc.matchedClientId && !doc.isDuplicate && !doc.hasErrors && (
+                      {!doc.matchedClientId && (!doc.isDuplicate || doc.isOrphanReusable) && !doc.hasErrors && (
                         <div className="mt-2 flex items-center gap-2">
                           <span className="text-[10px] text-warning">Cliente não vinculado →</span>
                           <Select onValueChange={v => handleClientMatch(i, v)}>

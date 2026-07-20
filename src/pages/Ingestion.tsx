@@ -145,6 +145,9 @@ export default function Ingestion() {
   const reprocessBatchId = searchParams.get('reprocess');
   const reprocessSuffix = reprocessBatchId ? ` · Reprocessamento de ${reprocessBatchId}` : '';
 
+  const getValidatedDocKey = (doc: ValidatedDocument) =>
+    doc.source.accessKey || `${doc.source.emitterCnpj || ''}::${doc.source.model || '55'}::${doc.source.series || ''}::${doc.source.invoiceNumber}`;
+
   // Configurable confidence threshold for needsReview (calibrates OCR/extraction quality).
   const REVIEW_THRESHOLD_KEY = 'ingestion.reviewThreshold';
   const [reviewThreshold, setReviewThreshold] = useState<number>(() => {
@@ -1325,7 +1328,7 @@ export default function Ingestion() {
     const results: string[] = [];
 
     // Track created entities for linking
-    const createdDocIds: Map<string, string> = new Map(); // invoiceNumber -> id
+    const createdDocIds: Map<string, string> = new Map(); // fiscal identity/access key -> id
     const createdOrderIds: Map<string, string> = new Map(); // orderNumber -> id
 
     try {
@@ -1333,13 +1336,13 @@ export default function Ingestion() {
       for (const doc of validatedDocs.filter(d => !d.hasErrors && (!d.isDuplicate || d.isOrphanReusable))) {
         const savedId = (doc as any)._savedId;
         if (savedId) {
-          createdDocIds.set(doc.source.invoiceNumber, savedId);
+          createdDocIds.set(getValidatedDocKey(doc), savedId);
           results.push(`✅ NF ${doc.source.invoiceNumber} (já salva)`);
         } else if (doc.isOrphanReusable && doc.existingDocumentId) {
           // Retomada de importação: NF já existia no banco sem carga vinculada.
-          createdDocIds.set(doc.source.invoiceNumber, doc.existingDocumentId);
+          createdDocIds.set(getValidatedDocKey(doc), doc.existingDocumentId);
           (doc as any)._savedId = doc.existingDocumentId;
-          results.push(`♻️ NF ${doc.source.invoiceNumber} reaproveitada (já existia sem carga)`);
+          results.push(`✅ NF ${doc.source.invoiceNumber} reaproveitada (já existia sem carga)`);
         } else {
           // Fallback: save now if somehow not saved earlier
           try {
@@ -1417,7 +1420,7 @@ export default function Ingestion() {
                     : {};
                 })(),
             });
-            createdDocIds.set(doc.source.invoiceNumber, created.id);
+            createdDocIds.set(getValidatedDocKey(doc), created.id);
 
             if (freightValue && freightBreakdown?.tableId && currentTenant) {
               await logFreightCalculation(currentTenant.id, created.id, 'fiscal_document', freightBreakdown, user?.id);
@@ -1465,6 +1468,18 @@ export default function Ingestion() {
         try {
           const loadNumber = String(nextLoadSeq);
           nextLoadSeq += 1;
+          const docIds = suggestion.documents
+            .map(d => createdDocIds.get(getValidatedDocKey(d)) || (d.isOrphanReusable ? d.existingDocumentId : null) || (d as any)._savedId)
+            .filter((id): id is string => !!id);
+
+          if (suggestion.documents.length > 0 && docIds.length === 0) {
+            throw new Error('Nenhuma NF pôde ser vinculada (todas duplicadas ou com erro na importação).');
+          }
+
+          if (suggestion.documents.length > 0 && docIds.length !== suggestion.documents.length) {
+            throw new Error(`Somente ${docIds.length} de ${suggestion.documents.length} NF(s) ficaram disponíveis para vínculo. Carga não criada para evitar romaneio sem notas.`);
+          }
+
           const createdLoad = await createLoad.mutateAsync({
             load_number: loadNumber,
             destination: suggestion.region,
@@ -1483,11 +1498,8 @@ export default function Ingestion() {
           let itemsCreated = 0;
 
           // Vincula documentos à carga via RPC oficial (cria load_items + atualiza fiscal_documents + auditoria)
-          const docIds = suggestion.documents
-            .map(d => createdDocIds.get(d.source.invoiceNumber))
-            .filter((id): id is string => !!id);
           if (docIds.length > 0 && currentTenant) {
-            const { error: assignErr } = await (supabase as any).rpc('assign_fiscal_documents_to_load', {
+            const { data: assignResult, error: assignErr } = await (supabase as any).rpc('assign_fiscal_documents_to_load', {
               _tenant_id: currentTenant.id,
               _load_id: loadId,
               _document_ids: docIds,
@@ -1503,6 +1515,19 @@ export default function Ingestion() {
                 /* noop */
               }
               throw new Error(`Falha ao vincular ${docIds.length} NF(s): ${assignErr.message || assignErr}`);
+            }
+
+            const updatedCount = Number((assignResult as any)?.updated ?? docIds.length);
+            if (updatedCount !== docIds.length) {
+              try {
+                await (supabase as any).rpc('delete_load_safely', {
+                  _tenant_id: currentTenant.id,
+                  _load_id: loadId,
+                });
+              } catch {
+                /* noop */
+              }
+              throw new Error(`Vínculo incompleto: ${updatedCount} de ${docIds.length} NF(s) foram associadas. Carga cancelada para não ficar sem notas.`);
             }
             itemsCreated += docIds.length;
           } else if (suggestion.documents.length > 0 && docIds.length === 0) {
