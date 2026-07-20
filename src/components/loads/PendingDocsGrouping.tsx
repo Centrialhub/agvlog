@@ -190,8 +190,10 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
       let nextSeq = currentTenant
         ? Number(await getNextLoadNumberFromExisting(currentTenant.id))
         : Date.now();
-      // Create all loads in parallel
-      const loadPromises = selected.map(async (group) => {
+      const errorMessages: string[] = [];
+
+      for (const group of selected) {
+        let createdLoadId: string | null = null;
         try {
           const loadNumber = String(nextSeq);
           nextSeq += 1;
@@ -203,25 +205,39 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
             vehicle_id: vehicleId,
             status: 'planned',
           } as any);
+          createdLoadId = createdLoad.id;
 
           // Vincula documentos à carga via RPC oficial (cria load_items + atualiza fiscal_documents + audita)
           const docIds = group.docs.map(d => d.id);
           if (docIds.length > 0) {
-            const { error: assignError } = await (supabase as any).rpc('assign_fiscal_documents_to_load', {
+            const { data: assignResult, error: assignError } = await (supabase as any).rpc('assign_fiscal_documents_to_load', {
               _tenant_id: currentTenant!.id,
               _load_id: createdLoad.id,
               _document_ids: docIds,
             });
             if (assignError) throw assignError;
+            const updatedCount = Number((assignResult as any)?.updated ?? docIds.length);
+            if (updatedCount !== docIds.length) {
+              throw new Error(`Vínculo incompleto: ${updatedCount} de ${docIds.length} NF(s).`);
+            }
           }
 
           created++;
-        } catch {
+        } catch (error: any) {
+          if (createdLoadId && currentTenant) {
+            try {
+              await (supabase as any).rpc('delete_load_safely', {
+                _tenant_id: currentTenant.id,
+                _load_id: createdLoadId,
+              });
+            } catch {
+              /* mantém apenas o erro original para o usuário */
+            }
+          }
           errors++;
+          errorMessages.push(`${group.routeName}: ${error?.message || 'falha ao criar carga'}`);
         }
-      });
-
-      await Promise.all(loadPromises);
+      }
 
       queryClient.invalidateQueries({ queryKey: ['loads'] });
       queryClient.invalidateQueries({ queryKey: ['fiscal_documents'] });
@@ -229,9 +245,15 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
       queryClient.invalidateQueries({ queryKey: ['load_items'] });
       queryClient.invalidateQueries({ queryKey: ['pending_docs_count'] });
 
-      toast.success(`${created} carga(s) criada(s)${errors > 0 ? `, ${errors} erro(s)` : ''}`);
+      if (errors > 0) {
+        toast.error(`${created} carga(s) criada(s), ${errors} erro(s)`, {
+          description: errorMessages.slice(0, 2).join(' | '),
+        });
+      } else {
+        toast.success(`${created} carga(s) criada(s)`);
+        onOpenChange(false);
+      }
       onCreated();
-      onOpenChange(false);
     } finally {
       setExecuting(false);
     }
