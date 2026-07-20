@@ -41,7 +41,13 @@ export interface LoadItem {
   created_at: string;
   updated_at: string;
   orders?: { order_number: string; clients?: { company_name: string } | null } | null;
-  fiscal_documents?: { invoice_number: string | null } | null;
+  fiscal_documents?: {
+    invoice_number: string | null;
+    remitter: string | null;
+    recipient: string | null;
+    recipient_city: string | null;
+    recipient_state: string | null;
+  } | null;
 }
 
 export function useLoadItems(loadId: string | undefined) {
@@ -51,7 +57,7 @@ export function useLoadItems(loadId: string | undefined) {
       if (!loadId) return [];
       const { data, error } = await (supabase as any)
         .from('load_items')
-        .select('*, orders(order_number, clients(company_name)), fiscal_documents(invoice_number)')
+        .select('*, orders(order_number, clients(company_name)), fiscal_documents(invoice_number, remitter, recipient, recipient_city, recipient_state)')
         .eq('load_id', loadId)
         .order('created_at', { ascending: true });
       if (error) throw error;
