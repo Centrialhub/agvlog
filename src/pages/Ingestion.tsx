@@ -1335,6 +1335,11 @@ export default function Ingestion() {
         if (savedId) {
           createdDocIds.set(doc.source.invoiceNumber, savedId);
           results.push(`✅ NF ${doc.source.invoiceNumber} (já salva)`);
+        } else if (doc.isOrphanReusable && doc.existingDocumentId) {
+          // Retomada de importação: NF já existia no banco sem carga vinculada.
+          createdDocIds.set(doc.source.invoiceNumber, doc.existingDocumentId);
+          (doc as any)._savedId = doc.existingDocumentId;
+          results.push(`♻️ NF ${doc.source.invoiceNumber} reaproveitada (já existia sem carga)`);
         } else {
           // Fallback: save now if somehow not saved earlier
           try {
