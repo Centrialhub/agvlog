@@ -49,7 +49,10 @@ function docKey(doc: ValidatedDocument): string {
 }
 
 export default function RoutingStep({ docs, orders, routes, onBack, onNext, onLearnCity }: RoutingStepProps) {
-  const validDocs = useMemo(() => docs.filter(d => !d.hasErrors && !d.isDuplicate), [docs]);
+  const validDocs = useMemo(
+    () => docs.filter(d => !d.hasErrors && (!d.isDuplicate || d.isOrphanReusable)),
+    [docs],
+  );
   const validOrders = useMemo(() => orders.filter(o => !o.hasErrors), [orders]);
 
   const initialGroups = useMemo(() => {
