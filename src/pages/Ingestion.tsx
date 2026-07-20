@@ -1487,7 +1487,30 @@ export default function Ingestion() {
               _load_id: loadId,
               _document_ids: docIds,
             });
-            if (!assignErr) itemsCreated += docIds.length;
+            if (assignErr) {
+              // Rollback: remove carga vazia para não deixar cargas sem notas
+              try {
+                await (supabase as any).rpc('delete_load_safely', {
+                  _tenant_id: currentTenant.id,
+                  _load_id: loadId,
+                });
+              } catch {
+                /* noop */
+              }
+              throw new Error(`Falha ao vincular ${docIds.length} NF(s): ${assignErr.message || assignErr}`);
+            }
+            itemsCreated += docIds.length;
+          } else if (suggestion.documents.length > 0 && docIds.length === 0) {
+            // Nenhuma das NFs da sugestão foi criada com sucesso (duplicadas ou erro de criação)
+            try {
+              await (supabase as any).rpc('delete_load_safely', {
+                _tenant_id: currentTenant!.id,
+                _load_id: loadId,
+              });
+            } catch {
+              /* noop */
+            }
+            throw new Error('Nenhuma NF pôde ser vinculada (todas duplicadas ou com erro na importação).');
           }
 
           // Itens de pedidos não passam por NF — usa createLoadItem que agora exige fiscal_document_id,
