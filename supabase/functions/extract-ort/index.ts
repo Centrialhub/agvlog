@@ -48,7 +48,19 @@ Deno.serve(async (req) => {
     for (const file of files) {
       if (!file?.base64 || !file?.mimeType || !file?.name) return jsonResp({ error: "Arquivo ORT inválido" }, 400);
       content.push({ type: "text", text: `Arquivo: ${file.name}` });
-      content.push({ type: "image_url", image_url: { url: `data:${file.mimeType};base64,${file.base64}` } });
+      const mime = String(file.mimeType).toLowerCase();
+      // Gemini via Lovable AI Gateway aceita PDFs como `file` inline; imagens vão como image_url.
+      if (mime === "application/pdf" || String(file.name).toLowerCase().endsWith(".pdf")) {
+        content.push({
+          type: "file",
+          file: {
+            filename: file.name,
+            file_data: `data:application/pdf;base64,${file.base64}`,
+          },
+        });
+      } else {
+        content.push({ type: "image_url", image_url: { url: `data:${file.mimeType};base64,${file.base64}` } });
+      }
     }
 
     const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -153,12 +165,18 @@ Deno.serve(async (req) => {
 
     if (aiResp.status === 429) return jsonResp({ error: "Limite da IA atingido, tente novamente em instantes." }, 429);
     if (aiResp.status === 402) return jsonResp({ error: "Créditos da Lovable AI insuficientes." }, 402);
-    if (!aiResp.ok) return jsonResp({ error: "Falha ao extrair a ORT" }, 500);
+    if (!aiResp.ok) {
+      const errText = await aiResp.text().catch(() => "");
+      console.error("[extract-ort] AI gateway error", aiResp.status, errText.slice(0, 800));
+      return jsonResp({ error: `Falha ao extrair a ORT (${aiResp.status}): ${errText.slice(0, 300)}` }, 500);
+    }
 
     const aiJson = await aiResp.json();
     const args = aiJson?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
+    if (!args) console.warn("[extract-ort] Resposta sem tool_call", JSON.stringify(aiJson).slice(0, 500));
     return jsonResp(args ? JSON.parse(args) : { documents: [] });
   } catch (e) {
+    console.error("[extract-ort] exception", e);
     return jsonResp({ error: e instanceof Error ? e.message : "Erro ao processar ORT" }, 500);
   }
 });
