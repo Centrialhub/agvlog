@@ -1019,8 +1019,8 @@ export default function Ingestion() {
 
     const results: string[] = [];
     try {
-      for (const doc of validatedDocs.filter(d => !d.hasErrors && !d.isDuplicate)) {
-        const savedId = (doc as any)._savedId;
+      for (const doc of validatedDocs.filter(d => !d.hasErrors && (!d.isDuplicate || d.isOrphanReusable))) {
+        const savedId = (doc as any)._savedId || (doc.isOrphanReusable ? doc.existingDocumentId : null);
         try {
           if (savedId) {
             // Já salvo no upload — vincula à carga via RPC oficial.
@@ -1134,7 +1134,7 @@ export default function Ingestion() {
 
       const successCount = results.filter(r => r.startsWith('✅')).length;
       const errorCount = results.filter(r => r.startsWith('❌')).length;
-      const validDocsForReport = validatedDocs.filter(d => !d.hasErrors && !d.isDuplicate);
+      const validDocsForReport = validatedDocs.filter(d => !d.hasErrors && (!d.isDuplicate || d.isOrphanReusable));
       const matchedExisting = validDocsForReport.filter(d =>
         d.matchedClientId && !clientsToSyncSsx.has(d.matchedClientId)
       ).length;
@@ -1330,11 +1330,16 @@ export default function Ingestion() {
 
     try {
       // 1. Map fiscal documents (already saved on upload)
-      for (const doc of validatedDocs.filter(d => !d.hasErrors && !d.isDuplicate)) {
+      for (const doc of validatedDocs.filter(d => !d.hasErrors && (!d.isDuplicate || d.isOrphanReusable))) {
         const savedId = (doc as any)._savedId;
         if (savedId) {
           createdDocIds.set(doc.source.invoiceNumber, savedId);
           results.push(`✅ NF ${doc.source.invoiceNumber} (já salva)`);
+        } else if (doc.isOrphanReusable && doc.existingDocumentId) {
+          // Retomada de importação: NF já existia no banco sem carga vinculada.
+          createdDocIds.set(doc.source.invoiceNumber, doc.existingDocumentId);
+          (doc as any)._savedId = doc.existingDocumentId;
+          results.push(`♻️ NF ${doc.source.invoiceNumber} reaproveitada (já existia sem carga)`);
         } else {
           // Fallback: save now if somehow not saved earlier
           try {
@@ -1544,7 +1549,7 @@ export default function Ingestion() {
 
       const successCount = results.filter(r => r.startsWith('✅')).length;
       const errorCount = results.filter(r => r.startsWith('❌')).length;
-      const validDocsForReport = validatedDocs.filter(d => !d.hasErrors && !d.isDuplicate);
+      const validDocsForReport = validatedDocs.filter(d => !d.hasErrors && (!d.isDuplicate || d.isOrphanReusable));
       const matchedExisting = validDocsForReport.filter(d => !!d.matchedClientId).length;
       const execLabel = `Execução completa de cargas${reprocessSuffix}`;
       const reportExec = buildIngestionReport({
