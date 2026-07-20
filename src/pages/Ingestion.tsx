@@ -1019,8 +1019,8 @@ export default function Ingestion() {
 
     const results: string[] = [];
     try {
-      for (const doc of validatedDocs.filter(d => !d.hasErrors && !d.isDuplicate)) {
-        const savedId = (doc as any)._savedId;
+      for (const doc of validatedDocs.filter(d => !d.hasErrors && (!d.isDuplicate || d.isOrphanReusable))) {
+        const savedId = (doc as any)._savedId || (doc.isOrphanReusable ? doc.existingDocumentId : null);
         try {
           if (savedId) {
             // Já salvo no upload — vincula à carga via RPC oficial.
