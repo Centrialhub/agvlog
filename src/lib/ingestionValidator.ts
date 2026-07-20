@@ -384,7 +384,7 @@ export function generateLoadSuggestions(
   orders: ValidatedOrder[],
   routes: OperationalRouteRef[] = [],
 ): LoadSuggestion[] {
-  const validDocs = documents.filter(d => !d.hasErrors && !d.isDuplicate);
+  const validDocs = documents.filter(d => !d.hasErrors && (!d.isDuplicate || d.isOrphanReusable));
   const validOrders = orders.filter(o => !o.hasErrors);
 
   const regionMap = new Map<string, LoadSuggestion>();
