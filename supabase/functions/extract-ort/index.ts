@@ -30,6 +30,25 @@ Deno.serve(async (req) => {
     const files = Array.isArray(body?.files) ? body.files : [];
     if (files.length === 0 || files.length > 5) return jsonResp({ error: "Envie de 1 a 5 imagens/PDFs da ORT" }, 400);
 
+    // Guard rails para o AI Gateway: rejeita cedo se o payload for grande demais
+    // (a Gemini via chat-completions aceita ~4 MB por parte inline). Base64 =
+    // ~1.37 × tamanho binário. 4 MB base64 ≈ 3 MB de arquivo original.
+    const PER_FILE_LIMIT = 4 * 1024 * 1024;
+    const TOTAL_LIMIT = 8 * 1024 * 1024;
+    let totalBytes = 0;
+    for (const f of files) {
+      const size = typeof f?.base64 === "string" ? f.base64.length : 0;
+      totalBytes += size;
+      if (size > PER_FILE_LIMIT) {
+        return jsonResp({
+          error: `Arquivo "${f?.name || "sem nome"}" muito grande para leitura por IA (limite ~3 MB). Reduza a resolução do scan ou envie páginas separadas.`,
+        }, 413);
+      }
+    }
+    if (totalBytes > TOTAL_LIMIT) {
+      return jsonResp({ error: "Conjunto de arquivos maior que ~6 MB. Envie em lotes menores." }, 413);
+    }
+
     const content: any[] = [{
       type: "text",
       text: [
@@ -48,19 +67,13 @@ Deno.serve(async (req) => {
     for (const file of files) {
       if (!file?.base64 || !file?.mimeType || !file?.name) return jsonResp({ error: "Arquivo ORT inválido" }, 400);
       content.push({ type: "text", text: `Arquivo: ${file.name}` });
-      const mime = String(file.mimeType).toLowerCase();
-      // Gemini via Lovable AI Gateway aceita PDFs como `file` inline; imagens vão como image_url.
-      if (mime === "application/pdf" || String(file.name).toLowerCase().endsWith(".pdf")) {
-        content.push({
-          type: "file",
-          file: {
-            filename: file.name,
-            file_data: `data:application/pdf;base64,${file.base64}`,
-          },
-        });
-      } else {
-        content.push({ type: "image_url", image_url: { url: `data:${file.mimeType};base64,${file.base64}` } });
-      }
+      const isPdf = String(file.mimeType).toLowerCase() === "application/pdf"
+        || String(file.name).toLowerCase().endsWith(".pdf");
+      const mime = isPdf ? "application/pdf" : file.mimeType;
+      // Gemini via Lovable AI Gateway (formato compatível OpenAI) aceita PDFs
+      // e imagens usando `image_url` com data URL. Para PDFs, o gateway repassa
+      // como inlineData para o Gemini.
+      content.push({ type: "image_url", image_url: { url: `data:${mime};base64,${file.base64}` } });
     }
 
     const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
