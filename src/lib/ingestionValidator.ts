@@ -21,6 +21,13 @@ export interface ValidatedDocument {
   matchedClientId: string | null;
   matchedClientName: string | null;
   isDuplicate: boolean;
+  /**
+   * A NF já existe no banco mas está órfã (sem load_id vinculado). Pode ser
+   * reaproveitada em uma nova carga — não conta como erro na importação.
+   */
+  isOrphanReusable?: boolean;
+  /** ID do documento fiscal já existente (quando duplicado ou órfão). */
+  existingDocumentId?: string | null;
 }
 
 export interface ValidatedOrder {
@@ -39,14 +46,26 @@ export interface ValidationIndexes {
   invoiceNumberSet: Set<string>;
   clientByTaxId: Map<string, Client>;
   clientByNameLower: Map<string, Client>;
+  /** existing doc por chave de acesso — usado para detectar órfãos reutilizáveis */
+  docByAccessKey: Map<string, FiscalDocument>;
+  /** existing doc por número de nota (fallback quando falta a chave) */
+  docByInvoiceNumber: Map<string, FiscalDocument>;
 }
 
 export function buildValidationIndexes(existingDocs: FiscalDocument[], clients: Client[]): ValidationIndexes {
   const accessKeySet = new Set<string>();
   const invoiceNumberSet = new Set<string>();
+  const docByAccessKey = new Map<string, FiscalDocument>();
+  const docByInvoiceNumber = new Map<string, FiscalDocument>();
   for (const d of existingDocs) {
-    if (d.access_key) accessKeySet.add(d.access_key);
-    if (d.invoice_number) invoiceNumberSet.add(d.invoice_number);
+    if (d.access_key) {
+      accessKeySet.add(d.access_key);
+      docByAccessKey.set(d.access_key, d);
+    }
+    if (d.invoice_number) {
+      invoiceNumberSet.add(d.invoice_number);
+      if (!docByInvoiceNumber.has(d.invoice_number)) docByInvoiceNumber.set(d.invoice_number, d);
+    }
   }
   const clientByTaxId = new Map<string, Client>();
   const clientByNameLower = new Map<string, Client>();
@@ -55,7 +74,7 @@ export function buildValidationIndexes(existingDocs: FiscalDocument[], clients: 
     if (tax) clientByTaxId.set(tax, c);
     if (c.company_name) clientByNameLower.set(c.company_name.toLowerCase(), c);
   }
-  return { accessKeySet, invoiceNumberSet, clientByTaxId, clientByNameLower };
+  return { accessKeySet, invoiceNumberSet, clientByTaxId, clientByNameLower, docByAccessKey, docByInvoiceNumber };
 }
 
 // Validate a parsed NF-e against existing data
@@ -70,11 +89,22 @@ export function validateNFe(
   const validations: ValidationResult[] = [];
 
   const isDuplicate = !!nfe.accessKey && idx.accessKeySet.has(nfe.accessKey);
+  const existingByKey = nfe.accessKey ? idx.docByAccessKey.get(nfe.accessKey) : undefined;
+  const existingByNumber = !existingByKey && nfe.invoiceNumber ? idx.docByInvoiceNumber.get(nfe.invoiceNumber) : undefined;
+  const existing = existingByKey || existingByNumber;
+  const existingDocumentId = existing?.id || null;
+  // Órfão reutilizável: NF já existe no banco mas ainda não foi vinculada a
+  // uma carga (load_id === null) e não foi cancelada. Nesse caso não é erro:
+  // é uma retomada de importação parcial anterior.
+  const isOrphanReusable = !!existing && !existing.load_id && existing.status !== 'cancelled';
+
   if (isDuplicate) {
     validations.push({
       field: 'accessKey',
-      message: `NF-e ${nfe.invoiceNumber} já importada (chave de acesso duplicada)`,
-      severity: 'error',
+      message: isOrphanReusable
+        ? `NF-e ${nfe.invoiceNumber} já salva anteriormente sem carga — será reaproveitada nesta importação.`
+        : `NF-e ${nfe.invoiceNumber} já importada e vinculada a uma carga (chave de acesso duplicada).`,
+      severity: isOrphanReusable ? 'info' : 'error',
     });
   }
 
@@ -82,8 +112,10 @@ export function validateNFe(
   if (duplicateByNumber) {
     validations.push({
       field: 'invoiceNumber',
-      message: `Nota fiscal nº ${nfe.invoiceNumber} já existe no sistema`,
-      severity: 'warning',
+      message: isOrphanReusable
+        ? `Nota fiscal nº ${nfe.invoiceNumber} já existe (sem carga) — será reaproveitada.`
+        : `Nota fiscal nº ${nfe.invoiceNumber} já existe no sistema`,
+      severity: isOrphanReusable ? 'info' : 'warning',
     });
   }
 
@@ -181,6 +213,8 @@ export function validateNFe(
     matchedClientId,
     matchedClientName,
     isDuplicate,
+    isOrphanReusable,
+    existingDocumentId,
   };
 }
 
