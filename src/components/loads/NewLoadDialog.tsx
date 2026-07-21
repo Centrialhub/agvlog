@@ -14,7 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { AlertTriangle, Eye, Loader2, Plus, Search } from 'lucide-react';
+import { AlertTriangle, Eye, Loader2, Plus, Search, UserX, UserCheck } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface Props {
@@ -65,6 +65,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   const emptyForm = { load_number: '', vehicle_id: '', driver_id: '', origin: '', destination: '', neighborhood: '', invoice_number: '', client_id: '', client_name: '', supplier: '', notes: '' };
   const [form, setForm] = useState(emptyForm);
   const [loadNumberTouched, setLoadNumberTouched] = useState(false);
+  const [driverAutoSuggested, setDriverAutoSuggested] = useState(false);
   const { preference: docPreference, isLoaded: isDocPreferenceLoaded, savePreference: saveDocPreference } = useUserUiPreference('new_load_doc_filters', defaultDocPreference);
   const [docFilters, setDocFilters] = useState(emptyDocFilters);
   const [docSort, setDocSort] = useState<'recent' | 'alpha'>('recent');
@@ -86,6 +87,24 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   const currentDocPreference = useMemo(() => ({ filters: docFilters, sort: docSort, visibleDocCount, visibleRecentDocCount, scrollTop: docScrollTop, recentScrollTop: recentDocScrollTop }), [docFilters, docSort, visibleDocCount, visibleRecentDocCount, docScrollTop, recentDocScrollTop]);
 
   const normalize = (value: string) => value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+  // Auto-fill driver from vehicle's current_driver_id whenever a vehicle is chosen and no driver is set.
+  useEffect(() => {
+    if (!form.vehicle_id) return;
+    const v = vehicles.find((x: any) => x.id === form.vehicle_id);
+    const suggested = v?.current_driver_id;
+    if (!suggested) return;
+    // Only auto-fill if driver field is empty or previously auto-suggested (avoid overriding a manual pick).
+    if (form.driver_id && !driverAutoSuggested) return;
+    if (form.driver_id === suggested) return;
+    const exists = drivers.some((d: any) => d.id === suggested);
+    if (!exists) return;
+    setForm(f => ({ ...f, driver_id: suggested }));
+    setDriverAutoSuggested(true);
+  }, [form.vehicle_id, form.driver_id, driverAutoSuggested, drivers, vehicles]);
+
+  const selectedDriver = form.driver_id ? drivers.find((d: any) => d.id === form.driver_id) : null;
+  const driverHasAppAccess = !!selectedDriver?.user_id;
 
   const { data: fiscalDocs = [], isFetching: isFetchingFiscalDocs } = useQuery({
     queryKey: ['new_load_available_fiscal_docs', currentTenant?.id],
