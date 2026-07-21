@@ -14,7 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { AlertTriangle, Eye, Loader2, Plus, Search } from 'lucide-react';
+import { AlertTriangle, Eye, Loader2, Plus, Search, UserX, UserCheck } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface Props {
@@ -65,6 +65,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   const emptyForm = { load_number: '', vehicle_id: '', driver_id: '', origin: '', destination: '', neighborhood: '', invoice_number: '', client_id: '', client_name: '', supplier: '', notes: '' };
   const [form, setForm] = useState(emptyForm);
   const [loadNumberTouched, setLoadNumberTouched] = useState(false);
+  const [driverAutoSuggested, setDriverAutoSuggested] = useState(false);
   const { preference: docPreference, isLoaded: isDocPreferenceLoaded, savePreference: saveDocPreference } = useUserUiPreference('new_load_doc_filters', defaultDocPreference);
   const [docFilters, setDocFilters] = useState(emptyDocFilters);
   const [docSort, setDocSort] = useState<'recent' | 'alpha'>('recent');
@@ -86,6 +87,24 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
   const currentDocPreference = useMemo(() => ({ filters: docFilters, sort: docSort, visibleDocCount, visibleRecentDocCount, scrollTop: docScrollTop, recentScrollTop: recentDocScrollTop }), [docFilters, docSort, visibleDocCount, visibleRecentDocCount, docScrollTop, recentDocScrollTop]);
 
   const normalize = (value: string) => value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+  // Auto-fill driver from vehicle's current_driver_id whenever a vehicle is chosen and no driver is set.
+  useEffect(() => {
+    if (!form.vehicle_id) return;
+    const v = vehicles.find((x: any) => x.id === form.vehicle_id);
+    const suggested = v?.current_driver_id;
+    if (!suggested) return;
+    // Only auto-fill if driver field is empty or previously auto-suggested (avoid overriding a manual pick).
+    if (form.driver_id && !driverAutoSuggested) return;
+    if (form.driver_id === suggested) return;
+    const exists = drivers.some((d: any) => d.id === suggested);
+    if (!exists) return;
+    setForm(f => ({ ...f, driver_id: suggested }));
+    setDriverAutoSuggested(true);
+  }, [form.vehicle_id, form.driver_id, driverAutoSuggested, drivers, vehicles]);
+
+  const selectedDriver = form.driver_id ? drivers.find((d: any) => d.id === form.driver_id) : null;
+  const driverHasAppAccess = !!selectedDriver?.user_id;
 
   const { data: fiscalDocs = [], isFetching: isFetchingFiscalDocs } = useQuery({
     queryKey: ['new_load_available_fiscal_docs', currentTenant?.id],
@@ -611,13 +630,27 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="text-xs">Motorista</Label>
-              <Select value={form.driver_id || '__none__'} onValueChange={v => setForm(f => ({ ...f, driver_id: v === '__none__' ? '' : v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+              <Select value={form.driver_id || '__none__'} onValueChange={v => { setDriverAutoSuggested(false); setForm(f => ({ ...f, driver_id: v === '__none__' ? '' : v })); }}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">Nenhum</SelectItem>
-                  {drivers.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                  {drivers.map((d: any) => (
+                    <SelectItem key={d.id} value={d.id}>
+                      {d.name}{!d.user_id ? ' — sem app' : ''}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
+              {selectedDriver && (
+                <div className={`mt-1 flex items-center gap-1 text-[10px] ${driverHasAppAccess ? 'text-success' : 'text-warning'}`}>
+                  {driverHasAppAccess ? <UserCheck className="h-3 w-3" /> : <UserX className="h-3 w-3" />}
+                  {driverHasAppAccess
+                    ? (driverAutoSuggested ? 'Motorista sugerido pelo veículo — verá a carga no app.' : 'Motorista verá a carga no app.')
+                    : 'Motorista sem conta vinculada — não verá a carga no app do motorista.'}
+                </div>
+              )}
             </div>
             <div><Label className="text-xs">Destino / Rota personalizada</Label><Input value={form.destination} onChange={e => setForm(f => ({ ...f, destination: e.target.value }))} placeholder="Centro, rota local, cliente X" /></div>
           </div>
