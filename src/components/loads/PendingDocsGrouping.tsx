@@ -13,7 +13,7 @@ import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
-import { FileStack, MapPin, Truck, CheckCircle, Loader2, AlertTriangle, X } from 'lucide-react';
+import { FileStack, MapPin, Truck, CheckCircle, Loader2, AlertTriangle, X, User, UserX } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface PendingDoc {
@@ -66,6 +66,23 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
   const [executing, setExecuting] = useState(false);
   const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
   const [vehicleAssignments, setVehicleAssignments] = useState<Map<string, string>>(new Map());
+  const [driverAssignments, setDriverAssignments] = useState<Map<string, string>>(new Map());
+
+  const { data: drivers = [] } = useQuery({
+    queryKey: ['drivers_for_grouping', currentTenant?.id],
+    queryFn: async () => {
+      if (!currentTenant) return [] as any[];
+      const { data, error } = await supabase
+        .from('drivers')
+        .select('id, name, user_id, current_vehicle_id, active')
+        .eq('tenant_id', currentTenant.id)
+        .eq('active', true)
+        .order('name');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentTenant && open,
+  });
 
   const { data: pendingDocs = [], isLoading } = useQuery({
     queryKey: ['pending_fiscal_docs', currentTenant?.id],
@@ -168,6 +185,22 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
     setVehicleAssignments(newMap);
   }, [vehiclesWithCapacity, groups]);
 
+  // Auto-suggest driver based on vehicle assignment
+  useEffect(() => {
+    if (drivers.length === 0) return;
+    const next = new Map<string, string>();
+    for (const g of groups) {
+      const vId = vehicleAssignments.get(g.routeName);
+      if (!vId) continue;
+      const veh = (vehicles as any[]).find(v => v.id === vId);
+      const derived = veh?.current_driver_id
+        ? (drivers as any[]).find(d => d.id === veh.current_driver_id)
+        : null;
+      if (derived) next.set(g.routeName, derived.id);
+    }
+    setDriverAssignments(next);
+  }, [vehicleAssignments, drivers, groups, vehicles]);
+
   const toggleGroup = (name: string) => {
     setSelectedGroups(prev => {
       const next = new Set(prev);
@@ -198,11 +231,13 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
           const loadNumber = String(nextSeq);
           nextSeq += 1;
           const vehicleId = vehicleAssignments.get(group.routeName) || null;
+          const driverId = driverAssignments.get(group.routeName) || null;
 
           const createdLoad = await createLoad.mutateAsync({
             load_number: loadNumber,
             destination: group.routeName,
             vehicle_id: vehicleId,
+            driver_id: driverId,
             status: 'planned',
           } as any);
           createdLoadId = createdLoad.id;
@@ -347,6 +382,32 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
                                   <Truck className="h-3 w-3 shrink-0" />
                                   <span>{v.plate}</span>
                                   {v.max_pallets && <span className="text-muted-foreground">({v.max_pallets}p)</span>}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+
+                        <Select
+                          value={driverAssignments.get(g.routeName) || '__none__'}
+                          onValueChange={v => setDriverAssignments(prev => {
+                            const next = new Map(prev);
+                            if (v === '__none__') next.delete(g.routeName);
+                            else next.set(g.routeName, v);
+                            return next;
+                          })}
+                        >
+                          <SelectTrigger className="w-[160px] h-8 text-xs">
+                            <SelectValue placeholder="Motorista" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">Sem motorista</SelectItem>
+                            {(drivers as any[]).map(d => (
+                              <SelectItem key={d.id} value={d.id}>
+                                <div className="flex items-center gap-1">
+                                  {d.user_id ? <User className="h-3 w-3 shrink-0" /> : <UserX className="h-3 w-3 shrink-0 text-warning" />}
+                                  <span>{d.name}</span>
+                                  {!d.user_id && <span className="text-warning text-[9px]">(sem app)</span>}
                                 </div>
                               </SelectItem>
                             ))}
