@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Truck, MapPin, Package, Clock, ArrowRight, ClipboardCheck, AlertTriangle, Receipt, FileText, Map } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import DemoBanner from '@/components/driver/DemoBanner';
+import NoLoadsHelp from '@/components/driver/NoLoadsHelp';
 import { useState, useEffect } from 'react';
 import DriverDeliveryMap, { DeliveryPoint } from '@/components/driver/DriverDeliveryMap';
 import { TRIP_ACTIVE_STATUSES, tripStatusLabel } from '@/lib/status';
@@ -136,28 +137,14 @@ export default function DriverHome() {
         />
       )}
 
-      {!driver && !driverLoading && !isDemo && (
-        <Card>
-          <CardContent className="py-6 text-center">
-            <AlertTriangle className="h-8 w-8 text-warning mx-auto mb-2" />
-            <p className="text-sm font-medium">Conta não vinculada</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Peça ao administrador para vincular seu usuário ao cadastro de motorista.
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
-      {driver && activeTrips.length === 0 && standaloneLoads.length === 0 && !loading && !isDemo && (
-        <Card>
-          <CardContent className="py-8 text-center">
-            <Truck className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-            <p className="text-sm font-medium">Nenhuma viagem ativa</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Aguarde a atribuição de uma nova carga pela operação.
-            </p>
-          </CardContent>
-        </Card>
+      {!loading && !isDemo && (!driver || (activeTrips.length === 0 && standaloneLoads.length === 0)) && (
+        <NoLoadsHelp
+          driverLinked={!!driver}
+          driverActive={!!driver && (driver as any).status !== 'inactive'}
+          hasAssignedLoads={standaloneLoads.length > 0 || myLoads.length > 0}
+          hasActiveTrip={activeTrips.length > 0}
+          driverName={driver?.name}
+        />
       )}
 
       {standaloneLoads.length > 0 && (
