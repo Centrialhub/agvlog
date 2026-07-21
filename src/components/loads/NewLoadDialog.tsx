@@ -630,13 +630,27 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="text-xs">Motorista</Label>
-              <Select value={form.driver_id || '__none__'} onValueChange={v => setForm(f => ({ ...f, driver_id: v === '__none__' ? '' : v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+              <Select value={form.driver_id || '__none__'} onValueChange={v => { setDriverAutoSuggested(false); setForm(f => ({ ...f, driver_id: v === '__none__' ? '' : v })); }}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">Nenhum</SelectItem>
-                  {drivers.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                  {drivers.map((d: any) => (
+                    <SelectItem key={d.id} value={d.id}>
+                      {d.name}{!d.user_id ? ' — sem app' : ''}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
+              {selectedDriver && (
+                <div className={`mt-1 flex items-center gap-1 text-[10px] ${driverHasAppAccess ? 'text-success' : 'text-warning'}`}>
+                  {driverHasAppAccess ? <UserCheck className="h-3 w-3" /> : <UserX className="h-3 w-3" />}
+                  {driverHasAppAccess
+                    ? (driverAutoSuggested ? 'Motorista sugerido pelo veículo — verá a carga no app.' : 'Motorista verá a carga no app.')
+                    : 'Motorista sem conta vinculada — não verá a carga no app do motorista.'}
+                </div>
+              )}
             </div>
             <div><Label className="text-xs">Destino / Rota personalizada</Label><Input value={form.destination} onChange={e => setForm(f => ({ ...f, destination: e.target.value }))} placeholder="Centro, rota local, cliente X" /></div>
           </div>
