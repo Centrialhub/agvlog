@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useCurrentDriver, useActiveTrip } from '@/hooks/useCurrentDriver';
@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Truck, MapPin, Package, Clock, ArrowRight, ClipboardCheck, AlertTriangle, Receipt, FileText, Map } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import DemoBanner from '@/components/driver/DemoBanner';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import DriverDeliveryMap, { DeliveryPoint } from '@/components/driver/DriverDeliveryMap';
 import { TRIP_ACTIVE_STATUSES, tripStatusLabel } from '@/lib/status';
 import { LOAD_STATUS_LABELS, TERMINAL_LOAD_STATUSES } from '@/lib/status/loadStatus';
@@ -37,6 +37,7 @@ export default function DriverHome() {
   const { currentTenant } = useTenant();
   const { data: driver, isLoading: driverLoading } = useCurrentDriver();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { data: autoTrip } = useActiveTrip(driver?.id);
   const checklist = useChecklistStatus(autoTrip?.id);
   const [demoActive, setDemoActive] = useState(true);
@@ -76,6 +77,36 @@ export default function DriverHome() {
     },
     enabled: !!driver && !!currentTenant,
   });
+
+  // Realtime: refresh assigned loads/trips whenever the driver assignment or status changes.
+  useEffect(() => {
+    if (!driver?.id || !currentTenant?.id) return;
+    const channel = supabase
+      .channel(`driver_home_${driver.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'loads', filter: `tenant_id=eq.${currentTenant.id}` },
+        (payload: any) => {
+          const row = payload.new || payload.old;
+          if (row?.driver_id === driver.id) {
+            queryClient.invalidateQueries({ queryKey: ['driver_my_loads', driver.id] });
+            queryClient.invalidateQueries({ queryKey: ['driver_my_trips', driver.id] });
+          }
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'dispatch_trips', filter: `driver_id=eq.${driver.id}` },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['driver_my_trips', driver.id] });
+          queryClient.invalidateQueries({ queryKey: ['driver_my_loads', driver.id] });
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [driver?.id, currentTenant?.id, queryClient]);
 
   // Loads without an associated trip (driver assigned directly but no dispatch yet).
   const tripLoadIds = new Set(activeTrips.map((t: any) => t.loads?.id || t.load_id).filter(Boolean));
