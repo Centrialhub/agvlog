@@ -12,6 +12,7 @@ import DemoBanner from '@/components/driver/DemoBanner';
 import { useState } from 'react';
 import DriverDeliveryMap, { DeliveryPoint } from '@/components/driver/DriverDeliveryMap';
 import { TRIP_ACTIVE_STATUSES, tripStatusLabel } from '@/lib/status';
+import { LOAD_STATUS_LABELS, TERMINAL_LOAD_STATUSES } from '@/lib/status/loadStatus';
 
 const IS_PROD = import.meta.env.PROD;
 
@@ -58,12 +59,34 @@ export default function DriverHome() {
     enabled: !!driver && !!currentTenant,
   });
 
-  const loading = driverLoading || tripsLoading;
+  const { data: myLoads = [], isLoading: loadsLoading } = useQuery({
+    queryKey: ['driver_my_loads', driver?.id],
+    queryFn: async () => {
+      if (!driver || !currentTenant) return [];
+      const { data, error } = await supabase
+        .from('loads')
+        .select('id, load_number, origin, destination, status, trip_id, total_pallet_count, total_weight_kg, scheduled_load_at, vehicles(plate, nickname)')
+        .eq('tenant_id', currentTenant.id)
+        .eq('driver_id', driver.id)
+        .not('status', 'in', `(${TERMINAL_LOAD_STATUSES.join(',')})`)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!driver && !!currentTenant,
+  });
+
+  // Loads without an associated trip (driver assigned directly but no dispatch yet).
+  const tripLoadIds = new Set(activeTrips.map((t: any) => t.loads?.id || t.load_id).filter(Boolean));
+  const standaloneLoads = myLoads.filter((l: any) => !l.trip_id && !tripLoadIds.has(l.id));
+
+  const loading = driverLoading || tripsLoading || loadsLoading;
 
   // Em produção nunca mostra dados demo; só aparece se realmente não há viagem real.
   const isDemo =
     !IS_PROD &&
-    (!driver || activeTrips.length === 0) &&
+    (!driver || (activeTrips.length === 0 && standaloneLoads.length === 0)) &&
     demoActive &&
     !loading;
   const tripsToShow: any[] = isDemo ? [DEMO_TRIP] : activeTrips;
@@ -94,7 +117,7 @@ export default function DriverHome() {
         </Card>
       )}
 
-      {driver && activeTrips.length === 0 && !loading && !isDemo && (
+      {driver && activeTrips.length === 0 && standaloneLoads.length === 0 && !loading && !isDemo && (
         <Card>
           <CardContent className="py-8 text-center">
             <Truck className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
@@ -104,6 +127,53 @@ export default function DriverHome() {
             </p>
           </CardContent>
         </Card>
+      )}
+
+      {standaloneLoads.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+            Cargas atribuídas ({standaloneLoads.length})
+          </p>
+          {standaloneLoads.map((load: any) => (
+            <Card key={load.id} className="border-l-4 border-l-warning">
+              <CardContent className="p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Package className="h-4 w-4 text-warning" />
+                    <span className="text-sm font-medium">Carga {load.load_number}</span>
+                  </div>
+                  <Badge variant="outline" className="text-[10px]">
+                    {LOAD_STATUS_LABELS[load.status as keyof typeof LOAD_STATUS_LABELS] || load.status}
+                  </Badge>
+                </div>
+                <div className="space-y-1 text-xs text-muted-foreground">
+                  {(load.origin || load.destination) && (
+                    <div className="flex items-center gap-1.5">
+                      <MapPin className="h-3 w-3" />
+                      <span>{load.origin || '—'}</span>
+                      <ArrowRight className="h-3 w-3" />
+                      <span>{load.destination || '—'}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-3">
+                    {load.vehicles?.plate && (
+                      <span className="flex items-center gap-1"><Truck className="h-3 w-3" />{load.vehicles.plate}</span>
+                    )}
+                    {load.total_pallet_count > 0 && (
+                      <span>{load.total_pallet_count} pallets</span>
+                    )}
+                    {load.total_weight_kg > 0 && (
+                      <span>{Number(load.total_weight_kg).toLocaleString('pt-BR')} kg</span>
+                    )}
+                  </div>
+                </div>
+                <p className="text-[10px] text-muted-foreground italic">
+                  Aguardando criação da viagem pela operação para liberar paradas.
+                </p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       )}
 
       {tripsToShow.length > 0 && (
