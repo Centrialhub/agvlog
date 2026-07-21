@@ -388,6 +388,32 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
                           </SelectContent>
                         </Select>
 
+                        <Select
+                          value={driverAssignments.get(g.routeName) || '__none__'}
+                          onValueChange={v => setDriverAssignments(prev => {
+                            const next = new Map(prev);
+                            if (v === '__none__') next.delete(g.routeName);
+                            else next.set(g.routeName, v);
+                            return next;
+                          })}
+                        >
+                          <SelectTrigger className="w-[160px] h-8 text-xs">
+                            <SelectValue placeholder="Motorista" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">Sem motorista</SelectItem>
+                            {(drivers as any[]).map(d => (
+                              <SelectItem key={d.id} value={d.id}>
+                                <div className="flex items-center gap-1">
+                                  {d.user_id ? <User className="h-3 w-3 shrink-0" /> : <UserX className="h-3 w-3 shrink-0 text-warning" />}
+                                  <span>{d.name}</span>
+                                  {!d.user_id && <span className="text-warning text-[9px]">(sem app)</span>}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+
                         {occ ? (
                           <div className="w-20 text-center">
                             <Progress value={Math.min(occ.pct, 100)} className={`h-1.5 ${occ.pct > 100 ? '[&>div]:bg-destructive' : occ.pct < 50 ? '[&>div]:bg-warning' : ''}`} />
