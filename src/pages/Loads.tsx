@@ -107,7 +107,7 @@ export default function Loads() {
     queryKey: ['drivers', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data } = await supabase.from('drivers').select('id, name').eq('tenant_id', currentTenant.id).eq('active', true).order('name');
+      const { data } = await supabase.from('drivers').select('id, name, user_id').eq('tenant_id', currentTenant.id).eq('active', true).order('name');
       return data || [];
     },
     enabled: !!currentTenant,
