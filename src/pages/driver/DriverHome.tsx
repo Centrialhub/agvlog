@@ -12,6 +12,7 @@ import DemoBanner from '@/components/driver/DemoBanner';
 import NoLoadsHelp from '@/components/driver/NoLoadsHelp';
 import { useState, useEffect } from 'react';
 import DriverDeliveryMap, { DeliveryPoint } from '@/components/driver/DriverDeliveryMap';
+import DriverLoadNotes from '@/components/driver/DriverLoadNotes';
 import { TRIP_ACTIVE_STATUSES, tripStatusLabel } from '@/lib/status';
 import { LOAD_STATUS_LABELS, TERMINAL_LOAD_STATUSES } from '@/lib/status/loadStatus';
 
@@ -49,7 +50,7 @@ export default function DriverHome() {
       if (!driver || !currentTenant) return [];
       const { data, error } = await supabase
         .from('dispatch_trips')
-        .select('*, loads(load_number, origin, destination, status), vehicles(plate, nickname)')
+        .select('*, loads(id, load_number, origin, destination, status), vehicles(plate, nickname)')
         .eq('tenant_id', currentTenant.id)
         .eq('driver_id', driver.id)
         .in('status', TRIP_ACTIVE_STATUSES as unknown as string[])
@@ -188,6 +189,12 @@ export default function DriverHome() {
                 <p className="text-[10px] text-muted-foreground italic">
                   Aguardando criação da viagem pela operação para liberar paradas.
                 </p>
+                <DriverLoadNotes
+                  loadId={load.id}
+                  loadNumber={load.load_number}
+                  vehiclePlate={load.vehicles?.plate}
+                  driverName={driver?.name}
+                />
               </CardContent>
             </Card>
           ))}
@@ -231,6 +238,14 @@ export default function DriverHome() {
                 >
                   Ver Paradas
                 </Button>
+                {trip.loads?.id && (
+                  <DriverLoadNotes
+                    loadId={trip.loads.id}
+                    loadNumber={trip.loads.load_number}
+                    vehiclePlate={trip.vehicles?.plate}
+                    driverName={driver?.name}
+                  />
+                )}
               </CardContent>
             </Card>
           ))}
