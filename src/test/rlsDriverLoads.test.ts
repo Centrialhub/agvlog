@@ -28,6 +28,7 @@ type Load = {
   driver_id: string | null;
   vehicle_id: string | null;
   trip_id: string | null;
+  on_hold?: boolean;
 };
 
 interface Fixture {
@@ -49,16 +50,18 @@ function driverLoadIds(f: Fixture): Set<string> {
   // Path A: dispatch_trip_loads pivot → trip.driver
   for (const dtl of f.tripLoads) {
     const trip = f.trips.find((t) => t.id === dtl.dispatch_trip_id);
-    if (trip?.driver_id && activeDriverIds.has(trip.driver_id)) ids.add(dtl.load_id);
+    const load = f.loads.find((l) => l.id === dtl.load_id);
+    if (trip?.driver_id && activeDriverIds.has(trip.driver_id) && !load?.on_hold) ids.add(dtl.load_id);
   }
   // Path B: load.trip_id → trip.driver
   for (const l of f.loads) {
-    if (!l.trip_id) continue;
+    if (!l.trip_id || l.on_hold) continue;
     const trip = f.trips.find((t) => t.id === l.trip_id);
     if (trip?.driver_id && activeDriverIds.has(trip.driver_id)) ids.add(l.id);
   }
   // Path C: load.driver_id direct
   for (const l of f.loads) {
+    if (l.on_hold) continue;
     if (l.driver_id && activeDriverIds.has(l.driver_id)) ids.add(l.id);
   }
   return ids;
