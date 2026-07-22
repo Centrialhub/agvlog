@@ -277,7 +277,7 @@ export default function RoutePlanning() {
   const filteredLoads = useMemo(() => {
     const loads = filterDest === 'all'
       ? availableLoads
-      : availableLoads.filter(l => (l.destination || '').toUpperCase().includes(filterDest));
+      : availableLoads.filter(l => (l.destination || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().includes(filterDest));
     return [...loads].sort((a, b) => {
       const recipientA = a.items[0]?.fiscal_documents?.recipient || a.destination || '';
       const recipientB = b.items[0]?.fiscal_documents?.recipient || b.destination || '';
@@ -286,7 +286,7 @@ export default function RoutePlanning() {
   }, [availableLoads, filterDest]);
 
   const destinations = useMemo(() => {
-    const set = new Set(availableLoads.map(l => (l.destination || 'Sem destino').trim().toUpperCase()));
+    const set = new Set(availableLoads.map(l => (l.destination || 'Sem destino').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase()));
     return Array.from(set).sort();
   }, [availableLoads]);
 
@@ -359,7 +359,7 @@ export default function RoutePlanning() {
     // Agrupamento simples por destination textual (legado, opcional).
     const groups: Record<string, PendingLoad[]> = {};
     availableLoads.forEach(l => {
-      const key = (l.destination || 'Sem destino').trim().toUpperCase();
+      const key = (l.destination || 'Sem destino').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
       (groups[key] ||= []).push(l);
     });
     const suggested: RoutePlan[] = Object.entries(groups).map(([dest, loads]) => ({
