@@ -140,6 +140,7 @@ export default function DriverHome() {
           hasAssignedLoads={standaloneLoads.length > 0 || myLoads.length > 0}
           hasActiveTrip={activeTrips.length > 0}
           driverName={driver?.name}
+          driverId={driver?.id}
         />
       )}
 
