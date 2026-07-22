@@ -278,7 +278,10 @@ function VehicleDialog({ open, onOpenChange, vehicle, tenantId, userId }: {
       if (numKeys.includes(k) && v !== null) v = Number(v);
       payload[k] = v;
     });
-    if (payload.plate) payload.plate = String(payload.plate).toUpperCase();
+    if (payload.plate) {
+      payload.plate = String(payload.plate).toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (!payload.plate) { toast.error('Placa inválida'); setLoading(false); return; }
+    }
 
     const { error } = vehicle
       ? await supabase.from('vehicles').update(payload).eq('id', vehicle.id)
