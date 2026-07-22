@@ -247,6 +247,94 @@ export default function LoadReallocation() {
   const { data: sourceItems = [] } = useLoadItems(sourceLoadId || undefined);
   const { data: targetItems = [] } = useLoadItems(targetLoadId || undefined);
 
+  // Fetch aggregate metadata (client/city) for all active loads to allow
+  // hierarchical grouping in the selectors: Client → City → Route → Load.
+  const activeLoadIds = useMemo(() => activeLoads.map(l => l.id), [activeLoads]);
+  const { data: allActiveItems = [] } = useQuery({
+    queryKey: ['reallocation_load_meta', activeLoadIds.join(',')],
+    enabled: activeLoadIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('load_items')
+        .select('load_id, fiscal_documents(recipient, recipient_city, recipient_state)')
+        .in('load_id', activeLoadIds);
+      if (error) throw error;
+      return (data || []) as Array<{ load_id: string; fiscal_documents: any }>;
+    },
+  });
+
+  const norm = (v?: string | null) =>
+    (v || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+      .toUpperCase();
+
+  // Predominant client / city per load id
+  const loadMeta = useMemo(() => {
+    const byLoad = new Map<string, { clients: Map<string, number>; cities: Map<string, number> }>();
+    for (const row of allActiveItems) {
+      const fd = row.fiscal_documents || {};
+      const rec = fd.recipient as string | null;
+      const city = fd.recipient_city as string | null;
+      const state = fd.recipient_state as string | null;
+      const bucket = byLoad.get(row.load_id) || { clients: new Map(), cities: new Map() };
+      if (rec) bucket.clients.set(rec, (bucket.clients.get(rec) || 0) + 1);
+      if (city) {
+        const label = state ? `${city}/${state}` : city;
+        bucket.cities.set(label, (bucket.cities.get(label) || 0) + 1);
+      }
+      byLoad.set(row.load_id, bucket);
+    }
+    const pick = (m: Map<string, number>) => {
+      let best: string | null = null; let bestN = 0;
+      m.forEach((n, k) => { if (n > bestN) { bestN = n; best = k; } });
+      return best;
+    };
+    const out = new Map<string, { client: string | null; city: string | null }>();
+    byLoad.forEach((b, id) => out.set(id, { client: pick(b.clients), city: pick(b.cities) }));
+    return out;
+  }, [allActiveItems]);
+
+  // Hierarchical tree: Client → City → Route (destination) → loads
+  type GroupNode = { label: string; loads: Load[] };
+  const groupedLoads = useMemo(() => {
+    const tree = new Map<string, Map<string, Map<string, Load[]>>>();
+    for (const l of activeLoads) {
+      const meta = loadMeta.get(l.id);
+      const client = meta?.client || 'Sem cliente identificado';
+      const city = meta?.city || 'Sem cidade';
+      const route = l.destination || 'Sem rota';
+      const cKey = client;
+      const cityKey = city;
+      const rKey = route;
+      let byCity = tree.get(cKey);
+      if (!byCity) { byCity = new Map(); tree.set(cKey, byCity); }
+      let byRoute = byCity.get(cityKey);
+      if (!byRoute) { byRoute = new Map(); byCity.set(cityKey, byRoute); }
+      let arr = byRoute.get(rKey);
+      if (!arr) { arr = []; byRoute.set(rKey, arr); }
+      arr.push(l);
+    }
+    // Flatten to ordered SelectGroup structure: [{ header, loads }]
+    const groups: Array<{ header: string; loads: Load[] }> = [];
+    const clients = Array.from(tree.keys()).sort((a, b) => norm(a).localeCompare(norm(b)));
+    for (const c of clients) {
+      const byCity = tree.get(c)!;
+      const cities = Array.from(byCity.keys()).sort((a, b) => norm(a).localeCompare(norm(b)));
+      for (const city of cities) {
+        const byRoute = byCity.get(city)!;
+        const routes = Array.from(byRoute.keys()).sort((a, b) => norm(a).localeCompare(norm(b)));
+        for (const r of routes) {
+          const ls = byRoute.get(r)!.slice().sort((a, b) => norm(a.load_number).localeCompare(norm(b.load_number)));
+          const header = `${c} · ${city}${r && r !== city ? ` · ${r}` : ''}`;
+          groups.push({ header, loads: ls });
+        }
+      }
+    }
+    return groups;
+  }, [activeLoads, loadMeta]);
+
   const sourceLoad = activeLoads.find(l => l.id === sourceLoadId);
   const targetLoad = activeLoads.find(l => l.id === targetLoadId);
 
