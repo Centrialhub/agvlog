@@ -98,14 +98,32 @@ export function generateAutomaticRoutePlans(input: AutoRoutePlannerInput): Gener
       weight_kg: stops.reduce((s, x) => s + x.total_weight_kg, 0),
       volume_m3: stops.reduce((s, x) => s + x.total_volume_m3, 0),
     };
-    const vSug = suggestBestVehicleForRoute(need, vehicles, usedVehicleIds);
-    if (vSug.vehicle) usedVehicleIds.add(vSug.vehicle.id);
-    else if (vSug.reason) warnings.push(vSug.reason);
+    // 7a) Herda veículo/motorista pré-atribuídos em /loads quando todo o grupo concorda
+    const preassignedVehicles = new Set(g.loads.map(l => l.vehicle_id || undefined).filter(Boolean) as string[]);
+    const preassignedDrivers = new Set(g.loads.map(l => l.driver_id || undefined).filter(Boolean) as string[]);
+    const inheritedVehicleId = preassignedVehicles.size === 1 ? Array.from(preassignedVehicles)[0] : null;
+    const inheritedDriverId = preassignedDrivers.size === 1 ? Array.from(preassignedDrivers)[0] : null;
 
-    // 8) Motorista
-    const dSug = suggestBestDriverForRoute(vSug.vehicle?.id, drivers, usedDriverIds);
-    if (dSug.driver) usedDriverIds.add(dSug.driver.id);
-    else if (dSug.reason) warnings.push(dSug.reason);
+    let vehicleId: string | undefined;
+    let driverId: string | undefined;
+
+    if (inheritedVehicleId) {
+      vehicleId = inheritedVehicleId;
+      usedVehicleIds.add(inheritedVehicleId);
+    } else {
+      const vSug = suggestBestVehicleForRoute(need, vehicles, usedVehicleIds);
+      if (vSug.vehicle) { vehicleId = vSug.vehicle.id; usedVehicleIds.add(vSug.vehicle.id); }
+      else if (vSug.reason) warnings.push(vSug.reason);
+    }
+
+    if (inheritedDriverId) {
+      driverId = inheritedDriverId;
+      usedDriverIds.add(inheritedDriverId);
+    } else {
+      const dSug = suggestBestDriverForRoute(vehicleId, drivers, usedDriverIds);
+      if (dSug.driver) { driverId = dSug.driver.id; usedDriverIds.add(dSug.driver.id); }
+      else if (dSug.reason) warnings.push(dSug.reason);
+    }
 
     const criticalStops = stops.filter(s => s.risk_level === 'critical').length;
     const warningStops = stops.filter(s => s.risk_level === 'warning').length;
@@ -114,21 +132,21 @@ export function generateAutomaticRoutePlans(input: AutoRoutePlannerInput): Gener
 
     // Score: 100 base, -20 por crítico, -5 por warning, -30 se sem veículo, -30 se sem motorista
     let score = 100;
-    if (!vSug.vehicle) score -= 30;
-    if (!dSug.driver) score -= 30;
+    if (!vehicleId) score -= 30;
+    if (!driverId) score -= 30;
     score -= criticalStops * 20;
     score -= warningStops * 5;
     score = Math.max(0, Math.min(100, score));
 
-    const requires_review = g.requires_review || !vSug.vehicle || !dSug.driver || criticalStops > 0;
+    const requires_review = g.requires_review || !vehicleId || !driverId || criticalStops > 0;
 
     return {
       id: crypto.randomUUID(),
       name: g.name,
       loads: g.loads,
       stops,
-      vehicle_id: vSug.vehicle?.id,
-      driver_id: dSug.driver?.id,
+      vehicle_id: vehicleId,
+      driver_id: driverId,
       planned_start_at: plannedStartAt,
       sortMode: 'auto' as const,
       automation_score: score,
