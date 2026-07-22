@@ -359,6 +359,11 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
                             {g.routeName}
                           </Badge>
                           <Badge variant="outline" className="text-[10px]">{g.docs.length} NF-es</Badge>
+                          {g.ambiguousCities && g.ambiguousCities.length > 0 && (
+                            <Badge variant="outline" className="text-[10px] border-warning/40 text-warning" title={`Cidades cobertas por >1 rota ativa: ${g.ambiguousCities.join(', ')}. Revise antes de confirmar.`}>
+                              Rota ambígua ({g.ambiguousCities.length})
+                            </Badge>
+                          )}
                         </div>
                         <div className="flex flex-wrap gap-1 mt-1">
                           {g.cities.map((city, ci) => (
