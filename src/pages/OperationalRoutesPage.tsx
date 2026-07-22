@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Search, Plus, Pencil, Trash2, Map as MapIcon, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { normalizeCity as norm } from '@/lib/utils/normalizeCity';
 
 const CLASSIFICATIONS = [
   { value: 'general', label: 'Geral' },
@@ -61,7 +62,6 @@ export default function OperationalRoutesPage() {
 
   const hasDuplicate = (r: any) => {
     if (!r.active) return false;
-    const norm = (v: string) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
     return (Array.isArray(r.destinations) ? r.destinations : []).some((d: any) => {
       const key = norm(typeof d === 'string' ? d : (d?.name || d?.city || ''));
       return key && (duplicateCities.get(key) || 0) > 1;
