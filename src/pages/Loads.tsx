@@ -604,6 +604,8 @@ export default function Loads() {
         <div className="text-center text-muted-foreground py-12">Carregando...</div>
       ) : filtered.length === 0 ? (
         <div className="text-center text-muted-foreground py-12">Nenhuma carga encontrada</div>
+      ) : viewMode === 'kanban' ? (
+        <LoadsKanban loads={filtered} />
       ) : (
         <div className="space-y-5">
           {Object.entries(groupedByDay).map(([day, dayLoads]) => (
@@ -640,6 +642,11 @@ export default function Loads() {
                         <Badge variant="outline" className={`text-[10px] ${STATUS_COLORS[l.status] || ''}`}>
                           {LOAD_STATUS_LABELS[l.status] || l.status}
                         </Badge>
+                        {(l as any).on_hold && (
+                          <Badge variant="outline" className="text-[10px] bg-warning/10 text-warning border-warning/30">
+                            <PauseCircle className="h-3 w-3 mr-1" /> Em espera
+                          </Badge>
+                        )}
                       </div>
                       <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
                         {l.vehicles && <span className="flex items-center gap-1"><Truck className="h-3 w-3" /> {l.vehicles.plate}</span>}
@@ -793,6 +800,34 @@ export default function Loads() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Hold dialog */}
+      <Dialog open={!!holdTarget} onOpenChange={o => { if (!o) { setHoldTarget(null); setHoldReason(''); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Colocar carga em espera</DialogTitle>
+            <DialogDescription>
+              A carga <strong>{holdTarget?.load_number}</strong> ficará fora do fluxo de despacho
+              (não aparece em roteirização nem no app do motorista) até ser retomada.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <label className="text-xs text-muted-foreground">Motivo (opcional)</label>
+            <Textarea
+              value={holdReason}
+              onChange={e => setHoldReason(e.target.value)}
+              placeholder="Ex.: aguardando confirmação do cliente, veículo indisponível..."
+              rows={3}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setHoldTarget(null)}>Cancelar</Button>
+            <Button onClick={submitHold} disabled={holdMut.isPending}>
+              <PauseCircle className="h-4 w-4 mr-1" /> Colocar em espera
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
