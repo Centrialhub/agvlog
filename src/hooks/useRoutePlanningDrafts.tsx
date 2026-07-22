@@ -2,6 +2,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
+import { useRef } from 'react';
+
+export class DraftConflictError extends Error {
+  constructor(public routeId: string, public expected: string | null, public actual: string | null) {
+    super(`Draft ${routeId} foi modificado em outra aba/sessão (esperado=${expected}, atual=${actual}).`);
+    this.name = 'DraftConflictError';
+  }
+}
 
 export interface RoutePlanningDraft {
   id: string;
@@ -49,12 +57,28 @@ export function useSavePlanSnapshot() {
   const { currentTenant } = useTenant();
   const { user } = useAuth();
   const qc = useQueryClient();
-  return useMutation({
+  // Guarda otimista: rastreia updated_at conhecido por routeId.
+  const versionsRef = useRef<Map<string, string>>(new Map());
+  const mutation = useMutation({
     mutationFn: async ({ routeId, name, snapshot }: { routeId: string; name: string; snapshot: any }) => {
       if (!currentTenant) return null;
       const loadIds: string[] = Array.isArray(snapshot?.loads)
         ? snapshot.loads.map((l: any) => l.id).filter(Boolean)
         : [];
+      // 1. Leitura da versão atual no banco (se existir)
+      const { data: existing, error: readErr } = await supabase
+        .from('route_planning_drafts')
+        .select('updated_at')
+        .eq('id', routeId)
+        .maybeSingle();
+      if (readErr) throw readErr;
+      const dbVersion = (existing as any)?.updated_at ?? null;
+      const knownVersion = versionsRef.current.get(routeId) ?? null;
+      // Só bloqueia se já rastreamos uma versão prévia e ela difere do banco.
+      if (knownVersion && dbVersion && knownVersion !== dbVersion) {
+        throw new DraftConflictError(routeId, knownVersion, dbVersion);
+      }
+      const nowIso = new Date().toISOString();
       const payload: any = {
         id: routeId,
         tenant_id: currentTenant.id,
@@ -68,13 +92,25 @@ export function useSavePlanSnapshot() {
         route_config: snapshot,
         status: 'draft',
         created_by: user?.id,
-        updated_at: new Date().toISOString(),
+        updated_at: nowIso,
       };
-      const { error } = await supabase.from('route_planning_drafts').upsert(payload as any, { onConflict: 'id' });
+      const { data: saved, error } = await supabase
+        .from('route_planning_drafts')
+        .upsert(payload as any, { onConflict: 'id' })
+        .select('id, updated_at')
+        .single();
       if (error) throw error;
+      const savedVersion = (saved as any)?.updated_at ?? nowIso;
+      versionsRef.current.set(routeId, savedVersion);
       return routeId;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['route_planning_drafts'] }),
+  });
+  return Object.assign(mutation, {
+    seedVersion: (routeId: string, updatedAt: string | null | undefined) => {
+      if (routeId && updatedAt) versionsRef.current.set(routeId, updatedAt);
+    },
+    forgetVersion: (routeId: string) => { versionsRef.current.delete(routeId); },
   });
 }
 
