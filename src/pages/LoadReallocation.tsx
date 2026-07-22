@@ -85,6 +85,27 @@ function LoadColumn({ load, items, vehicles, selectedItems, onToggleItem, onSele
   const allFilteredSelected = filteredIds.length > 0 && filteredIds.every(id => selectedItems.has(id));
   const canSelect = !isTarget && !!onSelectMany;
 
+  // Aggregate recipients (client) and cities present in this load so the operator
+  // can quickly identify who the load is for — the load_number alone is not enough.
+  const recipientsSummary = useMemo(() => {
+    const recipients = new Map<string, number>();
+    const cities = new Map<string, number>();
+    for (const i of items) {
+      const fd: any = i.fiscal_documents || {};
+      const rec = (fd.recipient || '').trim();
+      const city = (fd.recipient_city || '').trim();
+      const state = (fd.recipient_state || '').trim();
+      if (rec) recipients.set(rec, (recipients.get(rec) || 0) + 1);
+      if (city) {
+        const label = state ? `${city}/${state}` : city;
+        cities.set(label, (cities.get(label) || 0) + 1);
+      }
+    }
+    const sortDesc = (m: Map<string, number>) =>
+      Array.from(m.entries()).sort((a, b) => b[1] - a[1]);
+    return { recipients: sortDesc(recipients), cities: sortDesc(cities) };
+  }, [items]);
+
   return (
     <Card className={`flex-1 min-w-0 ${isTarget ? 'ring-2 ring-primary/30' : ''}`}>
       <CardHeader className="pb-2 space-y-2">
@@ -108,6 +129,55 @@ function LoadColumn({ load, items, vehicles, selectedItems, onToggleItem, onSele
             <span className="text-warning">Sem veículo</span>
           )}
         </div>
+        {(recipientsSummary.recipients.length > 0 || recipientsSummary.cities.length > 0) && (
+          <div className="space-y-1 rounded-md bg-muted/40 border border-border/60 p-1.5">
+            {recipientsSummary.recipients.length > 0 && (
+              <div className="flex items-start gap-1.5">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground shrink-0 mt-0.5">
+                  Clientes
+                </span>
+                <div className="flex flex-wrap gap-1">
+                  {recipientsSummary.recipients.slice(0, 4).map(([name, n]) => (
+                    <Badge
+                      key={name}
+                      variant="secondary"
+                      className="text-[10px] font-normal max-w-[180px]"
+                      title={name}
+                    >
+                      <span className="truncate">{name}</span>
+                      <span className="ml-1 text-muted-foreground">·{n}</span>
+                    </Badge>
+                  ))}
+                  {recipientsSummary.recipients.length > 4 && (
+                    <Badge variant="outline" className="text-[10px] font-normal">
+                      +{recipientsSummary.recipients.length - 4}
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            )}
+            {recipientsSummary.cities.length > 0 && (
+              <div className="flex items-start gap-1.5">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground shrink-0 mt-0.5">
+                  Cidades
+                </span>
+                <div className="flex flex-wrap gap-1">
+                  {recipientsSummary.cities.slice(0, 5).map(([label, n]) => (
+                    <Badge key={label} variant="outline" className="text-[10px] font-normal">
+                      {label}
+                      <span className="ml-1 text-muted-foreground">·{n}</span>
+                    </Badge>
+                  ))}
+                  {recipientsSummary.cities.length > 5 && (
+                    <Badge variant="outline" className="text-[10px] font-normal">
+                      +{recipientsSummary.cities.length - 5}
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
         {maxPallets > 0 && (
           <div className="space-y-1">
             <div className="flex items-center gap-2">
