@@ -3,6 +3,8 @@
 // - Route Planning (roteirização)
 // - Loads (reimpressão)
 
+import { normalizeCityKey } from '@/lib/utils/normalizeCity';
+
 export type RomaneioDoc = {
   city: string;
   state: string;
@@ -58,17 +60,24 @@ const sortByRecipient = (docs: RomaneioDoc[]) => [...docs].sort((a, b) =>
 );
 
 function buildCityBlocks(docs: RomaneioDoc[]) {
+  // Group by normalized city key (accent-insensitive) so "Janaúba" and "Janauba"
+  // merge; preserve the first-seen display spelling for the header.
   const cityMap = new Map<string, RomaneioDoc[]>();
+  const cityDisplay = new Map<string, string>();
   sortByRecipient(docs).forEach(d => {
-    const key = (d.city || 'SEM CIDADE').toUpperCase();
-    if (!cityMap.has(key)) cityMap.set(key, []);
+    const key = normalizeCityKey(d.city);
+    if (!cityMap.has(key)) {
+      cityMap.set(key, []);
+      cityDisplay.set(key, (d.city || 'SEM CIDADE').trim().toUpperCase());
+    }
     cityMap.get(key)!.push(d);
   });
 
   let totalNotas = 0, totalEntregas = 0, totalValor = 0, totalPeso = 0, totalVolumes = 0;
   let html = '';
 
-  Array.from(cityMap.entries()).sort(([a], [b]) => collator.compare(a, b)).forEach(([cityName, cityDocs]) => {
+  Array.from(cityMap.entries()).sort(([a], [b]) => collator.compare(a, b)).forEach(([key, cityDocs]) => {
+    const cityName = cityDisplay.get(key) || key;
     const entregas = new Set(cityDocs.map(d => d.destinatario)).size;
     const notas = cityDocs.length;
     const valor = cityDocs.reduce((s, d) => s + d.valor, 0);
