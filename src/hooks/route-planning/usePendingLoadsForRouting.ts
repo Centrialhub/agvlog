@@ -49,6 +49,7 @@ export function usePendingLoadsForRouting() {
         .eq('tenant_id', currentTenant.id)
         .eq('status', 'planned')
         .is('trip_id', null)
+        .eq('on_hold' as any, false)
         .order('destination', { ascending: true });
       if (error) throw error;
       if (!loads || loads.length === 0) return [];
