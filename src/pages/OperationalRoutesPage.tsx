@@ -46,7 +46,6 @@ export default function OperationalRoutesPage() {
   // Detecta cidades presentes em mais de uma rota ativa (duplicatas de cobertura)
   const duplicateCities = useMemo(() => {
     const counts = new Map<string, number>();
-    const norm = (v: string) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
     routes.filter(r => r.active).forEach(r => {
       const seen = new Set<string>();
       (Array.isArray(r.destinations) ? r.destinations : []).forEach((d: any) => {
