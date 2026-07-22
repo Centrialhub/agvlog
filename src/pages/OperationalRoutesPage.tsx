@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Search, Plus, Pencil, Trash2, Map, X } from 'lucide-react';
+import { Search, Plus, Pencil, Trash2, Map as MapIcon, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 const CLASSIFICATIONS = [
@@ -137,7 +137,7 @@ export default function OperationalRoutesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-            <Map className="h-6 w-6 text-primary" /> Rotas Operacionais
+            <MapIcon className="h-6 w-6 text-primary" /> Rotas Operacionais
           </h1>
           <p className="text-sm text-muted-foreground">
             Cadastro de rotas para roteirização. Diferente de corredores monitorados (telemetria).
