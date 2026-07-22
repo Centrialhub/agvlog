@@ -33,16 +33,13 @@ export function useCurrentDriver() {
 }
 
 export function useActiveTrip(driverId: string | undefined) {
-  const { currentTenant } = useTenant();
-
   return useQuery({
     queryKey: ['driver_active_trip', driverId],
     queryFn: async () => {
-      if (!driverId || !currentTenant) return null;
+      if (!driverId) return null;
       const { data, error } = await supabase
         .from('dispatch_trips')
         .select('*, loads(load_number, origin, destination, status), vehicles(plate, nickname)')
-        .eq('tenant_id', currentTenant.id)
         .eq('driver_id', driverId)
         .in('status', TRIP_ACTIVE_STATUSES as unknown as string[])
         .order('created_at', { ascending: false })
@@ -51,6 +48,6 @@ export function useActiveTrip(driverId: string | undefined) {
       if (error) throw error;
       return data;
     },
-    enabled: !!driverId && !!currentTenant,
+    enabled: !!driverId,
   });
 }

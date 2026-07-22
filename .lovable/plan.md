@@ -1,86 +1,49 @@
+## Diagnóstico do caso 1004 / GVJ3909 / Leandro
 
-## Diagnóstico (verificado no banco)
+Verificado direto no banco (não é hipótese):
 
-Na tabela `operational_routes` do seu tenant existem **49 rotas ativas**, mas na verdade são **dois catálogos sobrepostos** que foram semeados em datas diferentes:
+- `loads` `1004`: `driver_id = LEANDRO`, `vehicle_id = GVJ3909`, `trip_id = 69383db8`, `status = ready`, `on_hold = false`, `tenant_id = 6e874e6e…`.
+- `dispatch_trips 69383db8`: `driver_id = LEANDRO`, `status = planned`, mesmo tenant.
+- `drivers` LEANDRO: `active = true`, `user_id = 87873f27…`.
+- `tenant_memberships`: usuário `87873f27` tem role `driver` no tenant correto.
+- RLS: `_driver_load_ids()` cobre os 3 caminhos (direto, via `trip_id`, via `dispatch_trip_loads`) e a política `Drivers view own dispatch_trips` cobre `planned`.
 
-- **15/04** — catálogo por município: `MG-JAIBA`, `MG-JANUARIA`, `MG-DIAMANTINA`, `MG-PIRAPORA`, `MG-JANAUBA`, `MG-CURVELO`, `MG-BOCAIUVA`, `MG-ESPINOSA`, …
-- **16/04** — catálogo por rota comercial: `ROTA 24 - JANUARIA`, `ROTA 29 - DIAMANTINA`, `ROTA 26 - PIRAPORA`, `ROTA 23 - JANAUBA / ESPINOSA`, `ROTA 22 - MONTES CLAROS / CURVELO`, …
+Ou seja, do lado do banco a carga **deveria** aparecer. O que aparece "despachada" na visão do operador é na verdade `load.status=ready` + `trip.status=planned` — a viagem nunca saiu de "planejada", então nada foi realmente despachado, apesar do rótulo na UI operacional. O ponto mais provável para o app não mostrar é do lado do cliente:
 
-Nenhuma linha tem `updated_at ≠ created_at`, ou seja, **nenhuma rota foi renomeada manualmente**. O que o operador percebeu como “a rota mudou de nome sozinha” é o **matcher** de `src/lib/route-planning/loadGrouping.ts` escolhendo a primeira rota cuja lista de `destinations` bate com a cidade predominante da carga — como existem duas rotas cobrindo a mesma cidade, ora vem `MG-JANUARIA`, ora `ROTA 24 - JANUARIA`, dependendo da ordem do array. E, na tela `/operational-routes`, ambos aparecem lado a lado, dando a sensação de duplicata.
+1. Em `src/pages/driver/DriverHome.tsx` as duas queries filtram por `.eq('tenant_id', currentTenant.id)`. Se, na sessão do motorista, `useTenant` ainda não resolveu o tenant (ou resolve outro tenant no primeiro render), o filtro exclui tudo mesmo com RLS liberando.
+2. O canal Realtime também usa `filter: tenant_id=eq.${currentTenant.id}`, então uma inconsistência de tenant nunca é auto-corrigida.
+3. `NoLoadsHelp` mostra "sem cargas" sem qualquer sinal de que existe carga atribuída em outro escopo, o que mascara o problema.
 
-Também não há `UNIQUE(tenant_id, name)` nem normalização, então nada impede novas duplicatas por acento/caixa (`MG-JAIBA` vs `MG-JAÍBA`, `ROTA 24 - JANUARIA` vs `Rota 24 – Januária`, etc.). Não há linhas em `route_templates` nem em `route_planning_drafts`, então o problema está isolado neste catálogo.
+Não vou tratar como resolvido antes de logar de fato como Leandro no preview e confirmar. Também vou checar se o trigger `trg_loads_autofill_driver` está sobrescrevendo `driver_id` quando o `current_driver_id` do veículo muda (potencial causa "generalizada" mencionada pelo usuário).
 
-## Plano
+## Plano de correção
 
-### 1. Consolidar o catálogo em uma versão só (banco)
+### 1. Confirmar sintoma real (antes de qualquer edição)
+- Rodar Playwright autenticado como o usuário do motorista (`87873f27…`) via sessão gerenciada, abrir `/driver`, capturar: `currentTenant.id` real na sessão, retorno das duas queries, e a UI final. Sem esse passo o resto fica marcado UNVERIFIED.
+- Consultar `entity_audit_log` do `loads 0b988ce7…` e histórico do `driver_id` para descartar sobrescrita por trigger.
 
-- Escolher a família **`ROTA NN - NOME`** como canônica (é a que a operação nomeia no dia-a-dia).
-- Para cada par sobreposto (mesma cidade base), fazer:
-  - copiar destinos da versão `MG-…` para a `ROTA NN - …` se faltar algum;
-  - marcar `active = false` na versão `MG-…` (não deletar — preserva histórico e qualquer referência antiga).
-- Deixar ativas apenas rotas `MG-…` que **não têm** equivalente em `ROTA NN - …` (ex.: `MG-MC-001`, `MG-MIRABELA`, `MG-ARACUAI`, `MG-ITACAMBIRA`, `MG-FRANCISCO SA`, `MG-BR. DE MINAS`, `MG-C. JESUS`, `MG-PORTEIRINHA`), até o operador decidir.
+### 2. Remover dependência frágil de `currentTenant` no app do motorista
+Ajustes contidos em `src/pages/driver/DriverHome.tsx`:
+- Remover `.eq('tenant_id', currentTenant.id)` das queries `driver_my_trips` e `driver_my_loads`. A RLS já restringe ao driver logado; o filtro por tenant client-side não protege nada e quebra quando o tenant tarda a resolver.
+- Habilitar as queries com `enabled: !!driver` (sem exigir `currentTenant`).
+- No canal Realtime: trocar `filter: tenant_id=eq.…` por `filter: driver_id=eq.${driver.id}` em `loads`, mantendo o listener de `dispatch_trips` que já usa `driver_id`.
+- Em `useActiveTrip` (`src/hooks/useCurrentDriver.tsx`), mesma remoção do filtro de tenant.
 
-Migration executa esse merge em SQL determinístico, sem apagar nada.
+### 3. Tornar o vazio informativo
+Em `src/components/driver/NoLoadsHelp.tsx`:
+- Adicionar uma chamada leve a `loads` sem qualquer filtro além de `driver_id = me` para detectar "existem cargas atribuídas, mas nenhuma passou o filtro atual" e exibir texto: "existe(m) N carga(s) vinculada(s) a você — se não estão aparecendo, peça à operação para verificar tenant/status/on_hold".
+- Mostrar `driver.id` e email logado num bloco copiável para suporte.
 
-### 2. Impedir novas duplicatas e renomes silenciosos
+### 4. Blindar o trigger de auto-preencher motorista
+Auditar `trg_loads_autofill_driver`:
+- Se ele hoje sobrescreve `driver_id` no `UPDATE` quando `current_driver_id` do veículo muda, restringir para atuar somente em `INSERT` ou apenas quando `NEW.driver_id IS NULL`. Isso é o que costuma "sumir" cargas de um motorista quando o veículo passa a outro.
+- Só emitir migration se a auditoria confirmar sobrescrita indevida.
 
-- `CREATE UNIQUE INDEX operational_routes_tenant_name_key ON operational_routes (tenant_id, lower(unaccent(name))) WHERE active`;
-- Trigger simples que **preserva `name` quando não foi enviado no `UPDATE`** — corta o caso em que a UI envia o form inteiro com um campo em branco e “renomeia” a rota sem querer;
-- Auditoria: adicionar `INSERT INTO entity_audit_log` em `AFTER UPDATE OF name` para que qualquer alteração futura fique rastreável (quem, quando, de onde para onde).
+### 5. Verificação final
+- Nova sessão Playwright do motorista real → carga `1004` aparece em "Cargas atribuídas" ou dentro de "Viagens ativas".
+- Rodar `bunx vitest run src/test/rlsDriverLoads.test.ts src/test/loadKanbanColumn.test.ts` — devem continuar verdes.
+- Adicionar um teste em `rlsDriverLoads.test.ts` cobrindo o cenário "carga com `trip_id` planejada" para congelar o contrato.
 
-### 3. Corrigir o matcher para ser estável
-
-Em `src/lib/route-planning/loadGrouping.ts`:
-
-- Ordenar `operationalRoutes` de forma determinística antes do `for` (por `name`), para que o mesmo load caia sempre na mesma rota;
-- Ignorar rotas inativas;
-- Quando **mais de uma** rota ativa casar com a cidade, marcar o grupo com `requires_review = true` e `review_reason = "Cidade X pertence a mais de uma rota cadastrada."` — força o operador a resolver a ambiguidade no catálogo em vez de sortear.
-
-### 4. UX de `/operational-routes`
-
-- Coluna extra “Cidades” contando destinos, e badge `Duplicada?` quando existir outra rota ativa com pelo menos uma cidade em comum;
-- Filtro “Somente ativas” ligado por padrão;
-- Botão em massa **Desativar selecionadas** (não excluir) para consolidação futura;
-- Ao salvar, se o `name` normalizado colidir com outra ativa, mostrar toast com link para a rota existente em vez de erro cru do Postgres.
-
-### 5. Congruência com o resto do sistema
-
-- `/route-planning` e `/loads` já leem `operational_routes` filtrando por `active`? Confirmar e ajustar as duas queries — caso contrário rotas desativadas na etapa 1 continuariam aparecendo em selects.
-- Nenhuma alteração no app do motorista, no portal ou nos PDFs (não referenciam esta tabela).
-
-## Detalhes técnicos
-
-```text
-Passo 1 — merge SQL (idempotente):
-  WITH pares AS (
-    SELECT r_mg.id AS old_id, r_rt.id AS new_id
-    FROM operational_routes r_mg
-    JOIN operational_routes r_rt
-      ON r_rt.tenant_id = r_mg.tenant_id
-     AND r_rt.name LIKE 'ROTA %'
-     AND r_mg.name LIKE 'MG-%'
-     AND EXISTS (
-       SELECT 1
-         FROM jsonb_array_elements(r_mg.destinations) d_mg
-         JOIN jsonb_array_elements(r_rt.destinations) d_rt
-           ON translate(lower(coalesce(d_mg->>'name', d_mg::text)), 'áàâãéêíóôõúç', 'aaaaeeioooucс')
-            = translate(lower(coalesce(d_rt->>'name', d_rt::text)), 'áàâãéêíóôõúç', 'aaaaeeioooucс')
-     )
-  )
-  UPDATE operational_routes SET active=false, updated_at=now()
-   WHERE id IN (SELECT old_id FROM pares);
-```
-
-Migração adicional cria o índice único parcial, o trigger de proteção de nome e o gatilho de auditoria em `entity_audit_log`.
-
-Frontend:
-
-- `src/lib/route-planning/loadGrouping.ts` — filtro `active` + sort + detecção de ambiguidade.
-- `src/hooks/useOperationalRoutes.tsx` — passar a filtrar `active=true` por padrão, com flag opcional `includeInactive` para a tela de gestão.
-- `src/pages/OperationalRoutesPage.tsx` — badge de duplicata, filtro ativo/inativo, mensagem de conflito no salvar.
-
-## O que **não** vou fazer
-
-- Não vou deletar rotas históricas — apenas desativar.
-- Não vou renomear rotas existentes.
-- Não vou mexer em `route_templates` (corredores de telemetria) — problema é só em `operational_routes`.
+## Fora de escopo
+- Não vou mexer no fluxo operacional que hoje mostra a carga como "despachada" enquanto o `trip` está `planned` — isso é outra rodada.
+- Nenhum ajuste de RLS/GRANT (as políticas atuais já cobrem o caso).
