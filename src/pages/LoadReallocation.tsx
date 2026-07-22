@@ -21,7 +21,7 @@ type FilterField = 'all' | 'remitter' | 'recipient' | 'city' | 'invoice';
 
 // Merge destination strings preserving uniqueness, e.g.
 // "PAI PEDRO" + "PIRAPORA - JAIBA" -> "PAI PEDRO - PIRAPORA - JAIBA"
-function mergeDestinations(target?: string | null, source?: string | null): string | null {
+export function mergeDestinations(target?: string | null, source?: string | null): string | null {
   const split = (s?: string | null) =>
     (s || '')
       .split(/[-,/|]+/)
