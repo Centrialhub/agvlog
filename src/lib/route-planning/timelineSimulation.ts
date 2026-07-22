@@ -1,11 +1,5 @@
 import type { RouteStopDraft, RouteStopRiskLevel } from './routePlanningTypes';
-
-const norm = (v?: string | null) =>
-  (v || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-    .toUpperCase();
+import { normalizeCity as norm } from '@/lib/utils/normalizeCity';
 
 export interface SimulateOptions {
   /** Tempo de deslocamento do ponto de partida (depósito/origem) até a 1ª parada, em minutos. */

@@ -13,3 +13,19 @@ export function normalizeCityKey(city: string | null | undefined): string {
     .replace(/\s+/g, ' ')
     .trim();
 }
+
+/**
+ * Variante bruta da normalização: mesma canonicalização (NFD + strip de acentos + uppercase + colapso de espaços),
+ * mas retorna string vazia para entrada vazia (em vez de 'SEM CIDADE').
+ * Use para comparações onde vazio precisa ser distinguível.
+ */
+export function normalizeCity(city: string | null | undefined): string {
+  const raw = (city ?? '').toString();
+  if (!raw.trim()) return '';
+  return raw
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}

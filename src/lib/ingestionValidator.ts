@@ -347,14 +347,7 @@ export interface OperationalRouteRef {
   destinations: { name: string }[];
 }
 
-function normalizeCity(city: string): string {
-  return city
-    .toUpperCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^A-Z0-9 ]/g, '')
-    .trim();
-}
+import { normalizeCity } from '@/lib/utils/normalizeCity';
 
 const PREPOSITIONS = new Set(['DE', 'DO', 'DA', 'DOS', 'DAS', 'D', 'E', 'EM', 'NO', 'NA', 'NOS', 'NAS']);
 

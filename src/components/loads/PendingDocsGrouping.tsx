@@ -40,14 +40,7 @@ interface RouteGroup {
   ambiguousCities?: string[];
 }
 
-function normalizeCity(city: string): string {
-  return city
-    .toUpperCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^A-Z0-9 ]/g, '')
-    .trim();
-}
+import { normalizeCity } from '@/lib/utils/normalizeCity';
 
 interface Props {
   open: boolean;
