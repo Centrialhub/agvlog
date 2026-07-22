@@ -1,4 +1,5 @@
 import type { ConsolidationLoad } from './stopConsolidation';
+import { normalizeCity as norm } from '@/lib/utils/normalizeCity';
 
 export interface OperationalRouteLite {
   id: string;
@@ -16,13 +17,6 @@ export interface LoadGroup {
   primary_city?: string | null;
   operational_route_id?: string | null;
 }
-
-const norm = (v?: string | null) =>
-  (v || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-    .toUpperCase();
 
 function predominantCity(load: ConsolidationLoad): string | null {
   const counts = new Map<string, number>();

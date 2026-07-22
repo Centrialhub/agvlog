@@ -2,13 +2,7 @@ import type { RouteStopDraft, RouteStopSortMode } from './routePlanningTypes';
 import { consolidateLoadsIntoStops, type ConsolidationLoad } from './stopConsolidation';
 import { applySmartSequence, applyOriginalOrder, autoSequenceStops } from './simpleStopSequencing';
 import { simulateStopTimeline } from './timelineSimulation';
-
-const norm = (v?: string | null) =>
-  (v || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-    .toUpperCase();
+import { normalizeCity as norm } from '@/lib/utils/normalizeCity';
 
 const keyFor = (s: Pick<RouteStopDraft, 'client_id' | 'recipient_name' | 'city' | 'neighborhood'>) => [
   s.client_id ? `c:${s.client_id}` : `r:${norm(s.recipient_name)}`,
