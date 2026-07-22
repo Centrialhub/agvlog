@@ -37,6 +37,7 @@ interface RouteGroup {
   totalWeight: number;
   totalValue: number;
   cities: string[];
+  ambiguousCities?: string[];
 }
 
 function normalizeCity(city: string): string {
@@ -118,17 +119,23 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
       const city = doc.recipient_city || '';
       const normalized = normalizeCity(city);
 
-      let matchedRoute: typeof routeRefs[0] | null = null;
-      for (const route of routeRefs) {
-        for (const dest of route.destinations) {
+      // 1) match exato tem prioridade absoluta; 2) só considera substring quando não há exato.
+      // Coleta todos os candidatos exatos para sinalizar ambiguidade quando >1 rota cobre a cidade.
+      const exactMatches = routeRefs.filter(route =>
+        route.destinations.some(dest => normalizeCity(dest.name) === normalized)
+      );
+      const fuzzyMatches = exactMatches.length > 0 ? [] : routeRefs.filter(route =>
+        route.destinations.some(dest => {
           const nd = normalizeCity(dest.name);
-          if (nd === normalized || normalized.includes(nd) || nd.includes(normalized)) {
-            matchedRoute = route;
-            break;
-          }
-        }
-        if (matchedRoute) break;
-      }
+          return nd && (normalized.includes(nd) || nd.includes(normalized));
+        })
+      );
+      const candidates = exactMatches.length > 0 ? exactMatches : fuzzyMatches;
+      // Determinístico: se >1, escolhe pelo menor nome (estável) e marca ambiguidade.
+      const matchedRoute = candidates.length > 0
+        ? [...candidates].sort((a, b) => a.name.localeCompare(b.name))[0]
+        : null;
+      const ambiguous = candidates.length > 1;
 
       const key = matchedRoute ? matchedRoute.name : (city ? `${doc.recipient_state || ''} - ${city}` : 'Sem região');
       
@@ -141,6 +148,7 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
           totalWeight: 0,
           totalValue: 0,
           cities: [],
+          ambiguousCities: [],
         });
       }
 
@@ -151,6 +159,9 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
       group.totalValue += Number(doc.value) || 0;
       if (city && !group.cities.includes(city)) {
         group.cities.push(city);
+      }
+      if (ambiguous && city && !group.ambiguousCities!.includes(city)) {
+        group.ambiguousCities!.push(city);
       }
     }
 
@@ -348,6 +359,11 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
                             {g.routeName}
                           </Badge>
                           <Badge variant="outline" className="text-[10px]">{g.docs.length} NF-es</Badge>
+                          {g.ambiguousCities && g.ambiguousCities.length > 0 && (
+                            <Badge variant="outline" className="text-[10px] border-warning/40 text-warning" title={`Cidades cobertas por >1 rota ativa: ${g.ambiguousCities.join(', ')}. Revise antes de confirmar.`}>
+                              Rota ambígua ({g.ambiguousCities.length})
+                            </Badge>
+                          )}
                         </div>
                         <div className="flex flex-wrap gap-1 mt-1">
                           {g.cities.map((city, ci) => (
