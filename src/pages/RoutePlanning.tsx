@@ -36,7 +36,7 @@ import { useCustomerDeliveryWindowsForRouting } from '@/hooks/route-planning/use
 import { useDispatchRoutePlan } from '@/hooks/route-planning/useDispatchRoutePlan';
 import { validateRouteConsistency } from '@/lib/route-planning/routeConsistency';
 import { computeRouteStatus, STATUS_VISUALS, type RoutePlanStatusExt } from '@/lib/route-planning/routeStatus';
-import { useRoutePlanningDrafts, useSavePlanSnapshot, useDeleteDraft } from '@/hooks/useRoutePlanningDrafts';
+import { useRoutePlanningDrafts, useSavePlanSnapshot, useDeleteDraft, DraftConflictError } from '@/hooks/useRoutePlanningDrafts';
 import type { RouteStopDraft, RoutePlanValidationIssue, RouteStopSortMode } from '@/lib/route-planning/routePlanningTypes';
 
 /* ────────────── types ────────────── */
@@ -220,6 +220,8 @@ export default function RoutePlanning() {
     if (persistedDrafts.length === 0) { draftsHydratedRef.current = true; return; }
     const loadById = new Map(pendingLoads.map(l => [l.id, l] as const));
     const hydrated: RoutePlan[] = persistedDrafts.map((d: any) => {
+      // Semeia versão conhecida para guarda otimista de concorrência.
+      savePlanSnapshot.seedVersion(d.id, d.updated_at);
       const cfg = d.route_config || {};
       const ids: string[] = Array.isArray(d.load_ids) ? d.load_ids : (Array.isArray(cfg.load_ids) ? cfg.load_ids : []);
       const loads = ids.map(id => loadById.get(id)).filter(Boolean) as PendingLoad[];
@@ -263,6 +265,15 @@ export default function RoutePlanning() {
           sortMode: r.sortMode,
           initial_transit_minutes: r.initial_transit_minutes,
           notes: r.notes,
+        },
+      }, {
+        onError: (err: any) => {
+          if (err instanceof DraftConflictError) {
+            toast.error('Rascunho alterado em outra sessão. Recarregando última versão.');
+            savePlanSnapshot.forgetVersion(r.id);
+            queryClient.invalidateQueries({ queryKey: ['route_planning_drafts'] });
+            draftsHydratedRef.current = false;
+          }
         },
       });
     }, 1500));
