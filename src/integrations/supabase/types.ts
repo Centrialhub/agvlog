@@ -7787,6 +7787,9 @@ export type Database = {
           freight_percent: number | null
           gate_departure_at: string | null
           gross_cargo_value: number
+          held_at: string | null
+          held_by: string | null
+          hold_reason: string | null
           id: string
           invoice_count: number
           last_import_batch_id: string | null
@@ -7800,6 +7803,7 @@ export type Database = {
           occurrence_at: string | null
           occurrence_notes: string | null
           occurrence_responsible: string | null
+          on_hold: boolean
           operation_type: Database["public"]["Enums"]["operation_type"] | null
           operational_status: string | null
           origin: string | null
@@ -7857,6 +7861,9 @@ export type Database = {
           freight_percent?: number | null
           gate_departure_at?: string | null
           gross_cargo_value?: number
+          held_at?: string | null
+          held_by?: string | null
+          hold_reason?: string | null
           id?: string
           invoice_count?: number
           last_import_batch_id?: string | null
@@ -7870,6 +7877,7 @@ export type Database = {
           occurrence_at?: string | null
           occurrence_notes?: string | null
           occurrence_responsible?: string | null
+          on_hold?: boolean
           operation_type?: Database["public"]["Enums"]["operation_type"] | null
           operational_status?: string | null
           origin?: string | null
@@ -7927,6 +7935,9 @@ export type Database = {
           freight_percent?: number | null
           gate_departure_at?: string | null
           gross_cargo_value?: number
+          held_at?: string | null
+          held_by?: string | null
+          hold_reason?: string | null
           id?: string
           invoice_count?: number
           last_import_batch_id?: string | null
@@ -7940,6 +7951,7 @@ export type Database = {
           occurrence_at?: string | null
           occurrence_notes?: string | null
           occurrence_responsible?: string | null
+          on_hold?: boolean
           operation_type?: Database["public"]["Enums"]["operation_type"] | null
           operational_status?: string | null
           origin?: string | null
@@ -13973,6 +13985,9 @@ export type Database = {
           freight_percent: number | null
           gate_departure_at: string | null
           gross_cargo_value: number
+          held_at: string | null
+          held_by: string | null
+          hold_reason: string | null
           id: string
           invoice_count: number
           last_import_batch_id: string | null
@@ -13986,6 +14001,7 @@ export type Database = {
           occurrence_at: string | null
           occurrence_notes: string | null
           occurrence_responsible: string | null
+          on_hold: boolean
           operation_type: Database["public"]["Enums"]["operation_type"] | null
           operational_status: string | null
           origin: string | null
@@ -14313,6 +14329,10 @@ export type Database = {
           _tenant_id: string
         }
         Returns: boolean
+      }
+      hold_load: {
+        Args: { _load_id: string; _reason?: string }
+        Returns: undefined
       }
       import_bank_statement: {
         Args: {
@@ -14840,6 +14860,7 @@ export type Database = {
         Args: { _date_from?: string; _date_to?: string; _tenant_id: string }
         Returns: Json
       }
+      unhold_load: { Args: { _load_id: string }; Returns: undefined }
       update_driver_settlement_km_review: {
         Args: {
           _audited_km: number

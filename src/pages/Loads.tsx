@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLoads, useDeleteLoad, useDeleteLoads, LOAD_STATUSES, LOAD_STATUS_LABELS, Load } from '@/hooks/useLoads';
+import { useHoldLoad, useUnholdLoad } from '@/hooks/useLoads';
 import { useVehicles } from '@/hooks/useVehicles';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,8 +10,11 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Search, PackageCheck, Truck, MapPin, ArrowRight, FileStack, Trash2, MoreVertical, X, CheckSquare, Printer, Route as RouteIcon, CalendarDays, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Download, FileSpreadsheet, FileText } from 'lucide-react';
+import { Search, PackageCheck, Truck, MapPin, ArrowRight, FileStack, Trash2, MoreVertical, X, CheckSquare, Printer, Route as RouteIcon, CalendarDays, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Download, FileSpreadsheet, FileText, LayoutGrid, List, PauseCircle, PlayCircle } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import LoadsKanban from '@/components/loads/LoadsKanban';
 import { printRomaneioRoutes, RomaneioDoc } from '@/lib/romaneioPrint';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
@@ -65,6 +69,8 @@ export default function Loads() {
   const { data: vehicles = [] } = useVehicles();
   const deleteOne = useDeleteLoad();
   const deleteBulk = useDeleteLoads();
+  const holdMut = useHoldLoad();
+  const unholdMut = useUnholdLoad();
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -85,6 +91,13 @@ export default function Loads() {
   // Confirm dialogs
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+
+  // View mode
+  const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table');
+
+  // Hold dialog
+  const [holdTarget, setHoldTarget] = useState<Load | null>(null);
+  const [holdReason, setHoldReason] = useState('');
 
   const { data: pendingCount = 0 } = useQuery({
     queryKey: ['pending_docs_count', currentTenant?.id],
@@ -382,6 +395,27 @@ export default function Loads() {
   const selectedCount = selected.size;
   const allFilteredSelected = filtered.length > 0 && filtered.every(l => selected.has(l.id));
 
+  const submitHold = async () => {
+    if (!holdTarget) return;
+    try {
+      await holdMut.mutateAsync({ id: holdTarget.id, reason: holdReason.trim() || undefined });
+      toast({ title: 'Carga colocada em espera' });
+      setHoldTarget(null);
+      setHoldReason('');
+    } catch (e: any) {
+      toast({ title: 'Erro ao pausar', description: e.message, variant: 'destructive' });
+    }
+  };
+
+  const doUnhold = async (id: string) => {
+    try {
+      await unholdMut.mutateAsync(id);
+      toast({ title: 'Carga retomada' });
+    } catch (e: any) {
+      toast({ title: 'Erro ao retomar', description: e.message, variant: 'destructive' });
+    }
+  };
+
   return (
     <div className="animate-fade-in space-y-5">
       {/* Header */}
@@ -397,6 +431,24 @@ export default function Loads() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <div className="inline-flex rounded-md border border-border bg-card p-0.5">
+            <Button
+              size="sm"
+              variant={viewMode === 'table' ? 'default' : 'ghost'}
+              className="h-7 px-2"
+              onClick={() => setViewMode('table')}
+            >
+              <List className="h-4 w-4 mr-1" /> Tabela
+            </Button>
+            <Button
+              size="sm"
+              variant={viewMode === 'kanban' ? 'default' : 'ghost'}
+              className="h-7 px-2"
+              onClick={() => setViewMode('kanban')}
+            >
+              <LayoutGrid className="h-4 w-4 mr-1" /> Kanban
+            </Button>
+          </div>
           {!selectionMode && (
             <Button size="sm" variant="outline" onClick={() => setSelectionMode(true)}>
               <CheckSquare className="h-4 w-4 mr-1" /> Selecionar
@@ -552,6 +604,8 @@ export default function Loads() {
         <div className="text-center text-muted-foreground py-12">Carregando...</div>
       ) : filtered.length === 0 ? (
         <div className="text-center text-muted-foreground py-12">Nenhuma carga encontrada</div>
+      ) : viewMode === 'kanban' ? (
+        <LoadsKanban loads={filtered} />
       ) : (
         <div className="space-y-5">
           {Object.entries(groupedByDay).map(([day, dayLoads]) => (
@@ -588,6 +642,11 @@ export default function Loads() {
                         <Badge variant="outline" className={`text-[10px] ${STATUS_COLORS[l.status] || ''}`}>
                           {LOAD_STATUS_LABELS[l.status] || l.status}
                         </Badge>
+                        {(l as any).on_hold && (
+                          <Badge variant="outline" className="text-[10px] bg-warning/10 text-warning border-warning/30">
+                            <PauseCircle className="h-3 w-3 mr-1" /> Em espera
+                          </Badge>
+                        )}
                       </div>
                       <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
                         {l.vehicles && <span className="flex items-center gap-1"><Truck className="h-3 w-3" /> {l.vehicles.plate}</span>}
@@ -633,6 +692,15 @@ export default function Loads() {
                             <DropdownMenuItem onClick={e => { e.stopPropagation(); navigate('/route-planning'); }}>
                               <RouteIcon className="h-4 w-4 mr-2" /> Reanalisar na Roteirização
                             </DropdownMenuItem>
+                            {(l as any).on_hold ? (
+                              <DropdownMenuItem onClick={e => { e.stopPropagation(); doUnhold(l.id); }}>
+                                <PlayCircle className="h-4 w-4 mr-2" /> Retomar
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem onClick={e => { e.stopPropagation(); setHoldTarget(l); setHoldReason(''); }}>
+                                <PauseCircle className="h-4 w-4 mr-2" /> Colocar em espera
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuItem
                               className="text-destructive focus:text-destructive"
                               onClick={e => { e.stopPropagation(); setConfirmDeleteId(l.id); }}
@@ -732,6 +800,34 @@ export default function Loads() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Hold dialog */}
+      <Dialog open={!!holdTarget} onOpenChange={o => { if (!o) { setHoldTarget(null); setHoldReason(''); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Colocar carga em espera</DialogTitle>
+            <DialogDescription>
+              A carga <strong>{holdTarget?.load_number}</strong> ficará fora do fluxo de despacho
+              (não aparece em roteirização nem no app do motorista) até ser retomada.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <label className="text-xs text-muted-foreground">Motivo (opcional)</label>
+            <Textarea
+              value={holdReason}
+              onChange={e => setHoldReason(e.target.value)}
+              placeholder="Ex.: aguardando confirmação do cliente, veículo indisponível..."
+              rows={3}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setHoldTarget(null)}>Cancelar</Button>
+            <Button onClick={submitHold} disabled={holdMut.isPending}>
+              <PauseCircle className="h-4 w-4 mr-1" /> Colocar em espera
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

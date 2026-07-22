@@ -92,3 +92,35 @@ export const TERMINAL_LOAD_STATUSES = [
 export function isTerminalLoadStatus(s: string | null | undefined) {
   return !!s && (TERMINAL_LOAD_STATUSES as readonly string[]).includes(s);
 }
+
+/** Kanban columns for the /loads Kanban view. `hold` overrides any status. */
+export const LOAD_KANBAN_COLUMNS = [
+  { id: 'hold',       label: 'Em espera'    },
+  { id: 'backlog',    label: 'Backlog'      },
+  { id: 'prep',       label: 'Preparação'   },
+  { id: 'ready',      label: 'Pronta'       },
+  { id: 'in_route',   label: 'Em rota'      },
+  { id: 'done',       label: 'Concluídas'   },
+] as const;
+
+export type LoadKanbanColumn = typeof LOAD_KANBAN_COLUMNS[number]['id'];
+
+/**
+ * Map a load to a Kanban column. Hold overrides everything.
+ * `status` groupings:
+ *   backlog   -> planned
+ *   prep      -> assembling, loading
+ *   ready     -> ready, loaded
+ *   in_route  -> in_transit
+ *   done      -> any terminal status
+ */
+export function loadKanbanColumn(load: { status: string | null | undefined; on_hold?: boolean | null }): LoadKanbanColumn {
+  if (load.on_hold) return 'hold';
+  const s = load.status || '';
+  if (s === 'planned') return 'backlog';
+  if (s === 'assembling' || s === 'loading') return 'prep';
+  if (s === 'ready' || s === 'loaded') return 'ready';
+  if (s === 'in_transit') return 'in_route';
+  if (isTerminalLoadStatus(s) || s === 'divergent') return 'done';
+  return 'backlog';
+}

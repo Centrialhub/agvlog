@@ -28,6 +28,7 @@ type Load = {
   driver_id: string | null;
   vehicle_id: string | null;
   trip_id: string | null;
+  on_hold?: boolean;
 };
 
 interface Fixture {
@@ -49,16 +50,18 @@ function driverLoadIds(f: Fixture): Set<string> {
   // Path A: dispatch_trip_loads pivot → trip.driver
   for (const dtl of f.tripLoads) {
     const trip = f.trips.find((t) => t.id === dtl.dispatch_trip_id);
-    if (trip?.driver_id && activeDriverIds.has(trip.driver_id)) ids.add(dtl.load_id);
+    const load = f.loads.find((l) => l.id === dtl.load_id);
+    if (trip?.driver_id && activeDriverIds.has(trip.driver_id) && !load?.on_hold) ids.add(dtl.load_id);
   }
   // Path B: load.trip_id → trip.driver
   for (const l of f.loads) {
-    if (!l.trip_id) continue;
+    if (!l.trip_id || l.on_hold) continue;
     const trip = f.trips.find((t) => t.id === l.trip_id);
     if (trip?.driver_id && activeDriverIds.has(trip.driver_id)) ids.add(l.id);
   }
   // Path C: load.driver_id direct
   for (const l of f.loads) {
+    if (l.on_hold) continue;
     if (l.driver_id && activeDriverIds.has(l.driver_id)) ids.add(l.id);
   }
   return ids;
@@ -196,5 +199,18 @@ describe('RLS: driver load visibility (_driver_load_ids)', () => {
     expect(visible).toEqual(
       ['load-direct-A', 'load-pivot-A', 'load-trip-A', 'load-vehicle-A'].sort(),
     );
+  });
+
+  it('driver A does NOT see a load that is on hold', () => {
+    const f = { ...makeFixture(), authUid: 'user-A' };
+    // put the directly-assigned load on hold
+    f.loads = f.loads.map((l) => (l.id === 'load-direct-A' ? { ...l, on_hold: true } : l));
+    expect(driverLoadIds(f).has('load-direct-A')).toBe(false);
+  });
+
+  it('unhold re-exposes the load to the driver', () => {
+    const f = { ...makeFixture(), authUid: 'user-A' };
+    f.loads = f.loads.map((l) => (l.id === 'load-direct-A' ? { ...l, on_hold: false } : l));
+    expect(driverLoadIds(f).has('load-direct-A')).toBe(true);
   });
 });

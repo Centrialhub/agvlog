@@ -155,12 +155,12 @@ export default function RoutePlanning() {
     queryKey: ['pending_loads_for_routing', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data: loads, error } = await supabase
-        .from('loads')
+      const { data: loads, error } = await (supabase.from('loads') as any)
         .select('*')
         .eq('tenant_id', currentTenant.id)
         .eq('status', 'planned')
         .is('trip_id', null)
+        .eq('on_hold', false)
         .order('destination', { ascending: true });
       if (error) throw error;
       if (!loads || loads.length === 0) return [];
