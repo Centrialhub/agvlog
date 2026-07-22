@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -27,6 +30,7 @@ interface Props {
   hasAssignedLoads: boolean;
   hasActiveTrip: boolean;
   driverName?: string | null;
+  driverId?: string | null;
 }
 
 export default function NoLoadsHelp({
@@ -35,8 +39,29 @@ export default function NoLoadsHelp({
   hasAssignedLoads,
   hasActiveTrip,
   driverName,
+  driverId,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
+  const { user } = useAuth();
+
+  // Probe: count loads with driver_id = me, ignoring status/on_hold/tenant.
+  // Exposes hidden mismatches (on_hold, terminal status, other tenant) to support.
+  const { data: probe } = useQuery({
+    queryKey: ['driver_loads_probe', driverId],
+    queryFn: async () => {
+      if (!driverId) return { total: 0, hidden: 0 };
+      const { data, error } = await supabase
+        .from('loads')
+        .select('id, status, on_hold, tenant_id')
+        .eq('driver_id', driverId);
+      if (error) throw error;
+      const rows = data || [];
+      const terminal = new Set(['delivered', 'completed', 'cancelled', 'archived']);
+      const hidden = rows.filter((r: any) => r.on_hold || terminal.has(r.status)).length;
+      return { total: rows.length, hidden };
+    },
+    enabled: !!driverId,
+  });
 
   const checks: Check[] = [
     {
@@ -72,6 +97,26 @@ export default function NoLoadsHelp({
             operação atribuir você — não precisa recarregar.
           </p>
         </div>
+
+        {probe && probe.total > 0 && (
+          <div className="rounded-md border border-warning/40 bg-warning/5 p-3 text-xs">
+            <p className="font-medium text-warning-foreground">
+              Existe(m) {probe.total} carga(s) vinculada(s) a você no sistema
+              {probe.hidden > 0 ? ` — ${probe.hidden} em estado oculto (espera/finalizada)` : ''}.
+            </p>
+            <p className="text-muted-foreground mt-1">
+              Se não aparecem aqui, peça à operação para conferir <b>on hold</b>, <b>status</b> e o
+              <b> tenant</b> da carga.
+            </p>
+          </div>
+        )}
+
+        {(driverId || user?.email) && (
+          <div className="rounded-md bg-muted/40 p-2 text-[10px] font-mono break-all">
+            {user?.email && <div>email: {user.email}</div>}
+            {driverId && <div>driver_id: {driverId}</div>}
+          </div>
+        )}
 
         <div className="space-y-1.5">
           {checks.map((c, i) => (
