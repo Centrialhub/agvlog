@@ -336,6 +336,7 @@ export default function RoutePlanning() {
       id: crypto.randomUUID(),
       name,
       loads: selected,
+      ...inheritAssignmentFromLoads(selected),
     }]);
     setSelectedLoads(new Set());
     setNewRouteName('');
@@ -353,6 +354,7 @@ export default function RoutePlanning() {
       id: crypto.randomUUID(),
       name: `${dest} - ${format(new Date(), 'dd/MM')}`,
       loads: sortLoadsByRecipient(loads),
+      ...inheritAssignmentFromLoads(loads),
     }));
     setRoutes(prev => [...prev, ...suggested]);
     setSelectedLoads(new Set());
