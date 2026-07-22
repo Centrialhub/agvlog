@@ -47,11 +47,10 @@ export default function DriverHome() {
   const { data: activeTrips = [], isLoading: tripsLoading } = useQuery({
     queryKey: ['driver_my_trips', driver?.id],
     queryFn: async () => {
-      if (!driver || !currentTenant) return [];
+      if (!driver) return [];
       const { data, error } = await supabase
         .from('dispatch_trips')
         .select('*, loads(id, load_number, origin, destination, status), vehicles(plate, nickname)')
-        .eq('tenant_id', currentTenant.id)
         .eq('driver_id', driver.id)
         .in('status', TRIP_ACTIVE_STATUSES as unknown as string[])
         .order('created_at', { ascending: false })
@@ -59,17 +58,16 @@ export default function DriverHome() {
       if (error) throw error;
       return data || [];
     },
-    enabled: !!driver && !!currentTenant,
+    enabled: !!driver,
   });
 
   const { data: myLoads = [], isLoading: loadsLoading } = useQuery({
     queryKey: ['driver_my_loads', driver?.id],
     queryFn: async () => {
-      if (!driver || !currentTenant) return [];
+      if (!driver) return [];
       const { data, error } = await supabase
         .from('loads')
         .select('id, load_number, origin, destination, status, trip_id, total_pallet_count, total_weight_kg, scheduled_load_at, vehicles(plate, nickname)')
-        .eq('tenant_id', currentTenant.id)
         .eq('driver_id', driver.id)
         .not('status', 'in', `(${TERMINAL_LOAD_STATUSES.join(',')})`)
         .order('created_at', { ascending: false })
@@ -77,23 +75,20 @@ export default function DriverHome() {
       if (error) throw error;
       return data || [];
     },
-    enabled: !!driver && !!currentTenant,
+    enabled: !!driver,
   });
 
   // Realtime: refresh assigned loads/trips whenever the driver assignment or status changes.
   useEffect(() => {
-    if (!driver?.id || !currentTenant?.id) return;
+    if (!driver?.id) return;
     const channel = supabase
       .channel(`driver_home_${driver.id}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'loads', filter: `tenant_id=eq.${currentTenant.id}` },
-        (payload: any) => {
-          const row = payload.new || payload.old;
-          if (row?.driver_id === driver.id) {
-            queryClient.invalidateQueries({ queryKey: ['driver_my_loads', driver.id] });
-            queryClient.invalidateQueries({ queryKey: ['driver_my_trips', driver.id] });
-          }
+        { event: '*', schema: 'public', table: 'loads', filter: `driver_id=eq.${driver.id}` },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['driver_my_loads', driver.id] });
+          queryClient.invalidateQueries({ queryKey: ['driver_my_trips', driver.id] });
         },
       )
       .on(
@@ -108,7 +103,7 @@ export default function DriverHome() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [driver?.id, currentTenant?.id, queryClient]);
+  }, [driver?.id, queryClient]);
 
   // Loads without an associated trip (driver assigned directly but no dispatch yet).
   const tripLoadIds = new Set(activeTrips.map((t: any) => t.loads?.id || t.load_id).filter(Boolean));
