@@ -31,6 +31,10 @@ export interface Load {
   actual_load_at: string | null;
   created_at: string;
   updated_at: string;
+  on_hold?: boolean;
+  hold_reason?: string | null;
+  held_at?: string | null;
+  held_by?: string | null;
   vehicles?: { plate: string; nickname: string | null } | null;
   drivers?: { name: string } | null;
 }
@@ -162,5 +166,36 @@ export function useDeleteLoads() {
       }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['loads'] }),
+  });
+}
+
+export function useHoldLoad() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason?: string }) => {
+      const { error } = await (supabase as any).rpc('hold_load', {
+        _load_id: id,
+        _reason: reason ?? null,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['loads'] });
+      qc.invalidateQueries({ queryKey: ['pending_loads_for_routing'] });
+    },
+  });
+}
+
+export function useUnholdLoad() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await (supabase as any).rpc('unhold_load', { _load_id: id });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['loads'] });
+      qc.invalidateQueries({ queryKey: ['pending_loads_for_routing'] });
+    },
   });
 }
