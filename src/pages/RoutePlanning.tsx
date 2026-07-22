@@ -86,6 +86,8 @@ interface PendingLoad {
   status: string;
   created_at: string;
   notes: string | null;
+  vehicle_id: string | null;
+  driver_id: string | null;
   items: LoadItem[];
 }
 
