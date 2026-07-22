@@ -16,17 +16,19 @@ export interface OperationalRoute {
   updated_at: string;
 }
 
-export function useOperationalRoutes() {
+export function useOperationalRoutes(options: { includeInactive?: boolean } = {}) {
+  const { includeInactive = false } = options;
   const { currentTenant } = useTenant();
   return useQuery({
-    queryKey: ['operational_routes', currentTenant?.id],
+    queryKey: ['operational_routes', currentTenant?.id, includeInactive],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data, error } = await supabase
+      let q = supabase
         .from('operational_routes')
         .select('*')
-        .eq('tenant_id', currentTenant.id)
-        .order('name');
+        .eq('tenant_id', currentTenant.id);
+      if (!includeInactive) q = q.eq('active', true);
+      const { data, error } = await q.order('name');
       if (error) throw error;
       return (data || []) as OperationalRoute[];
     },

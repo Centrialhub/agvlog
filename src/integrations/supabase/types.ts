@@ -14664,6 +14664,7 @@ export type Database = {
       }
       normalize_fiscal_number: { Args: { value: string }; Returns: string }
       normalize_tax_id: { Args: { value: string }; Returns: string }
+      op_route_norm: { Args: { txt: string }; Returns: string }
       peek_next_load_number: { Args: { _tenant_id: string }; Returns: string }
       peek_next_pickup_number: { Args: { _tenant_id: string }; Returns: string }
       portal_user_can_access_fiscal_document: {
