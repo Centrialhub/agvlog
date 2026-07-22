@@ -21,7 +21,8 @@ const CLASSIFICATIONS = [
 ];
 
 export default function OperationalRoutesPage() {
-  const { data: routes = [], isLoading } = useOperationalRoutes();
+  const [showInactive, setShowInactive] = useState(false);
+  const { data: routes = [], isLoading } = useOperationalRoutes({ includeInactive: true });
   const createRoute = useCreateOperationalRoute();
   const updateRoute = useUpdateOperationalRoute();
   const deleteRoute = useDeleteOperationalRoute();
@@ -35,8 +36,38 @@ export default function OperationalRoutesPage() {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return routes.filter(r => !q || r.name.toLowerCase().includes(q) || (r.region_name || '').toLowerCase().includes(q));
-  }, [routes, search]);
+    return routes.filter(r => {
+      if (!showInactive && !r.active) return false;
+      if (!q) return true;
+      return r.name.toLowerCase().includes(q) || (r.region_name || '').toLowerCase().includes(q);
+    });
+  }, [routes, search, showInactive]);
+
+  // Detecta cidades presentes em mais de uma rota ativa (duplicatas de cobertura)
+  const duplicateCities = useMemo(() => {
+    const counts = new Map<string, number>();
+    const norm = (v: string) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
+    routes.filter(r => r.active).forEach(r => {
+      const seen = new Set<string>();
+      (Array.isArray(r.destinations) ? r.destinations : []).forEach((d: any) => {
+        const key = norm(typeof d === 'string' ? d : (d?.name || d?.city || ''));
+        if (key && !seen.has(key)) {
+          seen.add(key);
+          counts.set(key, (counts.get(key) || 0) + 1);
+        }
+      });
+    });
+    return counts;
+  }, [routes]);
+
+  const hasDuplicate = (r: any) => {
+    if (!r.active) return false;
+    const norm = (v: string) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
+    return (Array.isArray(r.destinations) ? r.destinations : []).some((d: any) => {
+      const key = norm(typeof d === 'string' ? d : (d?.name || d?.city || ''));
+      return key && (duplicateCities.get(key) || 0) > 1;
+    });
+  };
 
   const resetForm = () => {
     setForm({ name: '', description: '', classification: 'general', region_name: '', active: true, destinations: [] });
@@ -71,6 +102,10 @@ export default function OperationalRoutesPage() {
 
   const handleSave = async () => {
     try {
+      if (!form.name.trim()) {
+        toast.error('Informe o nome da rota');
+        return;
+      }
       const values: any = {
         name: form.name,
         description: form.description || null,
@@ -88,7 +123,12 @@ export default function OperationalRoutesPage() {
       }
       resetForm();
     } catch (e: any) {
-      toast.error(e.message);
+      const msg = String(e?.message || '');
+      if (msg.includes('operational_routes_tenant_name_key') || msg.toLowerCase().includes('duplicate')) {
+        toast.error('Já existe uma rota ativa com este nome. Renomeie ou desative a existente.');
+      } else {
+        toast.error(msg || 'Erro ao salvar rota');
+      }
     }
   };
 
@@ -111,6 +151,11 @@ export default function OperationalRoutesPage() {
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
         <Input placeholder="Buscar rota..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+      </div>
+
+      <div className="flex items-center gap-2">
+        <Switch checked={showInactive} onCheckedChange={setShowInactive} id="show-inactive" />
+        <Label htmlFor="show-inactive" className="text-sm text-muted-foreground">Mostrar rotas inativas</Label>
       </div>
 
       <Card>
@@ -139,7 +184,14 @@ export default function OperationalRoutesPage() {
                 <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhuma rota encontrada</TableCell></TableRow>
               ) : filtered.map((r: any) => (
                 <TableRow key={r.id}>
-                  <TableCell className="font-medium">{r.name}</TableCell>
+                  <TableCell className="font-medium">
+                    <div className="flex items-center gap-2">
+                      <span>{r.name}</span>
+                      {hasDuplicate(r) && (
+                        <Badge variant="destructive" className="text-[10px]" title="Cidade coberta por outra rota ativa">Duplicada</Badge>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell><Badge variant="outline">{CLASSIFICATIONS.find(c => c.value === r.classification)?.label || r.classification}</Badge></TableCell>
                   <TableCell className="text-sm text-muted-foreground">{r.region_name || '—'}</TableCell>
                   <TableCell className="text-sm">
