@@ -23,6 +23,10 @@ export interface ConsolidationLoad {
   id: string;
   load_number: string;
   destination: string | null;
+  /** Pré-atribuições vindas de /loads — se todas as cargas do grupo
+   *  coincidirem, o planejador herda ao invés de sugerir. */
+  vehicle_id?: string | null;
+  driver_id?: string | null;
   items: ConsolidationLoadItem[];
 }
 

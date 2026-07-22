@@ -86,6 +86,8 @@ interface PendingLoad {
   status: string;
   created_at: string;
   notes: string | null;
+  vehicle_id: string | null;
+  driver_id: string | null;
   items: LoadItem[];
 }
 
@@ -111,6 +113,18 @@ interface RoutePlan {
 }
 
 /* ────────────── main component ────────────── */
+/** If all selected loads share the same vehicle_id / driver_id, inherit those
+ *  into the newly-created route plan. Empty when loads disagree — the user
+ *  still gets to pick manually. */
+function inheritAssignmentFromLoads(loads: Array<{ vehicle_id?: string | null; driver_id?: string | null }>) {
+  const vehicleIds = new Set(loads.map(l => l.vehicle_id || undefined).filter(Boolean) as string[]);
+  const driverIds = new Set(loads.map(l => l.driver_id || undefined).filter(Boolean) as string[]);
+  return {
+    vehicle_id: vehicleIds.size === 1 ? Array.from(vehicleIds)[0] : undefined,
+    driver_id: driverIds.size === 1 ? Array.from(driverIds)[0] : undefined,
+  };
+}
+
 export default function RoutePlanning() {
   const { currentTenant } = useTenant();
   const { user } = useAuth();
@@ -334,6 +348,7 @@ export default function RoutePlanning() {
       id: crypto.randomUUID(),
       name,
       loads: selected,
+      ...inheritAssignmentFromLoads(selected),
     }]);
     setSelectedLoads(new Set());
     setNewRouteName('');
@@ -351,6 +366,7 @@ export default function RoutePlanning() {
       id: crypto.randomUUID(),
       name: `${dest} - ${format(new Date(), 'dd/MM')}`,
       loads: sortLoadsByRecipient(loads),
+      ...inheritAssignmentFromLoads(loads),
     }));
     setRoutes(prev => [...prev, ...suggested]);
     setSelectedLoads(new Set());
