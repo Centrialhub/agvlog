@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLoads, useDeleteLoad, useDeleteLoads, LOAD_STATUSES, LOAD_STATUS_LABELS, Load } from '@/hooks/useLoads';
+import { useHoldLoad, useUnholdLoad } from '@/hooks/useLoads';
 import { useVehicles } from '@/hooks/useVehicles';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,8 +10,11 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Search, PackageCheck, Truck, MapPin, ArrowRight, FileStack, Trash2, MoreVertical, X, CheckSquare, Printer, Route as RouteIcon, CalendarDays, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Download, FileSpreadsheet, FileText } from 'lucide-react';
+import { Search, PackageCheck, Truck, MapPin, ArrowRight, FileStack, Trash2, MoreVertical, X, CheckSquare, Printer, Route as RouteIcon, CalendarDays, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Download, FileSpreadsheet, FileText, LayoutGrid, List, PauseCircle, PlayCircle } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import LoadsKanban from '@/components/loads/LoadsKanban';
 import { printRomaneioRoutes, RomaneioDoc } from '@/lib/romaneioPrint';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
@@ -65,6 +69,8 @@ export default function Loads() {
   const { data: vehicles = [] } = useVehicles();
   const deleteOne = useDeleteLoad();
   const deleteBulk = useDeleteLoads();
+  const holdMut = useHoldLoad();
+  const unholdMut = useUnholdLoad();
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -85,6 +91,13 @@ export default function Loads() {
   // Confirm dialogs
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+
+  // View mode
+  const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table');
+
+  // Hold dialog
+  const [holdTarget, setHoldTarget] = useState<Load | null>(null);
+  const [holdReason, setHoldReason] = useState('');
 
   const { data: pendingCount = 0 } = useQuery({
     queryKey: ['pending_docs_count', currentTenant?.id],
@@ -382,6 +395,27 @@ export default function Loads() {
   const selectedCount = selected.size;
   const allFilteredSelected = filtered.length > 0 && filtered.every(l => selected.has(l.id));
 
+  const submitHold = async () => {
+    if (!holdTarget) return;
+    try {
+      await holdMut.mutateAsync({ id: holdTarget.id, reason: holdReason.trim() || undefined });
+      toast({ title: 'Carga colocada em espera' });
+      setHoldTarget(null);
+      setHoldReason('');
+    } catch (e: any) {
+      toast({ title: 'Erro ao pausar', description: e.message, variant: 'destructive' });
+    }
+  };
+
+  const doUnhold = async (id: string) => {
+    try {
+      await unholdMut.mutateAsync(id);
+      toast({ title: 'Carga retomada' });
+    } catch (e: any) {
+      toast({ title: 'Erro ao retomar', description: e.message, variant: 'destructive' });
+    }
+  };
+
   return (
     <div className="animate-fade-in space-y-5">
       {/* Header */}
@@ -397,6 +431,24 @@ export default function Loads() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <div className="inline-flex rounded-md border border-border bg-card p-0.5">
+            <Button
+              size="sm"
+              variant={viewMode === 'table' ? 'default' : 'ghost'}
+              className="h-7 px-2"
+              onClick={() => setViewMode('table')}
+            >
+              <List className="h-4 w-4 mr-1" /> Tabela
+            </Button>
+            <Button
+              size="sm"
+              variant={viewMode === 'kanban' ? 'default' : 'ghost'}
+              className="h-7 px-2"
+              onClick={() => setViewMode('kanban')}
+            >
+              <LayoutGrid className="h-4 w-4 mr-1" /> Kanban
+            </Button>
+          </div>
           {!selectionMode && (
             <Button size="sm" variant="outline" onClick={() => setSelectionMode(true)}>
               <CheckSquare className="h-4 w-4 mr-1" /> Selecionar
@@ -633,6 +685,15 @@ export default function Loads() {
                             <DropdownMenuItem onClick={e => { e.stopPropagation(); navigate('/route-planning'); }}>
                               <RouteIcon className="h-4 w-4 mr-2" /> Reanalisar na Roteirização
                             </DropdownMenuItem>
+                            {(l as any).on_hold ? (
+                              <DropdownMenuItem onClick={e => { e.stopPropagation(); doUnhold(l.id); }}>
+                                <PlayCircle className="h-4 w-4 mr-2" /> Retomar
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem onClick={e => { e.stopPropagation(); setHoldTarget(l); setHoldReason(''); }}>
+                                <PauseCircle className="h-4 w-4 mr-2" /> Colocar em espera
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuItem
                               className="text-destructive focus:text-destructive"
                               onClick={e => { e.stopPropagation(); setConfirmDeleteId(l.id); }}
