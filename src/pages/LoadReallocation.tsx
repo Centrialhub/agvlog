@@ -29,7 +29,7 @@ function mergeDestinations(target?: string | null, source?: string | null): stri
   const tokens: string[] = [];
   const seen = new Set<string>();
   for (const t of [...split(target), ...split(source)]) {
-    const key = t.toUpperCase();
+    const key = normalizeCity(t);
     if (!seen.has(key)) {
       seen.add(key);
       tokens.push(t);
