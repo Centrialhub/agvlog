@@ -38,6 +38,7 @@ import { validateRouteConsistency } from '@/lib/route-planning/routeConsistency'
 import { computeRouteStatus, STATUS_VISUALS, type RoutePlanStatusExt } from '@/lib/route-planning/routeStatus';
 import { useRoutePlanningDrafts, useSavePlanSnapshot, useDeleteDraft, DraftConflictError } from '@/hooks/useRoutePlanningDrafts';
 import type { RouteStopDraft, RoutePlanValidationIssue, RouteStopSortMode } from '@/lib/route-planning/routePlanningTypes';
+import { normalizeCity } from '@/lib/utils/normalizeCity';
 
 /* ────────────── types ────────────── */
 const recipientCollator = new Intl.Collator('pt-BR', { sensitivity: 'base', numeric: true });
@@ -288,7 +289,7 @@ export default function RoutePlanning() {
   const filteredLoads = useMemo(() => {
     const loads = filterDest === 'all'
       ? availableLoads
-      : availableLoads.filter(l => (l.destination || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().includes(filterDest));
+      : availableLoads.filter(l => normalizeCity(l.destination).includes(filterDest));
     return [...loads].sort((a, b) => {
       const recipientA = a.items[0]?.fiscal_documents?.recipient || a.destination || '';
       const recipientB = b.items[0]?.fiscal_documents?.recipient || b.destination || '';
@@ -297,7 +298,7 @@ export default function RoutePlanning() {
   }, [availableLoads, filterDest]);
 
   const destinations = useMemo(() => {
-    const set = new Set(availableLoads.map(l => (l.destination || 'Sem destino').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase()));
+    const set = new Set(availableLoads.map(l => normalizeCity(l.destination || 'Sem destino')));
     return Array.from(set).sort();
   }, [availableLoads]);
 
@@ -370,7 +371,7 @@ export default function RoutePlanning() {
     // Agrupamento simples por destination textual (legado, opcional).
     const groups: Record<string, PendingLoad[]> = {};
     availableLoads.forEach(l => {
-      const key = (l.destination || 'Sem destino').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
+      const key = normalizeCity(l.destination || 'Sem destino');
       (groups[key] ||= []).push(l);
     });
     const suggested: RoutePlan[] = Object.entries(groups).map(([dest, loads]) => ({

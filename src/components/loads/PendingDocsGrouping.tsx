@@ -117,10 +117,15 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
       const exactMatches = routeRefs.filter(route =>
         route.destinations.some(dest => normalizeCity(dest.name) === normalized)
       );
+      // Fuzzy fallback com limite de palavra: "RIO" só casa com cidades que contenham
+      // "RIO" como palavra inteira (não com "RIO PARDO"), evitando falsos positivos.
       const fuzzyMatches = exactMatches.length > 0 ? [] : routeRefs.filter(route =>
         route.destinations.some(dest => {
           const nd = normalizeCity(dest.name);
-          return nd && (normalized.includes(nd) || nd.includes(normalized));
+          if (!nd) return false;
+          const escaped = nd.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const wordRe = new RegExp(`(^|\\s)${escaped}(\\s|$)`);
+          return wordRe.test(normalized) || wordRe.test(nd) && new RegExp(`(^|\\s)${normalized.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\s|$)`).test(nd);
         })
       );
       const candidates = exactMatches.length > 0 ? exactMatches : fuzzyMatches;

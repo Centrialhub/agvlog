@@ -12,9 +12,13 @@ interface RouteRef { id: string; name: string; destinations: { name: string }[] 
 function matchRoute(city: string, routes: RouteRef[]) {
   const normalized = normalizeCity(city);
   const exact = routes.filter(r => r.destinations.some(d => normalizeCity(d.name) === normalized));
+  const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const asWord = (needle: string, haystack: string) =>
+    new RegExp(`(^|\\s)${escape(needle)}(\\s|$)`).test(haystack);
   const fuzzy = exact.length > 0 ? [] : routes.filter(r => r.destinations.some(d => {
     const nd = normalizeCity(d.name);
-    return nd && (normalized.includes(nd) || nd.includes(normalized));
+    if (!nd) return false;
+    return asWord(nd, normalized) || asWord(normalized, nd);
   }));
   const candidates = exact.length > 0 ? exact : fuzzy;
   const matched = candidates.length > 0 ? [...candidates].sort((a, b) => a.name.localeCompare(b.name))[0] : null;
@@ -27,6 +31,7 @@ const routes: RouteRef[] = [
   { id: 'r3', name: 'MG-C. JESUS', destinations: [{ name: 'Coração de Jesus' }] },
   { id: 'r4', name: 'ROTA - CORACAO DE JESUS', destinations: [{ name: 'Coração de Jesus' }] },
   { id: 'r5', name: 'ROTA - RIO', destinations: [{ name: 'Rio Pardo' }] },
+  { id: 'r6', name: 'ROTA - VELHO', destinations: [{ name: 'Velho' }] },
 ];
 
 describe('route matcher', () => {
@@ -59,5 +64,18 @@ describe('route matcher', () => {
   it('retorna null para cidade sem rota', () => {
     const { matched } = matchRoute('Cidade Inexistente XYZ', routes);
     expect(matched).toBeNull();
+  });
+
+  it('fallback fuzzy usa limite de palavra (VELHO não casa com "Porto Velho" sem match exato)', () => {
+    // Cidade "Porto Velho" — não há rota exata; fallback deve casar r6 (destino "Velho" existe como palavra inteira).
+    const r = matchRoute('Porto Velho', routes);
+    expect(r.exact).toBe(false);
+    expect(r.matched?.id).toBe('r6');
+  });
+
+  it('fallback fuzzy NÃO casa quando token é apenas substring parcial de palavra', () => {
+    // "Portovelh" (sem espaço) não deve casar "Velho" pois não é palavra inteira.
+    const r = matchRoute('Portovelho', routes);
+    expect(r.matched).toBeNull();
   });
 });

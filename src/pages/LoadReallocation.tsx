@@ -15,12 +15,13 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import { normalizeCity } from '@/lib/utils/normalizeCity';
 
 type FilterField = 'all' | 'remitter' | 'recipient' | 'city' | 'invoice';
 
 // Merge destination strings preserving uniqueness, e.g.
 // "PAI PEDRO" + "PIRAPORA - JAIBA" -> "PAI PEDRO - PIRAPORA - JAIBA"
-function mergeDestinations(target?: string | null, source?: string | null): string | null {
+export function mergeDestinations(target?: string | null, source?: string | null): string | null {
   const split = (s?: string | null) =>
     (s || '')
       .split(/[-,/|]+/)
@@ -29,7 +30,7 @@ function mergeDestinations(target?: string | null, source?: string | null): stri
   const tokens: string[] = [];
   const seen = new Set<string>();
   for (const t of [...split(target), ...split(source)]) {
-    const key = t.toUpperCase();
+    const key = normalizeCity(t);
     if (!seen.has(key)) {
       seen.add(key);
       tokens.push(t);
@@ -88,21 +89,28 @@ function LoadColumn({ load, items, vehicles, selectedItems, onToggleItem, onSele
   // Aggregate recipients (client) and cities present in this load so the operator
   // can quickly identify who the load is for — the load_number alone is not enough.
   const recipientsSummary = useMemo(() => {
-    const recipients = new Map<string, number>();
-    const cities = new Map<string, number>();
+    // Agrega por chave normalizada (case/acento invariante), mas mantém o rótulo original mais frequente.
+    const bump = (m: Map<string, { label: string; count: number }>, label: string) => {
+      const key = normalizeCity(label);
+      if (!key) return;
+      const cur = m.get(key);
+      if (cur) cur.count += 1;
+      else m.set(key, { label: label.trim(), count: 1 });
+    };
+    const recipients = new Map<string, { label: string; count: number }>();
+    const cities = new Map<string, { label: string; count: number }>();
     for (const i of items) {
       const fd: any = i.fiscal_documents || {};
       const rec = (fd.recipient || '').trim();
       const city = (fd.recipient_city || '').trim();
       const state = (fd.recipient_state || '').trim();
-      if (rec) recipients.set(rec, (recipients.get(rec) || 0) + 1);
-      if (city) {
-        const label = state ? `${city}/${state}` : city;
-        cities.set(label, (cities.get(label) || 0) + 1);
-      }
+      if (rec) bump(recipients, rec);
+      if (city) bump(cities, state ? `${city}/${state}` : city);
     }
-    const sortDesc = (m: Map<string, number>) =>
-      Array.from(m.entries()).sort((a, b) => b[1] - a[1]);
+    const sortDesc = (m: Map<string, { label: string; count: number }>): Array<[string, number]> =>
+      Array.from(m.values())
+        .sort((a, b) => b.count - a.count)
+        .map(v => [v.label, v.count] as [string, number]);
     return { recipients: sortDesc(recipients), cities: sortDesc(cities) };
   }, [items]);
 
@@ -333,12 +341,7 @@ export default function LoadReallocation() {
     },
   });
 
-  const norm = (v?: string | null) =>
-    (v || '')
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .trim()
-      .toUpperCase();
+  const norm = (v?: string | null) => normalizeCity(v);
 
   // Predominant client / city per load id
   const loadMeta = useMemo(() => {
