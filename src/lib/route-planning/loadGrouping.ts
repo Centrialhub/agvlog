@@ -61,16 +61,31 @@ function matchOperationalRoute(load: ConsolidationLoad, routes: OperationalRoute
   if (!routes.length) return null;
   const city = predominantCity(load);
   if (!city) return null;
-  for (const r of routes) {
+  // Ordenação determinística para evitar "rota mudou de nome sozinha"
+  const sorted = [...routes].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+  const matches = sorted.filter((r) => {
     const dests = Array.isArray(r.destinations) ? r.destinations : [];
-    const hit = dests.some((d: any) => {
+    return dests.some((d: any) => {
       if (!d) return false;
       const dc = norm(typeof d === 'string' ? d : (d.city || d.name));
       return dc && dc === city;
     });
-    if (hit) return r;
-  }
-  return null;
+  });
+  return matches[0] || null;
+}
+
+function countOperationalMatches(load: ConsolidationLoad, routes: OperationalRouteLite[]): number {
+  if (!routes.length) return 0;
+  const city = predominantCity(load);
+  if (!city) return 0;
+  return routes.filter((r) => {
+    const dests = Array.isArray(r.destinations) ? r.destinations : [];
+    return dests.some((d: any) => {
+      if (!d) return false;
+      const dc = norm(typeof d === 'string' ? d : (d.city || d.name));
+      return dc && dc === city;
+    });
+  }).length;
 }
 
 /**
@@ -90,6 +105,7 @@ export function groupLoadsForRouting(
     const city = predominantCity(load);
     const neighborhood = predominantNeighborhood(load);
     const opRoute = matchOperationalRoute(load, operationalRoutes);
+    const opMatchCount = countOperationalMatches(load, operationalRoutes);
 
     let key: string;
     let name: string;
@@ -101,6 +117,10 @@ export function groupLoadsForRouting(
       key = `op:${opRoute.id}`;
       name = opRoute.name;
       opRouteId = opRoute.id;
+      if (opMatchCount > 1) {
+        requires_review = true;
+        review_reason = `Cidade ${city} pertence a ${opMatchCount} rotas cadastradas — revise o catálogo em /operational-routes.`;
+      }
     } else if (city) {
       key = `city:${city}${neighborhood ? `|${neighborhood}` : ''}`;
       name = neighborhood ? `${city} · ${neighborhood}` : city;
