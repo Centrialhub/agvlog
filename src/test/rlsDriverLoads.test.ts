@@ -200,4 +200,17 @@ describe('RLS: driver load visibility (_driver_load_ids)', () => {
       ['load-direct-A', 'load-pivot-A', 'load-trip-A', 'load-vehicle-A'].sort(),
     );
   });
+
+  it('driver A does NOT see a load that is on hold', () => {
+    const f = { ...makeFixture(), authUid: 'user-A' };
+    // put the directly-assigned load on hold
+    f.loads = f.loads.map((l) => (l.id === 'load-direct-A' ? { ...l, on_hold: true } : l));
+    expect(driverLoadIds(f).has('load-direct-A')).toBe(false);
+  });
+
+  it('unhold re-exposes the load to the driver', () => {
+    const f = { ...makeFixture(), authUid: 'user-A' };
+    f.loads = f.loads.map((l) => (l.id === 'load-direct-A' ? { ...l, on_hold: false } : l));
+    expect(driverLoadIds(f).has('load-direct-A')).toBe(true);
+  });
 });
