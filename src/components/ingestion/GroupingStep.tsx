@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ArrowLeft, CheckCircle, Loader2, MapPin, Truck, AlertTriangle, FileSearch, Printer, Save } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { normalizeCityKey } from '@/lib/utils/normalizeCity';
 
 interface Vehicle {
   id: string;
@@ -220,16 +221,21 @@ export default function GroupingStep({ suggestions, vehicles, drivers, routes = 
 
   const buildCityBlocks = (docs: { city: string; state: string; remetente: string; destinatario: string; bairro: string; nfNumber: string; emissao: string; valor: number; peso: number; volumes: number }[]) => {
     const cityMap = new Map<string, typeof docs>();
+    const cityDisplay = new Map<string, string>();
     docs.forEach(d => {
-      const key = d.city.toUpperCase();
-      if (!cityMap.has(key)) cityMap.set(key, []);
+      const key = normalizeCityKey(d.city);
+      if (!cityMap.has(key)) {
+        cityMap.set(key, []);
+        cityDisplay.set(key, (d.city || 'SEM CIDADE').trim().toUpperCase());
+      }
       cityMap.get(key)!.push(d);
     });
 
     let totalNotas = 0, totalEntregas = 0, totalValor = 0, totalPeso = 0, totalVolumes = 0;
     let html = '';
 
-    cityMap.forEach((cityDocs, cityName) => {
+    cityMap.forEach((cityDocs, key) => {
+      const cityName = cityDisplay.get(key) || key;
       const entregas = new Set(cityDocs.map(d => d.destinatario)).size;
       const notas = cityDocs.length;
       const valor = cityDocs.reduce((s, d) => s + d.valor, 0);
