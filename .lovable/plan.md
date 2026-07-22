@@ -1,91 +1,86 @@
 
-## Objetivo
+## Diagnóstico (verificado no banco)
 
-Facilitar o manejo de cargas em /loads: hoje, depois de criada, a carga parece "empurrada" para o fluxo de despacho. Vamos permitir **pausar/adiar** uma carga sem cancelar nem apagar, e dar uma **visão consolidada em Kanban** por situação.
+Na tabela `operational_routes` do seu tenant existem **49 rotas ativas**, mas na verdade são **dois catálogos sobrepostos** que foram semeados em datas diferentes:
 
-Sem criar módulo novo — é uma nova visão + um estado operacional adicional em cima do que já existe.
+- **15/04** — catálogo por município: `MG-JAIBA`, `MG-JANUARIA`, `MG-DIAMANTINA`, `MG-PIRAPORA`, `MG-JANAUBA`, `MG-CURVELO`, `MG-BOCAIUVA`, `MG-ESPINOSA`, …
+- **16/04** — catálogo por rota comercial: `ROTA 24 - JANUARIA`, `ROTA 29 - DIAMANTINA`, `ROTA 26 - PIRAPORA`, `ROTA 23 - JANAUBA / ESPINOSA`, `ROTA 22 - MONTES CLAROS / CURVELO`, …
 
-## Escopo funcional
+Nenhuma linha tem `updated_at ≠ created_at`, ou seja, **nenhuma rota foi renomeada manualmente**. O que o operador percebeu como “a rota mudou de nome sozinha” é o **matcher** de `src/lib/route-planning/loadGrouping.ts` escolhendo a primeira rota cuja lista de `destinations` bate com a cidade predominante da carga — como existem duas rotas cobrindo a mesma cidade, ora vem `MG-JANUARIA`, ora `ROTA 24 - JANUARIA`, dependendo da ordem do array. E, na tela `/operational-routes`, ambos aparecem lado a lado, dando a sensação de duplicata.
 
-### 1. Novo estado operacional "Em espera" (hold)
+Também não há `UNIQUE(tenant_id, name)` nem normalização, então nada impede novas duplicatas por acento/caixa (`MG-JAIBA` vs `MG-JAÍBA`, `ROTA 24 - JANUARIA` vs `Rota 24 – Januária`, etc.). Não há linhas em `route_templates` nem em `route_planning_drafts`, então o problema está isolado neste catálogo.
 
-- Carga em espera fica **fora do fluxo de despacho**: não aparece em Route Planning, não é sugerida em Trips, some das telas operacionais como "próximas cargas".
-- Continua totalmente visível em /loads, com badge próprio, e pode ser reativada a qualquer momento voltando ao status anterior.
-- Não é status do pipeline (não substitui `planned/assembling/ready/...`). É uma flag operacional paralela, para não quebrar as transições canônicas nem a auditoria já existente.
+## Plano
 
-### 2. Ações rápidas na carga
+### 1. Consolidar o catálogo em uma versão só (banco)
 
-Na lista e no detalhe da carga:
-- **Colocar em espera** (com motivo opcional em texto livre).
-- **Retomar** (tira do hold, volta a aparecer nas telas operacionais).
-- Motivo e datas ficam registradas para auditoria simples.
+- Escolher a família **`ROTA NN - NOME`** como canônica (é a que a operação nomeia no dia-a-dia).
+- Para cada par sobreposto (mesma cidade base), fazer:
+  - copiar destinos da versão `MG-…` para a `ROTA NN - …` se faltar algum;
+  - marcar `active = false` na versão `MG-…` (não deletar — preserva histórico e qualquer referência antiga).
+- Deixar ativas apenas rotas `MG-…` que **não têm** equivalente em `ROTA NN - …` (ex.: `MG-MC-001`, `MG-MIRABELA`, `MG-ARACUAI`, `MG-ITACAMBIRA`, `MG-FRANCISCO SA`, `MG-BR. DE MINAS`, `MG-C. JESUS`, `MG-PORTEIRINHA`), até o operador decidir.
 
-### 3. Nova visão Kanban em /loads
+Migration executa esse merge em SQL determinístico, sem apagar nada.
 
-Botão de alternância **Tabela ↔ Kanban** no topo (mantém a tabela atual intacta).
+### 2. Impedir novas duplicatas e renomes silenciosos
 
-Colunas do Kanban, agrupando os status existentes:
+- `CREATE UNIQUE INDEX operational_routes_tenant_name_key ON operational_routes (tenant_id, lower(unaccent(name))) WHERE active`;
+- Trigger simples que **preserva `name` quando não foi enviado no `UPDATE`** — corta o caso em que a UI envia o form inteiro com um campo em branco e “renomeia” a rota sem querer;
+- Auditoria: adicionar `INSERT INTO entity_audit_log` em `AFTER UPDATE OF name` para que qualquer alteração futura fique rastreável (quem, quando, de onde para onde).
 
-```text
-┌────────────┬────────────┬──────────────┬──────────────┬──────────────┬─────────────┐
-│ Em espera  │ Backlog    │ Preparação   │ Pronta       │ Em rota      │ Concluídas  │
-│ (hold)     │ planned    │ assembling   │ ready/loaded │ in_transit   │ delivered / │
-│            │            │ loading      │              │              │ terminais   │
-└────────────┴────────────┴──────────────┴──────────────┴──────────────┴─────────────┘
-```
+### 3. Corrigir o matcher para ser estável
 
-- Cards mostram: número da carga, cidade/rota predominante, cliente predominante, veículo, motorista, contagem de NFs, badge de "sem app" se motorista não tem conta vinculada.
-- **Drag & drop entre "Em espera" e "Backlog"** (única transição livre). Demais colunas seguem o pipeline canônico e só reagem aos eventos operacionais existentes — arrastar entre elas mostra tooltip explicando por que a transição precisa vir da operação (não vamos burlar `statusPipeline.ts`).
-- Filtros e busca da tela atual (data, veículo, cliente, avançados) ficam aplicáveis ao Kanban.
+Em `src/lib/route-planning/loadGrouping.ts`:
 
-### 4. Integrações com o resto do sistema
+- Ordenar `operationalRoutes` de forma determinística antes do `for` (por `name`), para que o mesmo load caia sempre na mesma rota;
+- Ignorar rotas inativas;
+- Quando **mais de uma** rota ativa casar com a cidade, marcar o grupo com `requires_review = true` e `review_reason = "Cidade X pertence a mais de uma rota cadastrada."` — força o operador a resolver a ambiguidade no catálogo em vez de sortear.
 
-- **Route Planning / cargas pendentes**: passam a filtrar `on_hold = false`.
-- **DriverHome / app do motorista**: cargas em hold não aparecem como "atribuídas" nem geram alerta de "sem viagem".
-- **Auditoria**: cada hold/unhold entra em `load_status_history` como evento não-transicional (com campo `note` = motivo), reutilizando a tabela que já existe.
+### 4. UX de `/operational-routes`
+
+- Coluna extra “Cidades” contando destinos, e badge `Duplicada?` quando existir outra rota ativa com pelo menos uma cidade em comum;
+- Filtro “Somente ativas” ligado por padrão;
+- Botão em massa **Desativar selecionadas** (não excluir) para consolidação futura;
+- Ao salvar, se o `name` normalizado colidir com outra ativa, mostrar toast com link para a rota existente em vez de erro cru do Postgres.
+
+### 5. Congruência com o resto do sistema
+
+- `/route-planning` e `/loads` já leem `operational_routes` filtrando por `active`? Confirmar e ajustar as duas queries — caso contrário rotas desativadas na etapa 1 continuariam aparecendo em selects.
+- Nenhuma alteração no app do motorista, no portal ou nos PDFs (não referenciam esta tabela).
 
 ## Detalhes técnicos
 
-### Banco (uma migração)
+```text
+Passo 1 — merge SQL (idempotente):
+  WITH pares AS (
+    SELECT r_mg.id AS old_id, r_rt.id AS new_id
+    FROM operational_routes r_mg
+    JOIN operational_routes r_rt
+      ON r_rt.tenant_id = r_mg.tenant_id
+     AND r_rt.name LIKE 'ROTA %'
+     AND r_mg.name LIKE 'MG-%'
+     AND EXISTS (
+       SELECT 1
+         FROM jsonb_array_elements(r_mg.destinations) d_mg
+         JOIN jsonb_array_elements(r_rt.destinations) d_rt
+           ON translate(lower(coalesce(d_mg->>'name', d_mg::text)), 'áàâãéêíóôõúç', 'aaaaeeioooucс')
+            = translate(lower(coalesce(d_rt->>'name', d_rt::text)), 'áàâãéêíóôõúç', 'aaaaeeioooucс')
+     )
+  )
+  UPDATE operational_routes SET active=false, updated_at=now()
+   WHERE id IN (SELECT old_id FROM pares);
+```
 
-Em `public.loads`:
-- `on_hold boolean NOT NULL DEFAULT false`
-- `hold_reason text NULL`
-- `held_at timestamptz NULL`
-- `held_by uuid NULL` (referência a `auth.uid()`)
-- Índice parcial: `CREATE INDEX loads_on_hold_idx ON loads (tenant_id) WHERE on_hold = true;`
+Migração adicional cria o índice único parcial, o trigger de proteção de nome e o gatilho de auditoria em `entity_audit_log`.
 
-RPCs:
-- `hold_load(_load_id uuid, _reason text)` — seta os campos + insere em `load_status_history` (tipo `hold`).
-- `unhold_load(_load_id uuid)` — limpa os campos + insere `unhold`.
-- Ambas com `SECURITY DEFINER`, validando pertencimento ao tenant e papel operator/admin/owner.
+Frontend:
 
-Sem novas tabelas, sem novas policies (as políticas atuais de `loads` já cobrem update via RPC).
+- `src/lib/route-planning/loadGrouping.ts` — filtro `active` + sort + detecção de ambiguidade.
+- `src/hooks/useOperationalRoutes.tsx` — passar a filtrar `active=true` por padrão, com flag opcional `includeInactive` para a tela de gestão.
+- `src/pages/OperationalRoutesPage.tsx` — badge de duplicata, filtro ativo/inativo, mensagem de conflito no salvar.
 
-### Frontend
+## O que **não** vou fazer
 
-Arquivos afetados (edição apenas, sem novos módulos):
-- `src/hooks/useLoads.ts` — expor `on_hold`, `hold_reason`, `held_at`; hooks `useHoldLoad` / `useUnholdLoad`.
-- `src/pages/Loads.tsx` — toggle Tabela/Kanban, ações rápidas "Colocar em espera" / "Retomar" no menu da linha e em ações em lote.
-- `src/components/loads/LoadsKanban.tsx` (novo componente, uma tela só) — colunas descritas acima, cards e DnD entre `Em espera ↔ Backlog` usando `@dnd-kit/core` (já no projeto se disponível; caso não esteja, usar botões "Retomar" / "Pausar" no card, sem DnD — a decisão fica dentro do componente, não bloqueia o plano).
-- `src/pages/RoutePlanning.tsx` e hooks correlatos — adicionar `.eq('on_hold', false)` nas queries de cargas pendentes.
-- `src/pages/driver/DriverHome.tsx` e `_driver_load_ids()` — excluir cargas com `on_hold = true` da visão do motorista.
-- `src/lib/status/loadStatus.ts` — helpers `isHold(load)` e mapeamento coluna Kanban por status.
-
-### Testes
-
-- Ampliar `src/test/rlsDriverLoads.test.ts` (ou arquivo novo curto) para: motorista **não** vê carga em hold; ao dar unhold, volta a ver.
-- Teste unitário do mapeamento `status → coluna Kanban`.
-
-## Fora de escopo (para não inchar)
-
-- Prioridade alta/normal/baixa, arquivamento, agenda por data prevista de despacho: ficam para uma rodada seguinte se você validar essa primeiro.
-- Nenhuma mudança no pipeline canônico de status nem em Trips.
-
-## Entrega
-
-1. Migração (campos + RPCs).
-2. Ajuste dos hooks e queries afetadas (Route Planning, DriverHome, `_driver_load_ids`).
-3. Kanban + ações de hold/unhold em /loads.
-4. Testes.
-5. Build + testes passando.
+- Não vou deletar rotas históricas — apenas desativar.
+- Não vou renomear rotas existentes.
+- Não vou mexer em `route_templates` (corredores de telemetria) — problema é só em `operational_routes`.
