@@ -124,6 +124,17 @@ export default function FreightTables() {
   const upsertMutation = useMutation({
     mutationFn: async (values: typeof form & { id?: string }) => {
       if (!currentTenant) throw new Error('Sem tenant');
+      const hasContext = !!(
+        values.client_id ||
+        values.origin_state ||
+        values.destination_state ||
+        values.origin_municipality ||
+        values.destination_municipality ||
+        values.vehicle_type
+      );
+      if (!values.blocked && !hasContext) {
+        throw new Error('Informe pelo menos um contexto: cliente, origem, destino ou tipo de veículo (ou marque como bloqueada).');
+      }
       const record: any = {
         tenant_id: currentTenant.id,
         table_name: values.table_name,

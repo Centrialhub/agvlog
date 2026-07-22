@@ -13522,6 +13522,7 @@ export type Database = {
           owner_notes: string | null
           owner_phone: string | null
           plate: string
+          plate_raw: string | null
           renavam: string | null
           result_area: string | null
           result_center: string | null
@@ -13576,6 +13577,7 @@ export type Database = {
           owner_notes?: string | null
           owner_phone?: string | null
           plate: string
+          plate_raw?: string | null
           renavam?: string | null
           result_area?: string | null
           result_center?: string | null
@@ -13630,6 +13632,7 @@ export type Database = {
           owner_notes?: string | null
           owner_phone?: string | null
           plate?: string
+          plate_raw?: string | null
           renavam?: string | null
           result_area?: string | null
           result_center?: string | null
@@ -14664,6 +14667,7 @@ export type Database = {
       }
       normalize_fiscal_number: { Args: { value: string }; Returns: string }
       normalize_tax_id: { Args: { value: string }; Returns: string }
+      normalize_vehicle_plate: { Args: { p: string }; Returns: string }
       op_route_norm: { Args: { txt: string }; Returns: string }
       peek_next_load_number: { Args: { _tenant_id: string }; Returns: string }
       peek_next_pickup_number: { Args: { _tenant_id: string }; Returns: string }
