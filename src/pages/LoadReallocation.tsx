@@ -499,12 +499,19 @@ export default function LoadReallocation() {
             <SelectTrigger>
               <SelectValue placeholder="Selecione a carga de origem..." />
             </SelectTrigger>
-            <SelectContent>
-              {activeLoads.map(l => (
-                <SelectItem key={l.id} value={l.id} disabled={l.id === targetLoadId}>
-                  {l.load_number} — {l.destination || 'Sem destino'}
-                  {l.vehicles ? ` (${l.vehicles.plate})` : ''}
-                </SelectItem>
+            <SelectContent className="max-h-[420px]">
+              {groupedLoads.map((g, idx) => (
+                <SelectGroup key={`src-${idx}`}>
+                  <SelectLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    {g.header}
+                  </SelectLabel>
+                  {g.loads.map(l => (
+                    <SelectItem key={l.id} value={l.id} disabled={l.id === targetLoadId} className="pl-6">
+                      {l.load_number}
+                      {l.vehicles ? ` — ${l.vehicles.plate}` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               ))}
             </SelectContent>
           </Select>
@@ -518,12 +525,19 @@ export default function LoadReallocation() {
             <SelectTrigger>
               <SelectValue placeholder="Selecione a carga de destino..." />
             </SelectTrigger>
-            <SelectContent>
-              {activeLoads.map(l => (
-                <SelectItem key={l.id} value={l.id} disabled={l.id === sourceLoadId}>
-                  {l.load_number} — {l.destination || 'Sem destino'}
-                  {l.vehicles ? ` (${l.vehicles.plate})` : ''}
-                </SelectItem>
+            <SelectContent className="max-h-[420px]">
+              {groupedLoads.map((g, idx) => (
+                <SelectGroup key={`tgt-${idx}`}>
+                  <SelectLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    {g.header}
+                  </SelectLabel>
+                  {g.loads.map(l => (
+                    <SelectItem key={l.id} value={l.id} disabled={l.id === sourceLoadId} className="pl-6">
+                      {l.load_number}
+                      {l.vehicles ? ` — ${l.vehicles.plate}` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               ))}
             </SelectContent>
           </Select>
