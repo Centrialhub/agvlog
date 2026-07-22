@@ -1,52 +1,91 @@
 
 ## Objetivo
 
-Permitir criar um **acerto de motorista manual** (fora do fluxo automático baseado em viagem), vinculando **um ou mais romaneios (loads)** ao acerto, com a garantia de que cada romaneio só pode estar em **um único acerto ao mesmo tempo**. Manter possibilidade de correção (adicionar/remover romaneios) enquanto o acerto não estiver aprovado/pago/fechado.
+Facilitar o manejo de cargas em /loads: hoje, depois de criada, a carga parece "empurrada" para o fluxo de despacho. Vamos permitir **pausar/adiar** uma carga sem cancelar nem apagar, e dar uma **visão consolidada em Kanban** por situação.
 
-## O que muda para o usuário
+Sem criar módulo novo — é uma nova visão + um estado operacional adicional em cima do que já existe.
 
-Na página **Acerto de Motoristas**:
+## Escopo funcional
 
-1. Novo botão **"Novo acerto manual"** ao lado de "Gerar / Recalcular pendentes".
-2. Diálogo de criação: escolher **motorista**, **veículo** (opcional), **data**, e selecionar **romaneios elegíveis** (finalizados/entregues e ainda não vinculados a nenhum outro acerto). Busca por nº do romaneio, origem, destino.
-3. Ao confirmar, o acerto é criado e recalcula automaticamente totais (peso, notas, frete, mercadoria, despesas, KM, resultado da rota) a partir dos romaneios selecionados.
-4. No drawer do acerto (aba **Romaneios**), enquanto o acerto **não estiver** aprovado/pago/fechado:
-   - Botão **"Adicionar romaneio"** — abre picker mostrando apenas romaneios ainda livres.
-   - Botão **"Remover"** por linha — desvincula o romaneio, liberando-o para outro acerto.
-   - Cada alteração dispara **recálculo** dos totais.
-5. Regra de exclusividade: se um romaneio já está em outro acerto ativo (não `reopened` sem vínculo), ele **não aparece** na lista de disponíveis. Tentativa direta retorna erro claro ("Romaneio já vinculado ao acerto #X").
+### 1. Novo estado operacional "Em espera" (hold)
 
-## Como funciona por dentro (técnico)
+- Carga em espera fica **fora do fluxo de despacho**: não aparece em Route Planning, não é sugerida em Trips, some das telas operacionais como "próximas cargas".
+- Continua totalmente visível em /loads, com badge próprio, e pode ser reativada a qualquer momento voltando ao status anterior.
+- Não é status do pipeline (não substitui `planned/assembling/ready/...`). É uma flag operacional paralela, para não quebrar as transições canônicas nem a auditoria já existente.
 
-### Banco de dados (migração)
+### 2. Ações rápidas na carga
 
-- Nova tabela **`driver_settlement_loads`** (link N:N entre acerto e load) com:
-  - `settlement_id uuid NOT NULL REFERENCES driver_settlements(id) ON DELETE CASCADE`
-  - `load_id uuid NOT NULL REFERENCES loads(id) ON DELETE CASCADE`
-  - `tenant_id uuid NOT NULL`, `created_at`, `created_by`
-  - **`UNIQUE(load_id)` parcial** (exclusividade global do romaneio em qualquer acerto ativo). Como remoção é hard-delete da linha, o unique simples resolve.
-  - RLS + GRANTs padrão do projeto.
-- Tornar `dispatch_trip_id` **nullable** em `driver_settlements` (necessário para acertos manuais). Ajustar constraint única existente (`UNIQUE(dispatch_trip_id)`) para permitir múltiplos nulls (Postgres já permite) ou converter em unique parcial `WHERE dispatch_trip_id IS NOT NULL`.
-- Novo campo `is_manual boolean NOT NULL DEFAULT false` para diferenciar origem.
+Na lista e no detalhe da carga:
+- **Colocar em espera** (com motivo opcional em texto livre).
+- **Retomar** (tira do hold, volta a aparecer nas telas operacionais).
+- Motivo e datas ficam registradas para auditoria simples.
 
-### Funções RPC (novas)
+### 3. Nova visão Kanban em /loads
 
-- `create_manual_driver_settlement(_tenant_id, _driver_id, _vehicle_id, _reference_date, _load_ids uuid[])`
-  - Valida motorista/tenant, checa que nenhum `load_id` está em outro acerto (via `driver_settlement_loads` ou via `dispatch_trip_id` do trip que já gerou acerto), cria settlement `pending_review`, insere links e chama recálculo.
-- `attach_loads_to_driver_settlement(_settlement_id, _load_ids uuid[])` — só em status editável; valida exclusividade; recalcula.
-- `detach_load_from_driver_settlement(_settlement_id, _load_id)` — só em status editável; recalcula.
-- `recalculate_manual_driver_settlement(_settlement_id)` — agrega totais a partir dos loads vinculados + despesas do motorista no período (mesma lógica dos automáticos, mas fonte = links, não trip).
-- `list_available_loads_for_settlement(_tenant_id, _driver_id, _search, _limit)` — retorna romaneios finalizados e ainda não vinculados a nenhum acerto ativo.
+Botão de alternância **Tabela ↔ Kanban** no topo (mantém a tabela atual intacta).
 
-### Front-end
+Colunas do Kanban, agrupando os status existentes:
 
-- `src/hooks/useDriverSettlements.tsx`: novos hooks `useCreateManualSettlement`, `useAttachLoadsToSettlement`, `useDetachLoadFromSettlement`, `useAvailableLoadsForSettlement`.
-- `src/components/financial/NewManualSettlementDialog.tsx` (novo): motorista + veículo + data + tabela multi-select de romaneios disponíveis.
-- `src/components/financial/AttachLoadsDialog.tsx` (novo): reutilizado dentro do drawer para adicionar romaneios a um acerto existente.
-- `src/pages/DriverSettlements.tsx`: botão "Novo acerto manual".
-- `src/components/financial/DriverSettlementDrawer.tsx`: na aba Romaneios, adicionar botões Adicionar/Remover quando `!isLocked(status)`.
+```text
+┌────────────┬────────────┬──────────────┬──────────────┬──────────────┬─────────────┐
+│ Em espera  │ Backlog    │ Preparação   │ Pronta       │ Em rota      │ Concluídas  │
+│ (hold)     │ planned    │ assembling   │ ready/loaded │ in_transit   │ delivered / │
+│            │            │ loading      │              │              │ terminais   │
+└────────────┴────────────┴──────────────┴──────────────┴──────────────┴─────────────┘
+```
 
-## Fora do escopo
+- Cards mostram: número da carga, cidade/rota predominante, cliente predominante, veículo, motorista, contagem de NFs, badge de "sem app" se motorista não tem conta vinculada.
+- **Drag & drop entre "Em espera" e "Backlog"** (única transição livre). Demais colunas seguem o pipeline canônico e só reagem aos eventos operacionais existentes — arrastar entre elas mostra tooltip explicando por que a transição precisa vir da operação (não vamos burlar `statusPipeline.ts`).
+- Filtros e busca da tela atual (data, veículo, cliente, avançados) ficam aplicáveis ao Kanban.
 
-- Redesenho da lógica de cálculo automática já existente para viagens.
-- Regras novas de contabilidade/aprovação — reaproveitamos o pipeline atual de status.
+### 4. Integrações com o resto do sistema
+
+- **Route Planning / cargas pendentes**: passam a filtrar `on_hold = false`.
+- **DriverHome / app do motorista**: cargas em hold não aparecem como "atribuídas" nem geram alerta de "sem viagem".
+- **Auditoria**: cada hold/unhold entra em `load_status_history` como evento não-transicional (com campo `note` = motivo), reutilizando a tabela que já existe.
+
+## Detalhes técnicos
+
+### Banco (uma migração)
+
+Em `public.loads`:
+- `on_hold boolean NOT NULL DEFAULT false`
+- `hold_reason text NULL`
+- `held_at timestamptz NULL`
+- `held_by uuid NULL` (referência a `auth.uid()`)
+- Índice parcial: `CREATE INDEX loads_on_hold_idx ON loads (tenant_id) WHERE on_hold = true;`
+
+RPCs:
+- `hold_load(_load_id uuid, _reason text)` — seta os campos + insere em `load_status_history` (tipo `hold`).
+- `unhold_load(_load_id uuid)` — limpa os campos + insere `unhold`.
+- Ambas com `SECURITY DEFINER`, validando pertencimento ao tenant e papel operator/admin/owner.
+
+Sem novas tabelas, sem novas policies (as políticas atuais de `loads` já cobrem update via RPC).
+
+### Frontend
+
+Arquivos afetados (edição apenas, sem novos módulos):
+- `src/hooks/useLoads.ts` — expor `on_hold`, `hold_reason`, `held_at`; hooks `useHoldLoad` / `useUnholdLoad`.
+- `src/pages/Loads.tsx` — toggle Tabela/Kanban, ações rápidas "Colocar em espera" / "Retomar" no menu da linha e em ações em lote.
+- `src/components/loads/LoadsKanban.tsx` (novo componente, uma tela só) — colunas descritas acima, cards e DnD entre `Em espera ↔ Backlog` usando `@dnd-kit/core` (já no projeto se disponível; caso não esteja, usar botões "Retomar" / "Pausar" no card, sem DnD — a decisão fica dentro do componente, não bloqueia o plano).
+- `src/pages/RoutePlanning.tsx` e hooks correlatos — adicionar `.eq('on_hold', false)` nas queries de cargas pendentes.
+- `src/pages/driver/DriverHome.tsx` e `_driver_load_ids()` — excluir cargas com `on_hold = true` da visão do motorista.
+- `src/lib/status/loadStatus.ts` — helpers `isHold(load)` e mapeamento coluna Kanban por status.
+
+### Testes
+
+- Ampliar `src/test/rlsDriverLoads.test.ts` (ou arquivo novo curto) para: motorista **não** vê carga em hold; ao dar unhold, volta a ver.
+- Teste unitário do mapeamento `status → coluna Kanban`.
+
+## Fora de escopo (para não inchar)
+
+- Prioridade alta/normal/baixa, arquivamento, agenda por data prevista de despacho: ficam para uma rodada seguinte se você validar essa primeiro.
+- Nenhuma mudança no pipeline canônico de status nem em Trips.
+
+## Entrega
+
+1. Migração (campos + RPCs).
+2. Ajuste dos hooks e queries afetadas (Route Planning, DriverHome, `_driver_load_ids`).
+3. Kanban + ações de hold/unhold em /loads.
+4. Testes.
+5. Build + testes passando.
