@@ -271,7 +271,7 @@ export default function RoutePlanning() {
           if (err instanceof DraftConflictError) {
             toast.error('Rascunho alterado em outra sessão. Recarregando última versão.');
             savePlanSnapshot.forgetVersion(r.id);
-            queryClient.invalidateQueries({ queryKey: ['route_planning_drafts'] });
+            qc.invalidateQueries({ queryKey: ['route_planning_drafts'] });
             draftsHydratedRef.current = false;
           }
         },
