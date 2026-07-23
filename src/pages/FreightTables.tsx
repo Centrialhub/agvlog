@@ -590,7 +590,7 @@ export default function FreightTables() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-16">Cód.</TableHead>
-                  <TableHead>Cliente</TableHead>
+                  <TableHead>Fornecedor</TableHead>
                   <TableHead>Início</TableHead>
                   <TableHead>Fim</TableHead>
                   <TableHead>Grupo Pagador</TableHead>
