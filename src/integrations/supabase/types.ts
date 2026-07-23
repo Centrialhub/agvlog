@@ -6318,7 +6318,9 @@ export type Database = {
           environment: string
           id: string
           metadata: Json
-          secret_name: string
+          secret_ciphertext: string | null
+          secret_hint: string | null
+          secret_name: string | null
           tenant_id: string
           updated_at: string
         }
@@ -6330,7 +6332,9 @@ export type Database = {
           environment?: string
           id?: string
           metadata?: Json
-          secret_name: string
+          secret_ciphertext?: string | null
+          secret_hint?: string | null
+          secret_name?: string | null
           tenant_id: string
           updated_at?: string
         }
@@ -6342,7 +6346,9 @@ export type Database = {
           environment?: string
           id?: string
           metadata?: Json
-          secret_name?: string
+          secret_ciphertext?: string | null
+          secret_hint?: string | null
+          secret_name?: string | null
           tenant_id?: string
           updated_at?: string
         }
