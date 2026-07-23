@@ -20,6 +20,7 @@ import {
   Activity, Wifi, Link2, Unlink, Radio,
 } from 'lucide-react';
 import { CompanySettings } from '@/components/settings/CompanySettings';
+import EmittersSettings from '@/components/settings/EmittersSettings';
 
 export default function Settings() {
   return (
@@ -31,6 +32,7 @@ export default function Settings() {
       <Tabs defaultValue="company">
         <TabsList className="flex-wrap">
           <TabsTrigger value="company">Empresa</TabsTrigger>
+          <TabsTrigger value="emitters">Emitentes Fiscais</TabsTrigger>
           <TabsTrigger value="integration">Integração SSX</TabsTrigger>
           <TabsTrigger value="units">Rastreadores</TabsTrigger>
           <TabsTrigger value="telemetry">Catálogo Telemetria</TabsTrigger>
@@ -39,6 +41,7 @@ export default function Settings() {
           <TabsTrigger value="maintenance">Manutenção</TabsTrigger>
         </TabsList>
         <TabsContent value="company" className="mt-4"><CompanySettings /></TabsContent>
+        <TabsContent value="emitters" className="mt-4"><EmittersSettings /></TabsContent>
         <TabsContent value="integration" className="mt-4"><IntegrationSection /></TabsContent>
         <TabsContent value="units" className="mt-4"><UnitsSection /></TabsContent>
         <TabsContent value="telemetry" className="mt-4"><TelemetryCatalogSection /></TabsContent>
