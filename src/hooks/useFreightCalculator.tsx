@@ -78,6 +78,25 @@ function computeSpecificity(table: any, input: FreightInput): { score: number; m
     }
   };
 
+  // Soft check: when the input side is missing (null/empty), do NOT disqualify.
+  // Only pushes negative on a real mismatch (both sides present and different).
+  // This prevents generic all-null tables from being wrongly rejected in favor of
+  // a specific-but-mismatched fallback.
+  const checkSoft = (field: string, tableVal: string | null, inputVal: string | null | undefined) => {
+    if (!tableVal) return;
+    if (!inputVal) {
+      ignored.push(`${field}: table="${tableVal}" vs input="(vazio)" (não pontua, não desqualifica)`);
+      return;
+    }
+    if (tableVal.toLowerCase() === inputVal.toLowerCase()) {
+      score += 10;
+      matched[field] = tableVal;
+    } else {
+      score -= 100;
+      ignored.push(`${field}: table="${tableVal}" vs input="${inputVal}"`);
+    }
+  };
+
   const checkContains = (field: string, tableVal: string | null, inputVal: string | null | undefined) => {
     if (!tableVal) return;
     if (inputVal && inputVal.toLowerCase().includes(tableVal.toLowerCase())) {
@@ -89,8 +108,12 @@ function computeSpecificity(table: any, input: FreightInput): { score: number; m
     }
   };
 
-  check('payer_group', table.payer_group, input.payerGroup);
-  check('payer', table.payer, input.clientId ? 'client' : null); // simplified
+  // payer_group is treated softly: a table restricted to a payer_group should not be
+  // disqualified merely because the input's client hasn't been assigned to that group yet.
+  // This is the common source of wrong-fallback selection in production.
+  checkSoft('payer_group', table.payer_group, input.payerGroup);
+  // payer is compared to the actual client id, not the literal string "client".
+  checkSoft('payer', table.payer, input.clientId);
   check('origin_state', table.origin_state, input.originState);
   check('destination_state', table.destination_state, input.destinationState);
   check('origin_municipality', table.origin_municipality, input.originMunicipality);
@@ -199,7 +222,17 @@ export async function calculateFreight(input: FreightInput): Promise<FreightResu
     // Pick highest specificity
     qualified.sort((a, b) => b.score - a.score);
     chosen = qualified[0];
-    if (missingFields.length > 0) {
+    // Fallback flag only when the winner is a generic all-wildcard table AND we had
+    // missing context — a genuine specific match on an all-null table is NOT fallback.
+    const winnerHasAnyCriteria =
+      !!chosen.table.payer_group || !!chosen.table.payer ||
+      !!chosen.table.origin_state || !!chosen.table.destination_state ||
+      !!chosen.table.origin_municipality || !!chosen.table.destination_municipality ||
+      !!chosen.table.origin_region || !!chosen.table.destination_region ||
+      !!chosen.table.route || !!chosen.table.distribution_type ||
+      !!chosen.table.cargo_type || !!chosen.table.vehicle_type ||
+      !!chosen.table.body_type || !!chosen.table.ctrc_type;
+    if (missingFields.length > 0 && !winnerHasAnyCriteria) {
       fallbackUsed = true;
       fallbackReason = `Campos ausentes substituídos por UNKNOWN: ${missingFields.join(', ')}`;
     }
@@ -209,7 +242,13 @@ export async function calculateFreight(input: FreightInput): Promise<FreightResu
     fallbackReason = missingFields.length > 0
       ? `Nenhuma tabela compatível — usando tabela genérica. Campos ausentes: ${missingFields.join(', ')}`
       : 'Nenhuma tabela compatível — usando tabela genérica';
-    chosen = scored.sort((a, b) => (a.table.specificity_score || 0) - (b.table.specificity_score || 0))[0];
+    // Deterministic pick: least-negative score first (closest to matching), then
+    // lowest table_code as a stable tiebreaker.
+    chosen = scored.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return (a.table.table_code || 0) - (b.table.table_code || 0);
+    })[0];
+    fallbackReason += ` — tabela escolhida: #${chosen.table.table_code} ${chosen.table.table_name}`;
   }
 
   const components = computeFreightValue(chosen.table, normalizedInput);
