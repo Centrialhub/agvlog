@@ -87,8 +87,7 @@ export function CompanySettings() {
                 <Label className="text-xs">Logo</Label>
                 <div className="h-32 w-32 rounded-md border border-border bg-muted/40 flex items-center justify-center overflow-hidden">
                   {form.logo_data_url ? (
-                    // eslint-disable-next-line jsx-a11y/alt-text
-                    <img src={form.logo_data_url} className="max-h-full max-w-full object-contain" />
+                    <img src={form.logo_data_url} alt="Logo da empresa" className="max-h-full max-w-full object-contain" />
                   ) : (
                     <span className="text-[10px] text-muted-foreground text-center px-2">Sem logo</span>
                   )}

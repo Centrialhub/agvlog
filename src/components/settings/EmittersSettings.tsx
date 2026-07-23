@@ -112,6 +112,9 @@ function formatCnpj(cnpj: string) {
 
 function EmitterFormDialog({ initial, onClose }: { initial: Partial<TenantEmitter>; onClose: () => void }) {
   const save = useSaveEmitter();
+  const saveToken = useSaveHubCredentialToken();
+  const saveMeta = useSaveHubCredential();
+  const { data: existingCreds = [] } = useHubCredentials(initial.id);
   const [f, setF] = useState<any>({
     branch_code: initial.branch_code || 'MATRIZ',
     cnpj: initial.cnpj || '',
@@ -126,16 +129,48 @@ function EmitterFormDialog({ initial, onClose }: { initial: Partial<TenantEmitte
     is_default: initial.is_default ?? false,
     endereco: initial.endereco || {},
   });
+  const [cred, setCred] = useState({
+    mode: 'token' as 'token' | 'secret_name',
+    doc_scope: 'all' as HubFiscalCredential['doc_scope'],
+    environment: 'production' as HubFiscalCredential['environment'],
+    token: '',
+    secret_name: '',
+  });
+  const [saving, setSaving] = useState(false);
   const editing = !!initial.id;
   const set = (k: string, v: any) => setF((s: any) => ({ ...s, [k]: v }));
   const setEnd = (k: string, v: any) => setF((s: any) => ({ ...s, endereco: { ...(s.endereco || {}), [k]: v } }));
 
   const handleSave = async () => {
-    const payload = { ...f, id: initial.id };
     if (!f.cnpj || String(f.cnpj).replace(/\D/g, '').length !== 14) return alert('CNPJ inválido');
     if (!f.razao_social) return alert('Razão social é obrigatória');
-    await save.mutateAsync(payload as any);
-    onClose();
+    setSaving(true);
+    try {
+      const payload = { ...f, id: initial.id };
+      const saved = await save.mutateAsync(payload as any);
+      if (cred.mode === 'token' && cred.token.trim().length >= 8) {
+        await saveToken.mutateAsync({
+          emitter_id: saved.id,
+          doc_scope: cred.doc_scope,
+          environment: cred.environment,
+          token: cred.token,
+          enabled: true,
+        });
+      } else if (cred.mode === 'secret_name' && cred.secret_name.trim()) {
+        await saveMeta.mutateAsync({
+          emitter_id: saved.id,
+          doc_scope: cred.doc_scope,
+          environment: cred.environment,
+          secret_name: cred.secret_name.trim(),
+          enabled: true,
+        });
+      }
+      onClose();
+    } catch (e) {
+      // mutation hooks already show toast; keep dialog open on emitter error
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -176,10 +211,103 @@ function EmitterFormDialog({ initial, onClose }: { initial: Partial<TenantEmitte
           <div className="col-span-1"><Label>CEP</Label><Input value={f.endereco?.cep || ''} onChange={e => setEnd('cep', e.target.value)} /></div>
           <div className="col-span-2"><Label>Telefone</Label><Input value={f.endereco?.telefone || ''} onChange={e => setEnd('telefone', e.target.value)} /></div>
           <div className="col-span-2"><Label>E-mail</Label><Input value={f.endereco?.email || ''} onChange={e => setEnd('email', e.target.value)} /></div>
+
+          <div className="col-span-6 pt-4 border-t">
+            <h4 className="text-sm font-semibold mb-1">Credenciais do Hub Fiscal (opcional)</h4>
+            <p className="text-xs text-muted-foreground mb-3">
+              Cada emitente pode usar uma conta própria no Hub Fiscal. Se não preencher, o sistema usará o token padrão <code>HUB_FISCAL_API_KEY</code>.
+            </p>
+          </div>
+
+          {editing && existingCreds.length > 0 && (
+            <div className="col-span-6">
+              <h5 className="text-xs font-semibold mb-2">Credenciais já salvas</h5>
+              <div className="space-y-2">
+                {existingCreds.map(c => (
+                  <div key={c.id} className="flex items-center justify-between rounded-md border p-2 text-xs">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline">{c.doc_scope}</Badge>
+                      <span className="text-muted-foreground">{c.environment}</span>
+                    </div>
+                    <div className="font-mono">
+                      {c.has_ciphertext
+                        ? <span>Token salvo <span className="text-muted-foreground">({c.secret_hint || '••••'})</span></span>
+                        : c.secret_name
+                          ? <span>env: {c.secret_name}</span>
+                          : <span className="text-muted-foreground">—</span>}
+                    </div>
+                    <Badge className={c.enabled ? 'bg-success text-success-foreground' : ''} variant={c.enabled ? 'default' : 'secondary'}>{c.enabled ? 'Ativa' : 'Inativa'}</Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="col-span-2">
+            <Label>Escopo</Label>
+            <Select value={cred.doc_scope} onValueChange={v => setCred(s => ({ ...s, doc_scope: v as any }))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="nfse">NFS-e</SelectItem>
+                <SelectItem value="cte">CT-e</SelectItem>
+                <SelectItem value="nfe">NF-e</SelectItem>
+                <SelectItem value="nfce">NFC-e</SelectItem>
+                <SelectItem value="mdfe">MDF-e</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="col-span-2">
+            <Label>Ambiente</Label>
+            <Select value={cred.environment} onValueChange={v => setCred(s => ({ ...s, environment: v as any }))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="production">Produção</SelectItem>
+                <SelectItem value="sandbox">Homologação</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="col-span-2">
+            <Label>Modo</Label>
+            <Select value={cred.mode} onValueChange={v => setCred(s => ({ ...s, mode: v as any }))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="token">Colar token</SelectItem>
+                <SelectItem value="secret_name">Nome de segredo</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {cred.mode === 'token' ? (
+            <div className="col-span-4">
+              <Label>Token do Hub Fiscal</Label>
+              <Input
+                type="password"
+                autoComplete="new-password"
+                value={cred.token}
+                onChange={e => setCred(s => ({ ...s, token: e.target.value }))}
+                placeholder="Cole o token deste CNPJ"
+              />
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Criptografado com AES-GCM no backend e nunca devolvido para a tela.
+              </p>
+            </div>
+          ) : (
+            <div className="col-span-4">
+              <Label>Nome do segredo</Label>
+              <Input
+                value={cred.secret_name}
+                onChange={e => setCred(s => ({ ...s, secret_name: e.target.value }))}
+                placeholder="HUB_FISCAL_KEY_..."
+              />
+              <p className="text-[11px] text-muted-foreground mt-1">
+                O token deve estar configurado como variável de ambiente com esse nome.
+              </p>
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={handleSave} disabled={save.isPending}>{editing ? 'Salvar' : 'Cadastrar'}</Button>
+          <Button onClick={handleSave} disabled={saving}>{editing ? 'Salvar' : 'Cadastrar'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
