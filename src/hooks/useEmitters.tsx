@@ -28,7 +28,9 @@ export interface HubFiscalCredential {
   emitter_id: string;
   doc_scope: 'all' | 'nfse' | 'cte' | 'nfe' | 'nfce' | 'mdfe';
   environment: 'sandbox' | 'production';
-  secret_name: string;
+  secret_name: string | null;
+  secret_hint?: string | null;
+  has_ciphertext?: boolean;
   enabled: boolean;
   metadata: Record<string, any>;
   created_at: string;
@@ -122,11 +124,15 @@ export function useHubCredentials(emitterId?: string | null) {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from('hub_fiscal_credentials')
-        .select('*')
+        .select('id, tenant_id, emitter_id, doc_scope, environment, secret_name, secret_hint, secret_ciphertext, enabled, metadata, created_at, updated_at')
         .eq('emitter_id', emitterId!)
         .order('doc_scope');
       if (error) throw error;
-      return (data ?? []) as HubFiscalCredential[];
+      return (data ?? []).map((r: any) => ({
+        ...r,
+        has_ciphertext: !!r.secret_ciphertext,
+        secret_ciphertext: undefined,
+      })) as HubFiscalCredential[];
     },
   });
 }
@@ -153,6 +159,30 @@ export function useSaveHubCredential() {
       toast.success('Credencial salva');
     },
     onError: (e: any) => toast.error(e?.message || 'Falha ao salvar credencial'),
+  });
+}
+
+export function useSaveHubCredentialToken() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      id?: string;
+      emitter_id: string;
+      doc_scope: HubFiscalCredential['doc_scope'];
+      environment: HubFiscalCredential['environment'];
+      enabled?: boolean;
+      token: string;
+    }) => {
+      const { data, error } = await supabase.functions.invoke('hub-fiscal-credential-save', { body: input });
+      if (error) throw new Error((error as any)?.message || 'Falha ao salvar token');
+      if ((data as any)?.error) throw new Error((data as any).error);
+      return data;
+    },
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ['hub_fiscal_credentials', vars.emitter_id] });
+      toast.success('Token do Hub Fiscal salvo com segurança');
+    },
+    onError: (e: any) => toast.error(e?.message || 'Falha ao salvar token'),
   });
 }
 
