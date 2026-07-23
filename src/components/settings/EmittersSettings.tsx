@@ -137,7 +137,8 @@ function EmitterFormDialog({ initial, onClose }: { initial: Partial<TenantEmitte
     secret_name: '',
   });
   const [saving, setSaving] = useState(false);
-  const editing = !!initial.id;
+  const [savedId, setSavedId] = useState<string | undefined>(initial.id);
+  const editing = !!savedId;
   const set = (k: string, v: any) => setF((s: any) => ({ ...s, [k]: v }));
   const setEnd = (k: string, v: any) => setF((s: any) => ({ ...s, endereco: { ...(s.endereco || {}), [k]: v } }));
 
@@ -146,8 +147,9 @@ function EmitterFormDialog({ initial, onClose }: { initial: Partial<TenantEmitte
     if (!f.razao_social) return alert('Razão social é obrigatória');
     setSaving(true);
     try {
-      const payload = { ...f, id: initial.id };
+      const payload = { ...f, id: savedId };
       const saved = await save.mutateAsync(payload as any);
+      setSavedId(saved.id);
       if (cred.mode === 'token' && cred.token.trim().length >= 8) {
         await saveToken.mutateAsync({
           emitter_id: saved.id,
