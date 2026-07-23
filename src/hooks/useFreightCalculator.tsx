@@ -62,7 +62,7 @@ export interface FreightResult {
   error?: string;
 }
 
-function computeSpecificity(table: any, input: FreightInput): { score: number; matched: Record<string, string>; ignored: string[] } {
+export function computeSpecificity(table: any, input: FreightInput): { score: number; matched: Record<string, string>; ignored: string[] } {
   let score = 0;
   const matched: Record<string, string> = {};
   const ignored: string[] = [];
