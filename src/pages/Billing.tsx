@@ -732,7 +732,7 @@ export default function Billing() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
-            <Calculator className="h-4 w-4 text-primary" /> 3. Prévia do faturamento
+            <Calculator className="h-4 w-4 text-primary" /> 4. Prévia do faturamento
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
