@@ -75,7 +75,12 @@ export function useSaveEmitter() {
         return data;
       }
       const { data, error } = await (supabase as any).from('tenant_emitters').insert(payload).select().single();
-      if (error) throw error;
+      if (error) {
+        if ((error as any).code === '23505') {
+          throw new Error('Já existe um emitente com este CNPJ neste tenant. Edite o emitente existente na lista.');
+        }
+        throw error;
+      }
       return data;
     },
     onSuccess: () => {
