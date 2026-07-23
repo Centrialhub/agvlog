@@ -39,6 +39,7 @@ type OpType = OperationType;
 interface BillingPreferences {
   tab: SourceTab;
   clientId: string;
+  supplierId: string;
   periodStart: string;
   periodEnd: string;
   modeId: number;
@@ -72,6 +73,7 @@ interface BillingPreferences {
 const DEFAULT_BILLING_PREFS: BillingPreferences = {
   tab: 'period',
   clientId: SENTINEL_NONE,
+  supplierId: SENTINEL_NONE,
   periodStart: '',
   periodEnd: '',
   modeId: 1,
@@ -118,6 +120,7 @@ export default function Billing() {
 
   const [tab, setTab] = useState<SourceTab>('period');
   const [clientId, setClientId] = useState<string>(SENTINEL_NONE);
+  const [supplierId, setSupplierId] = useState<string>(SENTINEL_NONE);
   const [periodStart, setPeriodStart] = useState<string>('');
   const [periodEnd, setPeriodEnd] = useState<string>('');
   const [selectedLoadIds, setSelectedLoadIds] = useState<Set<string>>(new Set());
@@ -154,6 +157,7 @@ export default function Billing() {
   // ===== Pré-filtragem server-side (usa índices criados) =====
   const { data: docs = [], isLoading: docsLoading } = useBillingDocuments({
     clientId: clientId !== SENTINEL_NONE ? clientId : null,
+    supplierId: supplierId !== SENTINEL_NONE ? supplierId : null,
     periodStart: tab === 'period' ? periodStart : null,
     periodEnd: tab === 'period' ? periodEnd : null,
     invoiceNumber,
@@ -172,6 +176,7 @@ export default function Billing() {
     const p = preference;
     setTab(p.tab ?? 'period');
     setClientId(p.clientId ?? SENTINEL_NONE);
+    setSupplierId(p.supplierId ?? SENTINEL_NONE);
     setPeriodStart(p.periodStart ?? '');
     setPeriodEnd(p.periodEnd ?? '');
     setModeId(p.modeId ?? 1);
@@ -208,6 +213,7 @@ export default function Billing() {
       savePreference({
         tab,
         clientId,
+        supplierId,
         periodStart,
         periodEnd,
         modeId,
@@ -240,7 +246,7 @@ export default function Billing() {
     return () => clearTimeout(t);
   }, [
     isLoaded, savePreference,
-    tab, clientId, periodStart, periodEnd, modeId,
+    tab, clientId, supplierId, periodStart, periodEnd, modeId,
     osNumber, collectOrder, referenceNumber, cnpj, invoiceNumber,
     issueDateStart, issueDateEnd,
     importDateStart, importDateEnd,
