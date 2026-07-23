@@ -438,6 +438,7 @@ export default function Billing() {
               const next = v as SourceTab;
               setTab(next);
               if (next === 'period') setClientId(SENTINEL_NONE);
+              if (next === 'loads') setSupplierId(SENTINEL_NONE);
             }}
           >
             <TabsList>
