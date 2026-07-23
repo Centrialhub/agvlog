@@ -124,6 +124,7 @@ export default function Billing() {
   const [periodStart, setPeriodStart] = useState<string>('');
   const [periodEnd, setPeriodEnd] = useState<string>('');
   const [selectedLoadIds, setSelectedLoadIds] = useState<Set<string>>(new Set());
+  const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
   const [modeId, setModeId] = useState<number>(1);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [modeDialogOpen, setModeDialogOpen] = useState(false);
@@ -295,7 +296,7 @@ export default function Billing() {
   // Filtra documentos. Filtros de alta seletividade (cliente, período, NF, chave, remitente,
   // referência) já foram aplicados server-side pelo useBillingDocuments. Aqui só restam
   // filtros que dependem de tabelas relacionadas (loads/vehicles).
-  const eligibleDocs = useMemo(() => {
+  const filteredDocs = useMemo(() => {
     return docs.filter(d => {
       if (tab === 'loads') {
         if (!d.load_id || !selectedLoadIds.has(d.load_id)) return false;
@@ -350,6 +351,36 @@ export default function Billing() {
     scheduledLoadStart, scheduledLoadEnd, actualLoadStart, actualLoadEnd,
     opTypes, allOps,
   ]);
+
+  // Se o operador marcou notas específicas, restringe a elas. Caso contrário,
+  // usa todas as notas resultantes dos filtros (comportamento por lote antigo).
+  const eligibleDocs = useMemo(() => {
+    if (selectedDocIds.size === 0) return filteredDocs;
+    return filteredDocs.filter(d => selectedDocIds.has(d.id));
+  }, [filteredDocs, selectedDocIds]);
+
+  // Limpa seleções que deixaram de fazer parte do universo filtrado.
+  useEffect(() => {
+    if (selectedDocIds.size === 0) return;
+    const valid = new Set(filteredDocs.map(d => d.id));
+    let changed = false;
+    const next = new Set<string>();
+    selectedDocIds.forEach(id => {
+      if (valid.has(id)) next.add(id);
+      else changed = true;
+    });
+    if (changed) setSelectedDocIds(next);
+  }, [filteredDocs]);
+
+  const toggleDoc = (id: string) => {
+    setSelectedDocIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+  const selectAllDocs = () => setSelectedDocIds(new Set(filteredDocs.map(d => d.id)));
+  const clearDocSelection = () => setSelectedDocIds(new Set());
 
   const groups: CteGroupPreview[] = useMemo(
     () => buildGroups(eligibleDocs, modeId),
@@ -607,11 +638,78 @@ export default function Billing() {
         </CardContent>
       </Card>
 
+      {/* Seleção de notas */}
+      <Card>
+        <CardHeader className="flex-row items-center justify-between space-y-0">
+          <CardTitle className="text-base flex items-center gap-2">
+            <FileText className="h-4 w-4 text-primary" /> 2. Selecionar notas
+            <Badge variant="outline" className="ml-2">
+              {selectedDocIds.size > 0
+                ? `${selectedDocIds.size} selecionada${selectedDocIds.size > 1 ? 's' : ''}`
+                : `${filteredDocs.length} elegíveis`}
+            </Badge>
+          </CardTitle>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={selectAllDocs} disabled={filteredDocs.length === 0}>
+              Selecionar todas
+            </Button>
+            <Button variant="ghost" size="sm" onClick={clearDocSelection} disabled={selectedDocIds.size === 0}>
+              <Eraser className="h-4 w-4 mr-1" /> Limpar seleção
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          <p className="px-6 pb-3 text-xs text-muted-foreground">
+            Se nenhuma nota estiver marcada, todas as {filteredDocs.length} notas filtradas serão faturadas (modo lote).
+            Marque notas específicas para gerar apenas os CT-es correspondentes.
+          </p>
+          <div className="max-h-96 overflow-y-auto border-t">
+            <Table>
+              <TableHeader className="sticky top-0 bg-background">
+                <TableRow>
+                  <TableHead className="w-10">
+                    <Checkbox
+                      checked={filteredDocs.length > 0 && selectedDocIds.size === filteredDocs.length}
+                      onCheckedChange={(v) => v ? selectAllDocs() : clearDocSelection()}
+                    />
+                  </TableHead>
+                  <TableHead>NF</TableHead>
+                  <TableHead>Emissão</TableHead>
+                  <TableHead>Remetente</TableHead>
+                  <TableHead>Destinatário</TableHead>
+                  <TableHead className="text-right">Pallets</TableHead>
+                  <TableHead className="text-right">Peso</TableHead>
+                  <TableHead className="text-right">Valor</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {docsLoading ? (
+                  <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-6">Carregando...</TableCell></TableRow>
+                ) : filteredDocs.length === 0 ? (
+                  <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-6">Nenhuma nota disponível com os filtros atuais.</TableCell></TableRow>
+                ) : filteredDocs.map(d => (
+                  <TableRow key={d.id} className="cursor-pointer" onClick={() => toggleDoc(d.id)}>
+                    <TableCell><Checkbox checked={selectedDocIds.has(d.id)} /></TableCell>
+                    <TableCell className="font-mono text-xs">{d.invoice_number || '—'}</TableCell>
+                    <TableCell className="text-sm">{d.issue_date ? format(new Date(d.issue_date), 'dd/MM/yyyy') : '—'}</TableCell>
+                    <TableCell className="text-sm truncate max-w-[220px]">{d.remitter || '—'}</TableCell>
+                    <TableCell className="text-sm truncate max-w-[220px]">{d.recipient || d.clients?.company_name || '—'}</TableCell>
+                    <TableCell className="text-right text-sm">{d.pallet_count || 0}</TableCell>
+                    <TableCell className="text-right text-sm">{Number(d.weight_kg || 0).toLocaleString('pt-BR')}</TableCell>
+                    <TableCell className="text-right text-sm">R$ {Number(d.value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Modo de agrupamento */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
-            <Layers className="h-4 w-4 text-primary" /> 2. Modo de geração do conhecimento
+            <Layers className="h-4 w-4 text-primary" /> 3. Modo de geração do conhecimento
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -634,7 +732,7 @@ export default function Billing() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
-            <Calculator className="h-4 w-4 text-primary" /> 3. Prévia do faturamento
+            <Calculator className="h-4 w-4 text-primary" /> 4. Prévia do faturamento
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
