@@ -638,6 +638,73 @@ export default function Billing() {
         </CardContent>
       </Card>
 
+      {/* Seleção de notas */}
+      <Card>
+        <CardHeader className="flex-row items-center justify-between space-y-0">
+          <CardTitle className="text-base flex items-center gap-2">
+            <FileText className="h-4 w-4 text-primary" /> 2. Selecionar notas
+            <Badge variant="outline" className="ml-2">
+              {selectedDocIds.size > 0
+                ? `${selectedDocIds.size} selecionada${selectedDocIds.size > 1 ? 's' : ''}`
+                : `${filteredDocs.length} elegíveis`}
+            </Badge>
+          </CardTitle>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={selectAllDocs} disabled={filteredDocs.length === 0}>
+              Selecionar todas
+            </Button>
+            <Button variant="ghost" size="sm" onClick={clearDocSelection} disabled={selectedDocIds.size === 0}>
+              <Eraser className="h-4 w-4 mr-1" /> Limpar seleção
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          <p className="px-6 pb-3 text-xs text-muted-foreground">
+            Se nenhuma nota estiver marcada, todas as {filteredDocs.length} notas filtradas serão faturadas (modo lote).
+            Marque notas específicas para gerar apenas os CT-es correspondentes.
+          </p>
+          <div className="max-h-96 overflow-y-auto border-t">
+            <Table>
+              <TableHeader className="sticky top-0 bg-background">
+                <TableRow>
+                  <TableHead className="w-10">
+                    <Checkbox
+                      checked={filteredDocs.length > 0 && selectedDocIds.size === filteredDocs.length}
+                      onCheckedChange={(v) => v ? selectAllDocs() : clearDocSelection()}
+                    />
+                  </TableHead>
+                  <TableHead>NF</TableHead>
+                  <TableHead>Emissão</TableHead>
+                  <TableHead>Remetente</TableHead>
+                  <TableHead>Destinatário</TableHead>
+                  <TableHead className="text-right">Pallets</TableHead>
+                  <TableHead className="text-right">Peso</TableHead>
+                  <TableHead className="text-right">Valor</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {docsLoading ? (
+                  <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-6">Carregando...</TableCell></TableRow>
+                ) : filteredDocs.length === 0 ? (
+                  <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-6">Nenhuma nota disponível com os filtros atuais.</TableCell></TableRow>
+                ) : filteredDocs.map(d => (
+                  <TableRow key={d.id} className="cursor-pointer" onClick={() => toggleDoc(d.id)}>
+                    <TableCell><Checkbox checked={selectedDocIds.has(d.id)} /></TableCell>
+                    <TableCell className="font-mono text-xs">{d.invoice_number || '—'}</TableCell>
+                    <TableCell className="text-sm">{d.issue_date ? format(new Date(d.issue_date), 'dd/MM/yyyy') : '—'}</TableCell>
+                    <TableCell className="text-sm truncate max-w-[220px]">{d.remitter || '—'}</TableCell>
+                    <TableCell className="text-sm truncate max-w-[220px]">{d.recipient || d.clients?.company_name || '—'}</TableCell>
+                    <TableCell className="text-right text-sm">{d.pallet_count || 0}</TableCell>
+                    <TableCell className="text-right text-sm">{Number(d.weight_kg || 0).toLocaleString('pt-BR')}</TableCell>
+                    <TableCell className="text-right text-sm">R$ {Number(d.value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Modo de agrupamento */}
       <Card>
         <CardHeader>
