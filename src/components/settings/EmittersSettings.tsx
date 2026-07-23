@@ -14,6 +14,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Plus, Pencil, Trash2, Star, Key, Building2 } from 'lucide-react';
+import { hubFiscal } from '@/lib/fiscal/hubFiscalClient';
+import { toast } from 'sonner';
 
 export default function EmittersSettings() {
   const isAdmin = useIsAdmin();
@@ -139,6 +141,8 @@ function EmitterFormDialog({ initial, onClose }: { initial: Partial<TenantEmitte
   const [saving, setSaving] = useState(false);
   const [savedId, setSavedId] = useState<string | undefined>(initial.id);
   const editing = !!savedId;
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<null | { ok: boolean; source?: string; scope?: string | null; message?: string }>(null);
   const set = (k: string, v: any) => setF((s: any) => ({ ...s, [k]: v }));
   const setEnd = (k: string, v: any) => setF((s: any) => ({ ...s, endereco: { ...(s.endereco || {}), [k]: v } }));
 
@@ -172,6 +176,31 @@ function EmitterFormDialog({ initial, onClose }: { initial: Partial<TenantEmitte
       // mutation hooks already show toast; keep dialog open on emitter error
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleTest = async () => {
+    if (!savedId) { toast.info('Salve o emitente antes de testar a credencial.'); return; }
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const res: any = await hubFiscal.ping(savedId, cred.doc_scope === 'all' ? 'all' as any : (cred.doc_scope as any));
+      if (res?.success) {
+        setTestResult({
+          ok: true,
+          source: res.source,
+          scope: res.scope_matched,
+          message: res.source === 'default'
+            ? 'Nenhuma credencial específica encontrada — o proxy usaria o token padrão do Hub Fiscal.'
+            : `Credencial ${res.source === 'ciphertext' ? 'criptografada' : 'de segredo'} localizada (escopo: ${res.scope_matched || 'all'}).`,
+        });
+      } else {
+        setTestResult({ ok: false, message: res?.error?.message || 'Falha ao resolver credencial.' });
+      }
+    } catch (e: any) {
+      setTestResult({ ok: false, message: e?.message || 'Erro ao chamar o proxy.' });
+    } finally {
+      setTesting(false);
     }
   };
 
@@ -308,7 +337,17 @@ function EmitterFormDialog({ initial, onClose }: { initial: Partial<TenantEmitte
           )}
         </div>
         <DialogFooter>
+          <div className="flex-1 text-left text-xs">
+            {testResult && (
+              <span className={testResult.ok ? 'text-success' : 'text-destructive'}>
+                {testResult.ok ? '✔ ' : '✖ '}{testResult.message}
+              </span>
+            )}
+          </div>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button variant="secondary" onClick={handleTest} disabled={testing || !savedId} title={savedId ? 'Testar credencial do Hub Fiscal para este emitente' : 'Salve o emitente para habilitar o teste'}>
+            {testing ? 'Testando…' : 'Testar credencial'}
+          </Button>
           <Button onClick={handleSave} disabled={saving}>{editing ? 'Salvar' : 'Cadastrar'}</Button>
         </DialogFooter>
       </DialogContent>

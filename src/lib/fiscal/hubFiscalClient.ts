@@ -96,6 +96,11 @@ export const hubFiscal = {
     return invoke({ action: 'query', query: filters });
   },
 
+  /** Diagnóstico: verifica qual credencial seria usada para um emitente/escopo. Não retorna o token. */
+  ping(emitterId: string | undefined, type: HubDocType | 'all' = 'all') {
+    return invoke({ action: 'ping', emitterId, type });
+  },
+
   /** Returns a Blob you can hand to URL.createObjectURL for download/preview. */
   async file(hubDocumentId: string, format: 'pdf' | 'xml' = 'pdf'): Promise<Blob> {
     const { data: session } = await supabase.auth.getSession();
