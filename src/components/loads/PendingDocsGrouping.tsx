@@ -84,7 +84,7 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
       if (!currentTenant) return [];
       const { data, error } = await supabase
         .from('fiscal_documents')
-        .select('id, invoice_number, recipient, recipient_city, recipient_state, pallet_count, weight_kg, value, created_at, clients(company_name)')
+        .select('id, invoice_number, recipient, recipient_city, recipient_state, pallet_count, weight_kg, value, created_at, clients!fiscal_documents_client_id_fkey(company_name)')
         .eq('tenant_id', currentTenant.id)
         .eq('status', 'confirmed')
         .eq('document_type', 'inbound')

@@ -54,7 +54,7 @@ export function useBillingDocuments(filters: BillingDocumentFilters) {
 
       let q = supabase
         .from('fiscal_documents')
-        .select('*, clients(company_name), loads(load_number), orders(order_number)')
+        .select('*, clients!fiscal_documents_client_id_fkey(company_name), loads(load_number), orders(order_number)')
         .eq('tenant_id', currentTenant.id)
         // Pré-filtros aplicados em todas as queries de Billing — usam idx_fiscal_documents_tenant_type_status
         .eq('document_type', 'inbound')
