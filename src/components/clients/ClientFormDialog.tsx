@@ -258,6 +258,22 @@ export function ClientFormDialog({
                 <Switch checked={form.taxes_enabled} onCheckedChange={v => set('taxes_enabled', v)} />
                 <Label className="cursor-pointer">Taxas habilitadas</Label>
               </div>
+              <div className="col-span-12 rounded-md border border-border bg-muted/30 p-3 mt-2">
+                <Label className="text-xs uppercase text-muted-foreground">Tipo de cadastro</Label>
+                <div className="flex flex-wrap gap-6 mt-2">
+                  <div className="flex items-center gap-2">
+                    <Switch checked={form.is_client} onCheckedChange={v => set('is_client', v)} />
+                    <Label className="cursor-pointer">É cliente</Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch checked={form.is_supplier} onCheckedChange={v => set('is_supplier', v)} />
+                    <Label className="cursor-pointer">É fornecedor</Label>
+                  </div>
+                  <p className="text-xs text-muted-foreground self-center">
+                    Fornecedores são vinculados automaticamente às notas fiscais pelo CNPJ do remetente.
+                  </p>
+                </div>
+              </div>
             </div>
           </TabsContent>
 
