@@ -426,31 +426,46 @@ export default function Billing() {
           <CardTitle className="text-base">1. Selecione a base de faturamento</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Tabs value={tab} onValueChange={(v) => setTab(v as SourceTab)}>
+          <Tabs
+            value={tab}
+            onValueChange={(v) => {
+              const next = v as SourceTab;
+              setTab(next);
+              if (next === 'period') setClientId(SENTINEL_NONE);
+            }}
+          >
             <TabsList>
-              <TabsTrigger value="period">Por cliente / período</TabsTrigger>
+              <TabsTrigger value="period">Por fornecedor / período</TabsTrigger>
               <TabsTrigger value="loads">Por cargas</TabsTrigger>
             </TabsList>
 
             <TabsContent value="period" className="space-y-3 pt-3">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div>
-                  <Label>Cliente</Label>
-                  <Select value={clientId} onValueChange={setClientId}>
-                    <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={SENTINEL_NONE}>Todos os clientes</SelectItem>
-                      {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <div className="md:col-span-2">
+                  <Label>Fornecedor (remetente)</Label>
+                  <Input
+                    value={supplier}
+                    onChange={e => setSupplier(e.target.value)}
+                    placeholder="Nome do remetente"
+                  />
                 </div>
                 <div>
-                  <Label>Início</Label>
-                  <Input type="date" value={periodStart} onChange={e => setPeriodStart(e.target.value)} />
+                  <Label>CNPJ do fornecedor</Label>
+                  <Input
+                    value={supplierCnpj}
+                    onChange={e => setSupplierCnpj(e.target.value)}
+                    placeholder="00.000.000/0000-00"
+                  />
                 </div>
-                <div>
-                  <Label>Fim</Label>
-                  <Input type="date" value={periodEnd} onChange={e => setPeriodEnd(e.target.value)} />
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label>Início</Label>
+                    <Input type="date" value={periodStart} onChange={e => setPeriodStart(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label>Fim</Label>
+                    <Input type="date" value={periodEnd} onChange={e => setPeriodEnd(e.target.value)} />
+                  </div>
                 </div>
               </div>
             </TabsContent>
