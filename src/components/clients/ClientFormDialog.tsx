@@ -34,6 +34,7 @@ const empty = {
   is_rural: false, rural_notes: '', rural_driver_instructions: '',
   rural_requires_contact: false, rural_contact_name: '', rural_contact_phone: '',
   rural_access_type: '', rural_delivery_difficulty: '',
+  is_client: true, is_supplier: false,
 };
 
 type FormState = typeof empty;
