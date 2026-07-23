@@ -55,6 +55,8 @@ export interface Client {
   tax_code?: string | null;
   tax_description?: string | null;
   notes?: string | null;
+  is_client?: boolean | null;
+  is_supplier?: boolean | null;
 }
 
 export function useClients() {
