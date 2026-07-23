@@ -44,3 +44,6 @@ verify_jwt = false
 
 [functions.hub-fiscal-webhook-in]
 verify_jwt = false
+
+[functions.hub-fiscal-credential-save]
+verify_jwt = true
