@@ -63,12 +63,13 @@ export default function FreightSimulator() {
   }, [periodFilter, customStart, customEnd]);
 
   const { data: clients = [] } = useQuery({
-    queryKey: ['clients-min', tenantId],
+    queryKey: ['suppliers-min-freight', tenantId],
     queryFn: async () => {
       const { data } = await supabase
         .from('clients')
         .select('id, company_name, payer_group')
         .eq('tenant_id', tenantId!)
+        .eq('is_supplier', true)
         .order('company_name');
       return data || [];
     },
@@ -424,7 +425,7 @@ export default function FreightSimulator() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <Label>Cliente</Label>
+              <Label>Fornecedor</Label>
               <Select value={clientId} onValueChange={setClientId}>
                 <SelectTrigger><SelectValue placeholder="Qualquer" /></SelectTrigger>
                 <SelectContent>

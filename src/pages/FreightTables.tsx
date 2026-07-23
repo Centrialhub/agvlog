@@ -91,7 +91,7 @@ export default function FreightTables() {
   });
 
   const { data: clientsList = [] } = useQuery({
-    queryKey: ['clients_for_freight', currentTenant?.id],
+    queryKey: ['suppliers_for_freight', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
       const { data } = await supabase
@@ -99,6 +99,7 @@ export default function FreightTables() {
         .select('id, company_name')
         .eq('tenant_id', currentTenant.id)
         .eq('active', true)
+        .eq('is_supplier', true)
         .order('company_name');
       return data || [];
     },
@@ -277,15 +278,15 @@ export default function FreightTables() {
                   placeholder="Ex: TABELA TOZZI JAIBA 6%" />
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label>Cliente</Label>
+                 <div>
+                   <Label>Fornecedor</Label>
                   <Select
                     value={form.client_id || '__none__'}
                     onValueChange={(v) => setForm({ ...form, client_id: v === '__none__' ? '' : v })}
                   >
                     <SelectTrigger><SelectValue placeholder="Nenhum (genérica)" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__none__">— Nenhum (todos os clientes)</SelectItem>
+                      <SelectItem value="__none__">— Nenhum (todos os fornecedores)</SelectItem>
                       {clientsList.map((c: any) => (
                         <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
                       ))}
@@ -507,7 +508,7 @@ export default function FreightTables() {
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-7 gap-3">
             <div>
-              <Label className="text-xs">Cliente</Label>
+              <Label className="text-xs">Fornecedor</Label>
               <Select value={fClient || 'all'} onValueChange={(v) => setFClient(v === 'all' ? '' : v)}>
                 <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Todos" /></SelectTrigger>
                 <SelectContent>
@@ -589,7 +590,7 @@ export default function FreightTables() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-16">Cód.</TableHead>
-                  <TableHead>Cliente</TableHead>
+                  <TableHead>Fornecedor</TableHead>
                   <TableHead>Início</TableHead>
                   <TableHead>Fim</TableHead>
                   <TableHead>Grupo Pagador</TableHead>
