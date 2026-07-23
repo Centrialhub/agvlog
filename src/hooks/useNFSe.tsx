@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
 import { toast } from 'sonner';
+import { hubFiscal } from '@/lib/fiscal/hubFiscalClient';
 
 export interface NFSeDoc {
   id: string;
@@ -161,6 +162,95 @@ export function useIssueNFSe() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
+      // 1. Carrega o documento e o emitente vinculado.
+      const { data: doc, error: dErr } = await (supabase as any)
+        .from('nfse_documents')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+      if (dErr) throw dErr;
+      if (!doc) throw new Error('NFS-e não encontrada');
+
+      let emitter: any = null;
+      if (doc.emitter_id) {
+        const { data: em } = await (supabase as any)
+          .from('tenant_emitters')
+          .select('*')
+          .eq('id', doc.emitter_id)
+          .maybeSingle();
+        emitter = em;
+      }
+
+      // 2. Se há emitente com credencial Hub Fiscal, roteia pelo proxy.
+      let hasHubCred = false;
+      if (emitter) {
+        const { data: creds } = await (supabase as any)
+          .from('hub_fiscal_credentials')
+          .select('id')
+          .eq('emitter_id', emitter.id)
+          .eq('enabled', true)
+          .limit(1);
+        hasHubCred = (creds || []).length > 0;
+      }
+
+      if (hasHubCred && emitter) {
+        const environment = (emitter?.metadata?.environment as 'production' | 'sandbox') || 'production';
+        const externalId = doc.id;
+        const res = await hubFiscal.emit({
+          type: 'nfse',
+          emitterId: emitter.id,
+          nfseDocumentId: doc.id,
+          body: {
+            emitterCnpj: (emitter.cnpj || '').replace(/\D/g, ''),
+            environment,
+            externalId,
+            payload: {
+              rps: {
+                numero: doc.rps_number,
+                serie: doc.series || '1',
+                dataEmissao: doc.issue_date,
+              },
+              tomador: {
+                nome: doc.cliente_nome,
+                cnpjCpf: (doc.cliente_cnpj || '').replace(/\D/g, ''),
+              },
+              servico: {
+                descricao: doc.description || doc.items?.[0]?.description || 'Serviço de transporte',
+                valorServicos: doc.valor_servicos,
+                baseCalculo: doc.base_calculo,
+                aliquota: doc.aliquota_iss,
+                valorIss: doc.valor_iss,
+              },
+              items: doc.items || [],
+            },
+          },
+        });
+
+        const hubDoc = (res as any)?.hub?.document || {};
+        const emission = (res as any)?.emission || {};
+        await (supabase as any).from('nfse_documents').update({
+          status: hubDoc.status || (res.success ? 'queued' : 'rejected'),
+          provider: 'hub_fiscal',
+          protocol_number: hubDoc.authorizationProtocol || hubDoc.plugnotasProtocol || null,
+          nfse_number: hubDoc.number || null,
+          verification_code: hubDoc.accessKey || null,
+        }).eq('id', doc.id);
+        await (supabase as any).from('nfse_events').insert({
+          tenant_id: doc.tenant_id,
+          nfse_id: doc.id,
+          event_type: res.success ? 'submitted' : 'rejected',
+          message: res.success
+            ? `Enviado ao Hub Fiscal (emitente ${emitter.cnpj}) — ${hubDoc.status || 'processing'}`
+            : `Falha Hub Fiscal: ${(res as any)?.hub?.error?.message || (res as any)?.error?.message || 'erro'}`,
+          payload: { hub: (res as any)?.hub, emission_id: emission.id },
+        });
+        if (!res.success) {
+          throw new Error((res as any)?.hub?.error?.message || (res as any)?.error?.message || 'Falha ao enviar ao Hub Fiscal');
+        }
+        return { status: hubDoc.status || 'queued', provider: 'hub_fiscal', hub: (res as any)?.hub };
+      }
+
+      // 3. Fallback: sem credencial Hub Fiscal → caminho legado (simulação / provedor local).
       const { data, error } = await supabase.functions.invoke('emit-nfse', {
         body: { action: 'emit', nfse_id: id },
       });
@@ -170,6 +260,7 @@ export function useIssueNFSe() {
     onSuccess: (data: any) => {
       qc.invalidateQueries({ queryKey: ['nfse'] });
       if (data?.status === 'issued') toast.success('NFS-e emitida');
+      else if (data?.provider === 'hub_fiscal') toast.success('NFS-e enviada ao Hub Fiscal');
       else if (data?.status === 'queued' || data?.simulated) toast.info('Provedor fiscal não configurado — NFS-e marcada como pronta para emissão');
       else if (data?.status === 'rejected') toast.error(`Rejeitada: ${data?.message ?? ''}`);
     },
@@ -181,6 +272,40 @@ export function useCancelNFSe() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
+      // Se já foi emitido pelo Hub Fiscal, cancela pelo proxy (per-emitente).
+      const { data: doc } = await (supabase as any)
+        .from('nfse_documents')
+        .select('id, tenant_id, emitter_id, provider, protocol_number, status')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (doc?.provider === 'hub_fiscal' && doc?.emitter_id) {
+        // Recupera hub_document_id da emissão mais recente.
+        const { data: em } = await (supabase as any)
+          .from('hub_fiscal_emissions')
+          .select('id, hub_document_id')
+          .eq('nfse_document_id', id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (em?.hub_document_id) {
+          const justif = (reason || '').padEnd(15, ' ');
+          const res = await hubFiscal.cancel(em.hub_document_id, justif, em.id);
+          if (!res.success) throw new Error((res as any)?.hub?.error?.message || 'Falha ao cancelar no Hub Fiscal');
+          await (supabase as any).from('nfse_documents').update({
+            status: 'cancelled', cancelled: true,
+            cancellation_date: new Date().toISOString(),
+            cancellation_reason: reason ?? null,
+          }).eq('id', id);
+          await (supabase as any).from('nfse_events').insert({
+            tenant_id: doc.tenant_id, nfse_id: id,
+            event_type: 'cancelled',
+            message: `Cancelada no Hub Fiscal — ${reason || ''}`,
+          });
+          return { status: 'cancelled', provider: 'hub_fiscal' };
+        }
+      }
+
       const { data, error } = await supabase.functions.invoke('emit-nfse', {
         body: { action: 'cancel', nfse_id: id, reason },
       });
