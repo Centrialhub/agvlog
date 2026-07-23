@@ -43,8 +43,17 @@ export default function FreightBreakdownPanel({ breakdown, finalValue, success =
           {breakdown.regionName && (
             <div className="text-xs text-muted-foreground mt-1">Região: {breakdown.regionName}</div>
           )}
-          {breakdown.fallbackReason && (
-            <div className="text-xs text-amber-600 mt-1">⚠ {breakdown.fallbackReason}</div>
+          {breakdown.fallbackUsed && (
+            <div className="mt-2 rounded-md border border-amber-400 bg-amber-50 dark:bg-amber-950/20 p-2 text-xs text-amber-800 dark:text-amber-300 flex gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+              <div>
+                <div className="font-medium">Tabela genérica aplicada</div>
+                <div>{breakdown.fallbackReason}</div>
+                <div className="mt-1">
+                  Verifique se o cliente possui <code>payer_group</code> compatível com uma tabela específica.
+                </div>
+              </div>
+            </div>
           )}
           {breakdown.missingFields && breakdown.missingFields.length > 0 && (
             <div className="mt-1 flex flex-wrap gap-1">
