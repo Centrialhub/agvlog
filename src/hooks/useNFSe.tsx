@@ -77,20 +77,43 @@ export function useCreateNFSe() {
   const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: Partial<NFSeDoc> & { branch_code?: string; series?: string }) => {
+    mutationFn: async (input: Partial<NFSeDoc> & { branch_code?: string; series?: string; emitter_id?: string | null }) => {
       if (!currentTenant) throw new Error('Tenant não selecionado');
-      const branch = input.branch_code || 'MATRIZ';
       const series = input.series || '1';
-      // Allocate next RPS number atomically
-      const { data: nextNum, error: numErr } = await (supabase as any).rpc('next_nfse_number', {
-        _tenant_id: currentTenant.id,
-        _branch_code: branch,
-        _series: series,
-      });
-      if (numErr) throw numErr;
+
+      // Resolve emitter: explicit → default active
+      let emitterId = input.emitter_id ?? null;
+      let branch = input.branch_code || 'MATRIZ';
+      if (!emitterId) {
+        const { data: def } = await (supabase as any)
+          .from('tenant_emitters').select('id, branch_code')
+          .eq('tenant_id', currentTenant.id).eq('is_default', true).eq('active', true).maybeSingle();
+        if (def?.id) { emitterId = def.id; branch = def.branch_code || branch; }
+      } else {
+        const { data: em } = await (supabase as any)
+          .from('tenant_emitters').select('branch_code').eq('id', emitterId).maybeSingle();
+        if (em?.branch_code) branch = em.branch_code;
+      }
+
+      // Allocate next RPS number atomically (prefer per-emitter, fallback to per-branch)
+      let nextNum: any;
+      if (emitterId) {
+        const { data, error } = await (supabase as any).rpc('next_nfse_number_by_emitter', {
+          _tenant_id: currentTenant.id, _emitter_id: emitterId, _series: series,
+        });
+        if (error) throw error;
+        nextNum = data;
+      } else {
+        const { data, error } = await (supabase as any).rpc('next_nfse_number', {
+          _tenant_id: currentTenant.id, _branch_code: branch, _series: series,
+        });
+        if (error) throw error;
+        nextNum = data;
+      }
       const payload: any = {
         ...input,
         tenant_id: currentTenant.id,
+        emitter_id: emitterId,
         branch_code: branch,
         series,
         rps_number: String(nextNum),

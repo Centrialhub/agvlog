@@ -3,7 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const HUB_BASE = (Deno.env.get('HUB_FISCAL_BASE_URL') ||
   'https://rvgcsmuyvesusbxsqevr.supabase.co/functions/v1').replace(/\/$/, '');
-const HUB_KEY = Deno.env.get('HUB_FISCAL_API_KEY') || '';
+const DEFAULT_HUB_KEY = Deno.env.get('HUB_FISCAL_API_KEY') || '';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -24,6 +24,7 @@ interface ProxyRequest {
   fiscalDocumentId?: string;
   cteDocumentId?: string;
   nfseDocumentId?: string;
+  emitterId?: string;   // routes to per-emitter Hub credential
 }
 
 function json(status: number, payload: unknown) {
@@ -39,12 +40,13 @@ function buildUrl(path: string, qs?: Record<string, string>) {
   return u.toString();
 }
 
-async function callHub(method: string, path: string, qs?: Record<string, string>, body?: unknown) {
-  if (!HUB_KEY) throw new Error('HUB_FISCAL_API_KEY not configured');
+async function callHub(method: string, path: string, qs?: Record<string, string>, body?: unknown, token?: string) {
+  const key = token || DEFAULT_HUB_KEY;
+  if (!key) throw new Error('Nenhum token do Hub Fiscal configurado');
   const res = await fetch(buildUrl(path, qs), {
     method,
     headers: {
-      'Authorization': `Bearer ${HUB_KEY}`,
+      'Authorization': `Bearer ${key}`,
       'Content-Type': 'application/json',
     },
     body: body ? JSON.stringify(body) : undefined,
@@ -81,17 +83,37 @@ Deno.serve(async (req) => {
     const tenantId = memberships?.[0]?.tenant_id as string | undefined;
     if (!tenantId) return json(403, { success: false, error: { code: 'NO_TENANT' } });
 
+    // Resolve Hub token for this call — per-emitter credential if provided, else per-emission emitter, else default.
+    async function resolveToken(scope: string, emitterHint?: string | null): Promise<string> {
+      let emId = emitterHint || null;
+      if (!emId && payload.emissionId) {
+        const { data: em } = await admin.from('hub_fiscal_emissions')
+          .select('emitter_id').eq('id', payload.emissionId).maybeSingle();
+        emId = em?.emitter_id || null;
+      }
+      if (!emId) return DEFAULT_HUB_KEY;
+      const { data: creds } = await admin.from('hub_fiscal_credentials')
+        .select('doc_scope, secret_name, enabled')
+        .eq('emitter_id', emId).eq('enabled', true);
+      const list = (creds || []) as any[];
+      const match = list.find(c => c.doc_scope === scope) || list.find(c => c.doc_scope === 'all');
+      if (!match?.secret_name) return DEFAULT_HUB_KEY;
+      return Deno.env.get(match.secret_name) || DEFAULT_HUB_KEY;
+    }
+
     switch (action) {
       case 'emit': {
         const type = payload.type;
         if (!type) return json(400, { success: false, error: { code: 'MISSING_TYPE' } });
         const body = payload.body || {};
+        const token = await resolveToken(type, payload.emitterId);
 
-        const { status, data } = await callHub('POST', '/hub_documents_emit', { type }, body);
+        const { status, data } = await callHub('POST', '/hub_documents_emit', { type }, body, token);
 
         const doc = (data as any)?.document || {};
         const { data: row, error } = await admin.from('hub_fiscal_emissions').insert({
           tenant_id: tenantId,
+          emitter_id: payload.emitterId || null,
           doc_type: type,
           environment: (body as any).environment || 'sandbox',
           emitter_cnpj: (body as any).emitterCnpj || null,
@@ -114,7 +136,8 @@ Deno.serve(async (req) => {
 
       case 'get': {
         if (!payload.id) return json(400, { success: false, error: { code: 'MISSING_ID' } });
-        const { status, data } = await callHub('GET', '/hub_documents_get', { id: payload.id });
+        const token = await resolveToken(payload.type || 'all', payload.emitterId);
+        const { status, data } = await callHub('GET', '/hub_documents_get', { id: payload.id }, undefined, token);
         if (status < 400 && payload.emissionId) {
           const d = (data as any)?.document || {};
           await admin.from('hub_fiscal_emissions').update({
@@ -135,7 +158,8 @@ Deno.serve(async (req) => {
 
       case 'sync': {
         if (!payload.id) return json(400, { success: false, error: { code: 'MISSING_ID' } });
-        const { status, data } = await callHub('POST', '/hub_documents_sync', { id: payload.id });
+        const token = await resolveToken(payload.type || 'all', payload.emitterId);
+        const { status, data } = await callHub('POST', '/hub_documents_sync', { id: payload.id }, undefined, token);
         if (payload.emissionId) {
           await admin.rpc('increment_hfe_sync', { p_id: payload.emissionId }).catch(() => {});
           const d = (data as any)?.document || {};
@@ -162,7 +186,8 @@ Deno.serve(async (req) => {
         if (!justificativa || justificativa.trim().length < 15) {
           return json(400, { success: false, error: { code: 'INVALID_JUSTIFICATION', message: 'Mínimo 15 caracteres.' } });
         }
-        const { status, data } = await callHub('POST', '/hub_documents_cancel', { id: payload.id }, { justificativa });
+        const token = await resolveToken(payload.type || 'all', payload.emitterId);
+        const { status, data } = await callHub('POST', '/hub_documents_cancel', { id: payload.id }, { justificativa }, token);
         if (status < 400 && payload.emissionId) {
           await admin.from('hub_fiscal_emissions').update({
             status: 'cancelled',
@@ -176,22 +201,25 @@ Deno.serve(async (req) => {
 
       case 'cce': {
         if (!payload.id) return json(400, { success: false, error: { code: 'MISSING_ID' } });
-        const { status, data } = await callHub('POST', '/hub_documents_cce', { id: payload.id }, payload.body || {});
+        const token = await resolveToken(payload.type || 'all', payload.emitterId);
+        const { status, data } = await callHub('POST', '/hub_documents_cce', { id: payload.id }, payload.body || {}, token);
         return json(status, { success: status < 400, hub: data });
       }
 
       case 'email': {
         if (!payload.id) return json(400, { success: false, error: { code: 'MISSING_ID' } });
-        const { status, data } = await callHub('POST', '/hub_documents_email', { id: payload.id }, payload.body || {});
+        const token = await resolveToken(payload.type || 'all', payload.emitterId);
+        const { status, data } = await callHub('POST', '/hub_documents_email', { id: payload.id }, payload.body || {}, token);
         return json(status, { success: status < 400, hub: data });
       }
 
       case 'file': {
         if (!payload.id) return json(400, { success: false, error: { code: 'MISSING_ID' } });
         const format = payload.format || 'pdf';
+        const token = await resolveToken(payload.type || 'all', payload.emitterId);
         // Stream file content back to the caller.
         const url = buildUrl('/hub_documents_file', { id: payload.id, format });
-        const upstream = await fetch(url, { headers: { Authorization: `Bearer ${HUB_KEY}` } });
+        const upstream = await fetch(url, { headers: { Authorization: `Bearer ${token || DEFAULT_HUB_KEY}` } });
         const buf = await upstream.arrayBuffer();
         return new Response(buf, {
           status: upstream.status,
@@ -206,12 +234,14 @@ Deno.serve(async (req) => {
 
       case 'preview': {
         if (!payload.id) return json(400, { success: false, error: { code: 'MISSING_ID' } });
-        const { status, data } = await callHub('GET', '/hub_documents_preview', { id: payload.id });
+        const token = await resolveToken(payload.type || 'all', payload.emitterId);
+        const { status, data } = await callHub('GET', '/hub_documents_preview', { id: payload.id }, undefined, token);
         return json(status, { success: status < 400, hub: data });
       }
 
       case 'query': {
-        const { status, data } = await callHub('GET', '/hub_documents_query', payload.query || {});
+        const token = await resolveToken(payload.type || 'all', payload.emitterId);
+        const { status, data } = await callHub('GET', '/hub_documents_query', payload.query || {}, undefined, token);
         return json(status, { success: status < 400, hub: data });
       }
 

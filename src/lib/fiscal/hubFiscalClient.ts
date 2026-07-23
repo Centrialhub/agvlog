@@ -42,6 +42,8 @@ export interface EmitParams {
   fiscalDocumentId?: string;
   cteDocumentId?: string;
   nfseDocumentId?: string;
+  /** Tenant emitter id — routes the call to the correct Hub Fiscal token. */
+  emitterId?: string;
 }
 
 async function invoke(payload: Record<string, unknown>) {
@@ -59,6 +61,7 @@ export const hubFiscal = {
       fiscalDocumentId: params.fiscalDocumentId,
       cteDocumentId: params.cteDocumentId,
       nfseDocumentId: params.nfseDocumentId,
+      emitterId: params.emitterId,
     });
   },
 
