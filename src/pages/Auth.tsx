@@ -6,10 +6,12 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Truck } from 'lucide-react';
+import { Truck, AlertTriangle } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function Auth() {
   const [loading, setLoading] = useState(false);
+  const { backendUnavailable } = useAuth();
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -23,6 +25,25 @@ export default function Auth() {
             Inteligência logística para sua frota
           </p>
         </div>
+
+        {backendUnavailable && (
+          <div className="mb-4 flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div className="flex-1">
+              <p className="font-medium">Serviço temporariamente indisponível</p>
+              <p className="text-xs opacity-90">
+                Não foi possível conectar ao backend. Tente novamente em instantes.
+              </p>
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="mt-2 text-xs font-medium underline"
+              >
+                Tentar novamente
+              </button>
+            </div>
+          </div>
+        )}
 
         <Card>
           <Tabs defaultValue="login">
