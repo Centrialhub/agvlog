@@ -90,7 +90,7 @@ const navSections: NavSection[] = [
   {
     label: 'Cadastros',
     items: [
-      { label: 'Clientes', href: '/clients', icon: <Building2 className="h-4 w-4" /> },
+      { label: 'Clientes e Fornecedores', href: '/clients', icon: <Building2 className="h-4 w-4" /> },
       { label: 'Funcionários', href: '/employees', icon: <UserCog className="h-4 w-4" /> },
       { label: 'Veículos', href: '/vehicles', icon: <Truck className="h-4 w-4" /> },
       { label: 'Motoristas', href: '/drivers', icon: <Users className="h-4 w-4" /> },

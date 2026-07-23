@@ -68,7 +68,7 @@ export default function OrtGeracaoTab() {
     queryFn: async () => {
       let q = supabase
         .from('fiscal_documents')
-        .select('id, invoice_number, issue_date, value, pallet_count, weight_kg, remitter, recipient, client_id, clients(company_name), load_id')
+        .select('id, invoice_number, issue_date, value, pallet_count, weight_kg, remitter, recipient, client_id, clients!fiscal_documents_client_id_fkey(company_name), load_id')
         .eq('tenant_id', currentTenant!.id)
         .eq('document_type', 'inbound')
         .is('pickup_order_id', null)

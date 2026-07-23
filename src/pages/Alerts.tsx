@@ -205,7 +205,7 @@ function StaleFiscalDocsSection() {
       if (!currentTenant) return [];
       const { data, error } = await supabase
         .from('fiscal_documents')
-        .select('id, invoice_number, issue_date, recipient, recipient_neighborhood, recipient_city, recipient_state, remitter, pallet_count, weight_kg, value, status, clients(company_name)')
+        .select('id, invoice_number, issue_date, recipient, recipient_neighborhood, recipient_city, recipient_state, remitter, pallet_count, weight_kg, value, status, clients!fiscal_documents_client_id_fkey(company_name)')
         .eq('tenant_id', currentTenant.id)
         .eq('document_type', 'inbound')
         .is('load_id', null)

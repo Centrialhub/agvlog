@@ -34,6 +34,7 @@ const empty = {
   is_rural: false, rural_notes: '', rural_driver_instructions: '',
   rural_requires_contact: false, rural_contact_name: '', rural_contact_phone: '',
   rural_access_type: '', rural_delivery_difficulty: '',
+  is_client: true, is_supplier: false,
 };
 
 type FormState = typeof empty;
@@ -49,19 +50,27 @@ function clientToForm(c?: Client | null): FormState {
 const onlyDigits = (s: string) => s.replace(/\D/g, '');
 
 export function ClientFormDialog({
-  open, onOpenChange, client, onSave,
+  open, onOpenChange, client, onSave, defaultKind,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   client?: Client | null;
   onSave: (values: any) => Promise<void> | void;
+  defaultKind?: 'client' | 'supplier';
 }) {
   const [form, setForm] = useState<FormState>(clientToForm(client));
   const [lookupLoading, setLookupLoading] = useState(false);
   const { toast } = useToast();
   const { currentTenant } = useTenant();
 
-  useEffect(() => { setForm(clientToForm(client)); }, [client, open]);
+  useEffect(() => {
+    const base = clientToForm(client);
+    if (!client && defaultKind === 'supplier') {
+      base.is_client = false;
+      base.is_supplier = true;
+    }
+    setForm(base);
+  }, [client, open, defaultKind]);
 
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) =>
     setForm(prev => ({ ...prev, [k]: v }));
@@ -256,6 +265,22 @@ export function ClientFormDialog({
               <div className="col-span-4 flex items-center gap-3 pt-2">
                 <Switch checked={form.taxes_enabled} onCheckedChange={v => set('taxes_enabled', v)} />
                 <Label className="cursor-pointer">Taxas habilitadas</Label>
+              </div>
+              <div className="col-span-12 rounded-md border border-border bg-muted/30 p-3 mt-2">
+                <Label className="text-xs uppercase text-muted-foreground">Tipo de cadastro</Label>
+                <div className="flex flex-wrap gap-6 mt-2">
+                  <div className="flex items-center gap-2">
+                    <Switch checked={form.is_client} onCheckedChange={v => set('is_client', v)} />
+                    <Label className="cursor-pointer">É cliente</Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch checked={form.is_supplier} onCheckedChange={v => set('is_supplier', v)} />
+                    <Label className="cursor-pointer">É fornecedor</Label>
+                  </div>
+                  <p className="text-xs text-muted-foreground self-center">
+                    Fornecedores são vinculados automaticamente às notas fiscais pelo CNPJ do remetente.
+                  </p>
+                </div>
               </div>
             </div>
           </TabsContent>

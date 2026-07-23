@@ -1678,7 +1678,9 @@ export type Database = {
           id: string
           ie_indicator: string | null
           internal_code: string | null
+          is_client: boolean
           is_rural: boolean
+          is_supplier: boolean
           legal_name: string | null
           mobile: string | null
           municipal_registration: string | null
@@ -1749,7 +1751,9 @@ export type Database = {
           id?: string
           ie_indicator?: string | null
           internal_code?: string | null
+          is_client?: boolean
           is_rural?: boolean
+          is_supplier?: boolean
           legal_name?: string | null
           mobile?: string | null
           municipal_registration?: string | null
@@ -1820,7 +1824,9 @@ export type Database = {
           id?: string
           ie_indicator?: string | null
           internal_code?: string | null
+          is_client?: boolean
           is_rural?: boolean
+          is_supplier?: boolean
           legal_name?: string | null
           mobile?: string | null
           municipal_registration?: string | null
@@ -5544,6 +5550,7 @@ export type Database = {
           remitter: string | null
           remitter_cnpj: string | null
           status: string
+          supplier_id: string | null
           tenant_id: string
           updated_at: string
           value: number | null
@@ -5605,6 +5612,7 @@ export type Database = {
           remitter?: string | null
           remitter_cnpj?: string | null
           status?: string
+          supplier_id?: string | null
           tenant_id: string
           updated_at?: string
           value?: number | null
@@ -5666,6 +5674,7 @@ export type Database = {
           remitter?: string | null
           remitter_cnpj?: string | null
           status?: string
+          supplier_id?: string | null
           tenant_id?: string
           updated_at?: string
           value?: number | null
@@ -5706,6 +5715,13 @@ export type Database = {
             columns: ["pickup_order_id"]
             isOneToOne: false
             referencedRelation: "pickup_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fiscal_documents_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
             referencedColumns: ["id"]
           },
           {
