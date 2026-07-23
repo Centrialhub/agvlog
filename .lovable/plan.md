@@ -1,59 +1,70 @@
-## Varredura de duplicatas — resultado
+## Diagnóstico
 
-Rodei checagens em 20+ tabelas críticas cruzando chaves óbvias e compostas. Só 2 achados reais restaram — o resto (receivables, payables, CT-e, NFSe, client_invoices, closing_reports, load_items, load_documents, bank_transactions, drivers/employees/user, memberships, pallet, occurrence sheets, assignments, integration accounts) está limpo.
+Os relatos de **tela branca** e **loading infinito** não vêm do código do app — vêm do **backend Supabase deste projeto** (`qcvnsdrbcchaxvawcngk`), que está degradado agora.
 
-### Achado 1 — `vehicles.plate` sem normalização
-Mesmo veículo cadastrado duas vezes com placas diferindo só por espaço:
+### Evidências coletadas nesta rodada
 
-```text
-PXT 0255   → id 58d37ad1... (2026-03-09, sem modelo)
-PXT0255    → id 9ac6701a... (2026-05-13, VW 10.160 DRC 4X2)
-```
+1. **Auth (GoTrue) retornando 500/504** nos últimos ~15 min:
+   - `POST /auth/v1/token?grant_type=refresh_token` → **504 upstream request timeout**
+   - `POST /auth/v1/token?grant_type=password` → **500 "Database error querying schema"**, erro interno `error finding user: context canceled`
+   - Isso explica o loading infinito: o `useAuth` fica preso em `getSession()`/refresh que nunca resolve, então o `AuthProvider` nunca sai de `loading=true` e nada é renderizado além do "Carregando…".
 
-Ambos ativos no mesmo tenant. Não há índice único sobre placa normalizada, então o sistema aceitou os dois.
+2. **Postgres saturado / não respondendo**:
+   - Todas as tentativas de `supabase--read_query` (inclusive `SELECT 1`) retornam `Connection terminated due to connection timeout`.
+   - Logs do Postgres mostram:
+     - `duration: 55223.831 ms plan: …` (query rodando ~55s)
+     - `cron job 4 job startup timeout` repetido
+     - `could not accept SSL connection: EOF detected`
+     - checkpoints longos (~58s total)
+   - As ferramentas de metadata do Supabase também falharam (ver `<supabase-info>` no contexto: "Connection terminated due to connection timeout").
 
-### Achado 2 — `freight_tables` com 12 tarifas "fantasma"
-12 linhas ativas (não bloqueadas) do mesmo tenant, todas com `client_id=NULL`, origem/destino/veículo `NULL`. Só se distinguem por `table_code` (1..12) — parecem rascunhos/testes que ficaram ativos. Como nenhum registro tem contexto (rota/cliente/veículo), o motor de match de frete pode escolher qualquer uma pela pontuação de especificidade, gerando decisões não determinísticas.
+3. **Endpoints REST/Auth respondem no TCP** (401 rápido no health), mas qualquer request que toque no banco trava — clássico de **saturação/lock no Postgres**, não de rede.
 
-## Correções propostas
+### Causa mais provável
 
-### 1. Placa duplicada (dado + prevenção)
-- Migration:
-  - `UPDATE vehicles SET plate = UPPER(regexp_replace(plate,'[^A-Za-z0-9]','','g'))` no tenant, com backup do valor original em `plate_raw` (novo, nullable).
-  - Mesclar os dois registros: consolidar no mais completo (`9ac6701a...`), reatribuir FKs (`current_driver_id`, `loads.vehicle_id`, `dispatch_trips.vehicle_id`, `vehicle_driver_assignments.vehicle_id`, `driver_settlements.vehicle_id`, `vehicle_fueling`, `vehicle_maintenance`, `vehicle_odometer`, `vehicle_events`, `vehicle_tracker_links`, `maintenance_orders`, `positions_last`) do id antigo para o novo. Depois `active=false` no antigo (soft delete — mantém histórico).
-  - Índice único parcial:
-    ```sql
-    CREATE UNIQUE INDEX uq_vehicles_plate_norm
-      ON vehicles (tenant_id, UPPER(regexp_replace(plate,'[^A-Za-z0-9]','','g')))
-      WHERE active=true;
-    ```
-  - Trigger `BEFORE INSERT/UPDATE` normalizando `plate` (uppercase + strip de não-alfanumérico).
-- Frontend: `NewVehicleDialog` / `EditVehicleDialog` — aplicar mesma normalização no submit + mensagem clara em erro `23505`.
+Um **cron pg_cron** (jobid 4) está entrando em timeout de startup em ciclo, e há pelo menos uma query longa (~55s) segurando conexões. Combinado, isso satura o pool → GoTrue não consegue nem ler `auth.users`/schema → refresh/login expiram → o front trava no boot.
 
-### 2. Tarifas de frete fantasma
-- Migration:
-  - `UPDATE freight_tables SET blocked=true, notes = coalesce(notes,'')||' [auto-blocked: registro vazio sem rota/cliente]'` onde `client_id IS NULL AND origin_state IS NULL AND destination_state IS NULL AND origin_municipality IS NULL AND destination_municipality IS NULL AND vehicle_type IS NULL`.
-  - Trigger `BEFORE INSERT/UPDATE` em `freight_tables`: rejeita `active` (não-bloqueado) sem pelo menos um dos campos (client_id, origem, destino, veículo) — evita novos "fantasmas".
-  - Índice único parcial:
-    ```sql
-    CREATE UNIQUE INDEX uq_freight_tables_context
-      ON freight_tables (tenant_id, COALESCE(client_id::text,''),
-        COALESCE(origin_state,''), COALESCE(destination_state,''),
-        COALESCE(origin_municipality,''), COALESCE(destination_municipality,''),
-        COALESCE(vehicle_type,''))
-      WHERE blocked=false;
-    ```
-    Isso trava overlap exato futuro (mantendo diferenças por vigência via `valid_from/until` se necessário — se atrapalhar, incluí-las na chave).
-- Frontend: no editor de tarifa, avisar quando os campos-chave estão todos vazios antes de salvar.
+Nada disso é regressão do código recém-mergeado. É saúde do backend.
 
-### 3. Testes
-- `src/test/backendDuplicates.test.ts` (unit puro, sem DB): 
-  - Normalização de placa (`PXT 0255` == `pxt-0255` == `PXT0255`).
-  - Validação client-side de tarifa sem contexto retorna erro.
-- Sem novos testes de RLS — todos os 223 existentes continuam válidos.
+## O que fazer
 
-## Fora do escopo desta rodada
-- Deduplicação heurística por nome (clientes/employees/POIs sem CNPJ/CPF) — precisaria de UX de merge manual; achei zero grupos por chave forte.
-- Reprocessar `route_planning_stop_drafts` e `op_route_norm` — já listados como débito adiado em rodadas anteriores.
+### 1. Mitigação imediata no backend (fora do código)
 
-Aprova?
+Enquanto o Postgres estiver assim, nenhuma correção de front resolve. Precisamos:
+
+- Abrir o **Supabase Dashboard → Database → Roles/Reports** e verificar:
+  - conexões ativas e queries longas (`pg_stat_activity`);
+  - se dá para **cancelar** a query de ~55s e/ou **pausar o cron job 4** (`SELECT cron.unschedule(4);`) temporariamente.
+- Se o dashboard também estiver lento, abrir **ticket na Supabase** anexando: request-ids dos 504 (`019f8b74-…`, `019f8b72-…`, `019f8b6d-…`) e os trechos de log acima.
+
+Preciso da sua confirmação antes de tentar `cron.unschedule` / cancelar queries via migração — é ação destrutiva em produção.
+
+### 2. Blindagem no front para não ficar "loading infinito" quando o backend falhar
+
+Independente da causa raiz, o app não deve travar em tela branca quando o Supabase está fora. Ajustes pequenos, sem mudar regra de negócio:
+
+- **`src/hooks/useAuth.tsx`**: hoje, se `supabase.auth.getSession()` demorar/rejeitar, `setLoading(false)` nunca roda. Adicionar:
+  - `try/catch` em torno de `getSession()` que ainda chama `setLoading(false)`;
+  - um **timeout de segurança** (ex.: 8s) que força `loading=false` mesmo sem resposta, com `session=null` (usuário vai para `/auth`).
+- **`src/hooks/useTenant.tsx`**: mesma proteção em `fetchMemberships` — hoje, se a query trava, `loading` fica `true` para sempre.
+- **`src/pages/Auth.tsx` / layout raiz**: quando `loading=false` e ainda não há sessão por falha de rede, mostrar um estado de erro com botão "Tentar novamente" em vez de spinner infinito.
+
+### 3. Verificação pós-mitigação
+
+Depois que o backend voltar:
+
+- Re-rodar `SELECT 1` via read_query para confirmar responsividade.
+- Conferir cron job 4 (nome, schedule, última execução) e decidir se ele precisa ser otimizado ou reescrito (provavelmente é um dos jobs SSX/agvlog descritos na memória).
+- Rodar `bunx vitest run` para garantir que os guards adicionados no front não quebraram nada.
+
+## Detalhes técnicos
+
+- Arquivos a editar (etapa 2): `src/hooks/useAuth.tsx`, `src/hooks/useTenant.tsx`, e um pequeno componente/estado em `src/App.tsx` ou `src/pages/Auth.tsx` para o fallback "backend indisponível".
+- Sem migrações, sem edge functions novas, sem mudança de RLS.
+- Ações no banco (cancelar query, `cron.unschedule`) só depois da sua aprovação explícita.
+
+## Pergunta antes de implementar
+
+Quer que eu:
+- **(a)** foque só na **blindagem do front** agora (item 2), para o app não ficar branco enquanto o backend se recupera; ou
+- **(b)** também investigue/desative o **cron job 4** e tente cancelar a query longa (ação em produção)?

@@ -39,17 +39,18 @@ export function TenantProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const fetchMemberships = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        setLoading(false);
-        return;
-      }
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          setLoading(false);
+          return;
+        }
 
-      const { data, error } = await supabase
-        .from('tenant_memberships')
-        .select('tenant_id, role, tenants(id, name, plan_key, timezone)')
-        .eq('user_id', user.id)
-        .eq('active', true);
+        const { data, error } = await supabase
+          .from('tenant_memberships')
+          .select('tenant_id, role, tenants(id, name, plan_key, timezone)')
+          .eq('user_id', user.id)
+          .eq('active', true);
 
       if (!error && data) {
         let mapped = (data as any[]).map(d => ({
@@ -89,16 +90,25 @@ export function TenantProvider({ children }: { children: ReactNode }) {
           setCurrentTenantId(null);
         }
       }
-      setLoading(false);
+        setLoading(false);
+      } catch (err) {
+        console.warn('[useTenant] fetchMemberships failed', err);
+        setLoading(false);
+      }
     };
 
     fetchMemberships();
+    // Safety net so the app never hangs on a stuck backend.
+    const timer = setTimeout(() => setLoading(false), 8000);
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
       fetchMemberships();
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      clearTimeout(timer);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const handleSetTenantId = (id: string) => {
