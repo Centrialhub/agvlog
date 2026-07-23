@@ -124,6 +124,7 @@ export default function Billing() {
   const [periodStart, setPeriodStart] = useState<string>('');
   const [periodEnd, setPeriodEnd] = useState<string>('');
   const [selectedLoadIds, setSelectedLoadIds] = useState<Set<string>>(new Set());
+  const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
   const [modeId, setModeId] = useState<number>(1);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [modeDialogOpen, setModeDialogOpen] = useState(false);
@@ -295,7 +296,7 @@ export default function Billing() {
   // Filtra documentos. Filtros de alta seletividade (cliente, período, NF, chave, remitente,
   // referência) já foram aplicados server-side pelo useBillingDocuments. Aqui só restam
   // filtros que dependem de tabelas relacionadas (loads/vehicles).
-  const eligibleDocs = useMemo(() => {
+  const filteredDocs = useMemo(() => {
     return docs.filter(d => {
       if (tab === 'loads') {
         if (!d.load_id || !selectedLoadIds.has(d.load_id)) return false;
@@ -350,6 +351,36 @@ export default function Billing() {
     scheduledLoadStart, scheduledLoadEnd, actualLoadStart, actualLoadEnd,
     opTypes, allOps,
   ]);
+
+  // Se o operador marcou notas específicas, restringe a elas. Caso contrário,
+  // usa todas as notas resultantes dos filtros (comportamento por lote antigo).
+  const eligibleDocs = useMemo(() => {
+    if (selectedDocIds.size === 0) return filteredDocs;
+    return filteredDocs.filter(d => selectedDocIds.has(d.id));
+  }, [filteredDocs, selectedDocIds]);
+
+  // Limpa seleções que deixaram de fazer parte do universo filtrado.
+  useEffect(() => {
+    if (selectedDocIds.size === 0) return;
+    const valid = new Set(filteredDocs.map(d => d.id));
+    let changed = false;
+    const next = new Set<string>();
+    selectedDocIds.forEach(id => {
+      if (valid.has(id)) next.add(id);
+      else changed = true;
+    });
+    if (changed) setSelectedDocIds(next);
+  }, [filteredDocs]);
+
+  const toggleDoc = (id: string) => {
+    setSelectedDocIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+  const selectAllDocs = () => setSelectedDocIds(new Set(filteredDocs.map(d => d.id)));
+  const clearDocSelection = () => setSelectedDocIds(new Set());
 
   const groups: CteGroupPreview[] = useMemo(
     () => buildGroups(eligibleDocs, modeId),
