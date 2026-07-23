@@ -1,95 +1,68 @@
-## Objetivo
 
-Permitir que um mesmo tenant emita NFS-e, CT-e, NF-e/NFC-e e MDF-e a partir de **múltiplos CNPJs**, cada um com sua própria integração no Hub Fiscal (1 conta Hub por CNPJ). A seleção do CNPJ emitente é **manual por documento**, com um padrão sugerido.
+## Diagnóstico da comunicação por emitente
 
-## Estado atual (verificado)
+Auditei o caminho fiscal ponta-a-ponta. Resultado:
 
-- `nfse_provider_configs` é indexado por `(tenant_id, branch_code)` — já suporta múltiplas filiais, mas **não guarda o CNPJ emitente** nem credenciais do Hub Fiscal.
-- `hub_fiscal_emissions` já tem `emitter_cnpj`, porém o `hub-fiscal-proxy` usa **um único token** (`HUB_FISCAL_TOKEN`) global — não há roteamento por CNPJ.
-- `emit-nfse` só consulta `nfse_provider_configs` por `branch_code`; nunca resolve credencial por CNPJ.
-- `cte_documents`, `nfse_documents`, `fiscal_documents` não têm coluna do CNPJ emitente selecionado (apenas texto livre em `remitter` / `company_branch`).
-- `nfse_sequences` já é escopado por `(tenant_id, branch_code, series)`.
+### ✅ O que já está correto
 
-## O que será construído
+- `supabase/functions/hub-fiscal-proxy/index.ts` implementa `resolveToken(scope, emitterId)`:
+  1. Usa `payload.emitterId` (ou o `emitter_id` da `hub_fiscal_emissions` via `emissionId`) para buscar em `hub_fiscal_credentials`.
+  2. Prefere `doc_scope` específico (`nfse`, `cte`, …) e cai para `all`.
+  3. Decripta `secret_ciphertext` com `AGVLOG_ENCRYPTION_KEY` ou lê o secret pelo `secret_name`.
+  4. Só cai no `HUB_FISCAL_API_KEY` padrão se nada casar.
+- `hub_fiscal_emissions` grava `emitter_id`, então `get/sync/cancel` posteriores resolvem o token do emitente certo.
+- `useNFSe` já persiste `emitter_id` no documento e aloca RPS por emitente.
 
-### 1. Cadastro de emitentes (nova tabela `tenant_emitters`)
+### ❌ O que está quebrado (não usa o roteamento por emitente)
 
-Uma linha por CNPJ emitente do tenant. Substitui `branch_code` como texto solto, mantendo compatibilidade.
+1. **NFS-e não passa pelo `hub-fiscal-proxy`.** `useIssueNFSe`/`useCancelNFSe` chamam `emit-nfse`, que é um path legado baseado em `nfse_provider_configs` + `branch_code`. Ele **não lê `emitter_id`** do documento, **não usa `hub_fiscal_credentials`** e **não chama o Hub Fiscal** — apenas simula (`manual`) ou marca `queued`. Portanto, hoje, mesmo escolhendo o emitente na tela, a emissão real não acontece com o token correto.
+2. **`hubFiscal.emit/get/sync/cancel/file` (client) está sem uso.** Nenhum caller no `src/` chama esses métodos, então CT-e / NF-e / NFC-e / MDF-e também não estão de fato consumindo o proxy por emitente.
+3. **Payload do Hub sem `emitterCnpj` correto.** Como não há caller montando o `body` de emissão, não há garantia de que `emitterCnpj` enviado ao Hub bate com o CNPJ do `tenant_emitters` selecionado.
+4. **Fallback silencioso perigoso no proxy.** Em `resolveToken`, se `secret_ciphertext` existir mas `AGVLOG_ENCRYPTION_KEY` estiver vazio ou a decriptação falhar, ele cai no token global sem sinalizar. Isso mascara credenciais quebradas por emitente.
 
-Campos: `id`, `tenant_id`, `branch_code` (rótulo curto: MATRIZ, FILIAL01…), `cnpj` (14 dígitos, único por tenant), `razao_social`, `nome_fantasia`, `ie`, `im`, `regime_tributario`, `endereco` (jsonb), `logo_url`, `is_default` (bool), `active`, timestamps.
+## Correções propostas
 
-RLS: leitura para membros do tenant; escrita só para owner/admin.
+### 1. Rotear NFS-e pelo `hub-fiscal-proxy` com o emitente do documento
 
-### 2. Credenciais Hub Fiscal por emitente (nova tabela `hub_fiscal_credentials`)
+Substituir `useIssueNFSe`/`useCancelNFSe` para:
 
-Uma linha por documento suportado por emitente (permite Hub separado por tipo se preciso, mas normalmente uma linha "all").
+- Carregar o `nfse_documents` (inclui `emitter_id`, `rps_number`, `series`, `tenant_id`).
+- Carregar `tenant_emitters` (CNPJ, IE, endereço, razão social) do emitente vinculado — falhar cedo se ausente.
+- Chamar `hubFiscal.emit({ type: 'nfse', emitterId, nfseDocumentId, body: { emitterCnpj, environment, externalId, payload } })`.
+- Persistir `hub_document_id`, `provider = 'hub_fiscal'`, `status` retornado no `nfse_documents` + `nfse_events`.
+- Cancelamento: `hubFiscal.cancel(hub_document_id, reason, emissionId)`.
 
-Campos: `id`, `tenant_id`, `emitter_id` (FK), `doc_scope` (`all` | `nfse` | `cte` | `nfe` | `mdfe`), `environment` (`sandbox`|`production`), `secret_name` (nome do secret que guarda o token — ex.: `HUB_FISCAL_TOKEN__<slug>`), `enabled`, `metadata` (jsonb — client_id/URL/quirks do Hub), timestamps.
+O `emit-nfse` legado é mantido apenas para o modo simulado quando o emitente **não** tem credencial Hub Fiscal (fallback compatível com o comportamento atual).
 
-Os **tokens ficam em Supabase secrets** (nunca no banco). O nome do secret é gerado a partir do CNPJ (`HUB_FISCAL_TOKEN_<cnpj>`) e cadastrado por `add_secret` na UI.
+### 2. Endurecer `resolveToken` no proxy
 
-RLS: owner/admin do tenant.
+- Se `secret_ciphertext` existir e a decriptação **falhar**, retornar erro `HUB_CREDENTIAL_DECRYPT_FAILED` em vez de cair no token global.
+- Se `secret_name` estiver setado mas o env estiver vazio, retornar `HUB_CREDENTIAL_SECRET_MISSING`.
+- Só usar `DEFAULT_HUB_KEY` quando **nenhuma** credencial estiver vinculada ao emitente (ou nenhum emitente foi enviado).
+- Logar (sem vazar segredos) o `emitter_id`, `scope` e origem (`ciphertext` / `secret_name` / `default`) para diagnóstico.
 
-### 3. Vínculo dos documentos ao emitente
+### 3. Teste de fumaça de roteamento (novo edge callable curto)
 
-Adicionar `emitter_id uuid` (FK → `tenant_emitters`) e índice em:
-- `nfse_documents`
-- `cte_documents`
-- `fiscal_documents` (para NF-e/NFC-e emitidas pelo próprio tenant — mantendo compat com notas recebidas)
-- `hub_fiscal_emissions`
+Adicionar `action: 'ping'` no `hub-fiscal-proxy` que:
+- Recebe `emitterId` + `type`.
+- Resolve o token e devolve `{ source: 'ciphertext'|'secret_name'|'default', scope_matched, has_token: boolean }` — nunca o token.
+- Usado por um botão "Testar credencial" no `EmitterFormDialog` para o operador confirmar visualmente que aquele emitente tem token válido antes de emitir.
 
-Backfill: linhas existentes ganham `emitter_id` do emitter marcado `is_default=true` (criado a partir do `tenants.settings.company` atual — 1 emitter inicial).
+### 4. Verificação manual pós-deploy
 
-Sequences: adicionar `emitter_id` a `nfse_sequences` (opcional, mantendo `branch_code`) — a alocação passa a considerar `(tenant_id, emitter_id, series)`.
+- Cadastrar 2 emitentes com CNPJs distintos, cada um com token de sandbox diferente.
+- Emitir uma NFS-e por emitente e checar em `hub_fiscal_emissions` que `emitter_id` e `emitter_cnpj` batem com o emitente escolhido, e que o `Authorization` enviado ao Hub veio da credencial correta (via log).
 
-### 4. Edge Function `hub-fiscal-proxy` — roteamento por emitente
+## Detalhes técnicos
 
-- Payload passa a aceitar `emitterId` (uuid) OU `emitterCnpj` (14 dígitos).
-- Resolve o emitter no banco, lê `hub_fiscal_credentials` para o `doc_scope` pedido, obtém o `secret_name` e injeta `Deno.env.get(secret_name)` como Bearer para o Hub.
-- Se secret ausente → 424 com mensagem clara "Credencial não configurada para o CNPJ X".
-- `hub_fiscal_emissions.emitter_id` populado em toda inserção.
+- Arquivos a alterar:
+  - `src/hooks/useNFSe.tsx` — reescrever `useIssueNFSe`/`useCancelNFSe` usando `hubFiscal`.
+  - `supabase/functions/hub-fiscal-proxy/index.ts` — `resolveToken` estrito + `action: 'ping'`.
+  - `src/components/settings/EmitterFormDialog.tsx` — botão "Testar credencial".
+  - `src/lib/fiscal/hubFiscalClient.ts` — expor `ping(emitterId, scope)`.
+- Sem migrações de schema; `hub_fiscal_emissions` e `hub_fiscal_credentials` já suportam o caso.
+- `emit-nfse` continua deployado para fallback simulado; pode ser aposentado depois.
 
-### 5. Edge Function `emit-nfse` — usa emitter
+## Fora de escopo
 
-- Payload aceita `emitter_id`. Se ausente, usa o `emitter_id` do documento.
-- Config resolvida por `(tenant_id, emitter_id)` em vez de `branch_code`.
-- Numeração via `next_nfse_number(_emitter_id, _series)`.
-
-### 6. UI
-
-**`Settings` → nova aba "Emitentes fiscais"**
-- Lista de CNPJs cadastrados (razão, CNPJ, IE, ambiente, status Hub).
-- Botão "Novo CNPJ emitente" (form: dados fiscais + logo + endereço).
-- Por linha: "Configurar Hub Fiscal" abre modal que chama `add_secret` para o token, salva `hub_fiscal_credentials`, permite escolher `sandbox/production`.
-- Botão "Definir como padrão".
-
-**`NFSeFormDialog`, `CteHub` (geração), MDF-e/NF-e forms**
-- Substituir campo texto "Filial" por `<Select>` de emitentes ativos, defaultando ao `is_default`.
-- Mostra badge do CNPJ selecionado ao lado do número/série.
-
-**`companyHeader.ts` (PDFs)**
-- Passa a receber `emitterId` opcional; quando fornecido, usa dados daquele emitter (logo, razão, CNPJ, endereço) em vez do `tenants.settings.company` global. Fallback preservado.
-
-### 7. Sinalização e validações
-
-- Trigger em `tenant_emitters`: garante um único `is_default=true` por tenant e CNPJ único por tenant.
-- Validação: emissão bloqueada se `hub_fiscal_credentials` do emitter estiver `enabled=false` ou secret ausente — mensagem "Configure a integração do CNPJ X antes de emitir".
-- `hub_fiscal_emissions.emitter_id` obrigatório em novas inserções.
-
-## Detalhes técnicos (para revisão)
-
-- **Migração** em passos:
-  1. Cria `tenant_emitters` + grants + RLS + trigger de default único.
-  2. Cria `hub_fiscal_credentials` + grants + RLS.
-  3. Adiciona `emitter_id` (nullable) nas 4 tabelas fiscais + índices.
-  4. Seed: cria 1 emitter por tenant a partir de `tenants.settings.company` e marca `is_default`. Backfill de `emitter_id` nas linhas existentes.
-  5. Altera `next_nfse_number` para aceitar `_emitter_id` (mantém overload antigo por `_branch_code` durante transição).
-- **Nomes de secret**: `HUB_FISCAL_TOKEN_<cnpj>` (14 dígitos, sem máscara). O nome fica em `hub_fiscal_credentials.secret_name` — o valor nunca é armazenado.
-- **Compat**: `branch_code` continua nas tabelas (para exibição/rótulo), mas o vínculo autoritativo passa a ser `emitter_id`.
-- **Testes**: adicionar `src/test/multiCnpjEmission.test.ts` validando (a) seleção de credencial correta por CNPJ, (b) bloqueio quando secret ausente, (c) isolamento entre emitters de um mesmo tenant.
-
-## Fora do escopo desta rodada
-
-- Migrar tokens já existentes automaticamente (será feito manualmente por CNPJ no primeiro cadastro).
-- Regras automáticas de escolha de emitente (fica para uma rodada futura — hoje é manual com default sugerido).
-- Multi-tenant → multi-emitente cross-tenant (não faz sentido: emitter é sempre dentro do tenant).
+- Emissão real de CT-e/NF-e/NFC-e/MDF-e (nenhum caller hoje). Fica só o roteamento pronto no client (`hubFiscal.*`) para uso quando as telas de emissão desses documentos forem implementadas.
