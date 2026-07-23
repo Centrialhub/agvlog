@@ -39,6 +39,7 @@ type OpType = OperationType;
 interface BillingPreferences {
   tab: SourceTab;
   clientId: string;
+  supplierId: string;
   periodStart: string;
   periodEnd: string;
   modeId: number;
@@ -72,6 +73,7 @@ interface BillingPreferences {
 const DEFAULT_BILLING_PREFS: BillingPreferences = {
   tab: 'period',
   clientId: SENTINEL_NONE,
+  supplierId: SENTINEL_NONE,
   periodStart: '',
   periodEnd: '',
   modeId: 1,
@@ -118,6 +120,7 @@ export default function Billing() {
 
   const [tab, setTab] = useState<SourceTab>('period');
   const [clientId, setClientId] = useState<string>(SENTINEL_NONE);
+  const [supplierId, setSupplierId] = useState<string>(SENTINEL_NONE);
   const [periodStart, setPeriodStart] = useState<string>('');
   const [periodEnd, setPeriodEnd] = useState<string>('');
   const [selectedLoadIds, setSelectedLoadIds] = useState<Set<string>>(new Set());
@@ -154,6 +157,7 @@ export default function Billing() {
   // ===== Pré-filtragem server-side (usa índices criados) =====
   const { data: docs = [], isLoading: docsLoading } = useBillingDocuments({
     clientId: clientId !== SENTINEL_NONE ? clientId : null,
+    supplierId: supplierId !== SENTINEL_NONE ? supplierId : null,
     periodStart: tab === 'period' ? periodStart : null,
     periodEnd: tab === 'period' ? periodEnd : null,
     invoiceNumber,
@@ -172,6 +176,7 @@ export default function Billing() {
     const p = preference;
     setTab(p.tab ?? 'period');
     setClientId(p.clientId ?? SENTINEL_NONE);
+    setSupplierId(p.supplierId ?? SENTINEL_NONE);
     setPeriodStart(p.periodStart ?? '');
     setPeriodEnd(p.periodEnd ?? '');
     setModeId(p.modeId ?? 1);
@@ -208,6 +213,7 @@ export default function Billing() {
       savePreference({
         tab,
         clientId,
+        supplierId,
         periodStart,
         periodEnd,
         modeId,
@@ -240,7 +246,7 @@ export default function Billing() {
     return () => clearTimeout(t);
   }, [
     isLoaded, savePreference,
-    tab, clientId, periodStart, periodEnd, modeId,
+    tab, clientId, supplierId, periodStart, periodEnd, modeId,
     osNumber, collectOrder, referenceNumber, cnpj, invoiceNumber,
     issueDateStart, issueDateEnd,
     importDateStart, importDateEnd,
@@ -432,6 +438,7 @@ export default function Billing() {
               const next = v as SourceTab;
               setTab(next);
               if (next === 'period') setClientId(SENTINEL_NONE);
+              if (next === 'loads') setSupplierId(SENTINEL_NONE);
             }}
           >
             <TabsList>
@@ -442,22 +449,23 @@ export default function Billing() {
             <TabsContent value="period" className="space-y-3 pt-3">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                 <div className="md:col-span-2">
-                  <Label>Fornecedor (remetente)</Label>
-                  <Input
-                    value={supplier}
-                    onChange={e => setSupplier(e.target.value)}
-                    placeholder="Nome do remetente"
-                  />
+                  <Label>Fornecedor</Label>
+                  <Select value={supplierId} onValueChange={setSupplierId}>
+                    <SelectTrigger><SelectValue placeholder="Selecione um fornecedor" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={SENTINEL_NONE}>Todos os fornecedores</SelectItem>
+                      {clients.filter(c => c.is_supplier).map(c => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.company_name}{c.tax_id ? ` — ${c.tax_id}` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Vínculo direto pelo CNPJ do remetente da NF-e. Cadastre fornecedores em <span className="font-medium">Clientes e Fornecedores</span>.
+                  </p>
                 </div>
-                <div>
-                  <Label>CNPJ do fornecedor</Label>
-                  <Input
-                    value={supplierCnpj}
-                    onChange={e => setSupplierCnpj(e.target.value)}
-                    placeholder="00.000.000/0000-00"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="md:col-span-2 grid grid-cols-2 gap-2">
                   <div>
                     <Label>Início</Label>
                     <Input type="date" value={periodStart} onChange={e => setPeriodStart(e.target.value)} />

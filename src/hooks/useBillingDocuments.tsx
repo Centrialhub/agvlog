@@ -24,6 +24,7 @@ export interface BillingDocumentFilters {
   referenceNumber?: string | null; // client_load_number
   recipientCnpj?: string | null;
   remitterCnpj?: string | null;
+  supplierId?: string | null;
 }
 
 function nz(v: string | null | undefined): string | null {
@@ -45,6 +46,7 @@ export function useBillingDocuments(filters: BillingDocumentFilters) {
     referenceNumber: nz(filters.referenceNumber),
     recipientCnpj: nz(filters.recipientCnpj),
     remitterCnpj: nz(filters.remitterCnpj),
+    supplierId: nz(filters.supplierId),
   };
 
   return useQuery({
@@ -61,6 +63,7 @@ export function useBillingDocuments(filters: BillingDocumentFilters) {
         .neq('status', 'cancelled');
 
       if (f.clientId) q = q.eq('client_id', f.clientId);
+      if (f.supplierId) q = q.eq('supplier_id', f.supplierId);
       if (f.periodStart) q = q.gte('issue_date', f.periodStart);
       if (f.periodEnd) q = q.lte('issue_date', f.periodEnd);
       if (f.invoiceNumber) q = q.ilike('invoice_number', `%${f.invoiceNumber}%`);
