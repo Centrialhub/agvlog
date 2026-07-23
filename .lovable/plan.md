@@ -1,70 +1,95 @@
-## Diagnóstico
+## Objetivo
 
-Os relatos de **tela branca** e **loading infinito** não vêm do código do app — vêm do **backend Supabase deste projeto** (`qcvnsdrbcchaxvawcngk`), que está degradado agora.
+Permitir que um mesmo tenant emita NFS-e, CT-e, NF-e/NFC-e e MDF-e a partir de **múltiplos CNPJs**, cada um com sua própria integração no Hub Fiscal (1 conta Hub por CNPJ). A seleção do CNPJ emitente é **manual por documento**, com um padrão sugerido.
 
-### Evidências coletadas nesta rodada
+## Estado atual (verificado)
 
-1. **Auth (GoTrue) retornando 500/504** nos últimos ~15 min:
-   - `POST /auth/v1/token?grant_type=refresh_token` → **504 upstream request timeout**
-   - `POST /auth/v1/token?grant_type=password` → **500 "Database error querying schema"**, erro interno `error finding user: context canceled`
-   - Isso explica o loading infinito: o `useAuth` fica preso em `getSession()`/refresh que nunca resolve, então o `AuthProvider` nunca sai de `loading=true` e nada é renderizado além do "Carregando…".
+- `nfse_provider_configs` é indexado por `(tenant_id, branch_code)` — já suporta múltiplas filiais, mas **não guarda o CNPJ emitente** nem credenciais do Hub Fiscal.
+- `hub_fiscal_emissions` já tem `emitter_cnpj`, porém o `hub-fiscal-proxy` usa **um único token** (`HUB_FISCAL_TOKEN`) global — não há roteamento por CNPJ.
+- `emit-nfse` só consulta `nfse_provider_configs` por `branch_code`; nunca resolve credencial por CNPJ.
+- `cte_documents`, `nfse_documents`, `fiscal_documents` não têm coluna do CNPJ emitente selecionado (apenas texto livre em `remitter` / `company_branch`).
+- `nfse_sequences` já é escopado por `(tenant_id, branch_code, series)`.
 
-2. **Postgres saturado / não respondendo**:
-   - Todas as tentativas de `supabase--read_query` (inclusive `SELECT 1`) retornam `Connection terminated due to connection timeout`.
-   - Logs do Postgres mostram:
-     - `duration: 55223.831 ms plan: …` (query rodando ~55s)
-     - `cron job 4 job startup timeout` repetido
-     - `could not accept SSL connection: EOF detected`
-     - checkpoints longos (~58s total)
-   - As ferramentas de metadata do Supabase também falharam (ver `<supabase-info>` no contexto: "Connection terminated due to connection timeout").
+## O que será construído
 
-3. **Endpoints REST/Auth respondem no TCP** (401 rápido no health), mas qualquer request que toque no banco trava — clássico de **saturação/lock no Postgres**, não de rede.
+### 1. Cadastro de emitentes (nova tabela `tenant_emitters`)
 
-### Causa mais provável
+Uma linha por CNPJ emitente do tenant. Substitui `branch_code` como texto solto, mantendo compatibilidade.
 
-Um **cron pg_cron** (jobid 4) está entrando em timeout de startup em ciclo, e há pelo menos uma query longa (~55s) segurando conexões. Combinado, isso satura o pool → GoTrue não consegue nem ler `auth.users`/schema → refresh/login expiram → o front trava no boot.
+Campos: `id`, `tenant_id`, `branch_code` (rótulo curto: MATRIZ, FILIAL01…), `cnpj` (14 dígitos, único por tenant), `razao_social`, `nome_fantasia`, `ie`, `im`, `regime_tributario`, `endereco` (jsonb), `logo_url`, `is_default` (bool), `active`, timestamps.
 
-Nada disso é regressão do código recém-mergeado. É saúde do backend.
+RLS: leitura para membros do tenant; escrita só para owner/admin.
 
-## O que fazer
+### 2. Credenciais Hub Fiscal por emitente (nova tabela `hub_fiscal_credentials`)
 
-### 1. Mitigação imediata no backend (fora do código)
+Uma linha por documento suportado por emitente (permite Hub separado por tipo se preciso, mas normalmente uma linha "all").
 
-Enquanto o Postgres estiver assim, nenhuma correção de front resolve. Precisamos:
+Campos: `id`, `tenant_id`, `emitter_id` (FK), `doc_scope` (`all` | `nfse` | `cte` | `nfe` | `mdfe`), `environment` (`sandbox`|`production`), `secret_name` (nome do secret que guarda o token — ex.: `HUB_FISCAL_TOKEN__<slug>`), `enabled`, `metadata` (jsonb — client_id/URL/quirks do Hub), timestamps.
 
-- Abrir o **Supabase Dashboard → Database → Roles/Reports** e verificar:
-  - conexões ativas e queries longas (`pg_stat_activity`);
-  - se dá para **cancelar** a query de ~55s e/ou **pausar o cron job 4** (`SELECT cron.unschedule(4);`) temporariamente.
-- Se o dashboard também estiver lento, abrir **ticket na Supabase** anexando: request-ids dos 504 (`019f8b74-…`, `019f8b72-…`, `019f8b6d-…`) e os trechos de log acima.
+Os **tokens ficam em Supabase secrets** (nunca no banco). O nome do secret é gerado a partir do CNPJ (`HUB_FISCAL_TOKEN_<cnpj>`) e cadastrado por `add_secret` na UI.
 
-Preciso da sua confirmação antes de tentar `cron.unschedule` / cancelar queries via migração — é ação destrutiva em produção.
+RLS: owner/admin do tenant.
 
-### 2. Blindagem no front para não ficar "loading infinito" quando o backend falhar
+### 3. Vínculo dos documentos ao emitente
 
-Independente da causa raiz, o app não deve travar em tela branca quando o Supabase está fora. Ajustes pequenos, sem mudar regra de negócio:
+Adicionar `emitter_id uuid` (FK → `tenant_emitters`) e índice em:
+- `nfse_documents`
+- `cte_documents`
+- `fiscal_documents` (para NF-e/NFC-e emitidas pelo próprio tenant — mantendo compat com notas recebidas)
+- `hub_fiscal_emissions`
 
-- **`src/hooks/useAuth.tsx`**: hoje, se `supabase.auth.getSession()` demorar/rejeitar, `setLoading(false)` nunca roda. Adicionar:
-  - `try/catch` em torno de `getSession()` que ainda chama `setLoading(false)`;
-  - um **timeout de segurança** (ex.: 8s) que força `loading=false` mesmo sem resposta, com `session=null` (usuário vai para `/auth`).
-- **`src/hooks/useTenant.tsx`**: mesma proteção em `fetchMemberships` — hoje, se a query trava, `loading` fica `true` para sempre.
-- **`src/pages/Auth.tsx` / layout raiz**: quando `loading=false` e ainda não há sessão por falha de rede, mostrar um estado de erro com botão "Tentar novamente" em vez de spinner infinito.
+Backfill: linhas existentes ganham `emitter_id` do emitter marcado `is_default=true` (criado a partir do `tenants.settings.company` atual — 1 emitter inicial).
 
-### 3. Verificação pós-mitigação
+Sequences: adicionar `emitter_id` a `nfse_sequences` (opcional, mantendo `branch_code`) — a alocação passa a considerar `(tenant_id, emitter_id, series)`.
 
-Depois que o backend voltar:
+### 4. Edge Function `hub-fiscal-proxy` — roteamento por emitente
 
-- Re-rodar `SELECT 1` via read_query para confirmar responsividade.
-- Conferir cron job 4 (nome, schedule, última execução) e decidir se ele precisa ser otimizado ou reescrito (provavelmente é um dos jobs SSX/agvlog descritos na memória).
-- Rodar `bunx vitest run` para garantir que os guards adicionados no front não quebraram nada.
+- Payload passa a aceitar `emitterId` (uuid) OU `emitterCnpj` (14 dígitos).
+- Resolve o emitter no banco, lê `hub_fiscal_credentials` para o `doc_scope` pedido, obtém o `secret_name` e injeta `Deno.env.get(secret_name)` como Bearer para o Hub.
+- Se secret ausente → 424 com mensagem clara "Credencial não configurada para o CNPJ X".
+- `hub_fiscal_emissions.emitter_id` populado em toda inserção.
 
-## Detalhes técnicos
+### 5. Edge Function `emit-nfse` — usa emitter
 
-- Arquivos a editar (etapa 2): `src/hooks/useAuth.tsx`, `src/hooks/useTenant.tsx`, e um pequeno componente/estado em `src/App.tsx` ou `src/pages/Auth.tsx` para o fallback "backend indisponível".
-- Sem migrações, sem edge functions novas, sem mudança de RLS.
-- Ações no banco (cancelar query, `cron.unschedule`) só depois da sua aprovação explícita.
+- Payload aceita `emitter_id`. Se ausente, usa o `emitter_id` do documento.
+- Config resolvida por `(tenant_id, emitter_id)` em vez de `branch_code`.
+- Numeração via `next_nfse_number(_emitter_id, _series)`.
 
-## Pergunta antes de implementar
+### 6. UI
 
-Quer que eu:
-- **(a)** foque só na **blindagem do front** agora (item 2), para o app não ficar branco enquanto o backend se recupera; ou
-- **(b)** também investigue/desative o **cron job 4** e tente cancelar a query longa (ação em produção)?
+**`Settings` → nova aba "Emitentes fiscais"**
+- Lista de CNPJs cadastrados (razão, CNPJ, IE, ambiente, status Hub).
+- Botão "Novo CNPJ emitente" (form: dados fiscais + logo + endereço).
+- Por linha: "Configurar Hub Fiscal" abre modal que chama `add_secret` para o token, salva `hub_fiscal_credentials`, permite escolher `sandbox/production`.
+- Botão "Definir como padrão".
+
+**`NFSeFormDialog`, `CteHub` (geração), MDF-e/NF-e forms**
+- Substituir campo texto "Filial" por `<Select>` de emitentes ativos, defaultando ao `is_default`.
+- Mostra badge do CNPJ selecionado ao lado do número/série.
+
+**`companyHeader.ts` (PDFs)**
+- Passa a receber `emitterId` opcional; quando fornecido, usa dados daquele emitter (logo, razão, CNPJ, endereço) em vez do `tenants.settings.company` global. Fallback preservado.
+
+### 7. Sinalização e validações
+
+- Trigger em `tenant_emitters`: garante um único `is_default=true` por tenant e CNPJ único por tenant.
+- Validação: emissão bloqueada se `hub_fiscal_credentials` do emitter estiver `enabled=false` ou secret ausente — mensagem "Configure a integração do CNPJ X antes de emitir".
+- `hub_fiscal_emissions.emitter_id` obrigatório em novas inserções.
+
+## Detalhes técnicos (para revisão)
+
+- **Migração** em passos:
+  1. Cria `tenant_emitters` + grants + RLS + trigger de default único.
+  2. Cria `hub_fiscal_credentials` + grants + RLS.
+  3. Adiciona `emitter_id` (nullable) nas 4 tabelas fiscais + índices.
+  4. Seed: cria 1 emitter por tenant a partir de `tenants.settings.company` e marca `is_default`. Backfill de `emitter_id` nas linhas existentes.
+  5. Altera `next_nfse_number` para aceitar `_emitter_id` (mantém overload antigo por `_branch_code` durante transição).
+- **Nomes de secret**: `HUB_FISCAL_TOKEN_<cnpj>` (14 dígitos, sem máscara). O nome fica em `hub_fiscal_credentials.secret_name` — o valor nunca é armazenado.
+- **Compat**: `branch_code` continua nas tabelas (para exibição/rótulo), mas o vínculo autoritativo passa a ser `emitter_id`.
+- **Testes**: adicionar `src/test/multiCnpjEmission.test.ts` validando (a) seleção de credencial correta por CNPJ, (b) bloqueio quando secret ausente, (c) isolamento entre emitters de um mesmo tenant.
+
+## Fora do escopo desta rodada
+
+- Migrar tokens já existentes automaticamente (será feito manualmente por CNPJ no primeiro cadastro).
+- Regras automáticas de escolha de emitente (fica para uma rodada futura — hoje é manual com default sugerido).
+- Multi-tenant → multi-emitente cross-tenant (não faz sentido: emitter é sempre dentro do tenant).
