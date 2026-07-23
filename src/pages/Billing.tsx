@@ -448,22 +448,23 @@ export default function Billing() {
             <TabsContent value="period" className="space-y-3 pt-3">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                 <div className="md:col-span-2">
-                  <Label>Fornecedor (remetente)</Label>
-                  <Input
-                    value={supplier}
-                    onChange={e => setSupplier(e.target.value)}
-                    placeholder="Nome do remetente"
-                  />
+                  <Label>Fornecedor</Label>
+                  <Select value={supplierId} onValueChange={setSupplierId}>
+                    <SelectTrigger><SelectValue placeholder="Selecione um fornecedor" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={SENTINEL_NONE}>Todos os fornecedores</SelectItem>
+                      {clients.filter(c => c.is_supplier).map(c => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.company_name}{c.tax_id ? ` — ${c.tax_id}` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Vínculo direto pelo CNPJ do remetente da NF-e. Cadastre fornecedores em <span className="font-medium">Clientes e Fornecedores</span>.
+                  </p>
                 </div>
-                <div>
-                  <Label>CNPJ do fornecedor</Label>
-                  <Input
-                    value={supplierCnpj}
-                    onChange={e => setSupplierCnpj(e.target.value)}
-                    placeholder="00.000.000/0000-00"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="md:col-span-2 grid grid-cols-2 gap-2">
                   <div>
                     <Label>Início</Label>
                     <Input type="date" value={periodStart} onChange={e => setPeriodStart(e.target.value)} />
