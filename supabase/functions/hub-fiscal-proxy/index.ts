@@ -7,6 +7,23 @@ const DEFAULT_HUB_KEY = Deno.env.get('HUB_FISCAL_API_KEY') || '';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const ENC_KEY = Deno.env.get('AGVLOG_ENCRYPTION_KEY') || '';
+
+function hexToBytes(hex: string): Uint8Array {
+  const b = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < b.length; i++) b[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  return b;
+}
+async function decryptAesGcm(encrypted: string, keyHex: string): Promise<string> {
+  const parts = encrypted.split(':');
+  if (parts.length !== 4) throw new Error('Invalid encrypted format');
+  const keyBytes = hexToBytes(keyHex.padEnd(64, '0').slice(0, 64));
+  const key = await crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, ['decrypt']);
+  const iv = hexToBytes(parts[2]);
+  const ct = hexToBytes(parts[3]);
+  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
+  return new TextDecoder().decode(pt);
+}
 
 type Action =
   | 'emit' | 'get' | 'sync' | 'cancel' | 'cce'
@@ -93,12 +110,17 @@ Deno.serve(async (req) => {
       }
       if (!emId) return DEFAULT_HUB_KEY;
       const { data: creds } = await admin.from('hub_fiscal_credentials')
-        .select('doc_scope, secret_name, enabled')
+        .select('doc_scope, secret_name, secret_ciphertext, enabled')
         .eq('emitter_id', emId).eq('enabled', true);
       const list = (creds || []) as any[];
       const match = list.find(c => c.doc_scope === scope) || list.find(c => c.doc_scope === 'all');
-      if (!match?.secret_name) return DEFAULT_HUB_KEY;
-      return Deno.env.get(match.secret_name) || DEFAULT_HUB_KEY;
+      if (!match) return DEFAULT_HUB_KEY;
+      if (match.secret_ciphertext && ENC_KEY) {
+        try { return await decryptAesGcm(match.secret_ciphertext, ENC_KEY); }
+        catch (e) { console.warn('[hub-fiscal-proxy] decrypt failed', e); }
+      }
+      if (match.secret_name) return Deno.env.get(match.secret_name) || DEFAULT_HUB_KEY;
+      return DEFAULT_HUB_KEY;
     }
 
     switch (action) {

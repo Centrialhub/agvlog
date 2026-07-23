@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   useEmitters, useSaveEmitter, useDeleteEmitter, useMakeDefaultEmitter,
-  useHubCredentials, useSaveHubCredential, useDeleteHubCredential,
+  useHubCredentials, useSaveHubCredential, useSaveHubCredentialToken, useDeleteHubCredential,
   type TenantEmitter, type HubFiscalCredential,
 } from '@/hooks/useEmitters';
 import { useIsAdmin } from '@/hooks/useTenant';
@@ -188,15 +188,49 @@ function EmitterFormDialog({ initial, onClose }: { initial: Partial<TenantEmitte
 
 function CredentialsDialog({ emitter, onClose }: { emitter: TenantEmitter; onClose: () => void }) {
   const { data: creds = [] } = useHubCredentials(emitter.id);
-  const save = useSaveHubCredential();
+  const saveToken = useSaveHubCredentialToken();
+  const saveMeta = useSaveHubCredential();
   const del = useDeleteHubCredential();
-  const [form, setForm] = useState<Partial<HubFiscalCredential>>({
-    emitter_id: emitter.id,
+  const [form, setForm] = useState<{
+    doc_scope: HubFiscalCredential['doc_scope'];
+    environment: HubFiscalCredential['environment'];
+    mode: 'token' | 'secret_name';
+    token: string;
+    secret_name: string;
+    enabled: boolean;
+  }>({
     doc_scope: 'all',
     environment: 'production',
+    mode: 'token',
+    token: '',
     secret_name: '',
     enabled: true,
   });
+
+  const handleAdd = async () => {
+    if (form.mode === 'token') {
+      if (!form.token || form.token.trim().length < 8) return;
+      await saveToken.mutateAsync({
+        emitter_id: emitter.id,
+        doc_scope: form.doc_scope,
+        environment: form.environment,
+        enabled: form.enabled,
+        token: form.token,
+      });
+    } else {
+      if (!form.secret_name.trim()) return;
+      await saveMeta.mutateAsync({
+        emitter_id: emitter.id,
+        doc_scope: form.doc_scope,
+        environment: form.environment,
+        enabled: form.enabled,
+        secret_name: form.secret_name.trim(),
+      });
+    }
+    setForm(s => ({ ...s, token: '', secret_name: '' }));
+  };
+
+  const saving = saveToken.isPending || saveMeta.isPending;
 
   return (
     <Dialog open onOpenChange={onClose}>
@@ -207,9 +241,9 @@ function CredentialsDialog({ emitter, onClose }: { emitter: TenantEmitter; onClo
 
         <div className="rounded-md bg-muted/40 p-3 text-xs space-y-1">
           <p><strong>Como funciona:</strong> cada emitente pode ter uma conta própria no Hub Fiscal.</p>
-          <p>1. Cadastre o token no gerenciador de segredos da Lovable Cloud (Configurações do projeto → Secrets), com um nome único (ex.: <code>HUB_FISCAL_KEY_MATRIZ</code>).</p>
-          <p>2. Aqui, informe apenas o <strong>nome</strong> desse segredo. O valor nunca sai do backend.</p>
-          <p>3. Se nenhum registro estiver cadastrado, o sistema usa o token padrão <code>HUB_FISCAL_API_KEY</code>.</p>
+          <p>Cole o token do Hub Fiscal aqui — ele é criptografado no backend com AES-GCM (chave <code>AGVLOG_ENCRYPTION_KEY</code>) antes de ir para o banco e nunca é devolvido para a tela.</p>
+          <p>Alternativa avançada: se você preferir guardar o token como variável de ambiente, use o modo <em>“Nome de segredo”</em> e informe apenas o nome (ex.: <code>HUB_FISCAL_KEY_FILIAL2</code>).</p>
+          <p>Sem credencial cadastrada, o sistema usa o token padrão <code>HUB_FISCAL_API_KEY</code>.</p>
         </div>
 
         <Table>
@@ -217,7 +251,7 @@ function CredentialsDialog({ emitter, onClose }: { emitter: TenantEmitter; onClo
             <TableRow>
               <TableHead>Escopo</TableHead>
               <TableHead>Ambiente</TableHead>
-              <TableHead>Segredo (nome)</TableHead>
+              <TableHead>Fonte do token</TableHead>
               <TableHead>Status</TableHead>
               <TableHead></TableHead>
             </TableRow>
@@ -232,7 +266,13 @@ function CredentialsDialog({ emitter, onClose }: { emitter: TenantEmitter; onClo
               <TableRow key={c.id}>
                 <TableCell><Badge variant="outline">{c.doc_scope}</Badge></TableCell>
                 <TableCell>{c.environment}</TableCell>
-                <TableCell className="font-mono text-xs">{c.secret_name}</TableCell>
+                <TableCell className="font-mono text-xs">
+                  {c.has_ciphertext
+                    ? <span>token salvo <span className="text-muted-foreground">({c.secret_hint || '••••'})</span></span>
+                    : c.secret_name
+                      ? <>env: {c.secret_name}</>
+                      : <span className="text-muted-foreground">—</span>}
+                </TableCell>
                 <TableCell>{c.enabled ? <Badge className="bg-success text-success-foreground">Ativa</Badge> : <Badge variant="secondary">Inativa</Badge>}</TableCell>
                 <TableCell>
                   <Button size="sm" variant="ghost" onClick={() => del.mutate({ id: c.id, emitter_id: emitter.id })}>
@@ -272,12 +312,48 @@ function CredentialsDialog({ emitter, onClose }: { emitter: TenantEmitter; onClo
               </Select>
             </div>
             <div className="col-span-2">
-              <Label>Nome do segredo</Label>
-              <Input value={form.secret_name || ''} onChange={e => setForm(s => ({ ...s, secret_name: e.target.value }))} placeholder="HUB_FISCAL_KEY_..." />
+              <Label>Modo</Label>
+              <Select value={form.mode} onValueChange={v => setForm(s => ({ ...s, mode: v as any }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="token">Colar token (criptografado no banco)</SelectItem>
+                  <SelectItem value="secret_name">Usar nome de segredo (variável de ambiente)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+            {form.mode === 'token' ? (
+              <div className="col-span-4">
+                <Label>Token do Hub Fiscal</Label>
+                <Input
+                  type="password"
+                  autoComplete="new-password"
+                  value={form.token}
+                  onChange={e => setForm(s => ({ ...s, token: e.target.value }))}
+                  placeholder="Cole aqui o token deste CNPJ"
+                />
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Enviado por HTTPS ao backend, criptografado com AES-GCM e armazenado. Nunca é devolvido para a tela.
+                </p>
+              </div>
+            ) : (
+              <div className="col-span-4">
+                <Label>Nome do segredo</Label>
+                <Input
+                  value={form.secret_name}
+                  onChange={e => setForm(s => ({ ...s, secret_name: e.target.value }))}
+                  placeholder="HUB_FISCAL_KEY_..."
+                />
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  O valor do segredo precisa existir como variável de ambiente do backend com esse nome.
+                </p>
+              </div>
+            )}
           </div>
-          <Button size="sm" disabled={!form.secret_name || save.isPending}
-            onClick={() => save.mutate({ ...form, emitter_id: emitter.id } as any)}>
+          <Button
+            size="sm"
+            disabled={saving || (form.mode === 'token' ? form.token.trim().length < 8 : !form.secret_name.trim())}
+            onClick={handleAdd}
+          >
             <Plus className="h-3 w-3 mr-1" />Adicionar
           </Button>
         </div>
