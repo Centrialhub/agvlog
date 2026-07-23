@@ -2623,6 +2623,7 @@ export type Database = {
           cte_series: string | null
           cte_type: string
           driver_name: string | null
+          emitter_id: string | null
           fiscal_document_ids: string[] | null
           freight_value: number
           grouping_keys: Json | null
@@ -2698,6 +2699,7 @@ export type Database = {
           cte_series?: string | null
           cte_type?: string
           driver_name?: string | null
+          emitter_id?: string | null
           fiscal_document_ids?: string[] | null
           freight_value?: number
           grouping_keys?: Json | null
@@ -2773,6 +2775,7 @@ export type Database = {
           cte_series?: string | null
           cte_type?: string
           driver_name?: string | null
+          emitter_id?: string | null
           fiscal_document_ids?: string[] | null
           freight_value?: number
           grouping_keys?: Json | null
@@ -2836,6 +2839,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cte_documents_emitter_id_fkey"
+            columns: ["emitter_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_emitters"
             referencedColumns: ["id"]
           },
         ]
@@ -5493,6 +5503,7 @@ export type Database = {
           delivery_meta: Json
           document_type: string
           dynamic_lot: string | null
+          emitter_id: string | null
           fiscal_model: string | null
           freight_breakdown: Json | null
           freight_cif_value: number | null
@@ -5553,6 +5564,7 @@ export type Database = {
           delivery_meta?: Json
           document_type?: string
           dynamic_lot?: string | null
+          emitter_id?: string | null
           fiscal_model?: string | null
           freight_breakdown?: Json | null
           freight_cif_value?: number | null
@@ -5613,6 +5625,7 @@ export type Database = {
           delivery_meta?: Json
           document_type?: string
           dynamic_lot?: string | null
+          emitter_id?: string | null
           fiscal_model?: string | null
           freight_breakdown?: Json | null
           freight_cif_value?: number | null
@@ -5665,6 +5678,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fiscal_documents_emitter_id_fkey"
+            columns: ["emitter_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_emitters"
             referencedColumns: ["id"]
           },
           {
@@ -6289,6 +6309,60 @@ export type Database = {
           },
         ]
       }
+      hub_fiscal_credentials: {
+        Row: {
+          created_at: string
+          doc_scope: string
+          emitter_id: string
+          enabled: boolean
+          environment: string
+          id: string
+          metadata: Json
+          secret_name: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          doc_scope?: string
+          emitter_id: string
+          enabled?: boolean
+          environment?: string
+          id?: string
+          metadata?: Json
+          secret_name: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          doc_scope?: string
+          emitter_id?: string
+          enabled?: boolean
+          environment?: string
+          id?: string
+          metadata?: Json
+          secret_name?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hub_fiscal_credentials_emitter_id_fkey"
+            columns: ["emitter_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_emitters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hub_fiscal_credentials_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hub_fiscal_emissions: {
         Row: {
           access_key: string | null
@@ -6301,6 +6375,7 @@ export type Database = {
           cte_document_id: string | null
           doc_type: string
           emitter_cnpj: string | null
+          emitter_id: string | null
           environment: string
           external_id: string | null
           fiscal_document_id: string | null
@@ -6335,6 +6410,7 @@ export type Database = {
           cte_document_id?: string | null
           doc_type: string
           emitter_cnpj?: string | null
+          emitter_id?: string | null
           environment?: string
           external_id?: string | null
           fiscal_document_id?: string | null
@@ -6369,6 +6445,7 @@ export type Database = {
           cte_document_id?: string | null
           doc_type?: string
           emitter_cnpj?: string | null
+          emitter_id?: string | null
           environment?: string
           external_id?: string | null
           fiscal_document_id?: string | null
@@ -6398,6 +6475,13 @@ export type Database = {
             columns: ["cte_document_id"]
             isOneToOne: false
             referencedRelation: "cte_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hub_fiscal_emissions_emitter_id_fkey"
+            columns: ["emitter_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_emitters"
             referencedColumns: ["id"]
           },
           {
@@ -9020,6 +9104,7 @@ export type Database = {
           description: string | null
           doc_substituido: string | null
           doc_type: string
+          emitter_id: string | null
           fiscal_document_ids: string[] | null
           id: string
           internal_number: string | null
@@ -9105,6 +9190,7 @@ export type Database = {
           description?: string | null
           doc_substituido?: string | null
           doc_type?: string
+          emitter_id?: string | null
           fiscal_document_ids?: string[] | null
           id?: string
           internal_number?: string | null
@@ -9190,6 +9276,7 @@ export type Database = {
           description?: string | null
           doc_substituido?: string | null
           doc_type?: string
+          emitter_id?: string | null
           fiscal_document_ids?: string[] | null
           id?: string
           internal_number?: string | null
@@ -9244,7 +9331,15 @@ export type Database = {
           verification_code?: string | null
           xml_url?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "nfse_documents_emitter_id_fkey"
+            columns: ["emitter_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_emitters"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       nfse_events: {
         Row: {
@@ -9351,6 +9446,7 @@ export type Database = {
         Row: {
           branch_code: string
           created_at: string
+          emitter_id: string | null
           id: string
           next_number: number
           series: string
@@ -9360,6 +9456,7 @@ export type Database = {
         Insert: {
           branch_code?: string
           created_at?: string
+          emitter_id?: string | null
           id?: string
           next_number?: number
           series?: string
@@ -9369,13 +9466,22 @@ export type Database = {
         Update: {
           branch_code?: string
           created_at?: string
+          emitter_id?: string | null
           id?: string
           next_number?: number
           series?: string
           tenant_id?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "nfse_sequences_emitter_id_fkey"
+            columns: ["emitter_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_emitters"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       occurrence_report_export_items: {
         Row: {
@@ -12524,6 +12630,71 @@ export type Database = {
           },
         ]
       }
+      tenant_emitters: {
+        Row: {
+          active: boolean
+          branch_code: string
+          city_code: string | null
+          cnpj: string
+          created_at: string
+          endereco: Json
+          id: string
+          ie: string | null
+          im: string | null
+          is_default: boolean
+          logo_url: string | null
+          nome_fantasia: string | null
+          razao_social: string
+          regime_tributario: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          branch_code?: string
+          city_code?: string | null
+          cnpj: string
+          created_at?: string
+          endereco?: Json
+          id?: string
+          ie?: string | null
+          im?: string | null
+          is_default?: boolean
+          logo_url?: string | null
+          nome_fantasia?: string | null
+          razao_social: string
+          regime_tributario?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          branch_code?: string
+          city_code?: string | null
+          cnpj?: string
+          created_at?: string
+          endereco?: Json
+          id?: string
+          ie?: string | null
+          im?: string | null
+          is_default?: boolean
+          logo_url?: string | null
+          nome_fantasia?: string | null
+          razao_social?: string
+          regime_tributario?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_emitters_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenant_feature_policy: {
         Row: {
           created_at: string
@@ -14655,6 +14826,10 @@ export type Database = {
       }
       next_nfse_number: {
         Args: { _branch_code?: string; _series?: string; _tenant_id: string }
+        Returns: number
+      }
+      next_nfse_number_by_emitter: {
+        Args: { _emitter_id: string; _series: string; _tenant_id: string }
         Returns: number
       }
       next_occurrence_return_sheet_number: {

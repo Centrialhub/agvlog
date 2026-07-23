@@ -9,6 +9,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Plus, Trash2 } from 'lucide-react';
 import { useCreateNFSe, useUpdateNFSe, type NFSeDoc } from '@/hooks/useNFSe';
+import { useEmitters } from '@/hooks/useEmitters';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 
 interface NFSeItem {
@@ -32,6 +34,7 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
   const create = useCreateNFSe();
   const update = useUpdateNFSe();
   const editing = !!initial?.id;
+  const { data: emitters = [] } = useEmitters();
 
   const [form, setForm] = useState<any>({});
   const [items, setItems] = useState<NFSeItem[]>([]);
@@ -40,6 +43,7 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
     if (!open) return;
     setForm({
       branch_code: initial?.branch_code || 'MATRIZ',
+      emitter_id: (initial as any)?.emitter_id ?? null,
       series: initial?.series || '1',
       doc_type: initial?.doc_type || 'NFS',
       situacao_doc: initial?.situacao_doc || '00',
@@ -144,9 +148,26 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
 
           <TabsContent value="gerais" className="space-y-4 pt-4">
             <div className="grid grid-cols-6 gap-3">
+              <div className="col-span-3">
+                <Label>Emitente Fiscal</Label>
+                <Select value={form.emitter_id || ''} onValueChange={v => {
+                  const em = emitters.find(e => e.id === v);
+                  setField('emitter_id', v);
+                  if (em?.branch_code) setField('branch_code', em.branch_code);
+                }}>
+                  <SelectTrigger><SelectValue placeholder={emitters.length ? 'Selecione o emitente' : 'Cadastre um emitente em Configurações'} /></SelectTrigger>
+                  <SelectContent>
+                    {emitters.filter(e => e.active).map(e => (
+                      <SelectItem key={e.id} value={e.id}>
+                        {e.razao_social} — CNPJ {e.cnpj} {e.is_default ? '(padrão)' : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <div><Label>Tipo Doc</Label><Input value={form.doc_type || ''} onChange={e => setField('doc_type', e.target.value)} /></div>
               <div><Label>Série</Label><Input value={form.series || ''} onChange={e => setField('series', e.target.value)} /></div>
-              <div><Label>Filial</Label><Input value={form.branch_code || ''} onChange={e => setField('branch_code', e.target.value)} /></div>
+              <div><Label>Filial</Label><Input value={form.branch_code || ''} onChange={e => setField('branch_code', e.target.value)} disabled={!!form.emitter_id} /></div>
               <div><Label>Situação Doc</Label><Input value={form.situacao_doc || ''} onChange={e => setField('situacao_doc', e.target.value)} /></div>
               <div><Label>Data Emissão</Label><Input type="date" value={form.issue_date || ''} onChange={e => setField('issue_date', e.target.value)} /></div>
               <div className="flex items-end gap-2"><Checkbox checked={!!form.is_preview} onCheckedChange={v => setField('is_preview', !!v)} /><Label>Previsão</Label></div>
