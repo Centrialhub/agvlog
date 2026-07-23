@@ -426,7 +426,14 @@ export default function Billing() {
           <CardTitle className="text-base">1. Selecione a base de faturamento</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Tabs value={tab} onValueChange={(v) => setTab(v as SourceTab)}>
+          <Tabs
+            value={tab}
+            onValueChange={(v) => {
+              const next = v as SourceTab;
+              setTab(next);
+              if (next === 'period') setClientId(SENTINEL_NONE);
+            }}
+          >
             <TabsList>
               <TabsTrigger value="period">Por fornecedor / período</TabsTrigger>
               <TabsTrigger value="loads">Por cargas</TabsTrigger>
