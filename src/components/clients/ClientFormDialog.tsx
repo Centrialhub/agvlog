@@ -50,19 +50,27 @@ function clientToForm(c?: Client | null): FormState {
 const onlyDigits = (s: string) => s.replace(/\D/g, '');
 
 export function ClientFormDialog({
-  open, onOpenChange, client, onSave,
+  open, onOpenChange, client, onSave, defaultKind,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   client?: Client | null;
   onSave: (values: any) => Promise<void> | void;
+  defaultKind?: 'client' | 'supplier';
 }) {
   const [form, setForm] = useState<FormState>(clientToForm(client));
   const [lookupLoading, setLookupLoading] = useState(false);
   const { toast } = useToast();
   const { currentTenant } = useTenant();
 
-  useEffect(() => { setForm(clientToForm(client)); }, [client, open]);
+  useEffect(() => {
+    const base = clientToForm(client);
+    if (!client && defaultKind === 'supplier') {
+      base.is_client = false;
+      base.is_supplier = true;
+    }
+    setForm(base);
+  }, [client, open, defaultKind]);
 
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) =>
     setForm(prev => ({ ...prev, [k]: v }));
