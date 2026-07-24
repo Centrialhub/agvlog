@@ -176,9 +176,12 @@ export default function PortalShipmentDetail() {
             <CardContent className="p-4 text-xs space-y-2">
               <Field label="NF-e" value={doc.invoice_number || doc.access_key?.slice(0, 8)} />
               {load?.load_number && <Field label="Carga" value={load.load_number} />}
-              <p className="text-muted-foreground text-[11px] mt-2">
-                Download de arquivos XML/PDF será habilitado quando os arquivos estiverem disponíveis no armazenamento.
-              </p>
+              <div className="pt-2">
+                <PortalEmptyState
+                  title="Downloads indisponíveis"
+                  description="XML/PDF ainda não disponibilizados no armazenamento. Utilize a aba Canhotos para baixar o POD quando disponível."
+                />
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

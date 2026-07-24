@@ -31,7 +31,7 @@ export default function PortalPickups() {
   const canRequest = hasAnyPermission(access, 'can_request_pickup');
   const requestableClients = access.filter(a => a.can_request_pickup);
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const { data: pickups = [], isLoading } = usePortalPickups({
+  const { data: pickups = [], isLoading, error, refetch } = usePortalPickups({
     status: statusFilter === 'all' ? undefined : statusFilter,
   });
   const [open, setOpen] = useState(false);
@@ -142,6 +142,11 @@ export default function PortalPickups() {
         <CardContent className="p-0">
           {isLoading ? (
             <div className="p-8 text-center text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></div>
+          ) : error ? (
+            <div className="p-4 text-xs text-destructive flex items-center justify-between gap-3">
+              <span>Erro ao carregar coletas: {(error as Error).message}</span>
+              <Button size="sm" variant="outline" onClick={() => refetch()}>Tentar novamente</Button>
+            </div>
           ) : pickups.length === 0 ? (
             <PortalEmptyState title="Nenhuma coleta" description="Você ainda não tem coletas registradas." />
           ) : (

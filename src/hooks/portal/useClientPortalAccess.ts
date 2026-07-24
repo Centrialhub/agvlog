@@ -30,6 +30,9 @@ export function useClientPortalAccess() {
       if (!detailed.error && detailed.data) {
         return (detailed.data as PortalAccess[]) || [];
       }
+      if (detailed.error) {
+        console.warn('[portal] detailed access RPC failed, falling back', detailed.error);
+      }
       const { data, error } = await supabase.rpc('get_user_client_access', {
         _tenant_id: currentTenant.id,
       });

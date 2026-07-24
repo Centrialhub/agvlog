@@ -3,6 +3,9 @@ import { Link } from 'react-router-dom';
 import { PortalSection } from '@/components/portal/PortalLayout';
 import { PortalEmptyState } from '@/components/portal/PortalEmptyState';
 import { usePortalDocuments } from '@/hooks/portal/usePortalDocuments';
+import { usePortalClientScope } from '@/hooks/portal/usePortalClientScope';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AlertTriangle } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -20,13 +23,15 @@ const TYPES = [
 ];
 
 export default function PortalDocuments() {
+  const { can } = usePortalClientScope();
+  const showFinancial = can('can_view_financial');
   const [search, setSearch] = useState('');
   const [type, setType] = useState('all');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [page, setPage] = useState(0);
   const limit = 50;
-  const { data: docs = [], isLoading } = usePortalDocuments({
+  const { data: docs = [], isLoading, error, refetch } = usePortalDocuments({
     document_type: type === 'all' ? undefined : type,
     search: search.length >= 2 ? search : undefined,
     start: startDate || undefined,
@@ -63,6 +68,16 @@ export default function PortalDocuments() {
         <CardContent className="p-0">
           {isLoading ? (
             <div className="p-8 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></div>
+          ) : error ? (
+            <div className="p-4">
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription className="flex items-center justify-between gap-3">
+                  <span>Erro ao carregar documentos: {(error as Error).message}</span>
+                  <Button size="sm" variant="outline" onClick={() => refetch()}>Tentar novamente</Button>
+                </AlertDescription>
+              </Alert>
+            </div>
           ) : docs.length === 0 ? (
             <PortalEmptyState title="Nenhum documento" description="Não encontramos documentos para os filtros aplicados." />
           ) : (
@@ -75,7 +90,7 @@ export default function PortalDocuments() {
                   <TableHead>Remetente</TableHead>
                   <TableHead>Destinatário</TableHead>
                   <TableHead>Destino</TableHead>
-                  <TableHead className="text-right">Valor</TableHead>
+                  {showFinancial && <TableHead className="text-right">Valor</TableHead>}
                   <TableHead>Status</TableHead>
                   <TableHead>POD</TableHead>
                   <TableHead className="w-8" />
@@ -94,7 +109,9 @@ export default function PortalDocuments() {
                     <TableCell className="max-w-[180px] truncate">{d.remitter || '—'}</TableCell>
                     <TableCell className="max-w-[180px] truncate">{d.recipient || '—'}</TableCell>
                     <TableCell className="text-xs">{[d.recipient_city, d.recipient_state].filter(Boolean).join(' / ') || '—'}</TableCell>
-                    <TableCell className="text-right font-mono">{d.value ? d.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'}</TableCell>
+                    {showFinancial && (
+                      <TableCell className="text-right font-mono">{d.value ? d.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'}</TableCell>
+                    )}
                     <TableCell><Badge variant="outline">{d.status || '—'}</Badge></TableCell>
                     <TableCell>{d.has_pod && <FileCheck2 className="h-4 w-4 text-green-600" />}</TableCell>
                     <TableCell>

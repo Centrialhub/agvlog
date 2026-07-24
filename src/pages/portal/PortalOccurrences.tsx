@@ -32,7 +32,7 @@ export default function PortalOccurrences() {
   const openableClients = access.filter(a => a.can_open_occurrences);
   const [severity, setSeverity] = useState<string>('all');
   const [resolved, setResolved] = useState<string>('all');
-  const { data: occurrences = [], isLoading } = usePortalOccurrences({
+  const { data: occurrences = [], isLoading, error, refetch } = usePortalOccurrences({
     severity: severity === 'all' ? undefined : severity,
     resolved: resolved === 'all' ? undefined : resolved === 'yes',
   });
@@ -99,7 +99,7 @@ export default function PortalOccurrences() {
                     <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                     <SelectContent>
                       {openableClients.map(c => (
-                        <SelectItem key={c.client_id} value={c.client_id}>{c.client_id.slice(0, 8)}</SelectItem>
+                        <SelectItem key={c.client_id} value={c.client_id}>{c.client_name || c.client_id.slice(0, 8)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -139,6 +139,11 @@ export default function PortalOccurrences() {
 
       {isLoading ? (
         <div className="p-8 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></div>
+      ) : error ? (
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive flex items-center justify-between gap-3">
+          <span>Erro ao carregar ocorrências: {(error as Error).message}</span>
+          <Button size="sm" variant="outline" onClick={() => refetch()}>Tentar novamente</Button>
+        </div>
       ) : occurrences.length === 0 ? (
         <PortalEmptyState title="Sem ocorrências" description="Nenhuma ocorrência registrada para os filtros selecionados." />
       ) : (
@@ -167,11 +172,13 @@ export default function PortalOccurrences() {
                     {format(new Date(o.created_at), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
                   </div>
                 </div>
+                {canOpen && (
                 <div className="mt-3 flex justify-end">
                   <Button size="sm" variant="outline" onClick={() => setThreadId(o.id)}>
                     <MessageSquare className="h-4 w-4 mr-2" /> Conversar
                   </Button>
                 </div>
+                )}
               </CardContent>
             </Card>
           ))}

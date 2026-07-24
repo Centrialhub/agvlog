@@ -75,7 +75,7 @@ export default function PortalShipments() {
     offset: page * limit,
   }), [debouncedSearch, startDate, endDate, city, state, activeChip, hasPodFilter, hasOccurrenceFilter, page, selectedClientId]);
 
-  const { data, isLoading } = usePortalShipments(filters);
+  const { data, isLoading, error, refetch } = usePortalShipments(filters);
 
   const rows = data?.rows ?? [];
   const total = data?.total ?? 0;
@@ -134,6 +134,11 @@ export default function PortalShipments() {
       {isLoading ? (
         <div className="flex justify-center py-10">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
+      ) : error ? (
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive flex items-center justify-between gap-3">
+          <span>Erro ao carregar mercadorias: {(error as Error).message}</span>
+          <Button size="sm" variant="outline" onClick={() => refetch()}>Tentar novamente</Button>
         </div>
       ) : rows.length === 0 ? (
         <PortalEmptyState

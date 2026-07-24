@@ -24,6 +24,11 @@ export function usePortalOccurrenceMessages(occurrenceId: string | null) {
       return (data as PortalOccurrenceMessage[]) || [];
     },
     enabled: !!currentTenant && !!occurrenceId,
+    // Polling curto enquanto o diálogo está aberto — a tabela usa deny-all RLS,
+    // então postgres_changes não entrega eventos ao cliente. Refetch a cada 5s
+    // dá a percepção de tempo real sem exigir política extra.
+    refetchInterval: occurrenceId ? 5000 : false,
+    refetchIntervalInBackground: false,
   });
 }
 
