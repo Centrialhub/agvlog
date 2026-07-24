@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { MapPin, Navigation, CheckCircle, Clock, ArrowRight } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import DemoBanner from '@/components/driver/DemoBanner';
 import { canUseDriverDemo } from '@/lib/driver/demoMode';
 import { isStopTerminal, STOP_STATUS_LABELS } from '@/lib/status';
