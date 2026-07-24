@@ -86,6 +86,7 @@ export function useCteDocuments(batchId: string | null) {
 
 interface CreateBatchInput {
   client_id: string | null;
+  emitter_id?: string | null;
   grouping_mode: number;
   source_type: 'period' | 'loads';
   period_start?: string | null;
@@ -112,11 +113,29 @@ export function useCreateCteBatch() {
       const totalValue = input.groups.reduce((s, g) => s + g.cargo_value, 0);
       const totalFreight = input.groups.reduce((s, g) => s + g.freight_value, 0);
 
+      // Resolve emitente (override → default ativo) para vincular remetente/CNPJ nos CT-es do lote.
+      let emitter: any = null;
+      if (input.emitter_id) {
+        const { data } = await (supabase as any)
+          .from('tenant_emitters').select('*').eq('id', input.emitter_id).maybeSingle();
+        emitter = data || null;
+      }
+      if (!emitter) {
+        const { data } = await (supabase as any)
+          .from('tenant_emitters').select('*')
+          .eq('tenant_id', currentTenant.id).eq('active', true)
+          .order('is_default', { ascending: false })
+          .order('created_at', { ascending: true })
+          .limit(1);
+        emitter = data?.[0] || null;
+      }
+
       const { data: batch, error: e1 } = await supabase
         .from('cte_batches')
         .insert({
           tenant_id: currentTenant.id,
           client_id: input.client_id,
+          emitter_id: emitter?.id || input.emitter_id || null,
           grouping_mode: input.grouping_mode,
           grouping_mode_label: mode.label,
           source_type: input.source_type,
@@ -145,10 +164,12 @@ export function useCreateCteBatch() {
         return {
           tenant_id: currentTenant.id,
           batch_id: batch.id,
+          emitter_id: emitter?.id || input.emitter_id || null,
           client_id: g.client_id,
           cte_number: `RASCUNHO-${String(idx + 1).padStart(4, '0')}`,
           cte_series: '1',
-          remitter: g.remitter,
+          remitter: emitter?.razao_social || emitter?.nome_fantasia || g.remitter,
+          remitter_cnpj: emitter?.cnpj || null,
           recipient: g.recipient,
           recipient_city: g.recipient_city,
           recipient_state: g.recipient_state,
