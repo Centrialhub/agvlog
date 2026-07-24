@@ -20,8 +20,12 @@ export default function DriverChat() {
   const handleSend = async () => {
     const v = text.trim();
     if (!v || !driver) return;
-    setText('');
-    await send.mutateAsync({ driverId: driver.id, message: v, role: 'driver', name: driver.name });
+    try {
+      await send.mutateAsync({ driverId: driver.id, message: v, role: 'driver', name: driver.name });
+      setText('');
+    } catch {
+      // keep text so the user can retry
+    }
   };
 
   if (loadingDriver) {
