@@ -22,6 +22,7 @@ import { useIssueCTe } from '@/hooks/useIssueCTe';
 import type { CteGroupPreview } from '@/lib/cteGroupingModes';
 import { buildCtePayload, type CteTakerRole, type BuildCtePayloadInput } from '@/lib/fiscal/cteBuilder';
 import type { CteDocType } from '@/lib/fiscal/cteBuilder';
+import { suggestIcmsAliquota, icmsIsentoByCst } from '@/lib/fiscal/icmsAliquota';
 
 interface DriverOpt {
   id: string;
