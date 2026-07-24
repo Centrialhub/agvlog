@@ -131,6 +131,7 @@ export default function Billing() {
   const [modeId, setModeId] = useState<number>(1);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [modeDialogOpen, setModeDialogOpen] = useState(false);
+  const [emitPreviewOpen, setEmitPreviewOpen] = useState(false);
 
   // ===== Filtros avançados (SIAT) =====
   const [osNumber, setOsNumber] = useState('');
