@@ -1,88 +1,79 @@
+## Auditoria — o que está OK e o que quebra
 
-## Objetivo
+### API Hub Fiscal — proxy vs contrato v1 (2026-07-24)
+- `supabase/functions/hub-fiscal-proxy/index.ts` cobre todos os endpoints MVP do CSV (`/hub_documents_emit|get|sync|cancel|cce|email|file|preview|query`), com Bearer por emitente, resolução por scope (`cte`/`nfse`/`all`) e ambiente `sandbox|production`. ✅
+- `resolveToken` **não filtra por `environment`**. Se um emitente tiver credenciais sandbox e produção no mesmo scope, o proxy escolhe aleatoriamente (ordem do result set). Precisa ordenar/filtrar por `environment` explicitamente.
+- `hubFiscal.emit()` monta body sem `callbackUrl` — o Hub cai para `default_callback_url` do api_client. Isso é aceitável, mas o webhook de retorno precisa estar apontando para uma das nossas funções (`hub-fiscal-webhook-in`). Só surfar aviso.
 
-Substituir a geração cega de CT-e (que hoje só grava `fiscal_documents` como rascunho interno) por um fluxo com **prévia editável campo-a-campo** e **transmissão real ao SEFAZ** pelo Hub Fiscal, usando o emitente correto e capturando chave/protocolo/status de retorno.
+### Botões "Gerar CT-e" — hoje o emitente é ignorado em 3 de 4 caminhos
+| Origem | Hook | Passa `emitter_id`? | Chama Hub Fiscal? |
+|---|---|---|---|
+| `/loads/:id` "Confirmar e Gerar CT-e" | `useGenerateCTe` | ❌ Usa `currentTenant.name` como remetente | ❌ Só grava em `fiscal_documents` |
+| `CTeWorkbench` "Gerar CT-e" | `useGenerateCTe` | ❌ | ❌ |
+| `/cte-hub` "Gerar N CT-e(s)" | `useCreateCteBatch` | ❌ Não tem `emitter_id` no batch | ❌ Só cria rascunho interno |
+| `/cte-hub` "Prévia editável & transmitir" | `useIssueCTe` (novo) | ✅ | ✅ |
 
-## Estado atual (o que muda)
+Ou seja: **hoje só a prévia editável usa o emitente escolhido e transmite ao Hub**. Todos os outros botões continuam gerando rascunho interno, ignorando o cadastro de emitentes.
 
-1. `useGenerateCTe` (LoadDetail) e `useCreateCteBatch` (`/cte-hub`) hoje só fazem INSERT em `fiscal_documents` com `remitter = tenant.name`, `recipient = load.destination`, sem consignatário/tomador/motorista/veículo/emitente/natureza/observações e sem prévia editável.
-2. `hub-fiscal-proxy` já tem `action:'emit', type:'cte'` (com resolução por emitente e registro em `hub_fiscal_emissions`), mas **nenhum caller no app envia CT-e** — apenas NFSe hoje.
+### Bugs concretos identificados
+1. **`cte_defaults_for_group` filtra por coluna inexistente `is_active`** — a tabela `tenant_emitters` tem `active`, não `is_active`. Efeito: o RPC devolve `emitter: null` sempre, então a prévia editável não pré-preenche o emitente automaticamente.
+2. **`resolveToken` não considera `environment`** — se houver mais de uma credencial no mesmo scope, o token escolhido pode ser do ambiente errado.
+3. **`cte-sefaz-callback` grava em `cte_documents` (tabela legada)**. CT-es transmitidos pelo novo fluxo vivem em `fiscal_documents` com `hub_document_id`/`emission_id` — não recebem sync automático via callback do Hub. `hub-fiscal-webhook-in` já atualiza `fiscal_documents`, mas o Hub precisa estar configurado para chamar essa função, não a legada.
+4. **`useGenerateCTe` e `useCreateCteBatch`** não aceitam nem persistem `emitter_id` — os operadores não conseguem escolher CNPJ emitente no fluxo tradicional.
+5. **Dialog `CteEmissionPreviewDialog`** trava `environment: 'sandbox'` no builder (linha 133). Precisa ler do `hub_fiscal_credentials.environment` do emitente/scope selecionado (ou expor toggle na UI).
 
-## Escopo desta rodada
+## Correções propostas
 
-### 1. Modelo de dados
+### 1. Corrigir `cte_defaults_for_group` (migration)
+Trocar `e.is_active = true` por `e.active = true` para o RPC voltar a pré-preencher o emitente na prévia editável.
 
-Migration única para dar suporte ao payload completo e ao retorno da SEFAZ:
+### 2. Endurecer resolução de token no proxy
+Em `supabase/functions/hub-fiscal-proxy/index.ts` `resolveToken()`:
+- Aceitar `environment` opcional no payload; filtrar `hub_fiscal_credentials` por `environment` quando informado.
+- Ordenar match por `environment` primeiro, depois `doc_scope` específico > `all`.
+- Log estruturado indicando `environment` escolhido.
 
-- `fiscal_documents`:
-  - `cte_payload jsonb` — snapshot editável e transmitido (remetente, destinatário, consignatário, expedidor, recebedor, tomador, motorista, veículo, natureza, CFOP, observações, NFs referenciadas).
-  - `cte_taker_role text CHECK IN ('remetente','destinatario','expedidor','recebedor','terceiro')`.
-  - `cte_driver_id uuid`, `cte_vehicle_id uuid`, `cte_consignee_client_id uuid` (FK lógicas para auditoria; sem hard FK para não quebrar deleções).
-  - `sefaz_protocol text`, `sefaz_status text`, `sefaz_status_code text`, `sefaz_message text`, `hub_document_id text`, `emission_id uuid` (FK para `hub_fiscal_emissions`).
-  - `status` passa a aceitar `'draft' | 'transmitting' | 'authorized' | 'rejected' | 'cancelled'` para CT-e outbound; migração dos "confirmed" antigos permanece intocada.
-- RPC `cte_defaults_for_group(load_ids uuid[], mode text)` retornando pré-preenchimento (emitente padrão do tenant, remetente = maior remetente das NFs agrupadas, destinatário = cliente final, motorista/veículo da viagem/carga, consignatário = cliente do pagador, natureza padrão "PRESTAÇÃO DE SERVIÇO DE TRANSPORTE").
-- Índices auxiliares em `access_key` já existentes ficam; adicionar `idx_fd_hub_document_id`.
+### 3. Passar `emitter_id` nos botões legados
+- **`useGenerateCTe`**: aceitar `emitterId?` opcional; se ausente usar `useDefaultEmitter`. Popular `fiscal_documents.emitter_id`, `remitter`/`remitter_cnpj` a partir do `tenant_emitters` selecionado (não `currentTenant.name`).
+- **`useCreateCteBatch`**: aceitar `emitterId?` e propagar para cada rascunho.
+- **`LoadDetail` + `CTeWorkbench` + `Billing.handleGenerate`**: adicionar `Select` de emitente antes do botão "Gerar" usando `useEmitters()`, default = `useDefaultEmitter()`. Manter comportamento atual (rascunho interno) — só passar a respeitar o emitente escolhido.
 
-### 2. Builder de payload Hub Fiscal (`src/lib/fiscal/cteBuilder.ts`)
+### 4. Prévia editável: environment dinâmico
+- Adicionar hook `useHubCredentials(emitterId, 'cte')` no `CteEmissionPreviewDialog` para ler o `environment` da credencial CT-e ativa e passar ao builder em vez de fixar `sandbox`.
+- Mostrar badge "SANDBOX" / "PRODUÇÃO" no cabeçalho de cada CT-e para o operador ter feedback.
+- Repassar `environment` também para o `hubFiscal.emit()` (via `body.environment`) — já existe, só garantir consistência.
 
-Função pura `buildCtePayload(input) → { payload, warnings, missing }`:
+### 5. Callback SEFAZ: apontar novo fluxo para `fiscal_documents`
+Duas opções (escolher no build):
+- **A**: Estender `cte-sefaz-callback` para tentar update também em `fiscal_documents` quando o `id`/`accessKey` não bater em `cte_documents`.
+- **B** *(recomendado)*: Deprecar `cte-sefaz-callback` e apontar a config do Hub Fiscal para `hub-fiscal-webhook-in` (que já mapeia para `fiscal_documents`). Deixar `cte-sefaz-callback` só como fallback dos rascunhos legados em `cte_documents`.
 
-- Recebe grupo (NFs, load(s), emitente, motorista, veículo, consignatário, tomador, natureza, observações, frete + breakdown).
-- Monta o corpo exato esperado pelo Hub (`/hub_documents_emit?type=cte`): emitente (CNPJ, IE, endereço), remetente/destinatário/expedidor/recebedor/consignatário (CNPJ/CPF + endereço), tomador com `toma3/toma4`, veículo (placa/UF/renavam), motorista (CPF/nome), CFOP (por UF), natureza, valores (base cálculo IBS/CBS já calculados), NFs referenciadas (chave + série + número).
-- Validação Zod local antes de submeter — lista campos faltantes de forma amigável.
-- Coberto por testes unitários (`src/test/cteBuilder.test.ts`).
+### 6. Diagnóstico visível ao operador
+- Botão "Testar credencial" (`hubFiscal.ping(emitterId, 'cte')`) no card de emissão do `/cte-hub`, retornando `source` (`ciphertext`/`secret_name`/`default`), scope efetivamente casado e ambiente.
+- Alerta no dialog quando o emitente escolhido não tem credencial CT-e ativa (fallback para token default = risco de emissão pelo CNPJ errado).
 
-### 3. UI — Prévia editável (`/cte-hub` e LoadDetail)
+### 7. Testes de regressão
+- Unit test em `cteBuilder` cobrindo: taker `terceiro` sem `takerParty`, ausência de motorista/veículo, NFs sem chave (warning), payload final tem `emitterCnpj` e `payload.emitente.cnpj`.
+- Test do `resolveToken` (integration deno) com credencial dupla sandbox/produção garantindo escolha correta por ambiente.
 
-Refatorar o diálogo "Prévia dos CT-es a gerar" (Billing.tsx L847-887) em novo componente `CteEmissionPreviewDialog.tsx`:
+## Arquivos afetados
+```
+supabase/migrations/<nova>.sql              # fix cte_defaults_for_group (active)
+supabase/functions/hub-fiscal-proxy/index.ts # environment no resolveToken + logs
+supabase/functions/cte-sefaz-callback/index.ts # fallback opcional p/ fiscal_documents (opção A)
+src/hooks/useGenerateCTe.tsx                # aceitar emitterId + preencher remitter
+src/hooks/useBilling.tsx                    # useCreateCteBatch aceitar emitterId
+src/hooks/useEmitters.tsx                   # já expõe useHubCredentials — reusar
+src/pages/LoadDetail.tsx                    # Select de emitente antes de Gerar
+src/pages/Billing.tsx                       # Select de emitente + repasse ao batch
+src/components/loads/CTeWorkbench.tsx       # Select de emitente
+src/components/billing/CteEmissionPreviewDialog.tsx # environment dinâmico + badge + ping
+src/test/cteBuilder.test.ts                 # cobertura de validação
+```
 
-- Lista à esquerda: um CT-e por linha (do `buildGroups`) com badge de status de validação (verde = pronto, amarelo = faltam campos, vermelho = bloqueado).
-- Painel à direita com abas:
-  1. **Partes** — Emitente (select `tenant_emitters`), Remetente, Destinatário, Consignatário (select `clients`), Expedidor, Recebedor.
-  2. **Tomador** — radio `remetente|destinatario|expedidor|recebedor|terceiro`; se "terceiro", campos de CNPJ/endereço.
-  3. **Transporte** — Motorista (select `drivers` do tenant), Veículo (select `vehicles`), placa, UF, RENAVAM.
-  4. **Carga & valores** — resumo de NFs, pesos, pallets, frete (override permitido com motivo — já existe `freight_overridden`).
-  5. **Fiscal** — natureza da operação, CFOP, observações livres, série/número previstos.
-- Botão "Recalcular padrões" chama `cte_defaults_for_group`.
-- Botão "Salvar rascunho" grava `cte_payload` sem transmitir (`status='draft'`).
-- Botão "Transmitir X CT-es" só habilita quando todos passam na validação.
+## Fora de escopo
+- Não altero schema além do fix `is_active`→`active`.
+- Não removo `cte-sefaz-callback` nem `cte_documents` (mantém compat com rascunhos legados).
+- Não implemento CC-e/inutilização/DFe pela UI — proxy já expõe, integração de UI fica para etapa posterior.
 
-O botão de LoadDetail passa a abrir o mesmo diálogo com um único grupo.
-
-### 4. Transmissão
-
-Novo hook `useIssueCTe.tsx` (espelha `useIssueNFSe`):
-
-- Para cada grupo confirmado: `supabase.functions.invoke('hub-fiscal-proxy', { body: { action:'emit', type:'cte', emitterId, body: payload, fiscalDocumentId }})`.
-- Antes de invocar: cria/atualiza a linha em `fiscal_documents` com `status='transmitting'` e `cte_payload = payload` (para termos rastro se o edge falhar).
-- Após retorno: grava `hub_document_id`, `emission_id`, `access_key`, `sefaz_protocol`, `sefaz_status`, `status` final. Reaproveita `hub_fiscal_emissions` já preenchido pelo proxy.
-- Sync/cancel: novos hooks `useSyncCTe` e `useCancelCTe` (invocam `action:'get'|'sync'|'cancel'` no mesmo proxy).
-- A edge `cte-sefaz-callback` já existente é ajustada para propagar mudanças de status assíncronas para `fiscal_documents` via `hub_document_id`.
-
-### 5. Regressão / testes
-
-- `cteBuilder.test.ts`: montagem correta de payload com tomador em cada uma das 5 posições, NFs multi-remetente, override de frete, campos faltantes.
-- `rlsCteEmission.test.ts`: garante que um tenant não emite CT-e com emitter de outro tenant e não lê `hub_fiscal_emissions` alheio.
-- Ajustes nos testes existentes (`Billing.tsx` snapshots) para o novo diálogo.
-
-## Fora do escopo (não faço agora)
-
-- Reescrever `useGenerateCTe` legado para outras finalidades além do CT-e (segue como está, apenas reaproveita o builder).
-- Novos modos de agrupamento além dos 14 já existentes.
-- Impressão do DACTE (o Hub retorna PDF; ficamos apenas com download via `action:'file'` já existente).
-- Fluxo de MDF-e.
-
-## Riscos & mitigações
-
-- **Payload inválido rejeitado pelo SEFAZ** → validação Zod local + status `rejected` com `sefaz_message` visível na tabela; o rascunho fica editável para reemissão.
-- **Emitente sem credencial Hub configurada** → check prévio no diálogo (chama `action:'ping'` do proxy) desabilita "Transmitir".
-- **Idempotência** → antes de transmitir, verifica se já existe `fiscal_document` com mesmo `emission_id` ou `access_key` para o grupo; caso positivo, oferece "sincronizar" em vez de emitir de novo.
-
-## Ordem de implementação
-
-1. Migration (colunas + RPC de defaults).
-2. `cteBuilder.ts` + testes unitários.
-3. `useIssueCTe`, `useSyncCTe`, `useCancelCTe`.
-4. `CteEmissionPreviewDialog.tsx` + integração em `/cte-hub` e LoadDetail.
-5. Ajuste do `cte-sefaz-callback`.
-6. Testes de RLS + regressão.
+Confirma que sigo com esta lista ou quer priorizar só um subconjunto (ex.: só o fix do RPC + wiring do emitente nos botões legados)?
