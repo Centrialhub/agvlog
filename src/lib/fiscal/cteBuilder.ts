@@ -216,6 +216,52 @@ const TAKER_INDEX: Record<CteTakerRole, number> = {
   terceiro: 4,
 };
 
+/**
+ * Serializa o bloco de ICMS no formato esperado pelo Hub Fiscal (nomes alinhados ao layout CT-e SEFAZ):
+ *  - CST (00, 20, 40, 41, 51, 60, 90) ou CSOSN (SN → "90" com indicador Simples)
+ *  - vBC (base de cálculo), pICMS (alíquota %), vICMS (valor)
+ *  - Indicadores: embutido (indICMSTomador), isento
+ */
+function buildIcmsBlock(icms: CteIcms): Record<string, unknown> {
+  const cstRaw = (icms.cst || '').toString().toUpperCase();
+  const isSimples = cstRaw === 'SN' || cstRaw === 'CSOSN';
+  const cst = isSimples ? '90' : cstRaw || '00';
+  const isento = icms.isento === true || cst === '40' || cst === '41' || cst === '51';
+  const aliq = isento ? 0 : Number(icms.aliquota || 0);
+  const base = isento ? 0 : Number(icms.base || 0);
+  const valor = isento
+    ? 0
+    : icms.valor != null
+      ? Number(icms.valor)
+      : Number((base * aliq / 100).toFixed(2));
+
+  const block: Record<string, unknown> = {
+    CST: cst,
+    cst,
+    regime: isSimples ? 'simples' : 'normal',
+    vBC: Number(base.toFixed(2)),
+    pICMS: Number(aliq.toFixed(2)),
+    vICMS: Number(valor.toFixed(2)),
+    // Aliases legíveis mantidos por compatibilidade com o Hub Fiscal atual
+    base: Number(base.toFixed(2)),
+    aliquota: Number(aliq.toFixed(2)),
+    valor: Number(valor.toFixed(2)),
+    embutido: icms.embutido === true,
+    isento,
+  };
+
+  // Substituição tributária (opcional)
+  if (icms.st_base != null || icms.st_aliquota != null || icms.st_valor != null) {
+    block.st = {
+      vBCST: icms.st_base ?? undefined,
+      pICMSST: icms.st_aliquota ?? undefined,
+      vICMSST: icms.st_valor ?? undefined,
+    };
+  }
+
+  return block;
+}
+
 export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadResult {
   const missing: string[] = [];
   const warnings: string[] = [];
