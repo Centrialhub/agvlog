@@ -174,6 +174,7 @@ function groupToEditable(g: CteGroupPreview, defaultEmitterId: string): Editable
     icmsAliquota: 0,
     icmsBase: 0,
     icmsValor: 0,
+    icmsCst: '00',
     cbsAliquota: 0.9,
     ibsAliquota: 0.1,
     cbsIbsBase: 0,
@@ -271,6 +272,7 @@ function toBuildInput(
       helper: e.fcHelper || null,
     },
     icms: {
+      cst: e.icmsCst || null,
       embutido: e.icmsEmbutido,
       isento: e.icmsIsento,
       aliquota: e.icmsAliquota || null,
@@ -887,7 +889,28 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                 </div>
                 <div className="pt-2 border-t">
                   <Label className="text-xs font-semibold">ICMS</Label>
-                  <div className="grid grid-cols-5 gap-2 pt-1 items-end">
+                  <div className="grid grid-cols-6 gap-2 pt-1 items-end">
+                    <div>
+                      <Label className="text-xs">CST</Label>
+                      <select
+                        className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-xs"
+                        value={active.icmsCst}
+                        onChange={(e) => {
+                          const cst = e.target.value;
+                          const isento = cst === '40' || cst === '41' || cst === '51';
+                          patch({ icmsCst: cst, icmsIsento: isento });
+                        }}
+                      >
+                        <option value="00">00 — Tributação normal</option>
+                        <option value="20">20 — Redução de base</option>
+                        <option value="40">40 — Isenta</option>
+                        <option value="41">41 — Não tributada</option>
+                        <option value="51">51 — Diferimento</option>
+                        <option value="60">60 — ICMS cobrado por ST</option>
+                        <option value="90">90 — Outros</option>
+                        <option value="SN">90 CSOSN — Simples Nacional</option>
+                      </select>
+                    </div>
                     <label className="flex items-center gap-1 text-xs">
                       <input type="checkbox" checked={active.icmsEmbutido} onChange={(e) => patch({ icmsEmbutido: e.target.checked })} />
                       Embutido
@@ -909,6 +932,9 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                       <Input type="number" step="0.01" value={active.icmsValor} onChange={(e) => patch({ icmsValor: Number(e.target.value) })} />
                     </div>
                   </div>
+                  <p className="text-[10px] text-muted-foreground pt-1">
+                    Sugestão: recalcule base/valor a partir da alíquota. Base padrão = valor do frete.
+                  </p>
                 </div>
                 <div className="pt-2 border-t">
                   <Label className="text-xs font-semibold">Reforma tributária (CBS/IBS)</Label>
