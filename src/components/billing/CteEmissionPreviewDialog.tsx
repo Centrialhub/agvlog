@@ -201,7 +201,53 @@ function toBuildInput(
   e: EditableCte,
   emitter: any,
   environment: 'sandbox' | 'production' = 'sandbox',
+  clients: any[] = [],
 ): BuildCtePayloadInput {
+  const digits = (v?: string | null) => (v || '').replace(/\D+/g, '');
+  const byCnpj = new Map<string, any>();
+  for (const c of clients) {
+    const k = digits(c?.tax_id);
+    if (k) byCnpj.set(k, c);
+  }
+  function addressFromClient(c: any) {
+    if (!c) return null;
+    return {
+      street: c.address_street || null,
+      number: c.address_number || null,
+      complement: c.address_complement || null,
+      neighborhood: c.address_neighborhood || null,
+      city: c.address_city || null,
+      state: c.address_state || null,
+      zip: c.address_zip || null,
+    };
+  }
+  function enrichParty(
+    name: string,
+    cnpj: string,
+    fallbackAddress?: { city?: string | null; state?: string | null } | null,
+  ) {
+    if (!name) return null;
+    const c = byCnpj.get(digits(cnpj));
+    const addr = addressFromClient(c);
+    return {
+      name,
+      cnpj: cnpj || c?.tax_id || null,
+      ie: c?.state_registration || null,
+      address:
+        addr ||
+        (fallbackAddress
+          ? {
+              street: null,
+              number: null,
+              complement: null,
+              neighborhood: null,
+              city: fallbackAddress.city || null,
+              state: fallbackAddress.state || null,
+              zip: null,
+            }
+          : null),
+    };
+  }
   return {
     emitter: emitter
       ? {
@@ -220,25 +266,14 @@ function toBuildInput(
           },
         }
       : null,
-    remitter: e.remitterName
-      ? { name: e.remitterName, cnpj: e.remitterCnpj || null }
-      : null,
-    recipient: e.recipientName
-      ? {
-          name: e.recipientName,
-          cnpj: e.recipientCnpj || null,
-          address: { city: e.recipientCity || null, state: e.recipientState || null },
-        }
-      : null,
-    consignee: e.consigneeName
-      ? { name: e.consigneeName, cnpj: e.consigneeCnpj || null }
-      : null,
-    expedidor: e.expedidorName
-      ? { name: e.expedidorName, cnpj: e.expedidorCnpj || null }
-      : null,
-    recebedor: e.recebedorName
-      ? { name: e.recebedorName, cnpj: e.recebedorCnpj || null }
-      : null,
+    remitter: enrichParty(e.remitterName, e.remitterCnpj),
+    recipient: enrichParty(e.recipientName, e.recipientCnpj, {
+      city: e.recipientCity,
+      state: e.recipientState,
+    }),
+    consignee: enrichParty(e.consigneeName, e.consigneeCnpj),
+    expedidor: enrichParty(e.expedidorName, e.expedidorCnpj),
+    recebedor: enrichParty(e.recebedorName, e.recebedorCnpj),
     insurer: e.insurerName
       ? {
           name: e.insurerName,
@@ -249,7 +284,7 @@ function toBuildInput(
     takerRole: e.takerRole,
     takerParty:
       e.takerRole === 'terceiro'
-        ? { name: e.takerName, cnpj: e.takerCnpj || null }
+        ? enrichParty(e.takerName, e.takerCnpj)
         : null,
     driver: e.driverName ? { id: e.driverId, name: e.driverName, cpf: e.driverCpf } : null,
     vehicle: e.vehiclePlate
@@ -429,13 +464,13 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
 
   const validation = useMemo(() => {
     if (!active) return { ok: false, missing: [] as string[], warnings: [] as string[] };
-    const r = buildCtePayload(toBuildInput(active, emitterForActive, activeEnvironment));
+    const r = buildCtePayload(toBuildInput(active, emitterForActive, activeEnvironment, clients));
     return { ok: r.ok, missing: r.missing, warnings: r.warnings };
-  }, [active, emitterForActive, activeEnvironment]);
+  }, [active, emitterForActive, activeEnvironment, clients]);
 
   const allValid = items.every((it) => {
     const em = emitters.find((e: any) => e.id === it.emitterId) || defaultEmitter;
-    return buildCtePayload(toBuildInput(it, em)).ok;
+    return buildCtePayload(toBuildInput(it, em, 'sandbox', clients)).ok;
   });
 
   function patch(patch: Partial<EditableCte>) {
@@ -462,7 +497,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
           itCred?.environment === 'production' ? 'production' : 'sandbox';
         try {
           await issueCte.mutateAsync({
-            ...toBuildInput(it, em, itEnv),
+            ...toBuildInput(it, em, itEnv, clients),
             fiscal_document_ids: it.fiscalDocumentIds,
             load_ids: it.loadIds,
             meta: {
@@ -526,7 +561,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
             <div className="space-y-1">
               {items.map((it, i) => {
                 const em = emitters.find((e: any) => e.id === it.emitterId) || defaultEmitter;
-                const ok = buildCtePayload(toBuildInput(it, em)).ok;
+                const ok = buildCtePayload(toBuildInput(it, em, 'sandbox', clients)).ok;
                 return (
                   <button
                     key={it.key}
