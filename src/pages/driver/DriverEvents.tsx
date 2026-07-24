@@ -94,7 +94,7 @@ const FINAL_EVENT_TYPES = new Set([
 
 function mapRowToEvent(row: any): DemoEvent {
   const type: DemoEvent['type'] = FINAL_EVENT_TYPES.has(row.event_type) ? 'finalizador' : 'informativo';
-  const details = row.report_details || {};
+  const details: any = row.report_details || {};
   return {
     id: row.id,
     type,
