@@ -1,64 +1,51 @@
-## Correção end-to-end — App do Motorista
+# Vistoria do app motorista — rodada de correção
 
-Rodada curta e cirúrgica para fechar as 7 lacunas identificadas na auditoria. Sem funcionalidade nova.
+Auditoria confirmou que as bases de segurança (RLS de `fiscal_documents` por motorista, policies do bucket `receipts` por tenant, RPCs SECURITY DEFINER) já estão em ordem. O que sobrou são inconsistências funcionais e pequenos bugs. Correções conservadoras, sem novos módulos.
 
-### 1. `/driver/events` e `/driver/events/:id` — plugar em produção
-- Substituir `DEMO_EVENTS_INITIAL` hardcoded por query real em `operational_events`, filtrando pelo `dispatch_trip_id` da viagem ativa (`useActiveTrip`) e/ou `driver_id` de `useCurrentDriver`.
-- Manter fallback demo apenas quando `canUseDriverDemo === true` e não houver viagem ativa.
-- Detalhe (`/driver/events/:id`): buscar o evento por `id` na mesma tabela; manter botão "Ir para entregas" como CTA secundário.
-- Realtime: assinar `operational_events` (já publicado) filtrado por `dispatch_trip_id`.
+## 1. `DriverDeliveries.tsx` — produtos reais nas paradas
+Hoje `stopProducts` sempre vem do `DEMO_PRODUCTS_BY_STOP` (IDs `demo-1..5`), então **paradas reais nunca listam itens** para devolução parcial/avaria.
+- Buscar itens reais via `load_items` (ou `order_items`) associados ao `stop.load_id` numa nova query dependente de `eventForm.stop`.
+- Fallback para `DEMO_PRODUCTS_BY_STOP` só quando `isDemo === true`.
+- Manter shape (`{ id, name, qty }`) para não mexer no restante do form.
 
-### 2. Realtime — publicar tabelas faltantes
-Migration append-only:
-```sql
-ALTER PUBLICATION supabase_realtime ADD TABLE
-  public.dispatch_stops,
-  public.dispatch_events,
-  public.driver_expenses;
-```
-Adicionar `REPLICA IDENTITY FULL` nas três para payloads completos.
-Nas telas do motorista (`DriverStops`, `DriverJourney`, `DriverExpenses`), acrescentar canal Realtime dentro de `useEffect` com cleanup via `supabase.removeChannel`, invalidando as queries relevantes.
+## 2. `DriverDeliveries.tsx` — chat de evento em produção
+O state `threads` e a resposta simulada do operador estão dentro do branch `if (isDemo)`. Em eventos reais (`driver_create_event` RPC) a UI de chat fica vazia mesmo com o evento persistido.
+- Para eventos reais, após sucesso do RPC, criar entrada em `threads` com o `event_id` retornado e reidratar mensagens via `operational_event_messages` (mesmo padrão já usado por `useEventMessages`).
+- Limpar `threads` no `resetForm` para não crescer indefinidamente na sessão.
 
-### 3. RLS `driver_direct_messages` — endurecer INSERT
-Migration:
-```sql
-ALTER POLICY "tenant members insert driver direct messages"
-  ON public.driver_direct_messages
-  WITH CHECK (is_tenant_member(tenant_id));
-```
-(Mantém USING atual; só adiciona a validação de tenant no INSERT.)
+## 3. `DriverDeliveries.tsx` — upload de POD resiliente
+Loop de upload de fotos (linhas ~347-353) não faz rollback: se a 3ª foto falhar, as 2 primeiras ficam órfãs no bucket sem link com o evento.
+- Uploads em `Promise.allSettled`; se algum falhar, remover os `path` já enviados via `storage.remove()` antes de lançar o toast de erro.
 
-### 4. `proof_of_delivery` — policy SELECT para motorista dono da parada
-Migration:
-```sql
-CREATE POLICY "Driver can read own POD"
-  ON public.proof_of_delivery
-  FOR SELECT
-  TO authenticated
-  USING (driver_owns_stop(stop_id));
-```
-Não altera nada da UI atual; destrava reabertura futura do comprovante no app.
+## 4. `DriverHome.tsx` — mapa com dados reais (mínimo)
+`DriverDeliveryMap` só é montado com `DEMO_MAP_STOPS`/`DEMO_VEHICLE_POS`. Em viagem real fica invisível.
+- Quando houver `trip` real, montar `stops` a partir de `dispatch_stops` já carregado (lat/lng quando presentes) e passar `vehicle` a partir do último ponto conhecido via `positions_last` do veículo da trip. Se lat/lng ausentes, ocultar o card silenciosamente (comportamento adaptativo já usado no resto do sistema).
+- Sem introduzir nova subscrição de posições — leitura simples a cada refetch da home já é suficiente nesta rodada.
 
-### 5. `DriverChat` — só limpar input após sucesso
-Mover `setText('')` para dentro do `onSuccess` da mutation de envio. Em falha, o texto permanece e o toast de erro guia o retry.
+## 5. `DriverChecklist.tsx` — guard de produção e Realtime
+- Aplicar mesmo guard `IS_PROD` do `DriverHome` no cálculo de `isDemo` (evita checklist fictício em produção caso a flag `canUseDriverDemo` esteja mal configurada).
+- Assinar `postgres_changes` em `dispatch_events` filtrado por `trip_id` para atualizar status quando outro dispositivo salvar.
+- Permitir salvar com `checked.size === 0` (habilita reversão de checklist marcado por engano).
 
-### 6. `NoLoadsHelp` — filtrar probe por tenant
-Adicionar `.eq('tenant_id', tenantId)` (via `useTenant`) no `select` que hoje só depende da RLS. Sem mudança de contrato; apenas evita ruído em cenários multi-tenant.
+## 6. `DriverIssues.tsx` — Realtime e critério de demo
+- Padronizar `isDemo` para `!trip && canUseDriverDemo && !IS_PROD` (mesmo critério de `DriverHome`/`DriverDeliveries`).
+- Assinar `postgres_changes` em `operational_events` filtrado por `driver_id` para refletir mudanças (severidade, status) sem reabrir a tela.
 
-### 7. Verificação
-- `bun run build` e `bunx vitest run` (esperado: manter suite atual verde, incluindo `rlsDriverLoads.test.ts` e `rlsCrossTenant.test.ts`).
-- Smoke manual (não bloqueante): abrir `/driver/events` com viagem ativa e confirmar lista real; simular chegada/saída de parada pelo operador e ver a tela do motorista atualizar sem refresh.
+## 7. Componentes pequenos
+- **`SignaturePad.tsx`**: redimensionar o canvas em `resize`/`orientationchange` (recomputar `width/height` e reaplicar `getContext`), e emitir `onChange` também em `pointerleave`/`pointercancel` para não perder assinatura em desmount inesperado.
+- **`DriverLoadNotes.tsx`**: expor `error` da query e mostrar mensagem de erro específica em vez de mascarar como "Nenhuma nota fiscal vinculada".
+- **`DriverHome.tsx`**: `DemoBanner onReset` hoje desliga o demo permanentemente. Renomear ação para deixar claro ("Sair do modo demo") ou alinhar com padrão de reset já aplicado em `DriverEvents`/`DriverEventDetail` (versão que reidrata os dados fake).
 
-### Escopo fora
-- Nenhuma nova tela, RPC ou lógica de negócio.
-- Sem tocar em CT-e, folha, ocorrências RH, portal do cliente ou fiscal hub.
-- Sem refactor estético.
+## Fora de escopo (só registrado)
+- Unificar checklist do motorista (`dispatch_events`) com `operational_checklists`/`checklist_executions` — mudança de modelo, exige rodada dedicada.
+- Ligar `operational_events` do motorista a `incidents` formais para SLA/qualidade.
 
-### Detalhes técnicos
-- Arquivos previstos:
-  - `src/pages/driver/DriverEvents.tsx`, `src/pages/driver/DriverEventDetail.tsx` — trocar demo por query real + realtime.
-  - `src/pages/driver/DriverStops.tsx`, `src/pages/driver/DriverJourney.tsx`, `src/pages/driver/DriverExpenses.tsx` — adicionar canais realtime.
-  - `src/components/driver/DriverChat.tsx` — mover `setText('')` para `onSuccess`.
-  - `src/components/driver/NoLoadsHelp.tsx` — filtro por `tenant_id`.
-  - 1 migration SQL cobrindo publicação realtime + policies (itens 2, 3, 4).
-- Sem alteração em `types.ts` (regenerado automaticamente pela migration).
+## Verificação
+- `bun run build`
+- `bunx vitest run` (esperado: 250 passando, sem novas quebras)
+- Smoke visual no `/driver` (Home, Deliveries com trip real, Checklist, Issues) via preview.
+
+## Detalhes técnicos
+- Reaproveitar `useCurrentDriver` e padrão `useEffect` + `supabase.removeChannel` já em uso em `DriverStops`/`DriverJourney`/`DriverExpenses`.
+- Nenhuma migration necessária — todas as tabelas envolvidas já têm RLS e Realtime habilitados (`loads`, `dispatch_trips`, `dispatch_stops`, `dispatch_events`, `driver_expenses`, `operational_events`).
+- Sem alterações em edge functions, storage ou schema.

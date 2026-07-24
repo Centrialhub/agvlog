@@ -78,6 +78,37 @@ export default function DriverHome() {
     enabled: !!driver,
   });
 
+  // Paradas + posição do veículo para o mapa quando houver viagem real.
+  const primaryTrip: any = activeTrips[0];
+  const { data: realStops = [] } = useQuery({
+    queryKey: ['driver_home_stops', primaryTrip?.id],
+    queryFn: async () => {
+      if (!primaryTrip?.id) return [];
+      const { data, error } = await supabase
+        .from('dispatch_stops')
+        .select('id, stop_order, destination, status, latitude, longitude, clients(company_name)')
+        .eq('dispatch_trip_id', primaryTrip.id)
+        .order('stop_order', { ascending: true });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!primaryTrip?.id,
+  });
+
+  const { data: vehiclePos } = useQuery({
+    queryKey: ['driver_home_vehicle_pos', primaryTrip?.vehicle_id],
+    queryFn: async () => {
+      if (!primaryTrip?.vehicle_id) return null;
+      const { data } = await supabase
+        .from('positions_last')
+        .select('lat, lng')
+        .eq('vehicle_id', primaryTrip.vehicle_id)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!primaryTrip?.vehicle_id,
+  });
+
   // Realtime: refresh assigned loads/trips whenever the driver assignment or status changes.
   useEffect(() => {
     if (!driver?.id) return;
@@ -118,6 +149,28 @@ export default function DriverHome() {
     demoActive &&
     !loading;
   const tripsToShow: any[] = isDemo ? [DEMO_TRIP] : activeTrips;
+
+  // Constrói pontos reais do mapa a partir das paradas com lat/lng.
+  const TERMINAL_STOP_STATUSES = new Set(['completed', 'delivered', 'refused', 'returned', 'failed', 'partial_delivery']);
+  const realMapStops: DeliveryPoint[] = (realStops as any[])
+    .filter((s) => s.latitude != null && s.longitude != null)
+    .map((s, idx) => ({
+      id: s.id,
+      name: s.clients?.company_name || s.destination || `Parada ${idx + 1}`,
+      lat: Number(s.latitude),
+      lng: Number(s.longitude),
+      status: TERMINAL_STOP_STATUSES.has(s.status)
+        ? 'done'
+        : s.status === 'arrived'
+          ? 'current'
+          : 'pending',
+      sequence: s.stop_order ?? idx,
+    }));
+  const realVehicle =
+    vehiclePos && vehiclePos.lat != null && vehiclePos.lng != null
+      ? { lat: Number(vehiclePos.lat), lng: Number(vehiclePos.lng), plate: primaryTrip?.vehicles?.plate || '' }
+      : undefined;
+  const showRealMap = !isDemo && realMapStops.length > 0;
 
   return (
     <div className="space-y-4">
@@ -262,6 +315,35 @@ export default function DriverHome() {
               </Badge>
             </div>
             <DriverDeliveryMap stops={DEMO_MAP_STOPS} vehicle={DEMO_VEHICLE_POS} height={240} />
+            <div className="flex items-center justify-around text-[10px] text-muted-foreground pt-1">
+              <span className="flex items-center gap-1">
+                <span className="h-2.5 w-2.5 rounded-full bg-success" /> Entregue
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="h-2.5 w-2.5 rounded-full bg-primary" /> Atual
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="h-2.5 w-2.5 rounded-full bg-muted-foreground" /> Pendente
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Delivery map com dados reais — só quando há paradas geolocalizadas na viagem. */}
+      {showRealMap && (
+        <Card>
+          <CardContent className="p-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Map className="h-4 w-4 text-primary" />
+                <span className="text-sm font-medium">Mapa das entregas</span>
+              </div>
+              <Badge variant="outline" className="text-[10px]">
+                {realMapStops.filter((s) => s.status === 'done').length}/{realMapStops.length} entregues
+              </Badge>
+            </div>
+            <DriverDeliveryMap stops={realMapStops} vehicle={realVehicle} height={240} />
             <div className="flex items-center justify-around text-[10px] text-muted-foreground pt-1">
               <span className="flex items-center gap-1">
                 <span className="h-2.5 w-2.5 rounded-full bg-success" /> Entregue

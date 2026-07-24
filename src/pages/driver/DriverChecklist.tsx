@@ -11,6 +11,8 @@ import { ClipboardCheck, Save } from 'lucide-react';
 import DemoBanner from '@/components/driver/DemoBanner';
 import { canUseDriverDemo } from '@/lib/driver/demoMode';
 
+const IS_PROD = import.meta.env.PROD;
+
 const PRE_TRIP_ITEMS = [
   'Pneus em bom estado',
   'Nível de óleo verificado',
@@ -103,10 +105,14 @@ function ChecklistSection({
             variant="outline"
             className="w-full text-xs mt-2"
             onClick={() => saveChecklist.mutate()}
-            disabled={saveChecklist.isPending || checked.size === 0}
+            disabled={saveChecklist.isPending}
           >
             <Save className="h-3 w-3 mr-1" />
-            {saveChecklist.isPending ? 'Salvando...' : 'Salvar Checklist'}
+            {saveChecklist.isPending
+              ? 'Salvando...'
+              : checked.size === 0
+                ? 'Salvar (limpar checklist)'
+                : 'Salvar Checklist'}
           </Button>
         )}
       </CardContent>
@@ -119,6 +125,7 @@ export default function DriverChecklist() {
   const { data: driver } = useCurrentDriver();
   const { data: trip } = useActiveTrip(driver?.id);
   const [demoVersion, setDemoVersion] = useState(0);
+  const qc = useQueryClient();
 
   // Load previously saved checklists
   const { data: savedEvents = [] } = useQuery({
@@ -137,7 +144,27 @@ export default function DriverChecklist() {
     enabled: !!trip?.id,
   });
 
-  const isDemo = !trip && canUseDriverDemo;
+  // Em produção nunca usa dados demo, mesmo com flag ligada.
+  const isDemo = !trip && canUseDriverDemo && !IS_PROD;
+
+  // Realtime: se outro dispositivo salvar o checklist, refresca.
+  useEffect(() => {
+    if (!trip?.id) return;
+    const channel = supabase
+      .channel(`driver_checklist_${trip.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'dispatch_events', filter: `dispatch_trip_id=eq.${trip.id}` },
+        () => {
+          qc.invalidateQueries({ queryKey: ['driver_checklist_events', trip.id] });
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [trip?.id, qc]);
+
   const lastPre = savedEvents.find((e: any) => e.event_type === 'checklist_pre');
   const lastPost = savedEvents.find((e: any) => e.event_type === 'checklist_post');
   const preChecked = isDemo

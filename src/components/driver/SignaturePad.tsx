@@ -16,18 +16,34 @@ export default function SignaturePad({ onChange, height = 180 }: SignaturePadPro
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.scale(dpr, dpr);
-    ctx.lineWidth = 2;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.strokeStyle = '#0F172A';
-  }, []);
+    const setup = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      // Preserve current ink when resizing
+      const prev = canvas.toDataURL('image/png');
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      ctx.scale(dpr, dpr);
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = '#0F172A';
+      if (hasInk && prev) {
+        const img = new Image();
+        img.onload = () => ctx.drawImage(img, 0, 0, rect.width, rect.height);
+        img.src = prev;
+      }
+    };
+    setup();
+    window.addEventListener('resize', setup);
+    window.addEventListener('orientationchange', setup);
+    return () => {
+      window.removeEventListener('resize', setup);
+      window.removeEventListener('orientationchange', setup);
+    };
+  }, [hasInk]);
 
   const getPoint = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const rect = canvasRef.current!.getBoundingClientRect();
@@ -55,9 +71,11 @@ export default function SignaturePad({ onChange, height = 180 }: SignaturePadPro
   };
 
   const end = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const wasDrawing = drawingRef.current;
     drawingRef.current = false;
     lastPointRef.current = null;
-    if (hasInk && canvasRef.current) {
+    // Emit sempre que houver tinta OU um traço acabou de ser desenhado
+    if ((hasInk || wasDrawing) && canvasRef.current) {
       onChange(canvasRef.current.toDataURL('image/png'));
     }
   };
