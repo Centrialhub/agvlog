@@ -340,6 +340,22 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
           </DialogTitle>
         </DialogHeader>
 
+        <div className="flex items-center gap-2 text-xs">
+          <Badge variant={activeEnvironment === 'production' ? 'default' : 'secondary'}>
+            {activeEnvironment === 'production' ? 'PRODUÇÃO' : 'SANDBOX'}
+          </Badge>
+          {!activeCteCred && emitterForActive && (
+            <Badge variant="destructive">
+              Sem credencial CT-e — usará token padrão (risco)
+            </Badge>
+          )}
+          {activeCteCred && (
+            <span className="text-muted-foreground">
+              scope: {activeCteCred.doc_scope} · env: {activeCteCred.environment}
+            </span>
+          )}
+        </div>
+
         <div className="grid grid-cols-[220px_1fr] gap-4">
           {/* Navegação entre CT-es */}
           <ScrollArea className="h-[540px] rounded-md border p-2">
