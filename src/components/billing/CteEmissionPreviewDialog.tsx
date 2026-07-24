@@ -21,6 +21,7 @@ import { useTenant } from '@/hooks/useTenant';
 import { useIssueCTe } from '@/hooks/useIssueCTe';
 import type { CteGroupPreview } from '@/lib/cteGroupingModes';
 import { buildCtePayload, type CteTakerRole, type BuildCtePayloadInput } from '@/lib/fiscal/cteBuilder';
+import type { CteDocType } from '@/lib/fiscal/cteBuilder';
 
 interface DriverOpt {
   id: string;
@@ -40,6 +41,13 @@ interface EditableCte {
   consigneeClientId: string | null;
   consigneeName: string;
   consigneeCnpj: string;
+  expedidorName: string;
+  expedidorCnpj: string;
+  recebedorName: string;
+  recebedorCnpj: string;
+  insurerName: string;
+  insurerPolicy: string;
+  insurerEndorsement: string;
   takerRole: CteTakerRole;
   takerName: string;
   takerCnpj: string;
@@ -50,6 +58,13 @@ interface EditableCte {
   vehiclePlate: string;
   vehicleState: string;
   vehicleRenavam: string;
+  vehicleType: string;
+  trailerPlate1: string;
+  trailerPlate2: string;
+  trailerPlate3: string;
+  documentType: CteDocType;
+  refNumber: string;
+  clientOrderNumber: string;
   nature: string;
   cfop: string;
   observations: string;
@@ -57,6 +72,31 @@ interface EditableCte {
   cargoValue: number;
   weightKg: number;
   palletCount: number;
+  // Composição do frete (opcional)
+  fcFreightWeight: number;
+  fcDeliveryFee: number;
+  fcOthers: number;
+  fcInsurance: number;
+  fcDispatch: number;
+  fcGris: number;
+  fcToll: number;
+  fcTracking: number;
+  fcLoading: number;
+  fcHelper: number;
+  // ICMS
+  icmsEmbutido: boolean;
+  icmsIsento: boolean;
+  icmsAliquota: number;
+  icmsBase: number;
+  icmsValor: number;
+  // CBS/IBS
+  cbsAliquota: number;
+  ibsAliquota: number;
+  cbsIbsBase: number;
+  // Mercadoria
+  cargoContent: string;
+  cargoSpecies: string;
+  cargoPredominant: string;
   clientId: string | null;
   invoices: {
     id: string;
@@ -87,6 +127,13 @@ function groupToEditable(g: CteGroupPreview, defaultEmitterId: string): Editable
     consigneeClientId: null,
     consigneeName: '',
     consigneeCnpj: '',
+    expedidorName: '',
+    expedidorCnpj: '',
+    recebedorName: '',
+    recebedorCnpj: '',
+    insurerName: '',
+    insurerPolicy: '',
+    insurerEndorsement: '',
     takerRole: 'destinatario',
     takerName: '',
     takerCnpj: '',
@@ -97,6 +144,13 @@ function groupToEditable(g: CteGroupPreview, defaultEmitterId: string): Editable
     vehiclePlate: '',
     vehicleState: '',
     vehicleRenavam: '',
+    vehicleType: '01',
+    trailerPlate1: '',
+    trailerPlate2: '',
+    trailerPlate3: '',
+    documentType: '01',
+    refNumber: '',
+    clientOrderNumber: '',
     nature: 'PRESTACAO DE SERVICO DE TRANSPORTE',
     cfop: '',
     observations: '',
@@ -104,6 +158,27 @@ function groupToEditable(g: CteGroupPreview, defaultEmitterId: string): Editable
     cargoValue: g.cargo_value,
     weightKg: g.weight_kg,
     palletCount: g.pallet_count,
+    fcFreightWeight: 0,
+    fcDeliveryFee: 0,
+    fcOthers: 0,
+    fcInsurance: 0,
+    fcDispatch: 0,
+    fcGris: 0,
+    fcToll: 0,
+    fcTracking: 0,
+    fcLoading: 0,
+    fcHelper: 0,
+    icmsEmbutido: true,
+    icmsIsento: false,
+    icmsAliquota: 0,
+    icmsBase: 0,
+    icmsValor: 0,
+    cbsAliquota: 0.9,
+    ibsAliquota: 0.1,
+    cbsIbsBase: 0,
+    cargoContent: 'CONFORME NF',
+    cargoSpecies: 'CONFORME NF',
+    cargoPredominant: '',
     clientId: g.client_id,
     invoices: g.documents.map((d: any) => ({
       id: d.id,
@@ -155,6 +230,19 @@ function toBuildInput(
     consignee: e.consigneeName
       ? { name: e.consigneeName, cnpj: e.consigneeCnpj || null }
       : null,
+    expedidor: e.expedidorName
+      ? { name: e.expedidorName, cnpj: e.expedidorCnpj || null }
+      : null,
+    recebedor: e.recebedorName
+      ? { name: e.recebedorName, cnpj: e.recebedorCnpj || null }
+      : null,
+    insurer: e.insurerName
+      ? {
+          name: e.insurerName,
+          policy: e.insurerPolicy || null,
+          endorsement: e.insurerEndorsement || null,
+        }
+      : null,
     takerRole: e.takerRole,
     takerParty:
       e.takerRole === 'terceiro'
@@ -164,6 +252,43 @@ function toBuildInput(
     vehicle: e.vehiclePlate
       ? { id: e.vehicleId, plate: e.vehiclePlate, state: e.vehicleState, renavam: e.vehicleRenavam }
       : null,
+    vehicleType: e.vehicleType || null,
+    additionalPlates: [e.trailerPlate1, e.trailerPlate2, e.trailerPlate3].filter(Boolean),
+    documentType: e.documentType,
+    refNumber: e.refNumber || null,
+    clientOrderNumber: e.clientOrderNumber || null,
+    freightComposition: {
+      freight_weight: e.fcFreightWeight || null,
+      delivery_fee: e.fcDeliveryFee || null,
+      others: e.fcOthers || null,
+      insurance_value: e.fcInsurance || null,
+      dispatch: e.fcDispatch || null,
+      gris: e.fcGris || null,
+      toll: e.fcToll || null,
+      tracking: e.fcTracking || null,
+      loading: e.fcLoading || null,
+      helper: e.fcHelper || null,
+    },
+    icms: {
+      embutido: e.icmsEmbutido,
+      isento: e.icmsIsento,
+      aliquota: e.icmsAliquota || null,
+      base: e.icmsBase || null,
+      valor: e.icmsValor || null,
+    },
+    cbsIbs: {
+      base: e.cbsIbsBase || null,
+      cbs_aliquota: e.cbsAliquota || null,
+      cbs_valor: e.cbsIbsBase && e.cbsAliquota ? Number((e.cbsIbsBase * e.cbsAliquota / 100).toFixed(2)) : null,
+      ibs_aliquota: e.ibsAliquota || null,
+      ibs_valor: e.cbsIbsBase && e.ibsAliquota ? Number((e.cbsIbsBase * e.ibsAliquota / 100).toFixed(2)) : null,
+    },
+    cargo: {
+      content: e.cargoContent || null,
+      species: e.cargoSpecies || null,
+      predominant_product: e.cargoPredominant || null,
+      items_count: e.invoices.length || null,
+    },
     nature: e.nature,
     cfop: e.cfop || null,
     observations: e.observations || null,
@@ -173,6 +298,8 @@ function toBuildInput(
       cargo_value: e.cargoValue,
       weight_kg: e.weightKg,
       pallet_count: e.palletCount,
+      cbs_value: e.cbsIbsBase && e.cbsAliquota ? Number((e.cbsIbsBase * e.cbsAliquota / 100).toFixed(2)) : undefined,
+      ibs_value: e.cbsIbsBase && e.ibsAliquota ? Number((e.cbsIbsBase * e.ibsAliquota / 100).toFixed(2)) : undefined,
     },
   };
 }
@@ -498,6 +625,38 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t">
+                  <div>
+                    <Label>Expedidor (opcional)</Label>
+                    <Input value={active.expedidorName} onChange={(e) => patch({ expedidorName: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label>CNPJ expedidor</Label>
+                    <Input value={active.expedidorCnpj} onChange={(e) => patch({ expedidorCnpj: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label>Recebedor (opcional)</Label>
+                    <Input value={active.recebedorName} onChange={(e) => patch({ recebedorName: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label>CNPJ recebedor</Label>
+                    <Input value={active.recebedorCnpj} onChange={(e) => patch({ recebedorCnpj: e.target.value })} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2 pt-2 border-t">
+                  <div>
+                    <Label>Seguradora</Label>
+                    <Input value={active.insurerName} onChange={(e) => patch({ insurerName: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label>Apólice</Label>
+                    <Input value={active.insurerPolicy} onChange={(e) => patch({ insurerPolicy: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label>Nº averbação</Label>
+                    <Input value={active.insurerEndorsement} onChange={(e) => patch({ insurerEndorsement: e.target.value })} />
+                  </div>
+                </div>
               </TabsContent>
 
               <TabsContent value="tomador" className="space-y-3 pt-3">
@@ -525,8 +684,33 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
               </TabsContent>
 
               <TabsContent value="transporte" className="space-y-3 pt-3">
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <Label>Tipo CT-e</Label>
+                    <Select value={active.documentType} onValueChange={(v: any) => patch({ documentType: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="01">01 — Normal</SelectItem>
+                        <SelectItem value="02">02 — Complementar</SelectItem>
+                        <SelectItem value="03">03 — Anulação</SelectItem>
+                        <SelectItem value="04">04 — Substituição</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Nº Ref</Label>
+                    <Input value={active.refNumber} onChange={(e) => patch({ refNumber: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label>Nº Pedido Cliente</Label>
+                    <Input value={active.clientOrderNumber} onChange={(e) => patch({ clientOrderNumber: e.target.value })} />
+                  </div>
+                </div>
                 <div>
                   <Label>Motorista</Label>
+                  {!active.driverName && (
+                    <Badge variant="secondary" className="ml-2 text-[10px]">Emissão com "."</Badge>
+                  )}
                   <Select
                     value={active.driverId || 'none'}
                     onValueChange={(v) => {
@@ -556,6 +740,9 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                 </div>
                 <div>
                   <Label>Veículo</Label>
+                  {!active.vehiclePlate && (
+                    <Badge variant="secondary" className="ml-2 text-[10px]">Emissão com "."</Badge>
+                  )}
                   <Select
                     value={active.vehicleId || 'none'}
                     onValueChange={(v) => {
@@ -587,6 +774,24 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                     <Input value={active.vehicleRenavam} onChange={(e) => patch({ vehicleRenavam: e.target.value })} />
                   </div>
                 </div>
+                <div className="grid grid-cols-4 gap-2">
+                  <div>
+                    <Label>Tipo veículo</Label>
+                    <Input value={active.vehicleType} onChange={(e) => patch({ vehicleType: e.target.value })} placeholder="01" />
+                  </div>
+                  <div>
+                    <Label>Carreta 1</Label>
+                    <Input value={active.trailerPlate1} onChange={(e) => patch({ trailerPlate1: e.target.value.toUpperCase() })} />
+                  </div>
+                  <div>
+                    <Label>Carreta 2</Label>
+                    <Input value={active.trailerPlate2} onChange={(e) => patch({ trailerPlate2: e.target.value.toUpperCase() })} />
+                  </div>
+                  <div>
+                    <Label>Carreta 3</Label>
+                    <Input value={active.trailerPlate3} onChange={(e) => patch({ trailerPlate3: e.target.value.toUpperCase() })} />
+                  </div>
+                </div>
               </TabsContent>
 
               <TabsContent value="carga" className="space-y-3 pt-3">
@@ -612,6 +817,50 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                       onChange={(e) => patch({ palletCount: Number(e.target.value) })} />
                   </div>
                 </div>
+                <div className="pt-2 border-t">
+                  <Label className="text-xs font-semibold">Mercadoria</Label>
+                  <div className="grid grid-cols-3 gap-2 pt-1">
+                    <div>
+                      <Label className="text-xs">Conteúdo</Label>
+                      <Input value={active.cargoContent} onChange={(e) => patch({ cargoContent: e.target.value })} />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Espécie</Label>
+                      <Input value={active.cargoSpecies} onChange={(e) => patch({ cargoSpecies: e.target.value })} />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Produto predominante</Label>
+                      <Input value={active.cargoPredominant} onChange={(e) => patch({ cargoPredominant: e.target.value })} />
+                    </div>
+                  </div>
+                </div>
+                <div className="pt-2 border-t">
+                  <Label className="text-xs font-semibold">Composição do frete (opcional)</Label>
+                  <div className="grid grid-cols-5 gap-2 pt-1">
+                    {[
+                      ['fcFreightWeight', 'Frete peso'],
+                      ['fcDeliveryFee', 'Valor entrega'],
+                      ['fcOthers', 'Outros'],
+                      ['fcInsurance', 'Seguro (R$)'],
+                      ['fcDispatch', 'Despacho'],
+                      ['fcGris', 'GRIS'],
+                      ['fcToll', 'Pedágio'],
+                      ['fcTracking', 'Rastreamento'],
+                      ['fcLoading', 'Carga/Descarga'],
+                      ['fcHelper', 'Ajudante'],
+                    ].map(([k, label]) => (
+                      <div key={k}>
+                        <Label className="text-xs">{label}</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={(active as any)[k]}
+                          onChange={(e) => patch({ [k]: Number(e.target.value) } as any)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
                 <div>
                   <Label>NFs referenciadas ({active.invoices.length})</Label>
                   <div className="rounded-md border max-h-[200px] overflow-auto text-xs">
@@ -634,6 +883,53 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                 <div>
                   <Label>CFOP</Label>
                   <Input value={active.cfop} onChange={(e) => patch({ cfop: e.target.value })} placeholder="ex.: 5353, 6353" />
+                </div>
+                <div className="pt-2 border-t">
+                  <Label className="text-xs font-semibold">ICMS</Label>
+                  <div className="grid grid-cols-5 gap-2 pt-1 items-end">
+                    <label className="flex items-center gap-1 text-xs">
+                      <input type="checkbox" checked={active.icmsEmbutido} onChange={(e) => patch({ icmsEmbutido: e.target.checked })} />
+                      Embutido
+                    </label>
+                    <label className="flex items-center gap-1 text-xs">
+                      <input type="checkbox" checked={active.icmsIsento} onChange={(e) => patch({ icmsIsento: e.target.checked })} />
+                      Isento
+                    </label>
+                    <div>
+                      <Label className="text-xs">Alíquota %</Label>
+                      <Input type="number" step="0.01" value={active.icmsAliquota} onChange={(e) => patch({ icmsAliquota: Number(e.target.value) })} />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Base</Label>
+                      <Input type="number" step="0.01" value={active.icmsBase} onChange={(e) => patch({ icmsBase: Number(e.target.value) })} />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Valor</Label>
+                      <Input type="number" step="0.01" value={active.icmsValor} onChange={(e) => patch({ icmsValor: Number(e.target.value) })} />
+                    </div>
+                  </div>
+                </div>
+                <div className="pt-2 border-t">
+                  <Label className="text-xs font-semibold">Reforma tributária (CBS/IBS)</Label>
+                  <div className="grid grid-cols-3 gap-2 pt-1">
+                    <div>
+                      <Label className="text-xs">Base (R$)</Label>
+                      <Input type="number" step="0.01" value={active.cbsIbsBase} onChange={(e) => patch({ cbsIbsBase: Number(e.target.value) })} />
+                    </div>
+                    <div>
+                      <Label className="text-xs">CBS % (padrão 0,90)</Label>
+                      <Input type="number" step="0.01" value={active.cbsAliquota} onChange={(e) => patch({ cbsAliquota: Number(e.target.value) })} />
+                    </div>
+                    <div>
+                      <Label className="text-xs">IBS % (padrão 0,10)</Label>
+                      <Input type="number" step="0.01" value={active.ibsAliquota} onChange={(e) => patch({ ibsAliquota: Number(e.target.value) })} />
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground pt-1">
+                    CBS ={' '}
+                    R$ {((active.cbsIbsBase * active.cbsAliquota) / 100).toFixed(2)} · IBS ={' '}
+                    R$ {((active.cbsIbsBase * active.ibsAliquota) / 100).toFixed(2)}
+                  </p>
                 </div>
                 <div>
                   <Label>Observações</Label>

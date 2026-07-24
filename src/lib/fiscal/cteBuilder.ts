@@ -68,6 +68,69 @@ export interface CteReferencedNf {
   weight_kg?: number | null;
 }
 
+export type CteDocType = '01' | '02' | '03' | '04'; // Normal, Complementar, Anulação, Substituição
+
+export interface CteInsurer {
+  name: string;
+  cnpj?: string | null;
+  policy?: string | null;      // apólice
+  endorsement?: string | null; // averbação
+  insured_amount?: number | null;
+}
+
+export interface CteFreightComposition {
+  freight_weight?: number | null;      // frete peso
+  delivery_fee?: number | null;        // valor entrega
+  others?: number | null;
+  insurance_pct?: number | null;
+  insurance_value?: number | null;     // seguro R$
+  dispatch?: number | null;            // despacho/paletização
+  gris?: number | null;                // GRIS / valor GR
+  toll?: number | null;                // pedágio
+  tracking?: number | null;
+  loading?: number | null;             // carga/descarga
+  helper?: number | null;              // ajudante
+  partner_freight?: number | null;
+  carrier_freight?: number | null;
+  suspended_taxes?: number | null;
+}
+
+export interface CteIcms {
+  embutido?: boolean;
+  isento?: boolean;
+  aliquota?: number | null;
+  base?: number | null;
+  valor?: number | null;
+  st_base?: number | null;
+  st_aliquota?: number | null;
+  st_valor?: number | null;
+}
+
+export interface CteGnre {
+  base?: number | null;
+  aliquota?: number | null;
+  valor_guia?: number | null;
+  valor_frete?: number | null;
+}
+
+export interface CteCbsIbs {
+  base?: number | null;
+  cbs_aliquota?: number | null; // %
+  cbs_valor?: number | null;
+  ibs_aliquota?: number | null; // %
+  ibs_valor?: number | null;
+}
+
+export interface CteCargoInfo {
+  content?: string | null;           // conteúdo (CONFORME NF)
+  species?: string | null;           // espécie
+  items_count?: number | null;
+  deliveries_count?: number | null;
+  predominant_product?: string | null;
+  cubed_weight?: number | null;
+  container_value?: number | null;
+}
+
 export interface BuildCtePayloadInput {
   emitter: CteEmitter | null;
   remitter: CteParty | null;
@@ -75,10 +138,25 @@ export interface BuildCtePayloadInput {
   expedidor?: CteParty | null;
   recebedor?: CteParty | null;
   consignee?: CteParty | null;
+  insurer?: CteInsurer | null;
   takerRole: CteTakerRole;
   takerParty?: CteParty | null; // usado quando takerRole === 'terceiro'
   driver: CteDriver | null;
   vehicle: CteVehicle | null;
+  documentType?: CteDocType;                // Tipo CTRC — default '01'
+  vehicleType?: string | null;              // Tipo veículo SEFAZ (01,02,...)
+  additionalPlates?: string[];              // Carretas
+  distribution?: string | null;             // Tip Distribuição
+  operation?: string | null;                // Operação
+  issueDate?: string | null;                // Data de emissão (ISO)
+  refNumber?: string | null;                // Nº Ref
+  clientOrderNumber?: string | null;        // Nº Pedido Cliente
+  freightPriority?: string | null;
+  freightComposition?: CteFreightComposition | null;
+  icms?: CteIcms | null;
+  gnre?: CteGnre | null;
+  cbsIbs?: CteCbsIbs | null;
+  cargo?: CteCargoInfo | null;
   nature: string;
   cfop?: string | null;
   observations?: string | null;
@@ -153,8 +231,14 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
   else if (!digits(input.recipient.cnpj) && !digits(input.recipient.cpf)) {
     missing.push('CNPJ/CPF do destinatário');
   }
-  if (!input.driver || !input.driver.name) missing.push('Motorista');
-  if (!input.vehicle || !input.vehicle.plate) missing.push('Veículo (placa)');
+  // Motorista e veículo não bloqueiam a transmissão — quando ausentes,
+  // o CT-e é emitido com "." (compatível com o TMS legado). Emite aviso.
+  if (!input.driver || !input.driver.name) {
+    warnings.push('Motorista não informado — CT-e será emitido com "."');
+  }
+  if (!input.vehicle || !input.vehicle.plate) {
+    warnings.push('Veículo (placa) não informado — CT-e será emitido com "."');
+  }
   if (!input.nature) missing.push('Natureza da operação');
   if (!input.invoices?.length) missing.push('NFs referenciadas');
   if (!input.totals || !(input.totals.freight_value > 0)) missing.push('Valor do frete');
@@ -169,13 +253,30 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
     warnings.push(`${withoutKey} NF(s) sem chave de acesso — o SEFAZ pode rejeitar.`);
   }
 
+  const additionalPlates = (input.additionalPlates || [])
+    .map((p) => (p || '').toUpperCase().replace(/[^A-Z0-9]/g, ''))
+    .filter(Boolean);
+
+  const freightComposition = input.freightComposition
+    ? Object.fromEntries(
+        Object.entries(input.freightComposition).filter(([, v]) => v != null),
+      )
+    : undefined;
+
   const payload: Record<string, unknown> = {
     emitterCnpj: digits(input.emitter?.cnpj) || undefined,
     environment: input.emitter?.environment || 'sandbox',
     externalId: input.externalId || undefined,
     payload: {
+      tipoCtrc: input.documentType || '01',
       naturezaOperacao: input.nature,
       cfop: input.cfop || undefined,
+      dataEmissao: input.issueDate || undefined,
+      numeroRef: input.refNumber || undefined,
+      numeroPedidoCliente: input.clientOrderNumber || undefined,
+      prioridadeFrete: input.freightPriority || undefined,
+      tipoDistribuicao: input.distribution || undefined,
+      operacao: input.operation || undefined,
       observacoes: input.observations || undefined,
       emitente: serializeParty(
         input.emitter
@@ -192,21 +293,32 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
       expedidor: serializeParty(input.expedidor),
       recebedor: serializeParty(input.recebedor),
       consignatario: serializeParty(input.consignee),
+      seguradora: input.insurer
+        ? {
+            nome: input.insurer.name,
+            cnpj: digits(input.insurer.cnpj) || undefined,
+            apolice: input.insurer.policy || undefined,
+            averbacao: input.insurer.endorsement || undefined,
+            valorSegurado: input.insurer.insured_amount ?? undefined,
+          }
+        : undefined,
       tomador: {
         tipo: TAKER_INDEX[input.takerRole],
         role: input.takerRole,
         ...(input.takerRole === 'terceiro' ? { dados: serializeParty(input.takerParty) } : {}),
       },
-      motorista: input.driver
-        ? { nome: input.driver.name, cpf: digits(input.driver.cpf) || undefined }
-        : null,
-      veiculo: input.vehicle
-        ? {
-            placa: (input.vehicle.plate || '').toUpperCase().replace(/[^A-Z0-9]/g, ''),
-            uf: input.vehicle.state || undefined,
-            renavam: input.vehicle.renavam || undefined,
-          }
-        : null,
+      motorista: {
+        nome: input.driver?.name?.trim() || '.',
+        cpf: input.driver?.cpf ? digits(input.driver.cpf) || undefined : undefined,
+      },
+      veiculo: {
+        placa:
+          (input.vehicle?.plate || '').toUpperCase().replace(/[^A-Z0-9]/g, '') || '.',
+        uf: input.vehicle?.state || undefined,
+        renavam: input.vehicle?.renavam || undefined,
+        tipo: input.vehicleType || undefined,
+        carretas: additionalPlates.length ? additionalPlates : undefined,
+      },
       valores: {
         valorFrete: Number(input.totals.freight_value.toFixed(2)),
         valorCarga: Number((input.totals.cargo_value || 0).toFixed(2)),
@@ -215,6 +327,19 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
         ibs: input.totals.ibs_value ?? undefined,
         cbs: input.totals.cbs_value ?? undefined,
       },
+      composicaoFrete: freightComposition,
+      icms: input.icms
+        ? Object.fromEntries(Object.entries(input.icms).filter(([, v]) => v != null && v !== false))
+        : undefined,
+      gnre: input.gnre
+        ? Object.fromEntries(Object.entries(input.gnre).filter(([, v]) => v != null))
+        : undefined,
+      cbsIbs: input.cbsIbs
+        ? Object.fromEntries(Object.entries(input.cbsIbs).filter(([, v]) => v != null))
+        : undefined,
+      mercadoria: input.cargo
+        ? Object.fromEntries(Object.entries(input.cargo).filter(([, v]) => v != null && v !== ''))
+        : undefined,
       notasFiscais: (input.invoices || []).map((n) => ({
         chave: digits(n.access_key) || undefined,
         numero: n.number || undefined,
