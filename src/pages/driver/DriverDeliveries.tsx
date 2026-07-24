@@ -121,7 +121,7 @@ export default function DriverDeliveries() {
   const { data: trip } = useActiveTrip(driver?.id);
 
   // Em produção, nunca usar dados demo: melhor mostrar lista vazia que poluir POD.
-  const isDemo = !trip && canUseDriverDemo;
+  const isDemo = !trip && canUseDriverDemo && !import.meta.env.PROD;
   const [demoStops, setDemoStops] = useState<any[]>(DEMO_STOPS_INITIAL);
   const effectiveTrip: any = trip || DEMO_TRIP;
 
@@ -172,8 +172,38 @@ export default function DriverDeliveries() {
   const threadKey = eventForm ? `${eventForm.stop.id}|${eventForm.eventKey}` : '';
   const currentThread = threadKey ? (threads[threadKey] || []) : [];
 
+  // Itens reais da parada: fiscal_documents da carga (por client_id da parada) → load_items.
+  const { data: realStopProducts = [] } = useQuery({
+    queryKey: ['driver_stop_products', trip?.load_id, eventForm?.stop?.client_id],
+    queryFn: async () => {
+      if (!trip?.load_id || !eventForm?.stop?.client_id) return [] as DemoProduct[];
+      const { data: docs, error: docsErr } = await supabase
+        .from('fiscal_documents')
+        .select('id, invoice_number')
+        .eq('load_id', trip.load_id)
+        .eq('client_id', eventForm.stop.client_id);
+      if (docsErr) throw docsErr;
+      const docIds = (docs || []).map((d: any) => d.id);
+      if (docIds.length === 0) return [] as DemoProduct[];
+      const { data: items, error: itemsErr } = await supabase
+        .from('load_items')
+        .select('id, item_description, quantity, weight_kg, volume_m3, fiscal_document_id')
+        .in('fiscal_document_id', docIds);
+      if (itemsErr) throw itemsErr;
+      return (items || []).map((it: any) => ({
+        id: it.id,
+        sku: it.fiscal_document_id ? String(it.fiscal_document_id).slice(0, 8) : '',
+        name: it.item_description || 'Item',
+        qty: Number(it.quantity) || 0,
+        unit: 'UN',
+        price: 0,
+      })) as DemoProduct[];
+    },
+    enabled: !!eventForm?.stop && !isDemo && !!trip?.load_id && !!eventForm?.stop?.client_id,
+  });
+
   const stopProducts: DemoProduct[] = eventForm
-    ? (DEMO_PRODUCTS_BY_STOP[eventForm.stop.id] || [])
+    ? (isDemo ? (DEMO_PRODUCTS_BY_STOP[eventForm.stop.id] || []) : realStopProducts)
     : [];
 
   const totalReturnValue = stopProducts.reduce((sum, p) => {
@@ -237,6 +267,8 @@ export default function DriverDeliveries() {
     setBoletoDueDate('');
     setBoletoNote('');
     setFollowUp('');
+    // Evita crescimento indefinido de mensagens em memória entre entregas.
+    setThreads({});
   };
 
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -261,39 +293,42 @@ export default function DriverDeliveries() {
       const def = getEventDef(eventForm.eventKey);
       if (!def) throw new Error('Evento inválido');
 
-      // Demo: muta apenas em memória, sem chamar Supabase
-      if (isDemo) {
-        await new Promise((r) => setTimeout(r, 400));
-        // Constrói mensagem inicial do motorista para a thread
-        const driverParts: string[] = [];
-        driverParts.push(`Evento: ${def.label}`);
-        if (receiverName) driverParts.push(`Recebedor: ${receiverName}${receiverDoc ? ` (${receiverDoc})` : ''}`);
+      // Constrói a mensagem-resumo do motorista (usada em demo e produção).
+      const buildDriverSummary = (): ThreadMsg => {
+        const parts: string[] = [];
+        parts.push(`Evento: ${def.label}`);
+        if (receiverName) parts.push(`Recebedor: ${receiverName}${receiverDoc ? ` (${receiverDoc})` : ''}`);
         const itemsList = stopProducts.filter(p => (returnedItems[p.id] || 0) > 0);
         if (def.showsItems && itemsList.length) {
-          driverParts.push(
+          parts.push(
             'Itens devolvidos:\n' + itemsList.map(p => `• ${p.name} — ${returnedItems[p.id]}/${p.qty} ${p.unit}`).join('\n')
           );
-          if (returnReason) driverParts.push(`Motivo: ${returnReason}`);
-          driverParts.push(`Valor estimado: R$ ${totalReturnValue.toFixed(2)}`);
+          if (returnReason) parts.push(`Motivo: ${returnReason}`);
+          if (totalReturnValue > 0) parts.push(`Valor estimado: R$ ${totalReturnValue.toFixed(2)}`);
         }
         if (def.showsDiscount && discountAmount) {
-          driverParts.push(`Desconto solicitado: ${discountAmount}${discountKind === 'percent' ? '%' : ' R$'}`);
-          if (discountReason) driverParts.push(`Justificativa: ${discountReason}`);
+          parts.push(`Desconto solicitado: ${discountAmount}${discountKind === 'percent' ? '%' : ' R$'}`);
+          if (discountReason) parts.push(`Justificativa: ${discountReason}`);
         }
         if (def.key === 'atualizar_boleto') {
-          if (boletoDueDate) driverParts.push(`Novo vencimento sugerido: ${boletoDueDate}`);
-          if (boletoNote) driverParts.push(`Detalhe: ${boletoNote}`);
+          if (boletoDueDate) parts.push(`Novo vencimento sugerido: ${boletoDueDate}`);
+          if (boletoNote) parts.push(`Detalhe: ${boletoNote}`);
         }
-        if (notes) driverParts.push(`Obs.: ${notes}`);
-
-        const initialMsg: ThreadMsg = {
+        if (notes) parts.push(`Obs.: ${notes}`);
+        return {
           id: `m-${Date.now()}`,
           from: 'driver',
           author: driver?.name || 'Motorista',
-          text: driverParts.join('\n'),
+          text: parts.join('\n'),
           at: new Date().toISOString(),
           status: def.needsOperatorReply ? 'pending' : 'info',
         };
+      };
+
+      // Demo: muta apenas em memória, sem chamar Supabase
+      if (isDemo) {
+        await new Promise((r) => setTimeout(r, 400));
+        const initialMsg = buildDriverSummary();
         setThreads((prev) => ({ ...prev, [threadKey]: [...(prev[threadKey] || []), initialMsg] }));
 
         // Atualiza stop conforme finalAction (mesmo se aguardando operador, para refletir UI)
@@ -343,13 +378,30 @@ export default function DriverDeliveries() {
         return;
       }
 
+      // Upload de fotos resiliente: se qualquer uma falhar, remove as já enviadas para
+      // evitar arquivos órfãos sem link com o evento.
       const photoPaths: string[] = [];
-      for (const photo of photos) {
-        const ext = photo.name.split('.').pop() || 'jpg';
-        const path = `${currentTenant!.id}/deliveries/${trip!.id}/${eventForm.stop.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-        const { error } = await supabase.storage.from('receipts').upload(path, photo, { contentType: photo.type });
-        if (error) throw error;
-        photoPaths.push(path);
+      if (photos.length > 0) {
+        const results = await Promise.allSettled(
+          photos.map(async (photo) => {
+            const ext = (photo.name.split('.').pop() || 'jpg').toLowerCase();
+            const path = `${currentTenant!.id}/deliveries/${trip!.id}/${eventForm.stop.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+            const { error } = await supabase.storage.from('receipts').upload(path, photo, { contentType: photo.type });
+            if (error) throw error;
+            return path;
+          }),
+        );
+        for (const r of results) {
+          if (r.status === 'fulfilled') photoPaths.push(r.value);
+        }
+        const failed = results.filter((r) => r.status === 'rejected');
+        if (failed.length > 0) {
+          if (photoPaths.length > 0) {
+            await supabase.storage.from('receipts').remove(photoPaths).catch(() => {});
+          }
+          const firstErr = (failed[0] as PromiseRejectedResult).reason;
+          throw new Error(`Falha ao enviar ${failed.length} foto(s): ${firstErr?.message || firstErr}`);
+        }
       }
 
       let signaturePath: string | null = null;
@@ -357,7 +409,12 @@ export default function DriverDeliveries() {
         const blob = await (await fetch(signatureDataUrl)).blob();
         const path = `${currentTenant!.id}/deliveries/${trip!.id}/${eventForm.stop.id}/signature_${Date.now()}.png`;
         const { error } = await supabase.storage.from('receipts').upload(path, blob, { contentType: 'image/png' });
-        if (error) throw error;
+        if (error) {
+          if (photoPaths.length > 0) {
+            await supabase.storage.from('receipts').remove(photoPaths).catch(() => {});
+          }
+          throw error;
+        }
         signaturePath = path;
       }
 
@@ -442,6 +499,8 @@ export default function DriverDeliveries() {
         _notes: reason,
       } as any);
       if (evtErr) throw evtErr;
+      // Popula thread local com o resumo do motorista para dar feedback visual imediato.
+      setThreads((prev) => ({ ...prev, [threadKey]: [...(prev[threadKey] || []), buildDriverSummary()] }));
     },
     onSuccess: () => {
       toast({ title: 'Evento lançado com sucesso' });
