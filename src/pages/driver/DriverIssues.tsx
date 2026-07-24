@@ -22,6 +22,8 @@ import { OCCURRENCE_TEMPLATES, getTemplateFields, formatOccurrenceReport } from 
 import { EVENT_TYPE_LABELS, OperationalEventType } from '@/hooks/useOperationalEvents';
 import { Copy } from 'lucide-react';
 
+const IS_PROD = import.meta.env.PROD;
+
 // Tipos com modelo padronizado (texto pronto para o fornecedor) + tipos genéricos para casos do dia-a-dia.
 const TEMPLATE_TYPES = Object.keys(OCCURRENCE_TEMPLATES) as OperationalEventType[];
 const GENERIC_TYPES: OperationalEventType[] = ['damaged', 'wrong_address', 'wrong_quantity', 'partial_delivery', 'return', 'other'];
@@ -71,6 +73,24 @@ export default function DriverIssues() {
     enabled: !!currentTenant && !!driver,
   });
 
+  // Realtime: refletir mudanças (severidade, status, novas ocorrências) sem reabrir a tela.
+  useEffect(() => {
+    if (!driver?.id) return;
+    const channel = supabase
+      .channel(`driver_issues_${driver.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'operational_events', filter: `driver_id=eq.${driver.id}` },
+        () => {
+          qc.invalidateQueries({ queryKey: ['driver_operational_events', driver.id] });
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [driver?.id, qc]);
+
   const createIssue = useMutation({
     mutationFn: async () => {
       const report = formatOccurrenceReport(form.event_type, form.details);
@@ -106,7 +126,8 @@ export default function DriverIssues() {
     onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
   });
 
-  const isDemo = !driver && canUseDriverDemo;
+  // Padronizado com DriverHome/DriverDeliveries: nunca em produção.
+  const isDemo = !trip && canUseDriverDemo && !IS_PROD;
   const effectiveEvents = isDemo ? demoEvents : (driver ? events : []);
   const [chatEvent, setChatEvent] = useState<any | null>(null);
 
