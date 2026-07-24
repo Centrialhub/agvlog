@@ -941,6 +941,11 @@ export default function Billing() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <CteEmissionPreviewDialog
+        open={emitPreviewOpen}
+        onOpenChange={setEmitPreviewOpen}
+        groups={groups}
+      />
     </div>
   );
 }
