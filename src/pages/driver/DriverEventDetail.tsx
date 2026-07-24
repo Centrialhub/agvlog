@@ -52,9 +52,9 @@ export default function DriverEventDetail() {
   const isDemo = !driver && canUseDriverDemo;
   const event = isDemo
     ? DEMO_EVENTS_INITIAL.find((e) => e.id === id)
-    : realRow
+      : realRow
       ? (() => {
-          const details = realRow.report_details || {};
+          const details: any = realRow.report_details || {};
           const type: 'finalizador' | 'informativo' = FINAL_EVENT_TYPES.has(realRow.event_type) ? 'finalizador' : 'informativo';
           return {
             id: realRow.id,
