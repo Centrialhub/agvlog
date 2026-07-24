@@ -2537,6 +2537,7 @@ export type Database = {
           client_id: string | null
           created_at: string
           created_by: string | null
+          emitter_id: string | null
           fiscal_document_ids: string[] | null
           grouping_mode: number
           grouping_mode_label: string | null
@@ -2557,6 +2558,7 @@ export type Database = {
           client_id?: string | null
           created_at?: string
           created_by?: string | null
+          emitter_id?: string | null
           fiscal_document_ids?: string[] | null
           grouping_mode: number
           grouping_mode_label?: string | null
@@ -2577,6 +2579,7 @@ export type Database = {
           client_id?: string | null
           created_at?: string
           created_by?: string | null
+          emitter_id?: string | null
           fiscal_document_ids?: string[] | null
           grouping_mode?: number
           grouping_mode_label?: string | null
@@ -2599,6 +2602,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cte_batches_emitter_id_fkey"
+            columns: ["emitter_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_emitters"
             referencedColumns: ["id"]
           },
         ]
@@ -2662,6 +2672,7 @@ export type Database = {
           recipient_state: string | null
           reference_number: string | null
           remitter: string | null
+          remitter_cnpj: string | null
           romexp_number: string | null
           sefaz_environment: string | null
           sefaz_status: string
@@ -2738,6 +2749,7 @@ export type Database = {
           recipient_state?: string | null
           reference_number?: string | null
           remitter?: string | null
+          remitter_cnpj?: string | null
           romexp_number?: string | null
           sefaz_environment?: string | null
           sefaz_status?: string
@@ -2814,6 +2826,7 @@ export type Database = {
           recipient_state?: string | null
           reference_number?: string | null
           remitter?: string | null
+          remitter_cnpj?: string | null
           romexp_number?: string | null
           sefaz_environment?: string | null
           sefaz_status?: string

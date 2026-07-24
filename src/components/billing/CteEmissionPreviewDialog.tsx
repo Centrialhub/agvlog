@@ -14,6 +14,7 @@ import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, RotateCw, Send } 
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useEmitters } from '@/hooks/useEmitters';
+import { useHubCredentials } from '@/hooks/useEmitters';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useClients } from '@/hooks/useClients';
 import { useTenant } from '@/hooks/useTenant';
@@ -118,7 +119,11 @@ function groupToEditable(g: CteGroupPreview, defaultEmitterId: string): Editable
   };
 }
 
-function toBuildInput(e: EditableCte, emitter: any): BuildCtePayloadInput {
+function toBuildInput(
+  e: EditableCte,
+  emitter: any,
+  environment: 'sandbox' | 'production' = 'sandbox',
+): BuildCtePayloadInput {
   return {
     emitter: emitter
       ? {
@@ -126,7 +131,7 @@ function toBuildInput(e: EditableCte, emitter: any): BuildCtePayloadInput {
           cnpj: emitter.cnpj,
           ie: emitter.ie,
           name: emitter.razao_social || emitter.nome_fantasia || '',
-          environment: 'sandbox',
+          environment,
           address: {
             street: emitter.endereco?.logradouro || null,
             number: emitter.endereco?.numero || null,
@@ -245,11 +250,24 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     () => emitters.find((e: any) => e.id === active?.emitterId) || defaultEmitter,
     [emitters, active?.emitterId, defaultEmitter],
   );
+
+  // Ambiente e disponibilidade da credencial CT-e do emitente ativo
+  const { data: activeCreds = [] } = useHubCredentials(emitterForActive?.id);
+  const activeCteCred = useMemo(
+    () =>
+      (activeCreds as any[]).find((c) => c.doc_scope === 'cte' && c.enabled) ||
+      (activeCreds as any[]).find((c) => c.doc_scope === 'all' && c.enabled) ||
+      null,
+    [activeCreds],
+  );
+  const activeEnvironment: 'sandbox' | 'production' =
+    (activeCteCred?.environment as any) === 'production' ? 'production' : 'sandbox';
+
   const validation = useMemo(() => {
     if (!active) return { ok: false, missing: [] as string[], warnings: [] as string[] };
-    const r = buildCtePayload(toBuildInput(active, emitterForActive));
+    const r = buildCtePayload(toBuildInput(active, emitterForActive, activeEnvironment));
     return { ok: r.ok, missing: r.missing, warnings: r.warnings };
-  }, [active, emitterForActive]);
+  }, [active, emitterForActive, activeEnvironment]);
 
   const allValid = items.every((it) => {
     const em = emitters.find((e: any) => e.id === it.emitterId) || defaultEmitter;
@@ -266,9 +284,21 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
       for (let i = 0; i < items.length; i++) {
         const it = items[i];
         const em = emitters.find((e: any) => e.id === it.emitterId) || defaultEmitter;
+        // Ambiente da credencial do emitente da vez (CT-e específico → all → sandbox).
+        const { data: itCreds } = await (supabase as any)
+          .from('hub_fiscal_credentials')
+          .select('doc_scope, environment, enabled')
+          .eq('emitter_id', em?.id)
+          .eq('enabled', true);
+        const itCred =
+          (itCreds || []).find((c: any) => c.doc_scope === 'cte') ||
+          (itCreds || []).find((c: any) => c.doc_scope === 'all') ||
+          null;
+        const itEnv: 'sandbox' | 'production' =
+          itCred?.environment === 'production' ? 'production' : 'sandbox';
         try {
           await issueCte.mutateAsync({
-            ...toBuildInput(it, em),
+            ...toBuildInput(it, em, itEnv),
             fiscal_document_ids: it.fiscalDocumentIds,
             load_ids: it.loadIds,
             meta: {
@@ -309,6 +339,22 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
             Prévia editável — CT-e {activeIdx + 1} de {items.length}
           </DialogTitle>
         </DialogHeader>
+
+        <div className="flex items-center gap-2 text-xs">
+          <Badge variant={activeEnvironment === 'production' ? 'default' : 'secondary'}>
+            {activeEnvironment === 'production' ? 'PRODUÇÃO' : 'SANDBOX'}
+          </Badge>
+          {!activeCteCred && emitterForActive && (
+            <Badge variant="destructive">
+              Sem credencial CT-e — usará token padrão (risco)
+            </Badge>
+          )}
+          {activeCteCred && (
+            <span className="text-muted-foreground">
+              scope: {activeCteCred.doc_scope} · env: {activeCteCred.environment}
+            </span>
+          )}
+        </div>
 
         <div className="grid grid-cols-[220px_1fr] gap-4">
           {/* Navegação entre CT-es */}
