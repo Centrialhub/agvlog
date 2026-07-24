@@ -153,7 +153,6 @@ export default function DriverEvents() {
   }, [driver?.id, qc]);
 
   const isDemo = !driver && canUseDriverDemo;
-  const [demoActive, setDemoActive] = useState(isDemo);
   const events: DemoEvent[] = isDemo ? DEMO_EVENTS_INITIAL : realEvents;
 
   const filtered = useMemo(() => {
@@ -178,10 +177,10 @@ export default function DriverEvents() {
         <p className="text-sm text-muted-foreground">Histórico de eventos da viagem</p>
       </div>
 
-      {demoActive && (
+      {isDemo && (
         <DemoBanner
           message="Modo demonstração — eventos fictícios."
-          onReset={() => setDemoActive(true)}
+          onReset={() => { /* no-op: real data is auto-fetched */ }}
         />
       )}
 
