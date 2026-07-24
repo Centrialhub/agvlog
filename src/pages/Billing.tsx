@@ -22,6 +22,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { PendingInvoicesBanner } from '@/components/billing/PendingInvoicesBanner';
 import { useRecalculateInboundFreight } from '@/hooks/useRecalculateInboundFreight';
+import { CteEmissionPreviewDialog } from '@/components/billing/CteEmissionPreviewDialog';
 import {
   OPERATION_TYPE_OPTIONS,
   type OperationType,
@@ -130,6 +131,7 @@ export default function Billing() {
   const [modeId, setModeId] = useState<number>(1);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [modeDialogOpen, setModeDialogOpen] = useState(false);
+  const [emitPreviewOpen, setEmitPreviewOpen] = useState(false);
 
   // ===== Filtros avançados (SIAT) =====
   const [osNumber, setOsNumber] = useState('');
@@ -778,6 +780,13 @@ export default function Billing() {
             <Button variant="outline" disabled={groups.length === 0} onClick={() => setPreviewOpen(true)}>
               Ver prévia ({groups.length})
             </Button>
+            <Button
+              disabled={groups.length === 0}
+              variant="secondary"
+              onClick={() => setEmitPreviewOpen(true)}
+            >
+              Prévia editável & transmitir
+            </Button>
             <Button disabled={groups.length === 0 || createBatch.isPending} onClick={handleGenerate}>
               <CheckCircle2 className="h-4 w-4 mr-2" />
               {createBatch.isPending ? 'Gerando...' : `Gerar ${groups.length} CT-e(s)`}
@@ -932,6 +941,11 @@ export default function Billing() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <CteEmissionPreviewDialog
+        open={emitPreviewOpen}
+        onOpenChange={setEmitPreviewOpen}
+        groups={groups}
+      />
     </div>
   );
 }
