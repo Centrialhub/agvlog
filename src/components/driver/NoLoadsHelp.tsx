@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useTenant } from '@/hooks/useTenant';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -43,17 +44,20 @@ export default function NoLoadsHelp({
 }: Props) {
   const [expanded, setExpanded] = useState(false);
   const { user } = useAuth();
+  const { currentTenant } = useTenant();
 
   // Probe: count loads with driver_id = me, ignoring status/on_hold/tenant.
   // Exposes hidden mismatches (on_hold, terminal status, other tenant) to support.
   const { data: probe } = useQuery({
-    queryKey: ['driver_loads_probe', driverId],
+    queryKey: ['driver_loads_probe', driverId, currentTenant?.id],
     queryFn: async () => {
       if (!driverId) return { total: 0, hidden: 0 };
-      const { data, error } = await supabase
+      let query = supabase
         .from('loads')
         .select('id, status, on_hold, tenant_id')
         .eq('driver_id', driverId);
+      if (currentTenant?.id) query = query.eq('tenant_id', currentTenant.id);
+      const { data, error } = await query;
       if (error) throw error;
       const rows = data || [];
       const terminal = new Set(['delivered', 'completed', 'cancelled', 'archived']);
