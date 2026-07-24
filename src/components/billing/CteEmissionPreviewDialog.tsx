@@ -284,9 +284,21 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
       for (let i = 0; i < items.length; i++) {
         const it = items[i];
         const em = emitters.find((e: any) => e.id === it.emitterId) || defaultEmitter;
+        // Ambiente da credencial do emitente da vez (CT-e específico → all → sandbox).
+        const { data: itCreds } = await (supabase as any)
+          .from('hub_fiscal_credentials')
+          .select('doc_scope, environment, enabled')
+          .eq('emitter_id', em?.id)
+          .eq('enabled', true);
+        const itCred =
+          (itCreds || []).find((c: any) => c.doc_scope === 'cte') ||
+          (itCreds || []).find((c: any) => c.doc_scope === 'all') ||
+          null;
+        const itEnv: 'sandbox' | 'production' =
+          itCred?.environment === 'production' ? 'production' : 'sandbox';
         try {
           await issueCte.mutateAsync({
-            ...toBuildInput(it, em),
+            ...toBuildInput(it, em, itEnv),
             fiscal_document_ids: it.fiscalDocumentIds,
             load_ids: it.loadIds,
             meta: {
