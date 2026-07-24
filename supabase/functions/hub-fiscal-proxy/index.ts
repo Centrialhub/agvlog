@@ -117,13 +117,24 @@ Deno.serve(async (req) => {
       if (!emId) {
         return { token: DEFAULT_HUB_KEY, source: 'default', emitter_id: null, scope_matched: null };
       }
+      // Ambiente-alvo: usa o do payload.body.environment quando presente (emit) ou payload.environment.
+      const wantedEnv: string | null =
+        ((payload as any)?.body?.environment as string | undefined) ||
+        ((payload as any)?.environment as string | undefined) ||
+        null;
       const { data: creds } = await admin.from('hub_fiscal_credentials')
-        .select('doc_scope, secret_name, secret_ciphertext, enabled')
+        .select('doc_scope, environment, secret_name, secret_ciphertext, enabled')
         .eq('emitter_id', emId).eq('enabled', true);
       const list = (creds || []) as any[];
-      const match = list.find(c => c.doc_scope === scope) || list.find(c => c.doc_scope === 'all');
+      // Prioriza: (scope exato + env exato) > (scope exato) > (all + env exato) > (all).
+      const pick = (fn: (c: any) => boolean) => list.find(fn);
+      const match =
+        (wantedEnv && pick(c => c.doc_scope === scope && c.environment === wantedEnv)) ||
+        pick(c => c.doc_scope === scope) ||
+        (wantedEnv && pick(c => c.doc_scope === 'all' && c.environment === wantedEnv)) ||
+        pick(c => c.doc_scope === 'all');
       if (!match) {
-        console.log('[hub-fiscal-proxy] no credential for emitter', { emitter_id: emId, scope });
+        console.log('[hub-fiscal-proxy] no credential for emitter', { emitter_id: emId, scope, wantedEnv });
         return { token: DEFAULT_HUB_KEY, source: 'default', emitter_id: emId, scope_matched: null };
       }
       if (match.secret_ciphertext) {
@@ -139,7 +150,7 @@ Deno.serve(async (req) => {
             err.code = 'HUB_CREDENTIAL_DECRYPT_FAILED';
             throw err;
           }
-          console.log('[hub-fiscal-proxy] token resolved', { emitter_id: emId, scope: match.doc_scope, source: 'ciphertext' });
+          console.log('[hub-fiscal-proxy] token resolved', { emitter_id: emId, scope: match.doc_scope, env: match.environment, wantedEnv, source: 'ciphertext' });
           return { token, source: 'ciphertext', emitter_id: emId, scope_matched: match.doc_scope };
         } catch (e: any) {
           if (e?.code === 'HUB_CREDENTIAL_DECRYPT_FAILED' || e?.code === 'HUB_CREDENTIAL_ENC_KEY_MISSING') throw e;
@@ -155,7 +166,7 @@ Deno.serve(async (req) => {
           err.code = 'HUB_CREDENTIAL_SECRET_MISSING';
           throw err;
         }
-        console.log('[hub-fiscal-proxy] token resolved', { emitter_id: emId, scope: match.doc_scope, source: 'secret_name' });
+        console.log('[hub-fiscal-proxy] token resolved', { emitter_id: emId, scope: match.doc_scope, env: match.environment, wantedEnv, source: 'secret_name' });
         return { token, source: 'secret_name', emitter_id: emId, scope_matched: match.doc_scope };
       }
       return { token: DEFAULT_HUB_KEY, source: 'default', emitter_id: emId, scope_matched: null };
