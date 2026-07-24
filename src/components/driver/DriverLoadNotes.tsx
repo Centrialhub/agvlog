@@ -16,7 +16,7 @@ interface Props {
 export default function DriverLoadNotes({ loadId, loadNumber, vehiclePlate, driverName }: Props) {
   const [open, setOpen] = useState(false);
 
-  const { data: docs = [], isLoading } = useQuery({
+  const { data: docs = [], isLoading, error } = useQuery({
     queryKey: ['driver_load_fiscal_docs', loadId],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -93,12 +93,17 @@ export default function DriverLoadNotes({ loadId, loadNumber, vehiclePlate, driv
               <Loader2 className="h-3 w-3 animate-spin" /> Carregando notas…
             </div>
           )}
-          {!isLoading && docs.length === 0 && (
+          {!isLoading && error && (
+            <p className="text-[11px] text-destructive italic py-1">
+              Erro ao carregar notas: {(error as Error).message}
+            </p>
+          )}
+          {!isLoading && !error && docs.length === 0 && (
             <p className="text-[11px] text-muted-foreground italic py-1">
               Nenhuma nota fiscal vinculada a esta carga.
             </p>
           )}
-          {!isLoading && docs.length > 0 && (
+          {!isLoading && !error && docs.length > 0 && (
             <>
               <div className="max-h-56 overflow-y-auto rounded border bg-muted/30 divide-y">
                 {docs.map((d: any) => (
