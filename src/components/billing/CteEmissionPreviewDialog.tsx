@@ -237,6 +237,14 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
             vehiclePlate: it.vehiclePlate || d.vehicle?.plate || '',
             emitterId: it.emitterId || d.emitter?.id || '',
             nature: it.nature || d.nature_default || 'PRESTACAO DE SERVICO DE TRANSPORTE',
+            // Remetente/destinatário dominantes calculados pelo RPC a partir das NFs vinculadas
+            remitterName: it.remitterName || d.remitter?.remitter || '',
+            remitterCnpj: it.remitterCnpj || d.remitter?.remitter_cnpj || '',
+            recipientName: it.recipientName || d.recipient?.recipient || '',
+            recipientCnpj: it.recipientCnpj || d.recipient?.recipient_cnpj || '',
+            recipientCity: it.recipientCity || d.recipient?.recipient_city || '',
+            recipientState: it.recipientState || d.recipient?.recipient_state || '',
+            clientId: it.clientId || d.recipient?.client_id || null,
           };
         }),
       );
