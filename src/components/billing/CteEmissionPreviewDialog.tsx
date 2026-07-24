@@ -817,6 +817,50 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                       onChange={(e) => patch({ palletCount: Number(e.target.value) })} />
                   </div>
                 </div>
+                <div className="pt-2 border-t">
+                  <Label className="text-xs font-semibold">Mercadoria</Label>
+                  <div className="grid grid-cols-3 gap-2 pt-1">
+                    <div>
+                      <Label className="text-xs">Conteúdo</Label>
+                      <Input value={active.cargoContent} onChange={(e) => patch({ cargoContent: e.target.value })} />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Espécie</Label>
+                      <Input value={active.cargoSpecies} onChange={(e) => patch({ cargoSpecies: e.target.value })} />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Produto predominante</Label>
+                      <Input value={active.cargoPredominant} onChange={(e) => patch({ cargoPredominant: e.target.value })} />
+                    </div>
+                  </div>
+                </div>
+                <div className="pt-2 border-t">
+                  <Label className="text-xs font-semibold">Composição do frete (opcional)</Label>
+                  <div className="grid grid-cols-5 gap-2 pt-1">
+                    {[
+                      ['fcFreightWeight', 'Frete peso'],
+                      ['fcDeliveryFee', 'Valor entrega'],
+                      ['fcOthers', 'Outros'],
+                      ['fcInsurance', 'Seguro (R$)'],
+                      ['fcDispatch', 'Despacho'],
+                      ['fcGris', 'GRIS'],
+                      ['fcToll', 'Pedágio'],
+                      ['fcTracking', 'Rastreamento'],
+                      ['fcLoading', 'Carga/Descarga'],
+                      ['fcHelper', 'Ajudante'],
+                    ].map(([k, label]) => (
+                      <div key={k}>
+                        <Label className="text-xs">{label}</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={(active as any)[k]}
+                          onChange={(e) => patch({ [k]: Number(e.target.value) } as any)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
                 <div>
                   <Label>NFs referenciadas ({active.invoices.length})</Label>
                   <div className="rounded-md border max-h-[200px] overflow-auto text-xs">
@@ -839,6 +883,53 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                 <div>
                   <Label>CFOP</Label>
                   <Input value={active.cfop} onChange={(e) => patch({ cfop: e.target.value })} placeholder="ex.: 5353, 6353" />
+                </div>
+                <div className="pt-2 border-t">
+                  <Label className="text-xs font-semibold">ICMS</Label>
+                  <div className="grid grid-cols-5 gap-2 pt-1 items-end">
+                    <label className="flex items-center gap-1 text-xs">
+                      <input type="checkbox" checked={active.icmsEmbutido} onChange={(e) => patch({ icmsEmbutido: e.target.checked })} />
+                      Embutido
+                    </label>
+                    <label className="flex items-center gap-1 text-xs">
+                      <input type="checkbox" checked={active.icmsIsento} onChange={(e) => patch({ icmsIsento: e.target.checked })} />
+                      Isento
+                    </label>
+                    <div>
+                      <Label className="text-xs">Alíquota %</Label>
+                      <Input type="number" step="0.01" value={active.icmsAliquota} onChange={(e) => patch({ icmsAliquota: Number(e.target.value) })} />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Base</Label>
+                      <Input type="number" step="0.01" value={active.icmsBase} onChange={(e) => patch({ icmsBase: Number(e.target.value) })} />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Valor</Label>
+                      <Input type="number" step="0.01" value={active.icmsValor} onChange={(e) => patch({ icmsValor: Number(e.target.value) })} />
+                    </div>
+                  </div>
+                </div>
+                <div className="pt-2 border-t">
+                  <Label className="text-xs font-semibold">Reforma tributária (CBS/IBS)</Label>
+                  <div className="grid grid-cols-3 gap-2 pt-1">
+                    <div>
+                      <Label className="text-xs">Base (R$)</Label>
+                      <Input type="number" step="0.01" value={active.cbsIbsBase} onChange={(e) => patch({ cbsIbsBase: Number(e.target.value) })} />
+                    </div>
+                    <div>
+                      <Label className="text-xs">CBS % (padrão 0,90)</Label>
+                      <Input type="number" step="0.01" value={active.cbsAliquota} onChange={(e) => patch({ cbsAliquota: Number(e.target.value) })} />
+                    </div>
+                    <div>
+                      <Label className="text-xs">IBS % (padrão 0,10)</Label>
+                      <Input type="number" step="0.01" value={active.ibsAliquota} onChange={(e) => patch({ ibsAliquota: Number(e.target.value) })} />
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground pt-1">
+                    CBS ={' '}
+                    R$ {((active.cbsIbsBase * active.cbsAliquota) / 100).toFixed(2)} · IBS ={' '}
+                    R$ {((active.cbsIbsBase * active.ibsAliquota) / 100).toFixed(2)}
+                  </p>
                 </div>
                 <div>
                   <Label>Observações</Label>
