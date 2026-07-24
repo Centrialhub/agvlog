@@ -82,6 +82,24 @@ export default function DriverExpenses() {
     enabled: !!currentTenant && !!driver,
   });
 
+  // Realtime: refresh when operator approves/rejects or updates expenses.
+  useEffect(() => {
+    if (!driver?.id) return;
+    const channel = supabase
+      .channel(`driver_expenses_${driver.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'driver_expenses', filter: `driver_id=eq.${driver.id}` },
+        () => {
+          qc.invalidateQueries({ queryKey: ['driver_expenses'] });
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [driver?.id, qc]);
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
