@@ -115,6 +115,7 @@ export default function DriverEvents() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<'all' | 'finalizador' | 'informativo'>('all');
+  const [demoActive, setDemoActive] = useState(canUseDriverDemo);
   const { data: driver } = useCurrentDriver();
   const { data: trip } = useActiveTrip(driver?.id);
   const qc = useQueryClient();
@@ -152,7 +153,7 @@ export default function DriverEvents() {
     };
   }, [driver?.id, qc]);
 
-  const isDemo = !driver && canUseDriverDemo;
+  const isDemo = !driver && demoActive;
   const events: DemoEvent[] = isDemo ? DEMO_EVENTS_INITIAL : realEvents;
 
   const filtered = useMemo(() => {
@@ -180,7 +181,7 @@ export default function DriverEvents() {
       {isDemo && (
         <DemoBanner
           message="Modo demonstração — eventos fictícios."
-          onReset={() => { /* no-op: real data is auto-fetched */ }}
+          onReset={() => setDemoActive(false)}
         />
       )}
 
