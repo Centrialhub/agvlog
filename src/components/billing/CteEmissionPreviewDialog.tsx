@@ -84,6 +84,7 @@ interface EditableCte {
   fcLoading: number;
   fcHelper: number;
   // ICMS
+  icmsCst: string;
   icmsEmbutido: boolean;
   icmsIsento: boolean;
   icmsAliquota: number;
