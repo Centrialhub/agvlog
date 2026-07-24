@@ -625,6 +625,38 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t">
+                  <div>
+                    <Label>Expedidor (opcional)</Label>
+                    <Input value={active.expedidorName} onChange={(e) => patch({ expedidorName: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label>CNPJ expedidor</Label>
+                    <Input value={active.expedidorCnpj} onChange={(e) => patch({ expedidorCnpj: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label>Recebedor (opcional)</Label>
+                    <Input value={active.recebedorName} onChange={(e) => patch({ recebedorName: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label>CNPJ recebedor</Label>
+                    <Input value={active.recebedorCnpj} onChange={(e) => patch({ recebedorCnpj: e.target.value })} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2 pt-2 border-t">
+                  <div>
+                    <Label>Seguradora</Label>
+                    <Input value={active.insurerName} onChange={(e) => patch({ insurerName: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label>Apólice</Label>
+                    <Input value={active.insurerPolicy} onChange={(e) => patch({ insurerPolicy: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label>Nº averbação</Label>
+                    <Input value={active.insurerEndorsement} onChange={(e) => patch({ insurerEndorsement: e.target.value })} />
+                  </div>
+                </div>
               </TabsContent>
 
               <TabsContent value="tomador" className="space-y-3 pt-3">
