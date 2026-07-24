@@ -474,6 +474,8 @@ export default function DriverDeliveries() {
           _stop_id: eventForm.stop.id,
           _notes: reason,
         } as any);
+        // Popula thread local com o resumo do motorista para dar feedback visual imediato.
+        setThreads((prev) => ({ ...prev, [threadKey]: [...(prev[threadKey] || []), buildDriverSummary()] }));
         return;
       }
 
