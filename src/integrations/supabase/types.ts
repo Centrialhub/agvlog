@@ -14298,16 +14298,7 @@ export type Database = {
         Args: { _tenant_name: string }
         Returns: string
       }
-      cte_defaults_for_group:
-        | {
-            Args: {
-              _fiscal_document_ids: string[]
-              _load_ids: string[]
-              _tenant_id: string
-            }
-            Returns: Json
-          }
-        | { Args: { p_load_ids: string[] }; Returns: Json }
+      cte_defaults_for_group: { Args: { p_load_ids: string[] }; Returns: Json }
       current_driver_id: { Args: { _tenant_id: string }; Returns: string }
       delete_load_safely: {
         Args: { _load_id: string; _tenant_id: string }
