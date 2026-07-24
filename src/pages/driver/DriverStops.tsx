@@ -79,6 +79,24 @@ export default function DriverStops() {
     enabled: !!activeTrip?.id,
   });
 
+  // Realtime: refresh stops when operator marks arrival/departure or updates status.
+  useEffect(() => {
+    if (!activeTrip?.id) return;
+    const channel = supabase
+      .channel(`driver_stops_${activeTrip.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'dispatch_stops', filter: `dispatch_trip_id=eq.${activeTrip.id}` },
+        () => {
+          qc.invalidateQueries({ queryKey: ['driver_stops'] });
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeTrip?.id, qc]);
+
   const updateStop = useMutation({
     mutationFn: async ({ stopId, action, reason }: { stopId: string; action: 'arrival' | 'depart' | 'skipped' | 'refused' | 'damaged' | 'returned' | 'partial_delivery'; reason?: string }) => {
       if (!activeTrip) {
