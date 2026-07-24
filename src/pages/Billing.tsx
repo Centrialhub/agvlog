@@ -111,6 +111,7 @@ export default function Billing() {
   const createBatch = useCreateCteBatch();
   const cancelBatch = useCancelCteBatch();
   const { currentTenant } = useTenant();
+  const recalcFreight = useRecalculateInboundFreight();
 
   // Preferência por tenant (chave isolada por workspace)
   const prefKey = `billing:filters:${currentTenant?.id ?? 'none'}`;
@@ -657,6 +658,23 @@ export default function Billing() {
             <Button variant="ghost" size="sm" onClick={clearDocSelection} disabled={selectedDocIds.size === 0}>
               <Eraser className="h-4 w-4 mr-1" /> Limpar seleção
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={filteredDocs.length === 0 || recalcFreight.isPending}
+              onClick={async () => {
+                const ids = (selectedDocIds.size > 0
+                  ? filteredDocs.filter(d => selectedDocIds.has(d.id))
+                  : filteredDocs
+                ).map(d => d.id);
+                if (ids.length === 0) return;
+                const r = await recalcFreight.mutateAsync(ids);
+                toast.success(`Fretes recalculados: ${r.updated} atualizadas, ${r.skipped} ignoradas, ${r.failed} falhas`);
+              }}
+            >
+              <Calculator className="h-4 w-4 mr-1" />
+              {recalcFreight.isPending ? 'Recalculando…' : 'Recalcular fretes'}
+            </Button>
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -681,13 +699,14 @@ export default function Billing() {
                   <TableHead className="text-right">Pallets</TableHead>
                   <TableHead className="text-right">Peso</TableHead>
                   <TableHead className="text-right">Valor</TableHead>
+                  <TableHead className="text-right">Frete</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {docsLoading ? (
-                  <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-6">Carregando...</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-6">Carregando...</TableCell></TableRow>
                 ) : filteredDocs.length === 0 ? (
-                  <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-6">Nenhuma nota disponível com os filtros atuais.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-6">Nenhuma nota disponível com os filtros atuais.</TableCell></TableRow>
                 ) : filteredDocs.map(d => (
                   <TableRow key={d.id} className="cursor-pointer" onClick={() => toggleDoc(d.id)}>
                     <TableCell><Checkbox checked={selectedDocIds.has(d.id)} /></TableCell>
@@ -698,6 +717,11 @@ export default function Billing() {
                     <TableCell className="text-right text-sm">{d.pallet_count || 0}</TableCell>
                     <TableCell className="text-right text-sm">{Number(d.weight_kg || 0).toLocaleString('pt-BR')}</TableCell>
                     <TableCell className="text-right text-sm">R$ {Number(d.value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</TableCell>
+                    <TableCell className="text-right text-sm">
+                      {d.freight_value
+                        ? `R$ ${Number(d.freight_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                        : <span className="text-muted-foreground">—</span>}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
