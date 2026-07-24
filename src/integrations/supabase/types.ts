@@ -5506,9 +5506,15 @@ export type Database = {
           control_lot: string | null
           created_at: string
           created_by: string | null
+          cte_consignee_client_id: string | null
+          cte_driver_id: string | null
+          cte_payload: Json | null
+          cte_taker_role: string | null
+          cte_vehicle_id: string | null
           delivery_meta: Json
           document_type: string
           dynamic_lot: string | null
+          emission_id: string | null
           emitter_id: string | null
           fiscal_model: string | null
           freight_breakdown: Json | null
@@ -5523,6 +5529,7 @@ export type Database = {
           freight_table_id: string | null
           freight_value: number | null
           freight_value_original: number | null
+          hub_document_id: string | null
           ibs_base: number | null
           ibs_rate: number | null
           ibs_value: number | null
@@ -5549,6 +5556,10 @@ export type Database = {
           reference_number: string | null
           remitter: string | null
           remitter_cnpj: string | null
+          sefaz_message: string | null
+          sefaz_protocol: string | null
+          sefaz_status: string | null
+          sefaz_status_code: string | null
           status: string
           supplier_id: string | null
           tenant_id: string
@@ -5568,9 +5579,15 @@ export type Database = {
           control_lot?: string | null
           created_at?: string
           created_by?: string | null
+          cte_consignee_client_id?: string | null
+          cte_driver_id?: string | null
+          cte_payload?: Json | null
+          cte_taker_role?: string | null
+          cte_vehicle_id?: string | null
           delivery_meta?: Json
           document_type?: string
           dynamic_lot?: string | null
+          emission_id?: string | null
           emitter_id?: string | null
           fiscal_model?: string | null
           freight_breakdown?: Json | null
@@ -5585,6 +5602,7 @@ export type Database = {
           freight_table_id?: string | null
           freight_value?: number | null
           freight_value_original?: number | null
+          hub_document_id?: string | null
           ibs_base?: number | null
           ibs_rate?: number | null
           ibs_value?: number | null
@@ -5611,6 +5629,10 @@ export type Database = {
           reference_number?: string | null
           remitter?: string | null
           remitter_cnpj?: string | null
+          sefaz_message?: string | null
+          sefaz_protocol?: string | null
+          sefaz_status?: string | null
+          sefaz_status_code?: string | null
           status?: string
           supplier_id?: string | null
           tenant_id: string
@@ -5630,9 +5652,15 @@ export type Database = {
           control_lot?: string | null
           created_at?: string
           created_by?: string | null
+          cte_consignee_client_id?: string | null
+          cte_driver_id?: string | null
+          cte_payload?: Json | null
+          cte_taker_role?: string | null
+          cte_vehicle_id?: string | null
           delivery_meta?: Json
           document_type?: string
           dynamic_lot?: string | null
+          emission_id?: string | null
           emitter_id?: string | null
           fiscal_model?: string | null
           freight_breakdown?: Json | null
@@ -5647,6 +5675,7 @@ export type Database = {
           freight_table_id?: string | null
           freight_value?: number | null
           freight_value_original?: number | null
+          hub_document_id?: string | null
           ibs_base?: number | null
           ibs_rate?: number | null
           ibs_value?: number | null
@@ -5673,6 +5702,10 @@ export type Database = {
           reference_number?: string | null
           remitter?: string | null
           remitter_cnpj?: string | null
+          sefaz_message?: string | null
+          sefaz_protocol?: string | null
+          sefaz_status?: string | null
+          sefaz_status_code?: string | null
           status?: string
           supplier_id?: string | null
           tenant_id?: string
@@ -14265,6 +14298,7 @@ export type Database = {
         Args: { _tenant_name: string }
         Returns: string
       }
+      cte_defaults_for_group: { Args: { p_load_ids: string[] }; Returns: Json }
       current_driver_id: { Args: { _tenant_id: string }; Returns: string }
       delete_load_safely: {
         Args: { _load_id: string; _tenant_id: string }
