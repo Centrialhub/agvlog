@@ -923,8 +923,17 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                         value={active.icmsCst}
                         onChange={(e) => {
                           const cst = e.target.value;
-                          const isento = cst === '40' || cst === '41' || cst === '51';
-                          patch({ icmsCst: cst, icmsIsento: isento });
+                          const isento = icmsIsentoByCst(cst);
+                          const originUf = (emitterForActive as any)?.endereco?.uf || null;
+                          const aliq = isento ? 0 : suggestIcmsAliquota(originUf, active.recipientState);
+                          const base = active.icmsBase || active.freightValue || 0;
+                          patch({
+                            icmsCst: cst,
+                            icmsIsento: isento,
+                            icmsAliquota: aliq,
+                            icmsBase: base,
+                            icmsValor: Number((base * aliq / 100).toFixed(2)),
+                          });
                         }}
                       >
                         <option value="00">00 — Tributação normal</option>
@@ -947,20 +956,65 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                     </label>
                     <div>
                       <Label className="text-xs">Alíquota %</Label>
-                      <Input type="number" step="0.01" value={active.icmsAliquota} onChange={(e) => patch({ icmsAliquota: Number(e.target.value) })} />
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={active.icmsAliquota}
+                        onChange={(e) => {
+                          const aliq = Number(e.target.value);
+                          const base = active.icmsBase || active.freightValue || 0;
+                          patch({
+                            icmsAliquota: aliq,
+                            icmsBase: base,
+                            icmsValor: Number((base * aliq / 100).toFixed(2)),
+                          });
+                        }}
+                      />
                     </div>
                     <div>
                       <Label className="text-xs">Base</Label>
-                      <Input type="number" step="0.01" value={active.icmsBase} onChange={(e) => patch({ icmsBase: Number(e.target.value) })} />
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={active.icmsBase}
+                        onChange={(e) => {
+                          const base = Number(e.target.value);
+                          patch({
+                            icmsBase: base,
+                            icmsValor: Number((base * (active.icmsAliquota || 0) / 100).toFixed(2)),
+                          });
+                        }}
+                      />
                     </div>
                     <div>
                       <Label className="text-xs">Valor</Label>
                       <Input type="number" step="0.01" value={active.icmsValor} onChange={(e) => patch({ icmsValor: Number(e.target.value) })} />
                     </div>
                   </div>
-                  <p className="text-[10px] text-muted-foreground pt-1">
-                    Sugestão: recalcule base/valor a partir da alíquota. Base padrão = valor do frete.
-                  </p>
+                  <div className="flex items-center justify-between pt-1">
+                    <p className="text-[10px] text-muted-foreground">
+                      Sugestão automática por UF origem/destino. Interestadual S/SE→N/NE/CO/ES = 7%, demais = 12%; intraestadual usa tabela por UF.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => {
+                        const originUf = (emitterForActive as any)?.endereco?.uf || null;
+                        const isento = icmsIsentoByCst(active.icmsCst);
+                        const aliq = isento ? 0 : suggestIcmsAliquota(originUf, active.recipientState);
+                        const base = active.freightValue || 0;
+                        patch({
+                          icmsAliquota: aliq,
+                          icmsBase: base,
+                          icmsValor: Number((base * aliq / 100).toFixed(2)),
+                        });
+                      }}
+                    >
+                      Recalcular
+                    </Button>
+                  </div>
                 </div>
                 <div className="pt-2 border-t">
                   <Label className="text-xs font-semibold">Reforma tributária (CBS/IBS)</Label>
