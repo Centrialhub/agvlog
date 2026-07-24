@@ -1,4 +1,6 @@
 import { useNavigate, useParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -18,14 +20,58 @@ import {
 } from 'lucide-react';
 import DemoBanner from '@/components/driver/DemoBanner';
 import { DEMO_EVENTS_INITIAL } from './DriverEvents';
-import { useState } from 'react';
 import { canUseDriverDemo } from '@/lib/driver/demoMode';
+import { useCurrentDriver } from '@/hooks/useCurrentDriver';
+
+const FINAL_EVENT_TYPES = new Set([
+  'delivered', 'refused', 'returned', 'partial_delivery', 'damaged', 'missing_goods',
+  'delivery_completed', 'delivery_failed',
+]);
 
 export default function DriverEventDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [demoActive, setDemoActive] = useState(canUseDriverDemo);
-  const event = canUseDriverDemo ? DEMO_EVENTS_INITIAL.find((e) => e.id === id) : undefined;
+  const { data: driver } = useCurrentDriver();
+
+  const { data: realRow } = useQuery({
+    queryKey: ['driver_event_detail', id, driver?.id],
+    queryFn: async () => {
+      if (!id || !driver?.id) return null;
+      const { data, error } = await supabase
+        .from('operational_events')
+        .select('*')
+        .eq('id', id)
+        .eq('driver_id', driver.id)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!id && !!driver?.id,
+  });
+
+  const isDemo = !driver && canUseDriverDemo;
+  const event = isDemo
+    ? DEMO_EVENTS_INITIAL.find((e) => e.id === id)
+    : realRow
+      ? (() => {
+          const details = realRow.report_details || {};
+          const type: 'finalizador' | 'informativo' = FINAL_EVENT_TYPES.has(realRow.event_type) ? 'finalizador' : 'informativo';
+          return {
+            id: realRow.id,
+            type,
+            code: (realRow.event_type || '').toUpperCase().slice(0, 4),
+            label: details.label || realRow.event_type || 'Evento',
+            stopName: details.stop_name || details.client_name || '—',
+            invoice: details.invoice || details.nf,
+            receiver: details.receiver_name,
+            document: details.receiver_document,
+            observation: realRow.description,
+            occurredAt: realRow.created_at,
+            hasPhoto: !!details.has_photo,
+            hasSignature: !!details.has_signature,
+          };
+        })()
+      : undefined;
 
   if (!event) {
     return (
@@ -52,10 +98,10 @@ export default function DriverEventDetail() {
         <ArrowLeft className="h-4 w-4 mr-1" /> Eventos
       </Button>
 
-      {demoActive && (
+      {isDemo && (
         <DemoBanner
           message="Modo demonstração — dados fictícios."
-          onReset={() => setDemoActive(true)}
+          onReset={() => { /* no-op */ }}
         />
       )}
 
