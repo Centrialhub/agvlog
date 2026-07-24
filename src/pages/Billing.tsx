@@ -22,6 +22,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { PendingInvoicesBanner } from '@/components/billing/PendingInvoicesBanner';
 import { useRecalculateInboundFreight } from '@/hooks/useRecalculateInboundFreight';
+import { CteEmissionPreviewDialog } from '@/components/billing/CteEmissionPreviewDialog';
 import {
   OPERATION_TYPE_OPTIONS,
   type OperationType,
@@ -777,6 +778,13 @@ export default function Billing() {
           <div className="flex justify-end gap-2">
             <Button variant="outline" disabled={groups.length === 0} onClick={() => setPreviewOpen(true)}>
               Ver prévia ({groups.length})
+            </Button>
+            <Button
+              disabled={groups.length === 0}
+              variant="secondary"
+              onClick={() => setEmitPreviewOpen(true)}
+            >
+              Prévia editável & transmitir
             </Button>
             <Button disabled={groups.length === 0 || createBatch.isPending} onClick={handleGenerate}>
               <CheckCircle2 className="h-4 w-4 mr-2" />
