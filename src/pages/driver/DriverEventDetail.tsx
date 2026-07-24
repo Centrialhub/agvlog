@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -32,6 +33,7 @@ export default function DriverEventDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: driver } = useCurrentDriver();
+  const [demoActive, setDemoActive] = useState(canUseDriverDemo);
 
   const { data: realRow } = useQuery({
     queryKey: ['driver_event_detail', id, driver?.id],
@@ -49,7 +51,7 @@ export default function DriverEventDetail() {
     enabled: !!id && !!driver?.id,
   });
 
-  const isDemo = !driver && canUseDriverDemo;
+  const isDemo = !driver && demoActive;
   const event = isDemo
     ? DEMO_EVENTS_INITIAL.find((e) => e.id === id)
       : realRow
@@ -101,7 +103,7 @@ export default function DriverEventDetail() {
       {isDemo && (
         <DemoBanner
           message="Modo demonstração — dados fictícios."
-          onReset={() => { /* no-op */ }}
+          onReset={() => setDemoActive(false)}
         />
       )}
 
