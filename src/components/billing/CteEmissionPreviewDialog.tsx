@@ -230,6 +230,19 @@ function toBuildInput(
     consignee: e.consigneeName
       ? { name: e.consigneeName, cnpj: e.consigneeCnpj || null }
       : null,
+    expedidor: e.expedidorName
+      ? { name: e.expedidorName, cnpj: e.expedidorCnpj || null }
+      : null,
+    recebedor: e.recebedorName
+      ? { name: e.recebedorName, cnpj: e.recebedorCnpj || null }
+      : null,
+    insurer: e.insurerName
+      ? {
+          name: e.insurerName,
+          policy: e.insurerPolicy || null,
+          endorsement: e.insurerEndorsement || null,
+        }
+      : null,
     takerRole: e.takerRole,
     takerParty:
       e.takerRole === 'terceiro'
@@ -239,6 +252,43 @@ function toBuildInput(
     vehicle: e.vehiclePlate
       ? { id: e.vehicleId, plate: e.vehiclePlate, state: e.vehicleState, renavam: e.vehicleRenavam }
       : null,
+    vehicleType: e.vehicleType || null,
+    additionalPlates: [e.trailerPlate1, e.trailerPlate2, e.trailerPlate3].filter(Boolean),
+    documentType: e.documentType,
+    refNumber: e.refNumber || null,
+    clientOrderNumber: e.clientOrderNumber || null,
+    freightComposition: {
+      freight_weight: e.fcFreightWeight || null,
+      delivery_fee: e.fcDeliveryFee || null,
+      others: e.fcOthers || null,
+      insurance_value: e.fcInsurance || null,
+      dispatch: e.fcDispatch || null,
+      gris: e.fcGris || null,
+      toll: e.fcToll || null,
+      tracking: e.fcTracking || null,
+      loading: e.fcLoading || null,
+      helper: e.fcHelper || null,
+    },
+    icms: {
+      embutido: e.icmsEmbutido,
+      isento: e.icmsIsento,
+      aliquota: e.icmsAliquota || null,
+      base: e.icmsBase || null,
+      valor: e.icmsValor || null,
+    },
+    cbsIbs: {
+      base: e.cbsIbsBase || null,
+      cbs_aliquota: e.cbsAliquota || null,
+      cbs_valor: e.cbsIbsBase && e.cbsAliquota ? Number((e.cbsIbsBase * e.cbsAliquota / 100).toFixed(2)) : null,
+      ibs_aliquota: e.ibsAliquota || null,
+      ibs_valor: e.cbsIbsBase && e.ibsAliquota ? Number((e.cbsIbsBase * e.ibsAliquota / 100).toFixed(2)) : null,
+    },
+    cargo: {
+      content: e.cargoContent || null,
+      species: e.cargoSpecies || null,
+      predominant_product: e.cargoPredominant || null,
+      items_count: e.invoices.length || null,
+    },
     nature: e.nature,
     cfop: e.cfop || null,
     observations: e.observations || null,
@@ -248,6 +298,8 @@ function toBuildInput(
       cargo_value: e.cargoValue,
       weight_kg: e.weightKg,
       pallet_count: e.palletCount,
+      cbs_value: e.cbsIbsBase && e.cbsAliquota ? Number((e.cbsIbsBase * e.cbsAliquota / 100).toFixed(2)) : undefined,
+      ibs_value: e.cbsIbsBase && e.ibsAliquota ? Number((e.cbsIbsBase * e.ibsAliquota / 100).toFixed(2)) : undefined,
     },
   };
 }
