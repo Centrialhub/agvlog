@@ -390,6 +390,31 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     [emitters, active?.emitterId, defaultEmitter],
   );
 
+  // Auto-sugere alíquota de ICMS conforme UF de origem (emitente) e destino (destinatário) quando ainda não editada.
+  useEffect(() => {
+    if (!active) return;
+    const originUf = (emitterForActive as any)?.endereco?.uf || null;
+    const destUf = active.recipientState || null;
+    if (!originUf || !destUf) return;
+    const isento = icmsIsentoByCst(active.icmsCst);
+    const suggested = isento ? 0 : suggestIcmsAliquota(originUf, destUf);
+    if (Math.abs(active.icmsAliquota - suggested) < 0.001) return;
+    const base = active.icmsBase || active.freightValue || 0;
+    setItems((prev) =>
+      prev.map((it, i) =>
+        i === activeIdx
+          ? {
+              ...it,
+              icmsAliquota: suggested,
+              icmsBase: base,
+              icmsValor: Number((base * suggested / 100).toFixed(2)),
+            }
+          : it,
+      ),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeIdx, active?.recipientState, active?.icmsCst, emitterForActive?.id]);
+
   // Ambiente e disponibilidade da credencial CT-e do emitente ativo
   const { data: activeCreds = [] } = useHubCredentials(emitterForActive?.id);
   const activeCteCred = useMemo(
