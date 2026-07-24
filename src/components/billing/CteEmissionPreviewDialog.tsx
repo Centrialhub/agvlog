@@ -14,6 +14,7 @@ import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, RotateCw, Send } 
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useEmitters } from '@/hooks/useEmitters';
+import { useHubCredentials } from '@/hooks/useEmitters';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useClients } from '@/hooks/useClients';
 import { useTenant } from '@/hooks/useTenant';
@@ -118,7 +119,11 @@ function groupToEditable(g: CteGroupPreview, defaultEmitterId: string): Editable
   };
 }
 
-function toBuildInput(e: EditableCte, emitter: any): BuildCtePayloadInput {
+function toBuildInput(
+  e: EditableCte,
+  emitter: any,
+  environment: 'sandbox' | 'production' = 'sandbox',
+): BuildCtePayloadInput {
   return {
     emitter: emitter
       ? {
@@ -126,7 +131,7 @@ function toBuildInput(e: EditableCte, emitter: any): BuildCtePayloadInput {
           cnpj: emitter.cnpj,
           ie: emitter.ie,
           name: emitter.razao_social || emitter.nome_fantasia || '',
-          environment: 'sandbox',
+          environment,
           address: {
             street: emitter.endereco?.logradouro || null,
             number: emitter.endereco?.numero || null,
@@ -245,11 +250,24 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     () => emitters.find((e: any) => e.id === active?.emitterId) || defaultEmitter,
     [emitters, active?.emitterId, defaultEmitter],
   );
+
+  // Ambiente e disponibilidade da credencial CT-e do emitente ativo
+  const { data: activeCreds = [] } = useHubCredentials(emitterForActive?.id);
+  const activeCteCred = useMemo(
+    () =>
+      (activeCreds as any[]).find((c) => c.doc_scope === 'cte' && c.enabled) ||
+      (activeCreds as any[]).find((c) => c.doc_scope === 'all' && c.enabled) ||
+      null,
+    [activeCreds],
+  );
+  const activeEnvironment: 'sandbox' | 'production' =
+    (activeCteCred?.environment as any) === 'production' ? 'production' : 'sandbox';
+
   const validation = useMemo(() => {
     if (!active) return { ok: false, missing: [] as string[], warnings: [] as string[] };
-    const r = buildCtePayload(toBuildInput(active, emitterForActive));
+    const r = buildCtePayload(toBuildInput(active, emitterForActive, activeEnvironment));
     return { ok: r.ok, missing: r.missing, warnings: r.warnings };
-  }, [active, emitterForActive]);
+  }, [active, emitterForActive, activeEnvironment]);
 
   const allValid = items.every((it) => {
     const em = emitters.find((e: any) => e.id === it.emitterId) || defaultEmitter;
