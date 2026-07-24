@@ -96,6 +96,7 @@ export interface CteFreightComposition {
 }
 
 export interface CteIcms {
+  cst?: string | null;         // 00, 20, 40, 41, 51, 60, 90 (CST) ou 90 (CSOSN — Simples)
   embutido?: boolean;
   isento?: boolean;
   aliquota?: number | null;
