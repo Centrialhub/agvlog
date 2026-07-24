@@ -684,8 +684,33 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
               </TabsContent>
 
               <TabsContent value="transporte" className="space-y-3 pt-3">
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <Label>Tipo CT-e</Label>
+                    <Select value={active.documentType} onValueChange={(v: any) => patch({ documentType: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="01">01 — Normal</SelectItem>
+                        <SelectItem value="02">02 — Complementar</SelectItem>
+                        <SelectItem value="03">03 — Anulação</SelectItem>
+                        <SelectItem value="04">04 — Substituição</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Nº Ref</Label>
+                    <Input value={active.refNumber} onChange={(e) => patch({ refNumber: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label>Nº Pedido Cliente</Label>
+                    <Input value={active.clientOrderNumber} onChange={(e) => patch({ clientOrderNumber: e.target.value })} />
+                  </div>
+                </div>
                 <div>
                   <Label>Motorista</Label>
+                  {!active.driverName && (
+                    <Badge variant="secondary" className="ml-2 text-[10px]">Emissão com "."</Badge>
+                  )}
                   <Select
                     value={active.driverId || 'none'}
                     onValueChange={(v) => {
@@ -715,6 +740,9 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                 </div>
                 <div>
                   <Label>Veículo</Label>
+                  {!active.vehiclePlate && (
+                    <Badge variant="secondary" className="ml-2 text-[10px]">Emissão com "."</Badge>
+                  )}
                   <Select
                     value={active.vehicleId || 'none'}
                     onValueChange={(v) => {
@@ -744,6 +772,24 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                   <div>
                     <Label>RENAVAM</Label>
                     <Input value={active.vehicleRenavam} onChange={(e) => patch({ vehicleRenavam: e.target.value })} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-4 gap-2">
+                  <div>
+                    <Label>Tipo veículo</Label>
+                    <Input value={active.vehicleType} onChange={(e) => patch({ vehicleType: e.target.value })} placeholder="01" />
+                  </div>
+                  <div>
+                    <Label>Carreta 1</Label>
+                    <Input value={active.trailerPlate1} onChange={(e) => patch({ trailerPlate1: e.target.value.toUpperCase() })} />
+                  </div>
+                  <div>
+                    <Label>Carreta 2</Label>
+                    <Input value={active.trailerPlate2} onChange={(e) => patch({ trailerPlate2: e.target.value.toUpperCase() })} />
+                  </div>
+                  <div>
+                    <Label>Carreta 3</Label>
+                    <Input value={active.trailerPlate3} onChange={(e) => patch({ trailerPlate3: e.target.value.toUpperCase() })} />
                   </div>
                 </div>
               </TabsContent>
