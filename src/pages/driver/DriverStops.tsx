@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { MapPin, Navigation, CheckCircle, Clock, ArrowRight } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import DemoBanner from '@/components/driver/DemoBanner';
 import { canUseDriverDemo } from '@/lib/driver/demoMode';
 import { isStopTerminal, STOP_STATUS_LABELS } from '@/lib/status';
@@ -78,6 +78,24 @@ export default function DriverStops() {
     },
     enabled: !!activeTrip?.id,
   });
+
+  // Realtime: refresh stops when operator marks arrival/departure or updates status.
+  useEffect(() => {
+    if (!activeTrip?.id) return;
+    const channel = supabase
+      .channel(`driver_stops_${activeTrip.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'dispatch_stops', filter: `dispatch_trip_id=eq.${activeTrip.id}` },
+        () => {
+          qc.invalidateQueries({ queryKey: ['driver_stops'] });
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeTrip?.id, qc]);
 
   const updateStop = useMutation({
     mutationFn: async ({ stopId, action, reason }: { stopId: string; action: 'arrival' | 'depart' | 'skipped' | 'refused' | 'damaged' | 'returned' | 'partial_delivery'; reason?: string }) => {

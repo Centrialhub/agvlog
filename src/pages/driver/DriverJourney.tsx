@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Clock, Play, Coffee, Moon, CheckCircle, ClipboardCheck, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import DemoBanner from '@/components/driver/DemoBanner';
 import { canUseDriverDemo } from '@/lib/driver/demoMode';
 
@@ -53,6 +53,24 @@ export default function DriverJourney() {
     },
     enabled: !!trip?.id,
   });
+
+  // Realtime: sync journey events created by other clients (e.g. operator).
+  useEffect(() => {
+    if (!trip?.id) return;
+    const channel = supabase
+      .channel(`driver_journey_${trip.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'dispatch_events', filter: `dispatch_trip_id=eq.${trip.id}` },
+        () => {
+          qc.invalidateQueries({ queryKey: ['driver_journey_events'] });
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [trip?.id, qc]);
 
   const addEvent = useMutation({
     mutationFn: async (eventType: string) => {

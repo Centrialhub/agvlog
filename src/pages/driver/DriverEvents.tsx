@@ -1,10 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useCurrentDriver, useActiveTrip } from '@/hooks/useCurrentDriver';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, Package, CheckCircle2, AlertTriangle, FileText, ChevronRight, Clock, MapPin } from 'lucide-react';
+import { Search, CheckCircle2, AlertTriangle, FileText, ChevronRight, Clock, MapPin } from 'lucide-react';
 import DemoBanner from '@/components/driver/DemoBanner';
 import { canUseDriverDemo } from '@/lib/driver/demoMode';
 
@@ -83,12 +86,74 @@ export const DEMO_EVENTS_INITIAL: DemoEvent[] = [
   },
 ];
 
+// Event types that finalize a delivery (recusa/entregue/etc.) vs informativos.
+const FINAL_EVENT_TYPES = new Set([
+  'delivered', 'refused', 'returned', 'partial_delivery', 'damaged', 'missing_goods',
+  'delivery_completed', 'delivery_failed',
+]);
+
+function mapRowToEvent(row: any): DemoEvent {
+  const type: DemoEvent['type'] = FINAL_EVENT_TYPES.has(row.event_type) ? 'finalizador' : 'informativo';
+  const details: any = row.report_details || {};
+  return {
+    id: row.id,
+    type,
+    code: (row.event_type || '').toUpperCase().slice(0, 4),
+    label: details.label || row.event_type || 'Evento',
+    stopName: details.stop_name || details.client_name || '—',
+    invoice: details.invoice || details.nf || undefined,
+    receiver: details.receiver_name || undefined,
+    document: details.receiver_document || undefined,
+    observation: row.description || undefined,
+    occurredAt: row.created_at,
+    hasPhoto: !!details.has_photo,
+    hasSignature: !!details.has_signature,
+  };
+}
+
 export default function DriverEvents() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<'all' | 'finalizador' | 'informativo'>('all');
-  const [events] = useState<DemoEvent[]>(canUseDriverDemo ? DEMO_EVENTS_INITIAL : []);
-  const [demoActive, setDemoActive] = useState(canUseDriverDemo);
+  const { data: driver } = useCurrentDriver();
+  const { data: trip } = useActiveTrip(driver?.id);
+  const qc = useQueryClient();
+
+  const { data: realEvents = [] } = useQuery({
+    queryKey: ['driver_events', driver?.id, trip?.id],
+    queryFn: async () => {
+      if (!driver?.id) return [] as DemoEvent[];
+      let q = supabase
+        .from('operational_events')
+        .select('*')
+        .eq('driver_id', driver.id)
+        .order('created_at', { ascending: false })
+        .limit(100);
+      if (trip?.id) q = q.eq('dispatch_trip_id', trip.id);
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data || []).map(mapRowToEvent);
+    },
+    enabled: !!driver?.id,
+  });
+
+  useEffect(() => {
+    if (!driver?.id) return;
+    const channel = supabase
+      .channel(`driver_events_${driver.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'operational_events', filter: `driver_id=eq.${driver.id}` },
+        () => qc.invalidateQueries({ queryKey: ['driver_events'] }),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [driver?.id, qc]);
+
+  const isDemo = !driver && canUseDriverDemo;
+  const events: DemoEvent[] = isDemo ? DEMO_EVENTS_INITIAL : realEvents;
 
   const filtered = useMemo(() => {
     let list = events;
@@ -112,10 +177,10 @@ export default function DriverEvents() {
         <p className="text-sm text-muted-foreground">Histórico de eventos da viagem</p>
       </div>
 
-      {demoActive && (
+      {isDemo && (
         <DemoBanner
           message="Modo demonstração — eventos fictícios."
-          onReset={() => setDemoActive(true)}
+          onReset={() => { /* no-op: real data is auto-fetched */ }}
         />
       )}
 
