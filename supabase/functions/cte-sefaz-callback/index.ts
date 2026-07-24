@@ -111,7 +111,33 @@ Deno.serve(async (req) => {
       doc = data;
     }
     if (!doc) {
-      results.push({ ok: false, error: 'cte_not_found', id, accessKey });
+      // Fallback: novo fluxo de emissão grava em fiscal_documents (via useIssueCTe).
+      const fdUpdate: Record<string, any> = {
+        sefaz_status: status,
+        sefaz_message: item?.reason ?? item?.motivo ?? null,
+        sefaz_status_code: item?.status_code ?? item?.codigo ?? null,
+        sefaz_protocol: item?.protocol_number ?? item?.protocolo ?? null,
+        cte_payload: item,
+      };
+      if (accessKey) fdUpdate.access_key = accessKey;
+      if (status === 'processed') fdUpdate.status = 'issued';
+      if (status === 'cancelled') fdUpdate.status = 'cancelled';
+
+      let fdQuery = supabase.from('fiscal_documents').update(fdUpdate);
+      if (id) fdQuery = fdQuery.eq('hub_document_id', id);
+      else if (accessKey) fdQuery = fdQuery.eq('access_key', accessKey);
+      else {
+        results.push({ ok: false, error: 'missing_identifier', input: item });
+        continue;
+      }
+      const { error: fdErr, count } = await fdQuery.select('id', { count: 'exact' });
+      if (fdErr) {
+        results.push({ ok: false, error: fdErr.message, id, accessKey });
+      } else if (!count) {
+        results.push({ ok: false, error: 'document_not_found', id, accessKey });
+      } else {
+        results.push({ ok: true, target: 'fiscal_documents', matched: count, status });
+      }
       continue;
     }
 
