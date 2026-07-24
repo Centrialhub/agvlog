@@ -21,6 +21,7 @@ import { useTenant } from '@/hooks/useTenant';
 import { useIssueCTe } from '@/hooks/useIssueCTe';
 import type { CteGroupPreview } from '@/lib/cteGroupingModes';
 import { buildCtePayload, type CteTakerRole, type BuildCtePayloadInput } from '@/lib/fiscal/cteBuilder';
+import type { CteDocType } from '@/lib/fiscal/cteBuilder';
 
 interface DriverOpt {
   id: string;
@@ -40,6 +41,13 @@ interface EditableCte {
   consigneeClientId: string | null;
   consigneeName: string;
   consigneeCnpj: string;
+  expedidorName: string;
+  expedidorCnpj: string;
+  recebedorName: string;
+  recebedorCnpj: string;
+  insurerName: string;
+  insurerPolicy: string;
+  insurerEndorsement: string;
   takerRole: CteTakerRole;
   takerName: string;
   takerCnpj: string;
@@ -50,6 +58,13 @@ interface EditableCte {
   vehiclePlate: string;
   vehicleState: string;
   vehicleRenavam: string;
+  vehicleType: string;
+  trailerPlate1: string;
+  trailerPlate2: string;
+  trailerPlate3: string;
+  documentType: CteDocType;
+  refNumber: string;
+  clientOrderNumber: string;
   nature: string;
   cfop: string;
   observations: string;
@@ -57,6 +72,31 @@ interface EditableCte {
   cargoValue: number;
   weightKg: number;
   palletCount: number;
+  // Composição do frete (opcional)
+  fcFreightWeight: number;
+  fcDeliveryFee: number;
+  fcOthers: number;
+  fcInsurance: number;
+  fcDispatch: number;
+  fcGris: number;
+  fcToll: number;
+  fcTracking: number;
+  fcLoading: number;
+  fcHelper: number;
+  // ICMS
+  icmsEmbutido: boolean;
+  icmsIsento: boolean;
+  icmsAliquota: number;
+  icmsBase: number;
+  icmsValor: number;
+  // CBS/IBS
+  cbsAliquota: number;
+  ibsAliquota: number;
+  cbsIbsBase: number;
+  // Mercadoria
+  cargoContent: string;
+  cargoSpecies: string;
+  cargoPredominant: string;
   clientId: string | null;
   invoices: {
     id: string;
@@ -87,6 +127,13 @@ function groupToEditable(g: CteGroupPreview, defaultEmitterId: string): Editable
     consigneeClientId: null,
     consigneeName: '',
     consigneeCnpj: '',
+    expedidorName: '',
+    expedidorCnpj: '',
+    recebedorName: '',
+    recebedorCnpj: '',
+    insurerName: '',
+    insurerPolicy: '',
+    insurerEndorsement: '',
     takerRole: 'destinatario',
     takerName: '',
     takerCnpj: '',
@@ -97,6 +144,13 @@ function groupToEditable(g: CteGroupPreview, defaultEmitterId: string): Editable
     vehiclePlate: '',
     vehicleState: '',
     vehicleRenavam: '',
+    vehicleType: '01',
+    trailerPlate1: '',
+    trailerPlate2: '',
+    trailerPlate3: '',
+    documentType: '01',
+    refNumber: '',
+    clientOrderNumber: '',
     nature: 'PRESTACAO DE SERVICO DE TRANSPORTE',
     cfop: '',
     observations: '',
@@ -104,6 +158,27 @@ function groupToEditable(g: CteGroupPreview, defaultEmitterId: string): Editable
     cargoValue: g.cargo_value,
     weightKg: g.weight_kg,
     palletCount: g.pallet_count,
+    fcFreightWeight: 0,
+    fcDeliveryFee: 0,
+    fcOthers: 0,
+    fcInsurance: 0,
+    fcDispatch: 0,
+    fcGris: 0,
+    fcToll: 0,
+    fcTracking: 0,
+    fcLoading: 0,
+    fcHelper: 0,
+    icmsEmbutido: true,
+    icmsIsento: false,
+    icmsAliquota: 0,
+    icmsBase: 0,
+    icmsValor: 0,
+    cbsAliquota: 0.9,
+    ibsAliquota: 0.1,
+    cbsIbsBase: 0,
+    cargoContent: 'CONFORME NF',
+    cargoSpecies: 'CONFORME NF',
+    cargoPredominant: '',
     clientId: g.client_id,
     invoices: g.documents.map((d: any) => ({
       id: d.id,
