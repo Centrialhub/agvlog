@@ -37,7 +37,7 @@ export default function PortalPods() {
   const [search, setSearch] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const { data: pods = [], isLoading } = usePortalPods({
+  const { data: pods = [], isLoading, error, refetch } = usePortalPods({
     status: status === 'all' ? undefined : status,
     start: startDate || undefined,
     end: endDate || undefined,
@@ -98,6 +98,11 @@ export default function PortalPods() {
         <CardContent className="p-0">
           {isLoading ? (
             <div className="p-8 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></div>
+          ) : error ? (
+            <div className="p-4 text-xs text-destructive flex items-center justify-between gap-3">
+              <span>Erro ao carregar canhotos: {(error as Error).message}</span>
+              <Button size="sm" variant="outline" onClick={() => refetch()}>Tentar novamente</Button>
+            </div>
           ) : filtered.length === 0 ? (
             <PortalEmptyState title="Sem canhotos" description="Nenhum comprovante registrado para os filtros aplicados." />
           ) : (
