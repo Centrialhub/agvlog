@@ -11,8 +11,32 @@ export function useGenerateCTe() {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: async (load: Load) => {
+    mutationFn: async (arg: Load | { load: Load; emitterId?: string | null }) => {
+      const load: Load = (arg as any).load ?? (arg as Load);
+      const overrideEmitterId: string | null | undefined = (arg as any).emitterId;
       if (!currentTenant) throw new Error('Tenant não selecionado');
+
+      // Resolve o emitente (override → default ativo) para preencher remitter/emitter_id na NF-e/CT-e.
+      let emitter: any = null;
+      if (overrideEmitterId) {
+        const { data } = await (supabase as any)
+          .from('tenant_emitters')
+          .select('*')
+          .eq('id', overrideEmitterId)
+          .maybeSingle();
+        emitter = data || null;
+      }
+      if (!emitter) {
+        const { data } = await (supabase as any)
+          .from('tenant_emitters')
+          .select('*')
+          .eq('tenant_id', currentTenant.id)
+          .eq('active', true)
+          .order('is_default', { ascending: false })
+          .order('created_at', { ascending: true })
+          .limit(1);
+        emitter = data?.[0] || null;
+      }
 
       // Check if CT-e already exists for this load
       const { data: existing, error: checkError } = await supabase
@@ -156,7 +180,9 @@ export function useGenerateCTe() {
         invoice_number: cteNumber,
         load_id: load.id,
         client_id: clientId,
-        remitter: currentTenant.name || 'Transportadora',
+        emitter_id: emitter?.id || null,
+        remitter: emitter?.razao_social || emitter?.nome_fantasia || currentTenant.name || 'Transportadora',
+        remitter_cnpj: emitter?.cnpj || null,
         recipient: load.destination || 'Destino não informado',
         recipient_state: destState,
         recipient_city: destMunicipality,
