@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
@@ -12,7 +13,8 @@ export interface PortalOccurrenceMessage {
 
 export function usePortalOccurrenceMessages(occurrenceId: string | null) {
   const { currentTenant } = useTenant();
-  return useQuery({
+  const qc = useQueryClient();
+  const query = useQuery({
     queryKey: ['portal_occurrence_messages', currentTenant?.id, occurrenceId],
     queryFn: async (): Promise<PortalOccurrenceMessage[]> => {
       if (!currentTenant || !occurrenceId) return [];
@@ -24,12 +26,37 @@ export function usePortalOccurrenceMessages(occurrenceId: string | null) {
       return (data as PortalOccurrenceMessage[]) || [];
     },
     enabled: !!currentTenant && !!occurrenceId,
-    // Polling curto enquanto o diálogo está aberto — a tabela usa deny-all RLS,
-    // então postgres_changes não entrega eventos ao cliente. Refetch a cada 5s
-    // dá a percepção de tempo real sem exigir política extra.
-    refetchInterval: occurrenceId ? 5000 : false,
+    // Fallback de polling (10s) enquanto o diálogo está aberto — Realtime
+    // entrega novas mensagens em tempo real quando a policy permite.
+    refetchInterval: occurrenceId ? 10000 : false,
     refetchIntervalInBackground: false,
   });
+
+  useEffect(() => {
+    if (!currentTenant || !occurrenceId) return;
+    const channel = supabase
+      .channel(`portal_occ_msgs_${occurrenceId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'client_occurrence_messages',
+          filter: `occurrence_id=eq.${occurrenceId}`,
+        },
+        () => {
+          qc.invalidateQueries({
+            queryKey: ['portal_occurrence_messages', currentTenant.id, occurrenceId],
+          });
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentTenant, occurrenceId, qc]);
+
+  return query;
 }
 
 export function useReplyPortalOccurrence() {

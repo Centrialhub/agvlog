@@ -53,16 +53,16 @@ export function usePortalTracking() {
   return useQuery({
     queryKey: ['portal_tracking', currentTenant?.id, scope.selectedClientId ?? null],
     queryFn: async (): Promise<PortalTrackingItem[]> => {
-      if (!currentTenant) return [];
-      const { data, error } = await supabase.rpc('get_client_portal_tracking' as any, {
+      if (!currentTenant || !scope.selectedClientId) return [];
+      const { data, error } = await supabase.rpc('get_client_portal_tracking_v2' as any, {
         _tenant_id: currentTenant.id,
-        _client_id: scope.selectedClientId ?? null,
+        _client_id: scope.selectedClientId,
       });
       if (error) throw error;
       const payload = (data as any) || {};
       return (payload.items as PortalTrackingItem[]) || [];
     },
-    enabled: !!currentTenant,
+    enabled: !!currentTenant && !!scope.selectedClientId,
     refetchInterval: 60_000,
   });
 }

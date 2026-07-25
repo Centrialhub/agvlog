@@ -35,8 +35,8 @@ export function usePortalAlerts(opts?: { clientId?: string | null; limit?: numbe
   return useQuery({
     queryKey: ['portal_alerts', currentTenant?.id, clientId, limit],
     queryFn: async (): Promise<PortalAlert[]> => {
-      if (!currentTenant) return [];
-      const { data, error } = await supabase.rpc('get_client_portal_alerts' as any, {
+      if (!currentTenant || !clientId) return [];
+      const { data, error } = await supabase.rpc('get_client_portal_alerts_v2' as any, {
         _tenant_id: currentTenant.id,
         _client_id: clientId,
         _limit: limit,
@@ -44,7 +44,7 @@ export function usePortalAlerts(opts?: { clientId?: string | null; limit?: numbe
       if (error) throw error;
       return (data as PortalAlert[]) ?? [];
     },
-    enabled: !!currentTenant,
+    enabled: !!currentTenant && !!clientId,
     staleTime: 60_000,
   });
 }

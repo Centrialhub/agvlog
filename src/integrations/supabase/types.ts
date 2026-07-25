@@ -14457,6 +14457,10 @@ export type Database = {
         Args: { _client_id?: string; _limit?: number; _tenant_id: string }
         Returns: Json
       }
+      get_client_portal_alerts_v2: {
+        Args: { _client_id: string; _limit?: number; _tenant_id: string }
+        Returns: Json
+      }
       get_client_portal_reports_summary: {
         Args: { _end_date?: string; _start_date?: string; _tenant_id: string }
         Returns: Json
@@ -14495,8 +14499,16 @@ export type Database = {
         Args: { _client_id?: string; _tenant_id: string }
         Returns: Json
       }
+      get_client_portal_tracking_v2: {
+        Args: { _client_id: string; _tenant_id: string }
+        Returns: Json
+      }
       get_client_portal_upcoming_deliveries: {
         Args: { _client_id?: string; _limit?: number; _tenant_id: string }
+        Returns: Json
+      }
+      get_client_portal_upcoming_deliveries_v2: {
+        Args: { _client_id: string; _limit?: number; _tenant_id: string }
         Returns: Json
       }
       get_open_trip_alerts: {
