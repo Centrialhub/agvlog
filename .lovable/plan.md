@@ -1,51 +1,84 @@
-# Vistoria do portal do cliente — rodada de correção
+# Teste end-to-end do portal do cliente
 
-Auditoria confirmou que o núcleo de escopo por `client_id` já é feito nas RPCs (`get_client_portal_*_v2`, `create_client_occurrence`, `request_client_pickup`, `portal_user_can_access_fiscal_document`). Restam gaps concretos de permissão na UI, estados de erro engolidos, código morto perigoso e ausência de realtime no chat de ocorrência. Sem novos módulos.
+Rodada de verificação funcional do `/portal/*` via Playwright headless no sandbox, cobrindo todos os fluxos que um cliente real executa. Sem alterações de código — o entregável é um relatório do estado observado + evidências (screenshots + logs de console/network) + lista de defeitos encontrados por severidade.
 
-## 1. `src/pages/ClientPortal.tsx` — remover código morto
-Arquivo consulta `orders`/`loads` filtrando **apenas por `tenant_id`**, sem `client_id`. Não está roteado no `App.tsx`, mas é uma landmine: qualquer rota futura para ele vaza dados entre clientes do mesmo tenant.
-- Apagar `src/pages/ClientPortal.tsx`.
-- Confirmar via `rg ClientPortal` que nenhum import remanescente exista.
+## Escopo do teste
 
-## 2. `src/pages/portal/PortalDocuments.tsx` — gate financeiro
-Coluna "Valor" (linha ~97) exibe `d.value` sem checar `can_view_financial`. `PortalShipmentDetail.tsx` já faz isso corretamente.
-- Ocultar coluna e célula quando `!can('can_view_financial')` via `usePortalClientScope`.
-- Mesmo tratamento para totais/summary se existirem.
+Autenticação: usar a sessão Supabase gerenciada (`LOVABLE_BROWSER_AUTH_STATUS=injected`). Se o status vier `signed_out`, parar e pedir login no preview. Se `external_unmanaged`, executar apenas as rotas públicas alcançáveis e reportar.
 
-## 3. `src/pages/portal/PortalOccurrences.tsx` — usabilidade e permissão do chat
-- Trocar `c.client_id.slice(0, 8)` (linha ~102) por `c.client_name` no seletor do diálogo "Nova ocorrência", igualando ao padrão de `PortalPickups.tsx`.
-- Envolver botão "Conversar"/`OccurrenceThreadDialog` num check de `can('can_open_occurrences')` (mesma permissão usada para abrir). Sem novo permission — apenas alinhamento client-side; server-side já valida via `_portal_user_has_perm` no `reply_client_occurrence` (confirmar no migration antes de aplicar; se não validar, adicionar um `raise exception` na RPC).
+Fluxos cobertos (um script Playwright por área, com screenshot em cada passo-chave):
 
-## 4. Realtime no chat de ocorrência
-`OccurrenceThreadDialog` só atualiza no refetch manual — cliente não vê resposta do operador sem fechar/reabrir.
-- Adicionar `useEffect` com `supabase.channel(...).on('postgres_changes', ...)` filtrado por `occurrence_id` em `client_occurrence_messages`, invalidando `usePortalOccurrenceMessages` no evento. Cleanup com `supabase.removeChannel`.
-- Confirmar que a tabela `client_occurrence_messages` está no publication `supabase_realtime`; caso não, migration append-only `ALTER PUBLICATION supabase_realtime ADD TABLE public.client_occurrence_messages;`.
+1. **Bootstrap / seletor de cliente** (`PortalLayout`, `PortalClientSelector`)
+   - Login → `/portal` carrega sem tela branca.
+   - Se o usuário tem >1 cliente, alternar no seletor e confirmar que KPIs/listas re-fetcham escopo.
+   - Confere `useTenant` fallback via `get_user_portal_tenants` para usuários portal-only.
 
-## 5. Estados de erro visíveis nas listas
-Hooks `usePortalShipments`, `usePortalDocuments`, `usePortalPods`, `usePortalPickups`, `usePortalOccurrences`, `usePortalTracking` retornam apenas `data`/`isLoading`. Falha de RPC vira "empty state" silencioso.
-- Nas páginas correspondentes, desestruturar `error` da query e, quando `error`, renderizar um bloco de erro (padrão `PortalEmptyState` com variante `variant="error"` ou um `Alert destructive` com botão "Tentar novamente" → `refetch`).
-- Não trocar o shape dos hooks; só consumir `error` que o React Query já expõe.
+2. **Dashboard** (`PortalDashboard`)
+   - 11 KPIs renderizam (não `NaN`/`undefined`).
+   - Próximas entregas: card clicável → detalhe.
+   - Alertas: lista carrega, estados vazio/erro corretos.
 
-## 6. `useClientPortalAccess.ts` — log de fallback
-Fallback v2→legacy engole o erro do v2 silenciosamente.
-- Manter o fallback, mas logar `console.warn('[portal] detailed access RPC failed, falling back', detailed.error)` para diagnóstico. Nada muda no comportamento do usuário.
+3. **Shipments / Detail** (`PortalShipments`, `PortalShipmentDetail`)
+   - Lista carrega, filtros de status funcionam, click abre detalhe.
+   - Detalhe: timeline, ocorrências, provas, mapa (se `can_view_vehicle_live`).
+   - Gate `can_view_financial`: valor visível/oculto conforme permissão.
+   - Aba Documentos: empty state coerente (sem stub antigo).
 
-## 7. `PortalShipmentDetail.tsx` — stub de download
-Aba "Documentos" mostra "será habilitado quando os arquivos estiverem disponíveis" (linhas ~180-183). Sem escopo para implementar geração/serviço agora.
-- Substituir por `PortalEmptyState` com título "Downloads indisponíveis" para não passar sensação de bug. Registrar como fora de escopo.
+4. **Documents** (`PortalDocuments`)
+   - Coluna "Valor" só aparece com `can_view_financial`.
+   - Download só habilitado com `can_download_documents`.
 
-## Fora de escopo (só registrado)
-- Anexo de arquivos em ocorrências do cliente (finding 20) — exige bucket dedicado + policy + upload flow. Rodada própria.
-- Permissão separada `can_cancel_pickup` (finding 23) — mudança de modelo de permissões.
-- Legacy fallback nos demais hooks v2 (finding 14) — só compensa se planejarmos remover as RPCs v2 no curto prazo.
+5. **PODs** (`PortalPods`)
+   - Lista canhotos; URL assinada abre (chamar edge `get-client-pod-signed-url` e conferir 200).
 
-## Verificação
-- `bun run build`
-- `bunx vitest run` (esperado: 250 passando, sem novas quebras)
-- Smoke visual em `/portal` com um usuário multi-cliente: alternar cliente no seletor, abrir ocorrência, ver chat atualizar em tempo real, checar coluna "Valor" oculta quando `can_view_financial=false`.
+6. **Occurrences + chat realtime** (`PortalOccurrences`, `OccurrenceThreadDialog`)
+   - "Nova ocorrência": seletor mostra nome do cliente (não slice do UUID).
+   - Criar ocorrência com `can_open_occurrences=true` → aparece na lista.
+   - Abrir chat, enviar mensagem, confirmar persistência.
+   - Realtime: inserir mensagem via `supabase.rpc('reply_client_occurrence', …)` em outra sessão do script e verificar que o diálogo atualiza sem refetch manual (canal `client_occurrence_messages`).
+   - Botão "Conversar" oculto/desabilitado quando `can_open_occurrences=false`.
+
+7. **Pickups** (`PortalPickups`)
+   - Fluxo `request_client_pickup` end-to-end; validação de campos.
+   - Cancelamento (finding conhecido: sem permissão dedicada — apenas registrar comportamento).
+
+8. **Tracking** (`PortalTracking`)
+   - Mapa carrega, marcadores por `dispatch_stops`, sem vazamento cross-client.
+
+9. **Reports / Settings** (`PortalReports`, `PortalSettings`)
+   - Relatórios renderizam sem erro; settings salva alterações permitidas.
+
+10. **Segurança / escopo**
+    - Chamar diretamente `get_client_portal_*_v2` com `_client_id` de outro cliente do mesmo tenant → deve negar.
+    - Testar `portal_user_can_access_fiscal_document` com doc de cliente não-vinculado.
+    - Confirmar que RPCs legadas removidas (ex.: overload antigo de `get_client_portal_tracking`) não são chamadas.
+
+## Como o teste roda
+
+- Um script Python por área sob `/tmp/browser/portal-e2e/<area>.py`, cada um sobe browser novo, injeta sessão via `LOVABLE_BROWSER_SUPABASE_*`, navega a partir de `http://localhost:8080/portal`.
+- Viewport fixo `1280x1800`, `headless=True`, screenshots em `/tmp/browser/portal-e2e/screenshots/<area>_NN.png`.
+- Cada script imprime: URL final, título, contagem de linhas nos data grids, primeiros erros de console, requisições que retornaram ≥400.
+- Ao final, agrega um relatório único (`/tmp/browser/portal-e2e/report.md`) com:
+  - Status por área (pass / warn / fail).
+  - Screenshots referenciados.
+  - Lista de defeitos com severidade (crítico = quebra funcional ou vazamento cross-client; alto = permissão errada visível; médio = UX/estado de erro; baixo = cosmético).
+
+## Entregável
+
+Um resumo curto no chat com:
+- Total de áreas testadas e resultado.
+- Defeitos críticos/altos com caminho de arquivo sugerido para correção (sem aplicar correção nesta rodada).
+- Path do relatório completo + screenshots.
+
+## Fora de escopo
+
+- Corrigir defeitos encontrados (rodada separada, após triagem).
+- Anexo em ocorrências, `can_cancel_pickup` dedicado, remoção do fallback legacy — já registrados como fora de escopo no `.lovable/plan.md`.
+- Testes de carga/performance.
 
 ## Detalhes técnicos
-- Nenhuma alteração em edge functions.
-- Migration apenas se `client_occurrence_messages` não estiver no publication realtime.
-- Padrão de subscription já em uso em `DriverStops`/`DriverIssues` — reaproveitar.
-- Sem mudanças em RLS (todas as RPCs relevantes já validam client scope server-side).
+
+- Pré-requisito: `LOVABLE_BROWSER_AUTH_STATUS=injected` com um usuário que tenha acesso a ≥1 cliente via `client_portal_access`. Se não houver, pausar e pedir para o usuário logar no preview como cliente antes de rodar.
+- Multi-cliente: se o usuário atual só tem 1 cliente, testes de seletor viram smoke (registrar como "não coberto" no relatório).
+- Realtime: valida via `supabase.channel('client_occurrence_messages').on('postgres_changes', …)` que o publication está ativo; se não, marca como defeito.
+- Cross-tenant/cross-client: usar `supabase.rpc` direto no browser context (com o token do usuário atual) para tentar acesso indevido — a expectativa é receber erro ou zero linhas.
