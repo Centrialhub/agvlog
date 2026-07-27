@@ -35,8 +35,10 @@ interface EditableCte {
   emitterId: string;
   remitterName: string;
   remitterCnpj: string;
+  remitterIe: string;
   recipientName: string;
   recipientCnpj: string;
+  recipientIe: string;
   recipientCity: string;
   recipientState: string;
   consigneeClientId: string | null;
@@ -122,8 +124,10 @@ function groupToEditable(g: CteGroupPreview, defaultEmitterId: string): Editable
     emitterId: defaultEmitterId,
     remitterName: g.remitter || '',
     remitterCnpj: first?.remitter_cnpj || '',
+    remitterIe: '',
     recipientName: g.recipient || '',
     recipientCnpj: first?.recipient_cnpj || '',
+    recipientIe: '',
     recipientCity: g.recipient_city || '',
     recipientState: g.recipient_state || '',
     consigneeClientId: null,
@@ -225,6 +229,7 @@ function toBuildInput(
     name: string,
     cnpj: string,
     fallbackAddress?: { city?: string | null; state?: string | null } | null,
+    ieOverride?: string | null,
   ) {
     if (!name) return null;
     const c = byCnpj.get(digits(cnpj));
@@ -232,7 +237,7 @@ function toBuildInput(
     return {
       name,
       cnpj: cnpj || c?.tax_id || null,
-      ie: c?.state_registration || null,
+      ie: (ieOverride && ieOverride.trim()) || c?.state_registration || null,
       address:
         addr ||
         (fallbackAddress
@@ -266,11 +271,13 @@ function toBuildInput(
           },
         }
       : null,
-    remitter: enrichParty(e.remitterName, e.remitterCnpj),
-    recipient: enrichParty(e.recipientName, e.recipientCnpj, {
-      city: e.recipientCity,
-      state: e.recipientState,
-    }),
+    remitter: enrichParty(e.remitterName, e.remitterCnpj, null, e.remitterIe),
+    recipient: enrichParty(
+      e.recipientName,
+      e.recipientCnpj,
+      { city: e.recipientCity, state: e.recipientState },
+      e.recipientIe,
+    ),
     consignee: enrichParty(e.consigneeName, e.consigneeCnpj),
     expedidor: enrichParty(e.expedidorName, e.expedidorCnpj),
     recebedor: enrichParty(e.recebedorName, e.recebedorCnpj),
