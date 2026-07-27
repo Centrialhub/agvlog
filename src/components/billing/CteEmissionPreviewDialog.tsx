@@ -35,8 +35,10 @@ interface EditableCte {
   emitterId: string;
   remitterName: string;
   remitterCnpj: string;
+  remitterIe: string;
   recipientName: string;
   recipientCnpj: string;
+  recipientIe: string;
   recipientCity: string;
   recipientState: string;
   consigneeClientId: string | null;
@@ -122,8 +124,10 @@ function groupToEditable(g: CteGroupPreview, defaultEmitterId: string): Editable
     emitterId: defaultEmitterId,
     remitterName: g.remitter || '',
     remitterCnpj: first?.remitter_cnpj || '',
+    remitterIe: '',
     recipientName: g.recipient || '',
     recipientCnpj: first?.recipient_cnpj || '',
+    recipientIe: '',
     recipientCity: g.recipient_city || '',
     recipientState: g.recipient_state || '',
     consigneeClientId: null,
@@ -225,6 +229,7 @@ function toBuildInput(
     name: string,
     cnpj: string,
     fallbackAddress?: { city?: string | null; state?: string | null } | null,
+    ieOverride?: string | null,
   ) {
     if (!name) return null;
     const c = byCnpj.get(digits(cnpj));
@@ -232,7 +237,7 @@ function toBuildInput(
     return {
       name,
       cnpj: cnpj || c?.tax_id || null,
-      ie: c?.state_registration || null,
+      ie: (ieOverride && ieOverride.trim()) || c?.state_registration || null,
       address:
         addr ||
         (fallbackAddress
@@ -266,11 +271,13 @@ function toBuildInput(
           },
         }
       : null,
-    remitter: enrichParty(e.remitterName, e.remitterCnpj),
-    recipient: enrichParty(e.recipientName, e.recipientCnpj, {
-      city: e.recipientCity,
-      state: e.recipientState,
-    }),
+    remitter: enrichParty(e.remitterName, e.remitterCnpj, null, e.remitterIe),
+    recipient: enrichParty(
+      e.recipientName,
+      e.recipientCnpj,
+      { city: e.recipientCity, state: e.recipientState },
+      e.recipientIe,
+    ),
     consignee: enrichParty(e.consigneeName, e.consigneeCnpj),
     expedidor: enrichParty(e.expedidorName, e.expedidorCnpj),
     recebedor: enrichParty(e.recebedorName, e.recebedorCnpj),
@@ -418,6 +425,38 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  // Auto-preenche IE de remetente/destinatário a partir do cadastro de clientes/fornecedores
+  useEffect(() => {
+    if (!open || items.length === 0 || clients.length === 0) return;
+    const digitsOnly = (v?: string | null) => (v || '').replace(/\D+/g, '');
+    const byCnpj = new Map<string, any>();
+    for (const c of clients as any[]) {
+      const k = digitsOnly(c?.tax_id);
+      if (k) byCnpj.set(k, c);
+    }
+    let changed = false;
+    const next = items.map((it) => {
+      let out = it;
+      if (!out.remitterIe) {
+        const c = byCnpj.get(digitsOnly(out.remitterCnpj));
+        if (c?.state_registration) {
+          out = { ...out, remitterIe: String(c.state_registration) };
+          changed = true;
+        }
+      }
+      if (!out.recipientIe) {
+        const c = byCnpj.get(digitsOnly(out.recipientCnpj));
+        if (c?.state_registration) {
+          out = { ...out, recipientIe: String(c.state_registration) };
+          changed = true;
+        }
+      }
+      return out;
+    });
+    if (changed) setItems(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, clients, items.length]);
 
   const active = items[activeIdx];
   const emitterForActive = useMemo(
@@ -647,6 +686,14 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                     <Label>CNPJ</Label>
                     <Input value={active.remitterCnpj} onChange={(e) => patch({ remitterCnpj: e.target.value })} />
                   </div>
+                  <div>
+                    <Label>IE remetente</Label>
+                    <Input
+                      value={active.remitterIe}
+                      onChange={(e) => patch({ remitterIe: e.target.value })}
+                      placeholder="ISENTO se não contribuinte"
+                    />
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
@@ -656,6 +703,14 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                   <div>
                     <Label>CNPJ</Label>
                     <Input value={active.recipientCnpj} onChange={(e) => patch({ recipientCnpj: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label>IE destinatário</Label>
+                    <Input
+                      value={active.recipientIe}
+                      onChange={(e) => patch({ recipientIe: e.target.value })}
+                      placeholder="ISENTO se não contribuinte"
+                    />
                   </div>
                   <div>
                     <Label>Município</Label>
