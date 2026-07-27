@@ -5569,6 +5569,8 @@ export type Database = {
           reference_number: string | null
           remitter: string | null
           remitter_cnpj: string | null
+          remitter_ie_indicator: string | null
+          remitter_state_registration: string | null
           sefaz_message: string | null
           sefaz_protocol: string | null
           sefaz_status: string | null
@@ -5642,6 +5644,8 @@ export type Database = {
           reference_number?: string | null
           remitter?: string | null
           remitter_cnpj?: string | null
+          remitter_ie_indicator?: string | null
+          remitter_state_registration?: string | null
           sefaz_message?: string | null
           sefaz_protocol?: string | null
           sefaz_status?: string | null
@@ -5715,6 +5719,8 @@ export type Database = {
           reference_number?: string | null
           remitter?: string | null
           remitter_cnpj?: string | null
+          remitter_ie_indicator?: string | null
+          remitter_state_registration?: string | null
           sefaz_message?: string | null
           sefaz_protocol?: string | null
           sefaz_status?: string | null
