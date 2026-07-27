@@ -534,10 +534,10 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
       return;
     }
     // Separa o patch em duas partes: bulk-safe e per-item.
-    const bulkPart: Partial<EditableCte> = {};
-    const activePart: Partial<EditableCte> = {};
-    for (const [k, v] of Object.entries(patch) as [keyof EditableCte, any][]) {
-      if (PER_ITEM_ONLY.has(k)) activePart[k] = v;
+    const bulkPart: Record<string, any> = {};
+    const activePart: Record<string, any> = {};
+    for (const [k, v] of Object.entries(patch)) {
+      if (PER_ITEM_ONLY.has(k as keyof EditableCte)) activePart[k] = v;
       else bulkPart[k] = v;
     }
     setItems((arr) =>
