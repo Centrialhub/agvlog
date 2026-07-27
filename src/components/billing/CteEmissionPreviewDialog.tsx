@@ -624,6 +624,17 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
               scope: {activeCteCred.doc_scope} · env: {activeCteCred.environment}
             </span>
           )}
+          <label className="ml-auto flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={bulkEdit}
+              onChange={(e) => setBulkEdit(e.target.checked)}
+              className="h-3 w-3"
+            />
+            <span className={bulkEdit ? 'font-medium' : 'text-muted-foreground'}>
+              Aplicar edições a todas as {items.length} CT-es do lote
+            </span>
+          </label>
         </div>
 
         <div className="grid grid-cols-[220px_1fr] gap-4">
