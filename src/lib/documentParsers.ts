@@ -71,6 +71,7 @@ export interface ParsedNFe {
   issueDate: string;
   emitterName: string;
   emitterCnpj: string;
+  emitterStateRegistration?: string;
   recipientName: string;
   recipientCnpj: string;
   recipientFantasyName: string;
@@ -368,6 +369,7 @@ export function parseNFeXml(xmlString: string): ParsedNFe {
   const emit = infNFe.getElementsByTagName('emit')[0];
   const emitterName = getTagText(emit || infNFe, 'xNome');
   const emitterCnpj = getTagText(emit || infNFe, 'CNPJ');
+  const emitterStateRegistration = getTagText(emit || infNFe, 'IE');
 
   const recipient = extractRecipient(infNFe);
   const detElements = infNFe.getElementsByTagName('det');
@@ -386,7 +388,7 @@ export function parseNFeXml(xmlString: string): ParsedNFe {
 
   return {
     invoiceNumber, series, model, accessKey, issueDate,
-    emitterName, emitterCnpj,
+    emitterName, emitterCnpj, emitterStateRegistration,
     ...recipient,
     items, totalValue, totalWeight, totalVolume, estimatedPallets,
     observation,
