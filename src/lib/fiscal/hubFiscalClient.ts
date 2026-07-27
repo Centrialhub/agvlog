@@ -85,7 +85,7 @@ export const hubFiscal = {
   },
 
   email(hubDocumentId: string, emails: string[]) {
-    return invoke({ action: 'email', id: hubDocumentId, body: { emails } });
+    return invoke({ action: 'email', id: hubDocumentId, body: { destinatarios: emails } });
   },
 
   preview(hubDocumentId: string) {
@@ -96,13 +96,38 @@ export const hubFiscal = {
     return invoke({ action: 'query', query: filters });
   },
 
+  /** CT-e — Desacordo do Tomador (mín. 15 caracteres). */
+  desacordo(hubDocumentId: string, justificativa: string, emissionId?: string) {
+    return invoke({ action: 'desacordo', id: hubDocumentId, emissionId, body: { justificativa } });
+  },
+
+  /** CT-e — Comprovante de Entrega (CE-CT-e). */
+  cent(hubDocumentId: string, body: {
+    dataHoraEntrega: string;
+    nomeRecebedor: string;
+    cpfRecebedor: string;
+    hashComprovante: string;
+  }, emissionId?: string) {
+    return invoke({ action: 'cent', id: hubDocumentId, emissionId, body });
+  },
+
+  /** CT-e — Descarta rejeitado no ManagerSaaS permitindo reemissão com mesma numeração. */
+  discard(hubDocumentId: string, emissionId?: string) {
+    return invoke({ action: 'discard', id: hubDocumentId, emissionId });
+  },
+
+  /** CT-e — Importa XML autorizado externamente. */
+  import(body: { emitterCnpj: string; environment: HubEnvironment; xmlBase64: string }, emitterId?: string) {
+    return invoke({ action: 'import', body, emitterId });
+  },
+
   /** Diagnóstico: verifica qual credencial seria usada para um emitente/escopo. Não retorna o token. */
   ping(emitterId: string | undefined, type: HubDocType | 'all' = 'all') {
     return invoke({ action: 'ping', emitterId, type });
   },
 
   /** Returns a Blob you can hand to URL.createObjectURL for download/preview. */
-  async file(hubDocumentId: string, format: 'pdf' | 'xml' = 'pdf'): Promise<Blob> {
+  async file(hubDocumentId: string, format: 'pdf' | 'xml' | 'cancel_xml' = 'pdf'): Promise<Blob> {
     const { data: session } = await supabase.auth.getSession();
     const token = session.session?.access_token;
     const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/hub-fiscal-proxy`;
