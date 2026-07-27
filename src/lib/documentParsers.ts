@@ -71,6 +71,7 @@ export interface ParsedNFe {
   issueDate: string;
   emitterName: string;
   emitterCnpj: string;
+  emitterStateRegistration?: string;
   recipientName: string;
   recipientCnpj: string;
   recipientFantasyName: string;
