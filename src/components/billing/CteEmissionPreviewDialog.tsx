@@ -140,7 +140,7 @@ function groupToEditable(g: CteGroupPreview, defaultEmitterId: string): Editable
     insurerName: '',
     insurerPolicy: '',
     insurerEndorsement: '',
-    takerRole: 'destinatario',
+    takerRole: 'remetente',
     takerName: '',
     takerCnpj: '',
     driverId: null,
