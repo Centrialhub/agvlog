@@ -426,6 +426,38 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // Auto-preenche IE de remetente/destinatário a partir do cadastro de clientes/fornecedores
+  useEffect(() => {
+    if (!open || items.length === 0 || clients.length === 0) return;
+    const digitsOnly = (v?: string | null) => (v || '').replace(/\D+/g, '');
+    const byCnpj = new Map<string, any>();
+    for (const c of clients as any[]) {
+      const k = digitsOnly(c?.tax_id);
+      if (k) byCnpj.set(k, c);
+    }
+    let changed = false;
+    const next = items.map((it) => {
+      let out = it;
+      if (!out.remitterIe) {
+        const c = byCnpj.get(digitsOnly(out.remitterCnpj));
+        if (c?.state_registration) {
+          out = { ...out, remitterIe: String(c.state_registration) };
+          changed = true;
+        }
+      }
+      if (!out.recipientIe) {
+        const c = byCnpj.get(digitsOnly(out.recipientCnpj));
+        if (c?.state_registration) {
+          out = { ...out, recipientIe: String(c.state_registration) };
+          changed = true;
+        }
+      }
+      return out;
+    });
+    if (changed) setItems(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, clients, items.length]);
+
   const active = items[activeIdx];
   const emitterForActive = useMemo(
     () => emitters.find((e: any) => e.id === active?.emitterId) || defaultEmitter,
