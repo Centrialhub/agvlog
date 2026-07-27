@@ -367,6 +367,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
   const [items, setItems] = useState<EditableCte[]>([]);
   const [activeIdx, setActiveIdx] = useState(0);
   const [transmitting, setTransmitting] = useState(false);
+  const [bulkEdit, setBulkEdit] = useState(true);
 
   const defaultEmitter = emitters.find((e: any) => e.is_default && e.active) || emitters[0];
 
@@ -513,7 +514,38 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
   });
 
   function patch(patch: Partial<EditableCte>) {
-    setItems((arr) => arr.map((it, i) => (i === activeIdx ? { ...it, ...patch } : it)));
+    // Chaves específicas de cada CT-e — nunca replicar para o lote.
+    const PER_ITEM_ONLY = new Set<keyof EditableCte>([
+      'remitterName', 'remitterCnpj', 'remitterIe',
+      'recipientName', 'recipientCnpj', 'recipientIe',
+      'recipientCity', 'recipientState',
+      'consigneeClientId', 'consigneeName', 'consigneeCnpj',
+      'expedidorName', 'expedidorCnpj',
+      'recebedorName', 'recebedorCnpj',
+      'refNumber', 'clientOrderNumber',
+      'freightValue', 'cargoValue', 'weightKg', 'palletCount',
+      'icmsBase', 'icmsValor', 'cbsIbsBase',
+      'fcFreightWeight',
+      'invoices', 'loadIds', 'fiscalDocumentIds', 'clientId',
+      'key', 'transmitted', 'transmitMessage',
+    ]);
+    if (!bulkEdit) {
+      setItems((arr) => arr.map((it, i) => (i === activeIdx ? { ...it, ...patch } : it)));
+      return;
+    }
+    // Separa o patch em duas partes: bulk-safe e per-item.
+    const bulkPart: Record<string, any> = {};
+    const activePart: Record<string, any> = {};
+    for (const [k, v] of Object.entries(patch)) {
+      if (PER_ITEM_ONLY.has(k as keyof EditableCte)) activePart[k] = v;
+      else bulkPart[k] = v;
+    }
+    setItems((arr) =>
+      arr.map((it, i) => {
+        const base = { ...it, ...bulkPart };
+        return i === activeIdx ? { ...base, ...activePart } : base;
+      }),
+    );
   }
 
   async function transmit() {
@@ -592,6 +624,17 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
               scope: {activeCteCred.doc_scope} · env: {activeCteCred.environment}
             </span>
           )}
+          <label className="ml-auto flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={bulkEdit}
+              onChange={(e) => setBulkEdit(e.target.checked)}
+              className="h-3 w-3"
+            />
+            <span className={bulkEdit ? 'font-medium' : 'text-muted-foreground'}>
+              Aplicar edições a todas as {items.length} CT-es do lote
+            </span>
+          </label>
         </div>
 
         <div className="grid grid-cols-[220px_1fr] gap-4">
