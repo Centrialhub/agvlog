@@ -686,6 +686,14 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                     <Label>CNPJ</Label>
                     <Input value={active.remitterCnpj} onChange={(e) => patch({ remitterCnpj: e.target.value })} />
                   </div>
+                  <div>
+                    <Label>IE remetente</Label>
+                    <Input
+                      value={active.remitterIe}
+                      onChange={(e) => patch({ remitterIe: e.target.value })}
+                      placeholder="ISENTO se não contribuinte"
+                    />
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
@@ -695,6 +703,14 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                   <div>
                     <Label>CNPJ</Label>
                     <Input value={active.recipientCnpj} onChange={(e) => patch({ recipientCnpj: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label>IE destinatário</Label>
+                    <Input
+                      value={active.recipientIe}
+                      onChange={(e) => patch({ recipientIe: e.target.value })}
+                      placeholder="ISENTO se não contribuinte"
+                    />
                   </div>
                   <div>
                     <Label>Município</Label>
