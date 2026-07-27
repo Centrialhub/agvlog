@@ -27,7 +27,8 @@ async function decryptAesGcm(encrypted: string, keyHex: string): Promise<string>
 
 type Action =
   | 'emit' | 'get' | 'sync' | 'cancel' | 'cce'
-  | 'email' | 'file' | 'query' | 'preview' | 'ping';
+  | 'email' | 'file' | 'query' | 'preview' | 'ping'
+  | 'desacordo' | 'cent' | 'discard' | 'import';
 
 interface ProxyRequest {
   action: Action;
@@ -36,7 +37,7 @@ interface ProxyRequest {
   emissionId?: string;  // local hub_fiscal_emissions.id
   query?: Record<string, string>;
   body?: Record<string, unknown>;
-  format?: 'pdf' | 'xml';
+  format?: 'pdf' | 'xml' | 'cancel_xml';
   // emit-only
   fiscalDocumentId?: string;
   cteDocumentId?: string;
@@ -193,6 +194,12 @@ Deno.serve(async (req) => {
           hub_document_id: doc.id || null,
           plugnotas_id: doc.plugnotasId || null,
           status: doc.status || (status >= 400 ? 'error' : 'processing'),
+          access_key: doc.accessKey || null,
+          authorization_protocol: doc.authorizationProtocol || doc.plugnotasProtocol || null,
+          number: doc.number || null,
+          series: doc.series || null,
+          c_stat: doc.cStat ?? null,
+          message: doc.message || null,
           fiscal_document_id: payload.fiscalDocumentId || null,
           cte_document_id: payload.cteDocumentId || null,
           nfse_document_id: payload.nfseDocumentId || null,
@@ -280,7 +287,10 @@ Deno.serve(async (req) => {
       case 'email': {
         if (!payload.id) return json(400, { success: false, error: { code: 'MISSING_ID' } });
         const resolved = await resolveToken(payload.type || 'all', payload.emitterId);
-        const { status, data } = await callHub('POST', '/hub_documents_email', { id: payload.id }, payload.body || {}, resolved.token);
+        // Hub API espera { destinatarios: string[] }.
+        const src = (payload.body || {}) as Record<string, unknown>;
+        const destinatarios = (src.destinatarios || src.emails || []) as string[];
+        const { status, data } = await callHub('POST', '/hub_documents_email', { id: payload.id }, { destinatarios }, resolved.token);
         return json(status, { success: status < 400, hub: data });
       }
 
@@ -313,6 +323,44 @@ Deno.serve(async (req) => {
       case 'query': {
         const resolved = await resolveToken(payload.type || 'all', payload.emitterId);
         const { status, data } = await callHub('GET', '/hub_documents_query', payload.query || {}, undefined, resolved.token);
+        return json(status, { success: status < 400, hub: data });
+      }
+
+      case 'desacordo': {
+        if (!payload.id) return json(400, { success: false, error: { code: 'MISSING_ID' } });
+        const justificativa = (payload.body as any)?.justificativa as string | undefined;
+        if (!justificativa || justificativa.trim().length < 15) {
+          return json(400, { success: false, error: { code: 'INVALID_JUSTIFICATION', message: 'Mínimo 15 caracteres.' } });
+        }
+        const resolved = await resolveToken(payload.type || 'cte', payload.emitterId);
+        const { status, data } = await callHub('POST', '/hub_documents_desacordo', { id: payload.id }, { justificativa }, resolved.token);
+        return json(status, { success: status < 400, hub: data });
+      }
+
+      case 'cent': {
+        if (!payload.id) return json(400, { success: false, error: { code: 'MISSING_ID' } });
+        const resolved = await resolveToken(payload.type || 'cte', payload.emitterId);
+        const { status, data } = await callHub('POST', '/hub_documents_cent', { id: payload.id }, payload.body || {}, resolved.token);
+        return json(status, { success: status < 400, hub: data });
+      }
+
+      case 'discard': {
+        if (!payload.id) return json(400, { success: false, error: { code: 'MISSING_ID' } });
+        const resolved = await resolveToken(payload.type || 'cte', payload.emitterId);
+        const { status, data } = await callHub('POST', '/hub_documents_discard', { id: payload.id }, undefined, resolved.token);
+        if (status < 400 && payload.emissionId) {
+          await admin.from('hub_fiscal_emissions').update({
+            status: 'discarded',
+            last_response: data as any,
+          }).eq('id', payload.emissionId).eq('tenant_id', tenantId);
+        }
+        return json(status, { success: status < 400, hub: data });
+      }
+
+      case 'import': {
+        const body = payload.body || {};
+        const resolved = await resolveToken(payload.type || 'cte', payload.emitterId);
+        const { status, data } = await callHub('POST', '/hub_documents_import', undefined, body, resolved.token);
         return json(status, { success: status < 400, hub: data });
       }
 
