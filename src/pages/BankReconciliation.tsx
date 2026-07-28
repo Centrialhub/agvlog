@@ -281,7 +281,14 @@ function ImportStatementDialog({ accountId, periodStart, periodEnd }: { accountI
   const submit = async () => {
     if (!file || !accountId) return;
     const parsed = buildParsedRows(rowsRaw, mapping, accountId);
-    if (parsed.length === 0) { toast({ title: 'Nenhuma linha válida', variant: 'destructive' }); return; }
+    if (parsed.length === 0) {
+      toast({
+        title: 'Nenhuma linha válida',
+        description: 'Verifique se as colunas Data, Descrição e Valor (ou Crédito/Débito) foram mapeadas corretamente e se a linha do cabeçalho está certa.',
+        variant: 'destructive',
+      });
+      return;
+    }
     const hash = await computeFileHash(file);
     importMut.mutate({
       bank_account_id: accountId,
