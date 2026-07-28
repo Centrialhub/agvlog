@@ -13,9 +13,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Search, Plus, Wallet, Download, CheckCircle, XCircle } from 'lucide-react';
+import { Search, Plus, Wallet, Download, CheckCircle, XCircle, DollarSign, Receipt } from 'lucide-react';
 import { toast } from 'sonner';
 import FiscalXmlUpload from '@/components/financial/FiscalXmlUpload';
+import PayablePaymentDialog from '@/components/financial/PayablePaymentDialog';
+import ManualExpenseDialog from '@/components/financial/ManualExpenseDialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import type { ParsedFiscalXml } from '@/lib/nfeXmlParser';
@@ -50,6 +52,9 @@ export default function Payables() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ ...emptyForm });
   const [pendingReceipt, setPendingReceipt] = useState<File | null>(null);
+  const [paymentPayable, setPaymentPayable] = useState<Payable | null>(null);
+  const [manualOpen, setManualOpen] = useState(false);
+  const [sourceFilter, setSourceFilter] = useState('all');
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -62,9 +67,10 @@ export default function Payables() {
         else if (statusFilter !== 'overdue' && p.status !== statusFilter) return false;
       }
       if (categoryFilter !== 'all' && p.category !== categoryFilter) return false;
+      if (sourceFilter !== 'all' && ((p as any).source || 'system') !== sourceFilter) return false;
       return true;
     });
-  }, [payables, search, statusFilter, categoryFilter]);
+  }, [payables, search, statusFilter, categoryFilter, sourceFilter]);
 
   const totals = useMemo(() => ({
     pending: payables.filter(p => p.status === 'pending').reduce((s, p) => s + Number(p.amount || 0), 0),
@@ -225,6 +231,9 @@ export default function Payables() {
           <Button variant="outline" onClick={exportCsv} disabled={filtered.length === 0}>
             <Download className="h-4 w-4 mr-2" /> Exportar CSV
           </Button>
+          <Button variant="outline" onClick={() => setManualOpen(true)}>
+            <Receipt className="h-4 w-4 mr-2" /> Despesa avulsa
+          </Button>
           <Button onClick={() => { resetForm(); setDialogOpen(true); }}>
             <Plus className="h-4 w-4 mr-2" /> Nova conta
           </Button>
@@ -270,6 +279,14 @@ export default function Payables() {
             {PAYABLE_CATEGORIES.map(c => <SelectItem key={c} value={c}>{PAYABLE_CATEGORY_LABELS[c]}</SelectItem>)}
           </SelectContent>
         </Select>
+        <Select value={sourceFilter} onValueChange={setSourceFilter}>
+          <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Origem: todas</SelectItem>
+            <SelectItem value="system">Operacional</SelectItem>
+            <SelectItem value="manual">Avulsa</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <Card>
@@ -281,40 +298,46 @@ export default function Payables() {
                 <TableHead>Categoria</TableHead>
                 <TableHead>Documento</TableHead>
                 <TableHead className="text-right">Valor</TableHead>
+                <TableHead className="text-right">Pago / Saldo</TableHead>
                 <TableHead>Vencimento</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="w-32">Ações</TableHead>
+                <TableHead className="w-40">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
               ) : filtered.length === 0 ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhuma conta encontrada.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhuma conta encontrada.</TableCell></TableRow>
               ) : filtered.map((p) => (
                 <TableRow key={p.id} className="cursor-pointer hover:bg-muted/50" onClick={() => openEdit(p)}>
                   <TableCell className="text-sm font-medium">{p.supplier_name}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{PAYABLE_CATEGORY_LABELS[p.category] || p.category}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{p.document_number || '—'}</TableCell>
                   <TableCell className="text-sm text-right font-medium">{fmt(Number(p.amount || 0))}</TableCell>
+                  <TableCell className="text-sm text-right">
+                    <span className="text-green-600">{fmt(Number((p as any).paid_amount || 0))}</span>
+                    {' / '}
+                    <span className="text-warning">{fmt(Math.max(0, Number(p.amount || 0) - Number((p as any).paid_amount || 0)))}</span>
+                  </TableCell>
                   <TableCell className="text-sm">
                     {p.due_date ? new Date(p.due_date + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
                   </TableCell>
                   <TableCell>
                     <Badge className={statusColor(p)}>
-                      {isOverdue(p) ? 'Vencida' : (PAYABLE_STATUS_LABELS[p.status as PayableStatus] || p.status)}
+                      {isOverdue(p) ? 'Vencida' : (p.status === 'partial' ? 'Parcial' : (PAYABLE_STATUS_LABELS[p.status as PayableStatus] || p.status))}
                     </Badge>
                   </TableCell>
                   <TableCell onClick={(e) => e.stopPropagation()}>
                     <div className="flex gap-1">
-                      {p.status === 'pending' && (
-                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => quickUpdate(p, 'approved')}>
-                          <CheckCircle className="h-3.5 w-3.5 mr-1" /> Aprovar
+                      {p.status !== 'paid' && p.status !== 'cancelled' && (
+                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-green-600" onClick={() => setPaymentPayable(p)}>
+                          <DollarSign className="h-3.5 w-3.5 mr-1" /> Baixa
                         </Button>
                       )}
-                      {p.status === 'approved' && (
-                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => quickUpdate(p, 'paid')}>
-                          <CheckCircle className="h-3.5 w-3.5 mr-1" /> Marcar paga
+                      {p.status === 'paid' && (
+                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setPaymentPayable(p)}>
+                          <CheckCircle className="h-3.5 w-3.5 mr-1" /> Baixas
                         </Button>
                       )}
                       {p.status !== 'cancelled' && p.status !== 'paid' && (
@@ -399,6 +422,12 @@ export default function Payables() {
           </div>
         </DialogContent>
       </Dialog>
+      <PayablePaymentDialog
+        payable={paymentPayable}
+        open={!!paymentPayable}
+        onOpenChange={(o) => { if (!o) setPaymentPayable(null); }}
+      />
+      <ManualExpenseDialog open={manualOpen} onOpenChange={setManualOpen} />
     </div>
   );
 }
