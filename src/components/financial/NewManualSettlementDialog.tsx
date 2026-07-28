@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -19,15 +19,40 @@ export default function NewManualSettlementDialog({ open, onOpenChange, onCreate
   const [vehicleId, setVehicleId] = useState<string>('__none__');
   const [refDate, setRefDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [availableLoads, setAvailableLoads] = useState<Array<{ id: string; driver_id: string | null; driver_name: string | null }>>([]);
 
   useEffect(() => {
     if (open) {
       setDriverId(''); setVehicleId('__none__'); setSelectedIds([]);
       setRefDate(new Date().toISOString().slice(0, 10));
+      setAvailableLoads([]);
     }
   }, [open]);
 
-  const canSubmit = !!driverId && selectedIds.length > 0 && !create.isPending;
+  // Infer driver from selection when the user hasn't picked one yet.
+  const selectedLoads = useMemo(
+    () => availableLoads.filter(l => selectedIds.includes(l.id)),
+    [availableLoads, selectedIds],
+  );
+  const selectedDriverIds = useMemo(
+    () => Array.from(new Set(selectedLoads.map(l => l.driver_id).filter((v): v is string => !!v))),
+    [selectedLoads],
+  );
+  useEffect(() => {
+    if (!driverId && selectedDriverIds.length === 1) setDriverId(selectedDriverIds[0]);
+  }, [driverId, selectedDriverIds]);
+
+  const mixedDrivers = selectedDriverIds.length > 1;
+  const canSubmit = !!driverId && selectedIds.length > 0 && !mixedDrivers && !create.isPending;
+  const disabledReason = !driverId && selectedIds.length === 0
+    ? 'Selecione motorista e ao menos um romaneio'
+    : !driverId
+      ? 'Selecione o motorista'
+      : selectedIds.length === 0
+        ? 'Selecione ao menos um romaneio'
+        : mixedDrivers
+          ? 'Romaneios de motoristas diferentes'
+          : '';
 
   const submit = async () => {
     const id = await create.mutateAsync({
@@ -74,11 +99,29 @@ export default function NewManualSettlementDialog({ open, onOpenChange, onCreate
           <p className="text-xs text-muted-foreground mb-2">
             Apenas romaneios que ainda não estão em outro acerto aparecem aqui.
           </p>
-          <LoadPicker driverId={driverId || null} selectedIds={selectedIds} onChange={setSelectedIds} />
+          <LoadPicker
+            driverId={driverId || null}
+            selectedIds={selectedIds}
+            onChange={setSelectedIds}
+            onLoadsChange={setAvailableLoads}
+            lockedDriverId={driverId || null}
+          />
+          {mixedDrivers && (
+            <div className="mt-2 text-xs rounded border border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300 px-2 py-1.5">
+              Romaneios selecionados pertencem a motoristas diferentes. Selecione romaneios de um único motorista.
+            </div>
+          )}
         </div>
         <DialogFooter>
+          <div className="flex items-center gap-3 flex-1">
+            {disabledReason && (
+              <span className="text-xs text-muted-foreground">{disabledReason}</span>
+            )}
+          </div>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={submit} disabled={!canSubmit}>Criar acerto ({selectedIds.length})</Button>
+          <Button onClick={submit} disabled={!canSubmit} title={disabledReason || undefined}>
+            Criar acerto ({selectedIds.length})
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
