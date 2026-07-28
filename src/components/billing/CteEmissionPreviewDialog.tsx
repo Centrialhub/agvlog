@@ -194,8 +194,10 @@ function groupToEditable(g: CteGroupPreview, defaultEmitterId: string): Editable
     icmsEmbutido: true,
     icmsIsento: false,
     icmsAliquota: 12,
-    icmsBase: g.freight_value || 0,
-    icmsValor: Number(((g.freight_value || 0) * 12 / 100).toFixed(2)),
+    ...(() => {
+      const r = recalcIcms(g.freight_value || 0, 12, true, false);
+      return { icmsBase: r.base, icmsValor: r.valor };
+    })(),
     icmsCst: '00',
     cbsAliquota: 0.9,
     ibsAliquota: 0.1,
