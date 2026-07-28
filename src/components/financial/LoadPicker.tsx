@@ -16,9 +16,14 @@ interface Props {
   includeSettlementId?: string | null;
   selectedIds: string[];
   onChange: (ids: string[]) => void;
+  /** Called whenever the available loads list changes (post-filter). Lets the parent
+   *  infer driver from selection or block cross-driver selection. */
+  onLoadsChange?: (loads: Array<{ id: string; driver_id: string | null; driver_name: string | null }>) => void;
+  /** If set, checkboxes for loads whose driver_id ≠ lockedDriverId are disabled. */
+  lockedDriverId?: string | null;
 }
 
-export default function LoadPicker({ driverId, includeSettlementId, selectedIds, onChange }: Props) {
+export default function LoadPicker({ driverId, includeSettlementId, selectedIds, onChange, onLoadsChange, lockedDriverId }: Props) {
   const [search, setSearch] = useState('');
   const { data: loads = [], isLoading } = useAvailableLoadsForSettlement({
     driver_id: driverId ?? null,
@@ -26,6 +31,13 @@ export default function LoadPicker({ driverId, includeSettlementId, selectedIds,
     include_settlement_id: includeSettlementId ?? null,
   });
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  // Notify parent when list changes
+  useMemo(() => {
+    if (onLoadsChange) {
+      onLoadsChange(loads.map((l: any) => ({ id: l.id, driver_id: l.driver_id ?? null, driver_name: l.driver_name ?? null })));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loads]);
   const toggle = (id: string) => {
     if (selectedSet.has(id)) onChange(selectedIds.filter((x) => x !== id));
     else onChange([...selectedIds, id]);
@@ -66,9 +78,21 @@ export default function LoadPicker({ driverId, includeSettlementId, selectedIds,
               <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-6">Nenhum romaneio disponível.</TableCell></TableRow>
             )}
             {loads.map((l) => (
-              <TableRow key={l.id} className="cursor-pointer hover:bg-accent" onClick={() => toggle(l.id)}>
+              (() => {
+                const blocked = !!lockedDriverId && !!l.driver_id && l.driver_id !== lockedDriverId;
+                return (
+                <TableRow
+                  key={l.id}
+                  className={`hover:bg-accent ${blocked ? 'opacity-50' : 'cursor-pointer'}`}
+                  onClick={() => { if (!blocked) toggle(l.id); }}
+                  title={blocked ? 'Romaneio de outro motorista' : undefined}
+                >
                 <TableCell onClick={(e) => e.stopPropagation()}>
-                  <Checkbox checked={selectedSet.has(l.id)} onCheckedChange={() => toggle(l.id)} />
+                  <Checkbox
+                    checked={selectedSet.has(l.id)}
+                    disabled={blocked}
+                    onCheckedChange={() => { if (!blocked) toggle(l.id); }}
+                  />
                 </TableCell>
                 <TableCell className="font-medium">{l.load_number ?? '—'}</TableCell>
                 <TableCell>{l.load_date ?? '—'}</TableCell>
@@ -79,7 +103,9 @@ export default function LoadPicker({ driverId, includeSettlementId, selectedIds,
                 <TableCell className="text-right">{fmtMoney(l.gross_cargo_value)}</TableCell>
                 <TableCell className="text-right">{fmtMoney(l.freight_amount)}</TableCell>
                 <TableCell><Badge variant="outline" className="text-[10px]">{l.status ?? '—'}</Badge></TableCell>
-              </TableRow>
+                </TableRow>
+                );
+              })()
             ))}
           </TableBody>
         </Table>
