@@ -493,15 +493,15 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     const isento = icmsIsentoByCst(active.icmsCst);
     const suggested = isento ? 0 : suggestIcmsAliquota(originUf, destUf);
     if (Math.abs(active.icmsAliquota - suggested) < 0.001) return;
-    const base = active.icmsBase || active.freightValue || 0;
+    const r = recalcIcms(active.freightValue || 0, suggested, active.icmsEmbutido, isento);
     setItems((prev) =>
       prev.map((it, i) =>
         i === activeIdx
           ? {
               ...it,
               icmsAliquota: suggested,
-              icmsBase: base,
-              icmsValor: Number((base * suggested / 100).toFixed(2)),
+              icmsBase: r.base,
+              icmsValor: r.valor,
             }
           : it,
       ),
