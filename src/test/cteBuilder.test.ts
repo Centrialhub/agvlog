@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildCtePayload, type BuildCtePayloadInput } from '@/lib/fiscal/cteBuilder';
+import { buildCtePayload, computeIcmsAmounts, type BuildCtePayloadInput } from '@/lib/fiscal/cteBuilder';
 
 function baseInput(overrides: Partial<BuildCtePayloadInput> = {}): BuildCtePayloadInput {
   return {
@@ -86,5 +86,83 @@ describe('cteBuilder — novos blocos', () => {
     expect(p.icms).toBeUndefined();
     expect(p.mercadoria).toBeUndefined();
     expect(p.veiculo.carretas).toBeUndefined();
+  });
+});
+
+describe('cteBuilder — ICMS embutido (por dentro)', () => {
+  it('computeIcmsAmounts: por fora usa base = frete', () => {
+    const r = computeIcmsAmounts({ freight: 3583.74, aliq: 5.35, embutido: false, isento: false });
+    expect(r.base).toBeCloseTo(3583.74, 2);
+    expect(r.valor).toBeCloseTo(191.73, 2);
+  });
+
+  it('computeIcmsAmounts: embutido faz gross-up da base', () => {
+    const r = computeIcmsAmounts({ freight: 3583.74, aliq: 5.35, embutido: true, isento: false });
+    // 3583.74 / (1 - 0.0535) ≈ 3786.31
+    expect(r.base).toBeCloseTo(3786.31, 1);
+    expect(r.valor).toBeCloseTo(202.57, 1);
+  });
+
+  it('computeIcmsAmounts: isento zera mesmo com embutido=true', () => {
+    const r = computeIcmsAmounts({ freight: 1000, aliq: 12, embutido: true, isento: true });
+    expect(r.base).toBe(0);
+    expect(r.valor).toBe(0);
+  });
+
+  it('computeIcmsAmounts: embutido ignora providedBase quando é o "frete cru" (bug antigo)', () => {
+    const r = computeIcmsAmounts({
+      freight: 3583.74,
+      aliq: 5.35,
+      embutido: true,
+      isento: false,
+      providedBase: 3583.74,
+      providedValor: 191.73,
+    });
+    expect(r.base).toBeCloseTo(3786.31, 1);
+    expect(r.valor).toBeCloseTo(202.57, 1);
+  });
+
+  it('buildCtePayload: embutido=true gera vBC grossed-up no bloco icms', () => {
+    const input: BuildCtePayloadInput = {
+      emitter: { id: 'em1', cnpj: '18666510000168', name: 'X', environment: 'sandbox' },
+      remitter: { name: 'R', cnpj: '14998371003215' },
+      recipient: { name: 'D', cnpj: '07734610000168' },
+      takerRole: 'destinatario',
+      driver: null,
+      vehicle: null,
+      nature: 'PRESTACAO',
+      invoices: [{ access_key: '3'.repeat(44), number: '1', series: '1', value: 100 }],
+      totals: { freight_value: 3583.74, cargo_value: 100, weight_kg: 1, pallet_count: 0 },
+      icms: { cst: '00', aliquota: 5.35, base: 3583.74, valor: 191.73, embutido: true },
+    };
+    const r = buildCtePayload(input);
+    expect(r.ok).toBe(true);
+    const icms = (r.payload as any).payload.icms;
+    expect(icms.embutido).toBe(true);
+    expect(icms.indICMS).toBe(1);
+    expect(icms.vBC).toBeCloseTo(3786.31, 1);
+    expect(icms.vICMS).toBeCloseTo(202.57, 1);
+    expect(icms.pICMS).toBeCloseTo(5.35, 2);
+  });
+
+  it('buildCtePayload: por fora mantém vBC = frete', () => {
+    const input: BuildCtePayloadInput = {
+      emitter: { id: 'em1', cnpj: '18666510000168', name: 'X', environment: 'sandbox' },
+      remitter: { name: 'R', cnpj: '14998371003215' },
+      recipient: { name: 'D', cnpj: '07734610000168' },
+      takerRole: 'destinatario',
+      driver: null,
+      vehicle: null,
+      nature: 'PRESTACAO',
+      invoices: [{ access_key: '3'.repeat(44), number: '1', series: '1', value: 100 }],
+      totals: { freight_value: 3583.74, cargo_value: 100, weight_kg: 1, pallet_count: 0 },
+      icms: { cst: '00', aliquota: 5.35, embutido: false },
+    };
+    const r = buildCtePayload(input);
+    const icms = (r.payload as any).payload.icms;
+    expect(icms.embutido).toBe(false);
+    expect(icms.indICMS).toBe(0);
+    expect(icms.vBC).toBeCloseTo(3583.74, 2);
+    expect(icms.vICMS).toBeCloseTo(191.73, 2);
   });
 });

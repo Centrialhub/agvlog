@@ -20,9 +20,26 @@ import { useClients } from '@/hooks/useClients';
 import { useTenant } from '@/hooks/useTenant';
 import { useIssueCTe } from '@/hooks/useIssueCTe';
 import type { CteGroupPreview } from '@/lib/cteGroupingModes';
-import { buildCtePayload, type CteTakerRole, type BuildCtePayloadInput } from '@/lib/fiscal/cteBuilder';
+import { buildCtePayload, computeIcmsAmounts, type CteTakerRole, type BuildCtePayloadInput } from '@/lib/fiscal/cteBuilder';
 import type { CteDocType } from '@/lib/fiscal/cteBuilder';
 import { suggestIcmsAliquota, icmsIsentoByCst } from '@/lib/fiscal/icmsAliquota';
+
+/** Recalcula base/valor do ICMS respeitando o regime embutido (por dentro). */
+function recalcIcms(
+  freight: number,
+  aliq: number,
+  embutido: boolean,
+  isento: boolean,
+  providedBase?: number | null,
+): { base: number; valor: number } {
+  return computeIcmsAmounts({
+    freight: freight || 0,
+    aliq: Number(aliq) || 0,
+    embutido,
+    isento,
+    providedBase: providedBase ?? null,
+  });
+}
 
 interface DriverOpt {
   id: string;
@@ -177,8 +194,10 @@ function groupToEditable(g: CteGroupPreview, defaultEmitterId: string): Editable
     icmsEmbutido: true,
     icmsIsento: false,
     icmsAliquota: 12,
-    icmsBase: g.freight_value || 0,
-    icmsValor: Number(((g.freight_value || 0) * 12 / 100).toFixed(2)),
+    ...(() => {
+      const r = recalcIcms(g.freight_value || 0, 12, true, false);
+      return { icmsBase: r.base, icmsValor: r.valor };
+    })(),
     icmsCst: '00',
     cbsAliquota: 0.9,
     ibsAliquota: 0.1,
@@ -474,15 +493,15 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     const isento = icmsIsentoByCst(active.icmsCst);
     const suggested = isento ? 0 : suggestIcmsAliquota(originUf, destUf);
     if (Math.abs(active.icmsAliquota - suggested) < 0.001) return;
-    const base = active.icmsBase || active.freightValue || 0;
+    const r = recalcIcms(active.freightValue || 0, suggested, active.icmsEmbutido, isento);
     setItems((prev) =>
       prev.map((it, i) =>
         i === activeIdx
           ? {
               ...it,
               icmsAliquota: suggested,
-              icmsBase: base,
-              icmsValor: Number((base * suggested / 100).toFixed(2)),
+              icmsBase: r.base,
+              icmsValor: r.valor,
             }
           : it,
       ),
@@ -1059,13 +1078,13 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                           const isento = icmsIsentoByCst(cst);
                           const originUf = (emitterForActive as any)?.endereco?.uf || null;
                           const aliq = isento ? 0 : suggestIcmsAliquota(originUf, active.recipientState);
-                          const base = active.icmsBase || active.freightValue || 0;
+                          const r = recalcIcms(active.freightValue || 0, aliq, active.icmsEmbutido, isento);
                           patch({
                             icmsCst: cst,
                             icmsIsento: isento,
                             icmsAliquota: aliq,
-                            icmsBase: base,
-                            icmsValor: Number((base * aliq / 100).toFixed(2)),
+                            icmsBase: r.base,
+                            icmsValor: r.valor,
                           });
                         }}
                       >
@@ -1080,11 +1099,27 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                       </select>
                     </div>
                     <label className="flex items-center gap-1 text-xs">
-                      <input type="checkbox" checked={active.icmsEmbutido} onChange={(e) => patch({ icmsEmbutido: e.target.checked })} />
+                      <input
+                        type="checkbox"
+                        checked={active.icmsEmbutido}
+                        onChange={(e) => {
+                          const embutido = e.target.checked;
+                          const r = recalcIcms(active.freightValue || 0, active.icmsAliquota, embutido, active.icmsIsento);
+                          patch({ icmsEmbutido: embutido, icmsBase: r.base, icmsValor: r.valor });
+                        }}
+                      />
                       Embutido
                     </label>
                     <label className="flex items-center gap-1 text-xs">
-                      <input type="checkbox" checked={active.icmsIsento} onChange={(e) => patch({ icmsIsento: e.target.checked })} />
+                      <input
+                        type="checkbox"
+                        checked={active.icmsIsento}
+                        onChange={(e) => {
+                          const isento = e.target.checked;
+                          const r = recalcIcms(active.freightValue || 0, active.icmsAliquota, active.icmsEmbutido, isento);
+                          patch({ icmsIsento: isento, icmsBase: r.base, icmsValor: r.valor });
+                        }}
+                      />
                       Isento
                     </label>
                     <div>
@@ -1095,11 +1130,11 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                         value={active.icmsAliquota}
                         onChange={(e) => {
                           const aliq = Number(e.target.value);
-                          const base = active.icmsBase || active.freightValue || 0;
+                          const r = recalcIcms(active.freightValue || 0, aliq, active.icmsEmbutido, active.icmsIsento);
                           patch({
                             icmsAliquota: aliq,
-                            icmsBase: base,
-                            icmsValor: Number((base * aliq / 100).toFixed(2)),
+                            icmsBase: r.base,
+                            icmsValor: r.valor,
                           });
                         }}
                       />
@@ -1112,6 +1147,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                         value={active.icmsBase}
                         onChange={(e) => {
                           const base = Number(e.target.value);
+                          // Base manual: usuário assume a base e o valor sai por fora.
                           patch({
                             icmsBase: base,
                             icmsValor: Number((base * (active.icmsAliquota || 0) / 100).toFixed(2)),
@@ -1127,6 +1163,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                   <div className="flex items-center justify-between pt-1">
                     <p className="text-[10px] text-muted-foreground">
                       Sugestão automática por UF origem/destino. Interestadual S/SE→N/NE/CO/ES = 7%, demais = 12%; intraestadual usa tabela por UF.
+                      {' '}Com <b>Embutido</b> marcado, a base é calculada por dentro: base = frete / (1 − alíq/100).
                     </p>
                     <Button
                       type="button"
@@ -1137,11 +1174,11 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                         const originUf = (emitterForActive as any)?.endereco?.uf || null;
                         const isento = icmsIsentoByCst(active.icmsCst);
                         const aliq = isento ? 0 : suggestIcmsAliquota(originUf, active.recipientState);
-                        const base = active.freightValue || 0;
+                        const r = recalcIcms(active.freightValue || 0, aliq, active.icmsEmbutido, isento);
                         patch({
                           icmsAliquota: aliq,
-                          icmsBase: base,
-                          icmsValor: Number((base * aliq / 100).toFixed(2)),
+                          icmsBase: r.base,
+                          icmsValor: r.valor,
                         });
                       }}
                     >
