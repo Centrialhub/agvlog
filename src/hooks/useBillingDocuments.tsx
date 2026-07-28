@@ -60,7 +60,10 @@ export function useBillingDocuments(filters: BillingDocumentFilters) {
         .eq('tenant_id', currentTenant.id)
         // Pré-filtros aplicados em todas as queries de Billing — usam idx_fiscal_documents_tenant_type_status
         .eq('document_type', 'inbound')
-        .neq('status', 'cancelled');
+        .neq('status', 'cancelled')
+        // Oculta NFs que já geraram CT-e (emissão direta) — evita dupla emissão.
+        // Cancelar o CT-e limpa este campo e a NF volta ao pool.
+        .is('cte_emitted_at', null);
 
       if (f.clientId) q = q.eq('client_id', f.clientId);
       if (f.supplierId) q = q.eq('supplier_id', f.supplierId);
