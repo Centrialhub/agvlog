@@ -131,12 +131,31 @@ export function useIssueCTe() {
 
       await supabase.from('fiscal_documents').update(update as any).eq('id', inserted.id);
 
+      // Marca as NFs de entrada agrupadas neste CT-e para que sumam da tela de
+      // Faturamento (CT-e Hub) e evitem dupla emissão. Só marcamos se a
+      // transmissão foi aceita pelo Hub (success = true).
+      if (success && input.fiscal_document_ids?.length) {
+        try {
+          await supabase
+            .from('fiscal_documents')
+            .update({
+              cte_emitted_at: new Date().toISOString(),
+              cte_emitted_outbound_id: inserted.id,
+            } as any)
+            .in('id', input.fiscal_document_ids)
+            .eq('tenant_id', currentTenant.id);
+        } catch {
+          /* marcação best-effort — não deve derrubar a emissão */
+        }
+      }
+
       return { fiscal_document_id: inserted.id, hub: hubResponse };
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
       qc.invalidateQueries({ queryKey: ['cte_batches'] });
       qc.invalidateQueries({ queryKey: ['loads'] });
+      qc.invalidateQueries({ queryKey: ['billing_documents'] });
     },
     onError: (e: any) => {
       toast.error('Falha ao emitir CT-e', { description: e?.message });
