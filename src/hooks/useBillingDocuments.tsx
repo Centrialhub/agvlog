@@ -60,7 +60,10 @@ export function useBillingDocuments(filters: BillingDocumentFilters) {
         .eq('tenant_id', currentTenant.id)
         // Pré-filtros aplicados em todas as queries de Billing — usam idx_fiscal_documents_tenant_type_status
         .eq('document_type', 'inbound')
-        .neq('status', 'cancelled');
+        .neq('status', 'cancelled')
+        // Oculta NFs que já geraram CT-e (emissão direta) — evita dupla emissão.
+        // Cancelar o CT-e limpa este campo e a NF volta ao pool.
+        .is('cte_emitted_at', null);
 
       if (f.clientId) q = q.eq('client_id', f.clientId);
       if (f.supplierId) q = q.eq('supplier_id', f.supplierId);
@@ -88,7 +91,28 @@ export function useBillingDocuments(filters: BillingDocumentFilters) {
 
       const { data, error } = await q;
       if (error) throw error;
-      return (data || []) as FiscalDocument[];
+      const docs = (data || []) as FiscalDocument[];
+
+      // Remove documentos que já geraram CT-e ativa (autorizada/transmitida) para
+      // evitar dupla emissão. Considera-se "já emitido" todo cte_documents cujo
+      // status não seja 'cancelled' e que tenha access_key OU protocolo SEFAZ.
+      // Rascunhos permanecem visíveis até serem transmitidos.
+      const { data: emitted, error: emittedErr } = await supabase
+        .from('cte_documents')
+        .select('fiscal_document_ids, status, access_key')
+        .eq('tenant_id', currentTenant.id)
+        .neq('status', 'cancelled')
+        .not('access_key', 'is', null);
+      if (emittedErr) throw emittedErr;
+
+      const emittedIds = new Set<string>();
+      for (const row of emitted || []) {
+        for (const id of ((row as { fiscal_document_ids: string[] | null }).fiscal_document_ids || [])) {
+          if (id) emittedIds.add(id);
+        }
+      }
+
+      return docs.filter(d => !emittedIds.has(d.id));
     },
     enabled: !!currentTenant,
     // Mantém o resultado anterior visível enquanto refiltra (digitação fluida)
