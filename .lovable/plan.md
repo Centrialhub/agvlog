@@ -1,88 +1,72 @@
-# Lançamentos manuais no Financeiro
+# Vistoria completa do módulo Financeiro
 
-Objetivo: dar autonomia à operação para (1) lançar despesas/taxas avulsas, (2) dar baixa em boletos a pagar e (3) baixar recebíveis — permitindo baixa parcial e gerando automaticamente uma linha em `bank_transactions` já conciliada com o documento.
+Rodada de verificação (sem features novas). Objetivo: garantir que Financeiro, Contas a Pagar, Contas a Receber, Conciliação Bancária, Fechamentos, Acertos de Motorista e os fluxos novos de baixa manual estejam íntegros ponta a ponta.
 
-## 1. Despesas / taxas avulsas
+## 1. Auditoria estática (código + tipos + testes)
 
-Novo diálogo **"Nova despesa avulsa"** dentro de `Financial.tsx` → aba Contas a Pagar.
+- `tsgo` e `bunx vitest run` do zero — travar 250+ testes verdes antes de qualquer diagnóstico.
+- Grep de contratos quebrados nos novos hooks/RPCs:
+  - `register_payable_payment`, `register_receivable_payment`, `reverse_*`, `create_manual_expense`.
+  - Assinaturas dos parâmetros (`_payable_id`, `_amount`, `_paid_at`, `_bank_account_id`, `_method`, `_notes`, `_attachment_url`) x uso em `useFinancialPayments.tsx`.
+- Verificar imports órfãos e sentinelas Radix (`__none__`) em `ManualExpenseDialog`, `PayablePaymentDialog`, `ReceivablePaymentDialog`.
 
-Campos:
-- Descrição, categoria (tarifa bancária, imposto, taxa, despesa administrativa, outros)
-- Fornecedor (opcional — busca em `clients` com `is_supplier=true`)
-- Data de competência e data de vencimento
-- Valor
-- Conta bancária de origem (se já paga) — opcional
-- Status inicial: **em aberto** ou **já paga** (se paga, gera baixa imediata)
-- Anexo (comprovante) — bucket privado existente
+## 2. Auditoria de banco (RPC + RLS + Grants + Triggers)
 
-Grava em `payables` com `source='manual'` e sem vínculo a load/settlement. Se marcada como "já paga", cria imediatamente o registro em `payables_payments` (ver §2) e a `bank_transaction` conciliada.
+Consultar via `supabase--read_query`:
 
-## 2. Baixa manual de Contas a Pagar (boletos)
+- Existência e assinatura das RPCs novas (`pg_proc`) + `SECURITY DEFINER` + `search_path = public`.
+- `payables_payments` / `receivables_payments`: colunas, `tenant_id`, FK, unique, GRANTs para `authenticated`/`service_role`, RLS habilitada, políticas por tenant.
+- Trigger de recálculo de `paid_amount` / `received_amount` e transição de status (`pending → partial → paid`).
+- Enum/constraint `status` em `payables` e `receivables` inclui `partial`.
+- `bank_transactions` gerado pela baixa: `reconciliation_status='matched'`, `direction` correto (débito/crédito), vínculo pelo `bank_transaction_id` na tabela de pagamento.
+- Coluna `source` em `payables` com default e index útil para filtro operacional/avulso.
+- Isolamento cross-tenant: refazer os cenários de `rlsCrossTenant.test.ts` cobrindo as tabelas novas.
 
-Botão **"Dar baixa"** em cada linha aberta de `payables`. Abre diálogo com:
-- Data do pagamento
-- Valor pago (default = saldo restante; aceita menor → baixa parcial)
-- Conta bancária (obrigatório)
-- Forma (pix, boleto, ted, dinheiro, cartão)
-- Observação / número do comprovante
-- Anexo (opcional)
+## 3. Smoke funcional (Playwright headless em `localhost:8080`)
 
-Regras:
-- **Baixa parcial + total** suportadas. Enquanto `sum(payments) < amount` → status `partial`; ao quitar → `paid`.
-- Cada baixa cria uma linha em `bank_transactions` (tipo `debit`) já `matched` contra o payable, aparecendo no extrato interno e sem exigir importação do banco.
-- Estorno: possível excluir uma baixa (reverte status e apaga a `bank_transaction` correspondente).
+Fluxos executados de ponta a ponta, com screenshot em cada passo:
 
-## 3. Baixa manual de Contas a Receber
+1. **Contas a Pagar**
+   - Criar despesa avulsa em aberto → aparece com badge "Avulsa" e saldo cheio.
+   - Criar despesa avulsa "já paga" → gera `payables_payments` + `bank_transactions` conciliada.
+   - Baixa parcial de boleto operacional → status `partial`, saldo restante correto.
+   - Segunda baixa quita → status `paid`.
+   - Estornar última baixa → volta para `partial` e transação bancária some do extrato.
+   - Tentar baixa com valor > saldo → erro amigável.
+   - Filtro por origem (Todos / Operacional / Avulsa) filtra corretamente.
 
-Mesmo fluxo do §2 aplicado a `receivables`:
-- Botão **"Registrar recebimento"** com data, valor, conta, forma, observação, anexo.
-- Baixa parcial + total; status `partial` → `received`.
-- Gera `bank_transactions` (tipo `credit`) conciliada contra o receivable.
+2. **Contas a Receber**
+   - Registrar recebimento parcial → status `partial`, saldo remanescente.
+   - Concluir com segunda entrada → status `received` (ou `paid`, conforme enum atual).
+   - Estornar → status reverte, transação bancária removida.
+   - Anexo (PDF) sobe no bucket `receipts` privado e URL assinada abre.
 
-## 4. Banco de dados (migração)
+3. **Conciliação bancária**
+   - Importar XLSX SICOOB (arquivo de fixture no `/tmp/browser/`) → detecção de header e mapeamento automático.
+   - Transações geradas pelas baixas manuais aparecem já `matched` e não bagunçam o saldo importado.
 
-Duas tabelas novas de pagamentos + colunas auxiliares:
+4. **Acertos de motorista / Fechamentos**
+   - Novo acerto manual com múltiplos romaneios → travamento por motorista, driver_id inferido.
+   - Fechamento por viagem com filtros por data/placa/motorista + km inicial/final + PDF em paisagem "Controle de Viagens" abre sem erro.
 
-```text
-payables_payments (id, payable_id, amount, paid_at, bank_account_id,
-                   method, notes, attachment_url, bank_transaction_id,
-                   created_by, created_at)
+5. **Dashboard `/financial`**
+   - KPIs de a pagar / a receber / conciliado batem com a soma direta das tabelas após os cenários acima (tolerância 0,01).
 
-receivables_payments (id, receivable_id, amount, received_at, bank_account_id,
-                      method, notes, attachment_url, bank_transaction_id,
-                      created_by, created_at)
-```
+## 4. Cross-checks silenciosos
 
-- Ambas com `tenant_id`, RLS por tenant, GRANTs (`authenticated`, `service_role`), triggers `updated_at` (na tabela pai).
-- Triggers `after insert/delete` recalculam `paid_amount` e `status` em `payables` / `receivables` (adiciona coluna `paid_amount NUMERIC DEFAULT 0` se faltar, e expande enum de status para incluir `partial`).
-- Coluna `source` (`manual` / `system`) em `payables` para separar as despesas avulsas criadas pela operação.
+- `useReceivables` / `usePayables` continuam invalidando cache ao registrar baixa (React Query keys atualizadas via `useFinancialPayments`).
+- Nenhum uso de `service_role` no cliente.
+- Toasts em pt-BR e mensagens de erro específicas nos casos: sem conta bancária, sem valor, valor > saldo, tenant sem permissão.
+- Logs do dev server sem `permission denied` ou 401/403.
 
-RPCs (SECURITY DEFINER, restritas a `admin`/`owner`/`operator`):
-- `register_payable_payment(payable_id, amount, paid_at, bank_account_id, method, notes, attachment_url)`
-- `register_receivable_payment(receivable_id, ...)`
-- `reverse_payable_payment(payment_id)` / `reverse_receivable_payment(payment_id)`
-- `create_manual_expense(payload jsonb)` — cria payable avulso e, se marcado como pago, chama `register_payable_payment` na mesma transação.
+## 5. Entregáveis
 
-Cada RPC insere/deleta a `bank_transaction` correspondente atomicamente, com `reconciliation_status='matched'` e `related_type='payable'|'receivable'`.
+- Relatório curto (o que passou, o que falhou, evidência por screenshot).
+- Correções pontuais só se algo quebrar durante a vistoria — cada correção como um ajuste isolado, sem refactor.
+- Nenhuma migração nova a menos que uma inconsistência real apareça (ex.: trigger faltando, GRANT ausente, enum sem `partial`).
 
-## 5. UI (`src/pages/Financial.tsx` + componentes)
+## Detalhes técnicos
 
-Novos componentes em `src/components/financial/`:
-- `ManualExpenseDialog.tsx`
-- `PayablePaymentDialog.tsx`
-- `ReceivablePaymentDialog.tsx`
-- `PaymentHistoryList.tsx` (histórico de baixas por documento, com botão "Estornar")
-
-Ajustes:
-- Colunas "Pago" e "Saldo" nas tabelas de payables/receivables.
-- Badge `Parcial` quando `paid_amount > 0 && < amount`.
-- Ação "Ver baixas" abre `PaymentHistoryList`.
-- Filtro por `source` (todos / operacionais / avulsos).
-
-## 6. Testes
-
-- Unit: `register_payable_payment` — baixa total, parcial, tentativa de valor > saldo, estorno.
-- RLS: usuário de outro tenant não vê pagamentos.
-- Integração UI: criar despesa avulsa "já paga" gera payable + payment + bank_transaction.
-
-Sem impacto em outros módulos — mudanças isoladas ao financeiro.
+- Playwright em `/tmp/browser/financial-smoke/`, viewport 1280×1800, sessão restaurada via `LOVABLE_BROWSER_SUPABASE_*`.
+- Fixtures: XLSX mínimo SICOOB reutilizando o parser de `src/lib/bankStatementParser.ts`.
+- Consultas SQL apenas via `supabase--read_query` (somente leitura durante a vistoria).
