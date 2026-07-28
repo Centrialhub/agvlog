@@ -1,37 +1,88 @@
-## Correções no Financeiro
+# Lançamentos manuais no Financeiro
 
-Dois problemas relatados, ambos identificados na leitura do código.
+Objetivo: dar autonomia à operação para (1) lançar despesas/taxas avulsas, (2) dar baixa em boletos a pagar e (3) baixar recebíveis — permitindo baixa parcial e gerando automaticamente uma linha em `bank_transactions` já conciliada com o documento.
 
-### 1. Conciliação Bancária — "Nenhuma linha válida" na importação
+## 1. Despesas / taxas avulsas
 
-**Causa (confirmada nas telas):** os XLSX do Sicoob (`RelatorioPixPagamento_*`) trazem um bloco de título antes dos cabeçalhos reais. Como `parseWorkbook` usa a **primeira linha** da planilha como cabeçalho, todos os campos viram uma única coluna chamada `SICOOB` — por isso todos os selects mostram "SICOOB" e não há como mapear Data/Descrição/Valor, resultando em zero linhas válidas.
+Novo diálogo **"Nova despesa avulsa"** dentro de `Financial.tsx` → aba Contas a Pagar.
 
-**Correção:**
-- Em `src/lib/bankStatementParser.ts`, ler a planilha como matriz (`sheet_to_json({ header: 1 })`) e detectar automaticamente a linha de cabeçalho: varrer as primeiras ~20 linhas e escolher a que tenha maior nº de células não vazias **e** contenha pelo menos uma palavra-chave conhecida (`data`, `valor`, `crédito/credito`, `débito/debito`, `descri`, `histor`, `saldo`, `documento`). Usar as linhas seguintes como dados.
-- Retornar também `headerRowIndex` para exibição.
-- Em `parseCsv`, aplicar a mesma heurística (Sicoob CSV também tem preâmbulo).
-- Em `BankReconciliation.tsx` (`ImportStatementDialog`):
-  - Mostrar "Cabeçalho detectado na linha X" com um seletor numérico para o usuário sobrescrever caso a detecção erre (re-parse ao alterar).
-  - Manter a heurística de auto-mapeamento existente; ela funcionará assim que os headers reais forem detectados.
-- Se ainda assim `mapping.date` ou `mapping.description` ficarem vazios após o auto-guess, mostrar mensagem clara ("Não foi possível identificar as colunas — selecione manualmente") em vez do toast genérico.
+Campos:
+- Descrição, categoria (tarifa bancária, imposto, taxa, despesa administrativa, outros)
+- Fornecedor (opcional — busca em `clients` com `is_supplier=true`)
+- Data de competência e data de vencimento
+- Valor
+- Conta bancária de origem (se já paga) — opcional
+- Status inicial: **em aberto** ou **já paga** (se paga, gera baixa imediata)
+- Anexo (comprovante) — bucket privado existente
 
-### 2. Acerto de Motoristas — "não permite selecionar romaneio"
+Grava em `payables` com `source='manual'` e sem vínculo a load/settlement. Se marcada como "já paga", cria imediatamente o registro em `payables_payments` (ver §2) e a `bank_transaction` conciliada.
 
-**Causa (confirmada):** em `NewManualSettlementDialog`, `canSubmit` exige `driverId`. Na tela do usuário o campo **Motorista** está em "Selecione o motorista", então mesmo com romaneio marcado o botão "Criar acerto (1)" fica desabilitado, sem feedback do porquê. Além disso o `LoadPicker` já lista todos os romaneios (driverId nulo), o que sugere ao operador que ele pode simplesmente marcar e criar.
+## 2. Baixa manual de Contas a Pagar (boletos)
 
-**Correção (só UX, sem mudar regra de negócio):**
-- Em `NewManualSettlementDialog.tsx`:
-  - Quando o usuário selecionar romaneios sem ter motorista escolhido, **inferir e pré-preencher `driverId` automaticamente** a partir do `driver_id` do primeiro romaneio selecionado que tenha motorista.
-  - Se os romaneios selecionados tiverem motoristas diferentes, exibir alerta inline "Romaneios de motoristas diferentes — selecione apenas de um motorista" e desabilitar o botão explicando o motivo.
-  - Bloquear seleção de romaneios de outro motorista quando `driverId` já estiver definido (desabilitar checkbox com tooltip "Outro motorista").
-  - Exibir texto de ajuda ao lado do botão quando desabilitado: "Selecione um motorista" ou "Selecione ao menos um romaneio".
-- Em `LoadPicker.tsx`: expor `driver_id` do load ao componente pai via callback ou incluí-lo nos itens visíveis (o hook já retorna `driver_name`; confirmar que `driver_id` também vem — ajustar `useAvailableLoadsForSettlement` se necessário para incluir esse campo).
+Botão **"Dar baixa"** em cada linha aberta de `payables`. Abre diálogo com:
+- Data do pagamento
+- Valor pago (default = saldo restante; aceita menor → baixa parcial)
+- Conta bancária (obrigatório)
+- Forma (pix, boleto, ted, dinheiro, cartão)
+- Observação / número do comprovante
+- Anexo (opcional)
 
-### Escopo fora
-- Não alterar RPCs `create_manual_driver_settlement` nem `import_bank_statement`.
-- Não alterar layout geral das páginas de Financeiro.
-- Sem mudanças em conciliação após importação (o motor de match continua igual).
+Regras:
+- **Baixa parcial + total** suportadas. Enquanto `sum(payments) < amount` → status `partial`; ao quitar → `paid`.
+- Cada baixa cria uma linha em `bank_transactions` (tipo `debit`) já `matched` contra o payable, aparecendo no extrato interno e sem exigir importação do banco.
+- Estorno: possível excluir uma baixa (reverte status e apaga a `bank_transaction` correspondente).
 
-### Verificação
-- Build + `bunx vitest run` (esperado: 250 testes verdes, sem novos).
-- Teste manual mental: reimportar o XLSX do Sicoob deve detectar o header correto e permitir mapear Data/Descrição/Valor; criar acerto marcando um romaneio deve pré-preencher motorista.
+## 3. Baixa manual de Contas a Receber
+
+Mesmo fluxo do §2 aplicado a `receivables`:
+- Botão **"Registrar recebimento"** com data, valor, conta, forma, observação, anexo.
+- Baixa parcial + total; status `partial` → `received`.
+- Gera `bank_transactions` (tipo `credit`) conciliada contra o receivable.
+
+## 4. Banco de dados (migração)
+
+Duas tabelas novas de pagamentos + colunas auxiliares:
+
+```text
+payables_payments (id, payable_id, amount, paid_at, bank_account_id,
+                   method, notes, attachment_url, bank_transaction_id,
+                   created_by, created_at)
+
+receivables_payments (id, receivable_id, amount, received_at, bank_account_id,
+                      method, notes, attachment_url, bank_transaction_id,
+                      created_by, created_at)
+```
+
+- Ambas com `tenant_id`, RLS por tenant, GRANTs (`authenticated`, `service_role`), triggers `updated_at` (na tabela pai).
+- Triggers `after insert/delete` recalculam `paid_amount` e `status` em `payables` / `receivables` (adiciona coluna `paid_amount NUMERIC DEFAULT 0` se faltar, e expande enum de status para incluir `partial`).
+- Coluna `source` (`manual` / `system`) em `payables` para separar as despesas avulsas criadas pela operação.
+
+RPCs (SECURITY DEFINER, restritas a `admin`/`owner`/`operator`):
+- `register_payable_payment(payable_id, amount, paid_at, bank_account_id, method, notes, attachment_url)`
+- `register_receivable_payment(receivable_id, ...)`
+- `reverse_payable_payment(payment_id)` / `reverse_receivable_payment(payment_id)`
+- `create_manual_expense(payload jsonb)` — cria payable avulso e, se marcado como pago, chama `register_payable_payment` na mesma transação.
+
+Cada RPC insere/deleta a `bank_transaction` correspondente atomicamente, com `reconciliation_status='matched'` e `related_type='payable'|'receivable'`.
+
+## 5. UI (`src/pages/Financial.tsx` + componentes)
+
+Novos componentes em `src/components/financial/`:
+- `ManualExpenseDialog.tsx`
+- `PayablePaymentDialog.tsx`
+- `ReceivablePaymentDialog.tsx`
+- `PaymentHistoryList.tsx` (histórico de baixas por documento, com botão "Estornar")
+
+Ajustes:
+- Colunas "Pago" e "Saldo" nas tabelas de payables/receivables.
+- Badge `Parcial` quando `paid_amount > 0 && < amount`.
+- Ação "Ver baixas" abre `PaymentHistoryList`.
+- Filtro por `source` (todos / operacionais / avulsos).
+
+## 6. Testes
+
+- Unit: `register_payable_payment` — baixa total, parcial, tentativa de valor > saldo, estorno.
+- RLS: usuário de outro tenant não vê pagamentos.
+- Integração UI: criar despesa avulsa "já paga" gera payable + payment + bank_transaction.
+
+Sem impacto em outros módulos — mudanças isoladas ao financeiro.
