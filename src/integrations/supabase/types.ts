@@ -5521,6 +5521,8 @@ export type Database = {
           created_by: string | null
           cte_consignee_client_id: string | null
           cte_driver_id: string | null
+          cte_emitted_at: string | null
+          cte_emitted_outbound_id: string | null
           cte_payload: Json | null
           cte_taker_role: string | null
           cte_vehicle_id: string | null
@@ -5596,6 +5598,8 @@ export type Database = {
           created_by?: string | null
           cte_consignee_client_id?: string | null
           cte_driver_id?: string | null
+          cte_emitted_at?: string | null
+          cte_emitted_outbound_id?: string | null
           cte_payload?: Json | null
           cte_taker_role?: string | null
           cte_vehicle_id?: string | null
@@ -5671,6 +5675,8 @@ export type Database = {
           created_by?: string | null
           cte_consignee_client_id?: string | null
           cte_driver_id?: string | null
+          cte_emitted_at?: string | null
+          cte_emitted_outbound_id?: string | null
           cte_payload?: Json | null
           cte_taker_role?: string | null
           cte_vehicle_id?: string | null
