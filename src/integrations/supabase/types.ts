@@ -10917,6 +10917,7 @@ export type Database = {
           amount: number
           approved_at: string | null
           approved_by: string | null
+          bank_account_id: string | null
           category: string
           competence_date: string | null
           created_at: string
@@ -10929,8 +10930,10 @@ export type Database = {
           id: string
           load_id: string | null
           notes: string | null
+          paid_amount: number
           paid_at: string | null
           receipt_url: string | null
+          source: string
           source_id: string | null
           source_metadata: Json
           source_table: string | null
@@ -10945,6 +10948,7 @@ export type Database = {
           amount: number
           approved_at?: string | null
           approved_by?: string | null
+          bank_account_id?: string | null
           category?: string
           competence_date?: string | null
           created_at?: string
@@ -10957,8 +10961,10 @@ export type Database = {
           id?: string
           load_id?: string | null
           notes?: string | null
+          paid_amount?: number
           paid_at?: string | null
           receipt_url?: string | null
+          source?: string
           source_id?: string | null
           source_metadata?: Json
           source_table?: string | null
@@ -10973,6 +10979,7 @@ export type Database = {
           amount?: number
           approved_at?: string | null
           approved_by?: string | null
+          bank_account_id?: string | null
           category?: string
           competence_date?: string | null
           created_at?: string
@@ -10985,8 +10992,10 @@ export type Database = {
           id?: string
           load_id?: string | null
           notes?: string | null
+          paid_amount?: number
           paid_at?: string | null
           receipt_url?: string | null
+          source?: string
           source_id?: string | null
           source_metadata?: Json
           source_table?: string | null
@@ -10998,6 +11007,13 @@ export type Database = {
           vehicle_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "payables_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "payables_dispatch_trip_id_fkey"
             columns: ["dispatch_trip_id"]
@@ -11031,6 +11047,80 @@ export type Database = {
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payables_payments: {
+        Row: {
+          amount: number
+          attachment_url: string | null
+          bank_account_id: string
+          bank_transaction_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          method: string
+          notes: string | null
+          paid_at: string
+          payable_id: string
+          tenant_id: string
+        }
+        Insert: {
+          amount: number
+          attachment_url?: string | null
+          bank_account_id: string
+          bank_transaction_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          method?: string
+          notes?: string | null
+          paid_at?: string
+          payable_id: string
+          tenant_id: string
+        }
+        Update: {
+          amount?: number
+          attachment_url?: string | null
+          bank_account_id?: string
+          bank_transaction_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          method?: string
+          notes?: string | null
+          paid_at?: string
+          payable_id?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payables_payments_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payables_payments_bank_transaction_id_fkey"
+            columns: ["bank_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "bank_transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payables_payments_payable_id_fkey"
+            columns: ["payable_id"]
+            isOneToOne: false
+            referencedRelation: "payables"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payables_payments_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -11880,6 +11970,80 @@ export type Database = {
           updated_by?: string | null
         }
         Relationships: []
+      }
+      receivables_payments: {
+        Row: {
+          amount: number
+          attachment_url: string | null
+          bank_account_id: string
+          bank_transaction_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          method: string
+          notes: string | null
+          receivable_id: string
+          received_at: string
+          tenant_id: string
+        }
+        Insert: {
+          amount: number
+          attachment_url?: string | null
+          bank_account_id: string
+          bank_transaction_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          method?: string
+          notes?: string | null
+          receivable_id: string
+          received_at?: string
+          tenant_id: string
+        }
+        Update: {
+          amount?: number
+          attachment_url?: string | null
+          bank_account_id?: string
+          bank_transaction_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          method?: string
+          notes?: string | null
+          receivable_id?: string
+          received_at?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "receivables_payments_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receivables_payments_bank_transaction_id_fkey"
+            columns: ["bank_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "bank_transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receivables_payments_receivable_id_fkey"
+            columns: ["receivable_id"]
+            isOneToOne: false
+            referencedRelation: "receivables"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receivables_payments_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       reimport_batches: {
         Row: {
@@ -14295,6 +14459,7 @@ export type Database = {
         }
         Returns: string
       }
+      create_manual_expense: { Args: { _payload: Json }; Returns: string }
       create_manual_financial_match: {
         Args: {
           _amount_matched: number
@@ -15032,6 +15197,30 @@ export type Database = {
         }
         Returns: string
       }
+      register_payable_payment: {
+        Args: {
+          _amount: number
+          _attachment_url?: string
+          _bank_account_id: string
+          _method?: string
+          _notes?: string
+          _paid_at: string
+          _payable_id: string
+        }
+        Returns: string
+      }
+      register_receivable_payment: {
+        Args: {
+          _amount: number
+          _attachment_url?: string
+          _bank_account_id: string
+          _method?: string
+          _notes?: string
+          _receivable_id: string
+          _received_at: string
+        }
+        Returns: string
+      }
       reject_financial_match: {
         Args: { _match_id: string; _reason: string }
         Returns: undefined
@@ -15069,6 +15258,14 @@ export type Database = {
       reverse_financial_match: {
         Args: { _match_id: string; _reason: string }
         Returns: undefined
+      }
+      reverse_payable_payment: {
+        Args: { _payment_id: string }
+        Returns: boolean
+      }
+      reverse_receivable_payment: {
+        Args: { _payment_id: string }
+        Returns: boolean
       }
       revert_xml_loads_to_available: {
         Args: { _tenant_id: string }
