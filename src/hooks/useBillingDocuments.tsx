@@ -88,7 +88,28 @@ export function useBillingDocuments(filters: BillingDocumentFilters) {
 
       const { data, error } = await q;
       if (error) throw error;
-      return (data || []) as FiscalDocument[];
+      const docs = (data || []) as FiscalDocument[];
+
+      // Remove documentos que já geraram CT-e ativa (autorizada/transmitida) para
+      // evitar dupla emissão. Considera-se "já emitido" todo cte_documents cujo
+      // status não seja 'cancelled' e que tenha access_key OU protocolo SEFAZ.
+      // Rascunhos permanecem visíveis até serem transmitidos.
+      const { data: emitted, error: emittedErr } = await supabase
+        .from('cte_documents')
+        .select('fiscal_document_ids, status, access_key')
+        .eq('tenant_id', currentTenant.id)
+        .neq('status', 'cancelled')
+        .not('access_key', 'is', null);
+      if (emittedErr) throw emittedErr;
+
+      const emittedIds = new Set<string>();
+      for (const row of emitted || []) {
+        for (const id of ((row as { fiscal_document_ids: string[] | null }).fiscal_document_ids || [])) {
+          if (id) emittedIds.add(id);
+        }
+      }
+
+      return docs.filter(d => !emittedIds.has(d.id));
     },
     enabled: !!currentTenant,
     // Mantém o resultado anterior visível enquanto refiltra (digitação fluida)
