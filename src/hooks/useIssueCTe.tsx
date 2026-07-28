@@ -222,11 +222,17 @@ export function useCancelCTe() {
           .from('fiscal_documents')
           .update({ status: 'cancelled', sefaz_status: 'cancelled', sefaz_message: args.justificativa } as any)
           .eq('id', args.fiscalDocumentId);
+        // Libera as NFs de entrada vinculadas — voltam a aparecer no CT-e Hub
+        await supabase
+          .from('fiscal_documents')
+          .update({ cte_emitted_at: null, cte_emitted_outbound_id: null } as any)
+          .eq('cte_emitted_outbound_id', args.fiscalDocumentId);
       }
       return res;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
+      qc.invalidateQueries({ queryKey: ['billing_documents'] });
     },
   });
 }
