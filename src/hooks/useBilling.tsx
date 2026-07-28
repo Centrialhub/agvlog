@@ -229,6 +229,9 @@ export function useCreateCteBatch() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['cte_batches'] });
       qc.invalidateQueries({ queryKey: ['receivables'] });
+      // Documentos já emitidos devem sumir da listagem de Faturamento
+      qc.invalidateQueries({ queryKey: ['billing_documents'] });
+      qc.invalidateQueries({ queryKey: ['cte_documents'] });
     },
   });
 }
@@ -250,6 +253,8 @@ export function useCancelCteBatch() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['cte_batches'] });
       qc.invalidateQueries({ queryKey: ['cte_documents'] });
+      // Cancelamento devolve os documentos ao pool disponível
+      qc.invalidateQueries({ queryKey: ['billing_documents'] });
     },
   });
 }
