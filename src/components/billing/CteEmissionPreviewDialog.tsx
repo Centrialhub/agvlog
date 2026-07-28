@@ -20,9 +20,26 @@ import { useClients } from '@/hooks/useClients';
 import { useTenant } from '@/hooks/useTenant';
 import { useIssueCTe } from '@/hooks/useIssueCTe';
 import type { CteGroupPreview } from '@/lib/cteGroupingModes';
-import { buildCtePayload, type CteTakerRole, type BuildCtePayloadInput } from '@/lib/fiscal/cteBuilder';
+import { buildCtePayload, computeIcmsAmounts, type CteTakerRole, type BuildCtePayloadInput } from '@/lib/fiscal/cteBuilder';
 import type { CteDocType } from '@/lib/fiscal/cteBuilder';
 import { suggestIcmsAliquota, icmsIsentoByCst } from '@/lib/fiscal/icmsAliquota';
+
+/** Recalcula base/valor do ICMS respeitando o regime embutido (por dentro). */
+function recalcIcms(
+  freight: number,
+  aliq: number,
+  embutido: boolean,
+  isento: boolean,
+  providedBase?: number | null,
+): { base: number; valor: number } {
+  return computeIcmsAmounts({
+    freight: freight || 0,
+    aliq: Number(aliq) || 0,
+    embutido,
+    isento,
+    providedBase: providedBase ?? null,
+  });
+}
 
 interface DriverOpt {
   id: string;
