@@ -217,23 +217,72 @@ const TAKER_INDEX: Record<CteTakerRole, number> = {
 };
 
 /**
+ * Calcula base e valor do ICMS respeitando o regime "por dentro" (embutido).
+ *
+ * Regras (layout CT-e SEFAZ):
+ *  - Isento (CST 40/41/51 ou flag isento): vBC = 0, vICMS = 0.
+ *  - Por fora (embutido=false): vBC = vTPrest, vICMS = vBC × pICMS/100.
+ *  - Por dentro / embutido (embutido=true): vTPrest já contém o ICMS, então
+ *      vBC = vTPrest / (1 − pICMS/100)
+ *      vICMS = vBC × pICMS/100
+ *
+ * `providedBase`/`providedValor` são respeitados apenas quando são coerentes
+ * com o regime — caso o chamador ainda passe base = frete com embutido=true
+ * (bug antigo), o cálculo é refeito por dentro.
+ */
+export function computeIcmsAmounts(params: {
+  freight: number;
+  aliq: number;
+  embutido: boolean;
+  isento: boolean;
+  providedBase?: number | null;
+  providedValor?: number | null;
+}): { base: number; valor: number } {
+  const { freight, aliq, embutido, isento } = params;
+  if (isento || !(aliq > 0)) return { base: 0, valor: 0 };
+  const round2 = (n: number) => Number(n.toFixed(2));
+  const providedBase = params.providedBase != null ? Number(params.providedBase) : null;
+  const providedValor = params.providedValor != null ? Number(params.providedValor) : null;
+  if (embutido) {
+    // Base coerente com embutido: freight / (1 − aliq/100).
+    const coherentBase = freight / (1 - aliq / 100);
+    // Se o operador digitou uma base manual claramente diferente do frete,
+    // respeita. Caso contrário, recalcula (protege contra o bug antigo).
+    const useProvided =
+      providedBase != null &&
+      Math.abs(providedBase - freight) > 0.01 &&
+      Math.abs(providedBase - coherentBase) < 1;
+    const base = useProvided ? providedBase! : coherentBase;
+    const valor = base * (aliq / 100);
+    return { base: round2(base), valor: round2(valor) };
+  }
+  // Por fora
+  const base = providedBase != null && providedBase > 0 ? providedBase : freight;
+  const valor = providedValor != null ? providedValor : base * (aliq / 100);
+  return { base: round2(base), valor: round2(valor) };
+}
+
+/**
  * Serializa o bloco de ICMS no formato esperado pelo Hub Fiscal (nomes alinhados ao layout CT-e SEFAZ):
  *  - CST (00, 20, 40, 41, 51, 60, 90) ou CSOSN (SN → "90" com indicador Simples)
  *  - vBC (base de cálculo), pICMS (alíquota %), vICMS (valor)
  *  - Indicadores: embutido (indICMSTomador), isento
  */
-function buildIcmsBlock(icms: CteIcms): Record<string, unknown> {
+function buildIcmsBlock(icms: CteIcms, freightValue: number): Record<string, unknown> {
   const cstRaw = (icms.cst || '').toString().toUpperCase();
   const isSimples = cstRaw === 'SN' || cstRaw === 'CSOSN';
   const cst = isSimples ? '90' : cstRaw || '00';
   const isento = icms.isento === true || cst === '40' || cst === '41' || cst === '51';
   const aliq = isento ? 0 : Number(icms.aliquota || 0);
-  const base = isento ? 0 : Number(icms.base || 0);
-  const valor = isento
-    ? 0
-    : icms.valor != null
-      ? Number(icms.valor)
-      : Number((base * aliq / 100).toFixed(2));
+  const embutido = icms.embutido === true;
+  const { base, valor } = computeIcmsAmounts({
+    freight: freightValue,
+    aliq,
+    embutido,
+    isento,
+    providedBase: icms.base ?? null,
+    providedValor: icms.valor ?? null,
+  });
 
   const block: Record<string, unknown> = {
     CST: cst,
@@ -246,8 +295,11 @@ function buildIcmsBlock(icms: CteIcms): Record<string, unknown> {
     base: Number(base.toFixed(2)),
     aliquota: Number(aliq.toFixed(2)),
     valor: Number(valor.toFixed(2)),
-    embutido: icms.embutido === true,
+    embutido,
     isento,
+    // Indicadores SEFAZ: quando embutido, o ICMS está incluído no valor do serviço.
+    indICMS: embutido ? 1 : 0,
+    indIEToma: embutido ? 1 : 0,
   };
 
   // Substituição tributária (opcional)
@@ -375,7 +427,7 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
         cbs: input.totals.cbs_value ?? undefined,
       },
       composicaoFrete: freightComposition,
-      icms: input.icms ? buildIcmsBlock(input.icms) : undefined,
+      icms: input.icms ? buildIcmsBlock(input.icms, input.totals.freight_value) : undefined,
       gnre: input.gnre
         ? Object.fromEntries(Object.entries(input.gnre).filter(([, v]) => v != null))
         : undefined,
