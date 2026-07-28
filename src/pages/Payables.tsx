@@ -422,6 +422,12 @@ export default function Payables() {
           </div>
         </DialogContent>
       </Dialog>
+      <PayablePaymentDialog
+        payable={paymentPayable}
+        open={!!paymentPayable}
+        onOpenChange={(o) => { if (!o) setPaymentPayable(null); }}
+      />
+      <ManualExpenseDialog open={manualOpen} onOpenChange={setManualOpen} />
     </div>
   );
 }

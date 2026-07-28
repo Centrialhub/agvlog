@@ -10,9 +10,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Search, Plus, DollarSign, TrendingUp } from 'lucide-react';
+import { Search, Plus, DollarSign, TrendingUp, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import FiscalXmlUpload from '@/components/financial/FiscalXmlUpload';
+import ReceivablePaymentDialog from '@/components/financial/ReceivablePaymentDialog';
+import type { Receivable } from '@/hooks/useReceivables';
 import type { ParsedFiscalXml } from '@/lib/nfeXmlParser';
 
 export default function Receivables() {
@@ -27,6 +29,7 @@ export default function Receivables() {
   const [form, setForm] = useState({
     description: '', client_id: '', amount: '', due_date: '', invoice_number: '', notes: '', status: 'pending',
   });
+  const [paymentReceivable, setPaymentReceivable] = useState<Receivable | null>(null);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -115,6 +118,7 @@ export default function Receivables() {
   const fmt = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
   const statusColor = (s: string) => {
     if (s === 'received') return 'bg-green-500/10 text-green-600';
+    if (s === 'partial') return 'bg-amber-500/10 text-amber-600';
     if (s === 'invoiced') return 'bg-blue-500/10 text-blue-600';
     if (s === 'cancelled') return 'bg-destructive/10 text-destructive';
     return 'bg-warning/10 text-warning';
@@ -175,25 +179,44 @@ export default function Receivables() {
                 <TableHead>Cliente</TableHead>
                 <TableHead>Nº Fatura</TableHead>
                 <TableHead className="text-right">Valor</TableHead>
+                <TableHead className="text-right">Recebido / Saldo</TableHead>
                 <TableHead>Vencimento</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="w-20">Ações</TableHead>
+                <TableHead className="w-40">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
               ) : filtered.length === 0 ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhum título encontrado</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhum título encontrado</TableCell></TableRow>
               ) : filtered.map((r: any) => (
                 <TableRow key={r.id} className="cursor-pointer hover:bg-muted/50" onClick={() => openEdit(r)}>
                   <TableCell className="text-sm font-medium">{r.description || '—'}</TableCell>
                   <TableCell className="text-sm">{r.clients?.company_name || '—'}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{r.invoice_number || '—'}</TableCell>
                   <TableCell className="text-sm text-right font-medium">{fmt(Number(r.amount || 0))}</TableCell>
+                  <TableCell className="text-sm text-right">
+                    <span className="text-green-600">{fmt(Number(r.received_amount || 0))}</span>
+                    {' / '}
+                    <span className="text-warning">{fmt(Math.max(0, Number(r.amount || 0) - Number(r.received_amount || 0)))}</span>
+                  </TableCell>
                   <TableCell className="text-sm">{r.due_date ? new Date(r.due_date + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}</TableCell>
-                  <TableCell><Badge className={statusColor(r.status)}>{RECEIVABLE_STATUS_LABELS[r.status as keyof typeof RECEIVABLE_STATUS_LABELS] || r.status}</Badge></TableCell>
-                  <TableCell><Button variant="ghost" size="sm">Editar</Button></TableCell>
+                  <TableCell><Badge className={statusColor(r.status)}>{r.status === 'partial' ? 'Parcial' : (RECEIVABLE_STATUS_LABELS[r.status as keyof typeof RECEIVABLE_STATUS_LABELS] || r.status)}</Badge></TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <div className="flex gap-1">
+                      {r.status !== 'received' && r.status !== 'cancelled' && (
+                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-green-600" onClick={() => setPaymentReceivable(r)}>
+                          <DollarSign className="h-3.5 w-3.5 mr-1" /> Receber
+                        </Button>
+                      )}
+                      {r.status === 'received' && (
+                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setPaymentReceivable(r)}>
+                          <CheckCircle className="h-3.5 w-3.5 mr-1" /> Baixas
+                        </Button>
+                      )}
+                    </div>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -241,6 +264,11 @@ export default function Receivables() {
           </div>
         </DialogContent>
       </Dialog>
+      <ReceivablePaymentDialog
+        receivable={paymentReceivable}
+        open={!!paymentReceivable}
+        onOpenChange={(o) => { if (!o) setPaymentReceivable(null); }}
+      />
     </div>
   );
 }
