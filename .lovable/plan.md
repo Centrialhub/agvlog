@@ -1,39 +1,37 @@
+## Correções no Financeiro
 
-# Smoke Test — Pós-correções portal do cliente
+Dois problemas relatados, ambos identificados na leitura do código.
 
-Rodada curta de verificação após as últimas mudanças (RPCs `_v2` de portal + Realtime de mensagens). Sem alterar código de produto.
+### 1. Conciliação Bancária — "Nenhuma linha válida" na importação
 
-## Escopo
+**Causa (confirmada nas telas):** os XLSX do Sicoob (`RelatorioPixPagamento_*`) trazem um bloco de título antes dos cabeçalhos reais. Como `parseWorkbook` usa a **primeira linha** da planilha como cabeçalho, todos os campos viram uma única coluna chamada `SICOOB` — por isso todos os selects mostram "SICOOB" e não há como mapear Data/Descrição/Valor, resultando em zero linhas válidas.
 
-1. **Build & Tipagem**
-   - `bun run build` (Vite)
-   - `bunx tsgo --noEmit` (verificar contratos após os novos RPCs `_v2`)
+**Correção:**
+- Em `src/lib/bankStatementParser.ts`, ler a planilha como matriz (`sheet_to_json({ header: 1 })`) e detectar automaticamente a linha de cabeçalho: varrer as primeiras ~20 linhas e escolher a que tenha maior nº de células não vazias **e** contenha pelo menos uma palavra-chave conhecida (`data`, `valor`, `crédito/credito`, `débito/debito`, `descri`, `histor`, `saldo`, `documento`). Usar as linhas seguintes como dados.
+- Retornar também `headerRowIndex` para exibição.
+- Em `parseCsv`, aplicar a mesma heurística (Sicoob CSV também tem preâmbulo).
+- Em `BankReconciliation.tsx` (`ImportStatementDialog`):
+  - Mostrar "Cabeçalho detectado na linha X" com um seletor numérico para o usuário sobrescrever caso a detecção erre (re-parse ao alterar).
+  - Manter a heurística de auto-mapeamento existente; ela funcionará assim que os headers reais forem detectados.
+- Se ainda assim `mapping.date` ou `mapping.description` ficarem vazios após o auto-guess, mostrar mensagem clara ("Não foi possível identificar as colunas — selecione manualmente") em vez do toast genérico.
 
-2. **Testes automatizados**
-   - `bunx vitest run` (esperado: 250/250 passando)
+### 2. Acerto de Motoristas — "não permite selecionar romaneio"
 
-3. **Banco / RPCs novos**
-   - Confirmar via `supabase--read_query` que existem:
-     - `get_client_portal_alerts_v2`, `get_client_portal_upcoming_deliveries_v2`, `get_client_portal_tracking_v2`
-     - `client_occurrence_messages` presente em `pg_publication_tables` para `supabase_realtime`
-     - `REPLICA IDENTITY FULL` na tabela
-   - Chamar cada RPC `_v2` com `_client_id = NULL` para confirmar que retorna erro `client_id is required` (fail-closed).
-   - Chamar cada RPC `_v2` com um `_client_id` inválido (não vinculado ao user) para confirmar que `_portal_assert_client_access` bloqueia.
+**Causa (confirmada):** em `NewManualSettlementDialog`, `canSubmit` exige `driverId`. Na tela do usuário o campo **Motorista** está em "Selecione o motorista", então mesmo com romaneio marcado o botão "Criar acerto (1)" fica desabilitado, sem feedback do porquê. Além disso o `LoadPicker` já lista todos os romaneios (driverId nulo), o que sugere ao operador que ele pode simplesmente marcar e criar.
 
-4. **Runtime da aplicação (Playwright headless)**
-   - Rotas públicas: `/auth` responde 200.
-   - Rotas do portal (`/portal`, `/portal/tracking`, `/portal/alerts`, `/portal/upcoming`, `/portal/occurrences`) — sem sessão devem redirecionar para `/auth`; capturar screenshots.
-   - Console/network: nenhum erro 4xx/5xx em rotas públicas; nenhum `get_client_portal_*` chamado sem `_client_id`.
+**Correção (só UX, sem mudar regra de negócio):**
+- Em `NewManualSettlementDialog.tsx`:
+  - Quando o usuário selecionar romaneios sem ter motorista escolhido, **inferir e pré-preencher `driverId` automaticamente** a partir do `driver_id` do primeiro romaneio selecionado que tenha motorista.
+  - Se os romaneios selecionados tiverem motoristas diferentes, exibir alerta inline "Romaneios de motoristas diferentes — selecione apenas de um motorista" e desabilitar o botão explicando o motivo.
+  - Bloquear seleção de romaneios de outro motorista quando `driverId` já estiver definido (desabilitar checkbox com tooltip "Outro motorista").
+  - Exibir texto de ajuda ao lado do botão quando desabilitado: "Selecione um motorista" ou "Selecione ao menos um romaneio".
+- Em `LoadPicker.tsx`: expor `driver_id` do load ao componente pai via callback ou incluí-lo nos itens visíveis (o hook já retorna `driver_name`; confirmar que `driver_id` também vem — ajustar `useAvailableLoadsForSettlement` se necessário para incluir esse campo).
 
-5. **Regressão UI mínima**
-   - `/team` e `/drivers`: apenas verificar que carregam sem erro de console (dependem da edge function `list-tenant-members`, já corrigida em rodadas anteriores).
+### Escopo fora
+- Não alterar RPCs `create_manual_driver_settlement` nem `import_bank_statement`.
+- Não alterar layout geral das páginas de Financeiro.
+- Sem mudanças em conciliação após importação (o motor de match continua igual).
 
-## Entregável
-
-Relatório curto por seção com PASS/FAIL, saídas relevantes (contagem de testes, resultado das queries) e screenshots das rotas do portal em `/tmp/browser/smoke/`.
-
-## Não incluso
-
-- Fluxos autenticados end-to-end do portal (não há `client_portal_access` provisionado neste ambiente — já reportado).
-- Emissão real de CT-e via Hub Fiscal.
-- Mudanças de código; qualquer falha vira novo ticket.
+### Verificação
+- Build + `bunx vitest run` (esperado: 250 testes verdes, sem novos).
+- Teste manual mental: reimportar o XLSX do Sicoob deve detectar o header correto e permitir mapear Data/Descrição/Valor; criar acerto marcando um romaneio deve pré-preencher motorista.

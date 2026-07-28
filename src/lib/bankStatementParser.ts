@@ -79,18 +79,78 @@ function normalizeText(s: string) {
   return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
 }
 
-export function parseCsv(text: string): { headers: string[]; rows: Record<string, any>[] } {
+const HEADER_KEYWORDS = [
+  'data', 'dt', 'date',
+  'descri', 'histor', 'memo', 'lançamento', 'lancamento',
+  'valor', 'amount',
+  'crédito', 'credito', 'entrada', 'credit',
+  'débito', 'debito', 'saída', 'saida', 'debit',
+  'saldo', 'balance',
+  'documento', 'doc', 'referen',
+];
+
+function normHeader(v: any): string {
+  return String(v ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+}
+
+/**
+ * Given a matrix of rows (array of arrays), find the row that most likely contains
+ * the real column headers. Scans up to 20 rows and picks the one with the highest
+ * score = (non-empty cell count) + 2 * (number of keyword matches). Requires at
+ * least one keyword match, otherwise returns 0.
+ */
+export function detectHeaderRowIndex(matrix: any[][]): number {
+  const limit = Math.min(matrix.length, 20);
+  let bestIdx = 0;
+  let bestScore = -1;
+  for (let i = 0; i < limit; i++) {
+    const row = matrix[i] || [];
+    const nonEmpty = row.filter(c => String(c ?? '').trim() !== '').length;
+    if (nonEmpty < 2) continue;
+    let hits = 0;
+    for (const c of row) {
+      const n = normHeader(c);
+      if (!n) continue;
+      if (HEADER_KEYWORDS.some(k => n.includes(k))) hits++;
+    }
+    if (hits === 0) continue;
+    const score = nonEmpty + hits * 2;
+    if (score > bestScore) { bestScore = score; bestIdx = i; }
+  }
+  return bestScore < 0 ? 0 : bestIdx;
+}
+
+function matrixToRows(matrix: any[][], headerRowIndex: number): { headers: string[]; rows: Record<string, any>[] } {
+  const rawHeaders = (matrix[headerRowIndex] || []).map((h, i) => {
+    const s = String(h ?? '').trim();
+    return s || `Coluna ${i + 1}`;
+  });
+  // Deduplicate column names
+  const seen = new Map<string, number>();
+  const headers = rawHeaders.map(h => {
+    const n = seen.get(h) ?? 0;
+    seen.set(h, n + 1);
+    return n === 0 ? h : `${h} (${n + 1})`;
+  });
+  const rows: Record<string, any>[] = [];
+  for (let i = headerRowIndex + 1; i < matrix.length; i++) {
+    const arr = matrix[i] || [];
+    if (arr.every(c => String(c ?? '').trim() === '')) continue;
+    const obj: Record<string, any> = {};
+    headers.forEach((h, j) => { obj[h] = arr[j] ?? ''; });
+    rows.push(obj);
+  }
+  return { headers, rows };
+}
+
+export function parseCsv(text: string, headerRowIndex?: number): { headers: string[]; rows: Record<string, any>[]; headerRowIndex: number; matrix: any[][] } {
   const sep = (text.split('\n')[0] || '').includes(';') ? ';' : ',';
   const lines = text.split(/\r?\n/).filter(l => l.trim() !== '');
-  if (!lines.length) return { headers: [], rows: [] };
-  const headers = splitCsvLine(lines[0], sep);
-  const rows = lines.slice(1).map(line => {
-    const parts = splitCsvLine(line, sep);
-    const obj: Record<string, any> = {};
-    headers.forEach((h, i) => { obj[h] = parts[i] ?? ''; });
-    return obj;
-  });
-  return { headers, rows };
+  if (!lines.length) return { headers: [], rows: [], headerRowIndex: 0, matrix: [] };
+  const matrix = lines.map(l => splitCsvLine(l, sep));
+  const idx = headerRowIndex ?? detectHeaderRowIndex(matrix);
+  const { headers, rows } = matrixToRows(matrix, idx);
+  return { headers, rows, headerRowIndex: idx, matrix };
 }
 
 function splitCsvLine(line: string, sep: string): string[] {
@@ -107,17 +167,21 @@ function splitCsvLine(line: string, sep: string): string[] {
   return out.map(v => v.trim());
 }
 
-export async function parseWorkbook(file: File): Promise<{ headers: string[]; rows: Record<string, any>[] }> {
+export async function parseWorkbook(
+  file: File,
+  headerRowIndex?: number,
+): Promise<{ headers: string[]; rows: Record<string, any>[]; headerRowIndex: number; matrix: any[][] }> {
   if (file.name.toLowerCase().endsWith('.csv')) {
     const text = await file.text();
-    return parseCsv(text);
+    return parseCsv(text, headerRowIndex);
   }
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: 'array', cellDates: false });
   const ws = wb.Sheets[wb.SheetNames[0]];
-  const rows: Record<string, any>[] = XLSX.utils.sheet_to_json(ws, { defval: '', raw: true });
-  const headers = Object.keys(rows[0] || {});
-  return { headers, rows };
+  const matrix: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true, blankrows: false }) as any[][];
+  const idx = headerRowIndex ?? detectHeaderRowIndex(matrix);
+  const { headers, rows } = matrixToRows(matrix, idx);
+  return { headers, rows, headerRowIndex: idx, matrix };
 }
 
 export function buildParsedRows(rows: Record<string, any>[], map: ColumnMapping, bankAccountId: string): ParsedRow[] {

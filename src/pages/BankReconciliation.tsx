@@ -228,26 +228,48 @@ function ImportStatementDialog({ accountId, periodStart, periodEnd }: { accountI
   const [rowsRaw, setRowsRaw] = useState<Record<string, any>[]>([]);
   const [mapping, setMapping] = useState<ColumnMapping>({ date: '', description: '', amount: '' });
   const [preview, setPreview] = useState<any[]>([]);
+  const [headerRowIndex, setHeaderRowIndex] = useState<number>(0);
+  const [matrix, setMatrix] = useState<any[][]>([]);
+  const [autoGuessFailed, setAutoGuessFailed] = useState(false);
   const importMut = useImportBankStatement();
 
-  const reset = () => { setFile(null); setHeaders([]); setRowsRaw([]); setMapping({ date: '', description: '', amount: '' }); setPreview([]); };
+  const reset = () => {
+    setFile(null); setHeaders([]); setRowsRaw([]); setMapping({ date: '', description: '', amount: '' });
+    setPreview([]); setHeaderRowIndex(0); setMatrix([]); setAutoGuessFailed(false);
+  };
 
-  const onFile = async (f: File) => {
-    setFile(f);
-    const { headers: hs, rows } = await parseWorkbook(f);
-    setHeaders(hs);
-    setRowsRaw(rows);
-    // guess mapping
+  const applyGuess = (hs: string[]) => {
     const guess = (candidates: string[]) => hs.find(h => candidates.some(c => h.toLowerCase().includes(c))) || '';
-    setMapping({
+    const next: ColumnMapping = {
       date: guess(['data', 'date', 'dt']),
-      description: guess(['descri', 'histor', 'memo']),
+      description: guess(['descri', 'histor', 'memo', 'lanç', 'lanc']),
       amount: guess(['valor', 'amount']),
       inflow: guess(['crédito', 'credito', 'entrada', 'credit']),
       outflow: guess(['débito', 'debito', 'saída', 'saida', 'debit']),
       document: guess(['doc', 'referen']),
       balance: guess(['saldo', 'balance']),
-    });
+    };
+    setMapping(next);
+    setAutoGuessFailed(!next.date || !next.description || (!next.amount && !next.inflow && !next.outflow));
+  };
+
+  const onFile = async (f: File) => {
+    setFile(f);
+    const { headers: hs, rows, headerRowIndex: idx, matrix: mx } = await parseWorkbook(f);
+    setHeaders(hs);
+    setRowsRaw(rows);
+    setHeaderRowIndex(idx);
+    setMatrix(mx);
+    applyGuess(hs);
+  };
+
+  const changeHeaderRow = async (newIdx: number) => {
+    if (!file || !matrix.length) return;
+    const clamped = Math.max(0, Math.min(newIdx, Math.min(matrix.length - 1, 19)));
+    const { headers: hs, rows, headerRowIndex: idx, matrix: mx } = await parseWorkbook(file, clamped);
+    setHeaders(hs); setRowsRaw(rows); setHeaderRowIndex(idx); setMatrix(mx);
+    applyGuess(hs);
+    setPreview([]);
   };
 
   const buildPreview = () => {
@@ -259,7 +281,14 @@ function ImportStatementDialog({ accountId, periodStart, periodEnd }: { accountI
   const submit = async () => {
     if (!file || !accountId) return;
     const parsed = buildParsedRows(rowsRaw, mapping, accountId);
-    if (parsed.length === 0) { toast({ title: 'Nenhuma linha válida', variant: 'destructive' }); return; }
+    if (parsed.length === 0) {
+      toast({
+        title: 'Nenhuma linha válida',
+        description: 'Verifique se as colunas Data, Descrição e Valor (ou Crédito/Débito) foram mapeadas corretamente e se a linha do cabeçalho está certa.',
+        variant: 'destructive',
+      });
+      return;
+    }
     const hash = await computeFileHash(file);
     importMut.mutate({
       bank_account_id: accountId,
@@ -285,6 +314,27 @@ function ImportStatementDialog({ accountId, periodStart, periodEnd }: { accountI
         <DialogHeader><DialogTitle>Importar extrato bancário</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <Input type="file" accept=".csv,.xls,.xlsx" onChange={e => e.target.files?.[0] && onFile(e.target.files[0])} />
+          {headers.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 text-xs bg-muted/40 rounded px-2 py-1.5">
+              <span className="text-muted-foreground">Cabeçalho detectado na linha</span>
+              <Input
+                type="number"
+                min={1}
+                max={Math.min(matrix.length, 20)}
+                value={headerRowIndex + 1}
+                onChange={(e) => changeHeaderRow(Number(e.target.value) - 1)}
+                className="h-7 w-16"
+              />
+              <span className="text-muted-foreground truncate max-w-full">
+                Colunas: {headers.slice(0, 6).join(' · ')}{headers.length > 6 ? ` (+${headers.length - 6})` : ''}
+              </span>
+            </div>
+          )}
+          {headers.length > 0 && autoGuessFailed && (
+            <div className="text-xs rounded border border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300 px-2 py-1.5">
+              Não foi possível identificar automaticamente as colunas Data / Descrição / Valor. Selecione manualmente abaixo (ou ajuste a linha do cabeçalho).
+            </div>
+          )}
           {headers.length > 0 && (
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
               <MappingSelect label="Data *" value={mapping.date} onChange={v => setMapping(m => ({ ...m, date: v }))} headers={headers} />
