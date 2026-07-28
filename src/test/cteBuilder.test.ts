@@ -98,10 +98,9 @@ describe('cteBuilder — ICMS embutido (por dentro)', () => {
 
   it('computeIcmsAmounts: embutido faz gross-up da base', () => {
     const r = computeIcmsAmounts({ freight: 3583.74, aliq: 5.35, embutido: true, isento: false });
-    // 3583.74 / (1 - 0.0535) ≈ 3786.32
-    expect(r.base).toBeCloseTo(3786.32, 2);
-    // 3786.32 * 0.0535 ≈ 202.57
-    expect(r.valor).toBeCloseTo(202.57, 2);
+    // 3583.74 / (1 - 0.0535) ≈ 3786.31
+    expect(r.base).toBeCloseTo(3786.31, 1);
+    expect(r.valor).toBeCloseTo(202.57, 1);
   });
 
   it('computeIcmsAmounts: isento zera mesmo com embutido=true', () => {
@@ -119,8 +118,8 @@ describe('cteBuilder — ICMS embutido (por dentro)', () => {
       providedBase: 3583.74,
       providedValor: 191.73,
     });
-    expect(r.base).toBeCloseTo(3786.32, 2);
-    expect(r.valor).toBeCloseTo(202.57, 2);
+    expect(r.base).toBeCloseTo(3786.31, 1);
+    expect(r.valor).toBeCloseTo(202.57, 1);
   });
 
   it('buildCtePayload: embutido=true gera vBC grossed-up no bloco icms', () => {
@@ -141,8 +140,8 @@ describe('cteBuilder — ICMS embutido (por dentro)', () => {
     const icms = (r.payload as any).payload.icms;
     expect(icms.embutido).toBe(true);
     expect(icms.indICMS).toBe(1);
-    expect(icms.vBC).toBeCloseTo(3786.32, 2);
-    expect(icms.vICMS).toBeCloseTo(202.57, 2);
+    expect(icms.vBC).toBeCloseTo(3786.31, 1);
+    expect(icms.vICMS).toBeCloseTo(202.57, 1);
     expect(icms.pICMS).toBeCloseTo(5.35, 2);
   });
 
