@@ -90,7 +90,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
   );
 
   const totalServicos = useMemo(
-    () => selectedDocs.reduce((a: number, d: any) => a + num(d.freight_value ?? d.total_value ?? 0), 0),
+    () => selectedDocs.reduce((a: number, d: any) => a + num(d.freight_value ?? d.value ?? d.total_value ?? 0), 0),
     [selectedDocs],
   );
   const baseCalculo = +(Math.max(0, totalServicos - num(valorDeducoes))).toFixed(2);
@@ -307,8 +307,8 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
                       <TableCell className="font-mono text-xs">{d.invoice_number || d.access_key?.slice(-9) || '—'}</TableCell>
                       <TableCell className="text-xs">{d.issue_date}</TableCell>
                       <TableCell className="max-w-[220px] truncate">{d.remitter || '—'}</TableCell>
-                      <TableCell className="max-w-[220px] truncate">{d.recipient_name || '—'}</TableCell>
-                      <TableCell className="text-right tabular-nums">R$ {num(d.total_value).toFixed(2)}</TableCell>
+                      <TableCell className="max-w-[220px] truncate">{d.recipient || d.recipient_name || '—'}</TableCell>
+                      <TableCell className="text-right tabular-nums">R$ {num(d.value ?? d.total_value).toFixed(2)}</TableCell>
                       <TableCell className="text-right tabular-nums">R$ {num(d.freight_value).toFixed(2)}</TableCell>
                     </TableRow>
                   ))}
