@@ -315,8 +315,25 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
                 <Badge variant="secondary">{selectedDocs.length} NF(s)</Badge>{' '}
                 <span className="text-muted-foreground">Total frete: </span>
                 <span className="font-semibold tabular-nums">R$ {totalServicos.toFixed(2)}</span>
+                {missingFreight > 0 && (
+                  <span className="ml-2 text-xs text-yellow-600">
+                    ({missingFreight} sem frete — recalcule pela tabela)
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRecalc}
+                  disabled={recalcFreight.isPending || selectedDocs.length === 0}
+                  title="Recalcula o frete das NFs selecionadas usando a tabela de frete vigente"
+                >
+                  {recalcFreight.isPending
+                    ? <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                    : <Calculator className="h-4 w-4 mr-1" />}
+                  Recalcular frete
+                </Button>
                 <div className="flex items-center gap-2">
                   <Label className="text-xs">Tomador é:</Label>
                   <Select value={tomadorMode} onValueChange={(v: any) => setTomadorMode(v)}>
