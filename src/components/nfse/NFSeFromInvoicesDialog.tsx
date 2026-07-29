@@ -307,8 +307,8 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
                       <TableCell className="font-mono text-xs">{d.invoice_number || d.access_key?.slice(-9) || '—'}</TableCell>
                       <TableCell className="text-xs">{d.issue_date}</TableCell>
                       <TableCell className="max-w-[220px] truncate">{d.remitter || '—'}</TableCell>
-                      <TableCell className="max-w-[220px] truncate">{d.recipient_name || '—'}</TableCell>
-                      <TableCell className="text-right tabular-nums">R$ {num(d.total_value).toFixed(2)}</TableCell>
+                      <TableCell className="max-w-[220px] truncate">{d.recipient || d.recipient_name || '—'}</TableCell>
+                      <TableCell className="text-right tabular-nums">R$ {num(d.value ?? d.total_value).toFixed(2)}</TableCell>
                       <TableCell className="text-right tabular-nums">R$ {num(d.freight_value).toFixed(2)}</TableCell>
                     </TableRow>
                   ))}
