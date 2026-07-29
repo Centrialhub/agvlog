@@ -14,6 +14,8 @@ import { useBillingDocuments } from '@/hooks/useBillingDocuments';
 import { useClients } from '@/hooks/useClients';
 import { useEmitters } from '@/hooks/useEmitters';
 import { useCreateNFSe, useIssueNFSe } from '@/hooks/useNFSe';
+import { useRecalculateInboundFreight } from '@/hooks/useRecalculateInboundFreight';
+import { Calculator } from 'lucide-react';
 
 interface Props {
   open: boolean;
@@ -30,6 +32,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
   const { data: emitters = [] } = useEmitters();
   const create = useCreateNFSe();
   const issue = useIssueNFSe();
+  const recalcFreight = useRecalculateInboundFreight();
 
   const [step, setStep] = useState<1 | 2>(1);
   const [supplierId, setSupplierId] = useState<string>(SENTINEL_NONE);
@@ -50,6 +53,14 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
   const [issueDate, setIssueDate] = useState(new Date().toISOString().slice(0, 10));
   const [tomadorMode, setTomadorMode] = useState<'remetente' | 'destinatario'>('remetente');
   const [issuing, setIssuing] = useState(false);
+  // Retenções e deduções (opcionais)
+  const [valorDeducoes, setValorDeducoes] = useState<number>(0);
+  const [aliqPis, setAliqPis] = useState<number>(0);
+  const [aliqCofins, setAliqCofins] = useState<number>(0);
+  const [aliqInss, setAliqInss] = useState<number>(0);
+  const [aliqIr, setAliqIr] = useState<number>(0);
+  const [aliqCsll, setAliqCsll] = useState<number>(0);
+  const [outrasRetencoes, setOutrasRetencoes] = useState<number>(0);
 
   const suppliers = useMemo(() => clients.filter((c: any) => c.is_supplier), [clients]);
   const clientList = useMemo(() => clients.filter((c: any) => c.is_client !== false), [clients]);
@@ -82,9 +93,26 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
     () => selectedDocs.reduce((a: number, d: any) => a + num(d.freight_value ?? d.total_value ?? 0), 0),
     [selectedDocs],
   );
-  const baseCalculo = totalServicos;
-  const valorIss = +(baseCalculo * aliquotaIss / 100).toFixed(2);
-  const valorLiquido = +(totalServicos - (issRetido ? valorIss : 0)).toFixed(2);
+  const baseCalculo = +(Math.max(0, totalServicos - num(valorDeducoes))).toFixed(2);
+  const valorIss = +(baseCalculo * num(aliquotaIss) / 100).toFixed(2);
+  const valorPis = +(baseCalculo * num(aliqPis) / 100).toFixed(2);
+  const valorCofins = +(baseCalculo * num(aliqCofins) / 100).toFixed(2);
+  const valorInss = +(baseCalculo * num(aliqInss) / 100).toFixed(2);
+  const valorIr = +(baseCalculo * num(aliqIr) / 100).toFixed(2);
+  const valorCsll = +(baseCalculo * num(aliqCsll) / 100).toFixed(2);
+  const totalRetencoes = +(
+    (issRetido ? valorIss : 0) + valorPis + valorCofins + valorInss + valorIr + valorCsll + num(outrasRetencoes)
+  ).toFixed(2);
+  const valorLiquido = +(totalServicos - num(valorDeducoes) - totalRetencoes).toFixed(2);
+
+  const missingFreight = selectedDocs.filter((d: any) => num(d.freight_value) <= 0).length;
+
+  async function handleRecalc() {
+    const ids = selectedDocs.map((d: any) => d.id);
+    if (!ids.length) { toast.error('Selecione NFs primeiro'); return; }
+    const res = await recalcFreight.mutateAsync(ids);
+    toast.success(`Frete recalculado: ${res.updated} atualizadas, ${res.skipped} com override, ${res.failed} falharam`);
+  }
 
   const toggleAll = (v: boolean) => {
     const next: Record<string, boolean> = {};
@@ -158,6 +186,13 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
         valor_iss: valorIss,
         valor_liquido: valorLiquido,
         valor_total: totalServicos,
+        valor_deducoes: num(valorDeducoes),
+        valor_pis: valorPis,
+        valor_cofins: valorCofins,
+        valor_inss: valorInss,
+        valor_ir: valorIr,
+        valor_csll: valorCsll,
+        outras_retencoes: num(outrasRetencoes),
         items: selectedDocs.map((d: any) => ({
           description: `NF ${d.invoice_number || ''} — ${d.remitter || ''}`.trim(),
           quantity: 1,
@@ -280,8 +315,25 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
                 <Badge variant="secondary">{selectedDocs.length} NF(s)</Badge>{' '}
                 <span className="text-muted-foreground">Total frete: </span>
                 <span className="font-semibold tabular-nums">R$ {totalServicos.toFixed(2)}</span>
+                {missingFreight > 0 && (
+                  <span className="ml-2 text-xs text-yellow-600">
+                    ({missingFreight} sem frete — recalcule pela tabela)
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRecalc}
+                  disabled={recalcFreight.isPending || selectedDocs.length === 0}
+                  title="Recalcula o frete das NFs selecionadas usando a tabela de frete vigente"
+                >
+                  {recalcFreight.isPending
+                    ? <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                    : <Calculator className="h-4 w-4 mr-1" />}
+                  Recalcular frete
+                </Button>
                 <div className="flex items-center gap-2">
                   <Label className="text-xs">Tomador é:</Label>
                   <Select value={tomadorMode} onValueChange={(v: any) => setTomadorMode(v)}>
@@ -335,6 +387,55 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
                   placeholder={`Prestação de serviço de transporte referente a ${selectedDocs.length} NF(s)…`} />
               </div>
             </div>
+
+            <div className="rounded-md border p-3 space-y-3">
+              <div className="text-xs font-semibold text-muted-foreground">Retenções e deduções (opcionais)</div>
+              <div className="grid grid-cols-6 gap-3">
+                <div>
+                  <Label className="text-xs">Deduções (R$)</Label>
+                  <Input type="number" step="0.01" value={valorDeducoes} onChange={e => setValorDeducoes(+e.target.value)} />
+                </div>
+                <div>
+                  <Label className="text-xs">PIS (%)</Label>
+                  <Input type="number" step="0.0001" value={aliqPis} onChange={e => setAliqPis(+e.target.value)} />
+                </div>
+                <div>
+                  <Label className="text-xs">COFINS (%)</Label>
+                  <Input type="number" step="0.0001" value={aliqCofins} onChange={e => setAliqCofins(+e.target.value)} />
+                </div>
+                <div>
+                  <Label className="text-xs">INSS (%)</Label>
+                  <Input type="number" step="0.0001" value={aliqInss} onChange={e => setAliqInss(+e.target.value)} />
+                </div>
+                <div>
+                  <Label className="text-xs">IR (%)</Label>
+                  <Input type="number" step="0.0001" value={aliqIr} onChange={e => setAliqIr(+e.target.value)} />
+                </div>
+                <div>
+                  <Label className="text-xs">CSLL (%)</Label>
+                  <Input type="number" step="0.0001" value={aliqCsll} onChange={e => setAliqCsll(+e.target.value)} />
+                </div>
+                <div className="col-span-2">
+                  <Label className="text-xs">Outras retenções (R$)</Label>
+                  <Input type="number" step="0.01" value={outrasRetencoes} onChange={e => setOutrasRetencoes(+e.target.value)} />
+                </div>
+              </div>
+              <div className="grid grid-cols-6 gap-3 pt-2 border-t text-xs">
+                <div><div className="text-muted-foreground">PIS</div><div className="font-medium tabular-nums">R$ {valorPis.toFixed(2)}</div></div>
+                <div><div className="text-muted-foreground">COFINS</div><div className="font-medium tabular-nums">R$ {valorCofins.toFixed(2)}</div></div>
+                <div><div className="text-muted-foreground">INSS</div><div className="font-medium tabular-nums">R$ {valorInss.toFixed(2)}</div></div>
+                <div><div className="text-muted-foreground">IR</div><div className="font-medium tabular-nums">R$ {valorIr.toFixed(2)}</div></div>
+                <div><div className="text-muted-foreground">CSLL</div><div className="font-medium tabular-nums">R$ {valorCsll.toFixed(2)}</div></div>
+                <div><div className="text-muted-foreground">Retenções (total)</div><div className="font-semibold tabular-nums">R$ {totalRetencoes.toFixed(2)}</div></div>
+              </div>
+            </div>
+
+            {totalServicos <= 0 && (
+              <div className="rounded-md border border-yellow-500/40 bg-yellow-500/10 p-3 text-sm text-yellow-800">
+                Valor de serviços está zerado. Volte ao passo 1 e clique em <strong>Recalcular frete</strong> para calcular
+                a partir da tabela de frete das NFs selecionadas.
+              </div>
+            )}
 
             <div className="rounded-md border p-3 grid grid-cols-4 gap-3 bg-muted/30">
               <div><div className="text-xs text-muted-foreground">Vl. Serviços</div><div className="font-semibold tabular-nums">R$ {totalServicos.toFixed(2)}</div></div>
