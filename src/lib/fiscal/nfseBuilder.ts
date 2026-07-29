@@ -33,13 +33,21 @@ export interface BuildNFSeInput {
   emitter: TenantEmitter | null;
   environment?: 'sandbox' | 'production';
   callbackUrl?: string;
+  /**
+   * Nº da tentativa de envio (0 = primeira). O Hub Fiscal/PlugNotas deduplica
+   * requisições pelo `idIntegracao`; em reenvios precisamos de um id novo,
+   * senão a chamada é descartada e a nota nunca chega ao provedor.
+   */
+  attempt?: number;
 }
 
-export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl }: BuildNFSeInput) {
+export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl, attempt = 0 }: BuildNFSeInput) {
   if (!emitter) throw new Error('Emitente fiscal não configurado');
   if (!doc?.cliente_cnpj || !doc?.cliente_nome) {
     throw new Error('Tomador (cliente) sem CNPJ/razão social');
   }
+
+  const integrationId = attempt > 0 ? `${doc.id}-r${attempt}` : String(doc.id);
 
   const emitterCnpj = onlyDigits(emitter.cnpj);
   const env: 'sandbox' | 'production' =
@@ -60,7 +68,7 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl }:
 
   const payload = nonEmpty({
     // Identificação do RPS
-    idIntegracao: String(doc.id),
+    idIntegracao: integrationId,
     tipo: (doc.doc_type || 'RPS').toUpperCase(),
     natureza: doc.nat_operacao || undefined,
     ambiente: env === 'sandbox' ? 'homologacao' : 'producao',
@@ -148,7 +156,7 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl }:
   return {
     emitterCnpj,
     environment: env,
-    externalId: String(doc.id),
+    externalId: integrationId,
     callbackUrl,
     payload,
   };
