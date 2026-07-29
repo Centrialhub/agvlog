@@ -254,7 +254,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-4 w-4" />
-            Emitir NFS-e a partir de NFs {step === 1 ? '— 1. Selecionar notas' : '— 2. Dados fiscais e emissão'}
+            Emitir NFS-e a partir de NFs {step === 1 ? '— 1. Selecionar notas' : step === 2 ? '— 2. Valores por NF' : '— 3. Dados fiscais e emissão'}
           </DialogTitle>
         </DialogHeader>
 
