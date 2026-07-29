@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -131,18 +131,9 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
     }
   }
 
-  // Auto-recalcula frete de TODAS as NFs listadas quando o modal abre / filtros mudam.
-  const autoRecalcRef = useRef<string>('');
-  useEffect(() => {
-    if (!open || isLoading) return;
-    const ids = (docs as any[]).map((d: any) => d.id).sort();
-    if (!ids.length) return;
-    const key = ids.join(',');
-    if (autoRecalcRef.current === key) return;
-    autoRecalcRef.current = key;
-    // dispara em background — não bloqueia UI
-    recalcFreight.mutateAsync(ids).catch(() => { /* silencioso: usuário pode reexecutar manualmente */ });
-  }, [open, isLoading, docs]);
+  // Recálculo de frete é somente manual (botão "Recalcular frete").
+  // Auto-recálculo em background foi removido para não bloquear a função quando
+  // o usuário precisa dispará-la em NFs específicas (ex.: uma NF sem frete).
 
   const toggleAll = (v: boolean) => {
     const next: Record<string, boolean> = {};
