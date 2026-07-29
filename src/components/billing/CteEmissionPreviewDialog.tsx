@@ -688,6 +688,11 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                     <div className="text-muted-foreground">
                       {it.invoices.length} NF · R$ {it.freightValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </div>
+                    {it.invoices.length > 0 && (
+                      <div className="mt-1 truncate font-mono text-[10px] text-muted-foreground" title={it.invoices.map((n: any) => n.number || '—').join(', ')}>
+                        NF: {it.invoices.map((n: any) => n.number || '—').join(', ')}
+                      </div>
+                    )}
                   </button>
                 );
               })}
