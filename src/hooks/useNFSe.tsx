@@ -4,6 +4,7 @@ import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
 import { toast } from 'sonner';
 import { hubFiscal } from '@/lib/fiscal/hubFiscalClient';
+import { buildNFSeEmitPayload } from '@/lib/fiscal/nfseBuilder';
 
 export interface NFSeDoc {
   id: string;
@@ -186,68 +187,69 @@ export function useIssueNFSe() {
       if (emitter) {
         const { data: creds } = await (supabase as any)
           .from('hub_fiscal_credentials')
-          .select('id')
+          .select('id, doc_scope')
           .eq('emitter_id', emitter.id)
           .eq('enabled', true)
-          .limit(1);
+          .in('doc_scope', ['nfse', 'all']);
         hasHubCred = (creds || []).length > 0;
       }
 
       if (hasHubCred && emitter) {
         const environment = (emitter?.metadata?.environment as 'production' | 'sandbox') || 'production';
-        const externalId = doc.id;
+        const built = buildNFSeEmitPayload({ doc, emitter, environment });
         const res = await hubFiscal.emit({
           type: 'nfse',
           emitterId: emitter.id,
           nfseDocumentId: doc.id,
           body: {
-            emitterCnpj: (emitter.cnpj || '').replace(/\D/g, ''),
-            environment,
-            externalId,
-            payload: {
-              rps: {
-                numero: doc.rps_number,
-                serie: doc.series || '1',
-                dataEmissao: doc.issue_date,
-              },
-              tomador: {
-                nome: doc.cliente_nome,
-                cnpjCpf: (doc.cliente_cnpj || '').replace(/\D/g, ''),
-              },
-              servico: {
-                descricao: doc.description || doc.items?.[0]?.description || 'Serviço de transporte',
-                valorServicos: doc.valor_servicos,
-                baseCalculo: doc.base_calculo,
-                aliquota: doc.aliquota_iss,
-                valorIss: doc.valor_iss,
-              },
-              items: doc.items || [],
-            },
+            emitterCnpj: built.emitterCnpj,
+            environment: built.environment,
+            externalId: built.externalId,
+            payload: built.payload,
           },
         });
 
         const hubDoc = (res as any)?.hub?.document || {};
         const emission = (res as any)?.emission || {};
+        // Normaliza status devolvido pelo Hub para o vocabulário local.
+        const rawStatus = String(hubDoc.status || hubDoc.plugnotasStatus || '').toLowerCase();
+        const isAuthorized = ['authorized', 'autorizado', 'concluido', 'issued'].includes(rawStatus);
+        const isRejected = ['rejected', 'rejeitado', 'erro', 'error'].includes(rawStatus);
+        const localStatus = !res.success
+          ? 'rejected'
+          : isAuthorized
+            ? 'issued'
+            : isRejected
+              ? 'rejected'
+              : (rawStatus || 'processing');
         await (supabase as any).from('nfse_documents').update({
-          status: hubDoc.status || (res.success ? 'queued' : 'rejected'),
+          status: localStatus,
           provider: 'hub_fiscal',
           protocol_number: hubDoc.authorizationProtocol || hubDoc.plugnotasProtocol || null,
           nfse_number: hubDoc.number || null,
           verification_code: hubDoc.accessKey || null,
+          pdf_url: hubDoc.pdfUrl || null,
+          xml_url: hubDoc.xmlUrl || null,
+          authorization_date: isAuthorized ? new Date().toISOString() : null,
+          rejection_messages: isRejected
+            ? { message: hubDoc.message || (res as any)?.hub?.error?.message || 'Rejeitada' }
+            : null,
         }).eq('id', doc.id);
         await (supabase as any).from('nfse_events').insert({
           tenant_id: doc.tenant_id,
           nfse_id: doc.id,
-          event_type: res.success ? 'submitted' : 'rejected',
-          message: res.success
-            ? `Enviado ao Hub Fiscal (emitente ${emitter.cnpj}) — ${hubDoc.status || 'processing'}`
-            : `Falha Hub Fiscal: ${(res as any)?.hub?.error?.message || (res as any)?.error?.message || 'erro'}`,
+          event_type: !res.success ? 'rejected' : isAuthorized ? 'issued' : 'submitted',
+          message: !res.success
+            ? `Falha Hub Fiscal: ${(res as any)?.hub?.error?.message || (res as any)?.error?.message || 'erro'}`
+            : isAuthorized
+              ? `Autorizada pelo Hub Fiscal — nº ${hubDoc.number || '(pendente)'}`
+              : `Enviado ao Hub Fiscal (emitente ${emitter.cnpj}) — ${rawStatus || 'processing'}`,
           payload: { hub: (res as any)?.hub, emission_id: emission.id },
         });
         if (!res.success) {
           throw new Error((res as any)?.hub?.error?.message || (res as any)?.error?.message || 'Falha ao enviar ao Hub Fiscal');
         }
-        return { status: hubDoc.status || 'queued', provider: 'hub_fiscal', hub: (res as any)?.hub };
+        return { status: localStatus, provider: 'hub_fiscal', hub: (res as any)?.hub };
       }
 
       // 3. Fallback: sem credencial Hub Fiscal → caminho legado (simulação / provedor local).
@@ -260,7 +262,8 @@ export function useIssueNFSe() {
     onSuccess: (data: any) => {
       qc.invalidateQueries({ queryKey: ['nfse'] });
       if (data?.status === 'issued') toast.success('NFS-e emitida');
-      else if (data?.provider === 'hub_fiscal') toast.success('NFS-e enviada ao Hub Fiscal');
+      else if (data?.provider === 'hub_fiscal' && data?.status === 'processing') toast.info('NFS-e enviada ao Hub Fiscal — aguardando autorização da prefeitura');
+      else if (data?.provider === 'hub_fiscal') toast.success(`NFS-e no Hub Fiscal — ${data.status}`);
       else if (data?.status === 'queued' || data?.simulated) toast.info('Provedor fiscal não configurado — NFS-e marcada como pronta para emissão');
       else if (data?.status === 'rejected') toast.error(`Rejeitada: ${data?.message ?? ''}`);
     },
