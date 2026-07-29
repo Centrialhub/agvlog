@@ -364,6 +364,27 @@ export function useCancelNFSe() {
         }
       }
 
+      // Sem emissão no Hub (rascunho, rejeitada, erro): cancela localmente e libera as NFs.
+      if (!doc || doc.status !== 'issued') {
+        await (supabase as any).from('nfse_documents').update({
+          status: 'cancelled', cancelled: true,
+          cancellation_date: new Date().toISOString(),
+          cancellation_reason: reason ?? null,
+        }).eq('id', id);
+        await (supabase as any)
+          .from('fiscal_documents')
+          .update({ nfse_emitted_at: null, nfse_emitted_document_id: null })
+          .eq('nfse_emitted_document_id', id);
+        if (doc?.tenant_id) {
+          await (supabase as any).from('nfse_events').insert({
+            tenant_id: doc.tenant_id, nfse_id: id,
+            event_type: 'cancelled',
+            message: `Cancelada localmente — ${reason || ''}`,
+          });
+        }
+        return { status: 'cancelled', provider: 'local' };
+      }
+
       const { data, error } = await supabase.functions.invoke('emit-nfse', {
         body: { action: 'cancel', nfse_id: id, reason },
       });
@@ -382,6 +403,39 @@ export function useCancelNFSe() {
       toast.success('Cancelamento registrado');
     },
     onError: (e: any) => toast.error(e?.message || 'Falha ao cancelar NFS-e'),
+  });
+}
+
+/** Exclui definitivamente uma NFS-e que não foi autorizada, liberando as NFs vinculadas. */
+export function useDeleteNFSe() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data: doc } = await (supabase as any)
+        .from('nfse_documents')
+        .select('id, status')
+        .eq('id', id)
+        .maybeSingle();
+      if (doc && ['issued', 'authorized'].includes(doc.status)) {
+        throw new Error('NFS-e autorizada não pode ser excluída — cancele primeiro');
+      }
+      // Libera NFs vinculadas antes de remover o documento
+      await (supabase as any)
+        .from('fiscal_documents')
+        .update({ nfse_emitted_at: null, nfse_emitted_document_id: null })
+        .eq('nfse_emitted_document_id', id);
+      await (supabase as any).from('nfse_events').delete().eq('nfse_id', id);
+      const { error } = await (supabase as any).from('nfse_documents').delete().eq('id', id);
+      if (error) throw error;
+      return { id };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['nfse'] });
+      qc.invalidateQueries({ queryKey: ['billing_documents'] });
+      qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
+      toast.success('NFS-e excluída — NFs liberadas para novo faturamento');
+    },
+    onError: (e: any) => toast.error(e?.message || 'Falha ao excluir NFS-e'),
   });
 }
 
