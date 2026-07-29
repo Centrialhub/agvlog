@@ -226,8 +226,8 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
         items: selectedDocs.map((d: any) => ({
           description: `NF ${d.invoice_number || ''} — ${d.remitter || ''}`.trim(),
           quantity: 1,
-          unit_value: num(d.freight_value ?? d.total_value),
-          total: num(d.freight_value ?? d.total_value),
+          unit_value: valorPorDoc(d),
+          total: valorPorDoc(d),
           fiscal_document_id: d.id,
           access_key: d.access_key,
         })),
