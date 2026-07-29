@@ -4,8 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Send, Ban, Edit, FileText, AlertTriangle } from 'lucide-react';
-import { useNFSeList, useIssueNFSe, useCancelNFSe, useNFSeProviderConfig, type NFSeDoc } from '@/hooks/useNFSe';
+import { Plus, Send, Ban, Edit, FileText } from 'lucide-react';
+import { useNFSeList, useIssueNFSe, useCancelNFSe, type NFSeDoc } from '@/hooks/useNFSe';
 import NFSeFormDialog from '@/components/nfse/NFSeFormDialog';
 
 const STATUS_LABEL: Record<string, { label: string; variant: any }> = {
@@ -21,7 +21,6 @@ const STATUS_LABEL: Record<string, { label: string; variant: any }> = {
 
 export default function NFSePage() {
   const { data: docs = [], isLoading } = useNFSeList();
-  const { data: providerCfg } = useNFSeProviderConfig('MATRIZ');
   const issue = useIssueNFSe();
   const cancel = useCancelNFSe();
 
@@ -55,17 +54,6 @@ export default function NFSePage() {
             <Plus className="h-4 w-4 mr-1" /> Nova NFS-e
           </Button>
         </div>
-
-        {!providerCfg?.enabled && (
-          <Card className="border-amber-500/50 bg-amber-500/5">
-            <CardContent className="py-3 flex items-start gap-2 text-sm">
-              <AlertTriangle className="h-4 w-4 mt-0.5 text-amber-600" />
-              <div>
-                <strong>Provedor fiscal não configurado.</strong> As notas serão criadas como RPS internas. Configure o provedor (Focus NFe, NFE.io, eNotas ou webservice da prefeitura) em Configurações → Fiscal para emitir oficialmente.
-              </div>
-            </CardContent>
-          </Card>
-        )}
 
         <Card>
           <CardHeader className="flex-row items-center justify-between">
