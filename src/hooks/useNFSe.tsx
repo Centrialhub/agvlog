@@ -129,6 +129,16 @@ export function useCreateNFSe() {
         .select()
         .single();
       if (error) throw error;
+      // Vincula as NFs escolhidas para gerar a NFS-e — a mesma regra do CT-e:
+      // uma NF de entrada só pode virar UM documento de saída.
+      const fdIds = (input as any).fiscal_document_ids as string[] | undefined;
+      if (fdIds && fdIds.length) {
+        await (supabase as any)
+          .from('fiscal_documents')
+          .update({ nfse_emitted_at: new Date().toISOString(), nfse_emitted_document_id: data.id })
+          .in('id', fdIds)
+          .eq('tenant_id', currentTenant.id);
+      }
       await (supabase as any).from('nfse_events').insert({
         tenant_id: currentTenant.id,
         nfse_id: data.id,
@@ -138,7 +148,11 @@ export function useCreateNFSe() {
       });
       return data as NFSeDoc;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['nfse'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['nfse'] });
+      qc.invalidateQueries({ queryKey: ['billing_documents'] });
+      qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
+    },
   });
 }
 
@@ -146,6 +160,8 @@ export function useUpdateNFSe() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, patch }: { id: string; patch: Partial<NFSeDoc> }) => {
+      // Se a atualização mudou o conjunto de NFs vinculadas, sincroniza flags nas NFs.
+      const fdIds = (patch as any).fiscal_document_ids as string[] | undefined;
       const { data, error } = await (supabase as any)
         .from('nfse_documents')
         .update(patch)
@@ -153,9 +169,27 @@ export function useUpdateNFSe() {
         .select()
         .single();
       if (error) throw error;
+      if (fdIds) {
+        // Libera NFs previamente vinculadas a esta NFS-e que não estão mais na lista
+        await (supabase as any)
+          .from('fiscal_documents')
+          .update({ nfse_emitted_at: null, nfse_emitted_document_id: null })
+          .eq('nfse_emitted_document_id', id)
+          .not('id', 'in', `(${fdIds.length ? fdIds.map((x) => `"${x}"`).join(',') : '""'})`);
+        if (fdIds.length) {
+          await (supabase as any)
+            .from('fiscal_documents')
+            .update({ nfse_emitted_at: new Date().toISOString(), nfse_emitted_document_id: id })
+            .in('id', fdIds);
+        }
+      }
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['nfse'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['nfse'] });
+      qc.invalidateQueries({ queryKey: ['billing_documents'] });
+      qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
+    },
   });
 }
 
@@ -261,6 +295,8 @@ export function useIssueNFSe() {
     },
     onSuccess: (data: any) => {
       qc.invalidateQueries({ queryKey: ['nfse'] });
+      qc.invalidateQueries({ queryKey: ['billing_documents'] });
+      qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
       if (data?.status === 'issued') toast.success('NFS-e emitida');
       else if (data?.provider === 'hub_fiscal' && data?.status === 'processing') toast.info('NFS-e enviada ao Hub Fiscal — aguardando autorização da prefeitura');
       else if (data?.provider === 'hub_fiscal') toast.success(`NFS-e no Hub Fiscal — ${data.status}`);
@@ -300,6 +336,11 @@ export function useCancelNFSe() {
             cancellation_date: new Date().toISOString(),
             cancellation_reason: reason ?? null,
           }).eq('id', id);
+          // Libera as NFs vinculadas — voltam a aparecer para novo faturamento
+          await (supabase as any)
+            .from('fiscal_documents')
+            .update({ nfse_emitted_at: null, nfse_emitted_document_id: null })
+            .eq('nfse_emitted_document_id', id);
           await (supabase as any).from('nfse_events').insert({
             tenant_id: doc.tenant_id, nfse_id: id,
             event_type: 'cancelled',
@@ -313,10 +354,17 @@ export function useCancelNFSe() {
         body: { action: 'cancel', nfse_id: id, reason },
       });
       if (error) throw error;
+      // Fallback legado: também libera NFs vinculadas
+      await (supabase as any)
+        .from('fiscal_documents')
+        .update({ nfse_emitted_at: null, nfse_emitted_document_id: null })
+        .eq('nfse_emitted_document_id', id);
       return data;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['nfse'] });
+      qc.invalidateQueries({ queryKey: ['billing_documents'] });
+      qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
       toast.success('Cancelamento registrado');
     },
     onError: (e: any) => toast.error(e?.message || 'Falha ao cancelar NFS-e'),

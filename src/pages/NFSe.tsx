@@ -4,9 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Send, Ban, Edit, FileText } from 'lucide-react';
+import { Plus, Send, Ban, Edit, FileText, FilePlus2 } from 'lucide-react';
 import { useNFSeList, useIssueNFSe, useCancelNFSe, type NFSeDoc } from '@/hooks/useNFSe';
 import NFSeFormDialog from '@/components/nfse/NFSeFormDialog';
+import NFSeFromInvoicesDialog from '@/components/nfse/NFSeFromInvoicesDialog';
 
 const STATUS_LABEL: Record<string, { label: string; variant: any }> = {
   draft: { label: 'Rascunho', variant: 'secondary' },
@@ -26,6 +27,7 @@ export default function NFSePage() {
 
   const [search, setSearch] = useState('');
   const [formOpen, setFormOpen] = useState(false);
+  const [fromInvoicesOpen, setFromInvoicesOpen] = useState(false);
   const [editing, setEditing] = useState<NFSeDoc | null>(null);
 
   const filtered = useMemo(() => {
@@ -50,9 +52,14 @@ export default function NFSePage() {
             <h1 className="text-2xl font-semibold">NFS-e — Notas Fiscais de Serviço</h1>
             <p className="text-sm text-muted-foreground">Emissão de RPS / NFS-e (estrutura preparada para integração fiscal)</p>
           </div>
-          <Button onClick={() => { setEditing(null); setFormOpen(true); }}>
-            <Plus className="h-4 w-4 mr-1" /> Nova NFS-e
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => { setEditing(null); setFormOpen(true); }}>
+              <Plus className="h-4 w-4 mr-1" /> RPS avulso
+            </Button>
+            <Button onClick={() => setFromInvoicesOpen(true)}>
+              <FilePlus2 className="h-4 w-4 mr-1" /> Emitir a partir de NFs
+            </Button>
+          </div>
         </div>
 
         <Card>
@@ -116,6 +123,7 @@ export default function NFSePage() {
         </Card>
 
         <NFSeFormDialog open={formOpen} onOpenChange={setFormOpen} initial={editing} />
+        <NFSeFromInvoicesDialog open={fromInvoicesOpen} onOpenChange={setFromInvoicesOpen} />
     </div>
   );
 }
