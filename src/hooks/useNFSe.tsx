@@ -197,6 +197,17 @@ export function useIssueNFSe() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
+      const deepHubError = (res: any): string | null => {
+        const doc = res?.hub?.document || {};
+        return (
+          doc?.raw_response_json?.error?.message ||
+          doc?.raw_response_json?.message ||
+          res?.hub?.error?.message ||
+          doc?.message ||
+          res?.error?.message ||
+          null
+        );
+      };
       // 1. Carrega o documento e o emitente vinculado.
       const { data: doc, error: dErr } = await (supabase as any)
         .from('nfse_documents')
@@ -249,6 +260,7 @@ export function useIssueNFSe() {
         const rawStatus = String(hubDoc.status || hubDoc.plugnotasStatus || '').toLowerCase();
         const isAuthorized = ['authorized', 'autorizado', 'concluido', 'issued'].includes(rawStatus);
         const isRejected = ['rejected', 'rejeitado', 'erro', 'error'].includes(rawStatus);
+        const hubErrorMessage = deepHubError(res);
         const localStatus = !res.success
           ? 'rejected'
           : isAuthorized
@@ -266,7 +278,7 @@ export function useIssueNFSe() {
           xml_url: hubDoc.xmlUrl || null,
           authorization_date: isAuthorized ? new Date().toISOString() : null,
           rejection_messages: isRejected
-            ? { message: hubDoc.message || (res as any)?.hub?.error?.message || 'Rejeitada' }
+            ? { message: hubErrorMessage || 'Rejeitada' }
             : null,
         }).eq('id', doc.id);
         await (supabase as any).from('nfse_events').insert({
@@ -274,14 +286,16 @@ export function useIssueNFSe() {
           nfse_id: doc.id,
           event_type: !res.success ? 'rejected' : isAuthorized ? 'issued' : 'submitted',
           message: !res.success
-            ? `Falha Hub Fiscal: ${(res as any)?.hub?.error?.message || (res as any)?.error?.message || 'erro'}`
+            ? `Falha Hub Fiscal: ${hubErrorMessage || 'erro'}`
             : isAuthorized
               ? `Autorizada pelo Hub Fiscal — nº ${hubDoc.number || '(pendente)'}`
-              : `Enviado ao Hub Fiscal (emitente ${emitter.cnpj}) — ${rawStatus || 'processing'}`,
+              : isRejected
+                ? `Rejeitada pelo Hub Fiscal: ${hubErrorMessage || 'sem detalhe'}`
+                : `Enviado ao Hub Fiscal (emitente ${emitter.cnpj}) — ${rawStatus || 'processing'}`,
           payload: { hub: (res as any)?.hub, emission_id: emission.id },
         });
-        if (!res.success) {
-          throw new Error((res as any)?.hub?.error?.message || (res as any)?.error?.message || 'Falha ao enviar ao Hub Fiscal');
+        if (!res.success || isRejected) {
+          throw new Error(hubErrorMessage || 'Falha ao enviar ao Hub Fiscal');
         }
         return { status: localStatus, provider: 'hub_fiscal', hub: (res as any)?.hub };
       }
