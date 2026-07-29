@@ -120,8 +120,8 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
   const [manualRecalcing, setManualRecalcing] = useState(false);
 
   async function handleRecalc() {
-    const ids = (docs as any[]).map((d: any) => d.id);
-    if (!ids.length) { toast.error('Nenhuma NF disponível para recalcular'); return; }
+    const ids = selectedDocs.map((d: any) => d.id);
+    if (!ids.length) { toast.error('Selecione ao menos uma NF para recalcular'); return; }
     setManualRecalcing(true);
     try {
       const res = await recalcFreight.mutateAsync(ids);
