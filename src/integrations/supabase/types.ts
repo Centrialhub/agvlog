@@ -5556,8 +5556,6 @@ export type Database = {
           invoice_series: string | null
           issue_date: string | null
           load_id: string | null
-          nfse_emitted_at: string | null
-          nfse_emitted_document_id: string | null
           operation_type: Database["public"]["Enums"]["operation_type"] | null
           order_id: string | null
           origin_city: string | null
@@ -5635,8 +5633,6 @@ export type Database = {
           invoice_series?: string | null
           issue_date?: string | null
           load_id?: string | null
-          nfse_emitted_at?: string | null
-          nfse_emitted_document_id?: string | null
           operation_type?: Database["public"]["Enums"]["operation_type"] | null
           order_id?: string | null
           origin_city?: string | null
@@ -5714,8 +5710,6 @@ export type Database = {
           invoice_series?: string | null
           issue_date?: string | null
           load_id?: string | null
-          nfse_emitted_at?: string | null
-          nfse_emitted_document_id?: string | null
           operation_type?: Database["public"]["Enums"]["operation_type"] | null
           order_id?: string | null
           origin_city?: string | null
