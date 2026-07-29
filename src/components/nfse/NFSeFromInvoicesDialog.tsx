@@ -34,13 +34,15 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
   const issue = useIssueNFSe();
   const recalcFreight = useRecalculateInboundFreight();
 
-  const [step, setStep] = useState<1 | 2>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [supplierId, setSupplierId] = useState<string>(SENTINEL_NONE);
   const [clientId, setClientId] = useState<string>(SENTINEL_NONE);
   const [periodStart, setPeriodStart] = useState('');
   const [periodEnd, setPeriodEnd] = useState('');
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [selected, setSelected] = useState<Record<string, boolean>>({});
+  // Passo 2 — valor de serviço editável por NF (pré-preenchido com o frete)
+  const [serviceValues, setServiceValues] = useState<Record<string, number>>({});
 
   // Step 2 — dados fiscais da NFS-e
   const [emitterId, setEmitterId] = useState<string>('');
@@ -70,6 +72,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
     setStep(1);
     setSelected({});
     setDescricao('');
+    setServiceValues({});
     const defEm = emitters.find(e => e.active && e.is_default) || emitters.find(e => e.active);
     setEmitterId(defEm?.id || '');
   }, [open, emitters]);
@@ -89,9 +92,14 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
     [docs, selected],
   );
 
+  const valorPorDoc = (d: any) => {
+    const override = serviceValues[d.id];
+    if (override !== undefined) return num(override);
+    return num(d.freight_value ?? d.value ?? d.total_value ?? 0);
+  };
   const totalServicos = useMemo(
-    () => selectedDocs.reduce((a: number, d: any) => a + num(d.freight_value ?? d.value ?? d.total_value ?? 0), 0),
-    [selectedDocs],
+    () => selectedDocs.reduce((a: number, d: any) => a + valorPorDoc(d), 0),
+    [selectedDocs, serviceValues],
   );
   const baseCalculo = +(Math.max(0, totalServicos - num(valorDeducoes))).toFixed(2);
   const valorIss = +(baseCalculo * num(aliquotaIss) / 100).toFixed(2);
@@ -218,8 +226,8 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
         items: selectedDocs.map((d: any) => ({
           description: `NF ${d.invoice_number || ''} — ${d.remitter || ''}`.trim(),
           quantity: 1,
-          unit_value: num(d.freight_value ?? d.total_value),
-          total: num(d.freight_value ?? d.total_value),
+          unit_value: valorPorDoc(d),
+          total: valorPorDoc(d),
           fiscal_document_id: d.id,
           access_key: d.access_key,
         })),
@@ -246,7 +254,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-4 w-4" />
-            Emitir NFS-e a partir de NFs {step === 1 ? '— 1. Selecionar notas' : '— 2. Dados fiscais e emissão'}
+            Emitir NFS-e a partir de NFs {step === 1 ? '— 1. Selecionar notas' : step === 2 ? '— 2. Valores por NF' : '— 3. Dados fiscais e emissão'}
           </DialogTitle>
         </DialogHeader>
 
@@ -366,7 +374,22 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
                     </SelectContent>
                   </Select>
                 </div>
-                <Button onClick={() => setStep(2)} disabled={!canAdvance}>
+                <Button
+                  onClick={() => {
+                    // Pré-preenche valor de serviço com o frete atual de cada NF selecionada
+                    setServiceValues(prev => {
+                      const next = { ...prev };
+                      selectedDocs.forEach((d: any) => {
+                        if (next[d.id] === undefined) {
+                          next[d.id] = num(d.freight_value ?? d.value ?? d.total_value ?? 0);
+                        }
+                      });
+                      return next;
+                    });
+                    setStep(2);
+                  }}
+                  disabled={!canAdvance}
+                >
                   Avançar <ArrowRight className="h-4 w-4 ml-1" />
                 </Button>
               </div>
@@ -375,6 +398,57 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
         )}
 
         {step === 2 && (
+          <div className="space-y-4">
+            <div className="rounded-md border bg-muted/30 p-3 text-sm">
+              Ajuste, se necessário, o valor de serviço de cada NF selecionada. O valor vem pré-preenchido a partir do frete calculado automaticamente.
+            </div>
+            <div className="border rounded-md max-h-[60vh] overflow-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50 sticky top-0">
+                  <tr>
+                    <th className="text-left p-2">NF</th>
+                    <th className="text-left p-2">Remetente</th>
+                    <th className="text-left p-2">Destinatário</th>
+                    <th className="text-right p-2">Frete calc.</th>
+                    <th className="text-right p-2 w-40">Vl. Serviço (R$)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedDocs.map((d: any) => {
+                    const freteCalc = num(d.freight_value ?? 0);
+                    const val = serviceValues[d.id] ?? freteCalc;
+                    return (
+                      <tr key={d.id} className="border-t">
+                        <td className="p-2 font-mono">{d.invoice_number || d.access_key?.slice(-9)}</td>
+                        <td className="p-2">{d.remitter || '—'}</td>
+                        <td className="p-2">{d.recipient || d.recipient_name || '—'}</td>
+                        <td className="p-2 text-right tabular-nums text-muted-foreground">R$ {freteCalc.toFixed(2)}</td>
+                        <td className="p-2 text-right">
+                          <Input
+                            type="number"
+                            step="0.01"
+                            className="h-8 text-right"
+                            value={val}
+                            onChange={e => setServiceValues(prev => ({ ...prev, [d.id]: +e.target.value }))}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-muted/30 border-t">
+                    <td colSpan={3} className="p-2 text-right font-semibold">Total serviços</td>
+                    <td className="p-2"></td>
+                    <td className="p-2 text-right font-semibold tabular-nums">R$ {totalServicos.toFixed(2)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {step === 3 && (
           <div className="space-y-4">
             <div className="rounded-md border bg-muted/30 p-3 text-sm space-y-1">
               <div className="font-semibold">Tomador do serviço</div>
@@ -469,13 +543,18 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
         )}
 
         <DialogFooter>
-          {step === 2 && (
-            <Button variant="outline" onClick={() => setStep(1)} disabled={issuing}>
+          {step > 1 && (
+            <Button variant="outline" onClick={() => setStep((step - 1) as 1 | 2)} disabled={issuing}>
               <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
             </Button>
           )}
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={issuing}>Cancelar</Button>
           {step === 2 && (
+            <Button onClick={() => setStep(3)} disabled={totalServicos <= 0}>
+              Avançar <ArrowRight className="h-4 w-4 ml-1" />
+            </Button>
+          )}
+          {step === 3 && (
             <Button onClick={handleEmit} disabled={issuing || create.isPending || issue.isPending}>
               {issuing ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Send className="h-4 w-4 mr-1" />}
               Emitir NFS-e
