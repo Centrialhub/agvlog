@@ -241,7 +241,19 @@ export function useIssueNFSe() {
 
       if (hasHubCred && emitter) {
         const environment = (emitter?.metadata?.environment as 'production' | 'sandbox') || 'production';
-        const built = buildNFSeEmitPayload({ doc, emitter, environment });
+        // Reenvio: o Hub/PlugNotas deduplica pelo idIntegracao. Contamos as
+        // tentativas anteriores para gerar um id novo a cada reenvio, senão a
+        // requisição é descartada silenciosamente e nada chega ao provedor.
+        const { count: priorAttempts } = await (supabase as any)
+          .from('hub_fiscal_emissions')
+          .select('id', { count: 'exact', head: true })
+          .eq('nfse_document_id', doc.id);
+        const built = buildNFSeEmitPayload({
+          doc,
+          emitter,
+          environment,
+          attempt: priorAttempts || 0,
+        });
         const res = await hubFiscal.emit({
           type: 'nfse',
           emitterId: emitter.id,
