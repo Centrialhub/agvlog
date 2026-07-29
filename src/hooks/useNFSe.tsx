@@ -295,6 +295,8 @@ export function useIssueNFSe() {
     },
     onSuccess: (data: any) => {
       qc.invalidateQueries({ queryKey: ['nfse'] });
+      qc.invalidateQueries({ queryKey: ['billing_documents'] });
+      qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
       if (data?.status === 'issued') toast.success('NFS-e emitida');
       else if (data?.provider === 'hub_fiscal' && data?.status === 'processing') toast.info('NFS-e enviada ao Hub Fiscal — aguardando autorização da prefeitura');
       else if (data?.provider === 'hub_fiscal') toast.success(`NFS-e no Hub Fiscal — ${data.status}`);
