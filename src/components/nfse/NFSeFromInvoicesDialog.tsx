@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -108,11 +108,24 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
   const missingFreight = selectedDocs.filter((d: any) => num(d.freight_value) <= 0).length;
 
   async function handleRecalc() {
-    const ids = selectedDocs.map((d: any) => d.id);
-    if (!ids.length) { toast.error('Selecione NFs primeiro'); return; }
+    const ids = (docs as any[]).map((d: any) => d.id);
+    if (!ids.length) { toast.error('Nenhuma NF disponível para recalcular'); return; }
     const res = await recalcFreight.mutateAsync(ids);
     toast.success(`Frete recalculado: ${res.updated} atualizadas, ${res.skipped} com override, ${res.failed} falharam`);
   }
+
+  // Auto-recalcula frete de TODAS as NFs listadas quando o modal abre / filtros mudam.
+  const autoRecalcRef = useRef<string>('');
+  useEffect(() => {
+    if (!open || isLoading) return;
+    const ids = (docs as any[]).map((d: any) => d.id).sort();
+    if (!ids.length) return;
+    const key = ids.join(',');
+    if (autoRecalcRef.current === key) return;
+    autoRecalcRef.current = key;
+    // dispara em background — não bloqueia UI
+    recalcFreight.mutateAsync(ids).catch(() => { /* silencioso: usuário pode reexecutar manualmente */ });
+  }, [open, isLoading, docs]);
 
   const toggleAll = (v: boolean) => {
     const next: Record<string, boolean> = {};
@@ -326,8 +339,8 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
                   variant="outline"
                   size="sm"
                   onClick={handleRecalc}
-                  disabled={recalcFreight.isPending || selectedDocs.length === 0}
-                  title="Recalcula o frete das NFs selecionadas usando a tabela de frete vigente"
+                  disabled={recalcFreight.isPending || docs.length === 0}
+                  title="Recalcula o frete de TODAS as NFs listadas usando a tabela de frete vigente"
                 >
                   {recalcFreight.isPending
                     ? <Loader2 className="h-4 w-4 mr-1 animate-spin" />
