@@ -90,7 +90,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
   );
 
   const totalServicos = useMemo(
-    () => selectedDocs.reduce((a: number, d: any) => a + num(d.freight_value ?? d.total_value ?? 0), 0),
+    () => selectedDocs.reduce((a: number, d: any) => a + num(d.freight_value ?? d.value ?? d.total_value ?? 0), 0),
     [selectedDocs],
   );
   const baseCalculo = +(Math.max(0, totalServicos - num(valorDeducoes))).toFixed(2);
