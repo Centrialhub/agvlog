@@ -34,13 +34,15 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
   const issue = useIssueNFSe();
   const recalcFreight = useRecalculateInboundFreight();
 
-  const [step, setStep] = useState<1 | 2>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [supplierId, setSupplierId] = useState<string>(SENTINEL_NONE);
   const [clientId, setClientId] = useState<string>(SENTINEL_NONE);
   const [periodStart, setPeriodStart] = useState('');
   const [periodEnd, setPeriodEnd] = useState('');
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [selected, setSelected] = useState<Record<string, boolean>>({});
+  // Passo 2 — valor de serviço editável por NF (pré-preenchido com o frete)
+  const [serviceValues, setServiceValues] = useState<Record<string, number>>({});
 
   // Step 2 — dados fiscais da NFS-e
   const [emitterId, setEmitterId] = useState<string>('');
@@ -70,6 +72,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
     setStep(1);
     setSelected({});
     setDescricao('');
+    setServiceValues({});
     const defEm = emitters.find(e => e.active && e.is_default) || emitters.find(e => e.active);
     setEmitterId(defEm?.id || '');
   }, [open, emitters]);
@@ -89,9 +92,14 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
     [docs, selected],
   );
 
+  const valorPorDoc = (d: any) => {
+    const override = serviceValues[d.id];
+    if (override !== undefined) return num(override);
+    return num(d.freight_value ?? d.value ?? d.total_value ?? 0);
+  };
   const totalServicos = useMemo(
-    () => selectedDocs.reduce((a: number, d: any) => a + num(d.freight_value ?? d.value ?? d.total_value ?? 0), 0),
-    [selectedDocs],
+    () => selectedDocs.reduce((a: number, d: any) => a + valorPorDoc(d), 0),
+    [selectedDocs, serviceValues],
   );
   const baseCalculo = +(Math.max(0, totalServicos - num(valorDeducoes))).toFixed(2);
   const valorIss = +(baseCalculo * num(aliquotaIss) / 100).toFixed(2);
