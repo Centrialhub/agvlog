@@ -13,6 +13,7 @@ const STATUS_LABEL: Record<string, { label: string; variant: any }> = {
   queued: { label: 'Em fila', variant: 'outline' },
   processing: { label: 'Processando', variant: 'outline' },
   issued: { label: 'Emitida', variant: 'default' },
+  authorized: { label: 'Emitida', variant: 'default' },
   rejected: { label: 'Rejeitada', variant: 'destructive' },
   cancelled: { label: 'Cancelada', variant: 'destructive' },
   error: { label: 'Erro', variant: 'destructive' },
