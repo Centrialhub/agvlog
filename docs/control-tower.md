@@ -34,7 +34,7 @@ Endpoint usado:
 |------------|-----------------------------------------------------|-----------|
 | normal     | Em rota, sem anomalias                              | Azul      |
 | arriving   | ≤ 1000m da próxima parada                           | Ciano     |
-| at_stop    | ≤ 400m da parada com veículo lento, ou ≤ 900m parado (<3 km/h) | Verde |
+| at_stop    | ≤ 150m da parada e velocidade < 5 km/h              | Verde     |
 | stopped    | < 3 km/h por mais de 10 min, fora de uma parada     | Amarelo   |
 | delayed    | ETA > parada planejada + 5 min                      | Laranja   |
 | off_route  | > 500m da rota e velocidade > 10 km/h               | Vermelho  |
