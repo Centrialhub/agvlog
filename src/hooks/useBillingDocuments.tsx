@@ -63,7 +63,10 @@ export function useBillingDocuments(filters: BillingDocumentFilters) {
         .neq('status', 'cancelled')
         // Oculta NFs que já geraram CT-e (emissão direta) — evita dupla emissão.
         // Cancelar o CT-e limpa este campo e a NF volta ao pool.
-        .is('cte_emitted_at', null);
+        .is('cte_emitted_at', null)
+        // Também oculta NFs já usadas em NFS-e — a mesma NF não pode gerar dois
+        // documentos fiscais de saída (regra: uma NF vira 1 CT-e OU 1 NFS-e).
+        .is('nfse_emitted_at', null);
 
       if (f.clientId) q = q.eq('client_id', f.clientId);
       if (f.supplierId) q = q.eq('supplier_id', f.supplierId);
