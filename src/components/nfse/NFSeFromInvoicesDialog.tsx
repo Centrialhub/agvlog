@@ -107,11 +107,20 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
 
   const missingFreight = selectedDocs.filter((d: any) => num(d.freight_value) <= 0).length;
 
+  // Spinner do botão só reflete recálculo manual (clique do usuário).
+  // O auto-recálculo em background não deve prender o botão.
+  const [manualRecalcing, setManualRecalcing] = useState(false);
+
   async function handleRecalc() {
     const ids = (docs as any[]).map((d: any) => d.id);
     if (!ids.length) { toast.error('Nenhuma NF disponível para recalcular'); return; }
-    const res = await recalcFreight.mutateAsync(ids);
-    toast.success(`Frete recalculado: ${res.updated} atualizadas, ${res.skipped} com override, ${res.failed} falharam`);
+    setManualRecalcing(true);
+    try {
+      const res = await recalcFreight.mutateAsync(ids);
+      toast.success(`Frete recalculado: ${res.updated} atualizadas, ${res.skipped} com override, ${res.failed} falharam`);
+    } finally {
+      setManualRecalcing(false);
+    }
   }
 
   // Auto-recalcula frete de TODAS as NFs listadas quando o modal abre / filtros mudam.
@@ -339,10 +348,10 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
                   variant="outline"
                   size="sm"
                   onClick={handleRecalc}
-                  disabled={recalcFreight.isPending || docs.length === 0}
+                  disabled={manualRecalcing || docs.length === 0}
                   title="Recalcula o frete de TODAS as NFs listadas usando a tabela de frete vigente"
                 >
-                  {recalcFreight.isPending
+                  {manualRecalcing
                     ? <Loader2 className="h-4 w-4 mr-1 animate-spin" />
                     : <Calculator className="h-4 w-4 mr-1" />}
                   Recalcular frete
