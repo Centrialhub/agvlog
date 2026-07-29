@@ -374,7 +374,22 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
                     </SelectContent>
                   </Select>
                 </div>
-                <Button onClick={() => setStep(2)} disabled={!canAdvance}>
+                <Button
+                  onClick={() => {
+                    // Pré-preenche valor de serviço com o frete atual de cada NF selecionada
+                    setServiceValues(prev => {
+                      const next = { ...prev };
+                      selectedDocs.forEach((d: any) => {
+                        if (next[d.id] === undefined) {
+                          next[d.id] = num(d.freight_value ?? d.value ?? d.total_value ?? 0);
+                        }
+                      });
+                      return next;
+                    });
+                    setStep(2);
+                  }}
+                  disabled={!canAdvance}
+                >
                   Avançar <ArrowRight className="h-4 w-4 ml-1" />
                 </Button>
               </div>
