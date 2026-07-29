@@ -11,7 +11,14 @@ const ALLOWED_DEVIATION_M = 500;
 const NO_SIGNAL_MIN = 15;
 const STOPPED_MIN = 10;
 const ARRIVING_M = 1000;
-const AT_STOP_M = 150;
+// Raio de chegada. Endereços de parada normalmente vêm de geocodificação
+// aproximada (centro do CEP / quadra), então 150m gerava "Chegando (700m)"
+// com o veículo já no local. 400m é o raio efetivo de "na parada".
+const AT_STOP_M = 400;
+// Se o veículo está parado (sem movimento) e dentro deste raio, considera-se
+// que ele chegou ao local mesmo com imprecisão do geocode/GPS.
+const AT_STOP_STATIONARY_M = 900;
+const STATIONARY_SPEED_KMH = 3;
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -132,10 +139,13 @@ async function processTrip(supabase: any, trip: any, now: Date) {
         { lat: Number(nextStop.latitude), lng: Number(nextStop.longitude) },
       );
 
-      if (dToStop <= AT_STOP_M && speed < 5) {
+      if (
+        (dToStop <= AT_STOP_M && speed < 5) ||
+        (dToStop <= AT_STOP_STATIONARY_M && speed < STATIONARY_SPEED_KMH)
+      ) {
         state = 'at_stop';
         severity = 'success';
-        message = 'Na parada';
+        message = `Na parada (${Math.round(dToStop)}m do ponto)`;
       } else if (dToStop <= ARRIVING_M) {
         state = 'arriving';
         severity = 'info';
