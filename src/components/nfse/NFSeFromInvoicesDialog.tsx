@@ -14,6 +14,8 @@ import { useBillingDocuments } from '@/hooks/useBillingDocuments';
 import { useClients } from '@/hooks/useClients';
 import { useEmitters } from '@/hooks/useEmitters';
 import { useCreateNFSe, useIssueNFSe } from '@/hooks/useNFSe';
+import { useRecalculateInboundFreight } from '@/hooks/useRecalculateInboundFreight';
+import { Calculator } from 'lucide-react';
 
 interface Props {
   open: boolean;
@@ -30,6 +32,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
   const { data: emitters = [] } = useEmitters();
   const create = useCreateNFSe();
   const issue = useIssueNFSe();
+  const recalcFreight = useRecalculateInboundFreight();
 
   const [step, setStep] = useState<1 | 2>(1);
   const [supplierId, setSupplierId] = useState<string>(SENTINEL_NONE);
@@ -50,6 +53,14 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
   const [issueDate, setIssueDate] = useState(new Date().toISOString().slice(0, 10));
   const [tomadorMode, setTomadorMode] = useState<'remetente' | 'destinatario'>('remetente');
   const [issuing, setIssuing] = useState(false);
+  // Retenções e deduções (opcionais)
+  const [valorDeducoes, setValorDeducoes] = useState<number>(0);
+  const [aliqPis, setAliqPis] = useState<number>(0);
+  const [aliqCofins, setAliqCofins] = useState<number>(0);
+  const [aliqInss, setAliqInss] = useState<number>(0);
+  const [aliqIr, setAliqIr] = useState<number>(0);
+  const [aliqCsll, setAliqCsll] = useState<number>(0);
+  const [outrasRetencoes, setOutrasRetencoes] = useState<number>(0);
 
   const suppliers = useMemo(() => clients.filter((c: any) => c.is_supplier), [clients]);
   const clientList = useMemo(() => clients.filter((c: any) => c.is_client !== false), [clients]);
@@ -82,9 +93,26 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
     () => selectedDocs.reduce((a: number, d: any) => a + num(d.freight_value ?? d.total_value ?? 0), 0),
     [selectedDocs],
   );
-  const baseCalculo = totalServicos;
-  const valorIss = +(baseCalculo * aliquotaIss / 100).toFixed(2);
-  const valorLiquido = +(totalServicos - (issRetido ? valorIss : 0)).toFixed(2);
+  const baseCalculo = +(Math.max(0, totalServicos - num(valorDeducoes))).toFixed(2);
+  const valorIss = +(baseCalculo * num(aliquotaIss) / 100).toFixed(2);
+  const valorPis = +(baseCalculo * num(aliqPis) / 100).toFixed(2);
+  const valorCofins = +(baseCalculo * num(aliqCofins) / 100).toFixed(2);
+  const valorInss = +(baseCalculo * num(aliqInss) / 100).toFixed(2);
+  const valorIr = +(baseCalculo * num(aliqIr) / 100).toFixed(2);
+  const valorCsll = +(baseCalculo * num(aliqCsll) / 100).toFixed(2);
+  const totalRetencoes = +(
+    (issRetido ? valorIss : 0) + valorPis + valorCofins + valorInss + valorIr + valorCsll + num(outrasRetencoes)
+  ).toFixed(2);
+  const valorLiquido = +(totalServicos - num(valorDeducoes) - totalRetencoes).toFixed(2);
+
+  const missingFreight = selectedDocs.filter((d: any) => num(d.freight_value) <= 0).length;
+
+  async function handleRecalc() {
+    const ids = selectedDocs.map((d: any) => d.id);
+    if (!ids.length) { toast.error('Selecione NFs primeiro'); return; }
+    const res = await recalcFreight.mutateAsync(ids);
+    toast.success(`Frete recalculado: ${res.updated} atualizadas, ${res.skipped} com override, ${res.failed} falharam`);
+  }
 
   const toggleAll = (v: boolean) => {
     const next: Record<string, boolean> = {};
@@ -158,6 +186,13 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
         valor_iss: valorIss,
         valor_liquido: valorLiquido,
         valor_total: totalServicos,
+        valor_deducoes: num(valorDeducoes),
+        valor_pis: valorPis,
+        valor_cofins: valorCofins,
+        valor_inss: valorInss,
+        valor_ir: valorIr,
+        valor_csll: valorCsll,
+        outras_retencoes: num(outrasRetencoes),
         items: selectedDocs.map((d: any) => ({
           description: `NF ${d.invoice_number || ''} — ${d.remitter || ''}`.trim(),
           quantity: 1,
