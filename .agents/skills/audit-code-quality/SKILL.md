@@ -1,5 +1,5 @@
 ---
-name: Audit: Code Quality
+name: "Audit: Code Quality"
 description: Analisa a qualidade estrutural do código identificando problemas que travam ferramentas de IA: arquivos acima de 300 linhas, God Components com responsabilidades demais, lógica duplicada que deveria ser hook ou utilitário, nomes inconsistentes, valores hardcoded, dead code e imports não utilizados. Refatora automaticamente os casos mais críticos e lista os demais com prioridade de resolução.
 ---
 
