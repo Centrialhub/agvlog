@@ -110,7 +110,13 @@ Deno.serve(async (req) => {
     }
     if (emission.nfse_document_id) {
       await admin.from('nfse_documents').update({
-        status: normalized,
+        status: normalized === 'authorized' ? 'issued' : normalized,
+        pdf_url: doc.pdfUrl || doc.pdf || undefined,
+        xml_url: doc.xmlUrl || doc.xml || undefined,
+        nfse_number: doc.number || doc.numero || undefined,
+        protocol_number: doc.authorizationProtocol || doc.plugnotasProtocol || doc.protocolo || undefined,
+        verification_code: doc.accessKey || doc.chave || undefined,
+        authorization_date: normalized === 'authorized' ? new Date().toISOString() : undefined,
         updated_at: new Date().toISOString(),
       }).eq('id', emission.nfse_document_id);
     }
