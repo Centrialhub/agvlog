@@ -336,6 +336,11 @@ export function useCancelNFSe() {
             cancellation_date: new Date().toISOString(),
             cancellation_reason: reason ?? null,
           }).eq('id', id);
+          // Libera as NFs vinculadas — voltam a aparecer para novo faturamento
+          await (supabase as any)
+            .from('fiscal_documents')
+            .update({ nfse_emitted_at: null, nfse_emitted_document_id: null })
+            .eq('nfse_emitted_document_id', id);
           await (supabase as any).from('nfse_events').insert({
             tenant_id: doc.tenant_id, nfse_id: id,
             event_type: 'cancelled',
@@ -349,10 +354,17 @@ export function useCancelNFSe() {
         body: { action: 'cancel', nfse_id: id, reason },
       });
       if (error) throw error;
+      // Fallback legado: também libera NFs vinculadas
+      await (supabase as any)
+        .from('fiscal_documents')
+        .update({ nfse_emitted_at: null, nfse_emitted_document_id: null })
+        .eq('nfse_emitted_document_id', id);
       return data;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['nfse'] });
+      qc.invalidateQueries({ queryKey: ['billing_documents'] });
+      qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
       toast.success('Cancelamento registrado');
     },
     onError: (e: any) => toast.error(e?.message || 'Falha ao cancelar NFS-e'),
