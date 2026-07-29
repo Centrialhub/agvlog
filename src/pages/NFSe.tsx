@@ -4,8 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Send, Ban, Edit, FileText, FilePlus2 } from 'lucide-react';
-import { useNFSeList, useIssueNFSe, useCancelNFSe, type NFSeDoc } from '@/hooks/useNFSe';
+import { Plus, Send, Ban, Edit, FileText, FilePlus2, Trash2, AlertCircle } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useNFSeList, useIssueNFSe, useCancelNFSe, useDeleteNFSe, type NFSeDoc } from '@/hooks/useNFSe';
 import NFSeFormDialog from '@/components/nfse/NFSeFormDialog';
 import NFSeFromInvoicesDialog from '@/components/nfse/NFSeFromInvoicesDialog';
 
@@ -24,6 +25,7 @@ export default function NFSePage() {
   const { data: docs = [], isLoading } = useNFSeList();
   const issue = useIssueNFSe();
   const cancel = useCancelNFSe();
+  const del = useDeleteNFSe();
 
   const [search, setSearch] = useState('');
   const [formOpen, setFormOpen] = useState(false);
@@ -43,6 +45,19 @@ export default function NFSePage() {
     const reason = window.prompt('Motivo do cancelamento:');
     if (!reason) return;
     await cancel.mutateAsync({ id, reason });
+  };
+
+  const handleDelete = async (d: NFSeDoc) => {
+    const label = d.nfse_number || `RPS ${d.rps_number}`;
+    if (!window.confirm(`Excluir ${label}? As NFs vinculadas voltam a ficar disponíveis para faturamento.`)) return;
+    await del.mutateAsync(d.id);
+  };
+
+  const rejectionText = (d: NFSeDoc) => {
+    const m: any = d.rejection_messages;
+    if (!m) return null;
+    if (typeof m === 'string') return m;
+    return m.message || m.error || JSON.stringify(m);
   };
 
   return (
@@ -96,21 +111,40 @@ export default function NFSePage() {
                       <TableCell className="max-w-[260px] truncate">{d.cliente_nome || '—'}</TableCell>
                       <TableCell className="text-right tabular-nums">R$ {Number(d.valor_servicos).toFixed(2)}</TableCell>
                       <TableCell className="text-right tabular-nums">R$ {Number(d.valor_iss).toFixed(2)}</TableCell>
-                      <TableCell><Badge variant={st.variant as any}>{st.label}</Badge></TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Badge variant={st.variant as any}>{st.label}</Badge>
+                          {rejectionText(d) && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <AlertCircle className="h-3.5 w-3.5 text-destructive shrink-0" />
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-xs">{rejectionText(d)}</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell className="text-right space-x-1">
                         {d.status === 'draft' && (
                           <Button size="sm" variant="ghost" onClick={() => { setEditing(d); setFormOpen(true); }}>
                             <Edit className="h-3 w-3" />
                           </Button>
                         )}
-                        {(d.status === 'draft' || d.status === 'rejected') && (
+                        {(d.status === 'draft' || d.status === 'rejected' || d.status === 'error') && (
                           <Button size="sm" variant="outline" onClick={() => issue.mutate(d.id)} disabled={issue.isPending}>
-                            <Send className="h-3 w-3 mr-1" /> Emitir
+                            <Send className="h-3 w-3 mr-1" /> {d.status === 'draft' ? 'Emitir' : 'Reenviar'}
                           </Button>
                         )}
-                        {d.status === 'issued' && (
-                          <Button size="sm" variant="ghost" onClick={() => handleCancel(d.id)}>
+                        {d.status !== 'cancelled' && (
+                          <Button size="sm" variant="ghost" onClick={() => handleCancel(d.id)} disabled={cancel.isPending}>
                             <Ban className="h-3 w-3 mr-1" /> Cancelar
+                          </Button>
+                        )}
+                        {!['issued', 'authorized'].includes(d.status) && (
+                          <Button size="sm" variant="ghost" className="text-destructive" onClick={() => handleDelete(d)} disabled={del.isPending}>
+                            <Trash2 className="h-3 w-3 mr-1" /> Excluir
                           </Button>
                         )}
                       </TableCell>
