@@ -388,6 +388,55 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
               </div>
             </div>
 
+            <div className="rounded-md border p-3 space-y-3">
+              <div className="text-xs font-semibold text-muted-foreground">Retenções e deduções (opcionais)</div>
+              <div className="grid grid-cols-6 gap-3">
+                <div>
+                  <Label className="text-xs">Deduções (R$)</Label>
+                  <Input type="number" step="0.01" value={valorDeducoes} onChange={e => setValorDeducoes(+e.target.value)} />
+                </div>
+                <div>
+                  <Label className="text-xs">PIS (%)</Label>
+                  <Input type="number" step="0.0001" value={aliqPis} onChange={e => setAliqPis(+e.target.value)} />
+                </div>
+                <div>
+                  <Label className="text-xs">COFINS (%)</Label>
+                  <Input type="number" step="0.0001" value={aliqCofins} onChange={e => setAliqCofins(+e.target.value)} />
+                </div>
+                <div>
+                  <Label className="text-xs">INSS (%)</Label>
+                  <Input type="number" step="0.0001" value={aliqInss} onChange={e => setAliqInss(+e.target.value)} />
+                </div>
+                <div>
+                  <Label className="text-xs">IR (%)</Label>
+                  <Input type="number" step="0.0001" value={aliqIr} onChange={e => setAliqIr(+e.target.value)} />
+                </div>
+                <div>
+                  <Label className="text-xs">CSLL (%)</Label>
+                  <Input type="number" step="0.0001" value={aliqCsll} onChange={e => setAliqCsll(+e.target.value)} />
+                </div>
+                <div className="col-span-2">
+                  <Label className="text-xs">Outras retenções (R$)</Label>
+                  <Input type="number" step="0.01" value={outrasRetencoes} onChange={e => setOutrasRetencoes(+e.target.value)} />
+                </div>
+              </div>
+              <div className="grid grid-cols-6 gap-3 pt-2 border-t text-xs">
+                <div><div className="text-muted-foreground">PIS</div><div className="font-medium tabular-nums">R$ {valorPis.toFixed(2)}</div></div>
+                <div><div className="text-muted-foreground">COFINS</div><div className="font-medium tabular-nums">R$ {valorCofins.toFixed(2)}</div></div>
+                <div><div className="text-muted-foreground">INSS</div><div className="font-medium tabular-nums">R$ {valorInss.toFixed(2)}</div></div>
+                <div><div className="text-muted-foreground">IR</div><div className="font-medium tabular-nums">R$ {valorIr.toFixed(2)}</div></div>
+                <div><div className="text-muted-foreground">CSLL</div><div className="font-medium tabular-nums">R$ {valorCsll.toFixed(2)}</div></div>
+                <div><div className="text-muted-foreground">Retenções (total)</div><div className="font-semibold tabular-nums">R$ {totalRetencoes.toFixed(2)}</div></div>
+              </div>
+            </div>
+
+            {totalServicos <= 0 && (
+              <div className="rounded-md border border-yellow-500/40 bg-yellow-500/10 p-3 text-sm text-yellow-800">
+                Valor de serviços está zerado. Volte ao passo 1 e clique em <strong>Recalcular frete</strong> para calcular
+                a partir da tabela de frete das NFs selecionadas.
+              </div>
+            )}
+
             <div className="rounded-md border p-3 grid grid-cols-4 gap-3 bg-muted/30">
               <div><div className="text-xs text-muted-foreground">Vl. Serviços</div><div className="font-semibold tabular-nums">R$ {totalServicos.toFixed(2)}</div></div>
               <div><div className="text-xs text-muted-foreground">Base Cálculo</div><div className="font-semibold tabular-nums">R$ {baseCalculo.toFixed(2)}</div></div>
