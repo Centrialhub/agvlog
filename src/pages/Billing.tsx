@@ -427,7 +427,14 @@ export default function Billing() {
         fiscal_document_ids: eligibleDocs.map(d => d.id),
         groups,
       });
-      toast.success(`${groups.length} CT-e(s) gerados em rascunho. Sincronizado com Contas a Receber.`);
+      toast.warning(
+        `${groups.length} CT-e(s) gravados como RASCUNHO LOCAL — nada foi enviado ao Hub Fiscal/SEFAZ.`,
+        {
+          description:
+            'Para transmitir de verdade, use "Prévia editável & transmitir". Contas a Receber já foi sincronizado.',
+          duration: 8000,
+        },
+      );
       setPreviewOpen(false);
       setSelectedLoadIds(new Set());
     } catch (e: any) {
@@ -776,20 +783,32 @@ export default function Billing() {
             Modo selecionado: <strong className="text-foreground">{mode.label}</strong>
           </div>
 
+          <div className="flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 p-2 text-xs text-amber-700 dark:text-amber-400">
+            <Info className="h-3.5 w-3.5 shrink-0" />
+            <span>
+              <strong>Atenção:</strong> "Gerar rascunho local" apenas grava o lote no AGVLog e alimenta
+              Contas a Receber — <strong>não</strong> transmite ao Hub Fiscal/SEFAZ. A emissão real acontece
+              somente em <strong>"Prévia editável &amp; transmitir"</strong>.
+            </span>
+          </div>
+
           <div className="flex justify-end gap-2">
-            <Button variant="outline" disabled={groups.length === 0} onClick={() => setPreviewOpen(true)}>
+            <Button variant="ghost" disabled={groups.length === 0} onClick={() => setPreviewOpen(true)}>
               Ver prévia ({groups.length})
             </Button>
             <Button
+              variant="outline"
+              disabled={groups.length === 0 || createBatch.isPending}
+              onClick={handleGenerate}
+            >
+              <CheckCircle2 className="h-4 w-4 mr-2" />
+              {createBatch.isPending ? 'Gerando...' : 'Gerar rascunho local (não transmite)'}
+            </Button>
+            <Button
               disabled={groups.length === 0}
-              variant="secondary"
               onClick={() => setEmitPreviewOpen(true)}
             >
-              Prévia editável & transmitir
-            </Button>
-            <Button disabled={groups.length === 0 || createBatch.isPending} onClick={handleGenerate}>
-              <CheckCircle2 className="h-4 w-4 mr-2" />
-              {createBatch.isPending ? 'Gerando...' : `Gerar ${groups.length} CT-e(s)`}
+              Prévia editável &amp; transmitir ({groups.length})
             </Button>
           </div>
         </CardContent>
@@ -836,7 +855,11 @@ export default function Billing() {
                       b.status === 'cancelled' ? 'bg-destructive/10 text-destructive border-destructive/20' :
                       'bg-amber-500/10 text-amber-600 border-amber-500/20'
                     }>
-                      {b.status === 'generated' ? 'Gerado' : b.status === 'cancelled' ? 'Cancelado' : 'Rascunho'}
+                      {b.status === 'generated'
+                        ? 'Rascunho local (não transmitido)'
+                        : b.status === 'cancelled'
+                          ? 'Cancelado'
+                          : 'Rascunho'}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
@@ -887,9 +910,17 @@ export default function Billing() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPreviewOpen(false)}>Fechar</Button>
-            <Button onClick={handleGenerate} disabled={createBatch.isPending}>
+            <Button variant="outline" onClick={handleGenerate} disabled={createBatch.isPending}>
               <RotateCw className={`h-4 w-4 mr-2 ${createBatch.isPending ? 'animate-spin' : ''}`} />
-              Confirmar geração
+              Gravar rascunho local
+            </Button>
+            <Button
+              onClick={() => {
+                setPreviewOpen(false);
+                setEmitPreviewOpen(true);
+              }}
+            >
+              Transmitir ao Hub Fiscal
             </Button>
           </DialogFooter>
         </DialogContent>
