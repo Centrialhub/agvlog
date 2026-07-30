@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useBillingDocuments } from '@/hooks/useBillingDocuments';
 import { useClients } from '@/hooks/useClients';
 import { useLoads, LOAD_STATUSES, LOAD_STATUS_LABELS } from '@/hooks/useLoads';
-import { useCteBatches, useCreateCteBatch, useCancelCteBatch } from '@/hooks/useBilling';
+import { useCteBatches, useCancelCteBatch } from '@/hooks/useBilling';
 import { GROUPING_MODES, buildGroups, getGroupingMode, type CteGroupPreview } from '@/lib/cteGroupingModes';
 import { useUserUiPreference } from '@/hooks/useUserUiPreference';
 import { useTenant } from '@/hooks/useTenant';
@@ -17,7 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { FileSpreadsheet, Calculator, CheckCircle2, Layers, FileText, Info, XCircle, RotateCw, Filter, Eraser, Save } from 'lucide-react';
+import { FileSpreadsheet, Calculator, Layers, FileText, Info, XCircle, Filter, Eraser, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { PendingInvoicesBanner } from '@/components/billing/PendingInvoicesBanner';
@@ -109,7 +109,6 @@ export default function Billing() {
   const { data: clients = [] } = useClients();
   const { data: loads = [] } = useLoads();
   const { data: batches = [] } = useCteBatches();
-  const createBatch = useCreateCteBatch();
   const cancelBatch = useCancelCteBatch();
   const { currentTenant } = useTenant();
   const recalcFreight = useRecalculateInboundFreight();
@@ -411,36 +410,6 @@ export default function Billing() {
     });
   };
 
-  const handleGenerate = async () => {
-    if (groups.length === 0) {
-      toast.error('Nenhum documento elegível para faturar com os filtros atuais.');
-      return;
-    }
-    try {
-      await createBatch.mutateAsync({
-        client_id: clientId !== SENTINEL_NONE ? clientId : null,
-        grouping_mode: modeId,
-        source_type: tab,
-        period_start: tab === 'period' ? periodStart || null : null,
-        period_end: tab === 'period' ? periodEnd || null : null,
-        load_ids: tab === 'loads' ? Array.from(selectedLoadIds) : [],
-        fiscal_document_ids: eligibleDocs.map(d => d.id),
-        groups,
-      });
-      toast.warning(
-        `${groups.length} CT-e(s) gravados como RASCUNHO LOCAL — nada foi enviado ao Hub Fiscal/SEFAZ.`,
-        {
-          description:
-            'Para transmitir de verdade, use "Prévia editável & transmitir". Contas a Receber já foi sincronizado.',
-          duration: 8000,
-        },
-      );
-      setPreviewOpen(false);
-      setSelectedLoadIds(new Set());
-    } catch (e: any) {
-      toast.error('Erro ao gerar CT-es', { description: e.message });
-    }
-  };
 
   const mode = getGroupingMode(modeId);
 
@@ -783,26 +752,9 @@ export default function Billing() {
             Modo selecionado: <strong className="text-foreground">{mode.label}</strong>
           </div>
 
-          <div className="flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 p-2 text-xs text-amber-700 dark:text-amber-400">
-            <Info className="h-3.5 w-3.5 shrink-0" />
-            <span>
-              <strong>Atenção:</strong> "Gerar rascunho local" apenas grava o lote no AGVLog e alimenta
-              Contas a Receber — <strong>não</strong> transmite ao Hub Fiscal/SEFAZ. A emissão real acontece
-              somente em <strong>"Prévia editável &amp; transmitir"</strong>.
-            </span>
-          </div>
-
           <div className="flex justify-end gap-2">
             <Button variant="ghost" disabled={groups.length === 0} onClick={() => setPreviewOpen(true)}>
               Ver prévia ({groups.length})
-            </Button>
-            <Button
-              variant="outline"
-              disabled={groups.length === 0 || createBatch.isPending}
-              onClick={handleGenerate}
-            >
-              <CheckCircle2 className="h-4 w-4 mr-2" />
-              {createBatch.isPending ? 'Gerando...' : 'Gerar rascunho local (não transmite)'}
             </Button>
             <Button
               disabled={groups.length === 0}
@@ -910,10 +862,6 @@ export default function Billing() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPreviewOpen(false)}>Fechar</Button>
-            <Button variant="outline" onClick={handleGenerate} disabled={createBatch.isPending}>
-              <RotateCw className={`h-4 w-4 mr-2 ${createBatch.isPending ? 'animate-spin' : ''}`} />
-              Gravar rascunho local
-            </Button>
             <Button
               onClick={() => {
                 setPreviewOpen(false);
