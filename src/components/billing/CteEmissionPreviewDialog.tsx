@@ -569,6 +569,8 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
 
   async function transmit() {
     setTransmitting(true);
+    let okCount = 0;
+    const errors: string[] = [];
     try {
       for (let i = 0; i < items.length; i++) {
         const it = items[i];
@@ -598,15 +600,29 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
           setItems((arr) =>
             arr.map((x, idx) => (idx === i ? { ...x, transmitted: 'ok' } : x)),
           );
+          okCount++;
         } catch (err: any) {
           setItems((arr) =>
             arr.map((x, idx) =>
               idx === i ? { ...x, transmitted: 'error', transmitMessage: err?.message } : x,
             ),
           );
+          errors.push(`#${i + 1}: ${err?.message || 'erro desconhecido'}`);
         }
       }
-      toast.success('Transmissão concluída — verifique o status de cada CT-e.');
+      if (okCount === 0) {
+        toast.error('Nenhum CT-e chegou ao Hub Fiscal', {
+          description: errors.slice(0, 3).join(' • ') || 'Verifique credenciais do emitente.',
+          duration: 10000,
+        });
+      } else if (errors.length > 0) {
+        toast.warning(`${okCount} CT-e(s) transmitidos, ${errors.length} com erro`, {
+          description: errors.slice(0, 3).join(' • '),
+          duration: 10000,
+        });
+      } else {
+        toast.success(`${okCount} CT-e(s) transmitidos ao Hub Fiscal.`);
+      }
     } finally {
       setTransmitting(false);
     }
