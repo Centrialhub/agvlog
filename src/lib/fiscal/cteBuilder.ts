@@ -225,15 +225,14 @@ const TAKER_INDEX: Record<CteTakerRole, number> = {
  *
  * Regras (layout CT-e SEFAZ):
  *  - Isento (CST 40/41/51 ou flag isento): vBC = 0, vICMS = 0.
- *  - Por fora (embutido=false): vBC = vTPrest, vICMS = vBC × pICMS/100.
- *  - Por dentro / embutido (embutido=true): vTPrest é o total a receber e já
- *    contém o ICMS. A base fiscal continua sendo vTPrest e o valor do imposto
- *    é vTPrest × pICMS/100. O frete cru exibido nos componentes é calculado
- *    separadamente como vTPrest − vICMS.
+ *  - Por fora (embutido=false): vBC = FRETE PESO, vICMS = vBC × pICMS/100.
+ *  - Por dentro / embutido (embutido=true): o cálculo parte do FRETE PESO
+ *    (frete cru, informado em `freight`). A base fiscal é o valor "por dentro"
+ *    vBC = FRETE PESO ÷ (1 − pICMS/100) e vICMS = vBC × pICMS/100. Assim
+ *    FRETE A RECEBER = FRETE PESO + ICMS (= vBC).
  *
- * `providedBase`/`providedValor` são respeitados apenas quando são coerentes
- * com o regime — caso o chamador ainda passe base = frete com embutido=true
- * (bug antigo), o cálculo é refeito por dentro.
+ * `providedBase`/`providedValor` são respeitados apenas quando informados
+ * explicitamente e coerentes com o regime.
  */
 export function computeIcmsAmounts(params: {
   freight: number;
@@ -249,7 +248,9 @@ export function computeIcmsAmounts(params: {
   const providedBase = params.providedBase != null ? Number(params.providedBase) : null;
   const providedValor = params.providedValor != null ? Number(params.providedValor) : null;
   if (embutido) {
-    const base = providedBase != null && providedBase > 0 ? providedBase : freight;
+    // Gross-up sobre o FRETE PESO: base = frete ÷ (1 − alíquota).
+    const base =
+      providedBase != null && providedBase > 0 ? providedBase : freight / (1 - aliq / 100);
     const valor = base * (aliq / 100);
     return { base: round2(base), valor: round2(valor) };
   }
