@@ -44,6 +44,8 @@ export interface CteEmitter {
   name: string;
   environment: 'sandbox' | 'production';
   address?: CteParty['address'];
+  /** Regime tributário cadastrado: 'simples' | 'presumido' | 'real' | 'mei'. */
+  taxRegime?: string | null;
 }
 
 export interface CteDriver {
@@ -268,10 +270,16 @@ export function computeIcmsAmounts(params: {
  *  - vBC (base de cálculo), pICMS (alíquota %), vICMS (valor)
  *  - Indicadores: embutido (indICMSTomador), isento
  */
-function buildIcmsBlock(icms: CteIcms, freightValue: number): Record<string, unknown> {
+function buildIcmsBlock(
+  icms: CteIcms,
+  freightValue: number,
+  taxRegime?: string | null,
+): Record<string, unknown> {
   const cstRaw = (icms.cst || '').toString().toUpperCase();
-  const isSimples = cstRaw === 'SN' || cstRaw === 'CSOSN';
-  const cst = isSimples ? '90' : cstRaw || '00';
+  const regimeRaw = (taxRegime || '').toString().toLowerCase();
+  const regimeIsSimples = regimeRaw === 'simples' || regimeRaw === 'mei';
+  const isSimples = cstRaw === 'SN' || cstRaw === 'CSOSN' || regimeIsSimples;
+  const cst = cstRaw === 'SN' || cstRaw === 'CSOSN' ? '90' : cstRaw || '00';
   const isento = icms.isento === true || cst === '40' || cst === '41' || cst === '51';
   const aliq = isento ? 0 : Number(icms.aliquota || 0);
   const embutido = icms.embutido === true;
@@ -288,6 +296,10 @@ function buildIcmsBlock(icms: CteIcms, freightValue: number): Record<string, unk
     CST: cst,
     cst,
     regime: isSimples ? 'simples' : 'normal',
+    // CRT / classificação tributária do serviço (DACTE): 1 = Simples Nacional, 3 = Regime normal.
+    crt: isSimples ? 1 : 3,
+    regimeTributario: isSimples ? 1 : 3,
+    classificacaoTributaria: isSimples ? 'simples_nacional' : 'tributacao_normal',
     vBC: Number(base.toFixed(2)),
     pICMS: Number(aliq.toFixed(2)),
     vICMS: Number(valor.toFixed(2)),
@@ -362,11 +374,26 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
       )
     : undefined;
 
+  const emitterRegimeRaw = (input.emitter?.taxRegime || '').toString().toLowerCase();
+  const emitterIsSimples = emitterRegimeRaw === 'simples' || emitterRegimeRaw === 'mei';
+  const emitterRegimeCode = emitterIsSimples ? 1 : 3;
+  if (!emitterRegimeRaw) {
+    warnings.push(
+      'Regime tributário do emitente não cadastrado — assumindo regime normal (CRT 3). Configure em Configurações → Emitentes para garantir a impressão do ICMS no DACTE.',
+    );
+  }
+
   const payload: Record<string, unknown> = {
     emitterCnpj: digits(input.emitter?.cnpj) || undefined,
     environment: input.emitter?.environment || 'sandbox',
     externalId: input.externalId || undefined,
+    // Regime tributário do emitente — o Hub usa isso para a "Classificação
+    // Tributária do Serviço" do DACTE. Sem ele o Hub cai no cadastro da
+    // empresa (Simples Nacional) e o ICMS não é impresso.
+    regimeTributario: emitterRegimeCode,
     payload: {
+      regimeTributario: emitterRegimeCode,
+      crt: emitterRegimeCode,
       tipoCtrc: input.documentType || '01',
       naturezaOperacao: input.nature,
       cfop: input.cfop || undefined,
@@ -427,7 +454,9 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
         cbs: input.totals.cbs_value ?? undefined,
       },
       composicaoFrete: freightComposition,
-      icms: input.icms ? buildIcmsBlock(input.icms, input.totals.freight_value) : undefined,
+      icms: input.icms
+        ? buildIcmsBlock(input.icms, input.totals.freight_value, input.emitter?.taxRegime)
+        : undefined,
       gnre: input.gnre
         ? Object.fromEntries(Object.entries(input.gnre).filter(([, v]) => v != null))
         : undefined,
