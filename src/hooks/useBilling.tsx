@@ -84,6 +84,70 @@ export function useCteDocuments(batchId: string | null) {
   });
 }
 
+export interface IssuedCte {
+  id: string;
+  invoice_number: string | null;
+  status: string | null;
+  sefaz_status: string | null;
+  sefaz_message: string | null;
+  access_key: string | null;
+  hub_document_id: string | null;
+  remitter: string | null;
+  recipient: string | null;
+  recipient_city: string | null;
+  recipient_state: string | null;
+  freight_value: number;
+  created_at: string;
+  /** NFs de entrada agrupadas nesse CT-e. */
+  notes: { id: string; invoice_number: string | null; recipient: string | null; value: number }[];
+}
+
+/**
+ * CT-es realmente transmitidos (fiscal_documents outbound) com as NFs de entrada
+ * vinculadas — usado no histórico do CT-e Hub, onde antes as notas não apareciam.
+ */
+export function useIssuedCtes() {
+  const { currentTenant } = useTenant();
+  return useQuery({
+    queryKey: ['issued_ctes', currentTenant?.id],
+    enabled: !!currentTenant,
+    queryFn: async (): Promise<IssuedCte[]> => {
+      if (!currentTenant) return [];
+      const { data, error } = await supabase
+        .from('fiscal_documents')
+        .select(
+          'id, invoice_number, status, sefaz_status, sefaz_message, access_key, hub_document_id, remitter, recipient, recipient_city, recipient_state, freight_value, created_at',
+        )
+        .eq('tenant_id', currentTenant.id)
+        .eq('document_type', 'outbound')
+        .order('created_at', { ascending: false })
+        .limit(500);
+      if (error) throw error;
+      const ctes = (data || []) as any[];
+      if (ctes.length === 0) return [];
+
+      const { data: notes } = await supabase
+        .from('fiscal_documents')
+        .select('id, invoice_number, recipient, value, cte_emitted_outbound_id')
+        .eq('tenant_id', currentTenant.id)
+        .in('cte_emitted_outbound_id', ctes.map((c) => c.id));
+
+      const byCte = new Map<string, IssuedCte['notes']>();
+      for (const n of (notes || []) as any[]) {
+        const arr = byCte.get(n.cte_emitted_outbound_id) || [];
+        arr.push({ id: n.id, invoice_number: n.invoice_number, recipient: n.recipient, value: Number(n.value || 0) });
+        byCte.set(n.cte_emitted_outbound_id, arr);
+      }
+
+      return ctes.map((c) => ({
+        ...c,
+        freight_value: Number(c.freight_value || 0),
+        notes: byCte.get(c.id) || [],
+      })) as IssuedCte[];
+    },
+  });
+}
+
 interface CreateBatchInput {
   client_id: string | null;
   emitter_id?: string | null;
