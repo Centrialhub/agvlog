@@ -23,6 +23,7 @@ import type { CteGroupPreview } from '@/lib/cteGroupingModes';
 import { buildCtePayload, computeIcmsAmounts, type CteTakerRole, type BuildCtePayloadInput } from '@/lib/fiscal/cteBuilder';
 import type { CteDocType } from '@/lib/fiscal/cteBuilder';
 import { suggestIcmsAliquota, icmsIsentoByCst } from '@/lib/fiscal/icmsAliquota';
+import { validateInsurance, formatCnpj, onlyDigits } from '@/lib/fiscal/insuranceValidation';
 
 /** Recalcula base/valor do ICMS respeitando o regime embutido (por dentro). */
 function recalcIcms(
@@ -538,6 +539,19 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     const em = emitters.find((e: any) => e.id === it.emitterId) || defaultEmitter;
     return buildCtePayload(toBuildInput(it, em, 'sandbox', clients)).ok;
   });
+
+  const insuranceErrors = useMemo(
+    () =>
+      active
+        ? validateInsurance({
+            name: active.insurerName,
+            cnpj: active.insurerCnpj,
+            policy: active.insurerPolicy,
+            endorsement: active.insurerEndorsement,
+          }).errors
+        : {},
+    [active],
+  );
 
   function patch(patch: Partial<EditableCte>) {
     // Chaves específicas de cada CT-e — nunca replicar para o lote.
