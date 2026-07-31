@@ -322,32 +322,57 @@ Deno.serve(async (req) => {
 
         let hubMessage = '';
 
-        // 1) Rota dedicada de download do Hub.
-        // A API v1 expõe GET /documents/file?id=...&kind=pdf|xml. O endpoint
-        // intermediário hub_documents_file preserva esse contrato usando `kind`;
-        // enviar `format` fazia o ManagerSaaS montar uma rota inexistente.
+        // 1) Rotas dedicadas de download do Hub, com fallback de rota/parâmetro.
+        // A API v1 expõe GET /documents/file?id=...&kind=pdf|xml, mas instâncias
+        // do ManagerSaaS variam (`format`, rotas de impressão dedicadas). Tentamos
+        // as combinações conhecidas antes de desistir.
         const kind = format === 'cancel_xml' ? 'cancel_xml' : format;
-        const url = buildUrl('/hub_documents_file', { id: payload.id, kind });
-        const upstream = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-        const ct = upstream.headers.get('Content-Type') || '';
-        const buf = await upstream.arrayBuffer();
+        const attempts: { path: string; query: Record<string, string> }[] = [
+          { path: '/hub_documents_file', query: { id: payload.id, kind } },
+          { path: '/hub_documents_file', query: { id: payload.id, format: kind } },
+          { path: '/hub_documents_file', query: { id: payload.id, kind, type: payload.type || 'cte' } },
+          { path: '/hub_documents_download', query: { id: payload.id, kind } },
+          format === 'pdf'
+            ? { path: '/hub_documents_print', query: { id: payload.id } }
+            : { path: '/hub_documents_xml', query: { id: payload.id } },
+        ];
+        const attemptLog: string[] = [];
 
-        if (ct.includes('application/json')) {
-          let parsed: any = {};
-          try { parsed = JSON.parse(new TextDecoder().decode(buf)); } catch { /* ignore */ }
-          const b64 = parsed?.base64 || parsed?.content || parsed?.document?.base64;
-          const fileUrl = parsed?.url || parsed?.fileUrl || parsed?.document?.url;
-          if (upstream.ok && typeof b64 === 'string' && b64.length > 0) return fileResponse(b64ToBytes(b64));
-          if (upstream.ok && typeof fileUrl === 'string' && fileUrl.length > 0) {
-            const follow = await fetch(fileUrl);
-            if (follow.ok) return fileResponse(await follow.arrayBuffer(), follow.headers.get('Content-Type'));
+        for (const attempt of attempts) {
+          let upstream: Response;
+          try {
+            upstream = await fetch(buildUrl(attempt.path, attempt.query), {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+          } catch (e) {
+            attemptLog.push(`${attempt.path}: ${String((e as Error)?.message || e).slice(0, 120)}`);
+            continue;
           }
-          hubMessage = String(parsed?.error?.message || parsed?.message || parsed?.error?.code || '');
-        } else if (upstream.ok && buf.byteLength > 0) {
-          return fileResponse(buf, ct);
-        } else {
-          hubMessage = new TextDecoder().decode(buf).slice(0, 300);
+          const ct = upstream.headers.get('Content-Type') || '';
+          const buf = await upstream.arrayBuffer();
+
+          if (ct.includes('application/json')) {
+            let parsed: any = {};
+            try { parsed = JSON.parse(new TextDecoder().decode(buf)); } catch { /* ignore */ }
+            const b64 = parsed?.base64 || parsed?.content || parsed?.document?.base64;
+            const fileUrl = parsed?.url || parsed?.fileUrl || parsed?.document?.url;
+            if (upstream.ok && typeof b64 === 'string' && b64.length > 0) return fileResponse(b64ToBytes(b64));
+            if (upstream.ok && typeof fileUrl === 'string' && fileUrl.length > 0) {
+              const follow = await fetch(fileUrl);
+              if (follow.ok) return fileResponse(await follow.arrayBuffer(), follow.headers.get('Content-Type'));
+            }
+            const msg = String(parsed?.error?.message || parsed?.message || parsed?.error?.code || '');
+            attemptLog.push(`${attempt.path}(${Object.keys(attempt.query).join(',')}): ${upstream.status} ${msg}`.trim());
+            if (msg) hubMessage = msg;
+          } else if (upstream.ok && buf.byteLength > 0) {
+            return fileResponse(buf, ct);
+          } else {
+            const msg = new TextDecoder().decode(buf).slice(0, 200);
+            attemptLog.push(`${attempt.path}: ${upstream.status} ${msg}`.trim());
+            if (msg) hubMessage = msg;
+          }
         }
+        console.log('[hub-fiscal-proxy] file attempts exhausted', { id: payload.id, format, attemptLog });
 
         // 2) Fallback: o documento no Hub costuma carregar links/base64 do DACTE e XML.
         //    Necessário porque o ManagerSaaS pode não expor a rota de arquivo ("Rota
@@ -376,6 +401,41 @@ Deno.serve(async (req) => {
           try { return fileResponse(b64ToBytes(inline)); } catch { /* not base64 */ }
         }
 
+        // 3) Último fallback: varredura profunda do JSON do documento em busca de
+        //    qualquer link ou base64 do arquivo pedido (nomes de campo variam).
+        const wanted = format === 'pdf' ? /(pdf|dacte|danfe|print)/i : /(xml)/i;
+        const seen = new Set<unknown>();
+        const found: { links: string[]; blobs: string[] } = { links: [], blobs: [] };
+        const walk = (node: unknown, keyPath: string) => {
+          if (!node || typeof node !== 'object' || seen.has(node)) return;
+          seen.add(node);
+          for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+            const path = `${keyPath}.${k}`;
+            if (typeof v === 'string' && v.trim().length > 32 && wanted.test(path)) {
+              const val = v.trim();
+              if (/^https?:\/\//i.test(val)) found.links.push(val);
+              else if (format === 'xml' && val.trimStart().startsWith('<')) found.blobs.push(val);
+              else if (/^[A-Za-z0-9+/=\s]+$/.test(val)) found.blobs.push(val);
+            } else if (typeof v === 'object') {
+              walk(v, path);
+            }
+          }
+        };
+        walk(docData, 'doc');
+        for (const candidate of found.links) {
+          try {
+            const follow = await fetch(candidate);
+            if (follow.ok) return fileResponse(await follow.arrayBuffer(), follow.headers.get('Content-Type'));
+          } catch { /* tenta o próximo */ }
+        }
+        for (const candidate of found.blobs) {
+          if (format === 'xml' && candidate.trimStart().startsWith('<')) return fileResponse(candidate, 'application/xml');
+          try {
+            const bytes = b64ToBytes(candidate);
+            if (bytes.byteLength > 0) return fileResponse(bytes);
+          } catch { /* tenta o próximo */ }
+        }
+
         return json(502, {
           success: false,
           error: {
@@ -384,6 +444,7 @@ Deno.serve(async (req) => {
               `O Hub Fiscal não disponibilizou o ${format === 'pdf' ? 'DACTE (PDF)' : 'XML'} deste documento` +
               (hubMessage ? ` — ${hubMessage}` : '') +
               '. Verifique no Hub Fiscal se o documento está autorizado e se a rota de download está habilitada para o emitente.',
+            attempts: attemptLog,
           },
         });
       }
