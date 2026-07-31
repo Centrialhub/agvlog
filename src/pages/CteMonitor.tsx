@@ -17,6 +17,40 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PendingInvoicesBanner } from '@/components/billing/PendingInvoicesBanner';
+import { hubFiscal } from '@/lib/fiscal/hubFiscalClient';
+
+async function downloadHubFile(row: CteMonitorRow, format: 'pdf' | 'xml') {
+  const label = format === 'pdf' ? 'PDF (DACTE)' : 'XML';
+  const url = format === 'pdf' ? row.pdf_url : row.xml_url;
+  if (url) {
+    window.open(url, '_blank');
+    return;
+  }
+  if (!row.hub_document_id) {
+    toast.error(`${label} indisponível`, {
+      description:
+        row.source === 'hub'
+          ? 'Este CT-e ainda não tem id do Hub Fiscal — sincronize a emissão antes de baixar.'
+          : 'Este registro é um rascunho local que nunca foi transmitido ao Hub Fiscal/SEFAZ.',
+    });
+    return;
+  }
+  const toastId = toast.loading(`Baixando ${label}...`);
+  try {
+    const blob = await hubFiscal.file(row.hub_document_id, format);
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = `cte-${row.access_key || row.cte_number || row.id}.${format}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 10_000);
+    toast.success(`${label} baixado`, { id: toastId });
+  } catch (e: any) {
+    toast.error(`Falha ao baixar ${label}`, { id: toastId, description: e?.message });
+  }
+}
 
 const TONE_CLASS: Record<string, string> = {
   default: 'bg-secondary text-secondary-foreground',
@@ -85,18 +119,10 @@ export default function CteMonitor() {
   }
 
   async function downloadXml(row: CteMonitorRow) {
-    if (row.xml_url) {
-      window.open(row.xml_url, '_blank');
-      return;
-    }
-    toast.error('XML não disponível para este CT-e');
+    await downloadHubFile(row, 'xml');
   }
   async function downloadPdf(row: CteMonitorRow) {
-    if (row.pdf_url) {
-      window.open(row.pdf_url, '_blank');
-      return;
-    }
-    toast.error('PDF (DACTE) não disponível para este CT-e');
+    await downloadHubFile(row, 'pdf');
   }
 
   return (
