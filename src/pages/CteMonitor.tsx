@@ -20,6 +20,17 @@ import { PendingInvoicesBanner } from '@/components/billing/PendingInvoicesBanne
 import { hubFiscal } from '@/lib/fiscal/hubFiscalClient';
 import { summarizeBulkDownload, type BulkFailure } from '@/lib/fiscal/bulkDownloadSummary';
 
+function saveBlob(blob: Blob, filename: string) {
+  const objectUrl = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = objectUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 10_000);
+}
+
 async function downloadHubFile(
   row: CteMonitorRow,
   format: 'pdf' | 'xml',
@@ -27,12 +38,28 @@ async function downloadHubFile(
 ) {
   const label = format === 'pdf' ? 'PDF (DACTE)' : 'XML';
   const url = format === 'pdf' ? row.pdf_url : row.xml_url;
+  const filename = `cte-${row.access_key || row.cte_number || row.id}.${format}`;
   if (url) {
+    // Em lote, abrir várias abas é bloqueado pelo navegador: baixamos como blob.
+    if (opts.silent) {
+      try {
+        const res = await fetch(url);
+        if (res.ok) {
+          const blob = await res.blob();
+          if (blob.size > 0) {
+            saveBlob(blob, filename);
+            return;
+          }
+        }
+      } catch { /* cai para o proxy abaixo */ }
+      if (!row.hub_document_id) throw new Error('Não foi possível baixar o arquivo pelo link do Hub Fiscal.');
+    } else {
     const win = window.open(url, '_blank');
-    if (!win && opts.silent) {
-      throw new Error('O navegador bloqueou a abertura do arquivo (pop-up bloqueado).');
+      if (!win) {
+        toast.error(`${label} bloqueado`, { description: 'O navegador bloqueou a abertura do arquivo (pop-up).' });
+      }
+      return;
     }
-    return;
   }
   if (!row.hub_document_id) {
     const description =
@@ -49,14 +76,7 @@ async function downloadHubFile(
       type: 'cte',
       emissionId: row.emission_id,
     });
-    const objectUrl = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = objectUrl;
-    a.download = `cte-${row.access_key || row.cte_number || row.id}.${format}`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(objectUrl), 10_000);
+    saveBlob(blob, filename);
     if (!opts.silent) toast.success(`${label} baixado`, { id: toastId });
   } catch (e: any) {
     if (opts.silent) throw e;
@@ -131,8 +151,13 @@ export default function CteMonitor() {
     let ok = 0;
     const failures: BulkFailure[] = [];
     const toastId = toast.loading(`Baixando ${checkedRows.length} arquivo(s) ${format.toUpperCase()}...`);
+    let index = 0;
     for (const row of checkedRows) {
+      index++;
       const rowLabel = row.cte_number || row.access_key || row.id.slice(0, 8);
+      toast.loading(`Baixando ${format.toUpperCase()} ${index}/${checkedRows.length} (CT-e ${rowLabel})...`, {
+        id: toastId,
+      });
       try {
         await downloadHubFile(row, format, { silent: true });
         ok++;

@@ -325,6 +325,84 @@ Deno.serve(async (req) => {
           Uint8Array.from(atob(b64.replace(/^data:[^,]+,/, '').replace(/\s/g, '')), (c) => c.charCodeAt(0));
 
         let hubMessage = '';
+        const attemptLog: string[] = [];
+
+        // Contingência direta TecnoSpeed/ManagerSaaS. Tentada ANTES do Hub quando já
+        // conhecemos chave + CNPJ localmente: a rota de arquivos do Hub está
+        // indisponível nesta instância e as 5 tentativas gastam segundos por arquivo
+        // (inviável em download em lote). Credenciais ficam só nos secrets.
+        const managerTried = new Set<string>();
+        const tryManagerSaas = async (rawKey: string, rawCnpj: string): Promise<Response | null> => {
+          const key = String(rawKey || '').replace(/\D/g, '');
+          const cnpj = String(rawCnpj || '').replace(/\D/g, '');
+          if ((payload.type || 'cte') !== 'cte') return null;
+          if (key.length !== 44 || cnpj.length !== 14) return null;
+          if (!MANAGERSAAS_GROUP || !MANAGERSAAS_AUTH) return null;
+          const sig = `${key}:${cnpj}:${format}`;
+          if (managerTried.has(sig)) return null;
+          managerTried.add(sig);
+          const directPath = format === 'pdf' ? '/cte/imprime' : '/cte/xml';
+          const directUrl = new URL(`${MANAGERSAAS_BASE}${directPath}`);
+          directUrl.searchParams.set('Grupo', MANAGERSAAS_GROUP);
+          directUrl.searchParams.set('CNPJ', cnpj);
+          directUrl.searchParams.set('ChaveNota', key);
+          if (format === 'pdf') directUrl.searchParams.set('Url', '0');
+          if (format === 'cancel_xml') directUrl.searchParams.set('Documento', 'Cancelamento');
+          const authorization = /^Basic\s/i.test(MANAGERSAAS_AUTH)
+            ? MANAGERSAAS_AUTH
+            : `Basic ${btoa(MANAGERSAAS_AUTH)}`;
+          try {
+            const direct = await fetch(directUrl, {
+              method: 'GET',
+              headers: { Authorization: authorization, Accept: format === 'pdf' ? 'application/pdf' : 'application/xml' },
+            });
+            const directContentType = direct.headers.get('Content-Type') || '';
+            const directBuffer = await direct.arrayBuffer();
+            const directText = new TextDecoder().decode(directBuffer).trim();
+            const directFailed = !direct.ok || directBuffer.byteLength === 0 || /^(EXCEPTION|ERRO\b)/i.test(directText);
+            if (!directFailed) {
+              if (/^https?:\/\//i.test(directText)) {
+                const follow = await fetch(directText);
+                if (follow.ok) {
+                  console.log('[hub-fiscal-proxy] file via ManagerSaaS URL', { id: payload.id, format });
+                  return fileResponse(await follow.arrayBuffer(), follow.headers.get('Content-Type'));
+                }
+              } else {
+                console.log('[hub-fiscal-proxy] file via ManagerSaaS', { id: payload.id, format });
+                return fileResponse(directBuffer, directContentType);
+              }
+            }
+            attemptLog.push(`ManagerSaaS${directPath}: ${direct.status} ${directText.slice(0, 160)}`.trim());
+          } catch (e) {
+            attemptLog.push(`ManagerSaaS${directPath}: ${String((e as Error)?.message || e).slice(0, 160)}`);
+          }
+          return null;
+        };
+
+        // Dados locais (emissão e documento fiscal) para o atalho ManagerSaaS.
+        const { data: localEmission } = await admin.from('hub_fiscal_emissions')
+          .select('access_key, emitter_cnpj, emitter_id, last_response')
+          .eq('tenant_id', tenantId)
+          .or(payload.emissionId
+            ? `id.eq.${payload.emissionId},hub_document_id.eq.${payload.id}`
+            : `hub_document_id.eq.${payload.id}`)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        const managerData = (localEmission as any)?.last_response?.document?.raw_response_json?.managersaas || {};
+        const localKey =
+          localEmission?.access_key ||
+          (localEmission as any)?.last_response?.document?.access_key ||
+          (localEmission as any)?.last_response?.document?.accessKey ||
+          managerData?.parsed?.chave ||
+          managerData?.data?.csv?.chave ||
+          '';
+        const localCnpj =
+          localEmission?.emitter_cnpj ||
+          (localEmission as any)?.last_response?.document?.emitter_cnpj ||
+          '';
+        const early = await tryManagerSaas(localKey, localCnpj);
+        if (early) return early;
 
         // 1) Rotas dedicadas de download do Hub, com fallback de rota/parâmetro.
         // A API v1 expõe GET /documents/file?id=...&kind=pdf|xml, mas instâncias
@@ -340,7 +418,6 @@ Deno.serve(async (req) => {
             ? { path: '/hub_documents_print', query: { id: payload.id } }
             : { path: '/hub_documents_xml', query: { id: payload.id } },
         ];
-        const attemptLog: string[] = [];
 
         for (const attempt of attempts) {
           let upstream: Response;
@@ -447,86 +524,15 @@ Deno.serve(async (req) => {
           } catch { /* tenta o próximo */ }
         }
 
-        // 4) Contingência direta TecnoSpeed/ManagerSaaS. O Hub continua sendo a
-        // fonte primária; esta rota só é usada quando o CT-e autorizado existe,
-        // mas a função de arquivos do Hub está indisponível ou mal configurada.
-        // Credenciais permanecem exclusivamente nos secrets da Edge Function.
-        const { data: localEmission } = await admin.from('hub_fiscal_emissions')
-          .select('access_key, emitter_cnpj, emitter_id, last_response')
-          .eq('tenant_id', tenantId)
-          .or(payload.emissionId
-            ? `id.eq.${payload.emissionId},hub_document_id.eq.${payload.id}`
-            : `hub_document_id.eq.${payload.id}`)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        const managerData = (localEmission as any)?.last_response?.document?.raw_response_json?.managersaas || {};
-        const directAccessKey = String(
-          accessKey ||
-          localEmission?.access_key ||
-          (localEmission as any)?.last_response?.document?.access_key ||
-          (localEmission as any)?.last_response?.document?.accessKey ||
-          managerData?.parsed?.chave ||
-          managerData?.data?.csv?.chave ||
-          '',
-        ).replace(/\D/g, '');
-        const directCnpj = String(
-          emitterCnpj ||
-          localEmission?.emitter_cnpj ||
-          (localEmission as any)?.last_response?.document?.emitter_cnpj ||
-          '',
-        ).replace(/\D/g, '');
-        const canUseManager =
-          (payload.type || 'cte') === 'cte' &&
-          directAccessKey.length === 44 &&
-          directCnpj.length === 14 &&
-          MANAGERSAAS_GROUP.length > 0 &&
-          MANAGERSAAS_AUTH.length > 0;
-
-        if (canUseManager) {
-          const directPath = format === 'pdf' ? '/cte/imprime' : '/cte/xml';
-          const directUrl = new URL(`${MANAGERSAAS_BASE}${directPath}`);
-          directUrl.searchParams.set('Grupo', MANAGERSAAS_GROUP);
-          directUrl.searchParams.set('CNPJ', directCnpj);
-          directUrl.searchParams.set('ChaveNota', directAccessKey);
-          if (format === 'pdf') directUrl.searchParams.set('Url', '0');
-          if (format === 'cancel_xml') directUrl.searchParams.set('Documento', 'Cancelamento');
-          const authorization = /^Basic\s/i.test(MANAGERSAAS_AUTH)
-            ? MANAGERSAAS_AUTH
-            : `Basic ${btoa(MANAGERSAAS_AUTH)}`;
-          try {
-            const direct = await fetch(directUrl, {
-              method: 'GET',
-              headers: { Authorization: authorization, Accept: format === 'pdf' ? 'application/pdf' : 'application/xml' },
-            });
-            const directContentType = direct.headers.get('Content-Type') || '';
-            const directBuffer = await direct.arrayBuffer();
-            const directText = new TextDecoder().decode(directBuffer).trim();
-            const directFailed =
-              !direct.ok ||
-              directBuffer.byteLength === 0 ||
-              /^(EXCEPTION|ERRO\b)/i.test(directText);
-            if (!directFailed) {
-              // Algumas contas retornam uma URL em texto mesmo com Url=0.
-              if (/^https?:\/\//i.test(directText)) {
-                const follow = await fetch(directText);
-                if (follow.ok) {
-                  console.log('[hub-fiscal-proxy] file recovered via ManagerSaaS URL', { id: payload.id, format });
-                  return fileResponse(await follow.arrayBuffer(), follow.headers.get('Content-Type'));
-                }
-              } else {
-                console.log('[hub-fiscal-proxy] file recovered via ManagerSaaS', { id: payload.id, format });
-                return fileResponse(directBuffer, directContentType);
-              }
-            }
-            attemptLog.push(`ManagerSaaS${directPath}: ${direct.status} ${directText.slice(0, 160)}`.trim());
-          } catch (e) {
-            attemptLog.push(`ManagerSaaS${directPath}: ${String((e as Error)?.message || e).slice(0, 160)}`);
-          }
-        } else if ((payload.type || 'cte') === 'cte') {
+        // 4) Segunda tentativa direta na TecnoSpeed/ManagerSaaS, agora com chave e
+        //    CNPJ vindos do próprio documento do Hub (caso os dados locais estivessem
+        //    incompletos na primeira tentativa).
+        const retry = await tryManagerSaas(accessKey || localKey, emitterCnpj || localCnpj);
+        if (retry) return retry;
+        if ((payload.type || 'cte') === 'cte' && managerTried.size === 0) {
           const missing = [
-            directAccessKey.length !== 44 && 'chave',
-            directCnpj.length !== 14 && 'CNPJ',
+            String(accessKey || localKey).replace(/\D/g, '').length !== 44 && 'chave',
+            String(emitterCnpj || localCnpj).replace(/\D/g, '').length !== 14 && 'CNPJ',
             !MANAGERSAAS_GROUP && 'MANAGERSAAS_GROUP',
             !MANAGERSAAS_AUTH && 'MANAGERSAAS_AUTH',
           ].filter(Boolean);
