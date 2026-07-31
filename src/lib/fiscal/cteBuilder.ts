@@ -105,6 +105,8 @@ export interface CteIcms {
   cst?: string | null;         // 00, 20, 40, 41, 51, 60, 90 (CST) ou 90 (CSOSN — Simples)
   embutido?: boolean;
   isento?: boolean;
+  /** motDesICMS — motivo da desoneração (obrigatório nos CST isentos). */
+  motivo?: string | number | null;
   aliquota?: number | null;
   base?: number | null;
   valor?: number | null;
