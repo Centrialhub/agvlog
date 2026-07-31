@@ -345,7 +345,8 @@ const COMPONENT_LABELS: Record<keyof CteFreightComposition, string> = {
  */
 function buildComponentes(params: {
   composition?: CteFreightComposition | null;
-  freightValue: number;
+  /** FRETE PESO (frete cru, base do cálculo do ICMS). */
+  freightWeight: number;
   insuranceValue?: number | null;
   icmsValor?: number | null;
 }): { nome: string; valor: number }[] {
@@ -353,22 +354,9 @@ function buildComponentes(params: {
   const comp = params.composition || {};
   const items: { nome: string; valor: number }[] = [];
 
-  // Soma dos componentes acessórios informados (exclui frete peso e seguro %).
-  // O total a receber já contém ICMS; portanto FRETE PESO é o valor cru:
-  // total − ICMS − demais componentes.
-  let accessories = 0;
-  for (const [k, v] of Object.entries(comp)) {
-    if (k === 'freight_weight' || k === 'insurance_pct') continue;
-    const n = Number(v || 0);
-    if (n > 0) accessories += n;
-  }
-
-  const freightWeight =
-    Number(comp.freight_weight || 0) > 0
-      ? Number(comp.freight_weight)
-      : Math.max(params.freightValue - Number(params.icmsValor || 0) - accessories, 0) || params.freightValue;
-
-  items.push({ nome: COMPONENT_LABELS.freight_weight, valor: round2(freightWeight) });
+  // FRETE PESO é o valor cru (base). O ICMS é somado a ele para formar o
+  // FRETE A RECEBER — nunca deduzido.
+  items.push({ nome: COMPONENT_LABELS.freight_weight, valor: round2(params.freightWeight) });
 
   const insurance = Number(params.insuranceValue ?? comp.insurance_value ?? 0);
   if (insurance > 0) items.push({ nome: COMPONENT_LABELS.insurance_value, valor: round2(insurance) });
