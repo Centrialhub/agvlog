@@ -19,6 +19,7 @@ import { useVehicles } from '@/hooks/useVehicles';
 import { useClients } from '@/hooks/useClients';
 import { useTenant } from '@/hooks/useTenant';
 import { useIssueCTe } from '@/hooks/useIssueCTe';
+import { useInsuranceProfile, useUpdateInsuranceProfile } from '@/hooks/useInsuranceProfile';
 import type { CteGroupPreview } from '@/lib/cteGroupingModes';
 import { buildCtePayload, computeIcmsAmounts, type CteTakerRole, type BuildCtePayloadInput } from '@/lib/fiscal/cteBuilder';
 import type { CteDocType } from '@/lib/fiscal/cteBuilder';
