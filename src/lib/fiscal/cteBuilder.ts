@@ -61,6 +61,8 @@ export interface CteVehicle {
   plate: string;
   state?: string | null;
   renavam?: string | null;
+  /** RNTRC (8 dígitos) — aceito em veiculo/modalRodoviario/rodo pelo Hub v1. */
+  rntrc?: string | null;
 }
 
 export interface CteReferencedNf {
@@ -165,6 +167,18 @@ export interface BuildCtePayloadInput {
   nature: string;
   cfop?: string | null;
   observations?: string | null;
+  /** Série / numeração do CT-e (opcional — o Hub usa a do cadastro se ausente). */
+  series?: string | null;
+  number?: string | number | null;
+  /** Código numérico do CT-e (cCT). */
+  cCT?: string | number | null;
+  /** RNTRC do transportador (8 dígitos). */
+  rntrc?: string | null;
+  /** Override de UFIni/UFFim (inicio/fim da prestação). */
+  origin?: CteParty['address'] | null;
+  destination?: CteParty['address'] | null;
+  /** CNPJs autorizados a baixar o XML. */
+  authorizedXmlCnpjs?: string[] | null;
   invoices: CteReferencedNf[];
   totals: {
     freight_value: number;
