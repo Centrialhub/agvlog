@@ -457,7 +457,11 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
           };
         }),
       );
-      setItems(patched);
+      // Preserva a seguradora já aplicada/salva: o RPC é assíncrono e não deve
+      // sobrescrever o padrão do tenant aplicado enquanto ele carregava.
+      setItems((prev) =>
+        patched.map((it, i) => (prev[i] ? preserveInsurerFields(prev[i], it) : it)),
+      );
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -465,18 +469,11 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
   // Aplica a seguradora padrão salva (nome, CNPJ e apólice) em todos os CT-es do lote.
   // A averbação (CGC) continua por CT-e e nunca é replicada.
   useEffect(() => {
-    if (!open || items.length === 0 || !insuranceProfile) return;
-    const { name, cnpj, policy } = insuranceProfile;
-    if (!name && !cnpj && !policy) return;
-    let changed = false;
-    const next = items.map((it) => {
-      const out = { ...it };
-      if (!out.insurerName && name) { out.insurerName = name; changed = true; }
-      if (!out.insurerCnpj && cnpj) { out.insurerCnpj = cnpj; changed = true; }
-      if (!out.insurerPolicy && policy) { out.insurerPolicy = policy; changed = true; }
-      return out;
+    if (!open || !hasInsuranceProfile(insuranceProfile)) return;
+    setItems((prev) => {
+      if (prev.length === 0) return prev;
+      return applyInsuranceProfileToBatch(prev, insuranceProfile).items;
     });
-    if (changed) setItems(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, insuranceProfile, items.length]);
 
