@@ -527,6 +527,13 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
   const emitterRegimeRaw = (input.emitter?.taxRegime || '').toString().toLowerCase();
   const emitterIsSimples = emitterRegimeRaw === 'simples' || emitterRegimeRaw === 'mei';
   const emitterRegimeCode = emitterIsSimples ? 1 : 3;
+  const usoExclusivoEmitente = buildEmitterExclusiveUse({
+    insurer: input.insurer,
+    insuranceValue: insuranceValue,
+    insuredAmount: insuredAmount,
+    driver: input.driver,
+    observations: input.observations,
+  });
   if (!emitterRegimeRaw) {
     warnings.push(
       'Regime tributário do emitente não cadastrado — assumindo regime normal (CRT 3). Configure em Configurações → Emitentes para garantir a impressão do ICMS no DACTE.',
