@@ -437,6 +437,26 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
       )
     : undefined;
 
+  const icmsBlock = input.icms
+    ? buildIcmsBlock(input.icms, input.totals.freight_value, input.emitter?.taxRegime)
+    : undefined;
+
+  const insuranceValue = Number(input.freightComposition?.insurance_value || 0);
+  const insuredAmount =
+    input.insurer?.insured_amount ?? (input.insurer ? input.totals.cargo_value || null : null);
+  if (!input.insurer?.name) {
+    warnings.push(
+      'Seguro da carga não informado — o DACTE sairá sem seguradora/averbação. Preencha a aba Seguro.',
+    );
+  }
+
+  const componentes = buildComponentes({
+    composition: input.freightComposition,
+    freightValue: input.totals.freight_value,
+    insuranceValue,
+    icmsValor: (icmsBlock?.vICMS as number) ?? null,
+  });
+
   const emitterRegimeRaw = (input.emitter?.taxRegime || '').toString().toLowerCase();
   const emitterIsSimples = emitterRegimeRaw === 'simples' || emitterRegimeRaw === 'mei';
   const emitterRegimeCode = emitterIsSimples ? 1 : 3;
@@ -488,7 +508,8 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
             cnpj: digits(input.insurer.cnpj) || undefined,
             apolice: input.insurer.policy || undefined,
             averbacao: input.insurer.endorsement || undefined,
-            valorSegurado: input.insurer.insured_amount ?? undefined,
+            valorSegurado: insuredAmount ?? undefined,
+            valorSeguro: insuranceValue > 0 ? Number(insuranceValue.toFixed(2)) : undefined,
           }
         : undefined,
       tomador: {
@@ -517,9 +538,10 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
         cbs: input.totals.cbs_value ?? undefined,
       },
       composicaoFrete: freightComposition,
-      icms: input.icms
-        ? buildIcmsBlock(input.icms, input.totals.freight_value, input.emitter?.taxRegime)
-        : undefined,
+      // Componentes do valor da prestação (DACTE) — FRETE PESO / SEGURO / ICMS em destaque
+      componentes,
+      componentesValorPrestacao: componentes,
+      icms: icmsBlock,
       gnre: input.gnre
         ? Object.fromEntries(Object.entries(input.gnre).filter(([, v]) => v != null))
         : undefined,
