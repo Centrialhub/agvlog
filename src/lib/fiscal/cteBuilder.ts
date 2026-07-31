@@ -349,28 +349,36 @@ function buildComponentes(params: {
   freightWeight: number;
   insuranceValue?: number | null;
   icmsValor?: number | null;
-}): { nome: string; valor: number }[] {
+  /** Quando true o ICMS é somado ao valor a receber (regime por dentro). */
+  icmsEmbutido?: boolean;
+}): { nome: string; valor: number; soma: boolean }[] {
   const round2 = (n: number) => Number(n.toFixed(2));
   const comp = params.composition || {};
-  const items: { nome: string; valor: number }[] = [];
+  const items: { nome: string; valor: number; soma: boolean }[] = [];
 
-  // FRETE PESO é o valor cru (base). O ICMS é somado a ele para formar o
-  // FRETE A RECEBER — nunca deduzido.
-  items.push({ nome: COMPONENT_LABELS.freight_weight, valor: round2(params.freightWeight) });
+  // FRETE PESO é o valor cru (base). Quando o ICMS é embutido ele é somado
+  // a ele para formar o FRETE A RECEBER — nunca deduzido.
+  items.push({ nome: COMPONENT_LABELS.freight_weight, valor: round2(params.freightWeight), soma: true });
 
   const insurance = Number(params.insuranceValue ?? comp.insurance_value ?? 0);
-  if (insurance > 0) items.push({ nome: COMPONENT_LABELS.insurance_value, valor: round2(insurance) });
+  if (insurance > 0) items.push({ nome: COMPONENT_LABELS.insurance_value, valor: round2(insurance), soma: true });
 
   for (const [k, v] of Object.entries(comp)) {
     if (k === 'freight_weight' || k === 'insurance_pct' || k === 'insurance_value') continue;
     const n = Number(v || 0);
     if (n > 0) {
-      items.push({ nome: COMPONENT_LABELS[k as keyof CteFreightComposition] || k.toUpperCase(), valor: round2(n) });
+      items.push({
+        nome: COMPONENT_LABELS[k as keyof CteFreightComposition] || k.toUpperCase(),
+        valor: round2(n),
+        soma: true,
+      });
     }
   }
 
   const icms = Number(params.icmsValor || 0);
-  if (icms > 0) items.push({ nome: 'ICMS', valor: round2(icms) });
+  // ICMS sempre aparece em destaque no DACTE; só entra na soma do valor a
+  // receber quando o regime é embutido (por dentro).
+  if (icms > 0) items.push({ nome: 'ICMS', valor: round2(icms), soma: params.icmsEmbutido === true });
 
   return items;
 }
@@ -451,12 +459,17 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
     freightWeight: fretePeso,
     insuranceValue,
     icmsValor: (icmsBlock?.vICMS as number) ?? null,
+    icmsEmbutido: input.icms?.embutido === true,
   });
   const icmsValue = Number((Number(icmsBlock?.vICMS) || 0).toFixed(2));
   const freteBase = fretePeso;
-  // FRETE A RECEBER = soma dos componentes (FRETE PESO + acessórios + ICMS).
+  // FRETE A RECEBER = soma dos componentes somáveis. ICMS por fora fica em
+  // destaque no DACTE, mas NÃO é somado ao valor a receber.
   const totalServico = Number(
-    componentes.reduce((sum, component) => sum + Number(component.valor || 0), 0).toFixed(2),
+    componentes
+      .filter((component) => component.soma)
+      .reduce((sum, component) => sum + Number(component.valor || 0), 0)
+      .toFixed(2),
   );
   const seguroCarga = input.insurer
     ? {
