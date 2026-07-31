@@ -13,6 +13,8 @@
  * Sem side effects; totalmente coberto por src/test/cteBuilder.test.ts.
  */
 
+import { validateInsurance } from './insuranceValidation';
+
 export type CteTakerRole =
   | 'remetente'
   | 'destinatario'
