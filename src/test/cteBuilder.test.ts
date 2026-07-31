@@ -80,7 +80,7 @@ describe('cteBuilder — novos blocos', () => {
   });
 
   it('omite blocos vazios (undefined) do payload', () => {
-    const r = buildCtePayload(baseInput());
+    const r = buildCtePayload(baseInput({ insurer: null }));
     const p = (r.payload as any).payload;
     expect(p.seguradora).toBeUndefined();
     expect(p.composicaoFrete).toBeUndefined();
