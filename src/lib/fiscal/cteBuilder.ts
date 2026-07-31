@@ -576,8 +576,11 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
   if (rntrc && rntrc.length !== 8) {
     warnings.push('RNTRC informado não possui 8 dígitos — o Hub pode rejeitar a emissão.');
   }
-  const inicio = buildLocation(input.origin || input.remitter?.address);
-  const fim = buildLocation(input.destination || input.recipient?.address);
+  const inicio =
+    buildLocation(input.origin) ||
+    buildLocation(input.remitter?.address) ||
+    buildLocation(input.emitter?.address);
+  const fim = buildLocation(input.destination) || buildLocation(input.recipient?.address);
   const autorizadosXml = (input.authorizedXmlCnpjs || [])
     .map((c) => digits(c))
     .filter((c) => c.length === 14);
