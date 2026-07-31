@@ -168,8 +168,7 @@ export function useDeleteIssuedCte() {
       if (!doc) throw new Error('CT-e não encontrado');
       const status = (doc as any).status as string;
       const sefaz = (doc as any).sefaz_status as string | null;
-      const isAuthorizedLive =
-        status === 'authorized' && status !== 'cancelled' && sefaz !== 'cancelled';
+      const isAuthorizedLive = status === 'authorized' && sefaz !== 'cancelled';
       if (isAuthorizedLive && sefaz !== 'cancel_rejected') {
         throw new Error('CT-e autorizado não pode ser excluído — cancele na SEFAZ primeiro');
       }
