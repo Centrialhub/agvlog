@@ -44,10 +44,17 @@ export function useUpdateInsuranceProfile() {
       if (e1) throw e1;
       const settings = { ...((cur?.settings as any) || {}) };
       settings.insurance = { ...(settings.insurance || {}), ...patch };
-      const { error } = await supabase
-        .from('tenants').update({ settings }).eq('id', currentTenant.id);
+      const { data: updated, error } = await supabase
+        .from('tenants')
+        .update({ settings })
+        .eq('id', currentTenant.id)
+        .select('settings')
+        .maybeSingle();
       if (error) throw error;
-      return settings.insurance as InsuranceProfile;
+      if (!updated) {
+        throw new Error('Sem permissão para salvar a seguradora padrão (apenas admin/owner).');
+      }
+      return (((updated.settings as any) || {}).insurance || {}) as InsuranceProfile;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['insurance_profile'] });
