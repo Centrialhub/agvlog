@@ -44,6 +44,8 @@ export interface CteEmitter {
   name: string;
   environment: 'sandbox' | 'production';
   address?: CteParty['address'];
+  /** Regime tributário cadastrado: 'simples' | 'presumido' | 'real' | 'mei'. */
+  taxRegime?: string | null;
 }
 
 export interface CteDriver {
