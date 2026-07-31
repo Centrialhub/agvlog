@@ -19,7 +19,11 @@ import { toast } from 'sonner';
 import { PendingInvoicesBanner } from '@/components/billing/PendingInvoicesBanner';
 import { hubFiscal } from '@/lib/fiscal/hubFiscalClient';
 
-async function downloadHubFile(row: CteMonitorRow, format: 'pdf' | 'xml') {
+async function downloadHubFile(
+  row: CteMonitorRow,
+  format: 'pdf' | 'xml',
+  opts: { silent?: boolean } = {},
+) {
   const label = format === 'pdf' ? 'PDF (DACTE)' : 'XML';
   const url = format === 'pdf' ? row.pdf_url : row.xml_url;
   if (url) {
@@ -27,15 +31,15 @@ async function downloadHubFile(row: CteMonitorRow, format: 'pdf' | 'xml') {
     return;
   }
   if (!row.hub_document_id) {
-    toast.error(`${label} indisponível`, {
-      description:
-        row.source === 'hub'
-          ? 'Este CT-e ainda não tem id do Hub Fiscal — sincronize a emissão antes de baixar.'
-          : 'Este registro é um rascunho local que nunca foi transmitido ao Hub Fiscal/SEFAZ.',
-    });
+    const description =
+      row.source === 'hub'
+        ? 'Este CT-e ainda não tem id do Hub Fiscal — sincronize a emissão antes de baixar.'
+        : 'Este registro é um rascunho local que nunca foi transmitido ao Hub Fiscal/SEFAZ.';
+    if (opts.silent) throw new Error(description);
+    toast.error(`${label} indisponível`, { description });
     return;
   }
-  const toastId = toast.loading(`Baixando ${label}...`);
+  const toastId = opts.silent ? undefined : toast.loading(`Baixando ${label}...`);
   try {
     const blob = await hubFiscal.file(row.hub_document_id, format);
     const objectUrl = URL.createObjectURL(blob);
@@ -46,8 +50,9 @@ async function downloadHubFile(row: CteMonitorRow, format: 'pdf' | 'xml') {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(objectUrl), 10_000);
-    toast.success(`${label} baixado`, { id: toastId });
+    if (!opts.silent) toast.success(`${label} baixado`, { id: toastId });
   } catch (e: any) {
+    if (opts.silent) throw e;
     toast.error(`Falha ao baixar ${label}`, { id: toastId, description: e?.message });
   }
 }
@@ -78,7 +83,9 @@ function Field({ label, children, className = '' }: { label: string; children: R
   );
 }
 
-const DEFAULT_STATUSES: SefazStatus[] = ['pending', 'sent_error', 'processed_error', 'cancel_error'];
+// Mostra todos os status por padrão — CT-es autorizadas (processed) precisam
+// aparecer no monitor para download de PDF/XML.
+const DEFAULT_STATUSES: SefazStatus[] = [];
 
 export default function CteMonitor() {
   const [filters, setFilters] = useState<CteMonitorFilters>({
@@ -87,9 +94,50 @@ export default function CteMonitor() {
   });
   const [draft, setDraft] = useState<CteMonitorFilters>(filters);
   const [selected, setSelected] = useState<CteMonitorRow | null>(null);
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const { data: rows = [], isLoading, refetch, isFetching } = useCteMonitor(filters);
   const resend = useResendCte();
+
+  const downloadableRows = useMemo(() => rows.filter((r) => r.hub_document_id || r.pdf_url || r.xml_url), [rows]);
+  const checkedRows = useMemo(() => rows.filter((r) => checked.has(r.id)), [rows, checked]);
+
+  function toggleRow(id: string) {
+    setChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    setChecked((prev) =>
+      prev.size === downloadableRows.length ? new Set() : new Set(downloadableRows.map((r) => r.id)),
+    );
+  }
+
+  async function bulkDownload(format: 'pdf' | 'xml') {
+    if (checkedRows.length === 0) return;
+    setBulkBusy(true);
+    let ok = 0;
+    let fail = 0;
+    const toastId = toast.loading(`Baixando ${checkedRows.length} arquivo(s) ${format.toUpperCase()}...`);
+    for (const row of checkedRows) {
+      try {
+        await downloadHubFile(row, format, { silent: true });
+        ok++;
+      } catch {
+        fail++;
+      }
+      // Evita bloqueio de downloads simultâneos pelo navegador.
+      await new Promise((r) => setTimeout(r, 350));
+    }
+    setBulkBusy(false);
+    if (fail === 0) toast.success(`${ok} arquivo(s) ${format.toUpperCase()} baixado(s)`, { id: toastId });
+    else toast.warning(`${ok} baixado(s), ${fail} falha(s)`, { id: toastId });
+  }
 
   const counts = useMemo(() => {
     const c = { total: rows.length, errors: 0, processed: 0, pending: 0, cancelled: 0 };
@@ -109,6 +157,7 @@ export default function CteMonitor() {
     const cleared: CteMonitorFilters = { statuses: DEFAULT_STATUSES, correctionLetter: 'all' };
     setDraft(cleared);
     setFilters(cleared);
+    setChecked(new Set());
   }
 
   function toggleStatus(s: SefazStatus) {
@@ -269,10 +318,42 @@ export default function CteMonitor() {
 
         {/* Tabela */}
         <Card className="overflow-hidden">
+          <div className="flex items-center justify-between gap-3 flex-wrap border-b bg-muted/30 px-3 py-2">
+            <span className="text-sm text-muted-foreground">
+              {checkedRows.length > 0
+                ? `${checkedRows.length} CT-e(s) selecionado(s)`
+                : 'Selecione CT-es para emitir PDF/XML em massa'}
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={checkedRows.length === 0 || bulkBusy}
+                onClick={() => bulkDownload('pdf')}
+              >
+                <FileText className="h-4 w-4" /> PDF em massa
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={checkedRows.length === 0 || bulkBusy}
+                onClick={() => bulkDownload('xml')}
+              >
+                <FileDown className="h-4 w-4" /> XML em massa
+              </Button>
+            </div>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-muted/50 text-xs uppercase">
                 <tr>
+                  <th className="px-3 py-2 w-8">
+                    <Checkbox
+                      checked={downloadableRows.length > 0 && checked.size === downloadableRows.length}
+                      onCheckedChange={toggleAll}
+                      aria-label="Selecionar todos"
+                    />
+                  </th>
                   <th className="text-left px-3 py-2">Status</th>
                   <th className="text-left px-3 py-2">Nº CT-e</th>
                   <th className="text-left px-3 py-2">Série</th>
@@ -288,10 +369,10 @@ export default function CteMonitor() {
               </thead>
               <tbody>
                 {isLoading && (
-                  <tr><td colSpan={11} className="text-center text-muted-foreground py-8">Carregando…</td></tr>
+                  <tr><td colSpan={12} className="text-center text-muted-foreground py-8">Carregando…</td></tr>
                 )}
                 {!isLoading && rows.length === 0 && (
-                  <tr><td colSpan={11} className="text-center text-muted-foreground py-8">Nenhum CT-e encontrado com os filtros atuais.</td></tr>
+                  <tr><td colSpan={12} className="text-center text-muted-foreground py-8">Nenhum CT-e encontrado com os filtros atuais.</td></tr>
                 )}
                 {rows.map((r) => (
                   <tr
@@ -299,6 +380,14 @@ export default function CteMonitor() {
                     className="border-t hover:bg-muted/30 cursor-pointer"
                     onClick={() => setSelected(r)}
                   >
+                    <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={checked.has(r.id)}
+                        onCheckedChange={() => toggleRow(r.id)}
+                        disabled={!r.hub_document_id && !r.pdf_url && !r.xml_url}
+                        aria-label="Selecionar CT-e"
+                      />
+                    </td>
                     <td className="px-3 py-2"><StatusPill status={r.sefaz_status} /></td>
                     <td className="px-3 py-2 font-mono">{r.cte_number ?? '—'}</td>
                     <td className="px-3 py-2">{r.cte_series ?? '—'}</td>
