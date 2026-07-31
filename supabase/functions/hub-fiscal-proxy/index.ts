@@ -4,6 +4,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const HUB_BASE = (Deno.env.get('HUB_FISCAL_BASE_URL') ||
   'https://rvgcsmuyvesusbxsqevr.supabase.co/functions/v1').replace(/\/$/, '');
 const DEFAULT_HUB_KEY = Deno.env.get('HUB_FISCAL_API_KEY') || '';
+const MANAGERSAAS_BASE = (Deno.env.get('MANAGERSAAS_BASE_URL') ||
+  'https://managersaas.tecnospeed.com.br:8081/ManagerAPIWeb').replace(/\/$/, '');
+const MANAGERSAAS_GROUP = Deno.env.get('MANAGERSAAS_GROUP') || '';
+const MANAGERSAAS_AUTH = Deno.env.get('MANAGERSAAS_AUTH') || '';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -443,6 +447,85 @@ Deno.serve(async (req) => {
           } catch { /* tenta o próximo */ }
         }
 
+        // 4) Contingência direta TecnoSpeed/ManagerSaaS. O Hub continua sendo a
+        // fonte primária; esta rota só é usada quando o CT-e autorizado existe,
+        // mas a função de arquivos do Hub está indisponível ou mal configurada.
+        // Credenciais permanecem exclusivamente nos secrets da Edge Function.
+        const { data: localEmission } = await admin.from('hub_fiscal_emissions')
+          .select('access_key, emitter_cnpj, emitter_id, last_response')
+          .eq('tenant_id', tenantId)
+          .or(payload.emissionId
+            ? `id.eq.${payload.emissionId},hub_document_id.eq.${payload.id}`
+            : `hub_document_id.eq.${payload.id}`)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        const managerData = (localEmission as any)?.last_response?.document?.raw_response_json?.managersaas || {};
+        const directAccessKey = String(
+          accessKey ||
+          localEmission?.access_key ||
+          managerData?.parsed?.chave ||
+          managerData?.data?.csv?.chave ||
+          '',
+        ).replace(/\D/g, '');
+        const directCnpj = String(emitterCnpj || localEmission?.emitter_cnpj || '').replace(/\D/g, '');
+        const canUseManager =
+          (payload.type || 'cte') === 'cte' &&
+          directAccessKey.length === 44 &&
+          directCnpj.length === 14 &&
+          MANAGERSAAS_GROUP.length > 0 &&
+          MANAGERSAAS_AUTH.length > 0;
+
+        if (canUseManager) {
+          const directPath = format === 'pdf' ? '/cte/imprime' : '/cte/xml';
+          const directUrl = new URL(`${MANAGERSAAS_BASE}${directPath}`);
+          directUrl.searchParams.set('Grupo', MANAGERSAAS_GROUP);
+          directUrl.searchParams.set('CNPJ', directCnpj);
+          directUrl.searchParams.set('ChaveNota', directAccessKey);
+          if (format === 'pdf') directUrl.searchParams.set('Url', '0');
+          if (format === 'cancel_xml') directUrl.searchParams.set('Documento', 'Cancelamento');
+          const authorization = /^Basic\s/i.test(MANAGERSAAS_AUTH)
+            ? MANAGERSAAS_AUTH
+            : `Basic ${btoa(MANAGERSAAS_AUTH)}`;
+          try {
+            const direct = await fetch(directUrl, {
+              method: 'GET',
+              headers: { Authorization: authorization, Accept: format === 'pdf' ? 'application/pdf' : 'application/xml' },
+            });
+            const directContentType = direct.headers.get('Content-Type') || '';
+            const directBuffer = await direct.arrayBuffer();
+            const directText = new TextDecoder().decode(directBuffer).trim();
+            const directFailed =
+              !direct.ok ||
+              directBuffer.byteLength === 0 ||
+              /^(EXCEPTION|ERRO\b)/i.test(directText);
+            if (!directFailed) {
+              // Algumas contas retornam uma URL em texto mesmo com Url=0.
+              if (/^https?:\/\//i.test(directText)) {
+                const follow = await fetch(directText);
+                if (follow.ok) {
+                  console.log('[hub-fiscal-proxy] file recovered via ManagerSaaS URL', { id: payload.id, format });
+                  return fileResponse(await follow.arrayBuffer(), follow.headers.get('Content-Type'));
+                }
+              } else {
+                console.log('[hub-fiscal-proxy] file recovered via ManagerSaaS', { id: payload.id, format });
+                return fileResponse(directBuffer, directContentType);
+              }
+            }
+            attemptLog.push(`ManagerSaaS${directPath}: ${direct.status} ${directText.slice(0, 160)}`.trim());
+          } catch (e) {
+            attemptLog.push(`ManagerSaaS${directPath}: ${String((e as Error)?.message || e).slice(0, 160)}`);
+          }
+        } else if ((payload.type || 'cte') === 'cte') {
+          const missing = [
+            directAccessKey.length !== 44 && 'chave',
+            directCnpj.length !== 14 && 'CNPJ',
+            !MANAGERSAAS_GROUP && 'MANAGERSAAS_GROUP',
+            !MANAGERSAAS_AUTH && 'MANAGERSAAS_AUTH',
+          ].filter(Boolean);
+          attemptLog.push(`ManagerSaaS direto não configurado (${missing.join(', ')})`);
+        }
+
         const upstreamContractIssue =
           docStatus < 400 &&
           isAuthorized &&
@@ -454,9 +537,8 @@ Deno.serve(async (req) => {
           error: {
             code: upstreamContractIssue ? 'HUB_FILE_ROUTE_MISCONFIGURED' : 'HUB_FILE_UNAVAILABLE',
             message: upstreamContractIssue
-              ? `O CT-e está autorizado, mas a rota de arquivo do Hub Fiscal está configurada incorretamente. ` +
-                `O Hub deve buscar o ${format === 'pdf' ? 'DACTE por GET /cte/imprime' : 'XML por GET /cte/xml'} ` +
-                `usando Grupo, CNPJ e ChaveNota; novas tentativas com nomes de função diferentes não resolverão este erro.`
+              ? `O CT-e está autorizado, mas a rota de arquivo do Hub Fiscal está configurada incorretamente e a contingência direta da TecnoSpeed não conseguiu recuperar o arquivo. ` +
+                `Confira as credenciais ManagerSaaS do emitente e o acesso à rota ${format === 'pdf' ? 'GET /cte/imprime' : 'GET /cte/xml'}.`
               : `O Hub Fiscal não disponibilizou o ${format === 'pdf' ? 'DACTE (PDF)' : 'XML'} deste documento` +
                 (hubMessage ? ` — ${hubMessage}` : '') +
                 '. Verifique no Hub Fiscal se o documento está autorizado e se a rota de download está habilitada para o emitente.',
