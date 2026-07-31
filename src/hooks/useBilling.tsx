@@ -148,6 +148,58 @@ export function useIssuedCtes() {
   });
 }
 
+/**
+ * Exclui o registro local de um CT-e (outbound) e libera as NFs vinculadas.
+ * Não permitido para CT-e autorizado que ainda não foi cancelado na SEFAZ.
+ */
+export function useDeleteIssuedCte() {
+  const qc = useQueryClient();
+  const { currentTenant } = useTenant();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (!currentTenant) throw new Error('Tenant não encontrado');
+      const { data: doc, error: readErr } = await supabase
+        .from('fiscal_documents')
+        .select('id, status, sefaz_status')
+        .eq('id', id)
+        .eq('tenant_id', currentTenant.id)
+        .maybeSingle();
+      if (readErr) throw readErr;
+      if (!doc) throw new Error('CT-e não encontrado');
+      const status = (doc as any).status as string;
+      const sefaz = (doc as any).sefaz_status as string | null;
+      const isAuthorizedLive =
+        status === 'authorized' && status !== 'cancelled' && sefaz !== 'cancelled';
+      if (isAuthorizedLive && sefaz !== 'cancel_rejected') {
+        throw new Error('CT-e autorizado não pode ser excluído — cancele na SEFAZ primeiro');
+      }
+
+      // Libera as NFs vinculadas para novo faturamento
+      const { error: relErr } = await supabase
+        .from('fiscal_documents')
+        .update({ cte_emitted_at: null, cte_emitted_outbound_id: null } as any)
+        .eq('tenant_id', currentTenant.id)
+        .eq('cte_emitted_outbound_id', id);
+      if (relErr) throw relErr;
+
+      const { error } = await supabase
+        .from('fiscal_documents')
+        .delete()
+        .eq('id', id)
+        .eq('tenant_id', currentTenant.id);
+      if (error) throw error;
+      return { id };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['issued_ctes'] });
+      qc.invalidateQueries({ queryKey: ['billing_documents'] });
+      qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
+      qc.invalidateQueries({ queryKey: ['cte_monitor'] });
+      qc.invalidateQueries({ queryKey: ['cte_batches'] });
+    },
+  });
+}
+
 interface CreateBatchInput {
   client_id: string | null;
   emitter_id?: string | null;
