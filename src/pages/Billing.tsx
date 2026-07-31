@@ -32,6 +32,7 @@ import {
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { PendingInvoicesBanner } from '@/components/billing/PendingInvoicesBanner';
+import { normalizeCity } from '@/lib/utils/normalizeCity';
 import { useRecalculateInboundFreight } from '@/hooks/useRecalculateInboundFreight';
 import { CteEmissionPreviewDialog } from '@/components/billing/CteEmissionPreviewDialog';
 import { CancelCteDialog, type CancelCteTarget } from '@/components/billing/CancelCteDialog';
