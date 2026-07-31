@@ -188,6 +188,43 @@ function digits(v?: string | null): string {
   return (v || '').replace(/\D+/g, '');
 }
 
+/**
+ * "USO EXCLUSIVO DO EMISSOR" do DACTE.
+ *
+ * A API v1 do Hub Fiscal aceita o grupo `seguro` mas NÃO o transmite (o dataset
+ * do ManagerSaaS rejeita seguro/condutor junto ao modal rodoviário). Para que a
+ * informação continue impressa no CT-e, consolidamos esses dados extras em
+ * texto no campo de uso exclusivo do emitente.
+ */
+export function buildEmitterExclusiveUse(input: {
+  insurer?: CteInsurer | null;
+  insuranceValue?: number | null;
+  insuredAmount?: number | null;
+  driver?: CteDriver | null;
+  observations?: string | null;
+}): string {
+  const parts: string[] = [];
+  const ins = input.insurer;
+  if (ins?.name) {
+    const seg = [`SEGURADORA: ${ins.name}`];
+    if (ins.cnpj) seg.push(`CNPJ ${digits(ins.cnpj)}`);
+    if (ins.policy) seg.push(`APOLICE ${ins.policy}`);
+    if (ins.endorsement) seg.push(`AVERBACAO/CGC ${ins.endorsement}`);
+    if (input.insuredAmount) seg.push(`VALOR SEGURADO R$ ${Number(input.insuredAmount).toFixed(2)}`);
+    if (input.insuranceValue) seg.push(`SEGURO R$ ${Number(input.insuranceValue).toFixed(2)}`);
+    parts.push(seg.join(' - '));
+  }
+  const driverName = input.driver?.name?.trim();
+  if (driverName && driverName !== '.') {
+    const drv = [`MOTORISTA: ${driverName}`];
+    if (input.driver?.cpf) drv.push(`CPF ${digits(input.driver.cpf)}`);
+    parts.push(drv.join(' - '));
+  }
+  const obs = (input.observations || '').trim();
+  if (obs) parts.push(obs);
+  return parts.join(' | ').slice(0, 2000);
+}
+
 function serializeParty(p: CteParty | null | undefined) {
   if (!p) return null;
   const cnpj = digits(p.cnpj);
