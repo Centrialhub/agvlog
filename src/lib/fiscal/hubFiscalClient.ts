@@ -121,6 +121,8 @@ export const hubFiscal = {
     type?: HubDocType;
     emitterId?: string | null;
     emissionId?: string | null;
+    /** CT-e: variante do arquivo (XML/PDF do evento). */
+    documento?: 'Cancelamento' | 'CCe';
   } = {}) {
     return invoke({
       action: 'deliver',
@@ -129,6 +131,7 @@ export const hubFiscal = {
       emitterId: opts.emitterId || undefined,
       emissionId: opts.emissionId || undefined,
       kinds: opts.kinds ?? ['pdf', 'xml'],
+      documento: opts.documento,
       mode: opts.mode ?? 'url',
       expiresIn: opts.expiresIn ?? 604800,
       forceRefresh: opts.forceRefresh ?? true,
@@ -136,12 +139,16 @@ export const hubFiscal = {
   },
 
   /** URLs assinadas de PDF/XML (GET /hub_documents_links). */
-  links(hubDocumentId: string, opts: { expiresIn?: number; type?: HubDocType; emitterId?: string | null } = {}) {
+  links(hubDocumentId: string, opts: {
+    expiresIn?: number; type?: HubDocType; emitterId?: string | null;
+    documento?: 'Cancelamento' | 'CCe';
+  } = {}) {
     return invoke({
       action: 'links',
       id: hubDocumentId,
       type: opts.type,
       emitterId: opts.emitterId || undefined,
+      documento: opts.documento,
       expiresIn: opts.expiresIn ?? 604800,
     });
   },
@@ -184,7 +191,10 @@ export const hubFiscal = {
   async file(
     hubDocumentId: string,
     format: 'pdf' | 'xml' | 'cancel_xml' = 'pdf',
-    opts: { type?: HubDocType; emitterId?: string | null; emissionId?: string | null } = {},
+    opts: {
+      type?: HubDocType; emitterId?: string | null; emissionId?: string | null;
+      documento?: 'Cancelamento' | 'CCe';
+    } = {},
   ): Promise<Blob> {
     const { data: session } = await supabase.auth.getSession();
     const token = session.session?.access_token;
@@ -200,6 +210,7 @@ export const hubFiscal = {
         action: 'file',
         id: hubDocumentId,
         format,
+        documento: opts.documento,
         type: opts.type,
         emitterId: opts.emitterId || undefined,
         emissionId: opts.emissionId || undefined,
