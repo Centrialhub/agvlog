@@ -43,6 +43,8 @@ interface ProxyRequest {
   query?: Record<string, string>;
   body?: Record<string, unknown>;
   format?: 'pdf' | 'xml' | 'cancel_xml';
+  /** CT-e: variante do XML/PDF no ManagerSaaS (EP-010/EP-012). */
+  documento?: 'Cancelamento' | 'CCe';
   /** deliver/links — arquivos pedidos sob demanda. */
   kinds?: ('pdf' | 'xml')[];
   mode?: 'url' | 'inline' | 'email' | 'callback';
@@ -397,15 +399,17 @@ Deno.serve(async (req) => {
           return fileResponse(buf, res.headers.get('Content-Type'));
         };
         const tryOnDemand = async (): Promise<Response | null> => {
-          if (format === 'cancel_xml') return null; // não suportado por deliver/links
+          // cancel_xml = XML do evento de cancelamento (kind=xml + documento=Cancelamento).
+          const kindOnDemand = format === 'cancel_xml' ? 'xml' : format;
+          const documento = payload.documento || (format === 'cancel_xml' ? 'Cancelamento' : undefined);
           const readFiles = (data: any) => (data?.files || data?.hub?.files || {}) as Record<string, any>;
           const consume = async (data: any): Promise<Response | null> => {
-            const entry = readFiles(data)[format];
+            const entry = readFiles(data)[kindOnDemand];
             if (!entry) return null;
             if (entry.pending) return null;
             const inlineB64 = entry.base64 || entry.content;
             if (typeof inlineB64 === 'string' && inlineB64.length > 0) {
-              if (format === 'xml' && inlineB64.trimStart().startsWith('<')) return fileResponse(inlineB64, 'application/xml');
+              if (kindOnDemand === 'xml' && inlineB64.trimStart().startsWith('<')) return fileResponse(inlineB64, 'application/xml');
               try { return fileResponse(b64ToBytes(inlineB64), entry.contentType); } catch { /* segue */ }
             }
             if (typeof entry.signedUrl === 'string' && entry.signedUrl) {
@@ -422,7 +426,8 @@ Deno.serve(async (req) => {
             const { status, data } = await callHub('POST', '/hub_documents_deliver', undefined, {
               id: payload.id,
               idIntegracao: payload.idIntegracao,
-              kinds: [format],
+              kinds: [kindOnDemand],
+              ...(documento ? { documento } : {}),
               mode: 'url',
               forceRefresh: true,
               expiresIn: 604800,
@@ -441,6 +446,7 @@ Deno.serve(async (req) => {
           try {
             const { status, data } = await callHub('GET', '/hub_documents_links', {
               id: payload.id, base64: '1', expiresIn: '604800',
+              ...(documento ? { documento } : {}),
             }, undefined, token);
             const got = await consume(data);
             if (got) {
@@ -537,9 +543,14 @@ Deno.serve(async (req) => {
 
         // 1) Rota documentada de download direto: GET /hub_documents_file?id=...&kind=pdf|xml.
         //    Serve do Storage quando disponível; senão o Hub baixa do provedor.
-        const kind = format === 'cancel_xml' ? 'cancel_xml' : format;
+        // EP-012: kind aceita pdf|xml; a variante do evento vai em documento=Cancelamento|CCe.
+        const kind = format === 'cancel_xml' ? 'xml' : format;
+        const fileDocumento = payload.documento || (format === 'cancel_xml' ? 'Cancelamento' : undefined);
         const attempts: { path: string; query: Record<string, string> }[] = [
-          { path: '/hub_documents_file', query: { id: payload.id, kind } },
+          {
+            path: '/hub_documents_file',
+            query: { id: payload.id, kind, ...(fileDocumento ? { documento: fileDocumento } : {}) },
+          },
         ];
 
         for (const attempt of attempts) {
@@ -702,6 +713,7 @@ Deno.serve(async (req) => {
           id: payload.id,
           idIntegracao: payload.idIntegracao,
           kinds: payload.kinds && payload.kinds.length ? payload.kinds : ['pdf', 'xml'],
+          ...(payload.documento ? { documento: payload.documento } : {}),
           mode: payload.mode || 'url',
           expiresIn: payload.expiresIn ?? 604800,
           forceRefresh: payload.forceRefresh ?? true,
@@ -716,6 +728,7 @@ Deno.serve(async (req) => {
         const query: Record<string, string> = { expiresIn: String(payload.expiresIn ?? 604800) };
         if (payload.id) query.id = payload.id;
         if (payload.idIntegracao) query.idIntegracao = payload.idIntegracao;
+        if (payload.documento) query.documento = payload.documento;
         const { status, data } = await callHub('GET', '/hub_documents_links', query, undefined, resolved.token);
         return json(status, { success: status < 400, hub: data });
       }
