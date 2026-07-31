@@ -559,10 +559,6 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
               </div>
             </div>
 
-            {totalServicos <= 0 && (
-              <></>
-            )}
-
             <div className="rounded-md border p-3 space-y-3">
               <div className="text-xs font-semibold text-muted-foreground">
                 Seguro da carga (impresso na discriminação da NFS-e)
