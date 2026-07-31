@@ -224,9 +224,10 @@ const TAKER_INDEX: Record<CteTakerRole, number> = {
  * Regras (layout CT-e SEFAZ):
  *  - Isento (CST 40/41/51 ou flag isento): vBC = 0, vICMS = 0.
  *  - Por fora (embutido=false): vBC = vTPrest, vICMS = vBC × pICMS/100.
- *  - Por dentro / embutido (embutido=true): vTPrest já contém o ICMS, então
- *      vBC = vTPrest / (1 − pICMS/100)
- *      vICMS = vBC × pICMS/100
+ *  - Por dentro / embutido (embutido=true): vTPrest é o total a receber e já
+ *    contém o ICMS. A base fiscal continua sendo vTPrest e o valor do imposto
+ *    é vTPrest × pICMS/100. O frete cru exibido nos componentes é calculado
+ *    separadamente como vTPrest − vICMS.
  *
  * `providedBase`/`providedValor` são respeitados apenas quando são coerentes
  * com o regime — caso o chamador ainda passe base = frete com embutido=true
@@ -246,15 +247,7 @@ export function computeIcmsAmounts(params: {
   const providedBase = params.providedBase != null ? Number(params.providedBase) : null;
   const providedValor = params.providedValor != null ? Number(params.providedValor) : null;
   if (embutido) {
-    // Base coerente com embutido: freight / (1 − aliq/100).
-    const coherentBase = freight / (1 - aliq / 100);
-    // Se o operador digitou uma base manual claramente diferente do frete,
-    // respeita. Caso contrário, recalcula (protege contra o bug antigo).
-    const useProvided =
-      providedBase != null &&
-      Math.abs(providedBase - freight) > 0.01 &&
-      Math.abs(providedBase - coherentBase) < 1;
-    const base = useProvided ? providedBase! : coherentBase;
+    const base = providedBase != null && providedBase > 0 ? providedBase : freight;
     const valor = base * (aliq / 100);
     return { base: round2(base), valor: round2(valor) };
   }
@@ -357,7 +350,9 @@ function buildComponentes(params: {
   const comp = params.composition || {};
   const items: { nome: string; valor: number }[] = [];
 
-  // Soma dos componentes acessórios informados (exclui frete peso e seguro %)
+  // Soma dos componentes acessórios informados (exclui frete peso e seguro %).
+  // O total a receber já contém ICMS; portanto FRETE PESO é o valor cru:
+  // total − ICMS − demais componentes.
   let accessories = 0;
   for (const [k, v] of Object.entries(comp)) {
     if (k === 'freight_weight' || k === 'insurance_pct') continue;
@@ -368,7 +363,7 @@ function buildComponentes(params: {
   const freightWeight =
     Number(comp.freight_weight || 0) > 0
       ? Number(comp.freight_weight)
-      : Math.max(params.freightValue - accessories, 0) || params.freightValue;
+      : Math.max(params.freightValue - Number(params.icmsValor || 0) - accessories, 0) || params.freightValue;
 
   items.push({ nome: COMPONENT_LABELS.freight_weight, valor: round2(freightWeight) });
 
@@ -458,12 +453,38 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
     }
   }
 
+  // Seguro é obrigatório no fluxo operacional do AGVLog: sem estes dados o
+  // Hub até pode autorizar, mas o bloco não é impresso no DACTE.
+  if (!input.insurer?.name) missing.push('Seguradora da carga');
+  if (!input.insurer?.policy) missing.push('Nº da apólice');
+  if (!input.insurer?.endorsement) missing.push('Nº da averbação');
+
   const componentes = buildComponentes({
     composition: input.freightComposition,
     freightValue: input.totals.freight_value,
     insuranceValue,
     icmsValor: (icmsBlock?.vICMS as number) ?? null,
   });
+  const totalServico = Number(input.totals.freight_value.toFixed(2));
+  const icmsValue = Number((Number(icmsBlock?.vICMS) || 0).toFixed(2));
+  const freteBase = Number(
+    (componentes.find((component) => component.nome === 'FRETE PESO')?.valor || 0).toFixed(2),
+  );
+  const seguroCarga = input.insurer
+    ? {
+        responsavel: 4,
+        respSeg: 4,
+        nome: input.insurer.name,
+        xSeg: input.insurer.name,
+        cnpj: digits(input.insurer.cnpj) || undefined,
+        apolice: input.insurer.policy || undefined,
+        nApol: input.insurer.policy || undefined,
+        averbacao: input.insurer.endorsement || undefined,
+        nAver: input.insurer.endorsement ? [input.insurer.endorsement] : undefined,
+        valorSegurado: insuredAmount ?? undefined,
+        valorSeguro: insuranceValue > 0 ? Number(insuranceValue.toFixed(2)) : undefined,
+      }
+    : undefined;
 
   const emitterRegimeRaw = (input.emitter?.taxRegime || '').toString().toLowerCase();
   const emitterIsSimples = emitterRegimeRaw === 'simples' || emitterRegimeRaw === 'mei';
@@ -510,16 +531,9 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
       expedidor: serializeParty(input.expedidor),
       recebedor: serializeParty(input.recebedor),
       consignatario: serializeParty(input.consignee),
-      seguradora: input.insurer
-        ? {
-            nome: input.insurer.name,
-            cnpj: digits(input.insurer.cnpj) || undefined,
-            apolice: input.insurer.policy || undefined,
-            averbacao: input.insurer.endorsement || undefined,
-            valorSegurado: insuredAmount ?? undefined,
-            valorSeguro: insuranceValue > 0 ? Number(insuranceValue.toFixed(2)) : undefined,
-          }
-        : undefined,
+      seguradora: seguroCarga,
+      seguro: seguroCarga,
+      seguros: seguroCarga ? [seguroCarga] : undefined,
       tomador: {
         tipo: TAKER_INDEX[input.takerRole],
         role: input.takerRole,
@@ -538,7 +552,15 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
         carretas: additionalPlates.length ? additionalPlates : undefined,
       },
       valores: {
-        valorFrete: Number(input.totals.freight_value.toFixed(2)),
+        valorFrete: totalServico,
+        freteBase,
+        valorFreteBase: freteBase,
+        valorIcms: icmsValue,
+        valorTotalServico: totalServico,
+        valorPrestacao: totalServico,
+        valorReceber: totalServico,
+        vTPrest: totalServico,
+        vRec: totalServico,
         valorCarga: Number((input.totals.cargo_value || 0).toFixed(2)),
         pesoBrutoKg: Number((input.totals.weight_kg || 0).toFixed(3)),
         pallets: input.totals.pallet_count || 0,
@@ -549,6 +571,15 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
       // Componentes do valor da prestação (DACTE) — FRETE PESO / SEGURO / ICMS em destaque
       componentes,
       componentesValorPrestacao: componentes,
+      // Estrutura canônica do grupo vPrest do CT-e, além dos aliases do Hub.
+      valorPrestacao: {
+        vTPrest: totalServico,
+        vRec: totalServico,
+        Comp: componentes.map((component) => ({
+          xNome: component.nome,
+          vComp: component.valor,
+        })),
+      },
       icms: icmsBlock,
       gnre: input.gnre
         ? Object.fromEntries(Object.entries(input.gnre).filter(([, v]) => v != null))

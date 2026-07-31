@@ -11,6 +11,7 @@ function baseInput(overrides: Partial<BuildCtePayloadInput> = {}): BuildCtePaylo
     },
     remitter: { name: 'JMacedo', cnpj: '14998371003215' },
     recipient: { name: 'COMERCIAL GALA', cnpj: '07734610000168' },
+    insurer: { name: 'AKAD SEGUROS', policy: 'AP-BASE', endorsement: 'AV-BASE' },
     takerRole: 'destinatario',
     driver: null,
     vehicle: null,
@@ -79,7 +80,7 @@ describe('cteBuilder — novos blocos', () => {
   });
 
   it('omite blocos vazios (undefined) do payload', () => {
-    const r = buildCtePayload(baseInput());
+    const r = buildCtePayload(baseInput({ insurer: null }));
     const p = (r.payload as any).payload;
     expect(p.seguradora).toBeUndefined();
     expect(p.composicaoFrete).toBeUndefined();
@@ -96,11 +97,10 @@ describe('cteBuilder — ICMS embutido (por dentro)', () => {
     expect(r.valor).toBeCloseTo(191.73, 2);
   });
 
-  it('computeIcmsAmounts: embutido faz gross-up da base', () => {
-    const r = computeIcmsAmounts({ freight: 3583.74, aliq: 5.35, embutido: true, isento: false });
-    // 3583.74 / (1 - 0.0535) ≈ 3786.31
-    expect(r.base).toBeCloseTo(3786.31, 1);
-    expect(r.valor).toBeCloseTo(202.57, 1);
+  it('computeIcmsAmounts: embutido usa o total a receber como base fiscal', () => {
+    const r = computeIcmsAmounts({ freight: 188.82, aliq: 18, embutido: true, isento: false });
+    expect(r.base).toBeCloseTo(188.82, 2);
+    expect(r.valor).toBeCloseTo(33.99, 2);
   });
 
   it('computeIcmsAmounts: isento zera mesmo com embutido=true', () => {
@@ -109,7 +109,7 @@ describe('cteBuilder — ICMS embutido (por dentro)', () => {
     expect(r.valor).toBe(0);
   });
 
-  it('computeIcmsAmounts: embutido ignora providedBase quando é o "frete cru" (bug antigo)', () => {
+  it('computeIcmsAmounts: embutido mantém a base fiscal informada', () => {
     const r = computeIcmsAmounts({
       freight: 3583.74,
       aliq: 5.35,
@@ -118,11 +118,11 @@ describe('cteBuilder — ICMS embutido (por dentro)', () => {
       providedBase: 3583.74,
       providedValor: 191.73,
     });
-    expect(r.base).toBeCloseTo(3786.31, 1);
-    expect(r.valor).toBeCloseTo(202.57, 1);
+    expect(r.base).toBeCloseTo(3583.74, 2);
+    expect(r.valor).toBeCloseTo(191.73, 2);
   });
 
-  it('buildCtePayload: embutido=true gera vBC grossed-up no bloco icms', () => {
+  it('buildCtePayload: embutido=true preserva total, imposto e frete cru', () => {
     const input: BuildCtePayloadInput = {
       emitter: { id: 'em1', cnpj: '18666510000168', name: 'X', environment: 'sandbox' },
       remitter: { name: 'R', cnpj: '14998371003215' },
@@ -132,17 +132,26 @@ describe('cteBuilder — ICMS embutido (por dentro)', () => {
       vehicle: null,
       nature: 'PRESTACAO',
       invoices: [{ access_key: '3'.repeat(44), number: '1', series: '1', value: 100 }],
-      totals: { freight_value: 3583.74, cargo_value: 100, weight_kg: 1, pallet_count: 0 },
-      icms: { cst: '00', aliquota: 5.35, base: 3583.74, valor: 191.73, embutido: true },
+      totals: { freight_value: 188.82, cargo_value: 100, weight_kg: 1, pallet_count: 0 },
+      icms: { cst: '00', aliquota: 18, embutido: true },
+      insurer: { name: 'AKAD', policy: 'AP-1', endorsement: 'AV-1' },
     };
     const r = buildCtePayload(input);
     expect(r.ok).toBe(true);
     const icms = (r.payload as any).payload.icms;
     expect(icms.embutido).toBe(true);
     expect(icms.indICMS).toBe(1);
-    expect(icms.vBC).toBeCloseTo(3786.31, 1);
-    expect(icms.vICMS).toBeCloseTo(202.57, 1);
-    expect(icms.pICMS).toBeCloseTo(5.35, 2);
+    expect(icms.vBC).toBeCloseTo(188.82, 2);
+    expect(icms.vICMS).toBeCloseTo(33.99, 2);
+    expect(icms.pICMS).toBeCloseTo(18, 2);
+    const p = (r.payload as any).payload;
+    expect(p.valores.valorFreteBase).toBe(154.83);
+    expect(p.valores.valorTotalServico).toBe(188.82);
+    expect(p.valores.valorReceber).toBe(188.82);
+    expect(p.valorPrestacao.Comp).toEqual([
+      { xNome: 'FRETE PESO', vComp: 154.83 },
+      { xNome: 'ICMS', vComp: 33.99 },
+    ]);
   });
 
   it('buildCtePayload: por fora mantém vBC = frete', () => {
@@ -216,10 +225,15 @@ describe('cteBuilder — componentes do valor da prestação', () => {
     expect(nomes).toContain('ICMS');
     expect(p.seguradora.valorSeguro).toBe(33.99);
     expect(p.seguradora.valorSegurado).toBe(1000);
+    expect(p.seguro.nApol).toBe('123');
+    expect(p.seguro.nAver).toEqual(['9']);
+    expect(p.seguros).toHaveLength(1);
   });
 
   it('avisa quando não há seguradora informada', () => {
-    const r = buildCtePayload(baseInput());
+    const r = buildCtePayload(baseInput({ insurer: null }));
     expect(r.warnings.join(' ')).toMatch(/Seguro da carga não informado/i);
+    expect(r.ok).toBe(false);
+    expect(r.missing).toEqual(expect.arrayContaining(['Seguradora da carga', 'Nº da apólice', 'Nº da averbação']));
   });
 });
