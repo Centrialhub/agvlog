@@ -11,6 +11,7 @@ function baseInput(overrides: Partial<BuildCtePayloadInput> = {}): BuildCtePaylo
     },
     remitter: { name: 'JMacedo', cnpj: '14998371003215' },
     recipient: { name: 'COMERCIAL GALA', cnpj: '07734610000168' },
+    insurer: { name: 'AKAD SEGUROS', policy: 'AP-BASE', endorsement: 'AV-BASE' },
     takerRole: 'destinatario',
     driver: null,
     vehicle: null,
@@ -230,7 +231,7 @@ describe('cteBuilder — componentes do valor da prestação', () => {
   });
 
   it('avisa quando não há seguradora informada', () => {
-    const r = buildCtePayload(baseInput());
+    const r = buildCtePayload(baseInput({ insurer: null }));
     expect(r.warnings.join(' ')).toMatch(/Seguro da carga não informado/i);
     expect(r.ok).toBe(false);
     expect(r.missing).toEqual(expect.arrayContaining(['Seguradora da carga', 'Nº da apólice', 'Nº da averbação']));
