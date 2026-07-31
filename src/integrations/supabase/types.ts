@@ -5552,6 +5552,12 @@ export type Database = {
           import_batch_id: string | null
           imported_at: string | null
           imported_note_status: string | null
+          insurance_premium: number | null
+          insured_amount: number | null
+          insurer_cnpj: string | null
+          insurer_endorsement: string | null
+          insurer_name: string | null
+          insurer_policy: string | null
           invoice_number: string | null
           invoice_series: string | null
           issue_date: string | null
@@ -5631,6 +5637,12 @@ export type Database = {
           import_batch_id?: string | null
           imported_at?: string | null
           imported_note_status?: string | null
+          insurance_premium?: number | null
+          insured_amount?: number | null
+          insurer_cnpj?: string | null
+          insurer_endorsement?: string | null
+          insurer_name?: string | null
+          insurer_policy?: string | null
           invoice_number?: string | null
           invoice_series?: string | null
           issue_date?: string | null
@@ -5710,6 +5722,12 @@ export type Database = {
           import_batch_id?: string | null
           imported_at?: string | null
           imported_note_status?: string | null
+          insurance_premium?: number | null
+          insured_amount?: number | null
+          insurer_cnpj?: string | null
+          insurer_endorsement?: string | null
+          insurer_name?: string | null
+          insurer_policy?: string | null
           invoice_number?: string | null
           invoice_series?: string | null
           issue_date?: string | null
@@ -6468,6 +6486,12 @@ export type Database = {
           hub_document_id: string | null
           id: string
           id_integracao: string | null
+          insurance_premium: number | null
+          insured_amount: number | null
+          insurer_cnpj: string | null
+          insurer_endorsement: string | null
+          insurer_name: string | null
+          insurer_policy: string | null
           last_callback: Json | null
           last_response: Json | null
           last_synced_at: string | null
@@ -6503,6 +6527,12 @@ export type Database = {
           hub_document_id?: string | null
           id?: string
           id_integracao?: string | null
+          insurance_premium?: number | null
+          insured_amount?: number | null
+          insurer_cnpj?: string | null
+          insurer_endorsement?: string | null
+          insurer_name?: string | null
+          insurer_policy?: string | null
           last_callback?: Json | null
           last_response?: Json | null
           last_synced_at?: string | null
@@ -6538,6 +6568,12 @@ export type Database = {
           hub_document_id?: string | null
           id?: string
           id_integracao?: string | null
+          insurance_premium?: number | null
+          insured_amount?: number | null
+          insurer_cnpj?: string | null
+          insurer_endorsement?: string | null
+          insurer_name?: string | null
+          insurer_policy?: string | null
           last_callback?: Json | null
           last_response?: Json | null
           last_synced_at?: string | null

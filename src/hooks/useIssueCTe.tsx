@@ -85,6 +85,15 @@ export function useIssueCTe() {
           cte_driver_id: input.driver?.id || null,
           cte_vehicle_id: input.vehicle?.id || null,
           cte_consignee_client_id: input.meta.consignee_client_id || null,
+          // Snapshot do seguro por emissão — garante que CT-e/DACTE e nota
+          // apresentem exatamente a seguradora, apólice e averbação auditadas.
+          insurer_name: input.insurer?.name || null,
+          insurer_cnpj: (input.insurer?.cnpj || '').replace(/\D/g, '') || null,
+          insurer_policy: input.insurer?.policy || null,
+          insurer_endorsement: input.insurer?.endorsement || null,
+          insured_amount:
+            input.insurer?.insured_amount ?? (input.totals.cargo_value || null),
+          insurance_premium: input.freightComposition?.insurance_value ?? null,
         } as any)
         .select()
         .single();
