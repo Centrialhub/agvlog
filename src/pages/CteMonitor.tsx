@@ -452,6 +452,9 @@ export default function CteMonitor() {
                     </td>
                     <td className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="inline-flex gap-1">
+                        <Button size="sm" variant="ghost" title="Visualizar DACTE (PDF)" onClick={() => downloadHubFile(r, 'pdf', { view: true })}>
+                          <Eye className="h-4 w-4" />
+                        </Button>
                         <Button size="sm" variant="ghost" title="Baixar PDF (DACTE)" onClick={() => downloadPdf(r)}>
                           <FileText className="h-4 w-4" />
                         </Button>
@@ -539,6 +542,9 @@ function CteDetail({ row, onClose }: { row: CteMonitorRow; onClose: () => void }
       </div>
 
       <div className="flex justify-end gap-2">
+        <Button variant="outline" size="sm" onClick={() => downloadHubFile(row, 'pdf', { view: true })}>
+          <Eye className="h-4 w-4" /> Visualizar
+        </Button>
         <Button variant="outline" size="sm" onClick={() => downloadHubFile(row, 'pdf')}>
           <FileText className="h-4 w-4" /> PDF
         </Button>
