@@ -15,6 +15,8 @@ import { useClients } from '@/hooks/useClients';
 import { useEmitters } from '@/hooks/useEmitters';
 import { useCreateNFSe, useIssueNFSe } from '@/hooks/useNFSe';
 import { useRecalculateInboundFreight } from '@/hooks/useRecalculateInboundFreight';
+import { formatCnpj, validateInsurance } from '@/lib/fiscal/insuranceValidation';
+import { hasInsuranceData } from '@/lib/fiscal/insuranceText';
 import { Calculator } from 'lucide-react';
 
 interface Props {
@@ -63,6 +65,13 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
   const [aliqIr, setAliqIr] = useState<number>(0);
   const [aliqCsll, setAliqCsll] = useState<number>(0);
   const [outrasRetencoes, setOutrasRetencoes] = useState<number>(0);
+  // Seguro da carga (mesmos campos do CT-e)
+  const [insurerName, setInsurerName] = useState('');
+  const [insurerCnpj, setInsurerCnpj] = useState('');
+  const [insurerPolicy, setInsurerPolicy] = useState('');
+  const [insurerEndorsement, setInsurerEndorsement] = useState('');
+  const [insuredAmount, setInsuredAmount] = useState<number>(0);
+  const [insurancePremium, setInsurancePremium] = useState<number>(0);
 
   const suppliers = useMemo(() => clients.filter((c: any) => c.is_supplier), [clients]);
   const clientList = useMemo(() => clients.filter((c: any) => c.is_client !== false), [clients]);
@@ -114,6 +123,33 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
   const valorLiquido = +(totalServicos - num(valorDeducoes) - totalRetencoes).toFixed(2);
 
   const missingFreight = selectedDocs.filter((d: any) => num(d.freight_value) <= 0).length;
+
+  // Pré-preenche o seguro a partir das NFs selecionadas (snapshot da emissão fiscal)
+  useEffect(() => {
+    const src = selectedDocs.find((d: any) => d.insurer_policy || d.insurer_name || d.insurer_cnpj) as any;
+    if (!src) return;
+    setInsurerName((v) => v || src.insurer_name || '');
+    setInsurerCnpj((v) => v || formatCnpj(src.insurer_cnpj || ''));
+    setInsurerPolicy((v) => v || src.insurer_policy || '');
+    setInsurerEndorsement((v) => v || src.insurer_endorsement || '');
+    setInsuredAmount((v) => v || num(src.insured_amount));
+    setInsurancePremium((v) => v || num(src.insurance_premium));
+  }, [selectedDocs]);
+
+  const insuranceCheck = useMemo(
+    () =>
+      hasInsuranceData({
+        insurer_name: insurerName,
+        insurer_cnpj: insurerCnpj,
+        insurer_policy: insurerPolicy,
+        insurer_endorsement: insurerEndorsement,
+        insured_amount: insuredAmount,
+        insurance_premium: insurancePremium,
+      })
+        ? validateInsurance({ name: insurerName, cnpj: insurerCnpj, policy: insurerPolicy, endorsement: insurerEndorsement })
+        : { ok: true, errors: {}, messages: [] },
+    [insurerName, insurerCnpj, insurerPolicy, insurerEndorsement, insuredAmount, insurancePremium],
+  );
 
   // Spinner do botão só reflete recálculo manual (clique do usuário).
   // O auto-recálculo em background não deve prender o botão.
@@ -176,6 +212,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
     if (!emitterId) { toast.error('Selecione o emitente fiscal'); return; }
     if (!tomador?.cnpj) { toast.error('Tomador sem CNPJ — cadastre o cliente/fornecedor'); return; }
     if (totalServicos <= 0) { toast.error('Valor de serviços deve ser maior que zero'); return; }
+    if (!insuranceCheck.ok) { toast.error(`Seguro: ${insuranceCheck.messages.join(' ')}`); return; }
 
     setIssuing(true);
     try {
@@ -214,6 +251,12 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
         valor_ir: valorIr,
         valor_csll: valorCsll,
         outras_retencoes: num(outrasRetencoes),
+        insurer_name: insurerName.trim() || null,
+        insurer_cnpj: insurerCnpj.replace(/\D/g, '') || null,
+        insurer_policy: insurerPolicy.trim() || null,
+        insurer_endorsement: insurerEndorsement.trim() || null,
+        insured_amount: num(insuredAmount) || null,
+        insurance_premium: num(insurancePremium) || null,
         items: selectedDocs.map((d: any) => ({
           description: `NF ${d.invoice_number || ''} — ${d.remitter || ''}`.trim(),
           quantity: 1,
@@ -514,6 +557,42 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
                 <div><div className="text-muted-foreground">IR</div><div className="font-medium tabular-nums">R$ {valorIr.toFixed(2)}</div></div>
                 <div><div className="text-muted-foreground">CSLL</div><div className="font-medium tabular-nums">R$ {valorCsll.toFixed(2)}</div></div>
                 <div><div className="text-muted-foreground">Retenções (total)</div><div className="font-semibold tabular-nums">R$ {totalRetencoes.toFixed(2)}</div></div>
+              </div>
+            </div>
+
+            <div className="rounded-md border p-3 space-y-3">
+              <div className="text-xs font-semibold text-muted-foreground">
+                Seguro da carga (impresso na discriminação da NFS-e)
+              </div>
+              <div className="grid grid-cols-6 gap-3">
+                <div className="col-span-2">
+                  <Label className="text-xs">Seguradora</Label>
+                  <Input value={insurerName} onChange={e => setInsurerName(e.target.value)} />
+                  {insuranceCheck.errors.name && <p className="text-xs text-destructive mt-1">{insuranceCheck.errors.name}</p>}
+                </div>
+                <div className="col-span-2">
+                  <Label className="text-xs">CNPJ da seguradora</Label>
+                  <Input value={insurerCnpj} onChange={e => setInsurerCnpj(formatCnpj(e.target.value))} placeholder="00.000.000/0000-00" />
+                  {insuranceCheck.errors.cnpj && <p className="text-xs text-destructive mt-1">{insuranceCheck.errors.cnpj}</p>}
+                </div>
+                <div>
+                  <Label className="text-xs">Apólice</Label>
+                  <Input value={insurerPolicy} onChange={e => setInsurerPolicy(e.target.value)} />
+                  {insuranceCheck.errors.policy && <p className="text-xs text-destructive mt-1">{insuranceCheck.errors.policy}</p>}
+                </div>
+                <div>
+                  <Label className="text-xs">Averbação</Label>
+                  <Input value={insurerEndorsement} onChange={e => setInsurerEndorsement(e.target.value)} />
+                  {insuranceCheck.errors.endorsement && <p className="text-xs text-destructive mt-1">{insuranceCheck.errors.endorsement}</p>}
+                </div>
+                <div className="col-span-2">
+                  <Label className="text-xs">Valor segurado (R$)</Label>
+                  <Input type="number" step="0.01" value={insuredAmount} onChange={e => setInsuredAmount(+e.target.value)} />
+                </div>
+                <div className="col-span-2">
+                  <Label className="text-xs">Prêmio do seguro (R$)</Label>
+                  <Input type="number" step="0.01" value={insurancePremium} onChange={e => setInsurancePremium(+e.target.value)} />
+                </div>
               </div>
             </div>
 
