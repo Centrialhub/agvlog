@@ -199,3 +199,27 @@ describe('cteBuilder — regime tributário do emitente', () => {
     expect((r.payload as any).payload.icms.regime).toBe('normal');
   });
 });
+describe('cteBuilder — componentes do valor da prestação', () => {
+  it('sempre inclui FRETE PESO e ICMS, e SEGURO quando cobrado', () => {
+    const r = buildCtePayload(
+      baseInput({
+        totals: { freight_value: 188.82, cargo_value: 1000, weight_kg: 10, pallet_count: 0 },
+        freightComposition: { insurance_value: 33.99 } as any,
+        icms: { cst: '00', aliquota: 12, embutido: false },
+        insurer: { name: 'AKAD', policy: '123', endorsement: '9' },
+      }),
+    );
+    const p = (r.payload as any).payload;
+    const nomes = p.componentes.map((c: any) => c.nome);
+    expect(nomes).toContain('FRETE PESO');
+    expect(nomes).toContain('SEGURO');
+    expect(nomes).toContain('ICMS');
+    expect(p.seguradora.valorSeguro).toBe(33.99);
+    expect(p.seguradora.valorSegurado).toBe(1000);
+  });
+
+  it('avisa quando não há seguradora informada', () => {
+    const r = buildCtePayload(baseInput());
+    expect(r.warnings.join(' ')).toMatch(/Seguro da carga não informado/i);
+  });
+});
