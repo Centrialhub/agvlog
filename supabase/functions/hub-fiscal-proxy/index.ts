@@ -284,17 +284,34 @@ Deno.serve(async (req) => {
           hubError?.code === 'NOT_CANCELABLE' ||
           /cancel_rejected|cannot be cancelled/i.test(String(hubError?.message || ''))
         );
-        if (cancelRejected && payload.fiscalDocumentId) {
+        const cancelFailed = status >= 400;
+        const rejectionMessage =
+          hubError?.technicalMessage ||
+          hubError?.message ||
+          (data as any)?.document?.message ||
+          'Cancelamento rejeitado pela SEFAZ';
+        if (cancelFailed && payload.fiscalDocumentId) {
+          const { data: currentDocument } = await admin.from('fiscal_documents')
+            .select('sefaz_status, sefaz_message')
+            .eq('id', payload.fiscalDocumentId)
+            .eq('tenant_id', tenantId)
+            .maybeSingle();
+          const previousMessage = currentDocument?.sefaz_message || '';
+          const shouldPreserveOriginal = cancelRejected &&
+            currentDocument?.sefaz_status === 'cancel_rejected' &&
+            previousMessage &&
+            !/cannot be cancelled|não pode ser cancelado/i.test(previousMessage);
           await admin.from('fiscal_documents').update({
             sefaz_status: 'cancel_rejected',
-            sefaz_message: hubError?.message || 'Cancelamento rejeitado pela SEFAZ',
+            sefaz_message: shouldPreserveOriginal ? previousMessage : rejectionMessage,
           }).eq('id', payload.fiscalDocumentId).eq('tenant_id', tenantId);
         }
-        if (status < 400 && payload.emissionId) {
+        if (payload.emissionId) {
           await admin.from('hub_fiscal_emissions').update({
-            status: 'cancelled',
+            status: status < 400 ? 'cancelled' : 'cancel_rejected',
+            message: status < 400 ? 'CT-e cancelado' : rejectionMessage,
             cancel_reason: reason,
-            cancelled_at: new Date().toISOString(),
+            cancelled_at: status < 400 ? new Date().toISOString() : null,
             last_response: data as any,
           }).eq('id', payload.emissionId).eq('tenant_id', tenantId);
         }

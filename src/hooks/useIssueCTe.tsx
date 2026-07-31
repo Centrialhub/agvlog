@@ -233,6 +233,18 @@ export function useCancelCTe() {
         }
         throw e;
       }
+      if (res?.success === false) {
+        const hubError = res?.hub?.error || res?.error;
+        const raw = [hubError?.code, hubError?.technicalMessage || hubError?.message]
+          .filter(Boolean)
+          .join(': ');
+        if (/NOT_CANCELABLE|cancel_rejected|cannot be cancelled/i.test(raw)) {
+          throw new Error(
+            'Este CT-e já possui uma rejeição de cancelamento registrada. Consulte o motivo exibido no status do documento; um novo pedido igual não é aceito pelo Hub.',
+          );
+        }
+        throw new Error(raw || 'O cancelamento foi recusado pela SEFAZ.');
+      }
       if (res?.success !== false) {
         await supabase
           .from('fiscal_documents')
