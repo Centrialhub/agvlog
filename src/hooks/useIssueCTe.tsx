@@ -218,6 +218,7 @@ export function useCancelCTe() {
           anyDoc.hub_document_id,
           args.justificativa.trim(),
           anyDoc.emission_id || undefined,
+          args.fiscalDocumentId,
         );
       } catch (e) {
         const raw = String((e as Error)?.message || e);
