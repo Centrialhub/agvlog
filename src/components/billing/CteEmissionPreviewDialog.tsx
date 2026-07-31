@@ -1065,9 +1065,9 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
               <TabsContent value="carga" className="space-y-3 pt-3">
                 <div className="grid grid-cols-4 gap-2">
                   <div>
-                    <Label>Frete a receber — com ICMS (R$)</Label>
-                    <Input type="number" step="0.01" value={active.freightValue}
-                      onChange={(e) => patch({ freightValue: Number(e.target.value) })} />
+                    <Label>Frete peso — frete base (R$)</Label>
+                    <Input type="number" step="0.01" value={Number(active.freightValue ?? 0).toFixed(2)}
+                      onChange={(e) => patch({ freightValue: Math.round(Number(e.target.value) * 100) / 100 })} />
                   </div>
                   <div>
                     <Label>Valor carga (R$)</Label>
