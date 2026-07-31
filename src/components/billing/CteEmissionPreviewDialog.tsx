@@ -237,52 +237,16 @@ function toBuildInput(
   environment: 'sandbox' | 'production' = 'sandbox',
   clients: any[] = [],
 ): BuildCtePayloadInput {
-  const digits = (v?: string | null) => (v || '').replace(/\D+/g, '');
-  const byCnpj = new Map<string, any>();
-  for (const c of clients) {
-    const k = digits(c?.tax_id);
-    if (k) byCnpj.set(k, c);
-  }
-  function addressFromClient(c: any) {
-    if (!c) return null;
-    return {
-      street: c.address_street || null,
-      number: c.address_number || null,
-      complement: c.address_complement || null,
-      neighborhood: c.address_neighborhood || null,
-      city: c.address_city || null,
-      state: c.address_state || null,
-      zip: c.address_zip || null,
-    };
-  }
-  function enrichParty(
+  // Completa lacunas das partes com o cadastro local (CNPJ, IE, endereço).
+  const registry = buildClientIndex(clients as any[]);
+  const enrichParty = (
     name: string,
     cnpj: string,
     fallbackAddress?: { city?: string | null; state?: string | null } | null,
     ieOverride?: string | null,
-  ) {
-    if (!name) return null;
-    const c = byCnpj.get(digits(cnpj));
-    const addr = addressFromClient(c);
-    return {
-      name,
-      cnpj: cnpj || c?.tax_id || null,
-      ie: (ieOverride && ieOverride.trim()) || c?.state_registration || null,
-      address:
-        addr ||
-        (fallbackAddress
-          ? {
-              street: null,
-              number: null,
-              complement: null,
-              neighborhood: null,
-              city: fallbackAddress.city || null,
-              state: fallbackAddress.state || null,
-              zip: null,
-            }
-          : null),
-    };
-  }
+    clientId?: string | null,
+  ) =>
+    resolveParty(registry, { id: clientId, name, cnpj, ie: ieOverride }, fallbackAddress);
   return {
     emitter: emitter
       ? {
@@ -308,8 +272,9 @@ function toBuildInput(
       e.recipientCnpj,
       { city: e.recipientCity, state: e.recipientState },
       e.recipientIe,
+      e.clientId,
     ),
-    consignee: enrichParty(e.consigneeName, e.consigneeCnpj),
+    consignee: enrichParty(e.consigneeName, e.consigneeCnpj, null, null, e.consigneeClientId),
     expedidor: enrichParty(e.expedidorName, e.expedidorCnpj),
     recebedor: enrichParty(e.recebedorName, e.recebedorCnpj),
     insurer: e.insurerName
