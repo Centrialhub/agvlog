@@ -1030,27 +1030,45 @@ function IssuedCtesTable() {
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                  {c.status === 'cancelled' || c.sefaz_status === 'cancel_rejected' ? (
-                    <span className="text-xs text-muted-foreground">—</span>
-                  ) : (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-destructive hover:text-destructive"
-                      disabled={!c.hub_document_id}
-                      title={c.hub_document_id ? 'Cancelar CT-e na SEFAZ' : 'CT-e ainda não transmitido ao Hub Fiscal'}
-                      onClick={() =>
-                        setCancelTarget({
-                          id: c.id,
-                          label: c.invoice_number ? `nº ${c.invoice_number}` : c.id.slice(0, 8),
-                          accessKey: c.access_key,
-                          notesCount: c.notes.length,
-                        })
-                      }
-                    >
-                      <XCircle className="h-4 w-4 mr-1" /> Cancelar
-                    </Button>
-                  )}
+                  <div className="flex items-center justify-end gap-1">
+                    {c.status !== 'cancelled' && c.sefaz_status !== 'cancel_rejected' && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive hover:text-destructive"
+                        disabled={!c.hub_document_id}
+                        title={c.hub_document_id ? 'Cancelar CT-e na SEFAZ' : 'CT-e ainda não transmitido ao Hub Fiscal'}
+                        onClick={() =>
+                          setCancelTarget({
+                            id: c.id,
+                            label: c.invoice_number ? `nº ${c.invoice_number}` : c.id.slice(0, 8),
+                            accessKey: c.access_key,
+                            notesCount: c.notes.length,
+                          })
+                        }
+                      >
+                        <XCircle className="h-4 w-4 mr-1" /> Cancelar
+                      </Button>
+                    )}
+                    {(c.status !== 'authorized' || c.sefaz_status === 'cancel_rejected' || c.sefaz_status === 'cancelled' || c.status === 'cancelled') && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive hover:text-destructive"
+                        title="Excluir registro local do CT-e e liberar as NFs vinculadas"
+                        onClick={() =>
+                          setDeleteTarget({
+                            id: c.id,
+                            label: c.invoice_number ? `nº ${c.invoice_number}` : c.id.slice(0, 8),
+                            notesCount: c.notes.length,
+                            authorized: c.sefaz_status === 'cancel_rejected',
+                          })
+                        }
+                      >
+                        <Trash2 className="h-4 w-4 mr-1" /> Excluir
+                      </Button>
+                    )}
+                  </div>
                 </TableCell>
               </TableRow>
               {open && (
