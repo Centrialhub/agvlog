@@ -770,6 +770,17 @@ export default function Billing() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
+            <FileText className="h-4 w-4 text-primary" /> CT-es transmitidos &amp; notas vinculadas
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <IssuedCtesTable />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
             <FileText className="h-4 w-4 text-primary" /> Lotes gerados
           </CardTitle>
         </CardHeader>
