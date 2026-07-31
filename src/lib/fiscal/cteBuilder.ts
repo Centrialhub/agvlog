@@ -587,6 +587,47 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
           })),
       },
       icms: icmsBlock,
+      // ---- Estruturas canônicas do layout CT-e (SEFAZ) ----------------
+      // Alguns mapeadores do Hub só reconhecem os nomes oficiais do schema.
+      // Enviamos os dois formatos para garantir que o DACTE saia preenchido
+      // com FRETE PESO / SEGURO / ICMS em destaque (e não um único
+      // componente genérico "Frete Valor" igual ao total).
+      ide: {
+        CRT: emitterRegimeCode,
+        toma: TAKER_INDEX[input.takerRole],
+        natOp: input.nature,
+        CFOP: input.cfop || undefined,
+      },
+      vPrest: {
+        vTPrest: totalServico,
+        vRec: totalServico,
+        Comp: componentes
+          .filter((component) => component.soma)
+          .map((component) => ({ xNome: component.nome, vComp: component.valor })),
+      },
+      imp: icmsBlock
+        ? {
+            ICMS: {
+              [`ICMS${icmsBlock.cst as string}`]: {
+                CST: icmsBlock.cst,
+                vBC: icmsBlock.vBC,
+                pICMS: icmsBlock.pICMS,
+                vICMS: icmsBlock.vICMS,
+              },
+            },
+            vTotTrib: icmsValue,
+          }
+        : undefined,
+      seg: seguroCarga
+        ? [
+            {
+              respSeg: 4,
+              xSeg: input.insurer?.name,
+              nApol: input.insurer?.policy || undefined,
+              nAver: input.insurer?.endorsement || undefined,
+            },
+          ]
+        : undefined,
       gnre: input.gnre
         ? Object.fromEntries(Object.entries(input.gnre).filter(([, v]) => v != null))
         : undefined,
