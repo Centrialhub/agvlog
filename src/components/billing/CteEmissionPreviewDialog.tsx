@@ -30,6 +30,11 @@ import {
   hasInsuranceProfile,
   preserveInsurerFields,
 } from '@/lib/fiscal/insuranceProfile';
+import {
+  buildClientIndex,
+  fillPartyFieldsFromRegistry,
+  resolveParty,
+} from '@/lib/fiscal/partyRegistry';
 
 /** Recalcula base/valor do ICMS respeitando o regime embutido (por dentro). */
 function recalcIcms(
