@@ -560,6 +560,46 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
             </div>
 
             {totalServicos <= 0 && (
+              <></>
+            )}
+
+            <div className="rounded-md border p-3 space-y-3">
+              <div className="text-xs font-semibold text-muted-foreground">
+                Seguro da carga (impresso na discriminação da NFS-e)
+              </div>
+              <div className="grid grid-cols-6 gap-3">
+                <div className="col-span-2">
+                  <Label className="text-xs">Seguradora</Label>
+                  <Input value={insurerName} onChange={e => setInsurerName(e.target.value)} />
+                  {insuranceCheck.errors.name && <p className="text-xs text-destructive mt-1">{insuranceCheck.errors.name}</p>}
+                </div>
+                <div className="col-span-2">
+                  <Label className="text-xs">CNPJ da seguradora</Label>
+                  <Input value={insurerCnpj} onChange={e => setInsurerCnpj(formatCnpj(e.target.value))} placeholder="00.000.000/0000-00" />
+                  {insuranceCheck.errors.cnpj && <p className="text-xs text-destructive mt-1">{insuranceCheck.errors.cnpj}</p>}
+                </div>
+                <div>
+                  <Label className="text-xs">Apólice</Label>
+                  <Input value={insurerPolicy} onChange={e => setInsurerPolicy(e.target.value)} />
+                  {insuranceCheck.errors.policy && <p className="text-xs text-destructive mt-1">{insuranceCheck.errors.policy}</p>}
+                </div>
+                <div>
+                  <Label className="text-xs">Averbação</Label>
+                  <Input value={insurerEndorsement} onChange={e => setInsurerEndorsement(e.target.value)} />
+                  {insuranceCheck.errors.endorsement && <p className="text-xs text-destructive mt-1">{insuranceCheck.errors.endorsement}</p>}
+                </div>
+                <div className="col-span-2">
+                  <Label className="text-xs">Valor segurado (R$)</Label>
+                  <Input type="number" step="0.01" value={insuredAmount} onChange={e => setInsuredAmount(+e.target.value)} />
+                </div>
+                <div className="col-span-2">
+                  <Label className="text-xs">Prêmio do seguro (R$)</Label>
+                  <Input type="number" step="0.01" value={insurancePremium} onChange={e => setInsurancePremium(+e.target.value)} />
+                </div>
+              </div>
+            </div>
+
+            {totalServicos <= 0 && (
               <div className="rounded-md border border-yellow-500/40 bg-yellow-500/10 p-3 text-sm text-yellow-800">
                 Valor de serviços está zerado. Volte ao passo 1 e clique em <strong>Recalcular frete</strong> para calcular
                 a partir da tabela de frete das NFs selecionadas.
