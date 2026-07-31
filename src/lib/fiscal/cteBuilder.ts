@@ -351,6 +351,7 @@ function buildIcmsBlock(
     pICMS: Number(aliq.toFixed(2)),
     vICMS: Number(valor.toFixed(2)),
     // Aliases legíveis mantidos por compatibilidade com o Hub Fiscal atual
+    baseCalculo: Number(base.toFixed(2)),
     base: Number(base.toFixed(2)),
     aliquota: Number(aliq.toFixed(2)),
     valor: Number(valor.toFixed(2)),
@@ -360,6 +361,13 @@ function buildIcmsBlock(
     indICMS: embutido ? 1 : 0,
     indIEToma: embutido ? 1 : 0,
   };
+
+  // Motivo da desoneração (motDesICMS) — obrigatório nos CST isentos/não tributados.
+  if (isento) {
+    const motivo = (icms as { motivo?: string | number | null }).motivo ?? 12; // 12 = Outros
+    block.motivo = motivo;
+    block.motDesICMS = motivo;
+  }
 
   // Substituição tributária (opcional)
   if (icms.st_base != null || icms.st_aliquota != null || icms.st_valor != null) {
