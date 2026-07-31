@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useBillingDocuments } from '@/hooks/useBillingDocuments';
 import { useClients } from '@/hooks/useClients';
 import { useLoads, LOAD_STATUSES, LOAD_STATUS_LABELS } from '@/hooks/useLoads';
@@ -991,9 +991,8 @@ function IssuedCtesTable() {
         {ctes.map(c => {
           const open = !!expanded[c.id];
           return (
-            <>
+            <Fragment key={c.id}>
               <TableRow
-                key={c.id}
                 className="cursor-pointer"
                 onClick={() => setExpanded(p => ({ ...p, [c.id]: !open }))}
               >
@@ -1026,7 +1025,7 @@ function IssuedCtesTable() {
                 </TableCell>
               </TableRow>
               {open && (
-                <TableRow key={`${c.id}-notes`}>
+                <TableRow>
                   <TableCell colSpan={8} className="bg-muted/30">
                     {c.notes.length === 0 ? (
                       <p className="text-xs text-muted-foreground py-2">
@@ -1047,7 +1046,7 @@ function IssuedCtesTable() {
                   </TableCell>
                 </TableRow>
               )}
-            </>
+            </Fragment>
           );
         })}
       </TableBody>
