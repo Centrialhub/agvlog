@@ -298,16 +298,77 @@ Deno.serve(async (req) => {
         if (!payload.id) return json(400, { success: false, error: { code: 'MISSING_ID' } });
         const format = payload.format || 'pdf';
         const resolved = await resolveToken(payload.type || 'all', payload.emitterId);
-        // Stream file content back to the caller.
+        const token = resolved.token || DEFAULT_HUB_KEY;
+        if (!token) {
+          return json(400, {
+            success: false,
+            error: { code: 'NO_HUB_TOKEN', message: 'Nenhum token do Hub Fiscal configurado para este emitente.' },
+          });
+        }
+        console.log('[hub-fiscal-proxy] file', {
+          id: payload.id, format, emitter_id: resolved.emitter_id, source: resolved.source,
+        });
         const url = buildUrl('/hub_documents_file', { id: payload.id, format });
-        const upstream = await fetch(url, { headers: { Authorization: `Bearer ${resolved.token || DEFAULT_HUB_KEY}` } });
+        const upstream = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+        const ct = upstream.headers.get('Content-Type') || '';
         const buf = await upstream.arrayBuffer();
+
+        // O Hub pode responder com JSON: erro, { url } assinada, ou { base64 }.
+        if (ct.includes('application/json')) {
+          let parsed: any = {};
+          try { parsed = JSON.parse(new TextDecoder().decode(buf)); } catch { /* ignore */ }
+          const b64 = parsed?.base64 || parsed?.content || parsed?.document?.base64;
+          const fileUrl = parsed?.url || parsed?.fileUrl || parsed?.document?.url;
+          if (upstream.ok && typeof b64 === 'string' && b64.length > 0) {
+            const bytes = Uint8Array.from(atob(b64.replace(/^data:[^,]+,/, '')), (c) => c.charCodeAt(0));
+            return new Response(bytes, {
+              status: 200,
+              headers: {
+                ...corsHeaders,
+                'Content-Type': format === 'pdf' ? 'application/pdf' : 'application/xml',
+                'Content-Disposition': `attachment; filename="hub-${payload.id}.${format}"`,
+              },
+            });
+          }
+          if (upstream.ok && typeof fileUrl === 'string' && fileUrl.length > 0) {
+            const follow = await fetch(fileUrl);
+            if (follow.ok) {
+              return new Response(await follow.arrayBuffer(), {
+                status: 200,
+                headers: {
+                  ...corsHeaders,
+                  'Content-Type': follow.headers.get('Content-Type') ||
+                    (format === 'pdf' ? 'application/pdf' : 'application/xml'),
+                  'Content-Disposition': `attachment; filename="hub-${payload.id}.${format}"`,
+                },
+              });
+            }
+          }
+          const message =
+            parsed?.error?.message || parsed?.message || parsed?.error ||
+            `Hub Fiscal retornou ${upstream.status} sem conteúdo de arquivo.`;
+          return json(upstream.ok ? 502 : upstream.status, {
+            success: false,
+            error: { code: 'HUB_FILE_ERROR', message: String(message), hub: parsed },
+          });
+        }
+
+        if (!upstream.ok || buf.byteLength === 0) {
+          const text = new TextDecoder().decode(buf).slice(0, 500);
+          return json(upstream.ok ? 502 : upstream.status, {
+            success: false,
+            error: {
+              code: 'HUB_FILE_ERROR',
+              message: text || `Hub Fiscal retornou ${upstream.status} ao baixar o ${format.toUpperCase()}.`,
+            },
+          });
+        }
+
         return new Response(buf, {
-          status: upstream.status,
+          status: 200,
           headers: {
             ...corsHeaders,
-            'Content-Type': upstream.headers.get('Content-Type') ||
-              (format === 'pdf' ? 'application/pdf' : 'application/xml'),
+            'Content-Type': ct || (format === 'pdf' ? 'application/pdf' : 'application/xml'),
             'Content-Disposition': `attachment; filename="hub-${payload.id}.${format}"`,
           },
         });
