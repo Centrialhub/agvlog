@@ -455,37 +455,30 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     items.some((it) => !it.insurerName || !it.insurerCnpj || !it.insurerPolicy),
   ]);
 
-  // Auto-preenche IE de remetente/destinatário a partir do cadastro de clientes/fornecedores
+  // Auto-preenche nome, CNPJ, IE, cidade e UF de remetente/destinatário a partir
+  // do cadastro local (clientes/fornecedores) quando a NF veio incompleta.
   useEffect(() => {
     if (!open || items.length === 0 || clients.length === 0) return;
-    const digitsOnly = (v?: string | null) => (v || '').replace(/\D+/g, '');
-    const byCnpj = new Map<string, any>();
-    for (const c of clients as any[]) {
-      const k = digitsOnly(c?.tax_id);
-      if (k) byCnpj.set(k, c);
-    }
+    const registry = buildClientIndex(clients as any[]);
     let changed = false;
     const next = items.map((it) => {
-      let out = it;
-      if (!out.remitterIe) {
-        const c = byCnpj.get(digitsOnly(out.remitterCnpj));
-        if (c?.state_registration) {
-          out = { ...out, remitterIe: String(c.state_registration) };
-          changed = true;
-        }
-      }
-      if (!out.recipientIe) {
-        const c = byCnpj.get(digitsOnly(out.recipientCnpj));
-        if (c?.state_registration) {
-          out = { ...out, recipientIe: String(c.state_registration) };
-          changed = true;
-        }
-      }
-      return out;
+      const r = fillPartyFieldsFromRegistry(it, registry);
+      if (r.changed) changed = true;
+      return r.item;
     });
     if (changed) setItems(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, clients, items.length]);
+  }, [
+    open,
+    clients,
+    items.length,
+    // Reaplica quando itens são repopulados pelo RPC assíncrono e ficam sem dados.
+    items.some(
+      (it) =>
+        !it.remitterCnpj || !it.remitterIe || !it.recipientCnpj || !it.recipientIe ||
+        !it.recipientCity || !it.recipientState,
+    ),
+  ]);
 
   const active = items[activeIdx];
   const emitterForActive = useMemo(
