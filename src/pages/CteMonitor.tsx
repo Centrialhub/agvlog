@@ -78,7 +78,9 @@ function Field({ label, children, className = '' }: { label: string; children: R
   );
 }
 
-const DEFAULT_STATUSES: SefazStatus[] = ['pending', 'sent_error', 'processed_error', 'cancel_error'];
+// Mostra todos os status por padrão — CT-es autorizadas (processed) precisam
+// aparecer no monitor para download de PDF/XML.
+const DEFAULT_STATUSES: SefazStatus[] = [];
 
 export default function CteMonitor() {
   const [filters, setFilters] = useState<CteMonitorFilters>({
@@ -87,9 +89,50 @@ export default function CteMonitor() {
   });
   const [draft, setDraft] = useState<CteMonitorFilters>(filters);
   const [selected, setSelected] = useState<CteMonitorRow | null>(null);
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const { data: rows = [], isLoading, refetch, isFetching } = useCteMonitor(filters);
   const resend = useResendCte();
+
+  const downloadableRows = useMemo(() => rows.filter((r) => r.hub_document_id || r.pdf_url || r.xml_url), [rows]);
+  const checkedRows = useMemo(() => rows.filter((r) => checked.has(r.id)), [rows, checked]);
+
+  function toggleRow(id: string) {
+    setChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    setChecked((prev) =>
+      prev.size === downloadableRows.length ? new Set() : new Set(downloadableRows.map((r) => r.id)),
+    );
+  }
+
+  async function bulkDownload(format: 'pdf' | 'xml') {
+    if (checkedRows.length === 0) return;
+    setBulkBusy(true);
+    let ok = 0;
+    let fail = 0;
+    const toastId = toast.loading(`Baixando ${checkedRows.length} arquivo(s) ${format.toUpperCase()}...`);
+    for (const row of checkedRows) {
+      try {
+        await downloadHubFile(row, format, { silent: true });
+        ok++;
+      } catch {
+        fail++;
+      }
+      // Evita bloqueio de downloads simultâneos pelo navegador.
+      await new Promise((r) => setTimeout(r, 350));
+    }
+    setBulkBusy(false);
+    if (fail === 0) toast.success(`${ok} arquivo(s) ${format.toUpperCase()} baixado(s)`, { id: toastId });
+    else toast.warning(`${ok} baixado(s), ${fail} falha(s)`, { id: toastId });
+  }
 
   const counts = useMemo(() => {
     const c = { total: rows.length, errors: 0, processed: 0, pending: 0, cancelled: 0 };
@@ -109,6 +152,7 @@ export default function CteMonitor() {
     const cleared: CteMonitorFilters = { statuses: DEFAULT_STATUSES, correctionLetter: 'all' };
     setDraft(cleared);
     setFilters(cleared);
+    setChecked(new Set());
   }
 
   function toggleStatus(s: SefazStatus) {
