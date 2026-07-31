@@ -20,6 +20,7 @@ import {
   Activity, Wifi, Link2, Unlink, Radio,
 } from 'lucide-react';
 import { CompanySettings } from '@/components/settings/CompanySettings';
+import { InsuranceSettings } from '@/components/settings/InsuranceSettings';
 import EmittersSettings from '@/components/settings/EmittersSettings';
 
 export default function Settings() {
@@ -40,7 +41,10 @@ export default function Settings() {
           <TabsTrigger value="logs">Logs</TabsTrigger>
           <TabsTrigger value="maintenance">Manutenção</TabsTrigger>
         </TabsList>
-        <TabsContent value="company" className="mt-4"><CompanySettings /></TabsContent>
+        <TabsContent value="company" className="mt-4 space-y-4">
+          <CompanySettings />
+          <InsuranceSettings />
+        </TabsContent>
         <TabsContent value="emitters" className="mt-4"><EmittersSettings /></TabsContent>
         <TabsContent value="integration" className="mt-4"><IntegrationSection /></TabsContent>
         <TabsContent value="units" className="mt-4"><UnitsSection /></TabsContent>
