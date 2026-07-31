@@ -318,10 +318,42 @@ export default function CteMonitor() {
 
         {/* Tabela */}
         <Card className="overflow-hidden">
+          <div className="flex items-center justify-between gap-3 flex-wrap border-b bg-muted/30 px-3 py-2">
+            <span className="text-sm text-muted-foreground">
+              {checkedRows.length > 0
+                ? `${checkedRows.length} CT-e(s) selecionado(s)`
+                : 'Selecione CT-es para emitir PDF/XML em massa'}
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={checkedRows.length === 0 || bulkBusy}
+                onClick={() => bulkDownload('pdf')}
+              >
+                <FileText className="h-4 w-4" /> PDF em massa
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={checkedRows.length === 0 || bulkBusy}
+                onClick={() => bulkDownload('xml')}
+              >
+                <FileDown className="h-4 w-4" /> XML em massa
+              </Button>
+            </div>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-muted/50 text-xs uppercase">
                 <tr>
+                  <th className="px-3 py-2 w-8">
+                    <Checkbox
+                      checked={downloadableRows.length > 0 && checked.size === downloadableRows.length}
+                      onCheckedChange={toggleAll}
+                      aria-label="Selecionar todos"
+                    />
+                  </th>
                   <th className="text-left px-3 py-2">Status</th>
                   <th className="text-left px-3 py-2">Nº CT-e</th>
                   <th className="text-left px-3 py-2">Série</th>
@@ -337,10 +369,10 @@ export default function CteMonitor() {
               </thead>
               <tbody>
                 {isLoading && (
-                  <tr><td colSpan={11} className="text-center text-muted-foreground py-8">Carregando…</td></tr>
+                  <tr><td colSpan={12} className="text-center text-muted-foreground py-8">Carregando…</td></tr>
                 )}
                 {!isLoading && rows.length === 0 && (
-                  <tr><td colSpan={11} className="text-center text-muted-foreground py-8">Nenhum CT-e encontrado com os filtros atuais.</td></tr>
+                  <tr><td colSpan={12} className="text-center text-muted-foreground py-8">Nenhum CT-e encontrado com os filtros atuais.</td></tr>
                 )}
                 {rows.map((r) => (
                   <tr
@@ -348,6 +380,14 @@ export default function CteMonitor() {
                     className="border-t hover:bg-muted/30 cursor-pointer"
                     onClick={() => setSelected(r)}
                   >
+                    <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={checked.has(r.id)}
+                        onCheckedChange={() => toggleRow(r.id)}
+                        disabled={!r.hub_document_id && !r.pdf_url && !r.xml_url}
+                        aria-label="Selecionar CT-e"
+                      />
+                    </td>
                     <td className="px-3 py-2"><StatusPill status={r.sefaz_status} /></td>
                     <td className="px-3 py-2 font-mono">{r.cte_number ?? '—'}</td>
                     <td className="px-3 py-2">{r.cte_series ?? '—'}</td>
