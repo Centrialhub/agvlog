@@ -465,8 +465,8 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, groupsSignature, defaultEmitter?.id]);
 
-  // Aplica a seguradora padrão salva (nome, CNPJ e apólice) em todos os CT-es do lote.
-  // A averbação (CGC) continua por CT-e e nunca é replicada.
+  // Aplica a seguradora padrão salva em todos os CT-es do lote. O CNPJ da
+  // seguradora também é usado como Nº de averbação/CGC quando o campo está vazio.
   useEffect(() => {
     if (!open || !hasInsuranceProfile(insuranceProfile)) return;
     setItems((prev) => {
@@ -481,7 +481,13 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     items.length,
     // Reaplica sempre que algum CT-e do lote estiver sem seguradora/CNPJ/apólice
     // (ex.: itens repopulados pelo RPC assíncrono ou troca de lote).
-    items.some((it) => !it.insurerName || !it.insurerCnpj || !it.insurerPolicy),
+    items.some(
+      (it) =>
+        !it.insurerName ||
+        !it.insurerCnpj ||
+        !it.insurerPolicy ||
+        !it.insurerEndorsement,
+    ),
   ]);
 
   // Auto-preenche nome, CNPJ, IE, cidade e UF de remetente/destinatário a partir
@@ -917,7 +923,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                     )}
                   </div>
                   <div>
-                    <Label>Nº averbação / CGC (por CT-e)</Label>
+                    <Label>Nº averbação / CGC</Label>
                     <Input value={active.insurerEndorsement} onChange={(e) => patch({ insurerEndorsement: e.target.value })} />
                     {insuranceErrors.endorsement && (
                       <p className="text-[11px] text-destructive">{insuranceErrors.endorsement}</p>
@@ -980,13 +986,13 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                     </Button>
                   )}
                   <span className="text-[11px] text-muted-foreground">
-                    Seguradora, CNPJ e apólice ficam salvos para todos os CT-es. O nº da averbação (CGC) muda por CT-e.
+                    Seguradora, CNPJ e apólice ficam salvos para todos os CT-es. O CNPJ preenche também a averbação/CGC.
                   </span>
                 </div>
                 {Object.keys(insuranceErrors).length > 0 && (
                   <p className="text-[11px] text-amber-600">
                     O DACTE só imprime o bloco de seguro com seguradora, CNPJ, nº da apólice e nº da averbação válidos —
-                    a emissão fica bloqueada até a correção. A averbação (CGC) é por CT-e e não é replicada no lote.
+                    a emissão fica bloqueada até a correção.
                   </p>
                 )}
               </TabsContent>

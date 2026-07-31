@@ -65,10 +65,14 @@ describe('mergeInsurerFields', () => {
     expect(r.insurerName).toBe('AKAD SEGUROS');
   });
 
-  it('nunca toca na averbação (CGC), que é por CT-e', () => {
+  it('preenche a averbação/CGC com o CNPJ da seguradora', () => {
     const r = mergeInsurerFields(item({ insurerEndorsement: 'AV-1' }), PROFILE, true);
+    expect(r.insurerEndorsement).toBe('18666510000168');
+  });
+
+  it('preserva averbação editada manualmente no preenchimento automático', () => {
+    const r = mergeInsurerFields(item({ insurerEndorsement: 'AV-1' }), PROFILE);
     expect(r.insurerEndorsement).toBe('AV-1');
-    expect((PROFILE as any).endorsement).toBeUndefined();
   });
 });
 
@@ -83,16 +87,20 @@ describe('applyInsuranceProfileToBatch', () => {
       expect(it.insurerName).toBe('AKAD SEGUROS');
       expect(it.insurerCnpj).toBe('18666510000168');
       expect(it.insurerPolicy).toBe('2798202301065400079');
+      expect(it.insurerEndorsement).toBe('18666510000168');
     }
   });
 
-  it('mantém averbações distintas por CT-e', () => {
+  it('usar padrão salvo força a averbação/CGC para o CNPJ', () => {
     const { items } = applyInsuranceProfileToBatch(
       [item({ id: 'a', insurerEndorsement: 'AV-1' }), item({ id: 'b', insurerEndorsement: 'AV-2' })],
       PROFILE,
       true,
     );
-    expect(items.map((i) => i.insurerEndorsement)).toEqual(['AV-1', 'AV-2']);
+    expect(items.map((i) => i.insurerEndorsement)).toEqual([
+      '18666510000168',
+      '18666510000168',
+    ]);
   });
 
   it('não sinaliza mudança quando já está aplicado (evita loop de estado)', () => {
@@ -118,6 +126,7 @@ describe('preserveInsurerFields', () => {
     expect(r.insurerName).toBe('AKAD SEGUROS');
     expect(r.insurerCnpj).toBe('18666510000168');
     expect(r.insurerPolicy).toBe('AP-9');
+    expect(r.insurerEndorsement).toBe('');
   });
 
   it('usa o valor do RPC quando o estado atual está vazio', () => {

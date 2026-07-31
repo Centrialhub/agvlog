@@ -1,7 +1,7 @@
 /**
  * Aplicação do perfil da seguradora (padrão do tenant) ao lote de CT-es.
- * Nome, CNPJ e apólice são compartilhados por todo o lote; a averbação (CGC)
- * é sempre por CT-e e NUNCA é replicada aqui.
+ * Nome, CNPJ e apólice são compartilhados por todo o lote. Neste fluxo, o
+ * número da averbação/CGC usa o CNPJ da seguradora como valor padrão.
  */
 
 import { onlyDigits } from './insuranceValidation';
@@ -17,6 +17,7 @@ export interface InsurerFields {
   insurerName: string;
   insurerCnpj: string;
   insurerPolicy: string;
+  insurerEndorsement: string;
 }
 
 export function normalizeInsuranceProfile(
@@ -52,6 +53,7 @@ export function mergeInsurerFields<T extends InsurerFields>(
     insurerName: pick(item.insurerName, p.name),
     insurerCnpj: pick(item.insurerCnpj, p.cnpj),
     insurerPolicy: pick(item.insurerPolicy, p.policy),
+    insurerEndorsement: pick(item.insurerEndorsement, p.cnpj),
   };
 }
 
@@ -71,7 +73,8 @@ export function applyInsuranceProfileToBatch<T extends InsurerFields>(
     if (
       merged.insurerName !== it.insurerName ||
       merged.insurerCnpj !== it.insurerCnpj ||
-      merged.insurerPolicy !== it.insurerPolicy
+      merged.insurerPolicy !== it.insurerPolicy ||
+      merged.insurerEndorsement !== it.insurerEndorsement
     ) {
       changed = true;
       return merged;
@@ -92,5 +95,7 @@ export function preserveInsurerFields<T extends InsurerFields>(current: T, incom
     insurerName: (current.insurerName || '').trim() || incoming.insurerName,
     insurerCnpj: (current.insurerCnpj || '').trim() || incoming.insurerCnpj,
     insurerPolicy: (current.insurerPolicy || '').trim() || incoming.insurerPolicy,
+    insurerEndorsement:
+      (current.insurerEndorsement || '').trim() || incoming.insurerEndorsement,
   };
 }
