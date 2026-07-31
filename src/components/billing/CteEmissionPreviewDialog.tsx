@@ -30,6 +30,11 @@ import {
   hasInsuranceProfile,
   preserveInsurerFields,
 } from '@/lib/fiscal/insuranceProfile';
+import {
+  buildClientIndex,
+  fillPartyFieldsFromRegistry,
+  resolveParty,
+} from '@/lib/fiscal/partyRegistry';
 
 /** Recalcula base/valor do ICMS respeitando o regime embutido (por dentro). */
 function recalcIcms(
@@ -237,52 +242,16 @@ function toBuildInput(
   environment: 'sandbox' | 'production' = 'sandbox',
   clients: any[] = [],
 ): BuildCtePayloadInput {
-  const digits = (v?: string | null) => (v || '').replace(/\D+/g, '');
-  const byCnpj = new Map<string, any>();
-  for (const c of clients) {
-    const k = digits(c?.tax_id);
-    if (k) byCnpj.set(k, c);
-  }
-  function addressFromClient(c: any) {
-    if (!c) return null;
-    return {
-      street: c.address_street || null,
-      number: c.address_number || null,
-      complement: c.address_complement || null,
-      neighborhood: c.address_neighborhood || null,
-      city: c.address_city || null,
-      state: c.address_state || null,
-      zip: c.address_zip || null,
-    };
-  }
-  function enrichParty(
+  // Completa lacunas das partes com o cadastro local (CNPJ, IE, endereço).
+  const registry = buildClientIndex(clients as any[]);
+  const enrichParty = (
     name: string,
     cnpj: string,
     fallbackAddress?: { city?: string | null; state?: string | null } | null,
     ieOverride?: string | null,
-  ) {
-    if (!name) return null;
-    const c = byCnpj.get(digits(cnpj));
-    const addr = addressFromClient(c);
-    return {
-      name,
-      cnpj: cnpj || c?.tax_id || null,
-      ie: (ieOverride && ieOverride.trim()) || c?.state_registration || null,
-      address:
-        addr ||
-        (fallbackAddress
-          ? {
-              street: null,
-              number: null,
-              complement: null,
-              neighborhood: null,
-              city: fallbackAddress.city || null,
-              state: fallbackAddress.state || null,
-              zip: null,
-            }
-          : null),
-    };
-  }
+    clientId?: string | null,
+  ) =>
+    resolveParty(registry, { id: clientId, name, cnpj, ie: ieOverride }, fallbackAddress);
   return {
     emitter: emitter
       ? {
@@ -308,8 +277,9 @@ function toBuildInput(
       e.recipientCnpj,
       { city: e.recipientCity, state: e.recipientState },
       e.recipientIe,
+      e.clientId,
     ),
-    consignee: enrichParty(e.consigneeName, e.consigneeCnpj),
+    consignee: enrichParty(e.consigneeName, e.consigneeCnpj, null, null, e.consigneeClientId),
     expedidor: enrichParty(e.expedidorName, e.expedidorCnpj),
     recebedor: enrichParty(e.recebedorName, e.recebedorCnpj),
     insurer: e.insurerName
@@ -485,37 +455,30 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     items.some((it) => !it.insurerName || !it.insurerCnpj || !it.insurerPolicy),
   ]);
 
-  // Auto-preenche IE de remetente/destinatário a partir do cadastro de clientes/fornecedores
+  // Auto-preenche nome, CNPJ, IE, cidade e UF de remetente/destinatário a partir
+  // do cadastro local (clientes/fornecedores) quando a NF veio incompleta.
   useEffect(() => {
     if (!open || items.length === 0 || clients.length === 0) return;
-    const digitsOnly = (v?: string | null) => (v || '').replace(/\D+/g, '');
-    const byCnpj = new Map<string, any>();
-    for (const c of clients as any[]) {
-      const k = digitsOnly(c?.tax_id);
-      if (k) byCnpj.set(k, c);
-    }
+    const registry = buildClientIndex(clients as any[]);
     let changed = false;
     const next = items.map((it) => {
-      let out = it;
-      if (!out.remitterIe) {
-        const c = byCnpj.get(digitsOnly(out.remitterCnpj));
-        if (c?.state_registration) {
-          out = { ...out, remitterIe: String(c.state_registration) };
-          changed = true;
-        }
-      }
-      if (!out.recipientIe) {
-        const c = byCnpj.get(digitsOnly(out.recipientCnpj));
-        if (c?.state_registration) {
-          out = { ...out, recipientIe: String(c.state_registration) };
-          changed = true;
-        }
-      }
-      return out;
+      const r = fillPartyFieldsFromRegistry(it, registry);
+      if (r.changed) changed = true;
+      return r.item;
     });
     if (changed) setItems(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, clients, items.length]);
+  }, [
+    open,
+    clients,
+    items.length,
+    // Reaplica quando itens são repopulados pelo RPC assíncrono e ficam sem dados.
+    items.some(
+      (it) =>
+        !it.remitterCnpj || !it.remitterIe || !it.recipientCnpj || !it.recipientIe ||
+        !it.recipientCity || !it.recipientState,
+    ),
+  ]);
 
   const active = items[activeIdx];
   const emitterForActive = useMemo(
