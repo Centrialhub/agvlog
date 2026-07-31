@@ -378,7 +378,13 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
     emitterCnpj: digits(input.emitter?.cnpj) || undefined,
     environment: input.emitter?.environment || 'sandbox',
     externalId: input.externalId || undefined,
+    // Regime tributário do emitente — o Hub usa isso para a "Classificação
+    // Tributária do Serviço" do DACTE. Sem ele o Hub cai no cadastro da
+    // empresa (Simples Nacional) e o ICMS não é impresso.
+    regimeTributario: emitterRegimeCode,
     payload: {
+      regimeTributario: emitterRegimeCode,
+      crt: emitterRegimeCode,
       tipoCtrc: input.documentType || '01',
       naturezaOperacao: input.nature,
       cfop: input.cfop || undefined,
