@@ -187,6 +187,10 @@ Deno.serve(async (req) => {
         const { status, data } = await callHub('POST', '/hub_documents_emit', { type }, body, resolved.token);
 
         const doc = (data as any)?.document || {};
+        // Snapshot do bloco de seguro (seguradora/apólice/averbação) para auditoria
+        const inner = ((body as any).payload || {}) as Record<string, any>;
+        const seg = (inner.seguro || inner.seguradora || {}) as Record<string, any>;
+        const segNum = (v: unknown) => (v == null || v === '' ? null : Number(v));
         const { data: row, error } = await admin.from('hub_fiscal_emissions').insert({
           tenant_id: tenantId,
           emitter_id: payload.emitterId || null,
@@ -208,6 +212,13 @@ Deno.serve(async (req) => {
           cte_document_id: payload.cteDocumentId || null,
           nfse_document_id: payload.nfseDocumentId || null,
           request_payload: body as any,
+          insurer_name: seg.nome || seg.xSeg || null,
+          insurer_cnpj: seg.cnpj || null,
+          insurer_policy: seg.apolice || seg.nApol || null,
+          insurer_endorsement:
+            seg.averbacao || (Array.isArray(seg.nAver) ? seg.nAver[0] : seg.nAver) || null,
+          insured_amount: segNum(seg.valorSegurado),
+          insurance_premium: segNum(seg.valorSeguro),
           last_response: data as any,
           created_by: userId,
         }).select().single();
