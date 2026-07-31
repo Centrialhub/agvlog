@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useBillingDocuments } from '@/hooks/useBillingDocuments';
 import { useClients } from '@/hooks/useClients';
 import { useLoads, LOAD_STATUSES, LOAD_STATUS_LABELS } from '@/hooks/useLoads';
-import { useCteBatches, useCancelCteBatch } from '@/hooks/useBilling';
+import { useCteBatches, useCancelCteBatch, useIssuedCtes } from '@/hooks/useBilling';
 import { GROUPING_MODES, buildGroups, getGroupingMode, type CteGroupPreview } from '@/lib/cteGroupingModes';
 import { useUserUiPreference } from '@/hooks/useUserUiPreference';
 import { useTenant } from '@/hooks/useTenant';
@@ -17,7 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { FileSpreadsheet, Calculator, Layers, FileText, Info, XCircle, Filter, Eraser, Save } from 'lucide-react';
+import { FileSpreadsheet, Calculator, Layers, FileText, Info, XCircle, Filter, Eraser, Save, ChevronRight, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { PendingInvoicesBanner } from '@/components/billing/PendingInvoicesBanner';
@@ -770,6 +770,17 @@ export default function Billing() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
+            <FileText className="h-4 w-4 text-primary" /> CT-es transmitidos &amp; notas vinculadas
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <IssuedCtesTable />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
             <FileText className="h-4 w-4 text-primary" /> Lotes gerados
           </CardTitle>
         </CardHeader>
@@ -944,5 +955,101 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <Label className="text-xs text-muted-foreground">{label}</Label>
       {children}
     </div>
+  );
+}
+
+function IssuedCtesTable() {
+  const { data: ctes = [], isLoading } = useIssuedCtes();
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+  if (isLoading) {
+    return <p className="text-sm text-muted-foreground py-8 text-center">Carregando...</p>;
+  }
+  if (ctes.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground py-8 text-center">
+        Nenhum CT-e transmitido ao Hub Fiscal ainda.
+      </p>
+    );
+  }
+
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead className="w-8" />
+          <TableHead>Data</TableHead>
+          <TableHead>Nº / Chave</TableHead>
+          <TableHead>Remetente</TableHead>
+          <TableHead>Destinatário</TableHead>
+          <TableHead className="text-right">NFs</TableHead>
+          <TableHead className="text-right">Frete</TableHead>
+          <TableHead>Status</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {ctes.map(c => {
+          const open = !!expanded[c.id];
+          return (
+            <Fragment key={c.id}>
+              <TableRow
+                className="cursor-pointer"
+                onClick={() => setExpanded(p => ({ ...p, [c.id]: !open }))}
+              >
+                <TableCell>
+                  {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                </TableCell>
+                <TableCell className="text-sm">{format(new Date(c.created_at), 'dd/MM/yyyy HH:mm')}</TableCell>
+                <TableCell className="text-xs font-mono">{c.access_key || c.invoice_number || '—'}</TableCell>
+                <TableCell className="text-sm">{c.remitter || '—'}</TableCell>
+                <TableCell className="text-sm">
+                  {c.recipient || '—'}
+                  {c.recipient_city ? <span className="text-muted-foreground text-xs"> • {c.recipient_city}/{c.recipient_state}</span> : null}
+                </TableCell>
+                <TableCell className="text-right font-medium">{c.notes.length}</TableCell>
+                <TableCell className="text-right">
+                  R$ {c.freight_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </TableCell>
+                <TableCell>
+                  <Badge variant="outline" className={
+                    c.status === 'authorized' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' :
+                    c.status === 'rejected' ? 'bg-destructive/10 text-destructive border-destructive/20' :
+                    c.status === 'cancelled' ? 'bg-muted text-muted-foreground' :
+                    'bg-amber-500/10 text-amber-600 border-amber-500/20'
+                  } title={c.sefaz_message || undefined}>
+                    {c.status === 'authorized' ? 'Autorizado'
+                      : c.status === 'rejected' ? 'Rejeitado'
+                      : c.status === 'cancelled' ? 'Cancelado'
+                      : 'Transmitindo'}
+                  </Badge>
+                </TableCell>
+              </TableRow>
+              {open && (
+                <TableRow>
+                  <TableCell colSpan={8} className="bg-muted/30">
+                    {c.notes.length === 0 ? (
+                      <p className="text-xs text-muted-foreground py-2">
+                        Nenhuma NF vinculada a este CT-e.
+                      </p>
+                    ) : (
+                      <div className="py-1">
+                        <p className="text-xs text-muted-foreground mb-1">NFs agrupadas neste CT-e</p>
+                        <div className="flex flex-wrap gap-1">
+                          {c.notes.map(n => (
+                            <Badge key={n.id} variant="secondary" className="font-mono text-xs">
+                              NF {n.invoice_number || n.id.slice(0, 8)} • R$ {n.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </TableCell>
+                </TableRow>
+              )}
+            </Fragment>
+          );
+        })}
+      </TableBody>
+    </Table>
   );
 }

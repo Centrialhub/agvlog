@@ -88,6 +88,10 @@ export interface CteMonitorRow {
   issued_at: string | null;
   created_at: string;
   batch_id: string;
+  /** Origem da linha: rascunho local (`cte_documents`) ou emissão real no Hub (`fiscal_documents`). */
+  source?: 'draft' | 'hub';
+  hub_document_id?: string | null;
+  emission_id?: string | null;
 }
 
 export interface CteMonitorFilters {
@@ -174,9 +178,92 @@ export function useCteMonitor(filters: CteMonitorFilters) {
 
       const { data, error } = await q;
       if (error) throw error;
-      return (data || []) as unknown as CteMonitorRow[];
+      const draftRows = ((data || []) as unknown as CteMonitorRow[]).map((r) => ({
+        ...r,
+        source: 'draft' as const,
+      }));
+
+      // CT-es realmente transmitidos ao Hub Fiscal ficam em `fiscal_documents`
+      // (document_type = 'outbound'). Sem esse merge o monitor não mostrava as
+      // emissões reais — e por isso não havia como baixar PDF/XML de retorno.
+      const { data: outbound, error: outErr } = await supabase
+        .from('fiscal_documents')
+        .select(
+          'id, invoice_number, access_key, sefaz_protocol, sefaz_status, sefaz_status_code, sefaz_message, status, remitter, recipient, recipient_city, recipient_state, freight_value, value, issue_date, created_at, hub_document_id, emission_id',
+        )
+        .eq('tenant_id', currentTenant.id)
+        .eq('document_type', 'outbound')
+        .order('created_at', { ascending: false })
+        .limit(2000);
+      if (outErr) throw outErr;
+
+      const hubRows: CteMonitorRow[] = (outbound || []).map((d: any) => ({
+        id: d.id,
+        tenant_id: currentTenant.id,
+        cte_number: d.invoice_number ?? null,
+        cte_series: null,
+        access_key: d.access_key ?? null,
+        protocol_number: d.sefaz_protocol ?? null,
+        sefaz_status: mapOutboundStatus(d.status, d.sefaz_status),
+        sefaz_status_reason: d.sefaz_message ?? null,
+        sefaz_status_code: d.sefaz_status_code ?? null,
+        sefaz_status_at: d.created_at ?? null,
+        sefaz_environment: null,
+        sent_at: d.created_at ?? null,
+        processed_at: d.status === 'authorized' ? d.created_at ?? null : null,
+        cancelled_at: d.status === 'cancelled' ? d.created_at ?? null : null,
+        cancellation_reason: null,
+        correction_letter: false,
+        pdf_url: null,
+        xml_url: null,
+        reference_number: null,
+        internal_number: d.invoice_number ?? null,
+        payer_name: d.remitter ?? null,
+        payer_cnpj: null,
+        company_branch: null,
+        company_group: null,
+        payer_group: null,
+        driver_name: null,
+        vehicle_plate: null,
+        recipient: d.recipient ?? null,
+        recipient_city: d.recipient_city ?? null,
+        recipient_state: d.recipient_state ?? null,
+        remitter: d.remitter ?? null,
+        freight_value: Number(d.freight_value ?? d.value ?? 0),
+        cargo_value: Number(d.value ?? 0),
+        issued_at: d.issue_date ?? null,
+        created_at: d.created_at,
+        batch_id: '',
+        source: 'hub',
+        hub_document_id: d.hub_document_id ?? null,
+        emission_id: d.emission_id ?? null,
+      }));
+
+      const filteredHub = hubRows.filter((r) => {
+        if (filters.statuses?.length && !filters.statuses.includes(r.sefaz_status)) return false;
+        if (docNumber && !(r.cte_number || '').toLowerCase().includes(docNumber.toLowerCase())) return false;
+        if (key && !(r.access_key || '').includes(key)) return false;
+        if (payer && !(r.payer_name || '').toLowerCase().includes(payer.toLowerCase())) return false;
+        if (filters.correctionLetter === 'yes') return false;
+        return true;
+      });
+
+      return [...filteredHub, ...draftRows].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      );
     },
   });
+}
+
+/** Traduz status de `fiscal_documents` para o vocabulário do monitor SEFAZ. */
+function mapOutboundStatus(status?: string | null, sefaz?: string | null): SefazStatus {
+  const s = (sefaz || '').toLowerCase();
+  const st = (status || '').toLowerCase();
+  if (st === 'cancelled' || s === 'cancelled') return 'cancelled';
+  if (st === 'authorized' || s === 'authorized') return 'processed';
+  if (st === 'rejected' || s === 'error' || s === 'rejected') return 'processed_error';
+  if (st === 'transmitting' || s === 'processing') return 'processing';
+  return 'pending';
 }
 
 export interface CteSefazEvent {
