@@ -439,7 +439,9 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
         cbs: input.totals.cbs_value ?? undefined,
       },
       composicaoFrete: freightComposition,
-      icms: input.icms ? buildIcmsBlock(input.icms, input.totals.freight_value) : undefined,
+      icms: input.icms
+        ? buildIcmsBlock(input.icms, input.totals.freight_value, input.emitter?.taxRegime)
+        : undefined,
       gnre: input.gnre
         ? Object.fromEntries(Object.entries(input.gnre).filter(([, v]) => v != null))
         : undefined,
