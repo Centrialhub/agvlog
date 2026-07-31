@@ -343,14 +343,9 @@ function toBuildInput(
     observations: e.observations || null,
     // RNTRC: o Hub usa o cadastro da empresa, mas enviamos quando disponível localmente.
     rntrc: emitter?.rntrc || emitter?.endereco?.rntrc || null,
-    // Início / fim da prestação (override de UFIni/UFFim).
-    origin: emitter?.endereco
-      ? {
-          city: emitter.endereco.municipio || null,
-          city_ibge: emitter.city_code || null,
-          state: emitter.endereco.uf || null,
-        }
-      : null,
+    // Início / fim da prestação (override de UFIni/UFFim). Início = remetente
+    // (o builder cai no endereço do emitente quando o remetente não tem UF).
+    origin: null,
     destination: e.recipientCity || e.recipientState
       ? { city: e.recipientCity || null, state: e.recipientState || null }
       : null,
