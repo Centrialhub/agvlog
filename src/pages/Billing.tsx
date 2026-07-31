@@ -23,6 +23,7 @@ import { format } from 'date-fns';
 import { PendingInvoicesBanner } from '@/components/billing/PendingInvoicesBanner';
 import { useRecalculateInboundFreight } from '@/hooks/useRecalculateInboundFreight';
 import { CteEmissionPreviewDialog } from '@/components/billing/CteEmissionPreviewDialog';
+import { CancelCteDialog, type CancelCteTarget } from '@/components/billing/CancelCteDialog';
 import {
   OPERATION_TYPE_OPTIONS,
   type OperationType,
@@ -961,6 +962,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function IssuedCtesTable() {
   const { data: ctes = [], isLoading } = useIssuedCtes();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [cancelTarget, setCancelTarget] = useState<CancelCteTarget | null>(null);
 
   if (isLoading) {
     return <p className="text-sm text-muted-foreground py-8 text-center">Carregando...</p>;
@@ -985,6 +987,7 @@ function IssuedCtesTable() {
           <TableHead className="text-right">NFs</TableHead>
           <TableHead className="text-right">Frete</TableHead>
           <TableHead>Status</TableHead>
+          <TableHead className="text-right">Ações</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -1023,10 +1026,33 @@ function IssuedCtesTable() {
                       : 'Transmitindo'}
                   </Badge>
                 </TableCell>
+                <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                  {c.status === 'cancelled' ? (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:text-destructive"
+                      disabled={!c.hub_document_id}
+                      title={c.hub_document_id ? 'Cancelar CT-e na SEFAZ' : 'CT-e ainda não transmitido ao Hub Fiscal'}
+                      onClick={() =>
+                        setCancelTarget({
+                          id: c.id,
+                          label: c.invoice_number ? `nº ${c.invoice_number}` : c.id.slice(0, 8),
+                          accessKey: c.access_key,
+                          notesCount: c.notes.length,
+                        })
+                      }
+                    >
+                      <XCircle className="h-4 w-4 mr-1" /> Cancelar
+                    </Button>
+                  )}
+                </TableCell>
               </TableRow>
               {open && (
                 <TableRow>
-                  <TableCell colSpan={8} className="bg-muted/30">
+                  <TableCell colSpan={9} className="bg-muted/30">
                     {c.notes.length === 0 ? (
                       <p className="text-xs text-muted-foreground py-2">
                         Nenhuma NF vinculada a este CT-e.
@@ -1050,6 +1076,7 @@ function IssuedCtesTable() {
           );
         })}
       </TableBody>
+      <CancelCteDialog target={cancelTarget} onOpenChange={(o) => !o && setCancelTarget(null)} />
     </Table>
   );
 }
