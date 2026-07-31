@@ -323,7 +323,11 @@ Deno.serve(async (req) => {
         let hubMessage = '';
 
         // 1) Rota dedicada de download do Hub.
-        const url = buildUrl('/hub_documents_file', { id: payload.id, format, type: payload.type || '' });
+        // A API v1 expõe GET /documents/file?id=...&kind=pdf|xml. O endpoint
+        // intermediário hub_documents_file preserva esse contrato usando `kind`;
+        // enviar `format` fazia o ManagerSaaS montar uma rota inexistente.
+        const kind = format === 'cancel_xml' ? 'cancel_xml' : format;
+        const url = buildUrl('/hub_documents_file', { id: payload.id, kind });
         const upstream = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
         const ct = upstream.headers.get('Content-Type') || '';
         const buf = await upstream.arrayBuffer();
