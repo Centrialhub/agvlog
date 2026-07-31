@@ -151,8 +151,13 @@ export default function CteMonitor() {
     let ok = 0;
     const failures: BulkFailure[] = [];
     const toastId = toast.loading(`Baixando ${checkedRows.length} arquivo(s) ${format.toUpperCase()}...`);
+    let index = 0;
     for (const row of checkedRows) {
+      index++;
       const rowLabel = row.cte_number || row.access_key || row.id.slice(0, 8);
+      toast.loading(`Baixando ${format.toUpperCase()} ${index}/${checkedRows.length} (CT-e ${rowLabel})...`, {
+        id: toastId,
+      });
       try {
         await downloadHubFile(row, format, { silent: true });
         ok++;
