@@ -61,6 +61,8 @@ export interface CteVehicle {
   plate: string;
   state?: string | null;
   renavam?: string | null;
+  /** RNTRC (8 dígitos) — aceito em veiculo/modalRodoviario/rodo pelo Hub v1. */
+  rntrc?: string | null;
 }
 
 export interface CteReferencedNf {
@@ -103,6 +105,8 @@ export interface CteIcms {
   cst?: string | null;         // 00, 20, 40, 41, 51, 60, 90 (CST) ou 90 (CSOSN — Simples)
   embutido?: boolean;
   isento?: boolean;
+  /** motDesICMS — motivo da desoneração (obrigatório nos CST isentos). */
+  motivo?: string | number | null;
   aliquota?: number | null;
   base?: number | null;
   valor?: number | null;
@@ -165,6 +169,18 @@ export interface BuildCtePayloadInput {
   nature: string;
   cfop?: string | null;
   observations?: string | null;
+  /** Série / numeração do CT-e (opcional — o Hub usa a do cadastro se ausente). */
+  series?: string | null;
+  number?: string | number | null;
+  /** Código numérico do CT-e (cCT). */
+  cCT?: string | number | null;
+  /** RNTRC do transportador (8 dígitos). */
+  rntrc?: string | null;
+  /** Override de UFIni/UFFim (inicio/fim da prestação). */
+  origin?: CteParty['address'] | null;
+  destination?: CteParty['address'] | null;
+  /** CNPJs autorizados a baixar o XML. */
+  authorizedXmlCnpjs?: string[] | null;
   invoices: CteReferencedNf[];
   totals: {
     freight_value: number;
@@ -186,6 +202,28 @@ export interface BuildCtePayloadResult {
 
 function digits(v?: string | null): string {
   return (v || '').replace(/\D+/g, '');
+}
+
+/**
+ * Bloco `inicio` / `fim` (override de UFIni/UFFim) — campos aceitos pelo Hub v1:
+ * codigoCidade/cMun | municipio/cidade | uf/estado.
+ */
+function buildLocation(
+  address?: CteParty['address'] | null,
+): Record<string, unknown> | undefined {
+  if (!address) return undefined;
+  const city = address.city || undefined;
+  const uf = address.state || undefined;
+  const cMun = digits(address.city_ibge) || undefined;
+  if (!city && !uf && !cMun) return undefined;
+  return {
+    codigoCidade: cMun,
+    cMun,
+    municipio: city,
+    cidade: city,
+    uf,
+    estado: uf,
+  };
 }
 
 /**
@@ -337,6 +375,7 @@ function buildIcmsBlock(
     pICMS: Number(aliq.toFixed(2)),
     vICMS: Number(valor.toFixed(2)),
     // Aliases legíveis mantidos por compatibilidade com o Hub Fiscal atual
+    baseCalculo: Number(base.toFixed(2)),
     base: Number(base.toFixed(2)),
     aliquota: Number(aliq.toFixed(2)),
     valor: Number(valor.toFixed(2)),
@@ -346,6 +385,13 @@ function buildIcmsBlock(
     indICMS: embutido ? 1 : 0,
     indIEToma: embutido ? 1 : 0,
   };
+
+  // Motivo da desoneração (motDesICMS) — obrigatório nos CST isentos/não tributados.
+  if (isento) {
+    const motivo = (icms as { motivo?: string | number | null }).motivo ?? 12; // 12 = Outros
+    block.motivo = motivo;
+    block.motDesICMS = motivo;
+  }
 
   // Substituição tributária (opcional)
   if (icms.st_base != null || icms.st_aliquota != null || icms.st_valor != null) {
@@ -513,16 +559,31 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
         responsavel: 4,
         respSeg: 4,
         nome: input.insurer.name,
+        seguradora: input.insurer.name,
         xSeg: input.insurer.name,
         cnpj: digits(input.insurer.cnpj) || undefined,
         apolice: input.insurer.policy || undefined,
         nApol: input.insurer.policy || undefined,
         averbacao: input.insurer.endorsement || undefined,
         nAver: input.insurer.endorsement ? [input.insurer.endorsement] : undefined,
+        valorAverbacao: insuredAmount ?? undefined,
         valorSegurado: insuredAmount ?? undefined,
         valorSeguro: insuranceValue > 0 ? Number(insuranceValue.toFixed(2)) : undefined,
       }
     : undefined;
+
+  const rntrc = digits(input.rntrc || input.vehicle?.rntrc) || undefined;
+  if (rntrc && rntrc.length !== 8) {
+    warnings.push('RNTRC informado não possui 8 dígitos — o Hub pode rejeitar a emissão.');
+  }
+  const inicio =
+    buildLocation(input.origin) ||
+    buildLocation(input.remitter?.address) ||
+    buildLocation(input.emitter?.address);
+  const fim = buildLocation(input.destination) || buildLocation(input.recipient?.address);
+  const autorizadosXml = (input.authorizedXmlCnpjs || [])
+    .map((c) => digits(c))
+    .filter((c) => c.length === 14);
 
   const emitterRegimeRaw = (input.emitter?.taxRegime || '').toString().toLowerCase();
   const emitterIsSimples = emitterRegimeRaw === 'simples' || emitterRegimeRaw === 'mei';
@@ -554,7 +615,15 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
       tipoCtrc: input.documentType || '01',
       naturezaOperacao: input.nature,
       cfop: input.cfop || undefined,
+      CFOP: input.cfop || undefined,
+      serie: input.series != null && input.series !== '' ? String(input.series) : undefined,
+      numero: input.number != null && input.number !== '' ? String(input.number) : undefined,
+      cCT: input.cCT != null && input.cCT !== '' ? String(input.cCT) : undefined,
       dataEmissao: input.issueDate || undefined,
+      dhEmi: input.issueDate || undefined,
+      inicio,
+      fim,
+      autorizadosXml: autorizadosXml.length ? autorizadosXml : undefined,
       numeroRef: input.refNumber || undefined,
       numeroPedidoCliente: input.clientOrderNumber || undefined,
       prioridadeFrete: input.freightPriority || undefined,
@@ -604,8 +673,12 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
         uf: input.vehicle?.state || undefined,
         renavam: input.vehicle?.renavam || undefined,
         tipo: input.vehicleType || undefined,
+        rntrc,
         carretas: additionalPlates.length ? additionalPlates : undefined,
       },
+      // Modal rodoviário — o Hub aceita o RNTRC em veiculo/modalRodoviario/rodo.
+      modalRodoviario: rntrc ? { rntrc, RNTRC: rntrc } : undefined,
+      rodo: rntrc ? { rntrc, RNTRC: rntrc } : undefined,
       valores: {
         valorFrete: totalServico,
         freteBase,
@@ -615,6 +688,8 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
         valorFretePeso: freteBase,
         fretePeso: freteBase,
         valorIcms: icmsValue,
+        baseIcms: Number((Number(icmsBlock?.vBC) || 0).toFixed(2)),
+        aliquotaIcms: Number((Number(icmsBlock?.pICMS) || 0).toFixed(2)),
         valorTotalServico: totalServico,
         valorPrestacao: totalServico,
         valorReceber: totalServico,
@@ -622,6 +697,8 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
         vRec: totalServico,
         valorCarga: Number((input.totals.cargo_value || 0).toFixed(2)),
         pesoBrutoKg: Number((input.totals.weight_kg || 0).toFixed(3)),
+        pesoKg: Number((input.totals.weight_kg || 0).toFixed(3)),
+        valorAverbacao: insuredAmount ?? undefined,
         pallets: input.totals.pallet_count || 0,
         ibs: input.totals.ibs_value ?? undefined,
         cbs: input.totals.cbs_value ?? undefined,
@@ -701,11 +778,21 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
       cbsIbs: input.cbsIbs
         ? Object.fromEntries(Object.entries(input.cbsIbs).filter(([, v]) => v != null))
         : undefined,
+      // Campos aceitos pelo Hub v1: content | produto | species (vira proPred).
       mercadoria: input.cargo
-        ? Object.fromEntries(Object.entries(input.cargo).filter(([, v]) => v != null && v !== ''))
+        ? (() => {
+            const merc: Record<string, unknown> = {};
+            if (input.cargo?.content) merc.content = input.cargo.content;
+            const produto = input.cargo?.predominant_product || input.cargo?.content;
+            if (produto) merc.produto = produto;
+            if (input.cargo?.species) merc.species = input.cargo.species;
+            return Object.keys(merc).length ? merc : undefined;
+          })()
         : undefined,
       notasFiscais: (input.invoices || []).map((n) => ({
         chave: digits(n.access_key) || undefined,
+        chaveNFe: digits(n.access_key) || undefined,
+        chNFe: digits(n.access_key) || undefined,
         numero: n.number || undefined,
         serie: n.series || undefined,
         dataEmissao: n.issue_date || undefined,

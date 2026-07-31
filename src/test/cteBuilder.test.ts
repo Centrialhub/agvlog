@@ -309,3 +309,39 @@ describe('cteBuilder — componentes do valor da prestação', () => {
     expect(r.missing.join(' ')).toMatch(/averbação inválido/i);
   });
 });
+
+describe('cteBuilder — campos aceitos pela API v1 do Hub', () => {
+  it('envia CFOP, dhEmi, inicio/fim, mercadoria e aliases de ICMS/valores', () => {
+    const r = buildCtePayload(
+      baseInput({
+        cfop: '6352',
+        issueDate: '2026-07-31',
+        series: '1',
+        number: 21,
+        rntrc: '12345678',
+        icms: { cst: '00', aliquota: 12, embutido: true },
+        cargo: { content: 'CONFORME NF', species: 'CAIXAS', predominant_product: 'ALIMENTOS' },
+      }),
+    );
+    const p = (r.payload as any).payload;
+    expect(p.CFOP).toBe('6352');
+    expect(p.dhEmi).toBe('2026-07-31');
+    expect(p.serie).toBe('1');
+    expect(p.numero).toBe('21');
+    expect(p.veiculo.rntrc).toBe('12345678');
+    expect(p.modalRodoviario.rntrc).toBe('12345678');
+    expect(p.valores.baseIcms).toBeGreaterThan(0);
+    expect(p.valores.aliquotaIcms).toBe(12);
+    expect(p.icms.baseCalculo).toBe(p.icms.vBC);
+    expect(Object.keys(p.mercadoria).sort()).toEqual(['content', 'produto', 'species']);
+    expect(p.notasFiscais[0].chaveNFe).toBe(p.notasFiscais[0].chave);
+  });
+
+  it('inclui motDesICMS quando isento e valorAverbacao no seguro', () => {
+    const r = buildCtePayload(baseInput({ icms: { cst: '40', isento: true, aliquota: 0 } }));
+    const p = (r.payload as any).payload;
+    expect(p.icms.motDesICMS).toBeDefined();
+    expect(p.seguro.valorAverbacao).toBeDefined();
+    expect(p.seguro.seguradora).toBeDefined();
+  });
+});
