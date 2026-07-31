@@ -11,7 +11,7 @@ function baseInput(overrides: Partial<BuildCtePayloadInput> = {}): BuildCtePaylo
     },
     remitter: { name: 'JMacedo', cnpj: '14998371003215' },
     recipient: { name: 'COMERCIAL GALA', cnpj: '07734610000168' },
-    insurer: { name: 'AKAD SEGUROS', policy: 'AP-BASE', endorsement: 'AV-BASE' },
+    insurer: { name: 'AKAD SEGUROS', cnpj: '18666510000168', policy: 'AP-BASE', endorsement: 'AV-BASE' },
     takerRole: 'destinatario',
     driver: null,
     vehicle: null,
@@ -58,6 +58,7 @@ describe('cteBuilder — novos blocos', () => {
         additionalPlates: ['xyz1a11', 'xyz1a22'],
         insurer: {
           name: 'AKAD SEGUROS',
+          cnpj: '18666510000168',
           policy: '2798202301065400079',
           endorsement: '123',
         },
@@ -134,7 +135,7 @@ describe('cteBuilder — ICMS embutido (por dentro)', () => {
       invoices: [{ access_key: '3'.repeat(44), number: '1', series: '1', value: 100 }],
       totals: { freight_value: 188.82, cargo_value: 100, weight_kg: 1, pallet_count: 0 },
       icms: { cst: '00', aliquota: 18, embutido: true },
-      insurer: { name: 'AKAD', policy: 'AP-1', endorsement: 'AV-1' },
+      insurer: { name: 'AKAD', cnpj: '18666510000168', policy: 'AP-1', endorsement: 'AV-1' },
     };
     const r = buildCtePayload(input);
     expect(r.ok).toBe(true);
@@ -215,7 +216,7 @@ describe('cteBuilder — componentes do valor da prestação', () => {
         totals: { freight_value: 188.82, cargo_value: 1000, weight_kg: 10, pallet_count: 0 },
         freightComposition: { insurance_value: 33.99 } as any,
         icms: { cst: '00', aliquota: 12, embutido: false },
-        insurer: { name: 'AKAD', policy: '123', endorsement: '9' },
+        insurer: { name: 'AKAD', cnpj: '18666510000168', policy: '123456', endorsement: 'AV-9' },
       }),
     );
     const p = (r.payload as any).payload;
@@ -225,15 +226,27 @@ describe('cteBuilder — componentes do valor da prestação', () => {
     expect(nomes).toContain('ICMS');
     expect(p.seguradora.valorSeguro).toBe(33.99);
     expect(p.seguradora.valorSegurado).toBe(1000);
-    expect(p.seguro.nApol).toBe('123');
-    expect(p.seguro.nAver).toEqual(['9']);
+    expect(p.seguro.nApol).toBe('123456');
+    expect(p.seguro.nAver).toEqual(['AV-9']);
     expect(p.seguros).toHaveLength(1);
   });
 
-  it('avisa quando não há seguradora informada', () => {
+  it('bloqueia emissão quando não há seguradora informada', () => {
     const r = buildCtePayload(baseInput({ insurer: null }));
-    expect(r.warnings.join(' ')).toMatch(/Seguro da carga não informado/i);
     expect(r.ok).toBe(false);
-    expect(r.missing).toEqual(expect.arrayContaining(['Seguradora da carga', 'Nº da apólice', 'Nº da averbação']));
+    expect(r.missing.join(' ')).toMatch(/Seguradora é obrigatória/i);
+    expect(r.missing.join(' ')).toMatch(/CNPJ da seguradora é obrigatório/i);
+    expect(r.missing.join(' ')).toMatch(/apólice é obrigatório/i);
+    expect(r.missing.join(' ')).toMatch(/averbação é obrigatório/i);
+  });
+
+  it('bloqueia emissão quando CNPJ/apólice/averbação estão em formato inválido', () => {
+    const r = buildCtePayload(
+      baseInput({ insurer: { name: 'AKAD', cnpj: '11111111111111', policy: 'A', endorsement: '@@' } }),
+    );
+    expect(r.ok).toBe(false);
+    expect(r.missing.join(' ')).toMatch(/CNPJ da seguradora inválido/i);
+    expect(r.missing.join(' ')).toMatch(/apólice inválido/i);
+    expect(r.missing.join(' ')).toMatch(/averbação inválido/i);
   });
 });
