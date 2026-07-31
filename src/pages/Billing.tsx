@@ -1016,12 +1016,14 @@ function IssuedCtesTable() {
                 </TableCell>
                 <TableCell>
                   <Badge variant="outline" className={
+                    c.sefaz_status === 'cancel_rejected' ? 'bg-destructive/10 text-destructive border-destructive/20' :
                     c.status === 'authorized' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' :
                     c.status === 'rejected' ? 'bg-destructive/10 text-destructive border-destructive/20' :
                     c.status === 'cancelled' ? 'bg-muted text-muted-foreground' :
                     'bg-amber-500/10 text-amber-600 border-amber-500/20'
                   } title={c.sefaz_message || undefined}>
-                    {c.status === 'authorized' ? 'Autorizado'
+                    {c.sefaz_status === 'cancel_rejected' ? 'Cancelamento rejeitado'
+                      : c.status === 'authorized' ? 'Autorizado'
                       : c.status === 'rejected' ? 'Rejeitado'
                       : c.status === 'cancelled' ? 'Cancelado'
                       : 'Transmitindo'}
