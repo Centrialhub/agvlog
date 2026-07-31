@@ -1,5 +1,33 @@
 import { describe, it, expect } from 'vitest';
 import { buildCtePayload, computeIcmsAmounts, type BuildCtePayloadInput } from '@/lib/fiscal/cteBuilder';
+import { buildEmitterExclusiveUse } from '@/lib/fiscal/cteBuilder';
+
+describe('cteBuilder — uso exclusivo do emitente', () => {
+  it('consolida seguradora, motorista e observações no campo de uso exclusivo', () => {
+    const texto = buildEmitterExclusiveUse({
+      insurer: { name: 'AKAD SEGUROS', cnpj: '18.666.510/0001-68', policy: 'AP-1', endorsement: 'CGC-9' },
+      insuranceValue: 33.99,
+      insuredAmount: 1000,
+      driver: { name: 'João', cpf: '123.456.789-01' },
+      observations: 'ENTREGA AGENDADA',
+    });
+    expect(texto).toMatch(/SEGURADORA: AKAD SEGUROS/);
+    expect(texto).toMatch(/CNPJ 18666510000168/);
+    expect(texto).toMatch(/APOLICE AP-1/);
+    expect(texto).toMatch(/AVERBACAO\/CGC CGC-9/);
+    expect(texto).toMatch(/MOTORISTA: João - CPF 12345678901/);
+    expect(texto).toMatch(/ENTREGA AGENDADA/);
+  });
+
+  it('payload leva o texto em observacoes/usoExclusivoEmitente/compl', () => {
+    const r = buildCtePayload(baseInput({ observations: 'OBS TESTE' }));
+    const p = (r.payload as any).payload;
+    expect(p.usoExclusivoEmitente).toMatch(/SEGURADORA: AKAD SEGUROS/);
+    expect(p.observacoes).toBe(p.usoExclusivoEmitente);
+    expect(p.compl.xObs).toBe(p.usoExclusivoEmitente);
+    expect(p.compl.ObsCont[0].xCampo).toBe('USO EXCLUSIVO');
+  });
+});
 
 function baseInput(overrides: Partial<BuildCtePayloadInput> = {}): BuildCtePayloadInput {
   return {
