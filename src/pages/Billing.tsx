@@ -687,6 +687,25 @@ export default function Billing() {
           </div>
         </CardHeader>
         <CardContent className="p-0">
+          <div className="px-6 pb-3 flex flex-wrap items-end gap-3">
+            <div className="flex flex-col gap-1 min-w-[240px]">
+              <Label className="text-xs text-muted-foreground">Cidade do destinatário</Label>
+              <Select value={recipientCity} onValueChange={setRecipientCity}>
+                <SelectTrigger><SelectValue placeholder="Todas as cidades" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={SENTINEL_NONE}>Todas as cidades</SelectItem>
+                  {recipientCityOptions.map(c => (
+                    <SelectItem key={c.key} value={c.key}>{c.label} ({c.count})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {recipientCity !== SENTINEL_NONE && (
+              <Button variant="ghost" size="sm" onClick={() => setRecipientCity(SENTINEL_NONE)}>
+                <Eraser className="h-4 w-4 mr-1" /> Limpar cidade
+              </Button>
+            )}
+          </div>
           <p className="px-6 pb-3 text-xs text-muted-foreground">
             Se nenhuma nota estiver marcada, todas as {filteredDocs.length} notas filtradas serão faturadas (modo lote).
             Marque notas específicas para gerar apenas os CT-es correspondentes.
@@ -705,6 +724,7 @@ export default function Billing() {
                   <TableHead>Emissão</TableHead>
                   <TableHead>Remetente</TableHead>
                   <TableHead>Destinatário</TableHead>
+                  <TableHead>Cidade destino</TableHead>
                   <TableHead className="text-right">Pallets</TableHead>
                   <TableHead className="text-right">Peso</TableHead>
                   <TableHead className="text-right">Valor</TableHead>
@@ -713,9 +733,9 @@ export default function Billing() {
               </TableHeader>
               <TableBody>
                 {docsLoading ? (
-                  <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-6">Carregando...</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-6">Carregando...</TableCell></TableRow>
                 ) : filteredDocs.length === 0 ? (
-                  <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-6">Nenhuma nota disponível com os filtros atuais.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-6">Nenhuma nota disponível com os filtros atuais.</TableCell></TableRow>
                 ) : filteredDocs.map(d => (
                   <TableRow key={d.id} className="cursor-pointer" onClick={() => toggleDoc(d.id)}>
                     <TableCell><Checkbox checked={selectedDocIds.has(d.id)} /></TableCell>
@@ -723,6 +743,11 @@ export default function Billing() {
                     <TableCell className="text-sm">{d.issue_date ? format(new Date(d.issue_date), 'dd/MM/yyyy') : '—'}</TableCell>
                     <TableCell className="text-sm truncate max-w-[220px]">{d.remitter || '—'}</TableCell>
                     <TableCell className="text-sm truncate max-w-[220px]">{d.recipient || d.clients?.company_name || '—'}</TableCell>
+                    <TableCell className="text-sm">
+                      {(d as any).recipient_city
+                        ? `${(d as any).recipient_city}${(d as any).recipient_state ? `/${(d as any).recipient_state}` : ''}`
+                        : '—'}
+                    </TableCell>
                     <TableCell className="text-right text-sm">{d.pallet_count || 0}</TableCell>
                     <TableCell className="text-right text-sm">{Number(d.weight_kg || 0).toLocaleString('pt-BR')}</TableCell>
                     <TableCell className="text-right text-sm">R$ {Number(d.value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</TableCell>
