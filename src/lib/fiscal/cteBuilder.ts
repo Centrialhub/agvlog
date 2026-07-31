@@ -559,16 +559,28 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
         responsavel: 4,
         respSeg: 4,
         nome: input.insurer.name,
+        seguradora: input.insurer.name,
         xSeg: input.insurer.name,
         cnpj: digits(input.insurer.cnpj) || undefined,
         apolice: input.insurer.policy || undefined,
         nApol: input.insurer.policy || undefined,
         averbacao: input.insurer.endorsement || undefined,
         nAver: input.insurer.endorsement ? [input.insurer.endorsement] : undefined,
+        valorAverbacao: insuredAmount ?? undefined,
         valorSegurado: insuredAmount ?? undefined,
         valorSeguro: insuranceValue > 0 ? Number(insuranceValue.toFixed(2)) : undefined,
       }
     : undefined;
+
+  const rntrc = digits(input.rntrc || input.vehicle?.rntrc) || undefined;
+  if (rntrc && rntrc.length !== 8) {
+    warnings.push('RNTRC informado não possui 8 dígitos — o Hub pode rejeitar a emissão.');
+  }
+  const inicio = buildLocation(input.origin || input.remitter?.address);
+  const fim = buildLocation(input.destination || input.recipient?.address);
+  const autorizadosXml = (input.authorizedXmlCnpjs || [])
+    .map((c) => digits(c))
+    .filter((c) => c.length === 14);
 
   const emitterRegimeRaw = (input.emitter?.taxRegime || '').toString().toLowerCase();
   const emitterIsSimples = emitterRegimeRaw === 'simples' || emitterRegimeRaw === 'mei';
@@ -600,7 +612,15 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
       tipoCtrc: input.documentType || '01',
       naturezaOperacao: input.nature,
       cfop: input.cfop || undefined,
+      CFOP: input.cfop || undefined,
+      serie: input.series != null && input.series !== '' ? String(input.series) : undefined,
+      numero: input.number != null && input.number !== '' ? String(input.number) : undefined,
+      cCT: input.cCT != null && input.cCT !== '' ? String(input.cCT) : undefined,
       dataEmissao: input.issueDate || undefined,
+      dhEmi: input.issueDate || undefined,
+      inicio,
+      fim,
+      autorizadosXml: autorizadosXml.length ? autorizadosXml : undefined,
       numeroRef: input.refNumber || undefined,
       numeroPedidoCliente: input.clientOrderNumber || undefined,
       prioridadeFrete: input.freightPriority || undefined,
@@ -650,8 +670,12 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
         uf: input.vehicle?.state || undefined,
         renavam: input.vehicle?.renavam || undefined,
         tipo: input.vehicleType || undefined,
+        rntrc,
         carretas: additionalPlates.length ? additionalPlates : undefined,
       },
+      // Modal rodoviário — o Hub aceita o RNTRC em veiculo/modalRodoviario/rodo.
+      modalRodoviario: rntrc ? { rntrc, RNTRC: rntrc } : undefined,
+      rodo: rntrc ? { rntrc, RNTRC: rntrc } : undefined,
       valores: {
         valorFrete: totalServico,
         freteBase,
@@ -661,6 +685,8 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
         valorFretePeso: freteBase,
         fretePeso: freteBase,
         valorIcms: icmsValue,
+        baseIcms: Number((Number(icmsBlock?.vBC) || 0).toFixed(2)),
+        aliquotaIcms: Number((Number(icmsBlock?.pICMS) || 0).toFixed(2)),
         valorTotalServico: totalServico,
         valorPrestacao: totalServico,
         valorReceber: totalServico,
@@ -668,6 +694,8 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
         vRec: totalServico,
         valorCarga: Number((input.totals.cargo_value || 0).toFixed(2)),
         pesoBrutoKg: Number((input.totals.weight_kg || 0).toFixed(3)),
+        pesoKg: Number((input.totals.weight_kg || 0).toFixed(3)),
+        valorAverbacao: insuredAmount ?? undefined,
         pallets: input.totals.pallet_count || 0,
         ibs: input.totals.ibs_value ?? undefined,
         cbs: input.totals.cbs_value ?? undefined,
