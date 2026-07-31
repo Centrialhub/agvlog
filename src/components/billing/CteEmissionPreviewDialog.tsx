@@ -856,18 +856,35 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                   <div>
                     <Label>Seguradora</Label>
                     <Input value={active.insurerName} onChange={(e) => patch({ insurerName: e.target.value })} />
+                    {insuranceErrors.name && (
+                      <p className="text-[11px] text-destructive">{insuranceErrors.name}</p>
+                    )}
                   </div>
                   <div>
                     <Label>CNPJ seguradora</Label>
-                    <Input value={active.insurerCnpj} onChange={(e) => patch({ insurerCnpj: e.target.value })} />
+                    <Input
+                      value={formatCnpj(active.insurerCnpj)}
+                      inputMode="numeric"
+                      placeholder="00.000.000/0000-00"
+                      onChange={(e) => patch({ insurerCnpj: onlyDigits(e.target.value).slice(0, 14) })}
+                    />
+                    {insuranceErrors.cnpj && (
+                      <p className="text-[11px] text-destructive">{insuranceErrors.cnpj}</p>
+                    )}
                   </div>
                   <div>
                     <Label>Apólice</Label>
                     <Input value={active.insurerPolicy} onChange={(e) => patch({ insurerPolicy: e.target.value })} />
+                    {insuranceErrors.policy && (
+                      <p className="text-[11px] text-destructive">{insuranceErrors.policy}</p>
+                    )}
                   </div>
                   <div>
                     <Label>Nº averbação (por CT-e)</Label>
                     <Input value={active.insurerEndorsement} onChange={(e) => patch({ insurerEndorsement: e.target.value })} />
+                    {insuranceErrors.endorsement && (
+                      <p className="text-[11px] text-destructive">{insuranceErrors.endorsement}</p>
+                    )}
                   </div>
                   <div>
                     <Label>Valor segurado (R$)</Label>
@@ -888,17 +905,10 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                     />
                   </div>
                 </div>
-                {(!active.insurerName || !active.insurerPolicy || !active.insurerEndorsement) && (
+                {Object.keys(insuranceErrors).length > 0 && (
                   <p className="text-[11px] text-amber-600">
-                    O DACTE imprime o bloco de seguro com seguradora, nº da apólice e nº da averbação. Campos em falta:{' '}
-                    {[
-                      !active.insurerName && 'seguradora',
-                      !active.insurerPolicy && 'apólice',
-                      !active.insurerEndorsement && 'averbação',
-                    ]
-                      .filter(Boolean)
-                      .join(', ')}
-                    . A averbação é o número por CT-e e não é replicada no lote.
+                    O DACTE só imprime o bloco de seguro com seguradora, CNPJ, nº da apólice e nº da averbação válidos —
+                    a emissão fica bloqueada até a correção. A averbação é por CT-e e não é replicada no lote.
                   </p>
                 )}
               </TabsContent>
