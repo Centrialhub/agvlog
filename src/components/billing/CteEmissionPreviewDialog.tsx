@@ -19,6 +19,7 @@ import { useVehicles } from '@/hooks/useVehicles';
 import { useClients } from '@/hooks/useClients';
 import { useTenant } from '@/hooks/useTenant';
 import { useIssueCTe } from '@/hooks/useIssueCTe';
+import { useInsuranceProfile, useUpdateInsuranceProfile } from '@/hooks/useInsuranceProfile';
 import type { CteGroupPreview } from '@/lib/cteGroupingModes';
 import { buildCtePayload, computeIcmsAmounts, type CteTakerRole, type BuildCtePayloadInput } from '@/lib/fiscal/cteBuilder';
 import type { CteDocType } from '@/lib/fiscal/cteBuilder';
@@ -389,6 +390,8 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
   const { data: vehicles = [] } = useVehicles();
   const { data: clients = [] } = useClients();
   const issueCte = useIssueCTe();
+  const { data: insuranceProfile } = useInsuranceProfile();
+  const saveInsuranceProfile = useUpdateInsuranceProfile();
 
   const [drivers, setDrivers] = useState<DriverOpt[]>([]);
   const [items, setItems] = useState<EditableCte[]>([]);
@@ -453,6 +456,24 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  // Aplica a seguradora padrão salva (nome, CNPJ e apólice) em todos os CT-es do lote.
+  // A averbação (CGC) continua por CT-e e nunca é replicada.
+  useEffect(() => {
+    if (!open || items.length === 0 || !insuranceProfile) return;
+    const { name, cnpj, policy } = insuranceProfile;
+    if (!name && !cnpj && !policy) return;
+    let changed = false;
+    const next = items.map((it) => {
+      const out = { ...it };
+      if (!out.insurerName && name) { out.insurerName = name; changed = true; }
+      if (!out.insurerCnpj && cnpj) { out.insurerCnpj = cnpj; changed = true; }
+      if (!out.insurerPolicy && policy) { out.insurerPolicy = policy; changed = true; }
+      return out;
+    });
+    if (changed) setItems(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, insuranceProfile, items.length]);
 
   // Auto-preenche IE de remetente/destinatário a partir do cadastro de clientes/fornecedores
   useEffect(() => {
@@ -894,7 +915,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                     )}
                   </div>
                   <div>
-                    <Label>Nº averbação (por CT-e)</Label>
+                    <Label>Nº averbação / CGC (por CT-e)</Label>
                     <Input value={active.insurerEndorsement} onChange={(e) => patch({ insurerEndorsement: e.target.value })} />
                     {insuranceErrors.endorsement && (
                       <p className="text-[11px] text-destructive">{insuranceErrors.endorsement}</p>
@@ -919,10 +940,45 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                     />
                   </div>
                 </div>
+                <div className="flex items-center gap-2 pt-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={saveInsuranceProfile.isPending || !active.insurerName}
+                    onClick={async () => {
+                      try {
+                        await saveInsuranceProfile.mutateAsync({
+                          name: active.insurerName,
+                          cnpj: active.insurerCnpj,
+                          policy: active.insurerPolicy,
+                        });
+                        setItems((arr) =>
+                          arr.map((it) => ({
+                            ...it,
+                            insurerName: active.insurerName,
+                            insurerCnpj: active.insurerCnpj,
+                            insurerPolicy: active.insurerPolicy,
+                          })),
+                        );
+                        toast.success('Seguradora salva como padrão', {
+                          description: 'Aplicada a este lote e às próximas emissões.',
+                        });
+                      } catch (e: any) {
+                        toast.error('Falha ao salvar seguradora', { description: e?.message });
+                      }
+                    }}
+                  >
+                    Salvar seguradora como padrão
+                  </Button>
+                  <span className="text-[11px] text-muted-foreground">
+                    Seguradora, CNPJ e apólice ficam salvos para todos os CT-es. O nº da averbação (CGC) muda por CT-e.
+                  </span>
+                </div>
                 {Object.keys(insuranceErrors).length > 0 && (
                   <p className="text-[11px] text-amber-600">
                     O DACTE só imprime o bloco de seguro com seguradora, CNPJ, nº da apólice e nº da averbação válidos —
-                    a emissão fica bloqueada até a correção. A averbação é por CT-e e não é replicada no lote.
+                    a emissão fica bloqueada até a correção. A averbação (CGC) é por CT-e e não é replicada no lote.
                   </p>
                 )}
               </TabsContent>
