@@ -1041,7 +1041,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
               <TabsContent value="carga" className="space-y-3 pt-3">
                 <div className="grid grid-cols-4 gap-2">
                   <div>
-                    <Label>Frete (R$)</Label>
+                    <Label>Frete a receber — com ICMS (R$)</Label>
                     <Input type="number" step="0.01" value={active.freightValue}
                       onChange={(e) => patch({ freightValue: Number(e.target.value) })} />
                   </div>
@@ -1113,7 +1113,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                   const fretePeso =
                     active.fcFreightWeight > 0
                       ? active.fcFreightWeight
-                      : Math.max((active.freightValue || 0) - acc, 0) || active.freightValue || 0;
+                      : Math.max((active.freightValue || 0) - (active.icmsValor || 0) - acc, 0) || active.freightValue || 0;
                   const money = (n: number) =>
                     `R$ ${Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
                   return (
@@ -1136,10 +1136,14 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                           <span>ICMS</span>
                           <span>{money(active.icmsValor)}</span>
                         </div>
+                        <div className="flex justify-between px-3 py-1.5 font-semibold border-t-2">
+                          <span>FRETE A RECEBER</span>
+                          <span>{money(active.freightValue)}</span>
+                        </div>
                       </div>
                       <p className="text-[11px] text-muted-foreground mt-1">
-                        FRETE PESO e ICMS são sempre enviados em destaque; demais componentes entram
-                        conforme preenchidos acima.
+                        FRETE PESO é o frete cru, sem ICMS. FRETE A RECEBER é o total com ICMS
+                        embutido; demais componentes entram conforme preenchidos acima.
                       </p>
                     </div>
                   );
