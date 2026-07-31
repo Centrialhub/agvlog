@@ -385,6 +385,79 @@ Deno.serve(async (req) => {
         let hubMessage = '';
         const attemptLog: string[] = [];
 
+        // 0) Download SOB DEMANDA (API v1 atualizada): o Hub gera/baixa o arquivo do
+        //    provedor no momento do pedido, sem depender de cache.
+        //    POST /hub_documents_deliver (mode=url, forceRefresh) e, se pendente,
+        //    GET /hub_documents_links?base64=1.
+        const fetchSigned = async (url: string, withToken: boolean) => {
+          const res = await fetch(url, withToken ? { headers: { Authorization: `Bearer ${token}` } } : undefined);
+          if (!res.ok) return null;
+          const buf = await res.arrayBuffer();
+          if (buf.byteLength === 0) return null;
+          return fileResponse(buf, res.headers.get('Content-Type'));
+        };
+        const tryOnDemand = async (): Promise<Response | null> => {
+          if (format === 'cancel_xml') return null; // não suportado por deliver/links
+          const readFiles = (data: any) => (data?.files || data?.hub?.files || {}) as Record<string, any>;
+          const consume = async (data: any): Promise<Response | null> => {
+            const entry = readFiles(data)[format];
+            if (!entry) return null;
+            if (entry.pending) return null;
+            const inlineB64 = entry.base64 || entry.content;
+            if (typeof inlineB64 === 'string' && inlineB64.length > 0) {
+              if (format === 'xml' && inlineB64.trimStart().startsWith('<')) return fileResponse(inlineB64, 'application/xml');
+              try { return fileResponse(b64ToBytes(inlineB64), entry.contentType); } catch { /* segue */ }
+            }
+            if (typeof entry.signedUrl === 'string' && entry.signedUrl) {
+              const r = await fetchSigned(entry.signedUrl, false);
+              if (r) return r;
+            }
+            if (typeof entry.downloadUrl === 'string' && entry.downloadUrl) {
+              const r = await fetchSigned(entry.downloadUrl, true);
+              if (r) return r;
+            }
+            return null;
+          };
+          try {
+            const { status, data } = await callHub('POST', '/hub_documents_deliver', undefined, {
+              id: payload.id,
+              idIntegracao: payload.idIntegracao,
+              kinds: [format],
+              mode: 'url',
+              forceRefresh: true,
+              expiresIn: 604800,
+            }, token);
+            const got = await consume(data);
+            if (got) {
+              console.log('[hub-fiscal-proxy] file via deliver', { id: payload.id, format });
+              return got;
+            }
+            const msg = String((data as any)?.error?.message || (data as any)?.error?.code || '');
+            attemptLog.push(`/hub_documents_deliver: ${status} ${msg}`.trim());
+            if (msg) hubMessage = msg;
+          } catch (e) {
+            attemptLog.push(`/hub_documents_deliver: ${String((e as Error)?.message || e).slice(0, 160)}`);
+          }
+          try {
+            const { status, data } = await callHub('GET', '/hub_documents_links', {
+              id: payload.id, base64: '1', expiresIn: '604800',
+            }, undefined, token);
+            const got = await consume(data);
+            if (got) {
+              console.log('[hub-fiscal-proxy] file via links', { id: payload.id, format });
+              return got;
+            }
+            const msg = String((data as any)?.error?.message || (data as any)?.error?.code || '');
+            attemptLog.push(`/hub_documents_links: ${status} ${msg}`.trim());
+            if (msg) hubMessage = msg;
+          } catch (e) {
+            attemptLog.push(`/hub_documents_links: ${String((e as Error)?.message || e).slice(0, 160)}`);
+          }
+          return null;
+        };
+        const onDemand = await tryOnDemand();
+        if (onDemand) return onDemand;
+
         // Contingência direta TecnoSpeed/ManagerSaaS. Tentada ANTES do Hub quando já
         // conhecemos chave + CNPJ localmente: a rota de arquivos do Hub está
         // indisponível nesta instância e as 5 tentativas gastam segundos por arquivo
