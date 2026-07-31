@@ -41,7 +41,10 @@ async function downloadHubFile(
   }
   const toastId = opts.silent ? undefined : toast.loading(`Baixando ${label}...`);
   try {
-    const blob = await hubFiscal.file(row.hub_document_id, format);
+    const blob = await hubFiscal.file(row.hub_document_id, format, {
+      type: 'cte',
+      emissionId: row.emission_id,
+    });
     const objectUrl = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = objectUrl;

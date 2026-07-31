@@ -127,7 +127,11 @@ export const hubFiscal = {
   },
 
   /** Returns a Blob you can hand to URL.createObjectURL for download/preview. */
-  async file(hubDocumentId: string, format: 'pdf' | 'xml' | 'cancel_xml' = 'pdf'): Promise<Blob> {
+  async file(
+    hubDocumentId: string,
+    format: 'pdf' | 'xml' | 'cancel_xml' = 'pdf',
+    opts: { type?: HubDocType; emitterId?: string | null; emissionId?: string | null } = {},
+  ): Promise<Blob> {
     const { data: session } = await supabase.auth.getSession();
     const token = session.session?.access_token;
     const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/hub-fiscal-proxy`;
@@ -138,10 +142,27 @@ export const hubFiscal = {
         'Authorization': `Bearer ${token}`,
         'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string,
       },
-      body: JSON.stringify({ action: 'file', id: hubDocumentId, format }),
+      body: JSON.stringify({
+        action: 'file',
+        id: hubDocumentId,
+        format,
+        type: opts.type,
+        emitterId: opts.emitterId || undefined,
+        emissionId: opts.emissionId || undefined,
+      }),
     });
-    if (!res.ok) throw new Error(`Hub file download failed (${res.status})`);
-    return await res.blob();
+    const contentType = res.headers.get('Content-Type') || '';
+    if (!res.ok || contentType.includes('application/json')) {
+      let message = `Hub Fiscal retornou ${res.status}`;
+      try {
+        const j = await res.json();
+        message = j?.error?.message || j?.error?.code || j?.message || message;
+      } catch { /* keep default */ }
+      throw new Error(message);
+    }
+    const blob = await res.blob();
+    if (blob.size === 0) throw new Error('Arquivo vazio retornado pelo Hub Fiscal.');
+    return blob;
   },
 };
 
