@@ -68,6 +68,7 @@ interface EditableCte {
   insurerName: string;
   insurerPolicy: string;
   insurerEndorsement: string;
+  insurerInsuredAmount: number;
   takerRole: CteTakerRole;
   takerName: string;
   takerCnpj: string;
@@ -157,6 +158,7 @@ function groupToEditable(g: CteGroupPreview, defaultEmitterId: string): Editable
     insurerName: '',
     insurerPolicy: '',
     insurerEndorsement: '',
+    insurerInsuredAmount: 0,
     takerRole: 'remetente',
     takerName: '',
     takerCnpj: '',
@@ -306,6 +308,7 @@ function toBuildInput(
           name: e.insurerName,
           policy: e.insurerPolicy || null,
           endorsement: e.insurerEndorsement || null,
+          insured_amount: e.insurerInsuredAmount || e.cargoValue || null,
         }
       : null,
     takerRole: e.takerRole,
@@ -545,7 +548,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
       'refNumber', 'clientOrderNumber',
       'freightValue', 'cargoValue', 'weightKg', 'palletCount',
       'icmsBase', 'icmsValor', 'cbsIbsBase',
-      'fcFreightWeight',
+      'fcFreightWeight', 'insurerInsuredAmount',
       'invoices', 'loadIds', 'fiscalDocumentIds', 'clientId',
       'key', 'transmitted', 'transmitMessage',
     ]);
@@ -859,7 +862,30 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                     <Label>Nº averbação</Label>
                     <Input value={active.insurerEndorsement} onChange={(e) => patch({ insurerEndorsement: e.target.value })} />
                   </div>
+                  <div>
+                    <Label>Valor segurado (R$)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={active.insurerInsuredAmount || active.cargoValue || 0}
+                      onChange={(e) => patch({ insurerInsuredAmount: Number(e.target.value) })}
+                    />
+                  </div>
+                  <div>
+                    <Label>Seguro cobrado (R$)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={active.fcInsurance}
+                      onChange={(e) => patch({ fcInsurance: Number(e.target.value) })}
+                    />
+                  </div>
                 </div>
+                {!active.insurerName && (
+                  <p className="text-[11px] text-amber-600">
+                    Sem seguradora informada o DACTE sai sem seguro da carga. Preencha seguradora, apólice e averbação.
+                  </p>
+                )}
               </TabsContent>
 
               <TabsContent value="tomador" className="space-y-3 pt-3">
@@ -1064,6 +1090,45 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                     ))}
                   </div>
                 </div>
+                {(() => {
+                  const acc =
+                    (active.fcDeliveryFee || 0) + (active.fcOthers || 0) + (active.fcInsurance || 0) +
+                    (active.fcDispatch || 0) + (active.fcGris || 0) + (active.fcToll || 0) +
+                    (active.fcTracking || 0) + (active.fcLoading || 0) + (active.fcHelper || 0);
+                  const fretePeso =
+                    active.fcFreightWeight > 0
+                      ? active.fcFreightWeight
+                      : Math.max((active.freightValue || 0) - acc, 0) || active.freightValue || 0;
+                  const money = (n: number) =>
+                    `R$ ${Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+                  return (
+                    <div className="pt-2 border-t">
+                      <Label className="text-xs font-semibold">
+                        Componentes do valor da prestação (impresso no DACTE)
+                      </Label>
+                      <div className="mt-1 rounded-md border divide-y text-sm">
+                        <div className="flex justify-between px-3 py-1.5 font-semibold bg-muted/40">
+                          <span>FRETE PESO</span>
+                          <span>{money(fretePeso)}</span>
+                        </div>
+                        {active.fcInsurance > 0 && (
+                          <div className="flex justify-between px-3 py-1.5">
+                            <span>SEGURO</span>
+                            <span>{money(active.fcInsurance)}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between px-3 py-1.5 font-semibold bg-muted/40">
+                          <span>ICMS</span>
+                          <span>{money(active.icmsValor)}</span>
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground mt-1">
+                        FRETE PESO e ICMS são sempre enviados em destaque; demais componentes entram
+                        conforme preenchidos acima.
+                      </p>
+                    </div>
+                  );
+                })()}
                 <div>
                   <Label>NFs referenciadas ({active.invoices.length})</Label>
                   <div className="rounded-md border max-h-[200px] overflow-auto text-xs">
