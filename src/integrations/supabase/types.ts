@@ -9229,6 +9229,12 @@ export type Database = {
           emitter_id: string | null
           fiscal_document_ids: string[] | null
           id: string
+          insurance_premium: number | null
+          insured_amount: number | null
+          insurer_cnpj: string | null
+          insurer_endorsement: string | null
+          insurer_name: string | null
+          insurer_policy: string | null
           internal_number: string | null
           invoice_number: string | null
           is_preview: boolean
@@ -9315,6 +9321,12 @@ export type Database = {
           emitter_id?: string | null
           fiscal_document_ids?: string[] | null
           id?: string
+          insurance_premium?: number | null
+          insured_amount?: number | null
+          insurer_cnpj?: string | null
+          insurer_endorsement?: string | null
+          insurer_name?: string | null
+          insurer_policy?: string | null
           internal_number?: string | null
           invoice_number?: string | null
           is_preview?: boolean
@@ -9401,6 +9413,12 @@ export type Database = {
           emitter_id?: string | null
           fiscal_document_ids?: string[] | null
           id?: string
+          insurance_premium?: number | null
+          insured_amount?: number | null
+          insurer_cnpj?: string | null
+          insurer_endorsement?: string | null
+          insurer_name?: string | null
+          insurer_policy?: string | null
           internal_number?: string | null
           invoice_number?: string | null
           is_preview?: boolean
