@@ -472,10 +472,18 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     if (!open || !hasInsuranceProfile(insuranceProfile)) return;
     setItems((prev) => {
       if (prev.length === 0) return prev;
-      return applyInsuranceProfileToBatch(prev, insuranceProfile).items;
+      const { items: next, changed } = applyInsuranceProfileToBatch(prev, insuranceProfile);
+      return changed ? next : prev;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, insuranceProfile, items.length]);
+  }, [
+    open,
+    insuranceProfile,
+    items.length,
+    // Reaplica sempre que algum CT-e do lote estiver sem seguradora/CNPJ/apólice
+    // (ex.: itens repopulados pelo RPC assíncrono ou troca de lote).
+    items.some((it) => !it.insurerName || !it.insurerCnpj || !it.insurerPolicy),
+  ]);
 
   // Auto-preenche IE de remetente/destinatário a partir do cadastro de clientes/fornecedores
   useEffect(() => {
