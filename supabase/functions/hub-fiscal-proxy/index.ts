@@ -703,6 +703,31 @@ Deno.serve(async (req) => {
         return json(status, { success: status < 400, hub: data });
       }
 
+      case 'deliver': {
+        if (!payload.id && !payload.idIntegracao) return json(400, { success: false, error: { code: 'MISSING_ID' } });
+        const resolved = await resolveToken(payload.type || 'all', payload.emitterId);
+        const { status, data } = await callHub('POST', '/hub_documents_deliver', undefined, {
+          id: payload.id,
+          idIntegracao: payload.idIntegracao,
+          kinds: payload.kinds && payload.kinds.length ? payload.kinds : ['pdf', 'xml'],
+          mode: payload.mode || 'url',
+          expiresIn: payload.expiresIn ?? 604800,
+          forceRefresh: payload.forceRefresh ?? true,
+          ...(payload.body || {}),
+        }, resolved.token);
+        return json(status, { success: status < 400, hub: data });
+      }
+
+      case 'links': {
+        if (!payload.id && !payload.idIntegracao) return json(400, { success: false, error: { code: 'MISSING_ID' } });
+        const resolved = await resolveToken(payload.type || 'all', payload.emitterId);
+        const query: Record<string, string> = { expiresIn: String(payload.expiresIn ?? 604800) };
+        if (payload.id) query.id = payload.id;
+        if (payload.idIntegracao) query.idIntegracao = payload.idIntegracao;
+        const { status, data } = await callHub('GET', '/hub_documents_links', query, undefined, resolved.token);
+        return json(status, { success: status < 400, hub: data });
+      }
+
       case 'query': {
         const resolved = await resolveToken(payload.type || 'all', payload.emitterId);
         const { status, data } = await callHub('GET', '/hub_documents_query', payload.query || {}, undefined, resolved.token);
