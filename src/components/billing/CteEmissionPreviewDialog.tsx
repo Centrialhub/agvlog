@@ -390,6 +390,8 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
   const { data: vehicles = [] } = useVehicles();
   const { data: clients = [] } = useClients();
   const issueCte = useIssueCTe();
+  const { data: insuranceProfile } = useInsuranceProfile();
+  const saveInsuranceProfile = useUpdateInsuranceProfile();
 
   const [drivers, setDrivers] = useState<DriverOpt[]>([]);
   const [items, setItems] = useState<EditableCte[]>([]);
@@ -454,6 +456,24 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  // Aplica a seguradora padrão salva (nome, CNPJ e apólice) em todos os CT-es do lote.
+  // A averbação (CGC) continua por CT-e e nunca é replicada.
+  useEffect(() => {
+    if (!open || items.length === 0 || !insuranceProfile) return;
+    const { name, cnpj, policy } = insuranceProfile;
+    if (!name && !cnpj && !policy) return;
+    let changed = false;
+    const next = items.map((it) => {
+      const out = { ...it };
+      if (!out.insurerName && name) { out.insurerName = name; changed = true; }
+      if (!out.insurerCnpj && cnpj) { out.insurerCnpj = cnpj; changed = true; }
+      if (!out.insurerPolicy && policy) { out.insurerPolicy = policy; changed = true; }
+      return out;
+    });
+    if (changed) setItems(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, insuranceProfile, items.length]);
 
   // Auto-preenche IE de remetente/destinatário a partir do cadastro de clientes/fornecedores
   useEffect(() => {
