@@ -1138,7 +1138,9 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                     active.fcFreightWeight > 0
                       ? active.fcFreightWeight
                       : active.freightValue || 0;
-                  const freteReceber = fretePeso + acc + (active.icmsValor || 0);
+                  const icmsSoma = active.icmsEmbutido === true;
+                  const freteReceber =
+                    fretePeso + acc + (icmsSoma ? active.icmsValor || 0 : 0);
                   const money = (n: number) =>
                     `R$ ${Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
                   return (
@@ -1158,7 +1160,12 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                           </div>
                         )}
                         <div className="flex justify-between px-3 py-1.5 font-semibold bg-muted/40">
-                          <span>ICMS</span>
+                          <span>
+                            ICMS{' '}
+                            <span className="font-normal text-[11px] text-muted-foreground">
+                              {icmsSoma ? '(embutido — soma)' : '(por fora — destaque, não soma)'}
+                            </span>
+                          </span>
                           <span>{money(active.icmsValor)}</span>
                         </div>
                         <div className="flex justify-between px-3 py-1.5 font-semibold border-t-2">
@@ -1167,8 +1174,9 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                         </div>
                       </div>
                       <p className="text-[11px] text-muted-foreground mt-1">
-                        FRETE PESO é o frete cru (base do cálculo). FRETE A RECEBER = FRETE PESO +
-                        acessórios + ICMS embutido — o ICMS é somado, nunca deduzido.
+                        FRETE PESO é o frete cru (base do cálculo). Com ICMS embutido, FRETE A
+                        RECEBER = FRETE PESO + acessórios + ICMS. Sem embutido, o ICMS sai em
+                        destaque no CT-e mas não é somado ao valor a receber.
                       </p>
                     </div>
                   );

@@ -177,6 +177,35 @@ describe('cteBuilder — ICMS embutido (por dentro)', () => {
     expect(icms.vBC).toBeCloseTo(3583.74, 2);
     expect(icms.vICMS).toBeCloseTo(191.73, 2);
   });
+
+  it('buildCtePayload: por fora destaca ICMS sem somar ao valor a receber', () => {
+    const input: BuildCtePayloadInput = {
+      emitter: { id: 'em1', cnpj: '18666510000168', name: 'X', environment: 'sandbox' },
+      remitter: { name: 'R', cnpj: '14998371003215' },
+      recipient: { name: 'D', cnpj: '07734610000168' },
+      takerRole: 'destinatario',
+      driver: null,
+      vehicle: null,
+      nature: 'PRESTACAO',
+      invoices: [{ access_key: '3'.repeat(44), number: '1', series: '1', value: 100 }],
+      totals: { freight_value: 1000, cargo_value: 100, weight_kg: 1, pallet_count: 0 },
+      icms: { cst: '00', aliquota: 12, embutido: false },
+      insurer: { name: 'AKAD', cnpj: '18666510000168', policy: 'AP-1', endorsement: 'AV-1' },
+    };
+    const p = (buildCtePayload(input).payload as any).payload;
+    expect(p.valores.valorFreteBase).toBe(1000);
+    expect(p.valores.valorIcms).toBeCloseTo(120, 2);
+    // ICMS por fora NÃO entra no total a receber
+    expect(p.valores.valorReceber).toBe(1000);
+    expect(p.valores.valorTotalServico).toBe(1000);
+    // mas continua destacado nos componentes com soma=false
+    expect(p.componentes).toEqual([
+      { nome: 'FRETE PESO', valor: 1000, soma: true },
+      { nome: 'ICMS', valor: 120, soma: false },
+    ]);
+    // e fora do grupo Comp para fechar com vTPrest
+    expect(p.valorPrestacao.Comp).toEqual([{ xNome: 'FRETE PESO', vComp: 1000 }]);
+  });
 });
 
 describe('cteBuilder — regime tributário do emitente', () => {
