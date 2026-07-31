@@ -61,9 +61,6 @@ function validateDocNumber(raw: string, label: string): string | null {
   if (!DOC_PATTERN.test(value)) {
     return `${label} inválido — use de 3 a 30 caracteres alfanuméricos (permitidos - . /).`;
   }
-  if (!/[0-9]/.test(value)) {
-    return `${label} inválido — deve conter ao menos um número.`;
-  }
   return null;
 }
 
