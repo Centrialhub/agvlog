@@ -3,6 +3,8 @@
 // commonly demand so the Hub does not reject the note for missing metadata.
 
 import type { TenantEmitter } from '@/hooks/useEmitters';
+import { buildInsuranceText, hasInsuranceData } from './insuranceText';
+import { validateInsurance, onlyDigits as cnpjDigits } from './insuranceValidation';
 
 function onlyDigits(v: any): string {
   return String(v ?? '').replace(/\D/g, '');
@@ -60,11 +62,41 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl, a
   const valorIss = num(doc.valor_iss || (baseCalculo * aliquota) / 100);
 
   const items = Array.isArray(doc.items) ? doc.items : [];
-  const discriminacao = String(
+  const baseDiscriminacao = String(
     doc.description ||
       items.map((it: any) => `${it.description} (${num(it.quantity)}x R$ ${num(it.unit_value).toFixed(2)})`).join(' | ') ||
       'Serviço de transporte'
-  ).slice(0, 2000);
+  );
+
+  // Seguro da carga: mesmos campos do CT-e. O padrão ABRASF não tem bloco
+  // próprio, então garantimos a impressão na discriminação + observação.
+  const insurance = {
+    insurer_name: doc.insurer_name,
+    insurer_cnpj: doc.insurer_cnpj,
+    insurer_policy: doc.insurer_policy,
+    insurer_endorsement: doc.insurer_endorsement,
+    insured_amount: doc.insured_amount,
+    insurance_premium: doc.insurance_premium,
+  };
+  const hasInsurance = hasInsuranceData(insurance);
+  if (hasInsurance) {
+    const check = validateInsurance({
+      name: doc.insurer_name,
+      cnpj: doc.insurer_cnpj,
+      policy: doc.insurer_policy,
+      endorsement: doc.insurer_endorsement,
+    });
+    if (!check.ok) {
+      throw new Error(`Dados do seguro inválidos: ${check.messages.join(' ')}`);
+    }
+  }
+  const insuranceText = buildInsuranceText(insurance);
+
+  const discriminacao = [baseDiscriminacao, insuranceText]
+    .filter(Boolean)
+    .join('\n')
+    .slice(0, 2000);
+  const observacao = [doc.notes || '', insuranceText].filter(Boolean).join(' — ').slice(0, 2000) || undefined;
 
   const payload = nonEmpty({
     // Identificação do RPS
@@ -150,7 +182,20 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl, a
     },
 
     pedido: doc.pedido || doc.reference_number || undefined,
-    observacao: doc.notes || undefined,
+    observacao,
+
+    // Bloco extra de seguro — enviado ao Hub para auditoria/impressão quando
+    // o provedor municipal suportar campos adicionais.
+    seguro: hasInsurance
+      ? {
+          seguradora: (doc.insurer_name || '').trim() || undefined,
+          cnpjSeguradora: cnpjDigits(doc.insurer_cnpj) || undefined,
+          apolice: (doc.insurer_policy || '').trim() || undefined,
+          averbacao: (doc.insurer_endorsement || '').trim() || undefined,
+          valorSegurado: num(doc.insured_amount) || undefined,
+          valorSeguro: num(doc.insurance_premium) || undefined,
+        }
+      : undefined,
   });
 
   return {
