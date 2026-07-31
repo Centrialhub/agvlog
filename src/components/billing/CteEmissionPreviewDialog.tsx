@@ -971,6 +971,26 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                   >
                     Salvar seguradora como padrão
                   </Button>
+                  {(insuranceProfile?.name || insuranceProfile?.cnpj || insuranceProfile?.policy) && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setItems((arr) =>
+                          arr.map((it) => ({
+                            ...it,
+                            insurerName: insuranceProfile?.name || it.insurerName,
+                            insurerCnpj: insuranceProfile?.cnpj || it.insurerCnpj,
+                            insurerPolicy: insuranceProfile?.policy || it.insurerPolicy,
+                          })),
+                        );
+                        toast.success('Seguradora padrão aplicada ao lote');
+                      }}
+                    >
+                      Usar padrão salvo
+                    </Button>
+                  )}
                   <span className="text-[11px] text-muted-foreground">
                     Seguradora, CNPJ e apólice ficam salvos para todos os CT-es. O nº da averbação (CGC) muda por CT-e.
                   </span>
