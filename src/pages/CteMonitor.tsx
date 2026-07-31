@@ -13,7 +13,7 @@ import {
   type CteMonitorRow, type CteMonitorFilters, type SefazStatus,
 } from '@/hooks/useCteMonitor';
 import {
-  FileText, FileDown, RefreshCw, Search, Filter as FilterIcon, X, AlertCircle,
+  FileText, FileDown, RefreshCw, Search, Filter as FilterIcon, X, AlertCircle, Eye,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PendingInvoicesBanner } from '@/components/billing/PendingInvoicesBanner';
