@@ -140,6 +140,7 @@ export default function Billing() {
   const [periodEnd, setPeriodEnd] = useState<string>('');
   const [selectedLoadIds, setSelectedLoadIds] = useState<Set<string>>(new Set());
   const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
+  const [recipientCity, setRecipientCity] = useState<string>(SENTINEL_NONE);
   const [modeId, setModeId] = useState<number>(1);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [modeDialogOpen, setModeDialogOpen] = useState(false);
