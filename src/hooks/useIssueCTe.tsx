@@ -218,6 +218,7 @@ export function useCancelCTe() {
           anyDoc.hub_document_id,
           args.justificativa.trim(),
           anyDoc.emission_id || undefined,
+          args.fiscalDocumentId,
         );
       } catch (e) {
         const raw = String((e as Error)?.message || e);
@@ -251,6 +252,12 @@ export function useCancelCTe() {
       qc.invalidateQueries({ queryKey: ['issued_ctes'] });
       qc.invalidateQueries({ queryKey: ['cte_monitor'] });
       qc.invalidateQueries({ queryKey: ['cte_batches'] });
+    },
+    onError: () => {
+      // Uma recusa fiscal também pode atualizar sefaz_status no proxy.
+      qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
+      qc.invalidateQueries({ queryKey: ['issued_ctes'] });
+      qc.invalidateQueries({ queryKey: ['cte_monitor'] });
     },
   });
 }

@@ -279,6 +279,17 @@ Deno.serve(async (req) => {
           { reason, justificativa: reason },
           resolved.token,
         );
+        const hubError = (data as any)?.error;
+        const cancelRejected = status === 409 && (
+          hubError?.code === 'NOT_CANCELABLE' ||
+          /cancel_rejected|cannot be cancelled/i.test(String(hubError?.message || ''))
+        );
+        if (cancelRejected && payload.fiscalDocumentId) {
+          await admin.from('fiscal_documents').update({
+            sefaz_status: 'cancel_rejected',
+            sefaz_message: hubError?.message || 'Cancelamento rejeitado pela SEFAZ',
+          }).eq('id', payload.fiscalDocumentId).eq('tenant_id', tenantId);
+        }
         if (status < 400 && payload.emissionId) {
           await admin.from('hub_fiscal_emissions').update({
             status: 'cancelled',
@@ -287,7 +298,10 @@ Deno.serve(async (req) => {
             last_response: data as any,
           }).eq('id', payload.emissionId).eq('tenant_id', tenantId);
         }
-        return json(status, { success: status < 400, hub: data });
+        // NOT_CANCELABLE é uma recusa fiscal esperada. HTTP 200 evita que o SDK
+        // transforme o resultado em FunctionsHttpError/tela de erro; a UI trata
+        // `success: false` e mostra a orientação operacional ao usuário.
+        return json(cancelRejected ? 200 : status, { success: status < 400, hub: data });
       }
 
       case 'cce': {

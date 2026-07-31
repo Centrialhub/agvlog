@@ -1028,7 +1028,7 @@ function IssuedCtesTable() {
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                  {c.status === 'cancelled' ? (
+                  {c.status === 'cancelled' || c.sefaz_status === 'cancel_rejected' ? (
                     <span className="text-xs text-muted-foreground">—</span>
                   ) : (
                     <Button

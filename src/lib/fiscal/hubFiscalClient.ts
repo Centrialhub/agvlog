@@ -48,7 +48,23 @@ export interface EmitParams {
 
 async function invoke(payload: Record<string, unknown>) {
   const { data, error } = await supabase.functions.invoke('hub-fiscal-proxy', { body: payload });
-  if (error) throw new Error(error.message || 'Hub Fiscal proxy error');
+  if (error) {
+    let detail = error.message || 'Hub Fiscal proxy error';
+    const context = (error as { context?: Response }).context;
+    if (context) {
+      try {
+        const response = await context.clone().json();
+        const hubError = response?.hub?.error || response?.error;
+        detail = [hubError?.code, hubError?.message].filter(Boolean).join(': ') || detail;
+      } catch { /* mantém a mensagem padrão */ }
+    }
+    throw new Error(detail);
+  }
+  if ((data as HubResponse | null)?.success === false) {
+    const response = data as HubResponse;
+    const hubError = response.hub?.error || response.error;
+    throw new Error([hubError?.code, hubError?.message].filter(Boolean).join(': ') || 'Operação recusada pelo Hub Fiscal');
+  }
   return data as HubResponse;
 }
 
@@ -73,9 +89,10 @@ export const hubFiscal = {
     return invoke({ action: 'sync', id: hubDocumentId, emissionId });
   },
 
-  cancel(hubDocumentId: string, justificativa: string, emissionId?: string) {
+  cancel(hubDocumentId: string, justificativa: string, emissionId?: string, fiscalDocumentId?: string) {
     return invoke({
       action: 'cancel', id: hubDocumentId, emissionId,
+      fiscalDocumentId,
       body: { justificativa },
     });
   },
