@@ -406,8 +406,12 @@ function CteDetail({ row, onClose }: { row: CteMonitorRow; onClose: () => void }
       </div>
 
       <div className="flex justify-end gap-2">
-        {row.pdf_url && <Button variant="outline" size="sm" asChild><a href={row.pdf_url} target="_blank" rel="noreferrer"><FileText className="h-4 w-4" /> PDF</a></Button>}
-        {row.xml_url && <Button variant="outline" size="sm" asChild><a href={row.xml_url} target="_blank" rel="noreferrer"><FileDown className="h-4 w-4" /> XML</a></Button>}
+        <Button variant="outline" size="sm" onClick={() => downloadHubFile(row, 'pdf')}>
+          <FileText className="h-4 w-4" /> PDF
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => downloadHubFile(row, 'xml')}>
+          <FileDown className="h-4 w-4" /> XML
+        </Button>
         <Button size="sm" onClick={onClose}>Fechar</Button>
       </div>
     </>
