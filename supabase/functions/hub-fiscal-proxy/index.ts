@@ -32,7 +32,8 @@ async function decryptAesGcm(encrypted: string, keyHex: string): Promise<string>
 type Action =
   | 'emit' | 'get' | 'sync' | 'cancel' | 'cce'
   | 'email' | 'file' | 'query' | 'preview' | 'ping'
-  | 'desacordo' | 'cent' | 'discard' | 'import';
+  | 'desacordo' | 'cent' | 'discard' | 'import'
+  | 'deliver' | 'links';
 
 interface ProxyRequest {
   action: Action;
@@ -42,6 +43,12 @@ interface ProxyRequest {
   query?: Record<string, string>;
   body?: Record<string, unknown>;
   format?: 'pdf' | 'xml' | 'cancel_xml';
+  /** deliver/links — arquivos pedidos sob demanda. */
+  kinds?: ('pdf' | 'xml')[];
+  mode?: 'url' | 'inline' | 'email' | 'callback';
+  expiresIn?: number;
+  forceRefresh?: boolean;
+  idIntegracao?: string;
   // emit-only
   fiscalDocumentId?: string;
   cteDocumentId?: string;
