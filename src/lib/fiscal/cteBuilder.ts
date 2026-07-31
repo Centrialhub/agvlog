@@ -775,11 +775,21 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
       cbsIbs: input.cbsIbs
         ? Object.fromEntries(Object.entries(input.cbsIbs).filter(([, v]) => v != null))
         : undefined,
+      // Campos aceitos pelo Hub v1: content | produto | species (vira proPred).
       mercadoria: input.cargo
-        ? Object.fromEntries(Object.entries(input.cargo).filter(([, v]) => v != null && v !== ''))
+        ? (() => {
+            const merc: Record<string, unknown> = {};
+            if (input.cargo?.content) merc.content = input.cargo.content;
+            const produto = input.cargo?.predominant_product || input.cargo?.content;
+            if (produto) merc.produto = produto;
+            if (input.cargo?.species) merc.species = input.cargo.species;
+            return Object.keys(merc).length ? merc : undefined;
+          })()
         : undefined,
       notasFiscais: (input.invoices || []).map((n) => ({
         chave: digits(n.access_key) || undefined,
+        chaveNFe: digits(n.access_key) || undefined,
+        chNFe: digits(n.access_key) || undefined,
         numero: n.number || undefined,
         serie: n.series || undefined,
         dataEmissao: n.issue_date || undefined,
