@@ -17,7 +17,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { FileSpreadsheet, Calculator, Layers, FileText, Info, XCircle, Filter, Eraser, Save, ChevronRight, ChevronDown, Trash2 } from 'lucide-react';
+import { FileSpreadsheet, Calculator, Layers, FileText, Info, XCircle, Filter, Eraser, Save, ChevronRight, ChevronDown, Trash2, Eye, FileDown } from 'lucide-react';
+import { hubFiscal } from '@/lib/fiscal/hubFiscalClient';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -977,6 +978,41 @@ function IssuedCtesTable() {
   const [deleteConfirm, setDeleteConfirm] = useState('');
   const deleteCte = useDeleteIssuedCte();
 
+  /** PDF/XML sob demanda: pede o arquivo ao Hub Fiscal no momento do clique. */
+  async function fetchDocument(
+    cte: { id: string; hub_document_id: string | null; access_key: string | null; invoice_number: string | null },
+    kind: 'pdf' | 'xml',
+    view = false,
+  ) {
+    const label = kind === 'pdf' ? 'PDF (DACTE)' : 'XML';
+    if (!cte.hub_document_id) {
+      toast.error(`${label} indisponível`, {
+        description: 'Este CT-e ainda não tem id no Hub Fiscal — sincronize a emissão antes de baixar.',
+      });
+      return;
+    }
+    const toastId = toast.loading(`${view ? 'Abrindo' : 'Baixando'} ${label}...`);
+    try {
+      const blob = await hubFiscal.file(cte.hub_document_id, kind, { type: 'cte' });
+      const objectUrl = URL.createObjectURL(blob);
+      if (view) {
+        const win = window.open(objectUrl, '_blank');
+        if (!win) toast.warning('Pop-up bloqueado — use o botão de download.');
+      } else {
+        const a = document.createElement('a');
+        a.href = objectUrl;
+        a.download = `cte-${cte.access_key || cte.invoice_number || cte.id}.${kind}`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+      toast.success(`${label} ${view ? 'aberto' : 'baixado'}`, { id: toastId });
+    } catch (e: any) {
+      toast.error(`Falha ao obter ${label}`, { id: toastId, description: e?.message });
+    }
+  }
+
   if (isLoading) {
     return <p className="text-sm text-muted-foreground py-8 text-center">Carregando...</p>;
   }
@@ -1044,6 +1080,30 @@ function IssuedCtesTable() {
                 </TableCell>
                 <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center justify-end gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      title="Visualizar DACTE (PDF) — busca sob demanda no Hub Fiscal"
+                      onClick={() => fetchDocument(c, 'pdf', true)}
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      title="Baixar PDF (DACTE)"
+                      onClick={() => fetchDocument(c, 'pdf')}
+                    >
+                      <FileText className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      title="Baixar XML"
+                      onClick={() => fetchDocument(c, 'xml')}
+                    >
+                      <FileDown className="h-4 w-4" />
+                    </Button>
                     {c.status !== 'cancelled' && c.sefaz_status !== 'cancel_rejected' && (
                       <Button
                         variant="ghost"
