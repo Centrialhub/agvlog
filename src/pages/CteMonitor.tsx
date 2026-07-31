@@ -18,6 +18,7 @@ import {
 import { toast } from 'sonner';
 import { PendingInvoicesBanner } from '@/components/billing/PendingInvoicesBanner';
 import { hubFiscal } from '@/lib/fiscal/hubFiscalClient';
+import { summarizeBulkDownload, type BulkFailure } from '@/lib/fiscal/bulkDownloadSummary';
 
 async function downloadHubFile(
   row: CteMonitorRow,
@@ -128,7 +129,7 @@ export default function CteMonitor() {
     if (checkedRows.length === 0) return;
     setBulkBusy(true);
     let ok = 0;
-    const failures: { label: string; message: string }[] = [];
+    const failures: BulkFailure[] = [];
     const toastId = toast.loading(`Baixando ${checkedRows.length} arquivo(s) ${format.toUpperCase()}...`);
     for (const row of checkedRows) {
       const rowLabel = row.cte_number || row.access_key || row.id.slice(0, 8);
@@ -142,21 +143,9 @@ export default function CteMonitor() {
       await new Promise((r) => setTimeout(r, 350));
     }
     setBulkBusy(false);
-    if (failures.length === 0) {
-      toast.success(`${ok} arquivo(s) ${format.toUpperCase()} baixado(s)`, { id: toastId });
-      return;
-    }
-    const detail = failures
-      .slice(0, 5)
-      .map((f) => `CT-e ${f.label}: ${f.message}`)
-      .join(' | ');
-    const extra = failures.length > 5 ? ` (+${failures.length - 5} outras falhas)` : '';
-    const fn = ok === 0 ? toast.error : toast.warning;
-    fn(`${ok} baixado(s), ${failures.length} falha(s)`, {
-      id: toastId,
-      description: detail + extra,
-      duration: 12_000,
-    });
+    const summary = summarizeBulkDownload(format, ok, failures);
+    const fn = summary.tone === 'success' ? toast.success : summary.tone === 'error' ? toast.error : toast.warning;
+    fn(summary.title, { id: toastId, description: summary.description, duration: 12_000 });
   }
 
   const counts = useMemo(() => {
