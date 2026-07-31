@@ -377,8 +377,15 @@ Deno.serve(async (req) => {
         // 2) Fallback: o documento no Hub costuma carregar links/base64 do DACTE e XML.
         //    Necessário porque o ManagerSaaS pode não expor a rota de arquivo ("Rota
         //    solicitada não foi encontrada").
-        const { data: docData } = await callHub('GET', '/hub_documents_get', { id: payload.id }, undefined, token);
+        const { status: docStatus, data: docData } = await callHub(
+          'GET', '/hub_documents_get', { id: payload.id }, undefined, token,
+        );
         const doc = (docData as any)?.document || (docData as any) || {};
+        const accessKey = String(doc?.access_key || doc?.accessKey || '').replace(/\D/g, '');
+        const emitterCnpj = String(doc?.emitter_cnpj || doc?.emitterCnpj || '').replace(/\D/g, '');
+        const isAuthorized =
+          String(doc?.status || '').toLowerCase() === 'authorized' ||
+          Number(doc?.cstat ?? doc?.cStat) === 100;
         const pick = (...keys: string[]) => {
           for (const k of keys) {
             const v = doc?.[k];
@@ -436,15 +443,29 @@ Deno.serve(async (req) => {
           } catch { /* tenta o próximo */ }
         }
 
+        const upstreamContractIssue =
+          docStatus < 400 &&
+          isAuthorized &&
+          accessKey.length === 44 &&
+          attemptLog.some((entry) => /EspdAPIWebRouteNotFoundException|Requested function was not found/i.test(entry));
+
         return json(502, {
           success: false,
           error: {
-            code: 'HUB_FILE_UNAVAILABLE',
-            message:
-              `O Hub Fiscal não disponibilizou o ${format === 'pdf' ? 'DACTE (PDF)' : 'XML'} deste documento` +
-              (hubMessage ? ` — ${hubMessage}` : '') +
-              '. Verifique no Hub Fiscal se o documento está autorizado e se a rota de download está habilitada para o emitente.',
+            code: upstreamContractIssue ? 'HUB_FILE_ROUTE_MISCONFIGURED' : 'HUB_FILE_UNAVAILABLE',
+            message: upstreamContractIssue
+              ? `O CT-e está autorizado, mas a rota de arquivo do Hub Fiscal está configurada incorretamente. ` +
+                `O Hub deve buscar o ${format === 'pdf' ? 'DACTE por GET /cte/imprime' : 'XML por GET /cte/xml'} ` +
+                `usando Grupo, CNPJ e ChaveNota; novas tentativas com nomes de função diferentes não resolverão este erro.`
+              : `O Hub Fiscal não disponibilizou o ${format === 'pdf' ? 'DACTE (PDF)' : 'XML'} deste documento` +
+                (hubMessage ? ` — ${hubMessage}` : '') +
+                '. Verifique no Hub Fiscal se o documento está autorizado e se a rota de download está habilitada para o emitente.',
             attempts: attemptLog,
+            document: {
+              authorized: isAuthorized,
+              hasAccessKey: accessKey.length === 44,
+              hasEmitterCnpj: emitterCnpj.length === 14,
+            },
           },
         });
       }
