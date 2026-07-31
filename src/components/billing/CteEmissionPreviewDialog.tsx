@@ -393,13 +393,6 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
   );
 
   useEffect(() => {
-    if (!open) return;
-    setItems(groups.map((g) => groupToEditable(g, defaultEmitter?.id || '')));
-    setActiveIdx(0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, groupsSignature, defaultEmitter?.id]);
-
-  useEffect(() => {
     if (!currentTenant?.id) return;
     (async () => {
       const { data } = await (supabase as any)
@@ -412,12 +405,22 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     })();
   }, [currentTenant?.id]);
 
-  // Pré-preenche via RPC quando o diálogo abre
+  // Inicializa sempre a partir do lote atual e então pré-preenche via RPC.
+  // A consulta anterior é descartada quando a seleção muda, evitando que uma
+  // resposta tardia restaure no modal as notas do lote anterior.
   useEffect(() => {
-    if (!open || items.length === 0) return;
+    if (!open) return;
+    let cancelled = false;
+    const baseItems = groups.map((g) => groupToEditable(g, defaultEmitter?.id || ''));
+
+    setItems(baseItems);
+    setActiveIdx(0);
+
+    if (baseItems.length === 0) return () => { cancelled = true; };
+
     (async () => {
       const patched = await Promise.all(
-        items.map(async (it) => {
+        baseItems.map(async (it) => {
           if (it.loadIds.length === 0) return it;
           const { data } = await (supabase as any).rpc('cte_defaults_for_group', {
             p_load_ids: it.loadIds,
@@ -444,14 +447,23 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
           };
         }),
       );
+      if (cancelled) return;
       // Preserva a seguradora já aplicada/salva: o RPC é assíncrono e não deve
       // sobrescrever o padrão do tenant aplicado enquanto ele carregava.
-      setItems((prev) =>
-        patched.map((it, i) => (prev[i] ? preserveInsurerFields(prev[i], it) : it)),
-      );
+      setItems((prev) => {
+        const previousByKey = new Map(prev.map((it) => [it.key, it]));
+        return patched.map((it) => {
+          const previous = previousByKey.get(it.key);
+          return previous ? preserveInsurerFields(previous, it) : it;
+        });
+      });
     })();
+
+    return () => { cancelled = true; };
+    // groupsSignature representa integralmente as notas do lote; usar groups
+    // diretamente recriaria a prévia em renders sem mudança de seleção.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, groupsSignature]);
+  }, [open, groupsSignature, defaultEmitter?.id]);
 
   // Aplica a seguradora padrão salva (nome, CNPJ e apólice) em todos os CT-es do lote.
   // A averbação (CGC) continua por CT-e e nunca é replicada.
