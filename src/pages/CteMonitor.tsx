@@ -27,7 +27,10 @@ async function downloadHubFile(
   const label = format === 'pdf' ? 'PDF (DACTE)' : 'XML';
   const url = format === 'pdf' ? row.pdf_url : row.xml_url;
   if (url) {
-    window.open(url, '_blank');
+    const win = window.open(url, '_blank');
+    if (!win && opts.silent) {
+      throw new Error('O navegador bloqueou a abertura do arquivo (pop-up bloqueado).');
+    }
     return;
   }
   if (!row.hub_document_id) {
@@ -125,21 +128,35 @@ export default function CteMonitor() {
     if (checkedRows.length === 0) return;
     setBulkBusy(true);
     let ok = 0;
-    let fail = 0;
+    const failures: { label: string; message: string }[] = [];
     const toastId = toast.loading(`Baixando ${checkedRows.length} arquivo(s) ${format.toUpperCase()}...`);
     for (const row of checkedRows) {
+      const rowLabel = row.cte_number || row.access_key || row.id.slice(0, 8);
       try {
         await downloadHubFile(row, format, { silent: true });
         ok++;
-      } catch {
-        fail++;
+      } catch (e: any) {
+        failures.push({ label: rowLabel, message: e?.message || 'Falha desconhecida' });
       }
       // Evita bloqueio de downloads simultâneos pelo navegador.
       await new Promise((r) => setTimeout(r, 350));
     }
     setBulkBusy(false);
-    if (fail === 0) toast.success(`${ok} arquivo(s) ${format.toUpperCase()} baixado(s)`, { id: toastId });
-    else toast.warning(`${ok} baixado(s), ${fail} falha(s)`, { id: toastId });
+    if (failures.length === 0) {
+      toast.success(`${ok} arquivo(s) ${format.toUpperCase()} baixado(s)`, { id: toastId });
+      return;
+    }
+    const detail = failures
+      .slice(0, 5)
+      .map((f) => `CT-e ${f.label}: ${f.message}`)
+      .join(' | ');
+    const extra = failures.length > 5 ? ` (+${failures.length - 5} outras falhas)` : '';
+    const fn = ok === 0 ? toast.error : toast.warning;
+    fn(`${ok} baixado(s), ${failures.length} falha(s)`, {
+      id: toastId,
+      description: detail + extra,
+      duration: 12_000,
+    });
   }
 
   const counts = useMemo(() => {
