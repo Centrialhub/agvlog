@@ -423,8 +423,17 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
       )
     : undefined;
 
+  // FRETE PESO (frete cru) é a base do cálculo. Prevalece o componente
+  // explícito quando informado; senão usa o valor de frete calculado.
+  const fretePeso = Number(
+    (Number(input.freightComposition?.freight_weight || 0) > 0
+      ? Number(input.freightComposition?.freight_weight)
+      : input.totals.freight_value
+    ).toFixed(2),
+  );
+
   const icmsBlock = input.icms
-    ? buildIcmsBlock(input.icms, input.totals.freight_value, input.emitter?.taxRegime)
+    ? buildIcmsBlock(input.icms, fretePeso, input.emitter?.taxRegime)
     : undefined;
 
   const insuranceValue = Number(input.freightComposition?.insurance_value || 0);
@@ -439,14 +448,15 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
 
   const componentes = buildComponentes({
     composition: input.freightComposition,
-    freightValue: input.totals.freight_value,
+    freightWeight: fretePeso,
     insuranceValue,
     icmsValor: (icmsBlock?.vICMS as number) ?? null,
   });
-  const totalServico = Number(input.totals.freight_value.toFixed(2));
   const icmsValue = Number((Number(icmsBlock?.vICMS) || 0).toFixed(2));
-  const freteBase = Number(
-    (componentes.find((component) => component.nome === 'FRETE PESO')?.valor || 0).toFixed(2),
+  const freteBase = fretePeso;
+  // FRETE A RECEBER = soma dos componentes (FRETE PESO + acessórios + ICMS).
+  const totalServico = Number(
+    componentes.reduce((sum, component) => sum + Number(component.valor || 0), 0).toFixed(2),
   );
   const seguroCarga = input.insurer
     ? {
