@@ -553,7 +553,17 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
       prioridadeFrete: input.freightPriority || undefined,
       tipoDistribuicao: input.distribution || undefined,
       operacao: input.operation || undefined,
-      observacoes: input.observations || undefined,
+      observacoes: usoExclusivoEmitente || undefined,
+      // "USO EXCLUSIVO DO EMISSOR" no DACTE — carrega os dados extras que o
+      // ManagerSaaS não transmite em grupo próprio (seguradora, motorista).
+      usoExclusivoEmitente: usoExclusivoEmitente || undefined,
+      usoExclusivoEmissor: usoExclusivoEmitente || undefined,
+      compl: usoExclusivoEmitente
+        ? {
+            xObs: usoExclusivoEmitente,
+            ObsCont: [{ xCampo: 'USO EXCLUSIVO', xTexto: usoExclusivoEmitente.slice(0, 160) }],
+          }
+        : undefined,
       emitente: serializeParty(
         input.emitter
           ? {
