@@ -464,11 +464,18 @@ Deno.serve(async (req) => {
         const directAccessKey = String(
           accessKey ||
           localEmission?.access_key ||
+          (localEmission as any)?.last_response?.document?.access_key ||
+          (localEmission as any)?.last_response?.document?.accessKey ||
           managerData?.parsed?.chave ||
           managerData?.data?.csv?.chave ||
           '',
         ).replace(/\D/g, '');
-        const directCnpj = String(emitterCnpj || localEmission?.emitter_cnpj || '').replace(/\D/g, '');
+        const directCnpj = String(
+          emitterCnpj ||
+          localEmission?.emitter_cnpj ||
+          (localEmission as any)?.last_response?.document?.emitter_cnpj ||
+          '',
+        ).replace(/\D/g, '');
         const canUseManager =
           (payload.type || 'cte') === 'cte' &&
           directAccessKey.length === 44 &&
