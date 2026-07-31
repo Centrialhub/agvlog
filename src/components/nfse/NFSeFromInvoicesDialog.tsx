@@ -15,6 +15,8 @@ import { useClients } from '@/hooks/useClients';
 import { useEmitters } from '@/hooks/useEmitters';
 import { useCreateNFSe, useIssueNFSe } from '@/hooks/useNFSe';
 import { useRecalculateInboundFreight } from '@/hooks/useRecalculateInboundFreight';
+import { formatCnpj, validateInsurance } from '@/lib/fiscal/insuranceValidation';
+import { hasInsuranceData } from '@/lib/fiscal/insuranceText';
 import { Calculator } from 'lucide-react';
 
 interface Props {
@@ -124,7 +126,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
 
   // Pré-preenche o seguro a partir das NFs selecionadas (snapshot da emissão fiscal)
   useEffect(() => {
-    const src = selectedDocs.find((d: any) => d.insurer_policy || d.insurer_name || d.insurer_cnpj);
+    const src = selectedDocs.find((d: any) => d.insurer_policy || d.insurer_name || d.insurer_cnpj) as any;
     if (!src) return;
     setInsurerName((v) => v || src.insurer_name || '');
     setInsurerCnpj((v) => v || formatCnpj(src.insurer_cnpj || ''));
