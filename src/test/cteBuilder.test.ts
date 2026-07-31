@@ -166,3 +166,36 @@ describe('cteBuilder — ICMS embutido (por dentro)', () => {
     expect(icms.vICMS).toBeCloseTo(191.73, 2);
   });
 });
+
+describe('cteBuilder — regime tributário do emitente', () => {
+  it('emitente sem regime cadastrado assume normal (CRT 3) e avisa', () => {
+    const r = buildCtePayload(baseInput({ icms: { cst: '00', aliquota: 12, embutido: true } }));
+    const p = (r.payload as any).payload;
+    expect(p.crt).toBe(3);
+    expect(p.icms.crt).toBe(3);
+    expect(p.icms.regime).toBe('normal');
+    expect(r.warnings.join(' ')).toMatch(/Regime tributário do emitente/i);
+  });
+
+  it('emitente Simples Nacional envia CRT 1 e regime simples', () => {
+    const base = baseInput({ icms: { cst: '00', aliquota: 12, embutido: true } });
+    const r = buildCtePayload({
+      ...base,
+      emitter: { ...base.emitter!, taxRegime: 'simples' },
+    });
+    const p = (r.payload as any).payload;
+    expect(p.crt).toBe(1);
+    expect(p.icms.crt).toBe(1);
+    expect(p.icms.regime).toBe('simples');
+  });
+
+  it('emitente Lucro Real envia CRT 3', () => {
+    const base = baseInput({ icms: { cst: '00', aliquota: 12, embutido: true } });
+    const r = buildCtePayload({
+      ...base,
+      emitter: { ...base.emitter!, taxRegime: 'real' },
+    });
+    expect((r.payload as any).payload.crt).toBe(3);
+    expect((r.payload as any).payload.icms.regime).toBe('normal');
+  });
+});
