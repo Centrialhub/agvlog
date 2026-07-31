@@ -13,7 +13,7 @@ import {
   type CteMonitorRow, type CteMonitorFilters, type SefazStatus,
 } from '@/hooks/useCteMonitor';
 import {
-  FileText, FileDown, RefreshCw, Search, Filter as FilterIcon, X, AlertCircle,
+  FileText, FileDown, RefreshCw, Search, Filter as FilterIcon, X, AlertCircle, Eye,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PendingInvoicesBanner } from '@/components/billing/PendingInvoicesBanner';
@@ -31,37 +31,46 @@ function saveBlob(blob: Blob, filename: string) {
   setTimeout(() => URL.revokeObjectURL(objectUrl), 10_000);
 }
 
+function openBlob(blob: Blob, filename: string) {
+  const objectUrl = URL.createObjectURL(blob);
+  const win = window.open(objectUrl, '_blank');
+  if (!win) {
+    // Pop-up bloqueado: entrega o arquivo já baixado como download.
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+}
+
 async function downloadHubFile(
   row: CteMonitorRow,
   format: 'pdf' | 'xml',
-  opts: { silent?: boolean } = {},
+  opts: { silent?: boolean; view?: boolean } = {},
 ) {
   const label = format === 'pdf' ? 'PDF (DACTE)' : 'XML';
-  const url = format === 'pdf' ? row.pdf_url : row.xml_url;
+  const cachedUrl = format === 'pdf' ? row.pdf_url : row.xml_url;
   const filename = `cte-${row.access_key || row.cte_number || row.id}.${format}`;
-  if (url) {
-    // Em lote, abrir várias abas é bloqueado pelo navegador: baixamos como blob.
-    if (opts.silent) {
+
+  // O arquivo é sempre pedido SOB DEMANDA ao Hub Fiscal (deliver -> links -> file),
+  // então o cliente consegue baixar quando quiser, mesmo sem cache.
+  // Link em cache só é usado quando o registro não tem id no Hub.
+  if (!row.hub_document_id) {
+    if (cachedUrl) {
       try {
-        const res = await fetch(url);
+        const res = await fetch(cachedUrl);
         if (res.ok) {
           const blob = await res.blob();
           if (blob.size > 0) {
-            saveBlob(blob, filename);
+            if (opts.view) openBlob(blob, filename); else saveBlob(blob, filename);
             return;
           }
         }
-      } catch { /* cai para o proxy abaixo */ }
-      if (!row.hub_document_id) throw new Error('Não foi possível baixar o arquivo pelo link do Hub Fiscal.');
-    } else {
-    const win = window.open(url, '_blank');
-      if (!win) {
-        toast.error(`${label} bloqueado`, { description: 'O navegador bloqueou a abertura do arquivo (pop-up).' });
-      }
-      return;
+      } catch { /* segue para a mensagem de indisponível */ }
     }
-  }
-  if (!row.hub_document_id) {
     const description =
       row.source === 'hub'
         ? 'Este CT-e ainda não tem id do Hub Fiscal — sincronize a emissão antes de baixar.'
@@ -70,17 +79,18 @@ async function downloadHubFile(
     toast.error(`${label} indisponível`, { description });
     return;
   }
-  const toastId = opts.silent ? undefined : toast.loading(`Baixando ${label}...`);
+  const action = opts.view ? 'Abrindo' : 'Baixando';
+  const toastId = opts.silent ? undefined : toast.loading(`${action} ${label}...`);
   try {
     const blob = await hubFiscal.file(row.hub_document_id, format, {
       type: 'cte',
       emissionId: row.emission_id,
     });
-    saveBlob(blob, filename);
-    if (!opts.silent) toast.success(`${label} baixado`, { id: toastId });
+    if (opts.view) openBlob(blob, filename); else saveBlob(blob, filename);
+    if (!opts.silent) toast.success(`${label} ${opts.view ? 'aberto' : 'baixado'}`, { id: toastId });
   } catch (e: any) {
     if (opts.silent) throw e;
-    toast.error(`Falha ao baixar ${label}`, { id: toastId, description: e?.message });
+    toast.error(`Falha ao ${opts.view ? 'abrir' : 'baixar'} ${label}`, { id: toastId, description: e?.message });
   }
 }
 
@@ -442,6 +452,9 @@ export default function CteMonitor() {
                     </td>
                     <td className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="inline-flex gap-1">
+                        <Button size="sm" variant="ghost" title="Visualizar DACTE (PDF)" onClick={() => downloadHubFile(r, 'pdf', { view: true })}>
+                          <Eye className="h-4 w-4" />
+                        </Button>
                         <Button size="sm" variant="ghost" title="Baixar PDF (DACTE)" onClick={() => downloadPdf(r)}>
                           <FileText className="h-4 w-4" />
                         </Button>
@@ -529,6 +542,9 @@ function CteDetail({ row, onClose }: { row: CteMonitorRow; onClose: () => void }
       </div>
 
       <div className="flex justify-end gap-2">
+        <Button variant="outline" size="sm" onClick={() => downloadHubFile(row, 'pdf', { view: true })}>
+          <Eye className="h-4 w-4" /> Visualizar
+        </Button>
         <Button variant="outline" size="sm" onClick={() => downloadHubFile(row, 'pdf')}>
           <FileText className="h-4 w-4" /> PDF
         </Button>

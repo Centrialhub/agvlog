@@ -109,6 +109,43 @@ export const hubFiscal = {
     return invoke({ action: 'preview', id: hubDocumentId });
   },
 
+  /**
+   * Solicita PDF/XML SOB DEMANDA (POST /hub_documents_deliver). O Hub gera/baixa o
+   * arquivo no provedor no momento do pedido — não depende de cache.
+   */
+  deliver(hubDocumentId: string, opts: {
+    kinds?: ('pdf' | 'xml')[];
+    mode?: 'url' | 'inline' | 'email' | 'callback';
+    expiresIn?: number;
+    forceRefresh?: boolean;
+    type?: HubDocType;
+    emitterId?: string | null;
+    emissionId?: string | null;
+  } = {}) {
+    return invoke({
+      action: 'deliver',
+      id: hubDocumentId,
+      type: opts.type,
+      emitterId: opts.emitterId || undefined,
+      emissionId: opts.emissionId || undefined,
+      kinds: opts.kinds ?? ['pdf', 'xml'],
+      mode: opts.mode ?? 'url',
+      expiresIn: opts.expiresIn ?? 604800,
+      forceRefresh: opts.forceRefresh ?? true,
+    });
+  },
+
+  /** URLs assinadas de PDF/XML (GET /hub_documents_links). */
+  links(hubDocumentId: string, opts: { expiresIn?: number; type?: HubDocType; emitterId?: string | null } = {}) {
+    return invoke({
+      action: 'links',
+      id: hubDocumentId,
+      type: opts.type,
+      emitterId: opts.emitterId || undefined,
+      expiresIn: opts.expiresIn ?? 604800,
+    });
+  },
+
   query(filters: Record<string, string>) {
     return invoke({ action: 'query', query: filters });
   },
