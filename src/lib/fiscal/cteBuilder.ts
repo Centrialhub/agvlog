@@ -205,6 +205,28 @@ function digits(v?: string | null): string {
 }
 
 /**
+ * Bloco `inicio` / `fim` (override de UFIni/UFFim) — campos aceitos pelo Hub v1:
+ * codigoCidade/cMun | municipio/cidade | uf/estado.
+ */
+function buildLocation(
+  address?: CteParty['address'] | null,
+): Record<string, unknown> | undefined {
+  if (!address) return undefined;
+  const city = address.city || undefined;
+  const uf = address.state || undefined;
+  const cMun = digits(address.city_ibge) || undefined;
+  if (!city && !uf && !cMun) return undefined;
+  return {
+    codigoCidade: cMun,
+    cMun,
+    municipio: city,
+    cidade: city,
+    uf,
+    estado: uf,
+  };
+}
+
+/**
  * "USO EXCLUSIVO DO EMISSOR" do DACTE.
  *
  * A API v1 do Hub Fiscal aceita o grupo `seguro` mas NÃO o transmite (o dataset
