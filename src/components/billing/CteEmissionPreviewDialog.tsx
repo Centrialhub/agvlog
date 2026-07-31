@@ -280,6 +280,7 @@ function toBuildInput(
           ie: emitter.ie,
           name: emitter.razao_social || emitter.nome_fantasia || '',
           environment,
+          taxRegime: emitter.regime_tributario || null,
           address: {
             street: emitter.endereco?.logradouro || null,
             number: emitter.endereco?.numero || null,
