@@ -569,17 +569,22 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
         cbs: input.totals.cbs_value ?? undefined,
       },
       composicaoFrete: freightComposition,
-      // Componentes do valor da prestação (DACTE) — FRETE PESO / SEGURO / ICMS em destaque
-      componentes,
-      componentesValorPrestacao: componentes,
+      // Componentes do valor da prestação (DACTE) — FRETE PESO / SEGURO / ICMS em destaque.
+      // `soma: false` (ICMS por fora) = destaque impresso sem somar ao valor a receber.
+      componentes: componentes.map((c) => ({ nome: c.nome, valor: c.valor, soma: c.soma })),
+      componentesValorPrestacao: componentes.map((c) => ({ nome: c.nome, valor: c.valor, soma: c.soma })),
       // Estrutura canônica do grupo vPrest do CT-e, além dos aliases do Hub.
       valorPrestacao: {
         vTPrest: totalServico,
         vRec: totalServico,
-        Comp: componentes.map((component) => ({
-          xNome: component.nome,
-          vComp: component.valor,
-        })),
+        // O grupo Comp precisa fechar com vTPrest para o SEFAZ: apenas
+        // componentes somáveis entram aqui.
+        Comp: componentes
+          .filter((component) => component.soma)
+          .map((component) => ({
+            xNome: component.nome,
+            vComp: component.valor,
+          })),
       },
       icms: icmsBlock,
       gnre: input.gnre
