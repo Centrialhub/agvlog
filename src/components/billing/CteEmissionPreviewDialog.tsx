@@ -25,6 +25,11 @@ import { buildCtePayload, computeIcmsAmounts, type CteTakerRole, type BuildCtePa
 import type { CteDocType } from '@/lib/fiscal/cteBuilder';
 import { suggestIcmsAliquota, icmsIsentoByCst } from '@/lib/fiscal/icmsAliquota';
 import { validateInsurance, formatCnpj, onlyDigits } from '@/lib/fiscal/insuranceValidation';
+import {
+  applyInsuranceProfileToBatch,
+  hasInsuranceProfile,
+  preserveInsurerFields,
+} from '@/lib/fiscal/insuranceProfile';
 
 /** Recalcula base/valor do ICMS respeitando o regime embutido (por dentro). */
 function recalcIcms(
