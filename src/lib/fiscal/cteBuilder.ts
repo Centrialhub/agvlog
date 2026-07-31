@@ -13,6 +13,8 @@
  * Sem side effects; totalmente coberto por src/test/cteBuilder.test.ts.
  */
 
+import { validateInsurance } from './insuranceValidation';
+
 export type CteTakerRole =
   | 'remetente'
   | 'destinatario'
@@ -439,25 +441,12 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
   const insuranceValue = Number(input.freightComposition?.insurance_value || 0);
   const insuredAmount =
     input.insurer?.insured_amount ?? (input.insurer ? input.totals.cargo_value || null : null);
-  if (!input.insurer?.name) {
-    warnings.push(
-      'Seguro da carga não informado — o DACTE sairá sem seguradora/averbação. Preencha a aba Seguro.',
-    );
+  // Seguro é obrigatório no fluxo operacional do AGVLog: sem seguradora,
+  // apólice e averbação válidos o bloco não é impresso no DACTE.
+  const insuranceValidation = validateInsurance(input.insurer);
+  if (!insuranceValidation.ok) {
+    missing.push(...insuranceValidation.messages);
   }
-  if (input.insurer?.name) {
-    if (!input.insurer.policy) {
-      warnings.push('Nº da apólice não informado — o DACTE sairá sem o número da apólice.');
-    }
-    if (!input.insurer.endorsement) {
-      warnings.push('Nº da averbação não informado — o DACTE sairá sem o número da averbação.');
-    }
-  }
-
-  // Seguro é obrigatório no fluxo operacional do AGVLog: sem estes dados o
-  // Hub até pode autorizar, mas o bloco não é impresso no DACTE.
-  if (!input.insurer?.name) missing.push('Seguradora da carga');
-  if (!input.insurer?.policy) missing.push('Nº da apólice');
-  if (!input.insurer?.endorsement) missing.push('Nº da averbação');
 
   const componentes = buildComponentes({
     composition: input.freightComposition,
