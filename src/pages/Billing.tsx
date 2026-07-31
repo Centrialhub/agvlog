@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useBillingDocuments } from '@/hooks/useBillingDocuments';
 import { useClients } from '@/hooks/useClients';
 import { useLoads, LOAD_STATUSES, LOAD_STATUS_LABELS } from '@/hooks/useLoads';
-import { useCteBatches, useCancelCteBatch, useIssuedCtes } from '@/hooks/useBilling';
+import { useCteBatches, useCancelCteBatch, useIssuedCtes, useDeleteIssuedCte } from '@/hooks/useBilling';
 import { GROUPING_MODES, buildGroups, getGroupingMode, type CteGroupPreview } from '@/lib/cteGroupingModes';
 import { useUserUiPreference } from '@/hooks/useUserUiPreference';
 import { useTenant } from '@/hooks/useTenant';
@@ -17,7 +17,17 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { FileSpreadsheet, Calculator, Layers, FileText, Info, XCircle, Filter, Eraser, Save, ChevronRight, ChevronDown } from 'lucide-react';
+import { FileSpreadsheet, Calculator, Layers, FileText, Info, XCircle, Filter, Eraser, Save, ChevronRight, ChevronDown, Trash2 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { PendingInvoicesBanner } from '@/components/billing/PendingInvoicesBanner';
@@ -963,6 +973,9 @@ function IssuedCtesTable() {
   const { data: ctes = [], isLoading } = useIssuedCtes();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [cancelTarget, setCancelTarget] = useState<CancelCteTarget | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; label: string; notesCount: number; authorized: boolean } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState('');
+  const deleteCte = useDeleteIssuedCte();
 
   if (isLoading) {
     return <p className="text-sm text-muted-foreground py-8 text-center">Carregando...</p>;
@@ -1030,27 +1043,45 @@ function IssuedCtesTable() {
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                  {c.status === 'cancelled' || c.sefaz_status === 'cancel_rejected' ? (
-                    <span className="text-xs text-muted-foreground">—</span>
-                  ) : (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-destructive hover:text-destructive"
-                      disabled={!c.hub_document_id}
-                      title={c.hub_document_id ? 'Cancelar CT-e na SEFAZ' : 'CT-e ainda não transmitido ao Hub Fiscal'}
-                      onClick={() =>
-                        setCancelTarget({
-                          id: c.id,
-                          label: c.invoice_number ? `nº ${c.invoice_number}` : c.id.slice(0, 8),
-                          accessKey: c.access_key,
-                          notesCount: c.notes.length,
-                        })
-                      }
-                    >
-                      <XCircle className="h-4 w-4 mr-1" /> Cancelar
-                    </Button>
-                  )}
+                  <div className="flex items-center justify-end gap-1">
+                    {c.status !== 'cancelled' && c.sefaz_status !== 'cancel_rejected' && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive hover:text-destructive"
+                        disabled={!c.hub_document_id}
+                        title={c.hub_document_id ? 'Cancelar CT-e na SEFAZ' : 'CT-e ainda não transmitido ao Hub Fiscal'}
+                        onClick={() =>
+                          setCancelTarget({
+                            id: c.id,
+                            label: c.invoice_number ? `nº ${c.invoice_number}` : c.id.slice(0, 8),
+                            accessKey: c.access_key,
+                            notesCount: c.notes.length,
+                          })
+                        }
+                      >
+                        <XCircle className="h-4 w-4 mr-1" /> Cancelar
+                      </Button>
+                    )}
+                    {(c.status !== 'authorized' || c.sefaz_status === 'cancel_rejected' || c.sefaz_status === 'cancelled') && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive hover:text-destructive"
+                        title="Excluir registro local do CT-e e liberar as NFs vinculadas"
+                        onClick={() =>
+                          setDeleteTarget({
+                            id: c.id,
+                            label: c.invoice_number ? `nº ${c.invoice_number}` : c.id.slice(0, 8),
+                            notesCount: c.notes.length,
+                            authorized: c.sefaz_status === 'cancel_rejected',
+                          })
+                        }
+                      >
+                        <Trash2 className="h-4 w-4 mr-1" /> Excluir
+                      </Button>
+                    )}
+                  </div>
                 </TableCell>
               </TableRow>
               {open && (
@@ -1081,6 +1112,58 @@ function IssuedCtesTable() {
       </TableBody>
     </Table>
     <CancelCteDialog target={cancelTarget} onOpenChange={(o) => !o && setCancelTarget(null)} />
+    <AlertDialog
+      open={!!deleteTarget}
+      onOpenChange={(o) => { if (!o) { setDeleteTarget(null); setDeleteConfirm(''); } }}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Excluir CT-e {deleteTarget?.label}?</AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="space-y-2 text-sm">
+              <p>
+                O registro local será removido e {deleteTarget?.notesCount ?? 0} NF(s) vinculada(s) voltarão
+                a ficar disponíveis para novo faturamento.
+              </p>
+              {deleteTarget?.authorized && (
+                <p className="text-destructive font-medium">
+                  Atenção: este CT-e teve o cancelamento rejeitado pela SEFAZ, portanto continua válido
+                  fiscalmente. Excluir aqui remove apenas o controle interno — o documento permanece na
+                  SEFAZ e deve ser tratado com CT-e de anulação/substituição.
+                </p>
+              )}
+              <p>Digite <span className="font-mono font-semibold">EXCLUIR</span> para confirmar.</p>
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <Input
+          value={deleteConfirm}
+          onChange={(e) => setDeleteConfirm(e.target.value.toUpperCase())}
+          placeholder="EXCLUIR"
+          className="font-mono"
+        />
+        <AlertDialogFooter>
+          <AlertDialogCancel>Voltar</AlertDialogCancel>
+          <AlertDialogAction
+            disabled={deleteConfirm !== 'EXCLUIR' || deleteCte.isPending}
+            onClick={(e) => {
+              e.preventDefault();
+              if (!deleteTarget) return;
+              deleteCte.mutate(deleteTarget.id, {
+                onSuccess: () => {
+                  toast.success('CT-e excluído — NFs liberadas para novo faturamento');
+                  setDeleteTarget(null);
+                  setDeleteConfirm('');
+                },
+                onError: (err: any) => toast.error(err?.message || 'Falha ao excluir CT-e'),
+              });
+            }}
+          >
+            {deleteCte.isPending ? 'Excluindo...' : 'Excluir CT-e'}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
     </>
   );
 }
