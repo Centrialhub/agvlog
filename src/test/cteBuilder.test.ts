@@ -98,10 +98,12 @@ describe('cteBuilder — ICMS embutido (por dentro)', () => {
     expect(r.valor).toBeCloseTo(191.73, 2);
   });
 
-  it('computeIcmsAmounts: embutido usa o total a receber como base fiscal', () => {
-    const r = computeIcmsAmounts({ freight: 188.82, aliq: 18, embutido: true, isento: false });
+  it('computeIcmsAmounts: embutido faz gross-up do FRETE PESO', () => {
+    const r = computeIcmsAmounts({ freight: 154.83, aliq: 18, embutido: true, isento: false });
     expect(r.base).toBeCloseTo(188.82, 2);
     expect(r.valor).toBeCloseTo(33.99, 2);
+    // FRETE A RECEBER = FRETE PESO + ICMS
+    expect(154.83 + r.valor).toBeCloseTo(r.base, 2);
   });
 
   it('computeIcmsAmounts: isento zera mesmo com embutido=true', () => {
@@ -123,7 +125,7 @@ describe('cteBuilder — ICMS embutido (por dentro)', () => {
     expect(r.valor).toBeCloseTo(191.73, 2);
   });
 
-  it('buildCtePayload: embutido=true preserva total, imposto e frete cru', () => {
+  it('buildCtePayload: embutido=true soma ICMS ao FRETE PESO', () => {
     const input: BuildCtePayloadInput = {
       emitter: { id: 'em1', cnpj: '18666510000168', name: 'X', environment: 'sandbox' },
       remitter: { name: 'R', cnpj: '14998371003215' },
@@ -133,7 +135,7 @@ describe('cteBuilder — ICMS embutido (por dentro)', () => {
       vehicle: null,
       nature: 'PRESTACAO',
       invoices: [{ access_key: '3'.repeat(44), number: '1', series: '1', value: 100 }],
-      totals: { freight_value: 188.82, cargo_value: 100, weight_kg: 1, pallet_count: 0 },
+      totals: { freight_value: 154.83, cargo_value: 100, weight_kg: 1, pallet_count: 0 },
       icms: { cst: '00', aliquota: 18, embutido: true },
       insurer: { name: 'AKAD', cnpj: '18666510000168', policy: 'AP-1', endorsement: 'AV-1' },
     };
