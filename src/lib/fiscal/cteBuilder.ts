@@ -449,6 +449,14 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
       'Seguro da carga não informado — o DACTE sairá sem seguradora/averbação. Preencha a aba Seguro.',
     );
   }
+  if (input.insurer?.name) {
+    if (!input.insurer.policy) {
+      warnings.push('Nº da apólice não informado — o DACTE sairá sem o número da apólice.');
+    }
+    if (!input.insurer.endorsement) {
+      warnings.push('Nº da averbação não informado — o DACTE sairá sem o número da averbação.');
+    }
+  }
 
   const componentes = buildComponentes({
     composition: input.freightComposition,

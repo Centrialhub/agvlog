@@ -66,6 +66,7 @@ interface EditableCte {
   recebedorName: string;
   recebedorCnpj: string;
   insurerName: string;
+  insurerCnpj: string;
   insurerPolicy: string;
   insurerEndorsement: string;
   insurerInsuredAmount: number;
@@ -156,6 +157,7 @@ function groupToEditable(g: CteGroupPreview, defaultEmitterId: string): Editable
     recebedorName: '',
     recebedorCnpj: '',
     insurerName: '',
+    insurerCnpj: '',
     insurerPolicy: '',
     insurerEndorsement: '',
     insurerInsuredAmount: 0,
@@ -306,6 +308,7 @@ function toBuildInput(
     insurer: e.insurerName
       ? {
           name: e.insurerName,
+          cnpj: e.insurerCnpj || null,
           policy: e.insurerPolicy || null,
           endorsement: e.insurerEndorsement || null,
           insured_amount: e.insurerInsuredAmount || e.cargoValue || null,
@@ -548,7 +551,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
       'refNumber', 'clientOrderNumber',
       'freightValue', 'cargoValue', 'weightKg', 'palletCount',
       'icmsBase', 'icmsValor', 'cbsIbsBase',
-      'fcFreightWeight', 'insurerInsuredAmount',
+      'fcFreightWeight', 'insurerInsuredAmount', 'insurerEndorsement',
       'invoices', 'loadIds', 'fiscalDocumentIds', 'clientId',
       'key', 'transmitted', 'transmitMessage',
     ]);
@@ -855,11 +858,15 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                     <Input value={active.insurerName} onChange={(e) => patch({ insurerName: e.target.value })} />
                   </div>
                   <div>
+                    <Label>CNPJ seguradora</Label>
+                    <Input value={active.insurerCnpj} onChange={(e) => patch({ insurerCnpj: e.target.value })} />
+                  </div>
+                  <div>
                     <Label>Apólice</Label>
                     <Input value={active.insurerPolicy} onChange={(e) => patch({ insurerPolicy: e.target.value })} />
                   </div>
                   <div>
-                    <Label>Nº averbação</Label>
+                    <Label>Nº averbação (por CT-e)</Label>
                     <Input value={active.insurerEndorsement} onChange={(e) => patch({ insurerEndorsement: e.target.value })} />
                   </div>
                   <div>
@@ -881,9 +888,17 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                     />
                   </div>
                 </div>
-                {!active.insurerName && (
+                {(!active.insurerName || !active.insurerPolicy || !active.insurerEndorsement) && (
                   <p className="text-[11px] text-amber-600">
-                    Sem seguradora informada o DACTE sai sem seguro da carga. Preencha seguradora, apólice e averbação.
+                    O DACTE imprime o bloco de seguro com seguradora, nº da apólice e nº da averbação. Campos em falta:{' '}
+                    {[
+                      !active.insurerName && 'seguradora',
+                      !active.insurerPolicy && 'apólice',
+                      !active.insurerEndorsement && 'averbação',
+                    ]
+                      .filter(Boolean)
+                      .join(', ')}
+                    . A averbação é o número por CT-e e não é replicada no lote.
                   </p>
                 )}
               </TabsContent>
