@@ -556,6 +556,10 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
         valorFrete: totalServico,
         freteBase,
         valorFreteBase: freteBase,
+        // FRETE PESO explícito — evita que o Hub imprima um único componente
+        // "Frete Valor" com o mesmo número do total do serviço.
+        valorFretePeso: freteBase,
+        fretePeso: freteBase,
         valorIcms: icmsValue,
         valorTotalServico: totalServico,
         valorPrestacao: totalServico,
