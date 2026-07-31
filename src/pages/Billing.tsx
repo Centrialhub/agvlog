@@ -957,3 +957,100 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     </div>
   );
 }
+
+function IssuedCtesTable() {
+  const { data: ctes = [], isLoading } = useIssuedCtes();
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+  if (isLoading) {
+    return <p className="text-sm text-muted-foreground py-8 text-center">Carregando...</p>;
+  }
+  if (ctes.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground py-8 text-center">
+        Nenhum CT-e transmitido ao Hub Fiscal ainda.
+      </p>
+    );
+  }
+
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead className="w-8" />
+          <TableHead>Data</TableHead>
+          <TableHead>Nº / Chave</TableHead>
+          <TableHead>Remetente</TableHead>
+          <TableHead>Destinatário</TableHead>
+          <TableHead className="text-right">NFs</TableHead>
+          <TableHead className="text-right">Frete</TableHead>
+          <TableHead>Status</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {ctes.map(c => {
+          const open = !!expanded[c.id];
+          return (
+            <>
+              <TableRow
+                key={c.id}
+                className="cursor-pointer"
+                onClick={() => setExpanded(p => ({ ...p, [c.id]: !open }))}
+              >
+                <TableCell>
+                  {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                </TableCell>
+                <TableCell className="text-sm">{format(new Date(c.created_at), 'dd/MM/yyyy HH:mm')}</TableCell>
+                <TableCell className="text-xs font-mono">{c.access_key || c.invoice_number || '—'}</TableCell>
+                <TableCell className="text-sm">{c.remitter || '—'}</TableCell>
+                <TableCell className="text-sm">
+                  {c.recipient || '—'}
+                  {c.recipient_city ? <span className="text-muted-foreground text-xs"> • {c.recipient_city}/{c.recipient_state}</span> : null}
+                </TableCell>
+                <TableCell className="text-right font-medium">{c.notes.length}</TableCell>
+                <TableCell className="text-right">
+                  R$ {c.freight_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </TableCell>
+                <TableCell>
+                  <Badge variant="outline" className={
+                    c.status === 'authorized' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' :
+                    c.status === 'rejected' ? 'bg-destructive/10 text-destructive border-destructive/20' :
+                    c.status === 'cancelled' ? 'bg-muted text-muted-foreground' :
+                    'bg-amber-500/10 text-amber-600 border-amber-500/20'
+                  } title={c.sefaz_message || undefined}>
+                    {c.status === 'authorized' ? 'Autorizado'
+                      : c.status === 'rejected' ? 'Rejeitado'
+                      : c.status === 'cancelled' ? 'Cancelado'
+                      : 'Transmitindo'}
+                  </Badge>
+                </TableCell>
+              </TableRow>
+              {open && (
+                <TableRow key={`${c.id}-notes`}>
+                  <TableCell colSpan={8} className="bg-muted/30">
+                    {c.notes.length === 0 ? (
+                      <p className="text-xs text-muted-foreground py-2">
+                        Nenhuma NF vinculada a este CT-e.
+                      </p>
+                    ) : (
+                      <div className="py-1">
+                        <p className="text-xs text-muted-foreground mb-1">NFs agrupadas neste CT-e</p>
+                        <div className="flex flex-wrap gap-1">
+                          {c.notes.map(n => (
+                            <Badge key={n.id} variant="secondary" className="font-mono text-xs">
+                              NF {n.invoice_number || n.id.slice(0, 8)} • R$ {n.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </TableCell>
+                </TableRow>
+              )}
+            </>
+          );
+        })}
+      </TableBody>
+    </Table>
+  );
+}
