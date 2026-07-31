@@ -622,13 +622,22 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
             vTotTrib: icmsValue,
           }
         : undefined,
+      // Bloco canônico de seguro da carga (layout SEFAZ / Hub Fiscal v1).
+      // respSeg 4 = seguro por conta do emitente do CT-e.
       seg: seguroCarga
         ? [
             {
               respSeg: 4,
-              xSeg: input.insurer?.name,
+              xSeg: input.insurer?.name || undefined,
+              CNPJ: digits(input.insurer?.cnpj) || undefined,
               nApol: input.insurer?.policy || undefined,
               nAver: input.insurer?.endorsement || undefined,
+              vCarga: insuredAmount ?? undefined,
+              // Aliases aceitos pelo Hub para o mesmo grupo.
+              infSeg: {
+                xSeg: input.insurer?.name || undefined,
+                CNPJ: digits(input.insurer?.cnpj) || undefined,
+              },
             },
           ]
         : undefined,
