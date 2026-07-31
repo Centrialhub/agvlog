@@ -25,6 +25,11 @@ import { buildCtePayload, computeIcmsAmounts, type CteTakerRole, type BuildCtePa
 import type { CteDocType } from '@/lib/fiscal/cteBuilder';
 import { suggestIcmsAliquota, icmsIsentoByCst } from '@/lib/fiscal/icmsAliquota';
 import { validateInsurance, formatCnpj, onlyDigits } from '@/lib/fiscal/insuranceValidation';
+import {
+  applyInsuranceProfileToBatch,
+  hasInsuranceProfile,
+  preserveInsurerFields,
+} from '@/lib/fiscal/insuranceProfile';
 
 /** Recalcula base/valor do ICMS respeitando o regime embutido (por dentro). */
 function recalcIcms(
@@ -452,7 +457,11 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
           };
         }),
       );
-      setItems(patched);
+      // Preserva a seguradora já aplicada/salva: o RPC é assíncrono e não deve
+      // sobrescrever o padrão do tenant aplicado enquanto ele carregava.
+      setItems((prev) =>
+        patched.map((it, i) => (prev[i] ? preserveInsurerFields(prev[i], it) : it)),
+      );
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -460,18 +469,11 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
   // Aplica a seguradora padrão salva (nome, CNPJ e apólice) em todos os CT-es do lote.
   // A averbação (CGC) continua por CT-e e nunca é replicada.
   useEffect(() => {
-    if (!open || items.length === 0 || !insuranceProfile) return;
-    const { name, cnpj, policy } = insuranceProfile;
-    if (!name && !cnpj && !policy) return;
-    let changed = false;
-    const next = items.map((it) => {
-      const out = { ...it };
-      if (!out.insurerName && name) { out.insurerName = name; changed = true; }
-      if (!out.insurerCnpj && cnpj) { out.insurerCnpj = cnpj; changed = true; }
-      if (!out.insurerPolicy && policy) { out.insurerPolicy = policy; changed = true; }
-      return out;
+    if (!open || !hasInsuranceProfile(insuranceProfile)) return;
+    setItems((prev) => {
+      if (prev.length === 0) return prev;
+      return applyInsuranceProfileToBatch(prev, insuranceProfile).items;
     });
-    if (changed) setItems(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, insuranceProfile, items.length]);
 
@@ -948,19 +950,12 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                     disabled={saveInsuranceProfile.isPending || !active.insurerName}
                     onClick={async () => {
                       try {
-                        await saveInsuranceProfile.mutateAsync({
+                        const saved = await saveInsuranceProfile.mutateAsync({
                           name: active.insurerName,
                           cnpj: active.insurerCnpj,
                           policy: active.insurerPolicy,
                         });
-                        setItems((arr) =>
-                          arr.map((it) => ({
-                            ...it,
-                            insurerName: active.insurerName,
-                            insurerCnpj: active.insurerCnpj,
-                            insurerPolicy: active.insurerPolicy,
-                          })),
-                        );
+                        setItems((arr) => applyInsuranceProfileToBatch(arr, saved, true).items);
                         toast.success('Seguradora salva como padrão', {
                           description: 'Aplicada a este lote e às próximas emissões.',
                         });
@@ -971,20 +966,13 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                   >
                     Salvar seguradora como padrão
                   </Button>
-                  {(insuranceProfile?.name || insuranceProfile?.cnpj || insuranceProfile?.policy) && (
+                  {hasInsuranceProfile(insuranceProfile) && (
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
                       onClick={() => {
-                        setItems((arr) =>
-                          arr.map((it) => ({
-                            ...it,
-                            insurerName: insuranceProfile?.name || it.insurerName,
-                            insurerCnpj: insuranceProfile?.cnpj || it.insurerCnpj,
-                            insurerPolicy: insuranceProfile?.policy || it.insurerPolicy,
-                          })),
-                        );
+                        setItems((arr) => applyInsuranceProfileToBatch(arr, insuranceProfile, true).items);
                         toast.success('Seguradora padrão aplicada ao lote');
                       }}
                     >
