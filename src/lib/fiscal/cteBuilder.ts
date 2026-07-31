@@ -326,6 +326,69 @@ function buildIcmsBlock(
   return block;
 }
 
+const COMPONENT_LABELS: Record<keyof CteFreightComposition, string> = {
+  freight_weight: 'FRETE PESO',
+  delivery_fee: 'VALOR ENTREGA',
+  others: 'OUTROS',
+  insurance_pct: 'SEGURO %',
+  insurance_value: 'SEGURO',
+  dispatch: 'DESPACHO',
+  gris: 'GRIS',
+  toll: 'PEDAGIO',
+  tracking: 'RASTREAMENTO',
+  loading: 'CARGA/DESCARGA',
+  helper: 'AJUDANTE',
+  partner_freight: 'FRETE PARCEIRO',
+  carrier_freight: 'FRETE TRANSPORTADORA',
+  suspended_taxes: 'TRIBUTOS SUSPENSOS',
+};
+
+/**
+ * Componentes do valor da prestação do serviço (bloco impresso no DACTE).
+ * Garante sempre as linhas de destaque: FRETE PESO, SEGURO (quando houver) e ICMS.
+ */
+function buildComponentes(params: {
+  composition?: CteFreightComposition | null;
+  freightValue: number;
+  insuranceValue?: number | null;
+  icmsValor?: number | null;
+}): { nome: string; valor: number }[] {
+  const round2 = (n: number) => Number(n.toFixed(2));
+  const comp = params.composition || {};
+  const items: { nome: string; valor: number }[] = [];
+
+  // Soma dos componentes acessórios informados (exclui frete peso e seguro %)
+  let accessories = 0;
+  for (const [k, v] of Object.entries(comp)) {
+    if (k === 'freight_weight' || k === 'insurance_pct') continue;
+    const n = Number(v || 0);
+    if (n > 0) accessories += n;
+  }
+
+  const freightWeight =
+    Number(comp.freight_weight || 0) > 0
+      ? Number(comp.freight_weight)
+      : Math.max(params.freightValue - accessories, 0) || params.freightValue;
+
+  items.push({ nome: COMPONENT_LABELS.freight_weight, valor: round2(freightWeight) });
+
+  const insurance = Number(params.insuranceValue ?? comp.insurance_value ?? 0);
+  if (insurance > 0) items.push({ nome: COMPONENT_LABELS.insurance_value, valor: round2(insurance) });
+
+  for (const [k, v] of Object.entries(comp)) {
+    if (k === 'freight_weight' || k === 'insurance_pct' || k === 'insurance_value') continue;
+    const n = Number(v || 0);
+    if (n > 0) {
+      items.push({ nome: COMPONENT_LABELS[k as keyof CteFreightComposition] || k.toUpperCase(), valor: round2(n) });
+    }
+  }
+
+  const icms = Number(params.icmsValor || 0);
+  if (icms > 0) items.push({ nome: 'ICMS', valor: round2(icms) });
+
+  return items;
+}
+
 export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadResult {
   const missing: string[] = [];
   const warnings: string[] = [];
