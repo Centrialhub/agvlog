@@ -19,7 +19,11 @@ import { toast } from 'sonner';
 import { PendingInvoicesBanner } from '@/components/billing/PendingInvoicesBanner';
 import { hubFiscal } from '@/lib/fiscal/hubFiscalClient';
 
-async function downloadHubFile(row: CteMonitorRow, format: 'pdf' | 'xml') {
+async function downloadHubFile(
+  row: CteMonitorRow,
+  format: 'pdf' | 'xml',
+  opts: { silent?: boolean } = {},
+) {
   const label = format === 'pdf' ? 'PDF (DACTE)' : 'XML';
   const url = format === 'pdf' ? row.pdf_url : row.xml_url;
   if (url) {
@@ -27,15 +31,15 @@ async function downloadHubFile(row: CteMonitorRow, format: 'pdf' | 'xml') {
     return;
   }
   if (!row.hub_document_id) {
-    toast.error(`${label} indisponível`, {
-      description:
-        row.source === 'hub'
-          ? 'Este CT-e ainda não tem id do Hub Fiscal — sincronize a emissão antes de baixar.'
-          : 'Este registro é um rascunho local que nunca foi transmitido ao Hub Fiscal/SEFAZ.',
-    });
+    const description =
+      row.source === 'hub'
+        ? 'Este CT-e ainda não tem id do Hub Fiscal — sincronize a emissão antes de baixar.'
+        : 'Este registro é um rascunho local que nunca foi transmitido ao Hub Fiscal/SEFAZ.';
+    if (opts.silent) throw new Error(description);
+    toast.error(`${label} indisponível`, { description });
     return;
   }
-  const toastId = toast.loading(`Baixando ${label}...`);
+  const toastId = opts.silent ? undefined : toast.loading(`Baixando ${label}...`);
   try {
     const blob = await hubFiscal.file(row.hub_document_id, format);
     const objectUrl = URL.createObjectURL(blob);
@@ -46,8 +50,9 @@ async function downloadHubFile(row: CteMonitorRow, format: 'pdf' | 'xml') {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(objectUrl), 10_000);
-    toast.success(`${label} baixado`, { id: toastId });
+    if (!opts.silent) toast.success(`${label} baixado`, { id: toastId });
   } catch (e: any) {
+    if (opts.silent) throw e;
     toast.error(`Falha ao baixar ${label}`, { id: toastId, description: e?.message });
   }
 }
