@@ -47,6 +47,12 @@ export interface NFSeDoc {
   xml_url: string | null;
   rejection_messages: any;
   notes: string | null;
+  insurer_name?: string | null;
+  insurer_cnpj?: string | null;
+  insurer_policy?: string | null;
+  insurer_endorsement?: string | null;
+  insured_amount?: number | null;
+  insurance_premium?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -123,6 +129,30 @@ export function useCreateNFSe() {
         status: 'draft',
         created_by: user?.id ?? null,
       };
+
+      // Propaga o seguro das NFs vinculadas quando não informado no formulário,
+      // garantindo que CT-e e NFS-e saiam com exatamente os mesmos dados.
+      const linkedIds = (input as any).fiscal_document_ids as string[] | undefined;
+      const hasManualInsurance = !!(
+        payload.insurer_name || payload.insurer_cnpj || payload.insurer_policy || payload.insurer_endorsement
+      );
+      if (!hasManualInsurance && linkedIds?.length) {
+        const { data: srcs } = await (supabase as any)
+          .from('fiscal_documents')
+          .select('insurer_name, insurer_cnpj, insurer_policy, insurer_endorsement, insured_amount, insurance_premium')
+          .in('id', linkedIds)
+          .eq('tenant_id', currentTenant.id);
+        const src = (srcs ?? []).find((d: any) => d?.insurer_policy || d?.insurer_name || d?.insurer_cnpj);
+        if (src) {
+          payload.insurer_name = src.insurer_name ?? null;
+          payload.insurer_cnpj = src.insurer_cnpj ?? null;
+          payload.insurer_policy = src.insurer_policy ?? null;
+          payload.insurer_endorsement = src.insurer_endorsement ?? null;
+          payload.insured_amount = (srcs ?? []).reduce((a: number, d: any) => a + Number(d?.insured_amount || 0), 0) || null;
+          payload.insurance_premium = (srcs ?? []).reduce((a: number, d: any) => a + Number(d?.insurance_premium || 0), 0) || null;
+        }
+      }
+
       const { data, error } = await (supabase as any)
         .from('nfse_documents')
         .insert(payload)
