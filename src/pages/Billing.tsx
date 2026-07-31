@@ -976,6 +976,7 @@ function IssuedCtesTable() {
   }
 
   return (
+    <>
     <Table>
       <TableHeader>
         <TableRow>
@@ -1076,7 +1077,8 @@ function IssuedCtesTable() {
           );
         })}
       </TableBody>
-      <CancelCteDialog target={cancelTarget} onOpenChange={(o) => !o && setCancelTarget(null)} />
     </Table>
+    <CancelCteDialog target={cancelTarget} onOpenChange={(o) => !o && setCancelTarget(null)} />
+    </>
   );
 }
