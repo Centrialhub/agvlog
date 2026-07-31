@@ -212,6 +212,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
     if (!emitterId) { toast.error('Selecione o emitente fiscal'); return; }
     if (!tomador?.cnpj) { toast.error('Tomador sem CNPJ — cadastre o cliente/fornecedor'); return; }
     if (totalServicos <= 0) { toast.error('Valor de serviços deve ser maior que zero'); return; }
+    if (!insuranceCheck.ok) { toast.error(`Seguro: ${insuranceCheck.messages.join(' ')}`); return; }
 
     setIssuing(true);
     try {
