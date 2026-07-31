@@ -264,16 +264,25 @@ Deno.serve(async (req) => {
 
       case 'cancel': {
         if (!payload.id) return json(400, { success: false, error: { code: 'MISSING_ID' } });
-        const justificativa = (payload.body as any)?.justificativa as string | undefined;
+        const body = (payload.body || {}) as Record<string, unknown>;
+        const justificativa = (body.justificativa || body.reason || body.motivo) as string | undefined;
         if (!justificativa || justificativa.trim().length < 15) {
           return json(400, { success: false, error: { code: 'INVALID_JUSTIFICATION', message: 'Mínimo 15 caracteres.' } });
         }
         const resolved = await resolveToken(payload.type || 'all', payload.emitterId);
-        const { status, data } = await callHub('POST', '/hub_documents_cancel', { id: payload.id }, { justificativa }, resolved.token);
+        // A API v1 do Hub valida o campo `reason`; mantemos `justificativa` por compatibilidade.
+        const reason = justificativa.trim();
+        const { status, data } = await callHub(
+          'POST',
+          '/hub_documents_cancel',
+          { id: payload.id },
+          { reason, justificativa: reason },
+          resolved.token,
+        );
         if (status < 400 && payload.emissionId) {
           await admin.from('hub_fiscal_emissions').update({
             status: 'cancelled',
-            cancel_reason: justificativa,
+            cancel_reason: reason,
             cancelled_at: new Date().toISOString(),
             last_response: data as any,
           }).eq('id', payload.emissionId).eq('tenant_id', tenantId);
