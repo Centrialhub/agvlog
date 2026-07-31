@@ -384,11 +384,20 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
 
   const defaultEmitter = emitters.find((e: any) => e.is_default && e.active) || emitters[0];
 
+  // Assinatura do lote: muda sempre que as notas/grupos selecionados mudam.
+  // Sem isso o diálogo mantinha o lote capturado na primeira abertura (bug:
+  // abrir a prévia antes de selecionar as notas transmitia todas as elegíveis).
+  const groupsSignature = useMemo(
+    () => groups.map((g) => `${g.key}:${(g.fiscal_document_ids || []).join('.')}`).join('|'),
+    [groups],
+  );
+
   useEffect(() => {
     if (!open) return;
     setItems(groups.map((g) => groupToEditable(g, defaultEmitter?.id || '')));
     setActiveIdx(0);
-  }, [open, groups, defaultEmitter?.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, groupsSignature, defaultEmitter?.id]);
 
   useEffect(() => {
     if (!currentTenant?.id) return;
@@ -442,7 +451,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
       );
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, groupsSignature]);
 
   // Aplica a seguradora padrão salva (nome, CNPJ e apólice) em todos os CT-es do lote.
   // A averbação (CGC) continua por CT-e e nunca é replicada.
