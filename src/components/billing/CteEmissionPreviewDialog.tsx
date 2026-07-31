@@ -1137,7 +1137,8 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                   const fretePeso =
                     active.fcFreightWeight > 0
                       ? active.fcFreightWeight
-                      : Math.max((active.freightValue || 0) - (active.icmsValor || 0) - acc, 0) || active.freightValue || 0;
+                      : active.freightValue || 0;
+                  const freteReceber = fretePeso + acc + (active.icmsValor || 0);
                   const money = (n: number) =>
                     `R$ ${Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
                   return (
@@ -1162,12 +1163,12 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                         </div>
                         <div className="flex justify-between px-3 py-1.5 font-semibold border-t-2">
                           <span>FRETE A RECEBER</span>
-                          <span>{money(active.freightValue)}</span>
+                          <span>{money(freteReceber)}</span>
                         </div>
                       </div>
                       <p className="text-[11px] text-muted-foreground mt-1">
-                        FRETE PESO é o frete cru, sem ICMS. FRETE A RECEBER é o total com ICMS
-                        embutido; demais componentes entram conforme preenchidos acima.
+                        FRETE PESO é o frete cru (base do cálculo). FRETE A RECEBER = FRETE PESO +
+                        acessórios + ICMS embutido — o ICMS é somado, nunca deduzido.
                       </p>
                     </div>
                   );

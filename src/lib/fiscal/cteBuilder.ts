@@ -225,15 +225,14 @@ const TAKER_INDEX: Record<CteTakerRole, number> = {
  *
  * Regras (layout CT-e SEFAZ):
  *  - Isento (CST 40/41/51 ou flag isento): vBC = 0, vICMS = 0.
- *  - Por fora (embutido=false): vBC = vTPrest, vICMS = vBC × pICMS/100.
- *  - Por dentro / embutido (embutido=true): vTPrest é o total a receber e já
- *    contém o ICMS. A base fiscal continua sendo vTPrest e o valor do imposto
- *    é vTPrest × pICMS/100. O frete cru exibido nos componentes é calculado
- *    separadamente como vTPrest − vICMS.
+ *  - Por fora (embutido=false): vBC = FRETE PESO, vICMS = vBC × pICMS/100.
+ *  - Por dentro / embutido (embutido=true): o cálculo parte do FRETE PESO
+ *    (frete cru, informado em `freight`). A base fiscal é o valor "por dentro"
+ *    vBC = FRETE PESO ÷ (1 − pICMS/100) e vICMS = vBC × pICMS/100. Assim
+ *    FRETE A RECEBER = FRETE PESO + ICMS (= vBC).
  *
- * `providedBase`/`providedValor` são respeitados apenas quando são coerentes
- * com o regime — caso o chamador ainda passe base = frete com embutido=true
- * (bug antigo), o cálculo é refeito por dentro.
+ * `providedBase`/`providedValor` são respeitados apenas quando informados
+ * explicitamente e coerentes com o regime.
  */
 export function computeIcmsAmounts(params: {
   freight: number;
@@ -249,7 +248,9 @@ export function computeIcmsAmounts(params: {
   const providedBase = params.providedBase != null ? Number(params.providedBase) : null;
   const providedValor = params.providedValor != null ? Number(params.providedValor) : null;
   if (embutido) {
-    const base = providedBase != null && providedBase > 0 ? providedBase : freight;
+    // Gross-up sobre o FRETE PESO: base = frete ÷ (1 − alíquota).
+    const base =
+      providedBase != null && providedBase > 0 ? providedBase : freight / (1 - aliq / 100);
     const valor = base * (aliq / 100);
     return { base: round2(base), valor: round2(valor) };
   }
@@ -344,7 +345,8 @@ const COMPONENT_LABELS: Record<keyof CteFreightComposition, string> = {
  */
 function buildComponentes(params: {
   composition?: CteFreightComposition | null;
-  freightValue: number;
+  /** FRETE PESO (frete cru, base do cálculo do ICMS). */
+  freightWeight: number;
   insuranceValue?: number | null;
   icmsValor?: number | null;
 }): { nome: string; valor: number }[] {
@@ -352,22 +354,9 @@ function buildComponentes(params: {
   const comp = params.composition || {};
   const items: { nome: string; valor: number }[] = [];
 
-  // Soma dos componentes acessórios informados (exclui frete peso e seguro %).
-  // O total a receber já contém ICMS; portanto FRETE PESO é o valor cru:
-  // total − ICMS − demais componentes.
-  let accessories = 0;
-  for (const [k, v] of Object.entries(comp)) {
-    if (k === 'freight_weight' || k === 'insurance_pct') continue;
-    const n = Number(v || 0);
-    if (n > 0) accessories += n;
-  }
-
-  const freightWeight =
-    Number(comp.freight_weight || 0) > 0
-      ? Number(comp.freight_weight)
-      : Math.max(params.freightValue - Number(params.icmsValor || 0) - accessories, 0) || params.freightValue;
-
-  items.push({ nome: COMPONENT_LABELS.freight_weight, valor: round2(freightWeight) });
+  // FRETE PESO é o valor cru (base). O ICMS é somado a ele para formar o
+  // FRETE A RECEBER — nunca deduzido.
+  items.push({ nome: COMPONENT_LABELS.freight_weight, valor: round2(params.freightWeight) });
 
   const insurance = Number(params.insuranceValue ?? comp.insurance_value ?? 0);
   if (insurance > 0) items.push({ nome: COMPONENT_LABELS.insurance_value, valor: round2(insurance) });
@@ -434,8 +423,17 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
       )
     : undefined;
 
+  // FRETE PESO (frete cru) é a base do cálculo. Prevalece o componente
+  // explícito quando informado; senão usa o valor de frete calculado.
+  const fretePeso = Number(
+    (Number(input.freightComposition?.freight_weight || 0) > 0
+      ? Number(input.freightComposition?.freight_weight)
+      : input.totals.freight_value
+    ).toFixed(2),
+  );
+
   const icmsBlock = input.icms
-    ? buildIcmsBlock(input.icms, input.totals.freight_value, input.emitter?.taxRegime)
+    ? buildIcmsBlock(input.icms, fretePeso, input.emitter?.taxRegime)
     : undefined;
 
   const insuranceValue = Number(input.freightComposition?.insurance_value || 0);
@@ -450,14 +448,15 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
 
   const componentes = buildComponentes({
     composition: input.freightComposition,
-    freightValue: input.totals.freight_value,
+    freightWeight: fretePeso,
     insuranceValue,
     icmsValor: (icmsBlock?.vICMS as number) ?? null,
   });
-  const totalServico = Number(input.totals.freight_value.toFixed(2));
   const icmsValue = Number((Number(icmsBlock?.vICMS) || 0).toFixed(2));
-  const freteBase = Number(
-    (componentes.find((component) => component.nome === 'FRETE PESO')?.valor || 0).toFixed(2),
+  const freteBase = fretePeso;
+  // FRETE A RECEBER = soma dos componentes (FRETE PESO + acessórios + ICMS).
+  const totalServico = Number(
+    componentes.reduce((sum, component) => sum + Number(component.valor || 0), 0).toFixed(2),
   );
   const seguroCarga = input.insurer
     ? {
