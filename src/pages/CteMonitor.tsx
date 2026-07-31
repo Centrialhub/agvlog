@@ -18,6 +18,7 @@ import {
 import { toast } from 'sonner';
 import { PendingInvoicesBanner } from '@/components/billing/PendingInvoicesBanner';
 import { hubFiscal } from '@/lib/fiscal/hubFiscalClient';
+import { summarizeBulkDownload, type BulkFailure } from '@/lib/fiscal/bulkDownloadSummary';
 
 async function downloadHubFile(
   row: CteMonitorRow,
@@ -27,7 +28,10 @@ async function downloadHubFile(
   const label = format === 'pdf' ? 'PDF (DACTE)' : 'XML';
   const url = format === 'pdf' ? row.pdf_url : row.xml_url;
   if (url) {
-    window.open(url, '_blank');
+    const win = window.open(url, '_blank');
+    if (!win && opts.silent) {
+      throw new Error('O navegador bloqueou a abertura do arquivo (pop-up bloqueado).');
+    }
     return;
   }
   if (!row.hub_document_id) {
@@ -125,21 +129,23 @@ export default function CteMonitor() {
     if (checkedRows.length === 0) return;
     setBulkBusy(true);
     let ok = 0;
-    let fail = 0;
+    const failures: BulkFailure[] = [];
     const toastId = toast.loading(`Baixando ${checkedRows.length} arquivo(s) ${format.toUpperCase()}...`);
     for (const row of checkedRows) {
+      const rowLabel = row.cte_number || row.access_key || row.id.slice(0, 8);
       try {
         await downloadHubFile(row, format, { silent: true });
         ok++;
-      } catch {
-        fail++;
+      } catch (e: any) {
+        failures.push({ label: rowLabel, message: e?.message || 'Falha desconhecida' });
       }
       // Evita bloqueio de downloads simultâneos pelo navegador.
       await new Promise((r) => setTimeout(r, 350));
     }
     setBulkBusy(false);
-    if (fail === 0) toast.success(`${ok} arquivo(s) ${format.toUpperCase()} baixado(s)`, { id: toastId });
-    else toast.warning(`${ok} baixado(s), ${fail} falha(s)`, { id: toastId });
+    const summary = summarizeBulkDownload(format, ok, failures);
+    const fn = summary.tone === 'success' ? toast.success : summary.tone === 'error' ? toast.error : toast.warning;
+    fn(summary.title, { id: toastId, description: summary.description, duration: 12_000 });
   }
 
   const counts = useMemo(() => {
