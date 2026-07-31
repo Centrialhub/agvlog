@@ -356,6 +356,9 @@ export default function Billing() {
       }
       if (!matchesOp(load?.operation_type ?? (d as any).operation_type)) return false;
 
+      // Cidade do destinatário (comparação sem acentos/caixa)
+      if (recipientCity !== SENTINEL_NONE && normalizeCity((d as any).recipient_city) !== recipientCity) return false;
+
       return true;
     });
   }, [
@@ -366,8 +369,22 @@ export default function Billing() {
     supplierManifest, distributionManifest,
     shipmentManifest, originManifest, loadStatus, plate,
     scheduledLoadStart, scheduledLoadEnd, actualLoadStart, actualLoadEnd,
-    opTypes, allOps,
+    opTypes, allOps, recipientCity,
   ]);
+
+  // Cidades de destino disponíveis nas notas elegíveis (chave normalizada -> rótulo exibido)
+  const recipientCityOptions = useMemo(() => {
+    const m = new Map<string, { key: string; label: string; count: number }>();
+    for (const d of docs as any[]) {
+      const key = normalizeCity(d.recipient_city);
+      if (!key) continue;
+      const label = `${d.recipient_city}${d.recipient_state ? `/${d.recipient_state}` : ''}`;
+      const cur = m.get(key);
+      if (cur) cur.count += 1;
+      else m.set(key, { key, label, count: 1 });
+    }
+    return Array.from(m.values()).sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
+  }, [docs]);
 
   // Se o operador marcou notas específicas, restringe a elas. Caso contrário,
   // usa todas as notas resultantes dos filtros (comportamento por lote antigo).
