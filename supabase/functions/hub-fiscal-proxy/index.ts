@@ -535,19 +535,11 @@ Deno.serve(async (req) => {
         const early = await tryManagerSaas(localKey, localCnpj);
         if (early) return early;
 
-        // 1) Rotas dedicadas de download do Hub, com fallback de rota/parâmetro.
-        // A API v1 expõe GET /documents/file?id=...&kind=pdf|xml, mas instâncias
-        // do ManagerSaaS variam (`format`, rotas de impressão dedicadas). Tentamos
-        // as combinações conhecidas antes de desistir.
+        // 1) Rota documentada de download direto: GET /hub_documents_file?id=...&kind=pdf|xml.
+        //    Serve do Storage quando disponível; senão o Hub baixa do provedor.
         const kind = format === 'cancel_xml' ? 'cancel_xml' : format;
         const attempts: { path: string; query: Record<string, string> }[] = [
           { path: '/hub_documents_file', query: { id: payload.id, kind } },
-          { path: '/hub_documents_file', query: { id: payload.id, format: kind } },
-          { path: '/hub_documents_file', query: { id: payload.id, kind, type: payload.type || 'cte' } },
-          { path: '/hub_documents_download', query: { id: payload.id, kind } },
-          format === 'pdf'
-            ? { path: '/hub_documents_print', query: { id: payload.id } }
-            : { path: '/hub_documents_xml', query: { id: payload.id } },
         ];
 
         for (const attempt of attempts) {
