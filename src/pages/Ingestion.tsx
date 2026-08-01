@@ -1191,6 +1191,13 @@ export default function Ingestion() {
           description: 'Dados extraídos do XML/ORT foram salvos na ficha do cliente.',
         });
       }
+      if (ieUpdatedCount > 0) {
+        queryClient.invalidateQueries({ queryKey: ['clients'] });
+        toast({
+          title: `IE atualizada em ${ieUpdatedCount} cliente(s)`,
+          description: 'A Inscrição Estadual foi puxada da nota e gravada no cadastro.',
+        });
+      }
 
       // Sincronização opcional com SSX (InsertPerson) para os clientes recém-criados
       if (syncSsxClients && ssxAccountForClients?.id && currentTenant && clientsToSyncSsx.size > 0) {
