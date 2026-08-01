@@ -1,12 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Send, Ban, Edit, FileText, FilePlus2, Trash2, AlertCircle } from 'lucide-react';
+import { Plus, Send, Ban, Edit, FileText, FilePlus2, Trash2, AlertCircle, RefreshCw, Clock } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { useNFSeList, useIssueNFSe, useCancelNFSe, useDeleteNFSe, type NFSeDoc } from '@/hooks/useNFSe';
+import { useNFSeList, useIssueNFSe, useCancelNFSe, useDeleteNFSe, useSyncNFSeStatus, type NFSeDoc } from '@/hooks/useNFSe';
 import NFSeFormDialog from '@/components/nfse/NFSeFormDialog';
 import NFSeFromInvoicesDialog from '@/components/nfse/NFSeFromInvoicesDialog';
 
@@ -26,6 +26,7 @@ export default function NFSePage() {
   const issue = useIssueNFSe();
   const cancel = useCancelNFSe();
   const del = useDeleteNFSe();
+  const sync = useSyncNFSeStatus();
 
   const [search, setSearch] = useState('');
   const [formOpen, setFormOpen] = useState(false);
@@ -40,6 +41,24 @@ export default function NFSePage() {
         .filter(Boolean).some(v => String(v).toLowerCase().includes(s))
     );
   }, [docs, search]);
+
+  const PENDING_STATUSES = ['processing', 'queued', 'submitted', 'pending'];
+  const pendingCount = useMemo(
+    () => docs.filter(d => PENDING_STATUSES.includes(d.status)).length,
+    [docs],
+  );
+
+  // Verificação automática: enquanto houver NFS-e em processamento, consulta o
+  // provedor a cada 60s (a rotina do servidor roda a cada 5 min de forma independente).
+  const syncRef = useRef(sync);
+  syncRef.current = sync;
+  useEffect(() => {
+    if (pendingCount === 0) return;
+    const tick = () => { if (!syncRef.current.isPending) syncRef.current.mutate({ silent: true }); };
+    tick();
+    const t = setInterval(tick, 60_000);
+    return () => clearInterval(t);
+  }, [pendingCount]);
 
   const handleCancel = async (id: string) => {
     const reason = window.prompt('Motivo do cancelamento:');
@@ -68,6 +87,9 @@ export default function NFSePage() {
             <p className="text-sm text-muted-foreground">Emissão de RPS / NFS-e (estrutura preparada para integração fiscal)</p>
           </div>
           <div className="flex gap-2">
+            <Button variant="outline" onClick={() => sync.mutate({})} disabled={sync.isPending}>
+              <RefreshCw className={`h-4 w-4 mr-1 ${sync.isPending ? 'animate-spin' : ''}`} /> Consultar status
+            </Button>
             <Button variant="outline" onClick={() => { setEditing(null); setFormOpen(true); }}>
               <Plus className="h-4 w-4 mr-1" /> RPS avulso
             </Button>
