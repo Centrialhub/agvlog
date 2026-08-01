@@ -5,6 +5,7 @@ import {
   resolveParty,
   fillPartyFieldsFromRegistry,
   normalizeName,
+  sanitizeIe,
 } from '@/lib/fiscal/partyRegistry';
 
 const clients = [
