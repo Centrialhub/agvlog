@@ -7,7 +7,7 @@ async function makePdf(pages = 1): Promise<Blob> {
   const doc = await PDFDocument.create();
   for (let i = 0; i < pages; i++) doc.addPage([300, 300]);
   const bytes = await doc.save();
-  return new Blob([bytes as unknown as BlobPart], { type: 'application/pdf' });
+  return new Blob([bytes.buffer as ArrayBuffer], { type: 'application/pdf' });
 }
 
 describe('uniqueFilename', () => {

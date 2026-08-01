@@ -76,7 +76,7 @@ export async function mergePdfBlobs(
   if (merged === 0) return null;
   const bytes = await out.save();
   return {
-    blob: new Blob([bytes as unknown as BlobPart], { type: 'application/pdf' }),
+    blob: new Blob([bytes.buffer as ArrayBuffer], { type: 'application/pdf' }),
     pages: out.getPageCount(),
     merged,
   };
