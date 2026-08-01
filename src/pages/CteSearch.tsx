@@ -10,7 +10,7 @@ import {
   useCteSearch, CTE_TYPE_LABELS,
   type CteSearchFilters, type CteSearchRow, type CteType, type TriState,
 } from '@/hooks/useCteSearch';
-import { SEFAZ_STATUS_LABELS, SEFAZ_STATUS_TONE, SEFAZ_STATUSES, type SefazStatus } from '@/hooks/useCteMonitor';
+import { SEFAZ_STATUS_LABELS, SEFAZ_STATUS_TONE, type SefazStatus } from '@/hooks/useCteMonitor';
 import { runBulkDownload, summarizeBulkResult } from '@/lib/fiscal/bulkFileMerge';
 import { fetchCteBlob, cteFileName, cteLabel, canDownloadCte, saveBlob, openBlob } from '@/lib/fiscal/cteFiles';
 import {
@@ -64,6 +64,9 @@ function TriRadio({ label, value, onChange }: { label: string; value: TriState; 
     </div>
   );
 }
+
+/** Status usados no dia a dia — os demais ficam nos filtros avançados via busca. */
+const QUICK_STATUSES: SefazStatus[] = ['processed', 'pending', 'sent_error', 'processed_error', 'cancelled'];
 
 const ALL_CTE_TYPES: CteType[] = ['normal', 'complementary', 'voiding', 'substitute'];
 
@@ -318,7 +321,7 @@ export default function CteSearch() {
           <Button size="sm" variant="ghost" onClick={() => setPeriod(null)}>Tudo</Button>
 
           <span className="ml-2 text-[11px] uppercase tracking-wide text-muted-foreground">Status</span>
-          {(SEFAZ_STATUSES as SefazStatus[]).map((s) => {
+          {QUICK_STATUSES.map((s) => {
             const on = (filters.statuses ?? []).includes(s);
             return (
               <button
