@@ -9241,6 +9241,8 @@ export type Database = {
           iss_retido: boolean
           issue_date: string
           items: Json
+          last_status_check_at: string | null
+          last_status_response: Json | null
           load_id: string | null
           nat_operacao: string | null
           nfse_number: string | null
@@ -9270,6 +9272,7 @@ export type Database = {
           series: string | null
           situacao_doc: string | null
           status: string
+          status_check_attempts: number
           tenant_id: string
           tipo_ctrc: string | null
           trip_id: string | null
@@ -9333,6 +9336,8 @@ export type Database = {
           iss_retido?: boolean
           issue_date?: string
           items?: Json
+          last_status_check_at?: string | null
+          last_status_response?: Json | null
           load_id?: string | null
           nat_operacao?: string | null
           nfse_number?: string | null
@@ -9362,6 +9367,7 @@ export type Database = {
           series?: string | null
           situacao_doc?: string | null
           status?: string
+          status_check_attempts?: number
           tenant_id: string
           tipo_ctrc?: string | null
           trip_id?: string | null
@@ -9425,6 +9431,8 @@ export type Database = {
           iss_retido?: boolean
           issue_date?: string
           items?: Json
+          last_status_check_at?: string | null
+          last_status_response?: Json | null
           load_id?: string | null
           nat_operacao?: string | null
           nfse_number?: string | null
@@ -9454,6 +9462,7 @@ export type Database = {
           series?: string | null
           situacao_doc?: string | null
           status?: string
+          status_check_attempts?: number
           tenant_id?: string
           tipo_ctrc?: string | null
           trip_id?: string | null
