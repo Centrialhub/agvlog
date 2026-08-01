@@ -153,6 +153,7 @@ export default function CteMonitor() {
   const [selected, setSelected] = useState<CteMonitorRow | null>(null);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
 
   const { data: rows = [], isLoading, refetch, isFetching } = useCteMonitor(filters);
   const resend = useResendCte();
