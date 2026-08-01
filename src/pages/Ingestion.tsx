@@ -972,7 +972,9 @@ export default function Ingestion() {
         tax_id: taxId,
         person_type: isCpf ? 'CPF' : 'CNPJ',
         client_type: isCpf ? 'PF' : 'PJ',
-        state_registration: ieNorm.value,
+        // Nunca gravar o marcador 'UNKNOWN' na IE: ele vazava para o payload do
+        // CT-e e a SEFAZ rejeitava a emissão por IE inválida.
+        state_registration: ieNorm.unknown ? null : ieNorm.value,
         municipal_registration: src.recipientMunicipalRegistration || null,
         ie_indicator: taxDescription,
         tax_code: taxCode,
