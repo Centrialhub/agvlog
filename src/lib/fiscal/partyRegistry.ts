@@ -44,6 +44,27 @@ export interface ResolvedParty {
 
 export const digitsOnly = (v?: string | null) => (v || '').replace(/\D+/g, '');
 
+/**
+ * Sanitiza Inscrição Estadual antes de usar no CT-e.
+ *
+ * O auto-cadastro de clientes grava 'UNKNOWN' quando a IE lida da NF/OCR é
+ * ilegível ou incompatível com a UF. Esse marcador NUNCA pode ir para o Hub
+ * Fiscal/SEFAZ (rejeita o documento) nem preencher o campo do diálogo.
+ * Retorna null para marcadores inválidos, 'ISENTO' quando isento e os dígitos
+ * nos demais casos.
+ */
+export function sanitizeIe(v?: string | null): string | null {
+  const raw = (v || '').trim();
+  if (!raw) return null;
+  const upper = raw.toUpperCase();
+  if (/^(UNKNOWN|DESCONHECID[OA]|ILEG[IÍ]VEL|N\/?I|N\/?A|NAO INFORMAD[OA]|-+|\?+|0+)$/.test(upper)) {
+    return null;
+  }
+  if (/^(ISENTO|ISENTA|IS|EX)$/.test(upper)) return 'ISENTO';
+  const digits = digitsOnly(raw);
+  return digits || null;
+}
+
 /** Nome comparável: sem acento, sem pontuação, sem sufixos societários. */
 export function normalizeName(v?: string | null): string {
   return (v || '')
@@ -123,7 +144,7 @@ export function resolveParty(
   const name = (party.name || '').trim() || (c?.company_name || c?.legal_name || '').trim();
   if (!name) return null;
   const cnpj = digitsOnly(party.cnpj) || digitsOnly(c?.tax_id) || null;
-  const ie = (party.ie || '').trim() || (c?.state_registration ? String(c.state_registration) : null);
+  const ie = sanitizeIe(party.ie) || sanitizeIe(c?.state_registration);
   const fromClient = addressFromClient(c);
   const fallback: PartyAddress | null = fallbackAddress
     ? {
@@ -190,14 +211,24 @@ export function fillPartyFieldsFromRegistry<T extends PartyFields>(
   if (rem) {
     set('remitterName' as keyof T, rem.company_name || rem.legal_name);
     set('remitterCnpj' as keyof T, digitsOnly(rem.tax_id));
-    set('remitterIe' as keyof T, rem.state_registration);
+    set('remitterIe' as keyof T, sanitizeIe(rem.state_registration));
   }
   if (rec) {
     set('recipientName' as keyof T, rec.company_name || rec.legal_name);
     set('recipientCnpj' as keyof T, digitsOnly(rec.tax_id));
-    set('recipientIe' as keyof T, rec.state_registration);
+    set('recipientIe' as keyof T, sanitizeIe(rec.state_registration));
     set('recipientCity' as keyof T, rec.address_city);
     set('recipientState' as keyof T, rec.address_state);
+  }
+  // Limpa marcadores inválidos ('UNKNOWN') que possam ter vindo do cadastro/RPC.
+  for (const key of ['remitterIe', 'recipientIe'] as const) {
+    const current = ((next[key as keyof T] as unknown as string) || '').trim();
+    if (!current) continue;
+    const clean = sanitizeIe(current) || '';
+    if (clean !== current) {
+      (next[key as keyof T] as unknown as string) = clean;
+      changed = true;
+    }
   }
   return { item: changed ? next : item, changed };
 }
