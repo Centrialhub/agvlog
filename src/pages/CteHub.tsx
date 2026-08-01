@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FileSpreadsheet, ShieldCheck, FileSearch } from 'lucide-react';
 import Billing from '@/pages/Billing';
@@ -11,6 +12,14 @@ export default function CteHub() {
     : 'faturamento';
 
   const [activeTab, setActiveTab] = useState(initialTab);
+  const [searchParams] = useSearchParams();
+
+  // Mantém a aba sincronizada quando outras telas navegam para ?tab=monitor|consulta.
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab && tab !== activeTab) setActiveTab(tab);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   return (
     <div className="animate-fade-in space-y-6">
