@@ -106,4 +106,40 @@ describe('partyRegistry', () => {
     };
     expect(fillPartyFieldsFromRegistry(item, idx).changed).toBe(false);
   });
+
+  it('sanitizeIe descarta marcadores inválidos e mantém ISENTO/dígitos', () => {
+    expect(sanitizeIe('UNKNOWN')).toBeNull();
+    expect(sanitizeIe('ilegível')).toBeNull();
+    expect(sanitizeIe('  ')).toBeNull();
+    expect(sanitizeIe('Isento')).toBe('ISENTO');
+    expect(sanitizeIe('001.234.567/0089')).toBe('0012345670089');
+  });
+
+  it('não usa IE UNKNOWN do cadastro na resolução da parte', () => {
+    const idxUnknown = buildClientIndex([
+      { id: 'c9', company_name: 'SANTIAGO SUPERMERCADO LTDA', tax_id: '37646354000118', state_registration: 'UNKNOWN' },
+    ]);
+    const p = resolveParty(idxUnknown, { name: 'SANTIAGO SUPERMERCADO LTDA' });
+    expect(p?.cnpj).toBe('37646354000118');
+    expect(p?.ie).toBeNull();
+  });
+
+  it('limpa IE UNKNOWN já presente nos campos do diálogo', () => {
+    const { item: out, changed } = fillPartyFieldsFromRegistry(
+      {
+        remitterName: 'J. MACEDO S/A',
+        remitterCnpj: '11222333000144',
+        remitterIe: '1234567',
+        recipientName: 'SANTIAGO SUPERMERCADO LTDA',
+        recipientCnpj: '37646354000118',
+        recipientIe: 'UNKNOWN',
+        recipientCity: 'Divisa Alegre',
+        recipientState: 'MG',
+        clientId: null,
+      },
+      idx,
+    );
+    expect(changed).toBe(true);
+    expect(out.recipientIe).toBe('');
+  });
 });
