@@ -392,18 +392,27 @@ export default function CteMonitor() {
         <Card className="overflow-hidden">
           <div className="flex items-center justify-between gap-3 flex-wrap border-b bg-muted/30 px-3 py-2">
             <span className="text-sm text-muted-foreground">
-              {checkedRows.length > 0
-                ? `${checkedRows.length} CT-e(s) selecionado(s)`
-                : 'Selecione CT-es para emitir PDF/XML em massa'}
+              {bulkProgress
+                ? `Baixando ${bulkProgress.done}/${bulkProgress.total} do Hub Fiscal...`
+                : checkedRows.length > 0
+                  ? `${checkedRows.length} CT-e(s) selecionado(s) — download em arquivo único`
+                  : 'Filtre e selecione CT-es para baixar tudo em um único arquivo'}
             </span>
             <div className="flex items-center gap-2">
               <Button
                 size="sm"
                 variant="outline"
+                disabled={downloadableRows.length === 0 || bulkBusy}
+                onClick={() => setChecked(new Set(downloadableRows.map((r) => r.id)))}
+              >
+                Selecionar todos os filtrados ({downloadableRows.length})
+              </Button>
+              <Button
+                size="sm"
                 disabled={checkedRows.length === 0 || bulkBusy}
                 onClick={() => bulkDownload('pdf')}
               >
-                <FileText className="h-4 w-4" /> PDF em massa
+                <FileText className="h-4 w-4" /> Baixar PDF único
               </Button>
               <Button
                 size="sm"
@@ -411,7 +420,7 @@ export default function CteMonitor() {
                 disabled={checkedRows.length === 0 || bulkBusy}
                 onClick={() => bulkDownload('xml')}
               >
-                <FileDown className="h-4 w-4" /> XML em massa
+                <FileDown className="h-4 w-4" /> Baixar XMLs (ZIP)
               </Button>
             </div>
           </div>
