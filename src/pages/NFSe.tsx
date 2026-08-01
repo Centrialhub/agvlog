@@ -286,14 +286,22 @@ export default function NFSePage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading && <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-6">Carregando…</TableCell></TableRow>}
+                {isLoading && <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-6">Carregando…</TableCell></TableRow>}
                 {!isLoading && filtered.length === 0 && (
-                  <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-6">Nenhuma NFS-e</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-6">Nenhuma NFS-e para os filtros selecionados</TableCell></TableRow>
                 )}
                 {filtered.map(d => {
                   const st = STATUS_LABEL[d.status] || { label: d.status, variant: 'secondary' };
                   return (
                     <TableRow key={d.id}>
+                      <TableCell>
+                        <Checkbox
+                          checked={checked.has(d.id)}
+                          disabled={!ISSUED_STATUSES.includes(d.status)}
+                          onCheckedChange={() => toggleRow(d.id)}
+                          aria-label="Selecionar NFS-e"
+                        />
+                      </TableCell>
                       <TableCell className="font-mono text-xs">{d.nfse_number || `RPS ${d.rps_number}`}</TableCell>
                       <TableCell>{d.series}</TableCell>
                       <TableCell>{d.issue_date}</TableCell>
