@@ -149,6 +149,22 @@ export default function NFSePage() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right space-x-1">
+                        {PENDING_STATUSES.includes(d.status) && (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button size="sm" variant="ghost" onClick={() => sync.mutate({ id: d.id })} disabled={sync.isPending}>
+                                  <Clock className="h-3 w-3 mr-1" /> Consultar
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                {(d as any).last_status_check_at
+                                  ? `Última consulta: ${new Date((d as any).last_status_check_at).toLocaleString('pt-BR')} (${(d as any).status_check_attempts || 0} tentativas)`
+                                  : 'Nenhuma consulta automática realizada ainda'}
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
                         {d.status === 'draft' && (
                           <Button size="sm" variant="ghost" onClick={() => { setEditing(d); setFormOpen(true); }}>
                             <Edit className="h-3 w-3" />
