@@ -45,10 +45,16 @@ export function uniqueFilename(taken: Set<string>, filename: string): string {
 
 /** Lê o conteúdo binário do Blob (com fallback para ambientes sem Blob.arrayBuffer). */
 export async function blobToUint8(blob: Blob): Promise<Uint8Array> {
-  const buffer =
-    typeof (blob as any).arrayBuffer === 'function'
-      ? await blob.arrayBuffer()
-      : await new Response(blob).arrayBuffer();
+  if (typeof (blob as any).arrayBuffer === 'function') {
+    return new Uint8Array(await blob.arrayBuffer());
+  }
+  // Ambientes sem Blob.arrayBuffer (ex.: jsdom nos testes) — usa FileReader.
+  const buffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as ArrayBuffer);
+    reader.onerror = () => reject(reader.error || new Error('Falha ao ler arquivo'));
+    reader.readAsArrayBuffer(blob);
+  });
   return new Uint8Array(buffer);
 }
 
