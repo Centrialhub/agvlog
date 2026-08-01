@@ -178,29 +178,36 @@ export default function CteMonitor() {
   async function bulkDownload(format: 'pdf' | 'xml') {
     if (checkedRows.length === 0) return;
     setBulkBusy(true);
-    let ok = 0;
-    const failures: BulkFailure[] = [];
-    const toastId = toast.loading(`Baixando ${checkedRows.length} arquivo(s) ${format.toUpperCase()}...`);
-    let index = 0;
-    for (const row of checkedRows) {
-      index++;
-      const rowLabel = row.cte_number || row.access_key || row.id.slice(0, 8);
-      toast.loading(`Baixando ${format.toUpperCase()} ${index}/${checkedRows.length} (CT-e ${rowLabel})...`, {
-        id: toastId,
+    const total = checkedRows.length;
+    const toastId = toast.loading(`Baixando ${total} documento(s) ${format.toUpperCase()} do Hub Fiscal...`);
+    const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+    try {
+      const result = await runBulkDownload({
+        rows: checkedRows,
+        format,
+        outputBase: `ctes-${format}-${stamp}`,
+        fetchOne: (row) => fetchRowBlob(row, format),
+        labelOf: (row) => `CT-e ${row.cte_number || row.access_key || row.id.slice(0, 8)}`,
+        filenameOf: (row) => `cte-${row.access_key || row.cte_number || row.id}.${format}`,
+        onProgress: (doneCount, all, label) => {
+          setBulkProgress({ done: doneCount, total: all });
+          toast.loading(`Baixando ${doneCount}/${all} — ${label}`, { id: toastId });
+        },
       });
-      try {
-        await downloadHubFile(row, format, { silent: true });
-        ok++;
-      } catch (e: any) {
-        failures.push({ label: rowLabel, message: e?.message || 'Falha desconhecida' });
-      }
-      // Evita bloqueio de downloads simultâneos pelo navegador.
-      await new Promise((r) => setTimeout(r, 350));
+      toast.loading(
+        result.kind === 'pdf' ? 'Unindo tudo em um único PDF...' : 'Compactando arquivos...',
+        { id: toastId },
+      );
+      saveBlob(result.blob, result.filename);
+      const summary = summarizeBulkResult(result, total);
+      const fn = summary.tone === 'success' ? toast.success : summary.tone === 'error' ? toast.error : toast.warning;
+      fn(summary.title, { id: toastId, description: summary.description, duration: 12_000 });
+    } catch (e: any) {
+      toast.error('Falha no download em massa', { id: toastId, description: e?.message, duration: 12_000 });
+    } finally {
+      setBulkBusy(false);
+      setBulkProgress(null);
     }
-    setBulkBusy(false);
-    const summary = summarizeBulkDownload(format, ok, failures);
-    const fn = summary.tone === 'success' ? toast.success : summary.tone === 'error' ? toast.error : toast.warning;
-    fn(summary.title, { id: toastId, description: summary.description, duration: 12_000 });
   }
 
   const counts = useMemo(() => {
