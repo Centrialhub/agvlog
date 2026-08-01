@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { PDFDocument } from 'pdf-lib';
 import JSZip from 'jszip';
-import { uniqueFilename, mergePdfBlobs, zipFiles, runBulkDownload, summarizeBulkResult } from '@/lib/fiscal/bulkFileMerge';
+import { uniqueFilename, mergePdfBlobs, zipFiles, runBulkDownload, summarizeBulkResult, blobToUint8 } from '@/lib/fiscal/bulkFileMerge';
 
 async function makePdf(pages = 1): Promise<Blob> {
   const doc = await PDFDocument.create();
@@ -52,7 +52,7 @@ describe('zipFiles', () => {
       { label: 'a', filename: 'a.xml', blob: new Blob(['<a/>']) },
       { label: 'b', filename: 'a.xml', blob: new Blob(['<b/>']) },
     ]);
-    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+    const zip = await JSZip.loadAsync(await blobToUint8(blob));
     expect(Object.keys(zip.files).sort()).toEqual(['a (2).xml', 'a.xml']);
   });
 });
