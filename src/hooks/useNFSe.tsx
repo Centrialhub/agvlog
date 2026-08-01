@@ -80,6 +80,31 @@ export function useNFSeList(filters?: { status?: string; loadId?: string; client
   });
 }
 
+/**
+ * Mapa `nfse_document_id -> { hub_document_id, emission_id }` a partir da emissão
+ * mais recente de cada nota. Necessário para baixar PDF/XML sob demanda no Hub.
+ */
+export async function fetchNfseHubRefs(ids: string[]) {
+  const refs = new Map<string, { hubDocumentId: string; emissionId: string }>();
+  if (ids.length === 0) return refs;
+  for (let i = 0; i < ids.length; i += 200) {
+    const slice = ids.slice(i, i + 200);
+    const { data, error } = await (supabase as any)
+      .from('hub_fiscal_emissions')
+      .select('id, hub_document_id, nfse_document_id, created_at')
+      .in('nfse_document_id', slice)
+      .order('created_at', { ascending: true });
+    if (error) throw error;
+    for (const row of data ?? []) {
+      if (row.hub_document_id && row.nfse_document_id) {
+        // ordem crescente: a última atribuição fica sendo a emissão mais recente
+        refs.set(row.nfse_document_id, { hubDocumentId: row.hub_document_id, emissionId: row.id });
+      }
+    }
+  }
+  return refs;
+}
+
 export function useCreateNFSe() {
   const { currentTenant } = useTenant();
   const { user } = useAuth();
