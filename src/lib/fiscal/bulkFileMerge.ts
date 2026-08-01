@@ -43,6 +43,15 @@ export function uniqueFilename(taken: Set<string>, filename: string): string {
   return candidate;
 }
 
+/** Lê o conteúdo binário do Blob (com fallback para ambientes sem Blob.arrayBuffer). */
+export async function blobToUint8(blob: Blob): Promise<Uint8Array> {
+  const buffer =
+    typeof (blob as any).arrayBuffer === 'function'
+      ? await blob.arrayBuffer()
+      : await new Response(blob).arrayBuffer();
+  return new Uint8Array(buffer);
+}
+
 /**
  * Junta vários PDFs em um único documento, uma nota por página (ou mais, se a
  * nota original tiver várias páginas). Retorna null se nenhum PDF pôde ser lido.
@@ -55,7 +64,7 @@ export async function mergePdfBlobs(
   let merged = 0;
   for (const file of files) {
     try {
-      const bytes = new Uint8Array(await file.blob.arrayBuffer());
+      const bytes = await blobToUint8(file.blob);
       const src = await PDFDocument.load(bytes, { ignoreEncryption: true });
       const pages = await out.copyPages(src, src.getPageIndices());
       pages.forEach((p) => out.addPage(p));
