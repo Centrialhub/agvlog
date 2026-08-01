@@ -18,7 +18,7 @@ import {
 import { toast } from 'sonner';
 import { PendingInvoicesBanner } from '@/components/billing/PendingInvoicesBanner';
 import { hubFiscal } from '@/lib/fiscal/hubFiscalClient';
-import { summarizeBulkDownload, type BulkFailure } from '@/lib/fiscal/bulkDownloadSummary';
+import { runBulkDownload, summarizeBulkResult } from '@/lib/fiscal/bulkFileMerge';
 
 function saveBlob(blob: Blob, filename: string) {
   const objectUrl = URL.createObjectURL(blob);
@@ -44,6 +44,26 @@ function openBlob(blob: Blob, filename: string) {
     a.remove();
   }
   setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+}
+
+/** Obtém o arquivo do CT-e (sob demanda no Hub, ou link em cache como último recurso). */
+async function fetchRowBlob(row: CteMonitorRow, format: 'pdf' | 'xml'): Promise<Blob> {
+  if (row.hub_document_id) {
+    return hubFiscal.file(row.hub_document_id, format, { type: 'cte', emissionId: row.emission_id });
+  }
+  const cachedUrl = format === 'pdf' ? row.pdf_url : row.xml_url;
+  if (cachedUrl) {
+    const res = await fetch(cachedUrl);
+    if (res.ok) {
+      const blob = await res.blob();
+      if (blob.size > 0) return blob;
+    }
+  }
+  throw new Error(
+    row.source === 'hub'
+      ? 'Sem id do Hub Fiscal — sincronize a emissão antes de baixar.'
+      : 'Rascunho local nunca transmitido ao Hub Fiscal/SEFAZ.',
+  );
 }
 
 async function downloadHubFile(
@@ -133,6 +153,7 @@ export default function CteMonitor() {
   const [selected, setSelected] = useState<CteMonitorRow | null>(null);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
 
   const { data: rows = [], isLoading, refetch, isFetching } = useCteMonitor(filters);
   const resend = useResendCte();
@@ -158,29 +179,36 @@ export default function CteMonitor() {
   async function bulkDownload(format: 'pdf' | 'xml') {
     if (checkedRows.length === 0) return;
     setBulkBusy(true);
-    let ok = 0;
-    const failures: BulkFailure[] = [];
-    const toastId = toast.loading(`Baixando ${checkedRows.length} arquivo(s) ${format.toUpperCase()}...`);
-    let index = 0;
-    for (const row of checkedRows) {
-      index++;
-      const rowLabel = row.cte_number || row.access_key || row.id.slice(0, 8);
-      toast.loading(`Baixando ${format.toUpperCase()} ${index}/${checkedRows.length} (CT-e ${rowLabel})...`, {
-        id: toastId,
+    const total = checkedRows.length;
+    const toastId = toast.loading(`Baixando ${total} documento(s) ${format.toUpperCase()} do Hub Fiscal...`);
+    const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+    try {
+      const result = await runBulkDownload({
+        rows: checkedRows,
+        format,
+        outputBase: `ctes-${format}-${stamp}`,
+        fetchOne: (row) => fetchRowBlob(row, format),
+        labelOf: (row) => `CT-e ${row.cte_number || row.access_key || row.id.slice(0, 8)}`,
+        filenameOf: (row) => `cte-${row.access_key || row.cte_number || row.id}.${format}`,
+        onProgress: (doneCount, all, label) => {
+          setBulkProgress({ done: doneCount, total: all });
+          toast.loading(`Baixando ${doneCount}/${all} — ${label}`, { id: toastId });
+        },
       });
-      try {
-        await downloadHubFile(row, format, { silent: true });
-        ok++;
-      } catch (e: any) {
-        failures.push({ label: rowLabel, message: e?.message || 'Falha desconhecida' });
-      }
-      // Evita bloqueio de downloads simultâneos pelo navegador.
-      await new Promise((r) => setTimeout(r, 350));
+      toast.loading(
+        result.kind === 'pdf' ? 'Unindo tudo em um único PDF...' : 'Compactando arquivos...',
+        { id: toastId },
+      );
+      saveBlob(result.blob, result.filename);
+      const summary = summarizeBulkResult(result, total);
+      const fn = summary.tone === 'success' ? toast.success : summary.tone === 'error' ? toast.error : toast.warning;
+      fn(summary.title, { id: toastId, description: summary.description, duration: 12_000 });
+    } catch (e: any) {
+      toast.error('Falha no download em massa', { id: toastId, description: e?.message, duration: 12_000 });
+    } finally {
+      setBulkBusy(false);
+      setBulkProgress(null);
     }
-    setBulkBusy(false);
-    const summary = summarizeBulkDownload(format, ok, failures);
-    const fn = summary.tone === 'success' ? toast.success : summary.tone === 'error' ? toast.error : toast.warning;
-    fn(summary.title, { id: toastId, description: summary.description, duration: 12_000 });
   }
 
   const counts = useMemo(() => {
@@ -364,18 +392,27 @@ export default function CteMonitor() {
         <Card className="overflow-hidden">
           <div className="flex items-center justify-between gap-3 flex-wrap border-b bg-muted/30 px-3 py-2">
             <span className="text-sm text-muted-foreground">
-              {checkedRows.length > 0
-                ? `${checkedRows.length} CT-e(s) selecionado(s)`
-                : 'Selecione CT-es para emitir PDF/XML em massa'}
+              {bulkProgress
+                ? `Baixando ${bulkProgress.done}/${bulkProgress.total} do Hub Fiscal...`
+                : checkedRows.length > 0
+                  ? `${checkedRows.length} CT-e(s) selecionado(s) — download em arquivo único`
+                  : 'Filtre e selecione CT-es para baixar tudo em um único arquivo'}
             </span>
             <div className="flex items-center gap-2">
               <Button
                 size="sm"
                 variant="outline"
+                disabled={downloadableRows.length === 0 || bulkBusy}
+                onClick={() => setChecked(new Set(downloadableRows.map((r) => r.id)))}
+              >
+                Selecionar todos os filtrados ({downloadableRows.length})
+              </Button>
+              <Button
+                size="sm"
                 disabled={checkedRows.length === 0 || bulkBusy}
                 onClick={() => bulkDownload('pdf')}
               >
-                <FileText className="h-4 w-4" /> PDF em massa
+                <FileText className="h-4 w-4" /> Baixar PDF único
               </Button>
               <Button
                 size="sm"
@@ -383,7 +420,7 @@ export default function CteMonitor() {
                 disabled={checkedRows.length === 0 || bulkBusy}
                 onClick={() => bulkDownload('xml')}
               >
-                <FileDown className="h-4 w-4" /> XML em massa
+                <FileDown className="h-4 w-4" /> Baixar XMLs (ZIP)
               </Button>
             </div>
           </div>
