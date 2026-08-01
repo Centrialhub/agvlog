@@ -198,9 +198,83 @@ export default function NFSePage() {
             <Input className="max-w-xs" placeholder="Buscar nº, cliente, CNPJ…" value={search} onChange={e => setSearch(e.target.value)} />
           </CardHeader>
           <CardContent>
+            {/* Filtros de seleção para download em massa */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-3">
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] uppercase tracking-wide text-muted-foreground">Status</label>
+                <Select value={statusFilter} onValueChange={v => { setStatusFilter(v); setChecked(new Set()); }}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="issued">Emitidas / autorizadas</SelectItem>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="draft">Rascunho</SelectItem>
+                    <SelectItem value="processing">Processando</SelectItem>
+                    <SelectItem value="rejected">Rejeitada</SelectItem>
+                    <SelectItem value="cancelled">Cancelada</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] uppercase tracking-wide text-muted-foreground">Série</label>
+                <Select value={seriesFilter} onValueChange={v => { setSeriesFilter(v); setChecked(new Set()); }}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas</SelectItem>
+                    {seriesOptions.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] uppercase tracking-wide text-muted-foreground">Emissão — de</label>
+                <Input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setChecked(new Set()); }} />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] uppercase tracking-wide text-muted-foreground">Emissão — até</label>
+                <Input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setChecked(new Set()); }} />
+              </div>
+              <div className="flex items-end">
+                <Button variant="outline" className="w-full" onClick={() => {
+                  setStatusFilter('issued'); setSeriesFilter('all'); setDateFrom(''); setDateTo(''); setSearch(''); setChecked(new Set());
+                }}>
+                  <X className="h-4 w-4 mr-1" /> Limpar filtros
+                </Button>
+              </div>
+            </div>
+
+            {/* Barra de download em arquivo único */}
+            <div className="flex items-center justify-between gap-3 flex-wrap rounded-md border bg-muted/30 px-3 py-2 mb-3">
+              <span className="text-sm text-muted-foreground">
+                {bulkProgress
+                  ? `Baixando ${bulkProgress.done}/${bulkProgress.total} do Hub Fiscal...`
+                  : checkedDocs.length > 0
+                    ? `${checkedDocs.length} NFS-e selecionada(s) — download em arquivo único`
+                    : 'Filtre e selecione as NFS-e para baixar tudo em um único arquivo'}
+              </span>
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" disabled={downloadable.length === 0 || bulkBusy}
+                  onClick={() => setChecked(new Set(downloadable.map(d => d.id)))}>
+                  Selecionar todas as filtradas ({downloadable.length})
+                </Button>
+                <Button size="sm" disabled={checkedDocs.length === 0 || bulkBusy} onClick={() => bulkDownload('pdf')}>
+                  <FileText className="h-4 w-4 mr-1" /> Baixar PDF único
+                </Button>
+                <Button size="sm" variant="outline" disabled={checkedDocs.length === 0 || bulkBusy} onClick={() => bulkDownload('xml')}>
+                  <FileDown className="h-4 w-4 mr-1" /> Baixar XMLs (ZIP)
+                </Button>
+              </div>
+            </div>
+
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-8">
+                    <Checkbox
+                      checked={downloadable.length > 0 && checkedDocs.length === downloadable.length}
+                      onCheckedChange={() => setChecked(prev =>
+                        prev.size >= downloadable.length ? new Set() : new Set(downloadable.map(d => d.id)))}
+                      aria-label="Selecionar todas"
+                    />
+                  </TableHead>
                   <TableHead>RPS / Nº NFS-e</TableHead>
                   <TableHead>Série</TableHead>
                   <TableHead>Emissão</TableHead>
