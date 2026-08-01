@@ -481,6 +481,34 @@ export function useDeleteNFSe() {
   });
 }
 
+/**
+ * Consulta o status das NFS-e que ficaram "processando" no provedor.
+ * Sem argumento, verifica todas as pendentes do tenant; com `id`, apenas uma.
+ * A resposta bruta do provedor fica gravada em `nfse_documents.last_status_response`
+ * e no histórico de `hub_fiscal_emissions` para conferência posterior.
+ */
+export function useSyncNFSeStatus() {
+  const { currentTenant } = useTenant();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args?: { id?: string; silent?: boolean }) => {
+      const { data, error } = await supabase.functions.invoke('nfse-status-poll', {
+        body: args?.id ? { nfse_id: args.id } : { tenant_id: currentTenant?.id },
+      });
+      if (error) throw error;
+      return { ...(data as any), silent: args?.silent };
+    },
+    onSuccess: (res: any) => {
+      qc.invalidateQueries({ queryKey: ['nfse'] });
+      if (res?.silent) return;
+      const resolved = (res?.results || []).filter((r: any) => r.outcome && r.outcome !== 'pending').length;
+      if (resolved > 0) toast.success(`${resolved} NFS-e com status atualizado`);
+      else toast.info(`Consulta concluída — ${res?.checked ?? 0} nota(s) ainda em processamento`);
+    },
+    onError: (e: any) => toast.error(e?.message || 'Falha ao consultar status das NFS-e'),
+  });
+}
+
 export function useNFSeProviderConfig(branchCode: string = 'MATRIZ') {
   const { currentTenant } = useTenant();
   return useQuery({
