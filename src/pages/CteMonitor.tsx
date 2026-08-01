@@ -18,7 +18,7 @@ import {
 import { toast } from 'sonner';
 import { PendingInvoicesBanner } from '@/components/billing/PendingInvoicesBanner';
 import { hubFiscal } from '@/lib/fiscal/hubFiscalClient';
-import { summarizeBulkDownload, type BulkFailure } from '@/lib/fiscal/bulkDownloadSummary';
+import { runBulkDownload, summarizeBulkResult } from '@/lib/fiscal/bulkFileMerge';
 
 function saveBlob(blob: Blob, filename: string) {
   const objectUrl = URL.createObjectURL(blob);
@@ -44,6 +44,26 @@ function openBlob(blob: Blob, filename: string) {
     a.remove();
   }
   setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+}
+
+/** Obtém o arquivo do CT-e (sob demanda no Hub, ou link em cache como último recurso). */
+async function fetchRowBlob(row: CteMonitorRow, format: 'pdf' | 'xml'): Promise<Blob> {
+  if (row.hub_document_id) {
+    return hubFiscal.file(row.hub_document_id, format, { type: 'cte', emissionId: row.emission_id });
+  }
+  const cachedUrl = format === 'pdf' ? row.pdf_url : row.xml_url;
+  if (cachedUrl) {
+    const res = await fetch(cachedUrl);
+    if (res.ok) {
+      const blob = await res.blob();
+      if (blob.size > 0) return blob;
+    }
+  }
+  throw new Error(
+    row.source === 'hub'
+      ? 'Sem id do Hub Fiscal — sincronize a emissão antes de baixar.'
+      : 'Rascunho local nunca transmitido ao Hub Fiscal/SEFAZ.',
+  );
 }
 
 async function downloadHubFile(
