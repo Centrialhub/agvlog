@@ -861,6 +861,7 @@ export default function Ingestion() {
     const autoCreatedByIe = new Map<string, string>(); // chave: UF|IE digits
     const autoCreatedByIm = new Map<string, string>(); // chave: município|IM digits
     let autoCreatedCount = 0;
+    let ieUpdatedCount = 0;
     const clientsToSyncSsx = new Set<string>(); // client_ids para sincronizar com SSX
 
     const ensureClient = async (src: any, ortFields?: any): Promise<string | null> => {
@@ -876,10 +877,34 @@ export default function Ingestion() {
       const ieKey = ieDigits ? `${uf}|${ieDigits}` : '';
       const imKey = imDigits ? `${cityKey}|${imDigits}` : '';
 
+      // Cliente já cadastrado sem IE (ou com IE inválida/UNKNOWN): puxa a IE da
+      // nota e atualiza o cadastro, evitando rejeição da SEFAZ na emissão do CT-e.
+      const backfillIe = async (clientId: string) => {
+        const existing = clients.find(c => c.id === clientId) as any;
+        const currentIe = String(existing?.state_registration || '').trim();
+        const currentValid = currentIe && !/^(UNKNOWN|N\/?I|N\/?A|0+|-+|\?+)$/i.test(currentIe);
+        if (currentValid) return;
+        const ieConf = (src.fieldConfidences || ortFields?.fieldConfidences || {}).recipientStateRegistration;
+        const norm = normalizeStateRegistration(ieRawForKey, uf, ieConf);
+        if (norm.unknown || !norm.value) return;
+        const ind = normalizeIeIndicator(src.recipientIeIndicator || ortFields?.recipientIeIndicator, norm);
+        const patch: any = { state_registration: norm.value, updated_by: user?.id };
+        if (ind.description) {
+          patch.ie_indicator = ind.description;
+          patch.tax_description = ind.description;
+          patch.taxes_enabled = ind.taxesEnabled;
+        }
+        const { error } = await supabase.from('clients').update(patch).eq('id', clientId).eq('tenant_id', currentTenant.id);
+        if (!error) {
+          ieUpdatedCount++;
+          if (existing) existing.state_registration = norm.value;
+        }
+      };
+
       // Já existe no cadastro? (match por CNPJ → nome)
       if (cnpjDigits) {
         const existing = clients.find(c => onlyDigits(c.tax_id || '') === cnpjDigits);
-        if (existing) return existing.id;
+        if (existing) { await backfillIe(existing.id); return existing.id; }
         if (autoCreatedByCnpj.has(cnpjDigits)) return autoCreatedByCnpj.get(cnpjDigits)!;
       }
       // Match por IE (com mesma UF quando disponível) — evita duplicar quando CNPJ não foi extraído
@@ -901,12 +926,12 @@ export default function Ingestion() {
           const cCity = ((c as any).address_city || '').trim().toLowerCase();
           return !cityKey || !cCity || cCity === cityKey;
         });
-        if (existingByIm) return existingByIm.id;
+        if (existingByIm) { await backfillIe(existingByIm.id); return existingByIm.id; }
         if (autoCreatedByIm.has(imKey)) return autoCreatedByIm.get(imKey)!;
       }
       if (nameKey) {
         const existingByName = clients.find(c => (c.company_name || '').trim().toLowerCase() === nameKey);
-        if (existingByName) return existingByName.id;
+        if (existingByName) { await backfillIe(existingByName.id); return existingByName.id; }
         if (!cnpjDigits && autoCreatedByName.has(nameKey)) return autoCreatedByName.get(nameKey)!;
       }
 
@@ -1164,6 +1189,13 @@ export default function Ingestion() {
         toast({
           title: `${autoCreatedCount} cliente(s) cadastrado(s) automaticamente`,
           description: 'Dados extraídos do XML/ORT foram salvos na ficha do cliente.',
+        });
+      }
+      if (ieUpdatedCount > 0) {
+        queryClient.invalidateQueries({ queryKey: ['clients'] });
+        toast({
+          title: `IE atualizada em ${ieUpdatedCount} cliente(s)`,
+          description: 'A Inscrição Estadual foi puxada da nota e gravada no cadastro.',
         });
       }
 
