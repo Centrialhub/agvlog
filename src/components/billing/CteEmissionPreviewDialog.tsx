@@ -1303,8 +1303,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                         <option value="41">41 — Não tributada</option>
                         <option value="51">51 — Diferimento</option>
                         <option value="60">60 — ICMS cobrado por ST</option>
-                        <option value="90">90 — Outros</option>
-                        <option value="SN">90 CSOSN — Simples Nacional</option>
+                        <option value="90">90 — Outros / Simples Nacional</option>
                       </select>
                     </div>
                     <label className="flex items-center gap-1 text-xs">
