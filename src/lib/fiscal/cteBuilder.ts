@@ -350,7 +350,8 @@ function buildIcmsBlock(
   const regimeRaw = (taxRegime || '').toString().toLowerCase();
   const regimeIsSimples = regimeRaw === 'simples' || regimeRaw === 'mei';
   const isSimples = cstRaw === 'SN' || cstRaw === 'CSOSN' || regimeIsSimples;
-  const cst = cstRaw === 'SN' || cstRaw === 'CSOSN' ? '90' : cstRaw || '00';
+  // Para Simples Nacional, o CST/CSOSN mapeado para o DACTE/XML deve ser '90' (Outros).
+  const cst = isSimples ? '90' : (cstRaw || '00');
   const isento = icms.isento === true || cst === '40' || cst === '41' || cst === '51';
   const aliq = isento ? 0 : Number(icms.aliquota || 0);
   const embutido = icms.embutido === true;
