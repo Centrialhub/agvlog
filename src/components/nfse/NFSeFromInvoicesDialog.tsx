@@ -338,6 +338,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
                     <TableHead>Emissão</TableHead>
                     <TableHead>Remetente</TableHead>
                     <TableHead>Destinatário</TableHead>
+                    <TableHead>Destino</TableHead>
                     <TableHead className="text-right">Valor NF</TableHead>
                     <TableHead className="text-right">Frete</TableHead>
                   </TableRow>
@@ -359,6 +360,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
                       <TableCell className="text-xs">{d.issue_date}</TableCell>
                       <TableCell className="max-w-[220px] truncate">{d.remitter || '—'}</TableCell>
                       <TableCell className="max-w-[220px] truncate">{d.recipient || d.recipient_name || '—'}</TableCell>
+                      <TableCell className="text-xs">{d.recipient_city ? `${d.recipient_city}${d.recipient_state ? `/${d.recipient_state}` : ''}` : '—'}</TableCell>
                       <TableCell className="text-right tabular-nums">R$ {num(d.value ?? d.total_value).toFixed(2)}</TableCell>
                       <TableCell className="text-right tabular-nums">R$ {num(d.freight_value).toFixed(2)}</TableCell>
                     </TableRow>
