@@ -141,10 +141,16 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl, a
         descricaoCidade: doc.cliente_municipio || undefined,
         estado: doc.cliente_uf || undefined,
         cep: onlyDigits(doc.cliente_cep) || undefined,
+        // Campos canônicos para provedores que exigem xLgr/nro/xBairro/UF
+        xLgr: doc.cliente_endereco || undefined,
+        nro: doc.cliente_numero || undefined,
+        xBairro: doc.cliente_bairro || undefined,
+        UF: doc.cliente_uf || undefined,
       },
     },
 
     servico: {
+      itemListaServico: doc.cod_servico || undefined, // Campo ABRASF (Ex: 07.02)
       codigoTributacaoMunicipio: doc.cod_trib_municipal || doc.cod_servico || undefined,
       codigoLocalPrestacao: doc.cod_municipio_prestacao || emitter.city_code || undefined,
       codigoCnae: doc.cnae || undefined,

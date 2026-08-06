@@ -110,6 +110,7 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
 
   const handleSave = async () => {
     if (!form.cliente_nome) { toast.error('Informe o tomador (cliente)'); return; }
+    if (!form.cliente_municipio) { toast.error('Informe o município do tomador'); return; }
     if (totalServicos <= 0) { toast.error('Valor de serviços deve ser maior que zero'); return; }
     const payload: any = {
       ...form,

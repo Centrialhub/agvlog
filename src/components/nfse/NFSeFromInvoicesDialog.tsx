@@ -223,9 +223,10 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
     setIssuing(true);
     try {
       const fdIds = selectedDocs.map((d: any) => d.id);
-      const description = descricao?.trim() ||
-        `Prestação de serviço de transporte referente a ${fdIds.length} NF(s): ` +
-        selectedDocs.map((d: any) => `NF ${d.invoice_number || d.access_key?.slice(-9)}`).join(', ');
+      const description = (descricao?.trim() ||
+        `Prestacao de servico de transporte referente a ${fdIds.length} NF(s): ` +
+        selectedDocs.map((d: any) => `NF ${d.invoice_number || d.access_key?.slice(-9)}`).join(', '))
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // Remove acentos para evitar rejeição em provedores legados
 
       const created = await create.mutateAsync({
         emitter_id: emitterId,
