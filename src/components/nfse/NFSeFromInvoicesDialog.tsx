@@ -183,17 +183,23 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
     const key = tomadorMode === 'remetente' ? 'remitter' : 'recipient_name';
     const cnpjKey = tomadorMode === 'remetente' ? 'remitter_cnpj' : 'recipient_cnpj';
     const first = selectedDocs[0] as any;
+    
     // Tenta casar com um cliente cadastrado pelo CNPJ para pegar endereço/IE
     const cnpjDigits = onlyDigits(first[cnpjKey]);
     const match = clients.find((c: any) => onlyDigits(c.tax_id) === cnpjDigits);
+    
+    // Fallback para os dados da própria NF (OCR/XML) quando o cadastro está incompleto
+    const municipio = (match?.address_city || first.recipient_city || first.remitter_city || '').trim();
+    const uf = (match?.address_state || first.recipient_state || first.remitter_state || '').trim();
+
     return {
       nome: (match?.company_name || first[key] || '') as string,
       cnpj: cnpjDigits,
       ie: (match?.state_registration || '') as string,
       endereco: (match?.address_street || '') as string,
       bairro: (match?.address_neighborhood || '') as string,
-      municipio: (match?.address_city || '') as string,
-      uf: (match?.address_state || '') as string,
+      municipio,
+      uf,
       cep: onlyDigits((match as any)?.address_zip),
       cliente_id: match?.id || null,
     };
