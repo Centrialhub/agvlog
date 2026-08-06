@@ -355,7 +355,7 @@ export function useIssueNFSe() {
           nfse_id: doc.id,
           event_type: !res.success ? 'rejected' : isAuthorized ? 'issued' : 'submitted',
           message: !res.success
-            ? `Falha Hub Fiscal: ${hubErrorMessage || 'erro'}`
+            ? `Falha na validação do JSON de NFSe: ${hubErrorMessage || 'erro'}`
             : isAuthorized
               ? `Autorizada pelo Hub Fiscal — nº ${hubDoc.number || '(pendente)'}`
               : isRejected
