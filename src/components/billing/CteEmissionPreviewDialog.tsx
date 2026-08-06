@@ -444,6 +444,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
             recipientCity: it.recipientCity || d.recipient?.recipient_city || '',
             recipientState: it.recipientState || d.recipient?.recipient_state || '',
             clientId: it.clientId || d.recipient?.client_id || null,
+            cargoPredominant: it.cargoPredominant || d.cargo_predominant || '',
           };
         }),
       );
