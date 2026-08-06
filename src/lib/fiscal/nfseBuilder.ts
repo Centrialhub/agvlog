@@ -150,6 +150,7 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl, a
     },
 
     servico: {
+      itemListaServico: doc.cod_servico || undefined, // Campo ABRASF (Ex: 07.02)
       codigoTributacaoMunicipio: doc.cod_trib_municipal || doc.cod_servico || undefined,
       codigoLocalPrestacao: doc.cod_municipio_prestacao || emitter.city_code || undefined,
       codigoCnae: doc.cnae || undefined,
