@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
@@ -7,11 +7,16 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Trash2, Search, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Search, Loader2, UserSearch } from 'lucide-react';
 import { useCreateNFSe, useUpdateNFSe, type NFSeDoc } from '@/hooks/useNFSe';
 import { useFiscalDocuments } from '@/hooks/useFiscalDocuments';
 import { useEmitters } from '@/hooks/useEmitters';
+import { useClients } from '@/hooks/useClients';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '@/components/ui/command';
+import { cn } from '@/lib/utils';
+import { Check } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface NFSeItem {
@@ -36,13 +41,23 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
   const update = useUpdateNFSe();
   const editing = !!initial?.id;
   const { data: emitters = [] } = useEmitters();
+  const { data: clients = [] } = useClients();
 
   const [form, setForm] = useState<any>({});
   const [items, setItems] = useState<NFSeItem[]>([]);
   const [loadingInvoice, setLoadingInvoice] = useState(false);
   const [invoiceSearch, setInvoiceSearch] = useState('');
+  const [clientSearchOpen, setClientSearchOpen] = useState(false);
 
   const { data: allDocs = [] } = useFiscalDocuments();
+
+  const clientOptions = useMemo(() => {
+    return clients.filter(c => c.active).map(c => ({
+      value: c.id,
+      label: `${c.company_name} (${c.tax_id || 'S/CNPJ'})`,
+      raw: c
+    }));
+  }, [clients]);
 
   useEffect(() => {
     if (!open) return;
@@ -163,6 +178,24 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
     }
   };
 
+  const handleSelectClient = (clientId: string) => {
+    const client = clients.find(c => c.id === clientId);
+    if (!client) return;
+
+    setForm(prev => ({
+      ...prev,
+      cliente_nome: client.company_name,
+      cliente_cnpj: client.tax_id || '',
+      cliente_ie: client.state_registration || '',
+      cliente_endereco: `${client.address_street || ''}${client.address_number ? ', ' + client.address_number : ''}`,
+      cliente_bairro: client.address_neighborhood || '',
+      cliente_municipio: client.address_city || '',
+      cliente_uf: client.address_state || '',
+    }));
+    setClientSearchOpen(false);
+    toast.info('Dados do tomador preenchidos');
+  };
+
   const handleSave = async () => {
     if (!form.cliente_nome) { toast.error('Informe o tomador (cliente)'); return; }
     if (!form.cliente_municipio) { toast.error('Informe o município do tomador'); return; }
@@ -259,8 +292,40 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
               <div className="col-span-2"><Label>Tipo CTRC</Label><Input value={form.tipo_ctrc || ''} onChange={e => setField('tipo_ctrc', e.target.value)} /></div>
             </div>
 
-            <div className="space-y-2 pt-2">
-              <h4 className="font-semibold text-sm">Tomador (Cliente)</h4>
+              <div className="flex items-center justify-between pt-2">
+                <h4 className="font-semibold text-sm text-primary">Tomador (Cliente)</h4>
+                <Popover open={clientSearchOpen} onOpenChange={setClientSearchOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-8 gap-2">
+                      <UserSearch className="h-4 w-4" />
+                      Pesquisar Cliente
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="p-0 w-[400px]" align="end">
+                    <Command>
+                      <CommandInput placeholder="Buscar cliente por nome ou CNPJ..." />
+                      <CommandEmpty>Nenhum cliente encontrado.</CommandEmpty>
+                      <CommandGroup className="max-h-[300px] overflow-y-auto">
+                        {clientOptions.map((opt) => (
+                          <CommandItem
+                            key={opt.value}
+                            value={opt.label}
+                            onSelect={() => handleSelectClient(opt.value)}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                form.cliente_cnpj === opt.raw.tax_id ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {opt.label}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
               <div className="grid grid-cols-6 gap-3">
                 <div className="col-span-3"><Label>Nome</Label><Input value={form.cliente_nome || ''} onChange={e => setField('cliente_nome', e.target.value)} /></div>
                 <div className="col-span-2"><Label>CNPJ</Label><Input value={form.cliente_cnpj || ''} onChange={e => setField('cliente_cnpj', e.target.value)} /></div>
