@@ -7,8 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Search, Loader2 } from 'lucide-react';
 import { useCreateNFSe, useUpdateNFSe, type NFSeDoc } from '@/hooks/useNFSe';
+import { useFiscalDocuments } from '@/hooks/useFiscalDocuments';
 import { useEmitters } from '@/hooks/useEmitters';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
@@ -38,6 +39,10 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
 
   const [form, setForm] = useState<any>({});
   const [items, setItems] = useState<NFSeItem[]>([]);
+  const [loadingInvoice, setLoadingInvoice] = useState(false);
+  const [invoiceSearch, setInvoiceSearch] = useState('');
+
+  const { data: allDocs = [] } = useFiscalDocuments();
 
   useEffect(() => {
     if (!open) return;
@@ -108,6 +113,56 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
   };
   const removeItem = (i: number) => setItems(arr => arr.filter((_, idx) => idx !== i));
 
+  const handleFetchFromInvoice = async () => {
+    if (!invoiceSearch) {
+      toast.error('Informe o número ou chave da NF');
+      return;
+    }
+
+    setLoadingInvoice(true);
+    try {
+      const search = invoiceSearch.trim();
+      const doc = allDocs.find(d => 
+        d.invoice_number === search || 
+        d.access_key === search || 
+        (d.access_key && d.access_key.endsWith(search))
+      );
+
+      if (!doc) {
+        toast.error('Nota fiscal não encontrada');
+        return;
+      }
+
+      // Preenche os dados do tomador
+      setForm(prev => ({
+        ...prev,
+        cliente_nome: doc.remitter || doc.clients?.company_name || prev.cliente_nome,
+        cliente_cnpj: doc.remitter_cnpj || prev.cliente_cnpj,
+        cliente_municipio: doc.recipient_city || prev.cliente_municipio,
+        cliente_uf: doc.recipient_state || prev.cliente_uf,
+        cliente_bairro: doc.recipient_neighborhood || prev.cliente_bairro,
+        reference_number: doc.invoice_number || prev.reference_number,
+        valor_servicos: num(doc.freight_value || doc.value || 0),
+        description: `Serviço de transporte ref. NF ${doc.invoice_number || ''}`
+      }));
+
+      if (num(doc.freight_value || doc.value || 0) > 0) {
+        setItems([{
+          description: `Serviço de transporte ref. NF ${doc.invoice_number || ''}`,
+          quantity: 1,
+          unit_value: num(doc.freight_value || doc.value || 0),
+          total: num(doc.freight_value || doc.value || 0)
+        }]);
+      }
+
+      toast.success('Dados importados da NF');
+    } catch (err) {
+      toast.error('Erro ao buscar dados da NF');
+    } finally {
+      setLoadingInvoice(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!form.cliente_nome) { toast.error('Informe o tomador (cliente)'); return; }
     if (!form.cliente_municipio) { toast.error('Informe o município do tomador'); return; }
@@ -148,6 +203,24 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
           </TabsList>
 
           <TabsContent value="gerais" className="space-y-4 pt-4">
+            <div className="flex items-end gap-2 p-3 bg-muted/30 rounded-lg border border-dashed mb-2">
+              <div className="flex-1">
+                <Label className="text-xs">Importar dados de uma NF-e</Label>
+                <div className="flex gap-2">
+                  <Input 
+                    placeholder="Nº da NF ou Chave de Acesso" 
+                    value={invoiceSearch} 
+                    onChange={e => setInvoiceSearch(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleFetchFromInvoice()}
+                  />
+                  <Button variant="secondary" onClick={handleFetchFromInvoice} disabled={loadingInvoice}>
+                    {loadingInvoice ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4 mr-1" />}
+                    Puxar dados
+                  </Button>
+                </div>
+              </div>
+            </div>
+
             <div className="grid grid-cols-6 gap-3">
               <div className="col-span-3">
                 <Label>Emitente Fiscal</Label>
