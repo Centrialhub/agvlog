@@ -48,6 +48,9 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl, a
   if (!doc?.cliente_cnpj || !doc?.cliente_nome) {
     throw new Error('Tomador (cliente) sem CNPJ/razão social');
   }
+  if (!doc?.cliente_municipio) {
+    throw new Error('Município do tomador não informado (campo obrigatório para NFS-e)');
+  }
 
   const integrationId = attempt > 0 ? `${doc.id}-r${attempt}` : String(doc.id);
 
