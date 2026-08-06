@@ -309,6 +309,7 @@ export function useIssueNFSe() {
           environment,
           attempt: priorAttempts || 0,
         });
+        console.log(`[useIssueNFSe] Transmitindo NFS-e ${doc.id} (emitter: ${emitter.id})`);
         const res = await hubFiscal.emit({
           type: 'nfse',
           emitterId: emitter.id,
@@ -320,6 +321,7 @@ export function useIssueNFSe() {
             payload: built.payload,
           },
         });
+        console.log(`[useIssueNFSe] Resposta do Hub:`, res);
 
         const hubDoc = (res as any)?.hub?.document || {};
         const emission = (res as any)?.emission || {};

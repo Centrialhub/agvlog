@@ -49,7 +49,7 @@ export function useRecalculateInboundFreight() {
       for (const d of docs) {
         if (d.freight_overridden) { skipped++; continue; }
         try {
-          const result = await calculateFreight({
+          const calcParams = {
             tenantId: currentTenant.id,
             clientId: d.client_id || null,
             payerGroup: d.client_id ? payerGroupByClient.get(d.client_id) || null : null,
@@ -59,8 +59,15 @@ export function useRecalculateInboundFreight() {
             totalValue: Number(d.value) || 0,
             totalWeight: Number(d.weight_kg) || 0,
             totalPallets: Number(d.pallet_count) || 0,
-          });
-          if (!result.success || !result.breakdown) { failed++; continue; }
+          };
+          
+          const result = await calculateFreight(calcParams);
+          
+          if (!result.success || !result.breakdown) { 
+            console.warn(`[useRecalculateInboundFreight] Falha no cálculo para NF ${d.id}:`, result.error || 'Sem tabela compatível');
+            failed++; 
+            continue; 
+          }
 
           const { error: upErr } = await supabase
             .from('fiscal_documents')
