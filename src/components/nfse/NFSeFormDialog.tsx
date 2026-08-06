@@ -52,11 +52,13 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
   const { data: allDocs = [] } = useFiscalDocuments();
 
   const clientOptions = useMemo(() => {
-    return clients.filter(c => c.active).map(c => ({
-      value: c.id,
-      label: `${c.company_name} (${c.tax_id || 'S/CNPJ'})`,
-      raw: c
-    }));
+    return clients
+      .filter(c => c.active && (c.is_client || c.is_supplier))
+      .map(c => ({
+        value: c.id,
+        label: `${c.company_name} (${c.tax_id || 'S/CNPJ'}) ${c.is_supplier && !c.is_client ? '[Fornecedor]' : ''}`,
+        raw: c
+      }));
   }, [clients]);
 
   useEffect(() => {
@@ -299,13 +301,13 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
                   <PopoverTrigger asChild>
                     <Button variant="outline" size="sm" className="h-8 gap-2">
                       <UserSearch className="h-4 w-4" />
-                      Pesquisar Cliente
+                      Pesquisar Cliente/Fornecedor
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="p-0 w-[400px]" align="end">
                     <Command>
-                      <CommandInput placeholder="Buscar cliente por nome ou CNPJ..." />
-                      <CommandEmpty>Nenhum cliente encontrado.</CommandEmpty>
+                      <CommandInput placeholder="Buscar por nome ou CNPJ..." />
+                      <CommandEmpty>Nenhum registro encontrado.</CommandEmpty>
                       <CommandGroup className="max-h-[300px] overflow-y-auto">
                         {clientOptions.map((opt) => (
                           <CommandItem
