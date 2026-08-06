@@ -103,13 +103,16 @@ export function useIssueCTe() {
       const emitBody = { ...(built.payload as any), externalId };
       let hubResponse: any;
       try {
+        console.log(`[useIssueCTe] Transmitindo CT-e ${inserted.id} (emitter: ${input.emitter.id})`);
         hubResponse = await hubFiscal.emit({
           type: 'cte',
           body: emitBody,
           fiscalDocumentId: inserted.id,
           emitterId: input.emitter.id,
         });
+        console.log(`[useIssueCTe] Resposta do Hub:`, hubResponse);
       } catch (err: any) {
+        console.error(`[useIssueCTe] Erro na transmissão:`, err);
         // Erro de invocação — deixa como rejected para o operador ver
         await supabase
           .from('fiscal_documents')
