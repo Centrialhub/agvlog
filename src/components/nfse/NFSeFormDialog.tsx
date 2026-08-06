@@ -292,6 +292,7 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
               <div className="col-span-2"><Label>Tipo CTRC</Label><Input value={form.tipo_ctrc || ''} onChange={e => setField('tipo_ctrc', e.target.value)} /></div>
             </div>
 
+            <div className="space-y-2 pt-2">
               <div className="flex items-center justify-between pt-2">
                 <h4 className="font-semibold text-sm text-primary">Tomador (Cliente)</h4>
                 <Popover open={clientSearchOpen} onOpenChange={setClientSearchOpen}>
