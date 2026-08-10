@@ -24,7 +24,7 @@ import {
 import { format, subDays, startOfMonth, endOfMonth, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
-import { isBillableFiscalDoc, fiscalDocRevenue } from '@/lib/fiscal/documentStatus';
+import { isBillableFiscalDoc, fiscalDocRevenue, isBillableNfse, nfseRevenue, isVoidFiscalStatus } from '@/lib/fiscal/documentStatus';
 
 const COLORS = [
   'hsl(215, 80%, 48%)', 'hsl(142, 64%, 38%)', 'hsl(38, 92%, 50%)',
@@ -62,6 +62,22 @@ export default function Financial() {
   });
 
   // ── Driver Expenses ──
+  // ── NFS-e (receita de serviço) ──
+  const { data: nfseDocs = [] } = useQuery({
+    queryKey: ['fin_nfse', currentTenant?.id],
+    queryFn: async () => {
+      if (!currentTenant) return [];
+      const { data } = await supabase
+        .from('nfse_documents')
+        .select('id, status, valor_servicos, valor_liquido, issue_date, created_at, cliente_id, cliente_nome, rps_number, nfse_number')
+        .eq('tenant_id', currentTenant.id)
+        .order('issue_date', { ascending: false })
+        .limit(1000);
+      return data || [];
+    },
+    enabled: !!currentTenant,
+  });
+
   const { data: expenses = [] } = useQuery({
     queryKey: ['fin_expenses', currentTenant?.id],
     queryFn: async () => {
