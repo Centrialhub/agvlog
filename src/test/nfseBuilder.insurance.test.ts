@@ -10,6 +10,7 @@ const baseDoc: any = {
   id: 'doc-1', cliente_cnpj: '11222333000181', cliente_nome: 'Cliente X',
   valor_servicos: 100, aliquota_iss: 5, issue_date: '2026-07-31', rps_number: '10',
   description: 'Frete de transporte',
+  cliente_municipio: '3106200', cliente_uf: 'MG',
 };
 const ins = {
   insurer_name: 'Seguradora Brasil', insurer_cnpj: '11222333000181',
