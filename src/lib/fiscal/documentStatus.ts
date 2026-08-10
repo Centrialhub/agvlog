@@ -43,12 +43,61 @@ export function fiscalDocRevenue(doc: { freight_value?: any; value?: any } | nul
 /** Status de NFS-e que já representam serviço faturado. */
 export const NFSE_BILLABLE_STATUSES = new Set(['issued', 'authorized', 'autorizado', 'processing', 'submitted']);
 
+/**
+ * Status de NFS-e que já são receita confirmada (nota realmente emitida).
+ * `processing`/`submitted` ainda podem ser rejeitados — não viram receita.
+ */
+export const NFSE_CONFIRMED_STATUSES = new Set(['issued', 'authorized', 'autorizado']);
+
+/**
+ * Status de documento de saída (CT-e) que ainda não são receita confirmada:
+ * rascunhos e transmissões em andamento podem virar rejeição.
+ */
+export const PENDING_FISCAL_STATUSES = new Set([
+  'draft',
+  'rascunho',
+  'pending',
+  'pendente',
+  'transmitting',
+  'transmitindo',
+  'processing',
+  'processando',
+  'submitted',
+]);
+
+/** Documento fiscal confirmado (não anulado e não em trânsito) — usar em receita. */
+export function isConfirmedFiscalDoc(
+  doc: { status?: string | null; sefaz_status?: string | null } | null | undefined,
+): boolean {
+  if (!isBillableFiscalDoc(doc)) return false;
+  const s = String(doc?.status || '').trim().toLowerCase();
+  return !PENDING_FISCAL_STATUSES.has(s);
+}
+
+/**
+ * Um CT-e (rascunho, lote ou emitido) consome a NF do pool de faturamento
+ * enquanto não estiver anulado. Rascunhos também consomem: caso contrário a
+ * mesma NF entraria em dois lotes diferentes.
+ */
+export function cteConsumesInvoices(row: { status?: string | null } | null | undefined): boolean {
+  if (!row) return false;
+  return !isVoidFiscalStatus(row.status);
+}
+
 /** NFS-e válida para somar em receita de serviço. */
 export function isBillableNfse(doc: { status?: string | null } | null | undefined): boolean {
   if (!doc) return false;
   const s = String(doc.status || '').trim().toLowerCase();
   if (isVoidFiscalStatus(s)) return false;
   return NFSE_BILLABLE_STATUSES.has(s);
+}
+
+/** NFS-e com receita confirmada (exclui em processamento). */
+export function isConfirmedNfse(doc: { status?: string | null } | null | undefined): boolean {
+  if (!doc) return false;
+  const s = String(doc.status || '').trim().toLowerCase();
+  if (isVoidFiscalStatus(s)) return false;
+  return NFSE_CONFIRMED_STATUSES.has(s);
 }
 
 /** Receita de uma NFS-e (valor bruto dos serviços). */

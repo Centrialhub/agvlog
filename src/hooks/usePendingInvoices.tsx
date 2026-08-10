@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
-import { isBillableNfse } from '@/lib/fiscal/documentStatus';
+import { isBillableNfse, cteConsumesInvoices } from '@/lib/fiscal/documentStatus';
 
 export interface PendingInvoiceSummary {
   count: number;
@@ -40,16 +40,16 @@ export function usePendingInvoices() {
       const allIds = new Set<string>((docs || []).map((d: any) => d.id));
       if (allIds.size === 0) return { count: 0, totalValue: 0, invoiceIds: [], oldestIssueDate: null };
 
-      // CT-e válidos (não cancelados nem rejeitados) que já consumiram NF.
+      // CT-e não anulados que já consumiram NF (mesmo critério de useBillingDocuments).
       const { data: ctes, error: e2 } = await supabase
         .from('cte_documents')
         .select('fiscal_document_ids, status')
-        .eq('tenant_id', currentTenant.id)
-        .not('status', 'in', '("cancelled","rejected")');
+        .eq('tenant_id', currentTenant.id);
       if (e2) throw e2;
 
       const used = new Set<string>();
       for (const c of (ctes || []) as any[]) {
+        if (!cteConsumesInvoices(c)) continue;
         for (const id of (c.fiscal_document_ids || [])) used.add(id);
       }
 

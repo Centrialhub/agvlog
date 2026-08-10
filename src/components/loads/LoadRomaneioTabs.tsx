@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { isBillableFiscalDoc } from '@/lib/fiscal/documentStatus';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -114,9 +115,9 @@ export default function LoadRomaneioTabs({ load, documents, items, onSaved }: Pr
 
   // Totais NF e CT-e
   const nfeTotal = useMemo(() => documents
-    .filter((d: any) => d.document_type === 'inbound')
+    .filter((d: any) => d.document_type === 'inbound' && isBillableFiscalDoc(d))
     .reduce((s: number, d: any) => s + Number(d.value || 0), 0), [documents]);
-  const nfeQty = useMemo(() => documents.filter((d: any) => d.document_type === 'inbound').length, [documents]);
+  const nfeQty = useMemo(() => documents.filter((d: any) => d.document_type === 'inbound' && isBillableFiscalDoc(d)).length, [documents]);
   const deliveriesQty = useMemo(() => {
     const recipients = new Set(
       documents
@@ -137,7 +138,9 @@ export default function LoadRomaneioTabs({ load, documents, items, onSaved }: Pr
       return data || [];
     },
   });
-  const cteTotal = useMemo(() => ctes.filter((c: any) => !c.is_voided).reduce((s: number, c: any) => s + Number(c.freight_value || 0), 0), [ctes]);
+  const cteTotal = useMemo(() => ctes
+    .filter((c: any) => !c.is_voided && isBillableFiscalDoc(c))
+    .reduce((s: number, c: any) => s + Number(c.freight_value || 0), 0), [ctes]);
 
   // Despesas (via dispatch_trips)
   const { data: tripIds = [] } = useQuery({
