@@ -24,7 +24,7 @@ import {
 import { format, subDays, startOfMonth, endOfMonth, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
-import { isBillableFiscalDoc, fiscalDocRevenue } from '@/lib/fiscal/documentStatus';
+import { isBillableFiscalDoc, fiscalDocRevenue, isBillableNfse, nfseRevenue, isVoidFiscalStatus } from '@/lib/fiscal/documentStatus';
 
 const COLORS = [
   'hsl(215, 80%, 48%)', 'hsl(142, 64%, 38%)', 'hsl(38, 92%, 50%)',
@@ -62,6 +62,22 @@ export default function Financial() {
   });
 
   // ── Driver Expenses ──
+  // ── NFS-e (receita de serviço) ──
+  const { data: nfseDocs = [] } = useQuery({
+    queryKey: ['fin_nfse', currentTenant?.id],
+    queryFn: async () => {
+      if (!currentTenant) return [];
+      const { data } = await supabase
+        .from('nfse_documents')
+        .select('id, status, valor_servicos, valor_liquido, issue_date, created_at, cliente_id, cliente_nome, rps_number, nfse_number')
+        .eq('tenant_id', currentTenant.id)
+        .order('issue_date', { ascending: false })
+        .limit(1000);
+      return data || [];
+    },
+    enabled: !!currentTenant,
+  });
+
   const { data: expenses = [] } = useQuery({
     queryKey: ['fin_expenses', currentTenant?.id],
     queryFn: async () => {
@@ -113,6 +129,13 @@ export default function Financial() {
   // Documentos válidos (cancelados/rejeitados nunca entram em faturamento)
   const billableDocs = useMemo(() => fiscalDocs.filter((d: any) => isBillableFiscalDoc(d)), [fiscalDocs]);
   const voidDocs = useMemo(() => fiscalDocs.filter((d: any) => !isBillableFiscalDoc(d)), [fiscalDocs]);
+
+  // NFS-e válidas (emitidas/em processamento) e canceladas/rejeitadas
+  const billableNfse = useMemo(() => nfseDocs.filter((d: any) => isBillableNfse(d)), [nfseDocs]);
+  const voidNfse = useMemo(
+    () => nfseDocs.filter((d: any) => isVoidFiscalStatus((d as any).status)),
+    [nfseDocs],
+  );
 
   // Partes envolvidas: NF-e de entrada aponta para fornecedor, CT-e para cliente.
   const partyOptions = useMemo(() => {
@@ -178,11 +201,18 @@ export default function Financial() {
     const nfes = filteredDocs.filter((d: any) => d.document_type === 'inbound');
     const ctes = filteredDocs.filter((d: any) => d.document_type === 'outbound');
 
+    let filteredNfse = billableNfse.filter((d: any) => filterByPeriod(d.issue_date || d.created_at));
+    if (selectedClient !== 'all') filteredNfse = filteredNfse.filter((d: any) => d.cliente_id === selectedClient);
+    if (docType !== 'all' && docType !== 'nfse') filteredNfse = [];
+    const totalNfseValue = filteredNfse.reduce((s: number, d: any) => s + nfseRevenue(d), 0);
+
     const totalNfeValue = nfes.reduce((s: number, d: any) => s + (Number(d.value) || 0), 0);
     // `value` do CT-e espelha o frete: usamos um único valor por documento
     const totalFreight = ctes.reduce((s: number, d: any) => s + fiscalDocRevenue(d), 0);
     const totalCteValue = totalFreight;
-    const voidCount = voidDocs.filter((d: any) => filterByPeriod(d.issue_date || d.created_at)).length;
+    const voidCount =
+      voidDocs.filter((d: any) => filterByPeriod(d.issue_date || d.created_at)).length +
+      voidNfse.filter((d: any) => filterByPeriod(d.issue_date || d.created_at)).length;
 
     let filteredExpenses = expenses.filter((e: any) => filterByPeriod(e.expense_at));
     if (expenseCategory !== 'all') filteredExpenses = filteredExpenses.filter((e: any) => e.category === expenseCategory);
@@ -206,13 +236,14 @@ export default function Financial() {
     const filteredMaint = maintenanceCosts.filter((m: any) => filterByPeriod(m.created_at));
     const totalMaintenance = filteredMaint.reduce((s: number, m: any) => s + (Number(m.total_cost) || 0), 0);
 
-    const revenue = totalFreight;
+    const revenue = totalFreight + totalNfseValue;
     const outflow = totalExpenses + totalMaintenance;
     const balance = revenue - outflow;
 
     return {
       nfeCount: nfes.length, cteCount: ctes.length,
       totalNfeValue, totalCteValue, totalFreight,
+      nfseCount: filteredNfse.length, totalNfseValue,
       voidCount,
       totalExpenses, pendingExpensesCount: pendingExpenses.length,
       totalReceivable, pendingReceivable, paidReceivable, overdueReceivable,
@@ -220,7 +251,7 @@ export default function Financial() {
       revenue, outflow, balance,
       receivablesCount: filteredReceivables.length,
     };
-  }, [billableDocs, voidDocs, expenses, receivables, maintenanceCosts, periodStart, periodEnd, selectedClient, docType, expenseCategory]);
+  }, [billableDocs, voidDocs, billableNfse, voidNfse, expenses, receivables, maintenanceCosts, periodStart, periodEnd, selectedClient, docType, expenseCategory]);
 
   // ── Chart: Revenue vs Expenses by day ──
   const revenueExpenseChart = useMemo(() => {
@@ -232,6 +263,12 @@ export default function Financial() {
       days[day].receita += fiscalDocRevenue(d);
     });
 
+    billableNfse.filter((d: any) => filterByPeriod(d.issue_date || d.created_at)).forEach((d: any) => {
+      const day = (d.issue_date || d.created_at?.slice(0, 10)) || '';
+      if (!days[day]) days[day] = { day, receita: 0, despesa: 0 };
+      days[day].receita += nfseRevenue(d);
+    });
+
     expenses.filter((e: any) => filterByPeriod(e.expense_at)).forEach((e: any) => {
       const day = e.expense_at?.slice(0, 10) || '';
       if (!days[day]) days[day] = { day, receita: 0, despesa: 0 };
@@ -241,7 +278,7 @@ export default function Financial() {
     return Object.values(days)
       .sort((a, b) => a.day.localeCompare(b.day))
       .map(d => ({ ...d, day: d.day.length >= 10 ? format(new Date(d.day + 'T12:00:00'), 'dd/MM') : d.day }));
-  }, [billableDocs, expenses, periodStart]);
+  }, [billableDocs, billableNfse, expenses, periodStart]);
 
   // ── Chart: Expense breakdown by category ──
   const expenseByCategoryChart = useMemo(() => {
@@ -391,6 +428,7 @@ export default function Financial() {
                       <SelectItem value="inbound">NF-e Entrada</SelectItem>
                       <SelectItem value="outbound">CT-e / Saída</SelectItem>
                       <SelectItem value="transfer">Transferência</SelectItem>
+                      <SelectItem value="nfse">NFS-e (serviço)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -437,8 +475,8 @@ export default function Financial() {
               <Badge variant="secondary" className="text-[10px] font-medium">receita</Badge>
             </div>
             <p className="text-2xl font-extrabold text-foreground tracking-tight">{fmtCurrencyShort(kpis.revenue)}</p>
-            <p className="text-xs text-muted-foreground mt-1">Receita de frete</p>
-            <p className="text-[10px] text-muted-foreground mt-2">{kpis.cteCount} CT-es emitidos</p>
+            <p className="text-xs text-muted-foreground mt-1">Receita de frete + serviços</p>
+            <p className="text-[10px] text-muted-foreground mt-2">{kpis.cteCount} CT-es · {kpis.nfseCount} NFS-e</p>
           </CardContent>
         </Card>
 
@@ -500,11 +538,12 @@ export default function Financial() {
       </div>
 
       {/* ── Secondary KPIs ── */}
-      <div className="grid grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-3 lg:grid-cols-7 gap-3">
         {[
           { icon: FileText, label: 'NF-es', value: kpis.nfeCount, sub: fmtCurrencyShort(kpis.totalNfeValue), color: 'text-blue-500' },
           { icon: Receipt, label: 'CT-es', value: kpis.cteCount, sub: fmtCurrencyShort(kpis.totalCteValue), color: 'text-emerald-500' },
-          { icon: DollarSign, label: 'Frete Total', value: fmtCurrencyShort(kpis.totalFreight), sub: 'receita', color: 'text-green-600' },
+          { icon: DollarSign, label: 'Frete Total', value: fmtCurrencyShort(kpis.totalFreight), sub: 'CT-e', color: 'text-green-600' },
+          { icon: FileText, label: 'NFS-e', value: kpis.nfseCount, sub: fmtCurrencyShort(kpis.totalNfseValue), color: 'text-purple-500' },
           { icon: Receipt, label: 'Despesas Op.', value: fmtCurrencyShort(kpis.totalExpenses), sub: `${expenses.filter((e: any) => filterByPeriod(e.expense_at)).length} lançamentos`, color: 'text-red-500' },
           { icon: Wallet, label: 'Manutenção', value: fmtCurrencyShort(kpis.totalMaintenance), sub: 'custos', color: 'text-orange-500' },
           { icon: CheckCircle, label: 'Recebidos', value: fmtCurrencyShort(kpis.paidReceivable), sub: 'liquidados', color: 'text-teal-500' },

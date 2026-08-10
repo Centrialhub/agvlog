@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
+import { isBillableNfse } from '@/lib/fiscal/documentStatus';
 
 export interface PendingInvoiceSummary {
   count: number;
@@ -50,6 +51,17 @@ export function usePendingInvoices() {
       const used = new Set<string>();
       for (const c of (ctes || []) as any[]) {
         for (const id of (c.fiscal_document_ids || [])) used.add(id);
+      }
+
+      // NFS-e válidas também consomem NF do pool de faturamento.
+      const { data: nfse, error: e3 } = await supabase
+        .from('nfse_documents')
+        .select('fiscal_document_ids, status')
+        .eq('tenant_id', currentTenant.id);
+      if (e3) throw e3;
+      for (const n of (nfse || []) as any[]) {
+        if (!isBillableNfse(n)) continue;
+        for (const id of (n.fiscal_document_ids || [])) used.add(id);
       }
 
       let count = 0;

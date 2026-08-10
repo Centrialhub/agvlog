@@ -39,3 +39,22 @@ export function fiscalDocRevenue(doc: { freight_value?: any; value?: any } | nul
   if (freight > 0) return freight;
   return Number(doc.value) || 0;
 }
+
+/** Status de NFS-e que já representam serviço faturado. */
+export const NFSE_BILLABLE_STATUSES = new Set(['issued', 'authorized', 'autorizado', 'processing', 'submitted']);
+
+/** NFS-e válida para somar em receita de serviço. */
+export function isBillableNfse(doc: { status?: string | null } | null | undefined): boolean {
+  if (!doc) return false;
+  const s = String(doc.status || '').trim().toLowerCase();
+  if (isVoidFiscalStatus(s)) return false;
+  return NFSE_BILLABLE_STATUSES.has(s);
+}
+
+/** Receita de uma NFS-e (valor bruto dos serviços). */
+export function nfseRevenue(doc: { valor_servicos?: any; valor_liquido?: any } | null | undefined): number {
+  if (!doc) return 0;
+  const servicos = Number(doc.valor_servicos) || 0;
+  if (servicos > 0) return servicos;
+  return Number(doc.valor_liquido) || 0;
+}
