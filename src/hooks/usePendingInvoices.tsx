@@ -29,6 +29,9 @@ export function usePendingInvoices() {
         .eq('tenant_id', currentTenant.id)
         .eq('document_type', 'inbound')
         .neq('status', 'cancelled')
+        // Mesmo critério da tela de faturamento: NF já usada em CT-e/NFS-e não é pendente
+        .is('cte_emitted_at', null)
+        .is('nfse_emitted_at', null)
         .order('issue_date', { ascending: true })
         .limit(5000);
       if (e1) throw e1;
@@ -36,12 +39,12 @@ export function usePendingInvoices() {
       const allIds = new Set<string>((docs || []).map((d: any) => d.id));
       if (allIds.size === 0) return { count: 0, totalValue: 0, invoiceIds: [], oldestIssueDate: null };
 
-      // CT-e não cancelados que já consumiram NF.
+      // CT-e válidos (não cancelados nem rejeitados) que já consumiram NF.
       const { data: ctes, error: e2 } = await supabase
         .from('cte_documents')
         .select('fiscal_document_ids, status')
         .eq('tenant_id', currentTenant.id)
-        .neq('status', 'cancelled');
+        .not('status', 'in', '("cancelled","rejected")');
       if (e2) throw e2;
 
       const used = new Set<string>();
