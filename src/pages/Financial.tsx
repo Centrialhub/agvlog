@@ -24,7 +24,7 @@ import {
 import { format, subDays, startOfMonth, endOfMonth, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
-import { isBillableFiscalDoc, fiscalDocRevenue, isBillableNfse, nfseRevenue, isVoidFiscalStatus } from '@/lib/fiscal/documentStatus';
+import { isBillableFiscalDoc, fiscalDocRevenue, isBillableNfse, nfseRevenue, isVoidFiscalStatus, isConfirmedFiscalDoc, isConfirmedNfse } from '@/lib/fiscal/documentStatus';
 
 const COLORS = [
   'hsl(215, 80%, 48%)', 'hsl(142, 64%, 38%)', 'hsl(38, 92%, 50%)',
