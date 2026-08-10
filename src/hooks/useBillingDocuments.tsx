@@ -96,20 +96,18 @@ export function useBillingDocuments(filters: BillingDocumentFilters) {
       if (error) throw error;
       const docs = (data || []) as FiscalDocument[];
 
-      // Remove documentos que já geraram CT-e ativa (autorizada/transmitida) para
-      // evitar dupla emissão. Considera-se "já emitido" todo cte_documents cujo
-      // status não seja 'cancelled' e que tenha access_key OU protocolo SEFAZ.
-      // Rascunhos permanecem visíveis até serem transmitidos.
+      // Remove documentos já consumidos por um CT-e não anulado — inclusive
+      // rascunhos/lotes. Mesmo critério de `usePendingInvoices` (cteConsumesInvoices),
+      // para que o pool de faturamento e o KPI de pendentes nunca divirjam.
       const { data: emitted, error: emittedErr } = await supabase
         .from('cte_documents')
-        .select('fiscal_document_ids, status, access_key')
-        .eq('tenant_id', currentTenant.id)
-        .neq('status', 'cancelled')
-        .not('access_key', 'is', null);
+        .select('fiscal_document_ids, status')
+        .eq('tenant_id', currentTenant.id);
       if (emittedErr) throw emittedErr;
 
       const emittedIds = new Set<string>();
       for (const row of emitted || []) {
+        if (!cteConsumesInvoices(row as any)) continue;
         for (const id of ((row as { fiscal_document_ids: string[] | null }).fiscal_document_ids || [])) {
           if (id) emittedIds.add(id);
         }
