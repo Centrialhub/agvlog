@@ -538,7 +538,7 @@ export default function Financial() {
       </div>
 
       {/* ── Secondary KPIs ── */}
-      <div className="grid grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-3 lg:grid-cols-7 gap-3">
         {[
           { icon: FileText, label: 'NF-es', value: kpis.nfeCount, sub: fmtCurrencyShort(kpis.totalNfeValue), color: 'text-blue-500' },
           { icon: Receipt, label: 'CT-es', value: kpis.cteCount, sub: fmtCurrencyShort(kpis.totalCteValue), color: 'text-emerald-500' },
