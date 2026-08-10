@@ -24,6 +24,7 @@ import {
 import { format, subDays, startOfMonth, endOfMonth, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
+import { isBillableFiscalDoc, fiscalDocRevenue, isVoidFiscalStatus } from '@/lib/fiscal/documentStatus';
 
 const COLORS = [
   'hsl(215, 80%, 48%)', 'hsl(142, 64%, 38%)', 'hsl(38, 92%, 50%)',
@@ -109,6 +110,20 @@ export default function Financial() {
 
   const { data: clients = [] } = useClients();
 
+  // Documentos válidos (cancelados/rejeitados nunca entram em faturamento)
+  const billableDocs = useMemo(() => fiscalDocs.filter((d: any) => isBillableFiscalDoc(d)), [fiscalDocs]);
+  const voidDocs = useMemo(() => fiscalDocs.filter((d: any) => !isBillableFiscalDoc(d)), [fiscalDocs]);
+
+  // Partes envolvidas: NF-e de entrada aponta para fornecedor, CT-e para cliente.
+  const partyOptions = useMemo(() => {
+    return clients
+      .filter((c: any) => c.active !== false)
+      .map((c: any) => ({
+        id: c.id,
+        label: c.company_name + (c.is_supplier && !c.is_client ? ' · Fornecedor' : c.is_supplier && c.is_client ? ' · Cliente/Fornecedor' : ' · Cliente'),
+      }));
+  }, [clients]);
+
   // ── Unique expense categories ──
   const expenseCategories = useMemo(() => {
     const cats = new Set(expenses.map((e: any) => e.category).filter(Boolean));
@@ -156,7 +171,7 @@ export default function Financial() {
 
   // ── Computed KPIs ──
   const kpis = useMemo(() => {
-    let filteredDocs = fiscalDocs.filter((d: any) => filterByPeriod(d.issue_date || d.created_at));
+    let filteredDocs = billableDocs.filter((d: any) => filterByPeriod(d.issue_date || d.created_at));
     if (selectedClient !== 'all') filteredDocs = filteredDocs.filter((d: any) => d.client_id === selectedClient);
     if (docType !== 'all') filteredDocs = filteredDocs.filter((d: any) => d.document_type === docType);
 
@@ -164,8 +179,10 @@ export default function Financial() {
     const ctes = filteredDocs.filter((d: any) => d.document_type === 'outbound');
 
     const totalNfeValue = nfes.reduce((s: number, d: any) => s + (Number(d.value) || 0), 0);
-    const totalCteValue = ctes.reduce((s: number, d: any) => s + (Number(d.value) || 0), 0);
-    const totalFreight = ctes.reduce((s: number, d: any) => s + (Number(d.freight_value) || 0), 0);
+    // `value` do CT-e espelha o frete: usamos um único valor por documento
+    const totalFreight = ctes.reduce((s: number, d: any) => s + fiscalDocRevenue(d), 0);
+    const totalCteValue = totalFreight;
+    const voidCount = voidDocs.filter((d: any) => filterByPeriod(d.issue_date || d.created_at)).length;
 
     let filteredExpenses = expenses.filter((e: any) => filterByPeriod(e.expense_at));
     if (expenseCategory !== 'all') filteredExpenses = filteredExpenses.filter((e: any) => e.category === expenseCategory);
@@ -174,37 +191,45 @@ export default function Financial() {
 
     let filteredReceivables = receivables.filter((r: any) => filterByPeriod(r.created_at));
     if (selectedClient !== 'all') filteredReceivables = filteredReceivables.filter((r: any) => r.client_id === selectedClient);
+    filteredReceivables = filteredReceivables.filter((r: any) => r.status !== 'cancelled');
+    const today = new Date().toISOString().slice(0, 10);
+    const isOpen = (r: any) => r.status === 'pending' || r.status === 'invoiced' || r.status === 'partial';
     const totalReceivable = filteredReceivables.reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0);
-    const pendingReceivable = filteredReceivables.filter((r: any) => r.status === 'pending').reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0);
-    const paidReceivable = filteredReceivables.filter((r: any) => r.status === 'paid').reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0);
-    const overdueReceivable = filteredReceivables.filter((r: any) => r.status === 'overdue').reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0);
+    const pendingReceivable = filteredReceivables.filter(isOpen).reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0);
+    const paidReceivable = filteredReceivables
+      .filter((r: any) => r.status === 'received')
+      .reduce((s: number, r: any) => s + (Number(r.received_amount ?? r.amount) || 0), 0);
+    const overdueReceivable = filteredReceivables
+      .filter((r: any) => isOpen(r) && r.due_date && r.due_date < today)
+      .reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0);
 
     const filteredMaint = maintenanceCosts.filter((m: any) => filterByPeriod(m.created_at));
     const totalMaintenance = filteredMaint.reduce((s: number, m: any) => s + (Number(m.total_cost) || 0), 0);
 
-    const revenue = totalFreight + totalCteValue;
+    const revenue = totalFreight;
     const outflow = totalExpenses + totalMaintenance;
     const balance = revenue - outflow;
 
     return {
       nfeCount: nfes.length, cteCount: ctes.length,
       totalNfeValue, totalCteValue, totalFreight,
+      voidCount,
       totalExpenses, pendingExpensesCount: pendingExpenses.length,
       totalReceivable, pendingReceivable, paidReceivable, overdueReceivable,
       totalMaintenance,
       revenue, outflow, balance,
       receivablesCount: filteredReceivables.length,
     };
-  }, [fiscalDocs, expenses, receivables, maintenanceCosts, periodStart, periodEnd, selectedClient, docType, expenseCategory]);
+  }, [billableDocs, voidDocs, expenses, receivables, maintenanceCosts, periodStart, periodEnd, selectedClient, docType, expenseCategory]);
 
   // ── Chart: Revenue vs Expenses by day ──
   const revenueExpenseChart = useMemo(() => {
     const days: Record<string, { day: string; receita: number; despesa: number }> = {};
 
-    fiscalDocs.filter((d: any) => d.document_type === 'outbound' && filterByPeriod(d.issue_date || d.created_at)).forEach((d: any) => {
+    billableDocs.filter((d: any) => d.document_type === 'outbound' && filterByPeriod(d.issue_date || d.created_at)).forEach((d: any) => {
       const day = (d.issue_date || d.created_at?.slice(0, 10)) || '';
       if (!days[day]) days[day] = { day, receita: 0, despesa: 0 };
-      days[day].receita += Number(d.freight_value) || Number(d.value) || 0;
+      days[day].receita += fiscalDocRevenue(d);
     });
 
     expenses.filter((e: any) => filterByPeriod(e.expense_at)).forEach((e: any) => {
@@ -216,7 +241,7 @@ export default function Financial() {
     return Object.values(days)
       .sort((a, b) => a.day.localeCompare(b.day))
       .map(d => ({ ...d, day: d.day.length >= 10 ? format(new Date(d.day + 'T12:00:00'), 'dd/MM') : d.day }));
-  }, [fiscalDocs, expenses, periodStart]);
+  }, [billableDocs, expenses, periodStart]);
 
   // ── Chart: Expense breakdown by category ──
   const expenseByCategoryChart = useMemo(() => {
@@ -233,9 +258,10 @@ export default function Financial() {
     const statuses: Record<string, number> = {};
     receivables.filter((r: any) => filterByPeriod(r.created_at)).forEach((r: any) => {
       const s = r.status || 'pending';
-      statuses[s] = (statuses[s] || 0) + (Number(r.amount) || 0);
+      const amount = s === 'received' ? Number(r.received_amount ?? r.amount) || 0 : Number(r.amount) || 0;
+      statuses[s] = (statuses[s] || 0) + amount;
     });
-    const labels: Record<string, string> = { pending: 'Pendente', paid: 'Pago', overdue: 'Vencido', cancelled: 'Cancelado' };
+    const labels: Record<string, string> = { pending: 'Pendente', invoiced: 'Faturado', received: 'Recebido', partial: 'Parcial', cancelled: 'Cancelado' };
     return Object.entries(statuses).map(([status, value]) => ({ name: labels[status] || status, value }));
   }, [receivables, periodStart]);
 
