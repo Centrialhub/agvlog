@@ -360,16 +360,33 @@ export function useCancelCteBatch() {
         .update({ status: 'cancelled', updated_at: new Date().toISOString() } as any)
         .eq('id', batchId);
       if (error) throw error;
+      // Descobre as NFs consumidas pelo lote antes de cancelar, para devolvê-las ao pool.
+      const { data: rows } = await supabase
+        .from('cte_documents')
+        .select('fiscal_document_ids')
+        .eq('batch_id', batchId);
       await supabase
         .from('cte_documents')
         .update({ status: 'cancelled' } as any)
         .eq('batch_id', batchId);
+
+      const nfIds = Array.from(
+        new Set(((rows || []) as any[]).flatMap((r) => r.fiscal_document_ids || []).filter(Boolean)),
+      );
+      if (nfIds.length > 0) {
+        // Espelha useDeleteIssuedCte: cancelar o lote libera a NF para novo faturamento.
+        await supabase
+          .from('fiscal_documents')
+          .update({ cte_emitted_at: null, cte_emitted_outbound_id: null } as any)
+          .in('id', nfIds);
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['cte_batches'] });
       qc.invalidateQueries({ queryKey: ['cte_documents'] });
       // Cancelamento devolve os documentos ao pool disponível
       qc.invalidateQueries({ queryKey: ['billing_documents'] });
+      qc.invalidateQueries({ queryKey: ['pending_invoices_summary'] });
     },
   });
 }

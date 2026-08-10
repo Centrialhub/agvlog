@@ -199,12 +199,15 @@ export default function Financial() {
     if (docType !== 'all') filteredDocs = filteredDocs.filter((d: any) => d.document_type === docType);
 
     const nfes = filteredDocs.filter((d: any) => d.document_type === 'inbound');
-    const ctes = filteredDocs.filter((d: any) => d.document_type === 'outbound');
+    // Receita só de CT-e confirmado: rascunho/transmitindo ainda pode rejeitar.
+    const ctes = filteredDocs.filter((d: any) => d.document_type === 'outbound' && isConfirmedFiscalDoc(d));
 
     let filteredNfse = billableNfse.filter((d: any) => filterByPeriod(d.issue_date || d.created_at));
     if (selectedClient !== 'all') filteredNfse = filteredNfse.filter((d: any) => d.cliente_id === selectedClient);
     if (docType !== 'all' && docType !== 'nfse') filteredNfse = [];
-    const totalNfseValue = filteredNfse.reduce((s: number, d: any) => s + nfseRevenue(d), 0);
+    const totalNfseValue = filteredNfse
+      .filter((d: any) => isConfirmedNfse(d))
+      .reduce((s: number, d: any) => s + nfseRevenue(d), 0);
 
     const totalNfeValue = nfes.reduce((s: number, d: any) => s + (Number(d.value) || 0), 0);
     // `value` do CT-e espelha o frete: usamos um único valor por documento
@@ -257,13 +260,13 @@ export default function Financial() {
   const revenueExpenseChart = useMemo(() => {
     const days: Record<string, { day: string; receita: number; despesa: number }> = {};
 
-    billableDocs.filter((d: any) => d.document_type === 'outbound' && filterByPeriod(d.issue_date || d.created_at)).forEach((d: any) => {
+    billableDocs.filter((d: any) => d.document_type === 'outbound' && isConfirmedFiscalDoc(d) && filterByPeriod(d.issue_date || d.created_at)).forEach((d: any) => {
       const day = (d.issue_date || d.created_at?.slice(0, 10)) || '';
       if (!days[day]) days[day] = { day, receita: 0, despesa: 0 };
       days[day].receita += fiscalDocRevenue(d);
     });
 
-    billableNfse.filter((d: any) => filterByPeriod(d.issue_date || d.created_at)).forEach((d: any) => {
+    billableNfse.filter((d: any) => isConfirmedNfse(d) && filterByPeriod(d.issue_date || d.created_at)).forEach((d: any) => {
       const day = (d.issue_date || d.created_at?.slice(0, 10)) || '';
       if (!days[day]) days[day] = { day, receita: 0, despesa: 0 };
       days[day].receita += nfseRevenue(d);
