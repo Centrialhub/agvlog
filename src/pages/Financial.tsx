@@ -428,6 +428,7 @@ export default function Financial() {
                       <SelectItem value="inbound">NF-e Entrada</SelectItem>
                       <SelectItem value="outbound">CT-e / Saída</SelectItem>
                       <SelectItem value="transfer">Transferência</SelectItem>
+                      <SelectItem value="nfse">NFS-e (serviço)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -474,8 +475,8 @@ export default function Financial() {
               <Badge variant="secondary" className="text-[10px] font-medium">receita</Badge>
             </div>
             <p className="text-2xl font-extrabold text-foreground tracking-tight">{fmtCurrencyShort(kpis.revenue)}</p>
-            <p className="text-xs text-muted-foreground mt-1">Receita de frete</p>
-            <p className="text-[10px] text-muted-foreground mt-2">{kpis.cteCount} CT-es emitidos</p>
+            <p className="text-xs text-muted-foreground mt-1">Receita de frete + serviços</p>
+            <p className="text-[10px] text-muted-foreground mt-2">{kpis.cteCount} CT-es · {kpis.nfseCount} NFS-e</p>
           </CardContent>
         </Card>
 
@@ -541,7 +542,8 @@ export default function Financial() {
         {[
           { icon: FileText, label: 'NF-es', value: kpis.nfeCount, sub: fmtCurrencyShort(kpis.totalNfeValue), color: 'text-blue-500' },
           { icon: Receipt, label: 'CT-es', value: kpis.cteCount, sub: fmtCurrencyShort(kpis.totalCteValue), color: 'text-emerald-500' },
-          { icon: DollarSign, label: 'Frete Total', value: fmtCurrencyShort(kpis.totalFreight), sub: 'receita', color: 'text-green-600' },
+          { icon: DollarSign, label: 'Frete Total', value: fmtCurrencyShort(kpis.totalFreight), sub: 'CT-e', color: 'text-green-600' },
+          { icon: FileText, label: 'NFS-e', value: kpis.nfseCount, sub: fmtCurrencyShort(kpis.totalNfseValue), color: 'text-purple-500' },
           { icon: Receipt, label: 'Despesas Op.', value: fmtCurrencyShort(kpis.totalExpenses), sub: `${expenses.filter((e: any) => filterByPeriod(e.expense_at)).length} lançamentos`, color: 'text-red-500' },
           { icon: Wallet, label: 'Manutenção', value: fmtCurrencyShort(kpis.totalMaintenance), sub: 'custos', color: 'text-orange-500' },
           { icon: CheckCircle, label: 'Recebidos', value: fmtCurrencyShort(kpis.paidReceivable), sub: 'liquidados', color: 'text-teal-500' },
