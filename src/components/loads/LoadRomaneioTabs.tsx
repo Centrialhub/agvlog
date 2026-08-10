@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { isBillableFiscalDoc } from '@/lib/fiscal/documentStatus';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
