@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useAuth } from '@/hooks/useAuth';
 import { useFleetPositions } from '@/hooks/usePositions';
+import { isBillableFiscalDoc, fiscalDocRevenue } from '@/lib/fiscal/documentStatus';
 import { useFleetState, MovementState, stateColor, stateLabel, stateDotClass, formatStoppedDuration } from '@/hooks/useVehiclesState';
 import { useVehicles } from '@/hooks/useVehicles';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -343,11 +344,12 @@ export default function OperationsCenter() {
     const totalWeightActive = activeLoads.reduce((s: number, l: any) => s + (Number(l.total_weight_kg) || 0), 0);
     const totalPalletsActive = activeLoads.reduce((s: number, l: any) => s + (Number(l.total_pallet_count) || 0), 0);
 
-    const nfes = fiscalDocs.filter((d: any) => d.document_type === 'inbound');
-    const ctes = fiscalDocs.filter((d: any) => d.document_type === 'outbound');
+    const validDocs = fiscalDocs.filter((d: any) => isBillableFiscalDoc(d));
+    const nfes = validDocs.filter((d: any) => d.document_type === 'inbound');
+    const ctes = validDocs.filter((d: any) => d.document_type === 'outbound');
     const totalNfeValue = nfes.reduce((s: number, d: any) => s + (Number(d.value) || 0), 0);
-    const totalCteValue = ctes.reduce((s: number, d: any) => s + (Number(d.value) || 0), 0);
-    const totalFreight = ctes.reduce((s: number, d: any) => s + (Number(d.freight_value) || 0), 0);
+    const totalFreight = ctes.reduce((s: number, d: any) => s + fiscalDocRevenue(d), 0);
+    const totalCteValue = totalFreight;
 
     const activeDrivers = drivers.filter((d: any) => d.active);
     const driversWithVehicle = drivers.filter((d: any) => d.active && d.current_vehicle_id);
