@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
-import { isBillableNfse } from '@/lib/fiscal/documentStatus';
+import { isBillableNfse, cteConsumesInvoices } from '@/lib/fiscal/documentStatus';
 
 export interface PendingInvoiceSummary {
   count: number;

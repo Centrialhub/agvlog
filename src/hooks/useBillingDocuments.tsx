@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import type { FiscalDocument } from './useFiscalDocuments';
+import { cteConsumesInvoices } from '@/lib/fiscal/documentStatus';
 
 /**
  * Filtros server-side para o Faturamento (CT-e).

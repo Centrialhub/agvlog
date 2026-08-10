@@ -31,15 +31,20 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import { isBillableFiscalDoc, fiscalDocRevenue } from '@/lib/fiscal/documentStatus';
 
 /* ─── Summary Cards ─── */
 function SummaryCards({ docs }: { docs: FiscalDocument[] }) {
-  const inbound = docs.filter(d => d.document_type === 'inbound');
-  const outbound = docs.filter(d => d.document_type === 'outbound');
+  // Documentos anulados (cancelados/rejeitados) não entram em nenhum total.
+  const valid = docs.filter(d => isBillableFiscalDoc(d as any));
+  const inbound = valid.filter(d => d.document_type === 'inbound');
+  const outbound = valid.filter(d => d.document_type === 'outbound');
   const pending = docs.filter(d => d.status === 'pending');
-  const totalValue = docs.reduce((s, d) => s + (d.value || 0), 0);
-  const totalWeight = docs.reduce((s, d) => s + (d.weight_kg || 0), 0);
-  const totalPallets = docs.reduce((s, d) => s + (d.pallet_count || 0), 0);
+  const totalValue =
+    inbound.reduce((s, d) => s + (Number(d.value) || 0), 0) +
+    outbound.reduce((s, d) => s + fiscalDocRevenue(d as any), 0);
+  const totalWeight = valid.reduce((s, d) => s + (d.weight_kg || 0), 0);
+  const totalPallets = valid.reduce((s, d) => s + (d.pallet_count || 0), 0);
 
   const cards = [
     { label: 'NF-e Entrada', value: inbound.length, icon: ArrowDownToLine, color: 'text-emerald-500' },

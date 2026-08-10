@@ -114,11 +114,11 @@ export default function ManifestPanel({ loadId, loadNumber, origin, destination 
   });
 
   const totals = useMemo(() => ({
-    nfeCount: nfes.length,
+    nfeCount: nfes.filter((d: any) => isBillableFiscalDoc(d)).length,
     cteCount: ctes.filter((c: any) => !c.is_voided).length,
-    value: nfes.reduce((s: number, d: any) => s + Number(d.value || 0), 0),
-    weight: nfes.reduce((s: number, d: any) => s + Number(d.weight_kg || 0), 0),
-    pallets: nfes.reduce((s: number, d: any) => s + Number(d.pallet_count || 0), 0),
+    value: nfes.filter((d: any) => isBillableFiscalDoc(d)).reduce((s: number, d: any) => s + Number(d.value || 0), 0),
+    weight: nfes.filter((d: any) => isBillableFiscalDoc(d)).reduce((s: number, d: any) => s + Number(d.weight_kg || 0), 0),
+    pallets: nfes.filter((d: any) => isBillableFiscalDoc(d)).reduce((s: number, d: any) => s + Number(d.pallet_count || 0), 0),
     freight: ctes.filter((c: any) => !c.is_voided).reduce((s: number, c: any) => s + Number(c.freight_value || 0), 0),
   }), [nfes, ctes]);
 
