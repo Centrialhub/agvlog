@@ -365,15 +365,15 @@ export default function Financial() {
 
                 {/* Client */}
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Cliente</label>
+                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Cliente / Fornecedor</label>
                   <Select value={selectedClient} onValueChange={setSelectedClient}>
                     <SelectTrigger className="h-8 text-xs">
                       <SelectValue placeholder="Todos" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Todos os clientes</SelectItem>
-                      {clients.map((c: any) => (
-                        <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
+                      <SelectItem value="all">Todos (clientes e fornecedores)</SelectItem>
+                      {partyOptions.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>{c.label}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
