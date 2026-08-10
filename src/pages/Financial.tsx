@@ -417,6 +417,14 @@ export default function Financial() {
       </Collapsible>
 
       {/* ── Hero KPIs ── */}
+      {kpis.voidCount > 0 && (
+        <div className="flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/5 px-3 py-2">
+          <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
+          <p className="text-xs text-muted-foreground">
+            {kpis.voidCount} documento(s) cancelado(s)/rejeitado(s) no período foram desconsiderados do faturamento.
+          </p>
+        </div>
+      )}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="relative overflow-hidden border-primary/20 group hover:shadow-xl transition-all duration-300">
           <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/8 via-emerald-500/4 to-transparent" />
@@ -674,7 +682,7 @@ export default function Financial() {
           </CardHeader>
           <CardContent className="p-0">
             <div className="divide-y divide-border">
-              {fiscalDocs.filter((d: any) => d.document_type === 'outbound').slice(0, 6).map((doc: any) => (
+              {billableDocs.filter((d: any) => d.document_type === 'outbound').slice(0, 6).map((doc: any) => (
                 <div key={doc.id} className="flex items-center justify-between py-2.5 px-4">
                   <div className="min-w-0">
                     <p className="text-xs font-medium">CT-e {doc.invoice_number || '—'}</p>
@@ -682,10 +690,10 @@ export default function Financial() {
                       {doc.issue_date ? format(new Date(doc.issue_date + 'T12:00:00'), 'dd/MM/yy', { locale: ptBR }) : '—'}
                     </p>
                   </div>
-                  <span className="text-xs font-semibold text-emerald-600">+{fmtCurrency(Number(doc.freight_value || doc.value || 0))}</span>
+                  <span className="text-xs font-semibold text-emerald-600">+{fmtCurrency(fiscalDocRevenue(doc))}</span>
                 </div>
               ))}
-              {fiscalDocs.filter((d: any) => d.document_type === 'outbound').length === 0 && (
+              {billableDocs.filter((d: any) => d.document_type === 'outbound').length === 0 && (
                 <p className="text-xs text-muted-foreground text-center py-6">Nenhum CT-e emitido</p>
               )}
             </div>
