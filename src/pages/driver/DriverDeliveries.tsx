@@ -87,12 +87,12 @@ const EVENTS: EventDef[] = [
   { key: 'entregue',            label: 'ENTREGUE',            icon: CheckCircle, category: 'finalizador', finalAction: 'delivered', requiresReceiver: true, requiresPhoto: true, requiresSignature: true },
   { key: 'devolucao_parcial',   label: 'DEVOLUÇÃO PARCIAL',   icon: PackageX,    category: 'finalizador', finalAction: 'partial', requiresReceiver: true, showsItems: true, needsOperatorReply: true },
   { key: 'devolucao_total',     label: 'DEVOLUÇÃO TOTAL',     icon: Ban,         category: 'finalizador', finalAction: 'refused', showsItems: true, needsOperatorReply: true },
+  { key: 'chegada_no_cliente',  label: 'CHEGADA NO CLIENTE',  icon: MapPinned,   category: 'informativo' },
   { key: 'solicitar_desconto',  label: 'SOLICITAR DESCONTO',  icon: Percent,     category: 'informativo', showsDiscount: true, showsContact: true, needsOperatorReply: true },
   { key: 'atualizar_boleto',    label: 'ATUALIZAR BOLETO',    icon: FileText,    category: 'informativo', showsContact: true, needsOperatorReply: true },
   { key: 'avaria',              label: 'AVARIA',              icon: AlertCircle, category: 'informativo', requiresPhoto: true, showsItems: true },
   { key: 'cliente_recusou',     label: 'CLIENTE RECUSOU',     icon: PackageX,    category: 'informativo', showsItems: true },
   { key: 'coleta_realizada',    label: 'COLETA REALIZADA',    icon: Package,     category: 'informativo', requiresPhoto: true },
-  { key: 'chegada_no_cliente',  label: 'CHEGADA NO CLIENTE',  icon: MapPinned,   category: 'informativo' },
   { key: 'cliente_estava_fora', label: 'CLIENTE ESTAVA FORA', icon: UserX,       category: 'informativo' },
   { key: 'outros',              label: 'OUTROS',              icon: AlertTriangle, category: 'informativo' },
 ];
@@ -126,7 +126,7 @@ export default function DriverDeliveries() {
   const [demoStops, setDemoStops] = useState<any[]>(DEMO_STOPS_INITIAL);
   const effectiveTrip: any = trip || DEMO_TRIP;
 
-  const [tab, setTab] = useState<'em_rota' | 'planejadas'>('em_rota');
+  const [tab, setTab] = useState<'em_rota' | 'concluidas'>('em_rota');
   const [search, setSearch] = useState('');
   // Detalhe da entrega
   const [detailStop, setDetailStop] = useState<any | null>(null);
@@ -233,9 +233,9 @@ export default function DriverDeliveries() {
     const q = search.trim().toLowerCase();
     let list = effectiveStops;
     if (tab === 'em_rota') {
-      list = list.filter((s) => s.status === 'arrived' || s.status === 'pending');
+      list = list.filter((s) => !isStopTerminal(s.status) && s.status !== 'completed');
     } else {
-      list = list.filter((s) => s.status === 'pending');
+      list = list.filter((s) => isStopTerminal(s.status) || s.status === 'completed');
     }
     if (!q) return list;
     return list.filter((s) => {
