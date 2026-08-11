@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { RefreshCw, AlertTriangle, AlertCircle } from 'lucide-react';
 
 type Row = {
-  severity: 'critical' | 'warning' | 'info';
+  severity: 'critical' | 'warning' | 'info' | 'success';
   domain: string;
   entity_type: string;
   entity_id: string;
@@ -109,7 +109,11 @@ export default function DataAudit() {
             <div className="space-y-2">
               {filtered.map((r, i) => (
                 <div key={`${r.entity_id}-${i}`} className="flex items-start gap-3 rounded border p-3">
-                  <Badge variant={r.severity === 'critical' ? 'destructive' : r.severity === 'warning' ? 'secondary' : 'outline'}>
+                  <Badge variant={
+                    r.severity === 'critical' ? 'destructive' : 
+                    r.severity === 'warning' ? 'secondary' : 
+                    r.severity === 'success' ? 'outline' : 'outline'
+                  }>
                     {r.severity}
                   </Badge>
                   <div className="flex-1 text-sm">
