@@ -104,6 +104,7 @@ export const hubFiscal = {
       emissionId,
       body: { justificativa },
     });
+  },
 
   cce(hubDocumentId: string, correcao: string) {
     return invoke({ action: 'cce', id: hubDocumentId, body: { correcao } });
