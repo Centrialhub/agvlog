@@ -797,22 +797,6 @@ export default function OperationalEvents() {
           <Button variant="outline" size="sm" onClick={scrollToDetail}>
             <ListOrdered className="h-4 w-4 mr-1.5" /> Ir para Detalhamento
           </Button>
-        <Button
-          variant="outline"
-          asChild
-        >
-          <a
-            href="#detalhamento-ocorrencias"
-            onClick={(e) => {
-              e.preventDefault();
-              const el = document.getElementById('detalhamento-ocorrencias');
-              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-              if (window.location.hash !== '#detalhamento-ocorrencias') {
-                window.history.pushState(null, '', '#detalhamento-ocorrencias');
-              }
-              focusSearch();
-            }}
-          >
             <ListOrdered className="h-4 w-4 mr-2" /> Ir para detalhamento
           </a>
         </Button>
