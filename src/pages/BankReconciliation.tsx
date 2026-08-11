@@ -9,12 +9,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
-import { Landmark, Upload, RefreshCw, Play, Check, X, Link2, Plus } from 'lucide-react';
+import { Landmark, Upload, RefreshCw, Play, Check, X, Link2, Plus, Calendar } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   useBankAccounts, useCreateBankAccount, useBankTransactions, useFinancialObligations,
   useSuggestedMatches, useSyncObligations, useImportBankStatement, useRunReconciliation,
-  useAcceptMatch, useRejectMatch, useCreateManualMatch, type FinancialObligation, type BankTransaction,
+  useAcceptMatch, useRejectMatch, useCreateManualMatch, useCreateManualTransaction,
+  type FinancialObligation, type BankTransaction,
 } from '@/hooks/useBankReconciliation';
 import {
   parseWorkbook, buildParsedRows, computeFileHash, type ColumnMapping,
@@ -84,6 +85,7 @@ export default function BankReconciliation() {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <NewBankAccountDialog />
+          <NewManualTransactionDialog accountId={effectiveAccount} />
           <ImportStatementDialog accountId={effectiveAccount} periodStart={periodStart} periodEnd={periodEnd} />
           <Button variant="outline" size="sm" onClick={() => syncObg.mutate({ from: periodStart, to: periodEnd }, {
             onSuccess: (r: any) => toast({ title: 'Títulos sincronizados', description: JSON.stringify(r) }),
@@ -372,6 +374,128 @@ function ImportStatementDialog({ accountId, periodStart, periodEnd }: { accountI
           <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
           <Button disabled={!accountId || !file || importMut.isPending || !mapping.date || !mapping.description} onClick={submit}>
             {importMut.isPending ? 'Importando...' : 'Importar'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function NewManualTransactionDialog({ accountId }: { accountId: string }) {
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({
+    posted_at: todayIso(),
+    description: '',
+    amount: '',
+    type: 'debit' as 'credit' | 'debit',
+    document_number: '',
+  });
+  const create = useCreateManualTransaction();
+
+  const reset = () => setForm({
+    posted_at: todayIso(),
+    description: '',
+    amount: '',
+    type: 'debit',
+    document_number: '',
+  });
+
+  const handleSubmit = () => {
+    if (!accountId) return;
+    const amountNum = Math.abs(Number(form.amount));
+    const finalAmount = form.type === 'credit' ? amountNum : -amountNum;
+
+    create.mutate({
+      bank_account_id: accountId,
+      posted_at: form.posted_at,
+      description: form.description,
+      amount: finalAmount,
+      transaction_type: form.type,
+      document_number: form.document_number,
+    }, {
+      onSuccess: () => {
+        toast({ title: 'Lançamento manual criado' });
+        setOpen(false);
+        reset();
+      },
+      onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
+    });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={v => { setOpen(v); if (!v) reset(); }}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm" disabled={!accountId}>
+          <Plus className="h-4 w-4 mr-1" /> Lançamento manual
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Novo lançamento manual</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 pt-2">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label>Data</Label>
+              <Input
+                type="date"
+                value={form.posted_at}
+                onChange={e => setForm(f => ({ ...f, posted_at: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Tipo</Label>
+              <Select
+                value={form.type}
+                onValueChange={v => setForm(f => ({ ...f, type: v as any }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="credit">Crédito (Entrada)</SelectItem>
+                  <SelectItem value="debit">Débito (Saída)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Descrição</Label>
+            <Input
+              placeholder="Ex: Pagamento fornecedor X"
+              value={form.description}
+              onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label>Valor (R$)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                placeholder="0,00"
+                value={form.amount}
+                onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Documento / Ref</Label>
+              <Input
+                placeholder="Opcional"
+                value={form.document_number}
+                onChange={e => setForm(f => ({ ...f, document_number: e.target.value }))}
+              />
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
+          <Button
+            disabled={!form.description || !form.amount || create.isPending}
+            onClick={handleSubmit}
+          >
+            Salvar lançamento
           </Button>
         </DialogFooter>
       </DialogContent>
