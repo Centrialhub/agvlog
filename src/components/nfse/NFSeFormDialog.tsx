@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
@@ -7,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Trash2, Search, Loader2, UserSearch } from 'lucide-react';
+import { Plus, Trash2, Search, Loader2, UserSearch, FileText, Calculator, CheckCircle } from 'lucide-react';
 import { useCreateNFSe, useUpdateNFSe, type NFSeDoc } from '@/hooks/useNFSe';
 import { useFiscalDocuments } from '@/hooks/useFiscalDocuments';
 import { useEmitters } from '@/hooks/useEmitters';
@@ -48,6 +49,70 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
   const [loadingInvoice, setLoadingInvoice] = useState(false);
   const [invoiceSearch, setInvoiceSearch] = useState('');
   const [clientSearchOpen, setClientSearchOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [filters, setFilters] = useState({ invoice: '', recipient: '' });
+  const [debouncedFilters, setDebouncedFilters] = useState(filters);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => setDebouncedFilters(filters), 300);
+    return () => clearTimeout(timeout);
+  }, [filters]);
+
+  const { data: loadDocuments = [] } = useQuery({
+    queryKey: ['nfse_load_docs', loadId],
+    queryFn: async () => {
+      if (!loadId) return [];
+      const { data } = await supabase
+        .from('fiscal_documents')
+        .select('*')
+        .eq('load_id', loadId)
+        .eq('document_type', 'inbound');
+      return data || [];
+    },
+    enabled: !!loadId && open,
+  });
+
+  const normalize = (v: string) => v.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+  const filteredDocs = useMemo(() => {
+    return loadDocuments.filter(d => {
+      const docInvoice = normalize(d.invoice_number || '');
+      const docRecipient = normalize(d.recipient || '');
+      const fInvoice = normalize(debouncedFilters.invoice);
+      const fRecipient = normalize(debouncedFilters.recipient);
+      if (fInvoice && !docInvoice.includes(fInvoice)) return false;
+      if (fRecipient && !docRecipient.includes(fRecipient)) return false;
+      return true;
+    });
+  }, [loadDocuments, debouncedFilters]);
+
+  const selectAll = () => {
+    if (selectedIds.size === filteredDocs.length && filteredDocs.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredDocs.map(d => d.id)));
+    }
+  };
+
+  useEffect(() => {
+    if (selectedIds.size > 0) {
+      const selected = loadDocuments.filter(d => selectedIds.has(d.id));
+      const total = selected.reduce((sum, d) => sum + (Number(d.freight_value) || 0), 0);
+      const desc = `Prestação de serviço de transporte ref. NFs: ${selected.map(d => d.invoice_number).join(', ')}`;
+      const first = selected[0];
+      
+      setForm(f => ({
+        ...f,
+        valor_servicos: total,
+        description: desc,
+        cliente_nome: first.recipient || f.cliente_nome,
+        cliente_cnpj: first.recipient_cnpj || f.cliente_cnpj,
+        cliente_municipio: first.recipient_city || f.cliente_municipio,
+        cliente_uf: first.recipient_state || f.cliente_uf,
+        cliente_bairro: first.recipient_neighborhood || f.cliente_bairro,
+      }));
+    }
+  }, [selectedIds, loadDocuments]);
 
   const { data: allDocs = [] } = useFiscalDocuments();
 
@@ -256,6 +321,61 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
                 </div>
               </div>
             </div>
+
+            {loadId && (
+              <div className="space-y-3 border p-3 rounded-md bg-muted/30 mb-4">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-bold uppercase">NF-es da Carga</Label>
+                  <Button type="button" variant="ghost" size="sm" className="h-6 text-[10px]" onClick={selectAll}>
+                    {selectedIds.size === filteredDocs.length && filteredDocs.length > 0 ? 'Desmarcar' : 'Selecionar'} Todas
+                  </Button>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="relative">
+                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                    <Input 
+                      placeholder="Filtrar Nota..." 
+                      className="h-8 pl-7 text-xs" 
+                      value={filters.invoice}
+                      onChange={e => setFilters(f => ({ ...f, invoice: e.target.value }))}
+                    />
+                  </div>
+                  <Input 
+                    placeholder="Filtrar Destinatário..." 
+                    className="h-8 text-xs" 
+                    value={filters.recipient}
+                    onChange={e => setFilters(f => ({ ...f, recipient: e.target.value }))}
+                  />
+                </div>
+
+                <div className="max-h-[150px] overflow-y-auto border rounded divide-y bg-background">
+                  {filteredDocs.length === 0 ? (
+                    <div className="p-4 text-center text-xs text-muted-foreground">Nenhuma NF encontrada.</div>
+                  ) : filteredDocs.map(d => (
+                    <div 
+                      key={d.id} 
+                      className="flex items-center gap-2 p-2 hover:bg-muted/50 cursor-pointer"
+                      onClick={() => {
+                        const next = new Set(selectedIds);
+                        if (next.has(d.id)) next.delete(d.id);
+                        else next.add(d.id);
+                        setSelectedIds(next);
+                      }}
+                    >
+                      <Checkbox checked={selectedIds.has(d.id)} onCheckedChange={() => {}} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between text-[11px] font-medium">
+                          <span>NF {d.invoice_number}</span>
+                          <span>R$ {Number(d.freight_value || 0).toFixed(2)}</span>
+                        </div>
+                        <div className="text-[10px] text-muted-foreground truncate">{d.recipient}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-6 gap-3">
               <div className="col-span-3">
