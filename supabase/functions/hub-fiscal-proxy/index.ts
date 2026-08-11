@@ -356,6 +356,7 @@ Deno.serve(async (req) => {
           resolved.token,
         );
         return json(status, { success: status < 400, hub: data });
+      }
 
       case 'cce': {
         if (!payload.id) return json(400, { success: false, error: { code: 'MISSING_ID' } });
