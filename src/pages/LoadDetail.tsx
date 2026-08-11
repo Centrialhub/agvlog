@@ -354,7 +354,7 @@ export default function LoadDetail() {
             <RouteIcon className="h-3.5 w-3.5 mr-1" /> Roteirização
           </Button>
           {nextStatuses.map(ns => (
-            <Button key={ns} size="sm" variant="outline" onClick={() => handleStatusChange(ns)} disabled={updateLoad.isPending}>
+            <Button key={ns} size="sm" variant={ns === 'in_transit' ? 'default' : 'outline'} onClick={() => handleStatusChange(ns)} disabled={updateLoad.isPending}>
               <ArrowRight className="h-3 w-3 mr-1" />
               {LOAD_STATUS_LABELS[ns as keyof typeof LOAD_STATUS_LABELS] || ns}
             </Button>
