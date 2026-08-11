@@ -175,8 +175,7 @@ export default function NoLoadsHelp({
               <div>
                 <p className="font-medium text-foreground">2. Atribuição da carga</p>
                 <p>
-                  A operação cria uma carga e escolhe você como motorista — direto ou pelo veículo
-                  associado.
+                  A operação seleciona você na tela de <strong>Centro de Operações</strong> ou <strong>Painel de Controle</strong>.
                 </p>
               </div>
             </div>
