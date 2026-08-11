@@ -3,12 +3,16 @@
 export const LOAD_TRANSITIONS: Record<string, string[]> = {
   planned: ['assembling'],
   assembling: ['ready', 'planned'],
-  ready: ['loading', 'assembling'],
-  loading: ['loaded', 'ready'],
+  ready: ['loading', 'assembling', 'in_transit'],
+  loading: ['loaded', 'ready', 'in_transit'],
   loaded: ['in_transit'],
-  in_transit: ['delivered', 'divergent'],
+  in_transit: ['delivered', 'divergent', 'partial_delivery', 'returned', 'refused'],
   delivered: [],
-  divergent: ['in_transit', 'delivered'],
+  divergent: ['in_transit', 'delivered', 'partial_delivery', 'returned', 'refused'],
+  partial_delivery: ['delivered', 'returned'],
+  returned: ['delivered'],
+  refused: ['returned', 'delivered'],
+  failed: ['returned', 'delivered'],
 };
 
 export const ORDER_TRANSITIONS: Record<string, string[]> = {
