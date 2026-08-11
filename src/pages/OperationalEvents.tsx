@@ -904,6 +904,7 @@ export default function OperationalEvents() {
                   <Label className="text-xs text-muted-foreground">Busca livre</Label>
                   <Search className="absolute left-2.5 top-[30px] h-4 w-4 text-muted-foreground" />
                   <Input
+                    ref={searchRef}
                     placeholder="Descrição, carga, motorista, cliente..."
                     value={search}
                     onChange={e => setSearch(e.target.value)}
