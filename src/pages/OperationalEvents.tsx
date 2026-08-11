@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import {
   useOperationalEvents, useCreateOperationalEvent, useUpdateOperationalEvent,
   useOperationalEventsFiltered,
@@ -87,6 +87,12 @@ export default function OperationalEvents() {
   const { currentTenant } = useTenant();
   const { user } = useAuth();
   const { data: events = [], isLoading, isError, error, refetch, isFetching } = useOperationalEvents();
+
+  // Scroll callback para o botão da torre
+  const scrollToDetail = useCallback(() => {
+    document.getElementById('detalhamento-ocorrencias')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setTimeout(() => searchRef.current?.focus({ preventScroll: true }), 400);
+  }, []);
   const { data: loads = [] } = useLoads();
   const { data: clients = [] } = useClients();
   const createEvent = useCreateOperationalEvent();
