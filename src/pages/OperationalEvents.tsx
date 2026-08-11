@@ -797,9 +797,6 @@ export default function OperationalEvents() {
           <Button variant="outline" size="sm" onClick={scrollToDetail}>
             <ListOrdered className="h-4 w-4 mr-1.5" /> Ir para Detalhamento
           </Button>
-            <ListOrdered className="h-4 w-4 mr-2" /> Ir para detalhamento
-          </a>
-        </Button>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button><Plus className="h-4 w-4 mr-2" /> Nova Ocorrência</Button>
