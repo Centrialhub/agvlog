@@ -10,7 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { toast } from 'sonner';
-import { Save, CheckCircle2, XCircle, FileText, AlertTriangle, RotateCcw, Printer } from 'lucide-react';
+import { Save, CheckCircle2, XCircle, FileText, AlertTriangle, RotateCcw, Printer, Search } from 'lucide-react';
 import { Wand2 } from 'lucide-react';
 import { Info } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
