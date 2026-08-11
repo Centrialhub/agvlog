@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button';
 import { Truck, MapPin, Package, Clock, ArrowRight, ClipboardCheck, AlertTriangle, Receipt, FileText, Map } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import DemoBanner from '@/components/driver/DemoBanner';
-import { useQueryClient } from '@tanstack/react-query';
 import NoLoadsHelp from '@/components/driver/NoLoadsHelp';
 import { useState, useEffect } from 'react';
 import DriverDeliveryMap, { DeliveryPoint } from '@/components/driver/DriverDeliveryMap';
