@@ -43,7 +43,7 @@ export default function DriverHome() {
   const queryClient = useTanstackQueryClient();
   const { data: autoTrip } = useActiveTrip(driver?.id);
   const checklist = useChecklistStatus(autoTrip?.id);
-  const [demoActive, setDemoActive] = useState(true);
+  const [demoActive, setDemoActive] = useState(canUseDriverDemo);
 
   const { data: activeTrips = [], isLoading: tripsLoading } = useQuery({
     queryKey: ['driver_my_trips', driver?.id],
