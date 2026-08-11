@@ -95,7 +95,7 @@ export default function DriverJourney() {
     onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
   });
 
-  const isDemo = !trip && canUseDriverDemo;
+  const isDemo = !trip && canUseDriverDemo && import.meta.env.MODE !== 'production';
   const effectiveEvents = isDemo ? demoEvents : events;
 
   const handleEventClick = (eventType: string) => {
