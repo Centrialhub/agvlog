@@ -584,8 +584,8 @@ export default function DriverDeliveries() {
       {/* Tabs */}
       <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
         <TabsList className="grid grid-cols-2 w-full h-10">
-          <TabsTrigger value="em_rota" className="text-xs">Em Rota</TabsTrigger>
-          <TabsTrigger value="planejadas" className="text-xs">Planejadas</TabsTrigger>
+          <TabsTrigger value="em_rota" className="text-xs">Em Rota ({filteredStops.length})</TabsTrigger>
+          <TabsTrigger value="concluidas" className="text-xs">Concluídas ({completedStops.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value={tab} className="mt-3 space-y-2">
