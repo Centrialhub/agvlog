@@ -184,6 +184,7 @@ export default function Billing() {
     referenceNumber,
     recipientCnpj: cnpj,
     remitterCnpj: supplierCnpj,
+    recipientCity: recipientCity !== SENTINEL_NONE ? recipientCity : null,
   });
 
   // ===== Hidrata estado a partir da preferência salva (uma única vez) =====
@@ -356,8 +357,9 @@ export default function Billing() {
       }
       if (!matchesOp(load?.operation_type ?? (d as any).operation_type)) return false;
 
-      // Cidade do destinatário (comparação sem acentos/caixa)
-      if (recipientCity !== SENTINEL_NONE && normalizeCity((d as any).recipient_city) !== recipientCity) return false;
+      // Cidade do destinatário (já filtrada server-side se selecionada)
+      // Mantemos aqui apenas como redundância ou se quisermos filtrar por chave exata no client
+      // if (recipientCity !== SENTINEL_NONE && normalizeCity((d as any).recipient_city) !== recipientCity) return false;
 
       return true;
     });

@@ -26,6 +26,7 @@ export interface BillingDocumentFilters {
   recipientCnpj?: string | null;
   remitterCnpj?: string | null;
   supplierId?: string | null;
+  recipientCity?: string | null;
 }
 
 function nz(v: string | null | undefined): string | null {
@@ -48,6 +49,7 @@ export function useBillingDocuments(filters: BillingDocumentFilters) {
     recipientCnpj: nz(filters.recipientCnpj),
     remitterCnpj: nz(filters.remitterCnpj),
     supplierId: nz(filters.supplierId),
+    recipientCity: nz(filters.recipientCity),
   };
 
   return useQuery({
@@ -89,6 +91,7 @@ export function useBillingDocuments(filters: BillingDocumentFilters) {
         const digits = f.remitterCnpj.replace(/\D/g, '');
         if (digits) q = q.ilike('remitter_cnpj', `%${digits}%`);
       }
+      if (f.recipientCity) q = q.ilike('recipient_city', `%${f.recipientCity}%`);
 
       // Limit alto pra não estourar o default de 1000 do Supabase em tenants grandes
       q = q.order('issue_date', { ascending: false }).limit(5000);
