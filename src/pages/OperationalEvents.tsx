@@ -450,7 +450,9 @@ export default function OperationalEvents() {
         totals.ocorrencias,
         totals.nao_efetuada_motorista, totals.nao_efetuada,
         totals.baixa, totals.comp, totals.devol,
-        totals.dq, totals.dv, totals.fq, totals.fv, '',
+        totals.dq, totals.dv, totals.fq, totals.fv,
+        '', '', // Km Total placeholders
+        '',
       ]);
 
       const ws = XLSX.utils.aoa_to_sheet(aoa);
