@@ -794,6 +794,9 @@ export default function OperationalEvents() {
           <p className="text-sm text-muted-foreground">{openCount} abertas · {events.length} total · sincronia em tempo real com o app do motorista</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={scrollToDetail}>
+            <ListOrdered className="h-4 w-4 mr-1.5" /> Ir para Detalhamento
+          </Button>
         <Button
           variant="outline"
           asChild
