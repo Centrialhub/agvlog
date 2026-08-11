@@ -42,6 +42,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
   const [periodStart, setPeriodStart] = useState('');
   const [periodEnd, setPeriodEnd] = useState('');
   const [invoiceNumber, setInvoiceNumber] = useState('');
+  const [recipientCity, setRecipientCity] = useState('');
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   // Passo 2 — valor de serviço editável por NF (pré-preenchido com o frete)
   const [serviceValues, setServiceValues] = useState<Record<string, number>>({});
@@ -94,7 +95,8 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
     periodStart: periodStart || null,
     periodEnd: periodEnd || null,
     invoiceNumber: invoiceNumber || null,
-  }), [supplierId, clientId, periodStart, periodEnd, invoiceNumber]);
+    recipientCity: recipientCity || null,
+  }), [supplierId, clientId, periodStart, periodEnd, invoiceNumber, recipientCity]);
 
   const { data: docs = [], isLoading } = useBillingDocuments(filters);
 
@@ -324,6 +326,14 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
                     {clientList.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="col-span-2">
+                <Label>Cidade Destino</Label>
+                <Input 
+                  placeholder="Filtrar por cidade..." 
+                  value={recipientCity} 
+                  onChange={e => setRecipientCity(e.target.value)} 
+                />
               </div>
               <div><Label>Nº NF</Label><Input value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)} /></div>
               <div><Label>Emissão de</Label><Input type="date" value={periodStart} onChange={e => setPeriodStart(e.target.value)} /></div>
