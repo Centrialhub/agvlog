@@ -950,8 +950,16 @@ export default function RoutePlanning() {
                           <Button
                             size="sm"
                             variant="default"
-                            onClick={() => dispatchRouteMutation.mutate(route)}
-                            disabled={v.blocksDispatch || dispatchRouteMutation.isPending}
+                            onClick={() => {
+                              if (route.dispatching || dispatchRouteMutation.isPending) return;
+                              setRoutes(prev => prev.map(r => r.id === route.id ? { ...r, dispatching: true } : r));
+                              dispatchRouteMutation.mutate(route, {
+                                onSettled: () => {
+                                  setRoutes(prev => prev.map(r => r.id === route.id ? { ...r, dispatching: false } : r));
+                                }
+                              });
+                            }}
+                            disabled={v.blocksDispatch || dispatchRouteMutation.isPending || route.dispatching}
                             title={v.blocksDispatch ? (c.blockingErrors.join(' · ') || v.label) : 'Despachar rota'}
                           >
                             <Send className="h-3 w-3 mr-1" /> Despachar
