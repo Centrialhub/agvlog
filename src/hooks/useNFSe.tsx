@@ -413,7 +413,10 @@ export function useCancelNFSe() {
         if (em?.hub_document_id) {
           const justif = (reason || '').padEnd(15, ' ');
           const res = await hubFiscal.cancelNFSe(em.hub_document_id, justif, em.id);
-          if (!res.success) throw new Error((res as any)?.hub?.error?.message || 'Falha ao cancelar no Hub Fiscal');
+          if (!res.success) {
+            const hubMsg = (res as any)?.hub?.error?.message || (res as any)?.hub?.document?.message;
+            throw new Error(hubMsg || 'Falha ao cancelar no Hub Fiscal');
+          }
           await (supabase as any).from('nfse_documents').update({
             status: 'cancelled', cancelled: true,
             cancellation_date: new Date().toISOString(),
