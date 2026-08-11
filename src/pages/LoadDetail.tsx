@@ -364,7 +364,7 @@ export default function LoadDetail() {
               <FileText className="h-3 w-3 mr-1" /> CT-e
             </Button>
           )}
-          {['ready', 'loaded', 'loading'].includes(load.status) && !load.trip_id && (
+          {['ready', 'loaded', 'loading', 'in_transit'].includes(load.status) && !load.trip_id && (
             <Dialog open={dispatchOpen} onOpenChange={(v) => { setDispatchOpen(v); if (v) populateStopsFromItems(); }}>
               <DialogTrigger asChild>
                 <Button 

@@ -3,8 +3,8 @@
 export const LOAD_TRANSITIONS: Record<string, string[]> = {
   planned: ['assembling'],
   assembling: ['ready', 'planned'],
-  ready: ['loading', 'assembling'],
-  loading: ['loaded', 'ready'],
+  ready: ['loading', 'assembling', 'in_transit'],
+  loading: ['loaded', 'ready', 'in_transit'],
   loaded: ['in_transit'],
   in_transit: ['delivered', 'divergent'],
   delivered: [],
