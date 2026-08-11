@@ -26,7 +26,7 @@ interface LoadItemsPanelProps {
 
 const DOC_PAGE_SIZE = 25;
 const FILTER_DEBOUNCE_MS = 250;
-const emptyDocFilters = { invoice: '', client: '', neighborhood: '' };
+const emptyDocFilters = { invoice: '', client: '', neighborhood: '', city: '' };
 const defaultDocPreference = { filters: emptyDocFilters, sort: 'recent' as 'recent' | 'alpha', visibleDocCount: DOC_PAGE_SIZE, scrollTop: 0 };
 const LOAD_ITEMS_SESSION_ONLY_KEY = 'agvlog:load-items-doc-session-only';
 const LOAD_ITEMS_SESSION_PREF_KEY = 'agvlog:load-items-doc-session-preference';
@@ -78,6 +78,30 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
   const skipNextFilterReset = useRef(false);
   const debouncedDocFilters = useDebouncedValue(docFilters, FILTER_DEBOUNCE_MS);
   const currentDocPreference = useMemo(() => ({ filters: docFilters, sort: docSort, visibleDocCount, scrollTop: docScrollTop }), [docFilters, docSort, visibleDocCount, docScrollTop]);
+  const [itemsFilter, setItemsFilter] = useState({ description: '', order: '', recipient: '' });
+  const [debouncedItemsFilter, setDebouncedItemsFilter] = useState(itemsFilter);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => setDebouncedItemsFilter(itemsFilter), 300);
+    return () => clearTimeout(timeout);
+  }, [itemsFilter]);
+
+  const filteredItems = useMemo(() => {
+    return items.filter(item => {
+      const desc = normalize(item.item_description || '');
+      const order = normalize(item.orders?.order_number || '');
+      const recipient = normalize((item as any).fiscal_documents?.recipient || '');
+      
+      const fDesc = normalize(debouncedItemsFilter.description);
+      const fOrder = normalize(debouncedItemsFilter.order);
+      const fRecipient = normalize(debouncedItemsFilter.recipient);
+
+      if (fDesc && !desc.includes(fDesc)) return false;
+      if (fOrder && !order.includes(fOrder)) return false;
+      if (fRecipient && !recipient.includes(fRecipient)) return false;
+      return true;
+    });
+  }, [items, debouncedItemsFilter]);
   const [form, setForm] = useState({
     order_id: '',
     item_description: '',
@@ -109,6 +133,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
     const invoiceDigits = debouncedDocFilters.invoice.replace(/\D/g, '');
     const client = normalize(debouncedDocFilters.client);
     const neighborhood = normalize(debouncedDocFilters.neighborhood);
+    const city = normalize(debouncedDocFilters.city || '');
     const currentDocIds = new Set(items.map(item => item.fiscal_document_id).filter(Boolean));
     const docs = fiscalDocs.filter((doc: any) => {
       if (currentDocIds.has(doc.id)) return false;
@@ -116,9 +141,11 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
       const docInvoiceDigits = String(doc.invoice_number || '').replace(/\D/g, '');
       const docClient = normalize(doc.clients?.company_name || doc.recipient || '');
       const docNeighborhood = normalize(doc.recipient_neighborhood || '');
+      const docCity = normalize(doc.recipient_city || '');
       if (invoice && !docInvoice.includes(invoice) && (!invoiceDigits || !docInvoiceDigits.includes(invoiceDigits))) return false;
       if (client && !docClient.includes(client)) return false;
       if (neighborhood && !docNeighborhood.includes(neighborhood)) return false;
+      if (city && !docCity.includes(city)) return false;
       return true;
     });
     return docs.sort((a: any, b: any) => docSort === 'alpha'
@@ -172,7 +199,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
     setVisibleDocCount(DOC_PAGE_SIZE);
     setDocScrollTop(0);
     window.requestAnimationFrame(() => docListRef.current?.scrollTo({ top: 0 }));
-  }, [debouncedDocFilters.invoice, debouncedDocFilters.client, debouncedDocFilters.neighborhood]);
+  }, [debouncedDocFilters.invoice, debouncedDocFilters.client, debouncedDocFilters.neighborhood, debouncedDocFilters.city]);
 
   const recalculateModalHeight = () => {
     const viewportHeight = window.innerHeight || 720;
@@ -358,14 +385,15 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
                   <Button type="button" variant={mode === 'manual' ? 'secondary' : 'ghost'} size="sm" className="flex-1" onClick={() => setMode('manual')}>Item manual</Button>
                 </div>
                 {mode === 'note' ? (
-                  <div className="flex min-h-0 flex-1 flex-col gap-3">
-                    <div className="grid grid-cols-3 gap-2">
+                   <div className="flex min-h-0 flex-1 flex-col gap-3">
+                    <div className="grid grid-cols-4 gap-2">
                       <div className="relative">
                         <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input value={docFilters.invoice} onChange={e => setDocFilters(f => ({ ...f, invoice: e.target.value }))} placeholder="Nº NF" className="pl-8" />
+                        <Input value={docFilters.invoice} onChange={e => setDocFilters(f => ({ ...f, invoice: e.target.value }))} placeholder="Nº NF" className="pl-8 h-8 text-xs" />
                       </div>
-                      <Input value={docFilters.client} onChange={e => setDocFilters(f => ({ ...f, client: e.target.value }))} placeholder="Cliente" />
-                      <Input value={docFilters.neighborhood} onChange={e => setDocFilters(f => ({ ...f, neighborhood: e.target.value }))} placeholder="Bairro" />
+                      <Input value={docFilters.client} onChange={e => setDocFilters(f => ({ ...f, client: e.target.value }))} placeholder="Cliente" className="h-8 text-xs" />
+                      <Input value={docFilters.neighborhood} onChange={e => setDocFilters(f => ({ ...f, neighborhood: e.target.value }))} placeholder="Bairro" className="h-8 text-xs" />
+                      <Input value={docFilters.city || ''} onChange={e => setDocFilters(f => ({ ...f, city: e.target.value }))} placeholder="Cidade" className="h-8 text-xs" />
                     </div>
                     <div className="flex justify-end gap-2">
                       <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={clearDocFilters}>
@@ -496,11 +524,36 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
           </div>
         )}
 
+        <div className="grid grid-cols-3 gap-2 py-2 border-b">
+          <div className="relative">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              placeholder="Filtrar descrição..."
+              className="h-8 pl-8 text-xs"
+              value={itemsFilter.description}
+              onChange={e => setItemsFilter(f => ({ ...f, description: e.target.value }))}
+            />
+          </div>
+          <Input
+            placeholder="Filtrar pedido..."
+            className="h-8 text-xs"
+            value={itemsFilter.order}
+            onChange={e => setItemsFilter(f => ({ ...f, order: e.target.value }))}
+          />
+          <Input
+            placeholder="Filtrar destinatário..."
+            className="h-8 text-xs"
+            value={itemsFilter.recipient}
+            onChange={e => setItemsFilter(f => ({ ...f, recipient: e.target.value }))}
+          />
+        </div>
+
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Descrição</TableHead>
               <TableHead>Pedido</TableHead>
+              <TableHead>Destinatário</TableHead>
               <TableHead>Qtd</TableHead>
               <TableHead>Paletes</TableHead>
               <TableHead>Peso</TableHead>
@@ -510,13 +563,16 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-4">Carregando...</TableCell></TableRow>
-            ) : items.length === 0 ? (
-              <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-4">Nenhum item adicionado</TableCell></TableRow>
-            ) : items.map(item => (
+              <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-4">Carregando...</TableCell></TableRow>
+            ) : filteredItems.length === 0 ? (
+              <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-4">Nenhum item encontrado</TableCell></TableRow>
+            ) : filteredItems.map(item => (
               <TableRow key={item.id}>
                 <TableCell className="text-sm font-medium">{item.item_description || '—'}</TableCell>
                 <TableCell className="text-sm text-muted-foreground">{item.orders?.order_number || '—'}</TableCell>
+                <TableCell className="text-[11px] text-muted-foreground truncate max-w-[120px]" title={(item as any).fiscal_documents?.recipient || '—'}>
+                  {(item as any).fiscal_documents?.recipient || '—'}
+                </TableCell>
                 <TableCell>{item.quantity}</TableCell>
                 <TableCell>{item.pallet_count}</TableCell>
                 <TableCell>{item.weight_kg || '—'}</TableCell>

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
@@ -14,7 +14,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
-import { FileText, Calculator, AlertTriangle, CheckCircle, Eye, Edit3 } from 'lucide-react';
+import { FileText, Calculator, AlertTriangle, CheckCircle, Eye, Edit3, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import FreightReviewDialog from '@/components/freight/FreightReviewDialog';
 
@@ -52,6 +52,28 @@ export default function CTeWorkbench({ loadId, loadNumber, destination, document
   const outboundDocs = useMemo(() => documents.filter(d => d.document_type === 'outbound'), [documents]);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [filters, setFilters] = useState({ invoice: '', recipient: '' });
+  const [debouncedFilters, setDebouncedFilters] = useState(filters);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => setDebouncedFilters(filters), 300);
+    return () => clearTimeout(timeout);
+  }, [filters]);
+
+  const normalize = (v: string) => v.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+  const filteredInboundDocs = useMemo(() => {
+    return inboundDocs.filter(d => {
+      const docInvoice = normalize(d.invoice_number || '');
+      const docRecipient = normalize(d.recipient || '');
+      const fInvoice = normalize(debouncedFilters.invoice);
+      const fRecipient = normalize(debouncedFilters.recipient);
+
+      if (fInvoice && !docInvoice.includes(fInvoice)) return false;
+      if (fRecipient && !docRecipient.includes(fRecipient)) return false;
+      return true;
+    });
+  }, [inboundDocs, debouncedFilters]);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [overrideValue, setOverrideValue] = useState('');
   const [overrideReason, setOverrideReason] = useState('');
@@ -67,10 +89,10 @@ export default function CTeWorkbench({ loadId, loadNumber, destination, document
   };
 
   const selectAll = () => {
-    if (selectedIds.size === inboundDocs.length) {
+    if (selectedIds.size === filteredInboundDocs.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(inboundDocs.map(d => d.id)));
+      setSelectedIds(new Set(filteredInboundDocs.map(d => d.id)));
     }
   };
 
@@ -219,11 +241,30 @@ export default function CTeWorkbench({ loadId, loadNumber, destination, document
         {inboundDocs.length > 0 && (
           <>
             <Separator />
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-muted-foreground font-medium">Selecione NF-es para novo CT-e</p>
-              <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={selectAll}>
-                {selectedIds.size === inboundDocs.length ? 'Desmarcar' : 'Selecionar'} Todos
-              </Button>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-muted-foreground font-medium">Selecione NF-es para novo CT-e</p>
+                <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={selectAll}>
+                  {selectedIds.size === filteredInboundDocs.length && filteredInboundDocs.length > 0 ? 'Desmarcar' : 'Selecionar'} Todos
+                </Button>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="relative">
+                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                  <Input 
+                    placeholder="Filtrar por Nota..." 
+                    className="h-8 pl-7 text-xs" 
+                    value={filters.invoice}
+                    onChange={e => setFilters(f => ({ ...f, invoice: e.target.value }))}
+                  />
+                </div>
+                <Input 
+                  placeholder="Filtrar por Destinatário..." 
+                  className="h-8 text-xs" 
+                  value={filters.recipient}
+                  onChange={e => setFilters(f => ({ ...f, recipient: e.target.value }))}
+                />
+              </div>
             </div>
             <Table>
               <TableHeader>
@@ -237,7 +278,7 @@ export default function CTeWorkbench({ loadId, loadNumber, destination, document
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {inboundDocs.map(d => (
+                {filteredInboundDocs.map(d => (
                   <TableRow key={d.id} className="cursor-pointer" onClick={() => toggleDoc(d.id)}>
                     <TableCell>
                       <Checkbox checked={selectedIds.has(d.id)} />
