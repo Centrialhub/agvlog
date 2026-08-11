@@ -250,7 +250,8 @@ export function useCancelCTe() {
       qc.invalidateQueries({ queryKey: ['cte_monitor'] });
       qc.invalidateQueries({ queryKey: ['cte_batches'] });
     },
-    onError: () => {
+    onError: (e: any) => {
+      toast.error('Falha ao cancelar CT-e', { description: e?.message });
       // Uma recusa fiscal também pode atualizar sefaz_status no proxy.
       qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
       qc.invalidateQueries({ queryKey: ['issued_ctes'] });
