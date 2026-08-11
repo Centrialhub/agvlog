@@ -113,6 +113,7 @@ export default function OperationalEvents() {
   const [respFilter, setRespFilter] = useState<'all' | 'deposito' | 'transporte'>('all');
   const [hasChatOnly, setHasChatOnly] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
   const [driverPanelSearch, setDriverPanelSearch] = useState('');
   const [expandedDriver, setExpandedDriver] = useState<string | null>(null);
   const [chatDriver, setChatDriver] = useState<{ id: string; name: string } | null>(null);
