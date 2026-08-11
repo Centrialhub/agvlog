@@ -1155,7 +1155,7 @@ export default function OperationalEvents() {
                   return (
                     <button
                       key={t}
-                      onClick={() => setTypeFilter(active ? 'all' : t)}
+                      onClick={() => { setTypeFilter(active ? 'all' : t); scrollToDetail(); }}
                       className={`text-xs rounded-full pl-2 pr-3 py-1.5 border flex items-center gap-2 transition-all ${active ? 'border-foreground shadow-sm' : 'hover:bg-muted'}`}
                       style={{ borderColor: active ? color : undefined }}
                     >
@@ -1180,7 +1180,7 @@ export default function OperationalEvents() {
                   return (
                     <button
                       key={`card-${t}`}
-                      onClick={() => setTypeFilter(active ? 'all' : t)}
+                      onClick={() => { setTypeFilter(active ? 'all' : t); scrollToDetail(); }}
                       className={`group relative rounded-lg border-2 bg-card p-3 text-left transition-all hover:shadow-md ${active ? 'shadow-md ring-2 ring-offset-1' : ''}`}
                       style={{ borderColor: color, ...(active ? { ['--tw-ring-color' as any]: color } : {}) }}
                       title={`Filtrar por ${EVENT_TYPE_LABELS[t as keyof typeof EVENT_TYPE_LABELS] || t}`}
