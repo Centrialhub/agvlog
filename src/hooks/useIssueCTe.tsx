@@ -249,7 +249,7 @@ export function useCancelCTe() {
         // mostrará o erro e o status local não será alterado para 'cancelled'
         // erroneamente, preservando o estado original para novas tentativas.
         const hubError = res?.hub?.error || res?.error;
-        const msg = hubError?.message || hubError?.technicalMessage || 'Cancelamento recusado pelo Hub Fiscal.';
+        const msg = hubError?.message || (hubError as any)?.technicalMessage || 'Cancelamento recusado pelo Hub Fiscal.';
         throw new Error(msg);
       }
       return res;
