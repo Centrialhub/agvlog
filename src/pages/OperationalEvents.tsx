@@ -458,7 +458,7 @@ export default function OperationalEvents() {
       const ws = XLSX.utils.aoa_to_sheet(aoa);
       // Merges (linhas em índice 0-based dentro do array `aoa`)
       ws['!merges'] = [
-        { s: { r: 0, c: 0 }, e: { r: 0, c: 14 } }, // título
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 15 } }, // título (estendido para 16 colunas)
         { s: { r: 2, c: 1 }, e: { r: 2, c: 2 } }, // Entregas (qtd + notas)
         { s: { r: 2, c: 10 }, e: { r: 2, c: 11 } }, // Produtos danificados
         { s: { r: 2, c: 12 }, e: { r: 2, c: 13 } }, // Falta de produtos
