@@ -122,7 +122,7 @@ export default function DriverDeliveries() {
   const { data: trip } = useActiveTrip(driver?.id);
 
   // Em produção, nunca usar dados demo: melhor mostrar lista vazia que poluir POD.
-  const isDemo = !trip && canUseDriverDemo && !import.meta.env.PROD;
+  const isDemo = !trip && canUseDriverDemo && !IS_PROD;
   const [demoStops, setDemoStops] = useState<any[]>(DEMO_STOPS_INITIAL);
   const effectiveTrip: any = trip || DEMO_TRIP;
 
@@ -248,7 +248,7 @@ export default function DriverDeliveries() {
 
   // Considera todos os status terminais (delivered, refused, returned, partial_delivery, failed, etc.)
   const completedStops = effectiveStops.filter(
-    (s) => isStopTerminal(s.status) || s.status === 'completed',
+    (s) => isStopTerminal(s.status) || s.status === 'completed' || s.status === 'delivered',
   );
 
   const resetForm = () => {
@@ -336,7 +336,7 @@ export default function DriverDeliveries() {
         setDemoStops((prev) =>
           prev.map((s) => {
             if (s.id !== eventForm.stop.id) return s;
-            if (def.finalAction && !def.needsOperatorReply) return { ...s, status: 'completed' };
+            if (def.finalAction && !def.needsOperatorReply) return { ...s, status: def.finalAction === 'delivered' ? 'completed' : def.finalAction };
             if (def.key === 'chegada_no_cliente' && s.status === 'pending') return { ...s, status: 'arrived' };
             return s;
           })
