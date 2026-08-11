@@ -16,7 +16,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Plus, AlertOctagon, CheckCircle, MessageSquare, Send, Truck, User, Building2, Package, Wifi, ListOrdered, X, CalendarIcon, Loader2, Inbox, AlertTriangle, RefreshCw, ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, ArrowUpToLine, Bookmark, BookmarkPlus, Trash2, Star, Download, ExternalLink } from 'lucide-react';
+import { Search, Plus, AlertOctagon, CheckCircle, MessageSquare, Send, Truck, User, Building2, Package, Wifi, ListOrdered, X, CalendarIcon, Loader2, Inbox, AlertTriangle, RefreshCw, ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, ArrowUpToLine, Bookmark, BookmarkPlus, Trash2, Star, Download, ExternalLink, MapPinned } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Switch } from '@/components/ui/switch';
@@ -1738,6 +1738,7 @@ export default function OperationalEvents() {
                 <SortHead k="event_type" label="Tipo" />
                 <SortHead k="severity" label="Severidade" />
                 <SortHead k="load_number" label="Carga" />
+                <TableHead>Parada</TableHead>
                 <SortHead k="client" label="Cliente" />
                 <SortHead k="driver" label="Motorista" />
                 <SortHead k="financial_impact" label="Impacto" />
@@ -1818,6 +1819,9 @@ export default function OperationalEvents() {
                   </TableCell>
                   <TableCell><Badge variant="outline" className={severityColor(e.severity)}>{SEVERITY_LABELS[e.severity] || e.severity}</Badge></TableCell>
                   <TableCell className="text-sm">{e.loads?.load_number || '—'}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {(e.report_details as any)?.stop_order ? `Parada ${(e.report_details as any).stop_order}` : '—'}
+                  </TableCell>
                   <TableCell className="text-sm">{e.clients?.company_name || '—'}</TableCell>
                   <TableCell className="text-sm">{e.drivers?.name || '—'}</TableCell>
                   <TableCell className="text-sm">{e.financial_impact ? `R$ ${e.financial_impact.toLocaleString('pt-BR')}` : '—'}</TableCell>
@@ -1935,6 +1939,11 @@ function EventDetailDrawer({ event, onClose, onResolve }: { event: OperationalEv
             <div className="p-5 space-y-3 border-b bg-muted/20">
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <InfoRow icon={<Package className="h-3.5 w-3.5" />} label="Carga" value={event.loads?.load_number || '—'} />
+                <InfoRow 
+                  icon={<MapPinned className="h-3.5 w-3.5" />} 
+                  label="Parada" 
+                  value={(event.report_details as any)?.stop_order ? `Parada ${(event.report_details as any).stop_order}` : '—'} 
+                />
                 <InfoRow icon={<Building2 className="h-3.5 w-3.5" />} label="Cliente" value={event.clients?.company_name || '—'} />
                 <InfoRow icon={<User className="h-3.5 w-3.5" />} label="Motorista" value={event.drivers?.name || '—'} />
                 <InfoRow icon={<Truck className="h-3.5 w-3.5" />} label="Impacto" value={event.financial_impact ? `R$ ${Number(event.financial_impact).toLocaleString('pt-BR')}` : '—'} />

@@ -94,6 +94,7 @@ const EVENTS: EventDef[] = [
   { key: 'coleta_realizada',    label: 'COLETA REALIZADA',    icon: Package,     category: 'informativo', requiresPhoto: true },
   { key: 'chegada_no_cliente',  label: 'CHEGADA NO CLIENTE',  icon: MapPinned,   category: 'informativo' },
   { key: 'cliente_estava_fora', label: 'CLIENTE ESTAVA FORA', icon: UserX,       category: 'informativo' },
+  { key: 'outros',              label: 'OUTROS',              icon: AlertTriangle, category: 'informativo' },
 ];
 
 function getEventDef(key: string) {
