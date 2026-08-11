@@ -39,8 +39,10 @@ export default function NewManualSettlementDialog({ open, onOpenChange, onCreate
     [selectedLoads],
   );
   useEffect(() => {
-    if (!driverId && selectedDriverIds.length === 1) setDriverId(selectedDriverIds[0]);
-  }, [driverId, selectedDriverIds]);
+    if (!driverId && selectedDriverIds.length === 1) {
+      setDriverId(selectedDriverIds[0]);
+    }
+  }, [selectedDriverIds, driverId]);
 
   const mixedDrivers = selectedDriverIds.length > 1;
   const canSubmit = !!driverId && selectedIds.length > 0 && !mixedDrivers && !create.isPending;
