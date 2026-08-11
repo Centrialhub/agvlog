@@ -345,9 +345,13 @@ Deno.serve(async (req) => {
         if (!payload.id) return json(400, { success: false, error: { code: 'MISSING_ID' } });
         const body = (payload.body || {}) as Record<string, unknown>;
         const justificativa = (body.justificativa || body.reason || body.motivo) as string | undefined;
-        // NFS-e cancelamento costuma exigir motivo, mas Hub v1 centraliza em `reason`.
+        
+        if (!justificativa || justificativa.trim().length < 15) {
+          return json(400, { success: false, error: { code: 'INVALID_JUSTIFICATION', message: 'Mínimo 15 caracteres.' } });
+        }
+
         const resolved = await resolveToken(payload.type || 'nfse', payload.emitterId);
-        const reason = (justificativa || '').trim();
+        const reason = justificativa.trim();
         const { status, data } = await callHub(
           'POST',
           '/hub_documents_cancel',
@@ -355,7 +359,30 @@ Deno.serve(async (req) => {
           { reason, justificativa: reason },
           resolved.token,
         );
-        return json(status, { success: status < 400, hub: data });
+
+        const hubError = (data as any)?.error;
+        const cancelRejected = status === 409 && (
+          hubError?.code === 'NOT_CANCELABLE' ||
+          /cancel_rejected|cannot be cancelled/i.test(String(hubError?.message || ''))
+        );
+
+        const rejectionMessage =
+          hubError?.technicalMessage ||
+          hubError?.message ||
+          (data as any)?.document?.message ||
+          'Cancelamento de NFS-e rejeitado';
+
+        if (payload.emissionId) {
+          await admin.from('hub_fiscal_emissions').update({
+            status: status < 400 ? 'cancelled' : 'cancel_rejected',
+            message: status < 400 ? 'NFS-e cancelada' : rejectionMessage,
+            cancel_reason: reason,
+            cancelled_at: status < 400 ? new Date().toISOString() : null,
+            last_response: data as any,
+          }).eq('id', payload.emissionId).eq('tenant_id', tenantId);
+        }
+
+        return json(cancelRejected ? 200 : status, { success: status < 400, hub: data });
       }
 
       case 'cce': {
