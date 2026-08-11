@@ -36,7 +36,7 @@ export default function DataAudit() {
 
   const critical = data.filter(d => d.severity === 'critical');
   const warnings = data.filter(d => d.severity === 'warning');
-  const infos = data.filter(d => d.severity === 'info');
+  const infos = data.filter(d => d.severity === 'info' || d.severity === 'success');
   const domains = Array.from(new Set(data.map(d => d.domain))).sort();
   const filtered = domainFilter === 'all' ? data : data.filter(d => d.domain === domainFilter);
 
