@@ -230,16 +230,27 @@ export function useCancelCTe() {
         anyDoc.emission_id || undefined,
         args.fiscalDocumentId
       );
-      if (res?.success !== false) {
+      if (res?.success === true) {
         await supabase
           .from('fiscal_documents')
-          .update({ status: 'cancelled', sefaz_status: 'cancelled', sefaz_message: args.justificativa } as any)
+          .update({
+            status: 'cancelled',
+            sefaz_status: 'cancelled',
+            sefaz_message: args.justificativa,
+          } as any)
           .eq('id', args.fiscalDocumentId);
         // Libera as NFs de entrada vinculadas — voltam a aparecer no CT-e Hub
         await supabase
           .from('fiscal_documents')
           .update({ cte_emitted_at: null, cte_emitted_outbound_id: null } as any)
           .eq('cte_emitted_outbound_id', args.fiscalDocumentId);
+      } else {
+        // Se res.success for false (mesmo com HTTP 200/cancelRejected), a UI já
+        // mostrará o erro e o status local não será alterado para 'cancelled'
+        // erroneamente, preservando o estado original para novas tentativas.
+        const hubError = res?.hub?.error || res?.error;
+        const msg = hubError?.message || (hubError as any)?.technicalMessage || 'Cancelamento recusado pelo Hub Fiscal.';
+        throw new Error(msg);
       }
       return res;
     },
