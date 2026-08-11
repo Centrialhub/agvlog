@@ -295,7 +295,7 @@ Deno.serve(async (req) => {
         const { status, data } = await callHub(
           'POST',
           '/hub_documents_cancel',
-          { id: payload.id },
+          { id: payload.id, type: payload.type || 'cte' },
           { reason, justificativa: reason },
           resolved.token,
         );
