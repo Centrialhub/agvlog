@@ -19,7 +19,7 @@ import {
   Phone, MessageSquare, Send, Percent, FileText, RotateCcw, Clock, User as UserIcon, Loader2
 } from 'lucide-react';
 
-const IS_PROD = import.meta.env.PROD;
+const IS_PROD = !canUseDriverDemo;
 import { cn } from '@/lib/utils';
 import SignaturePad from '@/components/driver/SignaturePad';
 import DemoBanner from '@/components/driver/DemoBanner';
