@@ -10,7 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { toast } from 'sonner';
-import { Save, CheckCircle2, XCircle, FileText, AlertTriangle, RotateCcw, Printer } from 'lucide-react';
+import { Save, CheckCircle2, XCircle, FileText, AlertTriangle, RotateCcw, Printer, Search } from 'lucide-react';
 import { Wand2 } from 'lucide-react';
 import { Info } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -151,6 +151,36 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
   const [savingAll, setSavingAll] = useState(false);
   const [detectingPayments, setDetectingPayments] = useState(false);
   const [dirty, setDirty] = useState<Set<string>>(new Set());
+  const [inboundFilters, setInboundFilters] = useState({ invoice: '', recipient: '', neighborhood: '', city: '' });
+  const [debouncedInboundFilters, setDebouncedInboundFilters] = useState(inboundFilters);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => setDebouncedInboundFilters(inboundFilters), 300);
+    return () => clearTimeout(timeout);
+  }, [inboundFilters]);
+
+  const normalizeStr = (v: string) => v.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+  const filteredDocs = useMemo(() => {
+    return inboundDocs.filter((d: any) => {
+      const docInvoice = normalizeStr(d.invoice_number || '');
+      const docRecipient = normalizeStr(d.recipient || '');
+      const docNeighborhood = normalizeStr(d.recipient_neighborhood || '');
+      const docCity = normalizeStr(d.recipient_city || '');
+
+      const fInvoice = normalizeStr(debouncedInboundFilters.invoice);
+      const fRecipient = normalizeStr(debouncedInboundFilters.recipient);
+      const fNeighborhood = normalizeStr(debouncedInboundFilters.neighborhood);
+      const fCity = normalizeStr(debouncedInboundFilters.city);
+
+      if (fInvoice && !docInvoice.includes(fInvoice)) return false;
+      if (fRecipient && !docRecipient.includes(fRecipient)) return false;
+      if (fNeighborhood && !docNeighborhood.includes(fNeighborhood)) return false;
+      if (fCity && !docCity.includes(fCity)) return false;
+      return true;
+    });
+  }, [inboundDocs, debouncedInboundFilters]);
+
   const [neModal, setNeModal] = useState<{ docId: string; reason: string } | null>(null);
   const [reModal, setReModal] = useState<{ docId: string; reason: string } | null>(null);
   const [cashToReceive, setCashToReceive] = useState<string>(
@@ -543,6 +573,37 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
       </div>
 
       {/* TABELA */}
+      {/* FILTROS NF */}
+      <div className="grid grid-cols-4 gap-2 px-3 py-2 border-b bg-muted/5">
+        <div className="relative">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+          <Input 
+            placeholder="Nº NF..." 
+            className="h-7 pl-7 text-[11px]" 
+            value={inboundFilters.invoice}
+            onChange={e => setInboundFilters(f => ({ ...f, invoice: e.target.value }))}
+          />
+        </div>
+        <Input 
+          placeholder="Destinatário..." 
+          className="h-7 text-[11px]" 
+          value={inboundFilters.recipient}
+          onChange={e => setInboundFilters(f => ({ ...f, recipient: e.target.value }))}
+        />
+        <Input 
+          placeholder="Bairro..." 
+          className="h-7 text-[11px]" 
+          value={inboundFilters.neighborhood}
+          onChange={e => setInboundFilters(f => ({ ...f, neighborhood: e.target.value }))}
+        />
+        <Input 
+          placeholder="Cidade..." 
+          className="h-7 text-[11px]" 
+          value={inboundFilters.city}
+          onChange={e => setInboundFilters(f => ({ ...f, city: e.target.value }))}
+        />
+      </div>
+
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>
@@ -564,13 +625,13 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {inboundDocs.length === 0 ? (
+            {filteredDocs.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={14} className="text-center text-xs text-muted-foreground py-6">
-                  Nenhuma nota fiscal vinculada a esta carga.
+                  {inboundDocs.length === 0 ? 'Nenhuma nota fiscal vinculada a esta carga.' : 'Nenhuma nota fiscal corresponde aos filtros.'}
                 </TableCell>
               </TableRow>
-            ) : inboundDocs.map((d: any) => {
+            ) : filteredDocs.map((d: any) => {
               const m = meta[d.id] || {};
               const isDelivered = d.status === 'delivered';
               const isNotDelivered = d.status === 'not_delivered' || m.ne;
