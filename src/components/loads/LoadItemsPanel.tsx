@@ -26,7 +26,7 @@ interface LoadItemsPanelProps {
 
 const DOC_PAGE_SIZE = 25;
 const FILTER_DEBOUNCE_MS = 250;
-const emptyDocFilters = { invoice: '', client: '', neighborhood: '' };
+const emptyDocFilters = { invoice: '', client: '', neighborhood: '', city: '' };
 const defaultDocPreference = { filters: emptyDocFilters, sort: 'recent' as 'recent' | 'alpha', visibleDocCount: DOC_PAGE_SIZE, scrollTop: 0 };
 const LOAD_ITEMS_SESSION_ONLY_KEY = 'agvlog:load-items-doc-session-only';
 const LOAD_ITEMS_SESSION_PREF_KEY = 'agvlog:load-items-doc-session-preference';
@@ -109,6 +109,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
     const invoiceDigits = debouncedDocFilters.invoice.replace(/\D/g, '');
     const client = normalize(debouncedDocFilters.client);
     const neighborhood = normalize(debouncedDocFilters.neighborhood);
+    const city = normalize(debouncedDocFilters.city || '');
     const currentDocIds = new Set(items.map(item => item.fiscal_document_id).filter(Boolean));
     const docs = fiscalDocs.filter((doc: any) => {
       if (currentDocIds.has(doc.id)) return false;
@@ -116,9 +117,11 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
       const docInvoiceDigits = String(doc.invoice_number || '').replace(/\D/g, '');
       const docClient = normalize(doc.clients?.company_name || doc.recipient || '');
       const docNeighborhood = normalize(doc.recipient_neighborhood || '');
+      const docCity = normalize(doc.recipient_city || '');
       if (invoice && !docInvoice.includes(invoice) && (!invoiceDigits || !docInvoiceDigits.includes(invoiceDigits))) return false;
       if (client && !docClient.includes(client)) return false;
       if (neighborhood && !docNeighborhood.includes(neighborhood)) return false;
+      if (city && !docCity.includes(city)) return false;
       return true;
     });
     return docs.sort((a: any, b: any) => docSort === 'alpha'
@@ -172,7 +175,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
     setVisibleDocCount(DOC_PAGE_SIZE);
     setDocScrollTop(0);
     window.requestAnimationFrame(() => docListRef.current?.scrollTo({ top: 0 }));
-  }, [debouncedDocFilters.invoice, debouncedDocFilters.client, debouncedDocFilters.neighborhood]);
+  }, [debouncedDocFilters.invoice, debouncedDocFilters.client, debouncedDocFilters.neighborhood, debouncedDocFilters.city]);
 
   const recalculateModalHeight = () => {
     const viewportHeight = window.innerHeight || 720;
