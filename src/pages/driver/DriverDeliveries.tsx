@@ -124,7 +124,7 @@ export default function DriverDeliveries() {
   const { data: trip } = useActiveTrip(driver?.id);
 
   // Em produção, nunca usar dados demo: melhor mostrar lista vazia que poluir POD.
-  const isDemo = !trip && canUseDriverDemo && !IS_PROD;
+  const isDemo = !trip && canUseDriverDemo && !IS_PROD && import.meta.env.MODE !== 'production';
   const [demoStops, setDemoStops] = useState<any[]>(DEMO_STOPS_INITIAL);
   const effectiveTrip: any = trip || DEMO_TRIP;
 

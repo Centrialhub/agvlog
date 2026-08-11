@@ -147,7 +147,7 @@ export default function DriverStops() {
     window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(destination)}`, '_blank');
   };
 
-  const isDemo = !activeTrip && canUseDriverDemo;
+  const isDemo = !activeTrip && canUseDriverDemo && import.meta.env.MODE !== 'production';
   const effectiveTrip: any = activeTrip || DEMO_TRIP;
   const effectiveStops: any[] = isDemo ? demoStops : (activeTrip ? (stops as any[]) : []);
 
