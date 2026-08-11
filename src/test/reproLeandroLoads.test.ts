@@ -4,6 +4,7 @@ type Driver = { id: string; user_id: string | null; active: boolean; tenant_id: 
 type DispatchTrip = { id: string; driver_id: string | null; tenant_id: string; status: string };
 type Load = {
   id: string;
+  load_number: string;
   driver_id: string | null;
   trip_id: string | null;
   status: string;
