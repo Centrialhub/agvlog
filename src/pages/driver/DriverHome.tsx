@@ -148,13 +148,12 @@ export default function DriverHome() {
 
   const loading = driverLoading || tripsLoading || loadsLoading;
 
-  // Em produção nunca mostra dados demo; só aparece se realmente não há viagem real.
+  // Demo mode only allowed in local development when no real data exists.
   const isDemo =
-    !IS_PROD &&
+    canUseDriverDemo &&
     (!driver || (activeTrips.length === 0 && standaloneLoads.length === 0)) &&
     demoActive &&
-    !loading &&
-    import.meta.env.MODE !== 'production';
+    !loading;
   const tripsToShow: any[] = isDemo ? [DEMO_TRIP] : activeTrips.filter(t => TRIP_ACTIVE_STATUSES.includes(t.status as any));
 
   // Constrói pontos reais do mapa a partir das paradas com lat/lng.
