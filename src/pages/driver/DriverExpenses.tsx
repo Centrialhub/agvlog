@@ -172,7 +172,7 @@ export default function DriverExpenses() {
     },
   });
 
-  const isDemo = !driver && canUseDriverDemo && import.meta.env.MODE !== 'production';
+  const isDemo = canUseDriverDemo && !driver;
   const effectiveExpenses = isDemo ? demoExpenses : expenses;
 
   return (

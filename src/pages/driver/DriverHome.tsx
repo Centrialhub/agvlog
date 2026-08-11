@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Truck, MapPin, Package, Clock, ArrowRight, ClipboardCheck, AlertTriangle, Receipt, FileText, Map } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import DemoBanner from '@/components/driver/DemoBanner';
+import { canUseDriverDemo } from '@/lib/driver/demoMode';
 import NoLoadsHelp from '@/components/driver/NoLoadsHelp';
 import { useState, useEffect } from 'react';
 import DriverDeliveryMap, { DeliveryPoint } from '@/components/driver/DriverDeliveryMap';
@@ -148,13 +149,12 @@ export default function DriverHome() {
 
   const loading = driverLoading || tripsLoading || loadsLoading;
 
-  // Em produção nunca mostra dados demo; só aparece se realmente não há viagem real.
+  // Demo mode only allowed in local development when no real data exists.
   const isDemo =
-    !IS_PROD &&
+    canUseDriverDemo &&
     (!driver || (activeTrips.length === 0 && standaloneLoads.length === 0)) &&
     demoActive &&
-    !loading &&
-    import.meta.env.MODE !== 'production';
+    !loading;
   const tripsToShow: any[] = isDemo ? [DEMO_TRIP] : activeTrips.filter(t => TRIP_ACTIVE_STATUSES.includes(t.status as any));
 
   // Constrói pontos reais do mapa a partir das paradas com lat/lng.
