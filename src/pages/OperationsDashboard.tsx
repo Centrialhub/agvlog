@@ -34,9 +34,9 @@ export default function OperationsDashboard() {
   const { data: stockItems = [] } = useStockItems();
   const navigate = useNavigate();
 
-  const pendingOrders = orders.filter(o => !['delivered', 'cancelled'].includes(o.status));
+  const pendingOrders = orders.filter(o => !['delivered', 'cancelled', 'returned', 'refused'].includes(o.status));
   const delayedOrders = orders.filter(o => {
-    if (!o.promised_date || o.status === 'delivered' || o.status === 'cancelled') return false;
+    if (!o.promised_date || ['delivered', 'cancelled', 'returned', 'refused'].includes(o.status)) return false;
     return new Date(o.promised_date + 'T23:59:59') < new Date();
   });
 
@@ -48,20 +48,22 @@ export default function OperationsDashboard() {
     }));
   }, [orders]);
 
-  const activeLoads = loads.filter(l => !['delivered', 'divergent'].includes(l.status));
+  // Cargas ativas: exclui concluídas e canceladas
+  const activeLoads = loads.filter(l => !['delivered', 'divergent', 'cancelled'].includes(l.status));
   const inTransitLoads = loads.filter(l => l.status === 'in_transit');
   const divergentLoads = loads.filter(l => l.status === 'divergent');
   const deliveredLoads = loads.filter(l => l.status === 'delivered').length;
+  // Taxa de sucesso considera o que foi FINALIZADO (entregue vs divergente/devolvido)
   const completedLoads = deliveredLoads + divergentLoads.length;
   const deliverySuccessRate = completedLoads > 0 ? Math.round((deliveredLoads / completedLoads) * 100) : 100;
 
-  // Incidents KPIs
-  const openIncidents = incidents.filter(i => !['closed', 'cancelled'].includes(i.status));
-  const criticalIncidents = incidents.filter(i => i.severity === 'critical' && !['closed', 'cancelled'].includes(i.status));
+  // Incidents KPIs: exclui cancelados e resolvidos
+  const openIncidents = incidents.filter(i => !['closed', 'cancelled', 'resolved'].includes(i.status));
+  const criticalIncidents = incidents.filter(i => (i.severity === 'critical' || i.severity === 'high') && !['closed', 'cancelled', 'resolved'].includes(i.status));
   const incidentCost = incidents.reduce((s, i) => s + (i.actual_cost || i.estimated_cost || 0), 0);
 
   // Maintenance KPIs
-  const openMaintenance = maintenanceOrders.filter(o => !['completed', 'cancelled'].includes(o.status));
+  const openMaintenance = maintenanceOrders.filter(o => !['completed', 'closed', 'cancelled'].includes(o.status));
   const maintenanceCost = maintenanceOrders.reduce((s, o) => s + (o.total_cost || 0), 0);
 
   // Employee KPIs
