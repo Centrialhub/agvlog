@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -32,12 +32,11 @@ export default function LoadPicker({ driverId, includeSettlementId, selectedIds,
   });
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   // Notify parent when list changes
-  useMemo(() => {
-    if (onLoadsChange) {
+  useEffect(() => {
+    if (onLoadsChange && loads.length > 0) {
       onLoadsChange(loads.map((l: any) => ({ id: l.id, driver_id: l.driver_id ?? null, driver_name: l.driver_name ?? null })));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loads]);
+  }, [loads, onLoadsChange]);
   const toggle = (id: string) => {
     if (selectedSet.has(id)) onChange(selectedIds.filter((x) => x !== id));
     else onChange([...selectedIds, id]);
