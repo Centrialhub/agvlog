@@ -112,8 +112,8 @@ export default function DriverIssues() {
         _event_type: form.event_type,
         _description: description || '',
         _severity: form.severity,
-        _stop_id: null,
-        _client_id: null,
+        _stop_id: form.details.stop_id || null,
+        _client_id: form.details.client_id || null,
       });
       if (error) throw error;
     },

@@ -192,7 +192,7 @@ export default function DriverHome() {
         />
       )}
 
-      {!loading && !isDemo && (!driver || (activeTrips.length === 0 && standaloneLoads.length === 0 && myLoads.length === 0)) && (
+      {!loading && !isDemo && (!driver || (activeTrips.length === 0 && standaloneLoads.length === 0)) && (
         <NoLoadsHelp
           driverLinked={!!driver}
           driverActive={!!driver && (driver as any).status !== 'inactive'}
