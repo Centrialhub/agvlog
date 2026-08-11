@@ -70,3 +70,43 @@ export function documentStatusLabel(s: string | null | undefined): string {
 export function isDocumentTerminal(s: string | null | undefined): boolean {
   return !!s && (TERMINAL_DOCUMENT_STATUSES as readonly string[]).includes(s);
 }
+
+/** 
+ * Status de documento de saída que ainda não são receita confirmada: 
+ * rascunhos e transmissões em andamento podem virar rejeição.
+ */
+export const PENDING_FISCAL_STATUSES = new Set([
+  'draft',
+  'rascunho',
+  'pending',
+  'pendente',
+  'transmitting',
+  'transmitindo',
+  'processing',
+  'processando',
+  'submitted',
+]);
+
+/** 
+ * Status fiscais que NÃO devem ser considerados no faturamento/receita.
+ */
+export const VOID_FISCAL_STATUSES = new Set([
+  'cancelled',
+  'canceled',
+  'cancelada',
+  'cancelado',
+  'rejected',
+  'rejeitada',
+  'rejeitado',
+  'denied',
+  'denegada',
+  'denegado',
+  'inutilizada',
+  'error',
+  'erro',
+  'failed',
+]);
+
+export function isVoidFiscalStatus(status?: string | null): boolean {
+  return VOID_FISCAL_STATUSES.has(String(status || '').trim().toLowerCase());
+}
