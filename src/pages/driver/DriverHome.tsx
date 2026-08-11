@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient as useTanstackQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useCurrentDriver, useActiveTrip } from '@/hooks/useCurrentDriver';
@@ -39,7 +39,7 @@ export default function DriverHome() {
   const { currentTenant } = useTenant();
   const { data: driver, isLoading: driverLoading } = useCurrentDriver();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  const queryClient = useTanstackQueryClient();
   const { data: autoTrip } = useActiveTrip(driver?.id);
   const checklist = useChecklistStatus(autoTrip?.id);
   const [demoActive, setDemoActive] = useState(true);
@@ -130,7 +130,13 @@ export default function DriverHome() {
           queryClient.invalidateQueries({ queryKey: ['driver_my_loads', driver.id] });
         },
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log(`[DriverHome] Realtime subscription for driver ${driver.id}: ${status}`);
+        if (status === 'SUBSCRIBED') {
+          queryClient.invalidateQueries({ queryKey: ['driver_my_loads', driver.id] });
+          queryClient.invalidateQueries({ queryKey: ['driver_my_trips', driver.id] });
+        }
+      });
     return () => {
       supabase.removeChannel(channel);
     };
@@ -148,7 +154,7 @@ export default function DriverHome() {
     (!driver || (activeTrips.length === 0 && standaloneLoads.length === 0)) &&
     demoActive &&
     !loading;
-  const tripsToShow: any[] = isDemo ? [DEMO_TRIP] : activeTrips;
+  const tripsToShow: any[] = isDemo ? [DEMO_TRIP] : activeTrips.filter(t => TRIP_ACTIVE_STATUSES.includes(t.status as any));
 
   // Constrói pontos reais do mapa a partir das paradas com lat/lng.
   const TERMINAL_STOP_STATUSES = new Set(['completed', 'delivered', 'refused', 'returned', 'failed', 'partial_delivery']);
@@ -186,7 +192,7 @@ export default function DriverHome() {
         />
       )}
 
-      {!loading && !isDemo && (!driver || (activeTrips.length === 0 && standaloneLoads.length === 0)) && (
+      {!loading && !isDemo && (!driver || (activeTrips.length === 0 && standaloneLoads.length === 0 && myLoads.length === 0)) && (
         <NoLoadsHelp
           driverLinked={!!driver}
           driverActive={!!driver && (driver as any).status !== 'inactive'}
