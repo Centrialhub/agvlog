@@ -361,14 +361,15 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
                   <Button type="button" variant={mode === 'manual' ? 'secondary' : 'ghost'} size="sm" className="flex-1" onClick={() => setMode('manual')}>Item manual</Button>
                 </div>
                 {mode === 'note' ? (
-                  <div className="flex min-h-0 flex-1 flex-col gap-3">
-                    <div className="grid grid-cols-3 gap-2">
+                   <div className="flex min-h-0 flex-1 flex-col gap-3">
+                    <div className="grid grid-cols-4 gap-2">
                       <div className="relative">
                         <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input value={docFilters.invoice} onChange={e => setDocFilters(f => ({ ...f, invoice: e.target.value }))} placeholder="Nº NF" className="pl-8" />
+                        <Input value={docFilters.invoice} onChange={e => setDocFilters(f => ({ ...f, invoice: e.target.value }))} placeholder="Nº NF" className="pl-8 h-8 text-xs" />
                       </div>
-                      <Input value={docFilters.client} onChange={e => setDocFilters(f => ({ ...f, client: e.target.value }))} placeholder="Cliente" />
-                      <Input value={docFilters.neighborhood} onChange={e => setDocFilters(f => ({ ...f, neighborhood: e.target.value }))} placeholder="Bairro" />
+                      <Input value={docFilters.client} onChange={e => setDocFilters(f => ({ ...f, client: e.target.value }))} placeholder="Cliente" className="h-8 text-xs" />
+                      <Input value={docFilters.neighborhood} onChange={e => setDocFilters(f => ({ ...f, neighborhood: e.target.value }))} placeholder="Bairro" className="h-8 text-xs" />
+                      <Input value={docFilters.city || ''} onChange={e => setDocFilters(f => ({ ...f, city: e.target.value }))} placeholder="Cidade" className="h-8 text-xs" />
                     </div>
                     <div className="flex justify-end gap-2">
                       <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={clearDocFilters}>
