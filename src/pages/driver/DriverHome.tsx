@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient as useTanstackQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useCurrentDriver, useActiveTrip } from '@/hooks/useCurrentDriver';
@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Truck, MapPin, Package, Clock, ArrowRight, ClipboardCheck, AlertTriangle, Receipt, FileText, Map } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import DemoBanner from '@/components/driver/DemoBanner';
+import { useQueryClient } from '@tanstack/react-query';
 import NoLoadsHelp from '@/components/driver/NoLoadsHelp';
 import { useState, useEffect } from 'react';
 import DriverDeliveryMap, { DeliveryPoint } from '@/components/driver/DriverDeliveryMap';
@@ -39,7 +40,7 @@ export default function DriverHome() {
   const { currentTenant } = useTenant();
   const { data: driver, isLoading: driverLoading } = useCurrentDriver();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  const queryClient = useTanstackQueryClient();
   const { data: autoTrip } = useActiveTrip(driver?.id);
   const checklist = useChecklistStatus(autoTrip?.id);
   const [demoActive, setDemoActive] = useState(true);
@@ -130,7 +131,13 @@ export default function DriverHome() {
           queryClient.invalidateQueries({ queryKey: ['driver_my_loads', driver.id] });
         },
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log(`[DriverHome] Realtime subscription for driver ${driver.id}: ${status}`);
+        if (status === 'SUBSCRIBED') {
+          queryClient.invalidateQueries({ queryKey: ['driver_my_loads', driver.id] });
+          queryClient.invalidateQueries({ queryKey: ['driver_my_trips', driver.id] });
+        }
+      });
     return () => {
       supabase.removeChannel(channel);
     };
