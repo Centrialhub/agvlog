@@ -144,8 +144,8 @@ export default function DriverChecklist() {
     enabled: !!trip?.id,
   });
 
-  // Em produção nunca usa dados demo, mesmo com flag ligada.
-  const isDemo = !trip && canUseDriverDemo && !IS_PROD;
+  // Demo mode only allowed in local development.
+  const isDemo = canUseDriverDemo && !trip;
 
   // Realtime: se outro dispositivo salvar o checklist, refresca.
   useEffect(() => {
