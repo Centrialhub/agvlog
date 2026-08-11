@@ -153,7 +153,8 @@ export default function DriverHome() {
     !IS_PROD &&
     (!driver || (activeTrips.length === 0 && standaloneLoads.length === 0)) &&
     demoActive &&
-    !loading;
+    !loading &&
+    import.meta.env.MODE !== 'production';
   const tripsToShow: any[] = isDemo ? [DEMO_TRIP] : activeTrips.filter(t => TRIP_ACTIVE_STATUSES.includes(t.status as any));
 
   // Constrói pontos reais do mapa a partir das paradas com lat/lng.
