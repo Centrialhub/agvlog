@@ -447,7 +447,11 @@ export default function LoadDetail() {
                   <Button
                     className="w-full"
                     onClick={() => createTrip.mutate()}
-                    disabled={createTrip.isPending}
+                    disabled={createTrip.isPending || (load.status === 'loading' && !!load.trip_id)}
+                  >
+                    {createTrip.isPending ? 'Despachando...' : 
+                     (load.status === 'loading' && !!load.trip_id) ? 'Carga já despachada' : 'Criar Viagem'}
+                  </Button>
                   >
                     {createTrip.isPending ? 'Criando viagem...' : `Criar Viagem com ${dispatchStops.filter(s => s.destination.trim()).length} Parada(s)`}
                   </Button>
