@@ -96,6 +96,14 @@ export const hubFiscal = {
       body: { justificativa },
     });
   },
+  
+  cancelNFSe(hubDocumentId: string, justificativa: string, emissionId?: string) {
+    return invoke({
+      action: 'cancel-nfse',
+      id: hubDocumentId,
+      emissionId,
+      body: { justificativa },
+    });
 
   cce(hubDocumentId: string, correcao: string) {
     return invoke({ action: 'cce', id: hubDocumentId, body: { correcao } });

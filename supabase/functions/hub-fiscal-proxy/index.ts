@@ -33,7 +33,7 @@ type Action =
   | 'emit' | 'get' | 'sync' | 'cancel' | 'cce'
   | 'email' | 'file' | 'query' | 'preview' | 'ping'
   | 'desacordo' | 'cent' | 'discard' | 'import'
-  | 'deliver' | 'links';
+  | 'deliver' | 'links' | 'cancel-nfse';
 
 interface ProxyRequest {
   action: Action;
@@ -340,6 +340,22 @@ Deno.serve(async (req) => {
         // `success: false` e mostra a orientação operacional ao usuário.
         return json(cancelRejected ? 200 : status, { success: status < 400, hub: data });
       }
+      
+      case 'cancel-nfse': {
+        if (!payload.id) return json(400, { success: false, error: { code: 'MISSING_ID' } });
+        const body = (payload.body || {}) as Record<string, unknown>;
+        const justificativa = (body.justificativa || body.reason || body.motivo) as string | undefined;
+        // NFS-e cancelamento costuma exigir motivo, mas Hub v1 centraliza em `reason`.
+        const resolved = await resolveToken(payload.type || 'nfse', payload.emitterId);
+        const reason = (justificativa || '').trim();
+        const { status, data } = await callHub(
+          'POST',
+          '/hub_documents_cancel',
+          { id: payload.id, type: 'nfse' },
+          { reason, justificativa: reason },
+          resolved.token,
+        );
+        return json(status, { success: status < 400, hub: data });
 
       case 'cce': {
         if (!payload.id) return json(400, { success: false, error: { code: 'MISSING_ID' } });
