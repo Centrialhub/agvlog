@@ -16,8 +16,10 @@ import {
   Package, CheckCircle, AlertTriangle, Truck, Camera, X, ImageIcon,
   ChevronRight, ChevronDown, Search, PenLine, FileSignature,
   Ban, AlertCircle, PackageX, MapPinned, UserX,
-  Phone, MessageSquare, Send, Percent, FileText, RotateCcw, Clock, User as UserIcon,
+  Phone, MessageSquare, Send, Percent, FileText, RotateCcw, Clock, User as UserIcon, Loader2
 } from 'lucide-react';
+
+const IS_PROD = import.meta.env.PROD;
 import { cn } from '@/lib/utils';
 import SignaturePad from '@/components/driver/SignaturePad';
 import DemoBanner from '@/components/driver/DemoBanner';
@@ -87,12 +89,12 @@ const EVENTS: EventDef[] = [
   { key: 'entregue',            label: 'ENTREGUE',            icon: CheckCircle, category: 'finalizador', finalAction: 'delivered', requiresReceiver: true, requiresPhoto: true, requiresSignature: true },
   { key: 'devolucao_parcial',   label: 'DEVOLUÇÃO PARCIAL',   icon: PackageX,    category: 'finalizador', finalAction: 'partial', requiresReceiver: true, showsItems: true, needsOperatorReply: true },
   { key: 'devolucao_total',     label: 'DEVOLUÇÃO TOTAL',     icon: Ban,         category: 'finalizador', finalAction: 'refused', showsItems: true, needsOperatorReply: true },
+  { key: 'chegada_no_cliente',  label: 'CHEGADA NO CLIENTE',  icon: MapPinned,   category: 'informativo' },
   { key: 'solicitar_desconto',  label: 'SOLICITAR DESCONTO',  icon: Percent,     category: 'informativo', showsDiscount: true, showsContact: true, needsOperatorReply: true },
   { key: 'atualizar_boleto',    label: 'ATUALIZAR BOLETO',    icon: FileText,    category: 'informativo', showsContact: true, needsOperatorReply: true },
   { key: 'avaria',              label: 'AVARIA',              icon: AlertCircle, category: 'informativo', requiresPhoto: true, showsItems: true },
   { key: 'cliente_recusou',     label: 'CLIENTE RECUSOU',     icon: PackageX,    category: 'informativo', showsItems: true },
   { key: 'coleta_realizada',    label: 'COLETA REALIZADA',    icon: Package,     category: 'informativo', requiresPhoto: true },
-  { key: 'chegada_no_cliente',  label: 'CHEGADA NO CLIENTE',  icon: MapPinned,   category: 'informativo' },
   { key: 'cliente_estava_fora', label: 'CLIENTE ESTAVA FORA', icon: UserX,       category: 'informativo' },
   { key: 'outros',              label: 'OUTROS',              icon: AlertTriangle, category: 'informativo' },
 ];
@@ -122,11 +124,11 @@ export default function DriverDeliveries() {
   const { data: trip } = useActiveTrip(driver?.id);
 
   // Em produção, nunca usar dados demo: melhor mostrar lista vazia que poluir POD.
-  const isDemo = !trip && canUseDriverDemo && !import.meta.env.PROD;
+  const isDemo = !trip && canUseDriverDemo && !IS_PROD;
   const [demoStops, setDemoStops] = useState<any[]>(DEMO_STOPS_INITIAL);
   const effectiveTrip: any = trip || DEMO_TRIP;
 
-  const [tab, setTab] = useState<'em_rota' | 'planejadas'>('em_rota');
+  const [tab, setTab] = useState<'em_rota' | 'concluidas'>('em_rota');
   const [search, setSearch] = useState('');
   // Detalhe da entrega
   const [detailStop, setDetailStop] = useState<any | null>(null);
@@ -233,9 +235,9 @@ export default function DriverDeliveries() {
     const q = search.trim().toLowerCase();
     let list = effectiveStops;
     if (tab === 'em_rota') {
-      list = list.filter((s) => s.status === 'arrived' || s.status === 'pending');
+      list = list.filter((s) => !isStopTerminal(s.status) && s.status !== 'completed');
     } else {
-      list = list.filter((s) => s.status === 'pending');
+      list = list.filter((s) => isStopTerminal(s.status) || s.status === 'completed');
     }
     if (!q) return list;
     return list.filter((s) => {
@@ -248,7 +250,7 @@ export default function DriverDeliveries() {
 
   // Considera todos os status terminais (delivered, refused, returned, partial_delivery, failed, etc.)
   const completedStops = effectiveStops.filter(
-    (s) => isStopTerminal(s.status) || s.status === 'completed',
+    (s) => isStopTerminal(s.status) || s.status === 'completed' || s.status === 'delivered',
   );
 
   const resetForm = () => {
@@ -336,7 +338,7 @@ export default function DriverDeliveries() {
         setDemoStops((prev) =>
           prev.map((s) => {
             if (s.id !== eventForm.stop.id) return s;
-            if (def.finalAction && !def.needsOperatorReply) return { ...s, status: 'completed' };
+            if (def.finalAction && !def.needsOperatorReply) return { ...s, status: def.finalAction === 'delivered' ? 'completed' : def.finalAction };
             if (def.key === 'chegada_no_cliente' && s.status === 'pending') return { ...s, status: 'arrived' };
             return s;
           })
@@ -584,8 +586,8 @@ export default function DriverDeliveries() {
       {/* Tabs */}
       <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
         <TabsList className="grid grid-cols-2 w-full h-10">
-          <TabsTrigger value="em_rota" className="text-xs">Em Rota</TabsTrigger>
-          <TabsTrigger value="planejadas" className="text-xs">Planejadas</TabsTrigger>
+          <TabsTrigger value="em_rota" className="text-xs">Em Rota ({filteredStops.length})</TabsTrigger>
+          <TabsTrigger value="concluidas" className="text-xs">Concluídas ({completedStops.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value={tab} className="mt-3 space-y-2">

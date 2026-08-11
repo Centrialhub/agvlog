@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useAuth } from '@/hooks/useAuth';
 import { useFleetPositions } from '@/hooks/usePositions';
-import { isBillableFiscalDoc, fiscalDocRevenue } from '@/lib/fiscal/documentStatus';
+import { isBillableFiscalDoc, fiscalDocRevenue, isVoidFiscalStatus } from '@/lib/fiscal/documentStatus';
 import { useFleetState, MovementState, stateColor, stateLabel, stateDotClass, formatStoppedDuration } from '@/hooks/useVehiclesState';
 import { useVehicles } from '@/hooks/useVehicles';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -333,27 +333,30 @@ export default function OperationsCenter() {
 
   // ── Computed Stats ──
   const stats = useMemo(() => {
-    const activeLoads = loads.filter((l: any) => !['delivered'].includes(l.status));
+    const activeLoads = loads.filter((l: any) => !['delivered', 'cancelled'].includes(l.status));
     const inTransit = loads.filter((l: any) => l.status === 'in_transit');
     const delivered = loads.filter((l: any) => l.status === 'delivered');
     const delayed = loads.filter((l: any) => {
-      if (l.status === 'delivered') return false;
+      if (l.status === 'delivered' || l.status === 'cancelled') return false;
       const hoursSince = (Date.now() - new Date(l.updated_at).getTime()) / 3600000;
       return hoursSince > 24;
     });
     const totalWeightActive = activeLoads.reduce((s: number, l: any) => s + (Number(l.total_weight_kg) || 0), 0);
     const totalPalletsActive = activeLoads.reduce((s: number, l: any) => s + (Number(l.total_pallet_count) || 0), 0);
 
-    const validDocs = fiscalDocs.filter((d: any) => isBillableFiscalDoc(d));
-    const nfes = validDocs.filter((d: any) => d.document_type === 'inbound');
-    const ctes = validDocs.filter((d: any) => d.document_type === 'outbound');
+    // Documentos válidos seguindo lógica fiscal centralizada
+    const nfes = fiscalDocs.filter((d: any) => d.document_type === 'inbound' && !isVoidFiscalStatus(d.status));
+    const ctes = fiscalDocs.filter((d: any) => d.document_type === 'outbound' && !isVoidFiscalStatus(d.status));
+    
     const totalNfeValue = nfes.reduce((s: number, d: any) => s + (Number(d.value) || 0), 0);
-    const totalFreight = ctes.reduce((s: number, d: any) => s + fiscalDocRevenue(d), 0);
+    // Receita de CT-e (confirmados): rascunhos/transmitindo não somam em faturamento real no dashboard
+    const totalFreight = ctes.filter(d => !['draft', 'pending', 'processing', 'submitted'].includes(d.status))
+      .reduce((s: number, d: any) => s + fiscalDocRevenue(d), 0);
     const totalCteValue = totalFreight;
 
     const activeDrivers = drivers.filter((d: any) => d.active);
     const driversWithVehicle = drivers.filter((d: any) => d.active && d.current_vehicle_id);
-    const openIncidents = incidents.filter((i: any) => !['closed', 'resolved'].includes(i.status));
+    const openIncidents = incidents.filter((i: any) => !['closed', 'resolved', 'cancelled'].includes(i.status));
     const criticalIncidents = openIncidents.filter((i: any) => i.severity === 'critical' || i.severity === 'high');
 
     return {

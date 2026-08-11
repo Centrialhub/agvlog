@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import {
   useOperationalEvents, useCreateOperationalEvent, useUpdateOperationalEvent,
   useOperationalEventsFiltered,
@@ -87,6 +87,12 @@ export default function OperationalEvents() {
   const { currentTenant } = useTenant();
   const { user } = useAuth();
   const { data: events = [], isLoading, isError, error, refetch, isFetching } = useOperationalEvents();
+
+  // Scroll callback para o botão da torre
+  const scrollToDetail = useCallback(() => {
+    document.getElementById('detalhamento-ocorrencias')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setTimeout(() => searchRef.current?.focus({ preventScroll: true }), 400);
+  }, []);
   const { data: loads = [] } = useLoads();
   const { data: clients = [] } = useClients();
   const createEvent = useCreateOperationalEvent();
@@ -376,29 +382,31 @@ export default function OperationalEvents() {
       // Linha 3: grupos
       aoa.push([
         'Motorista',
-        'Entregas', 'Entregas', 'Valor',
-        'Ocorrências',
-        'Entrega NÃO efetuada / motorista',
-        'Entrega NÃO efetuada',
-        'Baixa NÃO Efetuada (qtd)',
-        'Comprovantes NÃO Entregues',
-        'Devoluções efetuadas',
-        'Produtos danificados', 'Produtos danificados',
-        'Falta de produtos', 'Falta de produtos',
+        'Cargas', 'Notas', 'Valor Entregue (R$)',
+        'Ocorrências (Qtd)',
+        'Não efetuada (Motorista)',
+        'Não efetuada (Outros)',
+        'Baixa pendente',
+        'Canhoto pendente',
+        'Devoluções (Qtd)',
+        'Avaria (Qtd)', 'Avaria (R$)',
+        'Falta (Qtd)', 'Falta (R$)',
+        'Km Inicial', 'Km Final',
         'Observação',
       ]);
       // Linha 4: subcabeçalhos
       aoa.push([
         '',
-        'quantidade', 'Notas', 'entregue (R$)',
-        'NÃO efetuadas',
+        '', '', '',
         '',
         '',
         '',
         '',
         '',
-        'quantidade', 'Vr. total (R$)',
-        'No. de faltas', 'Vr. total (R$)',
+        '',
+        '', '',
+        '', '',
+        '', '',
         '',
       ]);
 
@@ -413,15 +421,16 @@ export default function OperationalEvents() {
         const ocorrencias = a.nao_efetuada_motorista + a.nao_efetuada + a.devolucoes + a.danif_qtd + a.falta_qtd;
         aoa.push([
           a.name,
-          ld.entregas || '', ld.notas || '', ld.valor || '',
-          ocorrencias || '',
-          a.nao_efetuada_motorista || '',
-          a.nao_efetuada || '',
-          a.baixa_nao_efetuada || '',
-          a.comprovantes_nao_entregues || '',
-          a.devolucoes || '',
-          a.danif_qtd || '', a.danif_valor || '',
-          a.falta_qtd || '', a.falta_valor || '',
+          ld.entregas || 0, ld.notas || 0, ld.valor || 0,
+          ocorrencias || 0,
+          a.nao_efetuada_motorista || 0,
+          a.nao_efetuada || 0,
+          a.baixa_nao_efetuada || 0,
+          a.comprovantes_nao_entregues || 0,
+          a.devolucoes || 0,
+          a.danif_qtd || 0, a.danif_valor || 0,
+          a.falta_qtd || 0, a.falta_valor || 0,
+          '', '', // Km Initial/Final
           a.observacao || '',
         ]);
         totals.entregas += ld.entregas; totals.notas += ld.notas; totals.valor += ld.valor;
@@ -441,13 +450,15 @@ export default function OperationalEvents() {
         totals.ocorrencias,
         totals.nao_efetuada_motorista, totals.nao_efetuada,
         totals.baixa, totals.comp, totals.devol,
-        totals.dq, totals.dv, totals.fq, totals.fv, '',
+        totals.dq, totals.dv, totals.fq, totals.fv,
+        '', '', // Km Total placeholders
+        '',
       ]);
 
       const ws = XLSX.utils.aoa_to_sheet(aoa);
       // Merges (linhas em índice 0-based dentro do array `aoa`)
       ws['!merges'] = [
-        { s: { r: 0, c: 0 }, e: { r: 0, c: 14 } }, // título
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 15 } }, // título (estendido para 16 colunas)
         { s: { r: 2, c: 1 }, e: { r: 2, c: 2 } }, // Entregas (qtd + notas)
         { s: { r: 2, c: 10 }, e: { r: 2, c: 11 } }, // Produtos danificados
         { s: { r: 2, c: 12 }, e: { r: 2, c: 13 } }, // Falta de produtos
@@ -788,25 +799,9 @@ export default function OperationalEvents() {
           <p className="text-sm text-muted-foreground">{openCount} abertas · {events.length} total · sincronia em tempo real com o app do motorista</p>
         </div>
         <div className="flex items-center gap-2">
-        <Button
-          variant="outline"
-          asChild
-        >
-          <a
-            href="#detalhamento-ocorrencias"
-            onClick={(e) => {
-              e.preventDefault();
-              const el = document.getElementById('detalhamento-ocorrencias');
-              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-              if (window.location.hash !== '#detalhamento-ocorrencias') {
-                window.history.pushState(null, '', '#detalhamento-ocorrencias');
-              }
-              focusSearch();
-            }}
-          >
-            <ListOrdered className="h-4 w-4 mr-2" /> Ir para detalhamento
-          </a>
-        </Button>
+          <Button variant="outline" size="sm" onClick={scrollToDetail}>
+            <ListOrdered className="h-4 w-4 mr-1.5" /> Ir para Detalhamento
+          </Button>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button><Plus className="h-4 w-4 mr-2" /> Nova Ocorrência</Button>
@@ -914,6 +909,7 @@ export default function OperationalEvents() {
                   <Label className="text-xs text-muted-foreground">Busca livre</Label>
                   <Search className="absolute left-2.5 top-[30px] h-4 w-4 text-muted-foreground" />
                   <Input
+                    ref={searchRef}
                     placeholder="Descrição, carga, motorista, cliente..."
                     value={search}
                     onChange={e => setSearch(e.target.value)}
@@ -1075,8 +1071,7 @@ export default function OperationalEvents() {
                 </div>
               </div>
 
-              {/* Atalhos rápidos de período */}
-              <div className="flex flex-wrap items-center gap-2 pt-2 border-t">
+              <div id="detalhamento-ocorrencias" className="flex flex-wrap items-center gap-2 pt-2 border-t">
                 <span className="text-[11px] text-muted-foreground uppercase tracking-wide">Período rápido:</span>
                 {[
                   { label: 'Hoje', from: startOfDay(new Date()) },
@@ -1160,7 +1155,7 @@ export default function OperationalEvents() {
                   return (
                     <button
                       key={t}
-                      onClick={() => setTypeFilter(active ? 'all' : t)}
+                      onClick={() => { setTypeFilter(active ? 'all' : t); scrollToDetail(); }}
                       className={`text-xs rounded-full pl-2 pr-3 py-1.5 border flex items-center gap-2 transition-all ${active ? 'border-foreground shadow-sm' : 'hover:bg-muted'}`}
                       style={{ borderColor: active ? color : undefined }}
                     >
@@ -1185,7 +1180,7 @@ export default function OperationalEvents() {
                   return (
                     <button
                       key={`card-${t}`}
-                      onClick={() => setTypeFilter(active ? 'all' : t)}
+                      onClick={() => { setTypeFilter(active ? 'all' : t); scrollToDetail(); }}
                       className={`group relative rounded-lg border-2 bg-card p-3 text-left transition-all hover:shadow-md ${active ? 'shadow-md ring-2 ring-offset-1' : ''}`}
                       style={{ borderColor: color, ...(active ? { ['--tw-ring-color' as any]: color } : {}) }}
                       title={`Filtrar por ${EVENT_TYPE_LABELS[t as keyof typeof EVENT_TYPE_LABELS] || t}`}
@@ -1374,6 +1369,7 @@ export default function OperationalEvents() {
                          setExpandedDriver(next);
                          setSearch(next ?? '');
                          setPage(1);
+                         if (next) scrollToDetail();
                        }}
                       className={cn(
                         'w-full grid grid-cols-[1fr_auto] items-center gap-3 py-3 px-1 text-left hover:bg-muted/40 transition-colors rounded-sm',
