@@ -73,6 +73,21 @@ export default function DriverIssues() {
     enabled: !!currentTenant && !!driver,
   });
 
+  const { data: stops = [] } = useQuery({
+    queryKey: ['driver_trip_stops_for_issues', trip?.id],
+    queryFn: async () => {
+      if (!trip?.id) return [];
+      const { data, error } = await supabase
+        .from('dispatch_stops')
+        .select('*, clients(company_name)')
+        .eq('dispatch_trip_id', trip.id)
+        .order('stop_order', { ascending: true });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!trip?.id,
+  });
+
   // Realtime: refletir mudanças (severidade, status, novas ocorrências) sem reabrir a tela.
   useEffect(() => {
     if (!driver?.id) return;
@@ -156,9 +171,41 @@ export default function DriverIssues() {
           <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
             <DialogHeader><DialogTitle>Nova Ocorrência</DialogTitle></DialogHeader>
             <div className="space-y-3">
+              {trip && (
+                <div>
+                  <Label className="text-xs">Parada / Cliente (opcional)</Label>
+                  <Select 
+                    value={form.details.stop_id || "none"} 
+                    onValueChange={v => {
+                      const stop = stops.find((s: any) => s.id === v);
+                      setForm(f => ({ 
+                        ...f, 
+                        details: { 
+                          ...f.details, 
+                          stop_id: v === "none" ? null : v,
+                          client_id: stop?.client_id || null,
+                          razao_social: stop?.clients?.company_name || f.details.razao_social
+                        } 
+                      }));
+                    }}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Selecione a parada..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Nenhuma específica</SelectItem>
+                      {stops.map((s: any) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.stop_order}. {s.clients?.company_name || s.destination}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div>
                 <Label className="text-xs">Tipo</Label>
-                <Select value={form.event_type} onValueChange={v => setForm(f => ({ ...f, event_type: v, details: {} }))}>
+                <Select value={form.event_type} onValueChange={v => setForm(f => ({ ...f, event_type: v, details: { ...f.details } }))}>
                   <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {ISSUE_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
