@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useAuth } from '@/hooks/useAuth';
 import { useFleetPositions } from '@/hooks/usePositions';
-import { isBillableFiscalDoc, fiscalDocRevenue } from '@/lib/fiscal/documentStatus';
+import { isBillableFiscalDoc, fiscalDocRevenue, isVoidFiscalStatus } from '@/lib/fiscal/documentStatus';
 import { useFleetState, MovementState, stateColor, stateLabel, stateDotClass, formatStoppedDuration } from '@/hooks/useVehiclesState';
 import { useVehicles } from '@/hooks/useVehicles';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
