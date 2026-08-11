@@ -1066,8 +1066,7 @@ export default function OperationalEvents() {
                 </div>
               </div>
 
-              {/* Atalhos rápidos de período */}
-              <div className="flex flex-wrap items-center gap-2 pt-2 border-t">
+              <div id="detalhamento-ocorrencias" className="flex flex-wrap items-center gap-2 pt-2 border-t">
                 <span className="text-[11px] text-muted-foreground uppercase tracking-wide">Período rápido:</span>
                 {[
                   { label: 'Hoje', from: startOfDay(new Date()) },
