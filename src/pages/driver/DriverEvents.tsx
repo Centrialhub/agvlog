@@ -153,7 +153,7 @@ export default function DriverEvents() {
     };
   }, [driver?.id, qc]);
 
-  const isDemo = !driver && demoActive;
+  const isDemo = canUseDriverDemo && !driver && demoActive;
   const events: DemoEvent[] = isDemo ? DEMO_EVENTS_INITIAL : realEvents;
 
   const filtered = useMemo(() => {
