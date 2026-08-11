@@ -224,39 +224,12 @@ export function useCancelCTe() {
         .maybeSingle();
       const anyDoc = doc as any;
       if (!anyDoc?.hub_document_id) throw new Error('CT-e ainda não transmitido');
-      let res: any;
-      try {
-        res = await hubFiscal.cancel(
-          anyDoc.hub_document_id,
-          args.justificativa.trim(),
-          anyDoc.emission_id || undefined,
-          args.fiscalDocumentId,
-        );
-      } catch (e) {
-        const raw = String((e as Error)?.message || e);
-        // O Hub rejeita novos pedidos quando a SEFAZ já negou o cancelamento.
-        if (/NOT_CANCELABLE|cannot be cancelled/i.test(raw)) {
-          const status = raw.match(/Status\s+([a-z_]+)\s+cannot/i)?.[1] || '';
-          throw new Error(
-            status === 'cancel_rejected'
-              ? 'A SEFAZ rejeitou o cancelamento anterior deste CT-e. Não é possível reenviar o pedido pelo Hub — verifique o motivo da rejeição na consulta do documento (prazo de 168h excedido, CT-e com MDF-e/evento vinculado ou já cancelado) e, se aplicável, emita uma CT-e de anulação/substituição.'
-              : `Este CT-e não pode ser cancelado no estado atual${status ? ` (${status})` : ''}.`,
-          );
-        }
-        throw e;
-      }
-      if (res?.success === false) {
-        const hubError = res?.hub?.error || res?.error;
-        const raw = [hubError?.code, hubError?.technicalMessage || hubError?.message]
-          .filter(Boolean)
-          .join(': ');
-        if (/NOT_CANCELABLE|cancel_rejected|cannot be cancelled/i.test(raw)) {
-          throw new Error(
-            'Este CT-e já possui uma rejeição de cancelamento registrada. Consulte o motivo exibido no status do documento; um novo pedido igual não é aceito pelo Hub.',
-          );
-        }
-        throw new Error(raw || 'O cancelamento foi recusado pela SEFAZ.');
-      }
+      const res = await hubFiscal.cancel(
+        anyDoc.hub_document_id,
+        args.justificativa.trim(),
+        anyDoc.emission_id || undefined,
+        args.fiscalDocumentId
+      );
       if (res?.success !== false) {
         await supabase
           .from('fiscal_documents')
@@ -277,7 +250,8 @@ export function useCancelCTe() {
       qc.invalidateQueries({ queryKey: ['cte_monitor'] });
       qc.invalidateQueries({ queryKey: ['cte_batches'] });
     },
-    onError: () => {
+    onError: (e: any) => {
+      toast.error('Falha ao cancelar CT-e', { description: e?.message });
       // Uma recusa fiscal também pode atualizar sefaz_status no proxy.
       qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
       qc.invalidateQueries({ queryKey: ['issued_ctes'] });
