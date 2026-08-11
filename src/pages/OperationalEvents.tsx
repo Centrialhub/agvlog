@@ -421,15 +421,16 @@ export default function OperationalEvents() {
         const ocorrencias = a.nao_efetuada_motorista + a.nao_efetuada + a.devolucoes + a.danif_qtd + a.falta_qtd;
         aoa.push([
           a.name,
-          ld.entregas || '', ld.notas || '', ld.valor || '',
-          ocorrencias || '',
-          a.nao_efetuada_motorista || '',
-          a.nao_efetuada || '',
-          a.baixa_nao_efetuada || '',
-          a.comprovantes_nao_entregues || '',
-          a.devolucoes || '',
-          a.danif_qtd || '', a.danif_valor || '',
-          a.falta_qtd || '', a.falta_valor || '',
+          ld.entregas || 0, ld.notas || 0, ld.valor || 0,
+          ocorrencias || 0,
+          a.nao_efetuada_motorista || 0,
+          a.nao_efetuada || 0,
+          a.baixa_nao_efetuada || 0,
+          a.comprovantes_nao_entregues || 0,
+          a.devolucoes || 0,
+          a.danif_qtd || 0, a.danif_valor || 0,
+          a.falta_qtd || 0, a.falta_valor || 0,
+          '', '', // Km Initial/Final
           a.observacao || '',
         ]);
         totals.entregas += ld.entregas; totals.notas += ld.notas; totals.valor += ld.valor;
