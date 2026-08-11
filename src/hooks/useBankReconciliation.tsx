@@ -99,6 +99,37 @@ export function useBankTransactions(bankAccountId: string | null, periodStart: s
   });
 }
 
+export function useCreateManualTransaction() {
+  const { currentTenant } = useTenant();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      bank_account_id: string;
+      posted_at: string;
+      description: string;
+      amount: number;
+      transaction_type: 'credit' | 'debit';
+      document_number?: string;
+    }) => {
+      const { data, error } = await supabase.from('bank_transactions').insert({
+        tenant_id: currentTenant!.id,
+        bank_account_id: payload.bank_account_id,
+        posted_at: payload.posted_at,
+        description: payload.description,
+        amount: payload.amount,
+        transaction_type: payload.transaction_type,
+        document_number: payload.document_number || null,
+        reconciliation_status: 'unmatched',
+      } as any).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['bank_transactions'] });
+    },
+  });
+}
+
 export interface FinancialObligation {
   id: string;
   tenant_id: string;
