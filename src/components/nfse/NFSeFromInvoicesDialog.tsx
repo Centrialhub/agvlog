@@ -72,6 +72,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
   const [insurerEndorsement, setInsurerEndorsement] = useState('');
   const [insuredAmount, setInsuredAmount] = useState<number>(0);
   const [insurancePremium, setInsurancePremium] = useState<number>(0);
+  const [observacoes, setObservacoes] = useState('');
 
   const suppliers = useMemo(() => clients.filter((c: any) => c.is_supplier), [clients]);
   const clientList = useMemo(() => clients.filter((c: any) => c.is_client !== false), [clients]);
@@ -81,6 +82,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
     setStep(1);
     setSelected({});
     setDescricao('');
+    setObservacoes('');
     setServiceValues({});
     const defEm = emitters.find(e => e.active && e.is_default) || emitters.find(e => e.active);
     setEmitterId(defEm?.id || '');
@@ -273,6 +275,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
           access_key: d.access_key,
         })),
         fiscal_document_ids: fdIds,
+        notes: observacoes.trim() || undefined,
       } as any);
 
       toast.success(`RPS ${created.rps_number} criado — enviando ao Hub Fiscal…`);
@@ -430,6 +433,9 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
                       return next;
                     });
                     setStep(2);
+                    // Preenche observações automaticamente ao avançar
+                    const nfList = selectedDocs.map((d: any) => d.invoice_number || d.access_key?.slice(-9)).join(', ');
+                    setObservacoes(`NFS-e referente a(s) NF ${nfList}`);
                   }}
                   disabled={!canAdvance}
                 >
@@ -524,6 +530,15 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
                 <Label>Discriminação dos Serviços</Label>
                 <Textarea rows={4} value={descricao} onChange={e => setDescricao(e.target.value)}
                   placeholder={`Prestação de serviço de transporte referente a ${selectedDocs.length} NF(s)…`} />
+              </div>
+              <div className="col-span-6">
+                <Label>Observações / Notas</Label>
+                <Textarea 
+                  rows={2} 
+                  value={observacoes} 
+                  onChange={e => setObservacoes(e.target.value)}
+                  placeholder="Observações que constarão na nota…"
+                />
               </div>
             </div>
 

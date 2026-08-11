@@ -160,7 +160,8 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
         cliente_bairro: doc.recipient_neighborhood || prev.cliente_bairro,
         reference_number: doc.invoice_number || prev.reference_number,
         valor_servicos: num(doc.freight_value || doc.value || 0),
-        description: `Serviço de transporte ref. NF ${doc.invoice_number || ''}`
+        description: `Serviço de transporte ref. NF ${doc.invoice_number || ''}`,
+        notes: `NFS-e referente a(s) NF ${doc.invoice_number || ''}`
       }));
 
       if (num(doc.freight_value || doc.value || 0) > 0) {
