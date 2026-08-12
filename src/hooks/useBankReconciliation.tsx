@@ -75,6 +75,7 @@ export interface BankTransaction {
   document_number: string | null;
   counterparty_name: string | null;
   reconciliation_status: 'unmatched' | 'suggested' | 'matched' | 'ignored' | 'manual_review';
+  cost_center: string | null;
 }
 
 export function useBankTransactions(bankAccountId: string | null, periodStart: string, periodEnd: string) {
@@ -110,6 +111,7 @@ export function useCreateManualTransaction() {
       amount: number;
       transaction_type: 'credit' | 'debit';
       document_number?: string;
+      cost_center?: string;
     }) => {
       const { data, error } = await supabase.from('bank_transactions').insert({
         tenant_id: currentTenant!.id,
@@ -119,6 +121,7 @@ export function useCreateManualTransaction() {
         amount: payload.amount,
         transaction_type: payload.transaction_type,
         document_number: payload.document_number || null,
+        cost_center: payload.cost_center || null,
         reconciliation_status: 'unmatched',
       } as any).select().single();
       if (error) throw error;

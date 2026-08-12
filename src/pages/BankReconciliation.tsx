@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
-import { Landmark, Upload, RefreshCw, Play, Check, X, Link2, Plus, Calendar } from 'lucide-react';
+import { Landmark, Upload, RefreshCw, Play, Check, X, Link2, Plus, Calendar, Tag } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   useBankAccounts, useCreateBankAccount, useBankTransactions, useFinancialObligations,
@@ -20,6 +20,7 @@ import {
 import {
   parseWorkbook, buildParsedRows, computeFileHash, type ColumnMapping,
 } from '@/lib/bankStatementParser';
+import { useCostCenters } from '@/hooks/useCostCenters';
 
 const OBLIGATION_TYPE_LABEL: Record<string, string> = {
   receivable: 'Recebível',
@@ -346,6 +347,7 @@ function ImportStatementDialog({ accountId, periodStart, periodEnd }: { accountI
               <MappingSelect label="Saída (débito)" value={mapping.outflow || ''} onChange={v => setMapping(m => ({ ...m, outflow: v }))} headers={headers} />
               <MappingSelect label="Documento" value={mapping.document || ''} onChange={v => setMapping(m => ({ ...m, document: v }))} headers={headers} />
               <MappingSelect label="Saldo" value={mapping.balance || ''} onChange={v => setMapping(m => ({ ...m, balance: v }))} headers={headers} />
+              <MappingSelect label="Centro de Custo" value={mapping.costCenter || ''} onChange={v => setMapping(m => ({ ...m, costCenter: v }))} headers={headers} />
             </div>
           )}
           {headers.length > 0 && (
@@ -356,12 +358,13 @@ function ImportStatementDialog({ accountId, periodStart, periodEnd }: { accountI
           {preview.length > 0 && (
             <div className="max-h-60 overflow-auto border rounded">
               <Table>
-                <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Descrição</TableHead><TableHead className="text-right">Valor</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Descrição</TableHead><TableHead>Centro de Custo</TableHead><TableHead className="text-right">Valor</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {preview.map((p, i) => (
                     <TableRow key={i}>
                       <TableCell className="text-xs">{new Date(p.posted_at).toLocaleDateString('pt-BR')}</TableCell>
                       <TableCell className="text-xs truncate max-w-[300px]">{p.description}</TableCell>
+                      <TableCell className="text-xs">{p.cost_center || '-'}</TableCell>
                       <TableCell className="text-right text-xs">{fmt(p.amount)}</TableCell>
                     </TableRow>
                   ))}
@@ -390,8 +393,10 @@ function NewManualTransactionDialog({ accountId }: { accountId: string }) {
     amount: '',
     type: 'debit' as 'credit' | 'debit',
     document_number: '',
+    cost_center: '',
   });
   const create = useCreateManualTransaction();
+  const { data: costCenters = [] } = useCostCenters();
 
   const reset = () => setForm({
     posted_at: todayIso(),
@@ -399,6 +404,7 @@ function NewManualTransactionDialog({ accountId }: { accountId: string }) {
     amount: '',
     type: 'debit',
     document_number: '',
+    cost_center: '',
   });
 
   const handleSubmit = () => {
@@ -413,6 +419,7 @@ function NewManualTransactionDialog({ accountId }: { accountId: string }) {
       amount: finalAmount,
       transaction_type: form.type,
       document_number: form.document_number,
+      cost_center: form.cost_center,
     }, {
       onSuccess: () => {
         toast({ title: 'Lançamento manual criado' });
@@ -488,7 +495,25 @@ function NewManualTransactionDialog({ accountId }: { accountId: string }) {
               />
             </div>
           </div>
+          <div className="space-y-2">
+            <Label>Centro de Custo</Label>
+            <Select
+              value={form.cost_center}
+              onValueChange={v => setForm(f => ({ ...f, cost_center: v }))}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione um centro de custo (opcional)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Nenhum</SelectItem>
+                {costCenters.map(cc => (
+                  <SelectItem key={cc} value={cc}>{cc}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
+
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
           <Button
@@ -535,17 +560,18 @@ function ExtratoTab({ transactions, suggested, obligations }: { transactions: Ba
     <Card><CardContent className="p-0">
       <Table>
         <TableHeader><TableRow>
-          <TableHead>Data</TableHead><TableHead>Descrição</TableHead><TableHead className="text-right">Valor</TableHead>
+          <TableHead>Data</TableHead><TableHead>Descrição</TableHead><TableHead>C. Custo</TableHead><TableHead className="text-right">Valor</TableHead>
           <TableHead>Status</TableHead><TableHead>Candidato</TableHead><TableHead>Ações</TableHead>
         </TableRow></TableHeader>
         <TableBody>
-          {transactions.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-8">Sem transações no período.</TableCell></TableRow>}
+          {transactions.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-8">Sem transações no período.</TableCell></TableRow>}
           {transactions.map(t => {
             const s = suggMap.get(t.id);
             return (
               <TableRow key={t.id}>
                 <TableCell className="text-xs">{new Date(t.posted_at).toLocaleDateString('pt-BR')}</TableCell>
                 <TableCell className="text-xs max-w-[380px] truncate">{t.description}</TableCell>
+                <TableCell className="text-xs">{t.cost_center || '-'}</TableCell>
                 <TableCell className={`text-right text-xs ${t.amount < 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(t.amount)}</TableCell>
                 <TableCell><Badge variant={t.reconciliation_status === 'matched' ? 'default' : 'secondary'} className="text-[10px]">{STATUS_LABEL[t.reconciliation_status] || t.reconciliation_status}</Badge></TableCell>
                 <TableCell className="text-xs">

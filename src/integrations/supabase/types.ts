@@ -568,6 +568,7 @@ export type Database = {
           amount: number
           balance_after: number | null
           bank_account_id: string
+          cost_center: string | null
           counterparty_name: string | null
           created_at: string
           description: string | null
@@ -588,6 +589,7 @@ export type Database = {
           amount: number
           balance_after?: number | null
           bank_account_id: string
+          cost_center?: string | null
           counterparty_name?: string | null
           created_at?: string
           description?: string | null
@@ -608,6 +610,7 @@ export type Database = {
           amount?: number
           balance_after?: number | null
           bank_account_id?: string
+          cost_center?: string | null
           counterparty_name?: string | null
           created_at?: string
           description?: string | null
@@ -10995,6 +10998,7 @@ export type Database = {
           bank_account_id: string | null
           category: string
           competence_date: string | null
+          cost_center: string | null
           created_at: string
           created_by: string | null
           description: string | null
@@ -11026,6 +11030,7 @@ export type Database = {
           bank_account_id?: string | null
           category?: string
           competence_date?: string | null
+          cost_center?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -11057,6 +11062,7 @@ export type Database = {
           bank_account_id?: string | null
           category?: string
           competence_date?: string | null
+          cost_center?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -11132,6 +11138,7 @@ export type Database = {
           attachment_url: string | null
           bank_account_id: string
           bank_transaction_id: string | null
+          cost_center: string | null
           created_at: string
           created_by: string | null
           id: string
@@ -11146,6 +11153,7 @@ export type Database = {
           attachment_url?: string | null
           bank_account_id: string
           bank_transaction_id?: string | null
+          cost_center?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -11160,6 +11168,7 @@ export type Database = {
           attachment_url?: string | null
           bank_account_id?: string
           bank_transaction_id?: string | null
+          cost_center?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -11983,6 +11992,7 @@ export type Database = {
           client_id: string | null
           client_invoice_id: string | null
           closing_report_id: string | null
+          cost_center: string | null
           created_at: string
           created_by: string | null
           description: string | null
@@ -12005,6 +12015,7 @@ export type Database = {
           client_id?: string | null
           client_invoice_id?: string | null
           closing_report_id?: string | null
+          cost_center?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -12027,6 +12038,7 @@ export type Database = {
           client_id?: string | null
           client_invoice_id?: string | null
           closing_report_id?: string | null
+          cost_center?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -12052,6 +12064,7 @@ export type Database = {
           attachment_url: string | null
           bank_account_id: string
           bank_transaction_id: string | null
+          cost_center: string | null
           created_at: string
           created_by: string | null
           id: string
@@ -12066,6 +12079,7 @@ export type Database = {
           attachment_url?: string | null
           bank_account_id: string
           bank_transaction_id?: string | null
+          cost_center?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -12080,6 +12094,7 @@ export type Database = {
           attachment_url?: string | null
           bank_account_id?: string
           bank_transaction_id?: string | null
+          cost_center?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
