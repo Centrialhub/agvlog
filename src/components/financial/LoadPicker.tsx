@@ -59,18 +59,20 @@ export default function LoadPicker({ driverId, includeSettlementId, selectedIds,
       <div className="rounded-md border overflow-hidden">
         <div className="overflow-x-auto overflow-y-auto max-h-[45vh] min-h-[200px]">
           <Table>
-            <TableHeader className="sticky top-0 bg-background z-10 shadow-sm">
-              <TableRow>
-                <TableHead className="w-8 sticky left-0 bg-background z-20"><Checkbox checked={allSelected} onCheckedChange={toggleAll} /></TableHead>
-              <TableHead>Romaneio</TableHead>
-              <TableHead>Data</TableHead>
-              <TableHead>Origem → Destino</TableHead>
-              <TableHead>Motorista</TableHead>
-              <TableHead className="text-right">Notas</TableHead>
-              <TableHead className="text-right">Peso</TableHead>
-              <TableHead className="text-right">Valor</TableHead>
-              <TableHead className="text-right">Frete</TableHead>
-                <TableHead>Status</TableHead>
+            <TableHeader className="sticky top-0 bg-background z-30 shadow-sm">
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="w-12 sticky left-0 bg-background z-40 border-r text-center">
+                  <Checkbox checked={allSelected} onCheckedChange={toggleAll} />
+                </TableHead>
+                <TableHead className="whitespace-nowrap">Romaneio</TableHead>
+                <TableHead className="whitespace-nowrap">Data</TableHead>
+                <TableHead className="whitespace-nowrap">Origem → Destino</TableHead>
+                <TableHead className="whitespace-nowrap">Motorista</TableHead>
+                <TableHead className="text-right whitespace-nowrap">Notas</TableHead>
+                <TableHead className="text-right whitespace-nowrap">Peso</TableHead>
+                <TableHead className="text-right whitespace-nowrap">Valor</TableHead>
+                <TableHead className="text-right whitespace-nowrap">Frete</TableHead>
+                <TableHead className="whitespace-nowrap">Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
