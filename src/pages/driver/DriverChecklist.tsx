@@ -9,8 +9,6 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ClipboardCheck, Save } from 'lucide-react';
 
-const IS_PROD = import.meta.env.PROD;
-
 const PRE_TRIP_ITEMS = [
   'Pneus em bom estado',
   'Nível de óleo verificado',

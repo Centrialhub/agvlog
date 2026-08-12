@@ -68,9 +68,7 @@ export default function DriverJourney() {
   const addEvent = useMutation({
     mutationFn: async (eventType: string) => {
       if (!trip || !currentTenant) {
-        // Demo
-        setDemoEvents((prev) => [...prev, { id: 'd' + Date.now(), event_type: eventType, event_at: new Date().toISOString() }]);
-        return;
+        throw new Error('Sem viagem ativa. Aguarde o despacho da carga pela operação.');
       }
       const { error } = await supabase.rpc('driver_create_event', {
         _trip_id: trip.id,
