@@ -77,6 +77,8 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
   const [insuredAmount, setInsuredAmount] = useState<number>(0);
   const [insurancePremium, setInsurancePremium] = useState<number>(0);
   const [observacoes, setObservacoes] = useState('');
+  const [manualTomador, setManualTomador] = useState<any>(null);
+  const [isEditingTomador, setIsEditingTomador] = useState(false);
 
   const suppliers = useMemo(() => clients.filter((c: any) => c.is_supplier), [clients]);
   const clientList = useMemo(() => clients.filter((c: any) => c.is_client !== false), [clients]);
@@ -88,6 +90,8 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
     setDescricao('');
     setObservacoes('');
     setServiceValues({});
+    setManualTomador(null);
+    setIsEditingTomador(false);
     const defEm = emitters.find(e => e.active && e.is_default) || emitters.find(e => e.active);
     if (defEm) {
       setEmitterId(defEm.id);
@@ -230,6 +234,18 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
     };
   }, [selectedDocs, tomadorMode, clients]);
 
+  // Sincroniza o manualTomador quando o tomador derivado muda e o usuário NÃO está editando manualmente
+  useEffect(() => {
+    if (!isEditingTomador && tomador) {
+      setManualTomador(tomador);
+    }
+  }, [tomador, isEditingTomador]);
+
+  const setManualField = (k: string, v: any) => {
+    setIsEditingTomador(true);
+    setManualTomador((f: any) => ({ ...f, [k]: v }));
+  };
+
   const allSameTomador = useMemo(() => {
     if (selectedDocs.length < 2) return true;
     const key = tomadorMode === 'remetente' ? 'remitter_cnpj' : 'recipient_cnpj';
@@ -241,11 +257,12 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
 
   const handleEmit = async () => {
     if (!emitterId) { toast.error('Selecione o emitente fiscal'); return; }
-    if (!tomador?.cnpj) { toast.error('Tomador sem CNPJ — cadastre o cliente/fornecedor'); return; }
-    if (!tomador.municipio_cod) { toast.error('Tomador sem código IBGE do município — complete o cadastro do cliente'); return; }
-    if (!tomador.cep) { toast.error('Tomador sem CEP válido (8 dígitos) — complete o cadastro do cliente'); return; }
-    if (!tomador.uf) { toast.error('Tomador sem UF — complete o cadastro do cliente'); return; }
-    if (!tomador.endereco || !tomador.bairro) { toast.error('Tomador sem logradouro/bairro — complete o cadastro do cliente'); return; }
+    const currentTomador = manualTomador || tomador;
+    if (!currentTomador?.cnpj) { toast.error('Tomador sem CNPJ — cadastre o cliente/fornecedor'); return; }
+    if (!currentTomador.municipio_cod) { toast.error('Tomador sem código IBGE do município — complete o cadastro do cliente'); return; }
+    if (!currentTomador.cep) { toast.error('Tomador sem CEP válido (8 dígitos) — complete o cadastro do cliente'); return; }
+    if (!currentTomador.uf) { toast.error('Tomador sem UF — complete o cadastro do cliente'); return; }
+    if (!currentTomador.endereco || !currentTomador.bairro) { toast.error('Tomador sem logradouro/bairro — complete o cadastro do cliente'); return; }
     if (totalServicos <= 0) { toast.error('Valor de serviços deve ser maior que zero'); return; }
     if (!insuranceCheck.ok) { toast.error(`Seguro: ${insuranceCheck.messages.join(' ')}`); return; }
 
@@ -261,21 +278,21 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
         emitter_id: emitterId,
         regime_tributario: regimeTributario,
         issue_date: issueDate,
-        cliente_id: tomador.cliente_id,
-        cliente_nome: tomador.nome,
-        cliente_cnpj: tomador.cnpj,
-        cliente_ie: tomador.ie || null,
-        cliente_im: tomador.im || null,
-        cliente_email: tomador.email || null,
-        cliente_telefone: tomador.telefone || null,
-        cliente_numero: tomador.numero || null,
-        cliente_complemento: tomador.complemento || null,
-        cliente_endereco: tomador.endereco,
-        cliente_bairro: tomador.bairro,
-        cliente_municipio: tomador.municipio,
-        cliente_uf: tomador.uf,
-        cliente_cep: tomador.cep || null,
-        cliente_cod_municipio: tomador.municipio_cod,
+        cliente_id: currentTomador.cliente_id,
+        cliente_nome: currentTomador.nome,
+        cliente_cnpj: currentTomador.cnpj,
+        cliente_ie: currentTomador.ie || null,
+        cliente_im: currentTomador.im || null,
+        cliente_email: currentTomador.email || null,
+        cliente_telefone: currentTomador.telefone || null,
+        cliente_numero: currentTomador.numero || null,
+        cliente_complemento: currentTomador.complemento || null,
+        cliente_endereco: currentTomador.endereco,
+        cliente_bairro: currentTomador.bairro,
+        cliente_municipio: currentTomador.municipio,
+        cliente_uf: currentTomador.uf,
+        cliente_cep: currentTomador.cep || null,
+        cliente_cod_municipio: currentTomador.municipio_cod,
         description,
         aliquota_iss: aliquotaIss,
         iss_retido: issRetido,
@@ -541,11 +558,90 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
 
         {step === 3 && (
           <div className="space-y-4">
-            <div className="rounded-md border bg-muted/30 p-3 text-sm space-y-1">
-              <div className="font-semibold">Tomador do serviço</div>
-              <div>{tomador?.nome} — CNPJ {tomador?.cnpj}</div>
-              {tomador?.endereco && <div className="text-muted-foreground">{tomador.endereco}, {tomador.bairro} — {tomador.municipio}/{tomador.uf}</div>}
-              <div className="text-xs text-muted-foreground pt-1">Baseado em {selectedDocs.length} NF(s) — total R$ {totalServicos.toFixed(2)}</div>
+            <div className="rounded-md border bg-muted/30 p-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <div className="font-semibold flex items-center gap-2">
+                    Tomador do serviço
+                    {isEditingTomador && <Badge variant="outline" className="text-[10px] h-4">Editado</Badge>}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Baseado em {selectedDocs.length} NF(s) — total R$ {totalServicos.toFixed(2)}
+                  </div>
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-7 text-xs" 
+                  onClick={() => setIsEditingTomador(!isEditingTomador)}
+                >
+                  {isEditingTomador ? 'Visualizar Resumo' : 'Editar Dados'}
+                </Button>
+              </div>
+
+              {!isEditingTomador ? (
+                <div className="text-sm space-y-1">
+                  <div className="font-medium">{manualTomador?.nome || tomador?.nome} — CNPJ {manualTomador?.cnpj || tomador?.cnpj}</div>
+                  {(manualTomador?.endereco || tomador?.endereco) && (
+                    <div className="text-muted-foreground text-xs">
+                      {manualTomador?.endereco || tomador?.endereco}, {manualTomador?.numero || tomador?.numero} — {manualTomador?.bairro || tomador?.bairro}
+                      <br />
+                      {manualTomador?.municipio || tomador?.municipio}/{manualTomador?.uf || tomador?.uf} — CEP {manualTomador?.cep || tomador?.cep}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-6 gap-3 pt-2">
+                  <div className="col-span-4">
+                    <Label className="text-[10px] uppercase">Razão Social / Nome</Label>
+                    <Input className="h-8 text-xs" value={manualTomador?.nome || ''} onChange={e => setManualField('nome', e.target.value)} />
+                  </div>
+                  <div className="col-span-2">
+                    <Label className="text-[10px] uppercase">CNPJ / CPF</Label>
+                    <Input className="h-8 text-xs" value={manualTomador?.cnpj || ''} onChange={e => setManualField('cnpj', e.target.value)} />
+                  </div>
+                  <div className="col-span-4">
+                    <Label className="text-[10px] uppercase">Endereço (Logradouro)</Label>
+                    <Input className="h-8 text-xs" value={manualTomador?.endereco || ''} onChange={e => setManualField('endereco', e.target.value)} />
+                  </div>
+                  <div>
+                    <Label className="text-[10px] uppercase">Número</Label>
+                    <Input className="h-8 text-xs" value={manualTomador?.numero || ''} onChange={e => setManualField('numero', e.target.value)} />
+                  </div>
+                  <div>
+                    <Label className="text-[10px] uppercase">UF</Label>
+                    <Input className="h-8 text-xs" value={manualTomador?.uf || ''} maxLength={2} onChange={e => setManualField('uf', e.target.value)} />
+                  </div>
+                  <div className="col-span-2">
+                    <Label className="text-[10px] uppercase">Bairro</Label>
+                    <Input className="h-8 text-xs" value={manualTomador?.bairro || ''} onChange={e => setManualField('bairro', e.target.value)} />
+                  </div>
+                  <div className="col-span-2">
+                    <Label className="text-[10px] uppercase">Cidade</Label>
+                    <Input className="h-8 text-xs" value={manualTomador?.municipio || ''} onChange={e => setManualField('municipio', e.target.value)} />
+                  </div>
+                  <div>
+                    <Label className="text-[10px] uppercase">CEP</Label>
+                    <Input className="h-8 text-xs" value={manualTomador?.cep || ''} maxLength={9} onChange={e => setManualField('cep', e.target.value)} />
+                  </div>
+                  <div>
+                    <Label className="text-[10px] uppercase">Cód. IBGE</Label>
+                    <Input className="h-8 text-xs" value={manualTomador?.municipio_cod || ''} maxLength={7} onChange={e => setManualField('municipio_cod', e.target.value)} />
+                  </div>
+                  <div className="col-span-2">
+                    <Label className="text-[10px] uppercase">Inscrição Estadual</Label>
+                    <Input className="h-8 text-xs" value={manualTomador?.ie || ''} onChange={e => setManualField('ie', e.target.value)} />
+                  </div>
+                  <div className="col-span-2">
+                    <Label className="text-[10px] uppercase">E-mail</Label>
+                    <Input className="h-8 text-xs" value={manualTomador?.email || ''} onChange={e => setManualField('email', e.target.value)} />
+                  </div>
+                  <div className="col-span-2">
+                    <Label className="text-[10px] uppercase">Telefone</Label>
+                    <Input className="h-8 text-xs" value={manualTomador?.telefone || ''} onChange={e => setManualField('telefone', e.target.value)} />
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-6 gap-3">
