@@ -9,6 +9,7 @@ export type ParsedRow = {
   balance_after?: number | null;
   normalized_key: string;
   raw: Record<string, any>;
+  cost_center?: string | null;
 };
 
 export type ColumnMapping = {
@@ -19,6 +20,7 @@ export type ColumnMapping = {
   outflow?: string;
   document?: string;
   balance?: string;
+  costCenter?: string;
 };
 
 export function normalizeBrNumber(input: any): number | null {
@@ -201,6 +203,7 @@ export function buildParsedRows(rows: Record<string, any>[], map: ColumnMapping,
     const description = String(r[map.description] ?? '');
     const document_number = map.document ? String(r[map.document] ?? '') || null : null;
     const balance_after = map.balance ? normalizeBrNumber(r[map.balance]) : null;
+    const cost_center = map.costCenter ? String(r[map.costCenter] ?? '') || null : null;
     const normalized_key = [
       bankAccountId,
       iso.slice(0, 10),
@@ -214,6 +217,7 @@ export function buildParsedRows(rows: Record<string, any>[], map: ColumnMapping,
       amount,
       document_number,
       balance_after,
+      cost_center,
       normalized_key,
       raw: r,
     });
