@@ -94,10 +94,10 @@ export default function LoadPicker({ driverId, includeSettlementId, selectedIds,
                     onCheckedChange={() => { if (!blocked) toggle(l.id); }}
                   />
                 </TableCell>
-                <TableCell className="font-medium">{l.load_number ?? '—'}</TableCell>
-                <TableCell>{l.load_date ?? '—'}</TableCell>
+                <TableCell className="font-medium whitespace-nowrap">{l.load_number ?? '—'}</TableCell>
+                <TableCell className="whitespace-nowrap">{l.load_date ?? '—'}</TableCell>
                 <TableCell className="max-w-[200px] truncate" title={[l.origin, l.destination].filter(Boolean).join(' → ')}>{[l.origin, l.destination].filter(Boolean).join(' → ') || '—'}</TableCell>
-                <TableCell>{l.driver_name ?? '—'}</TableCell>
+                <TableCell className="whitespace-nowrap">{l.driver_name ?? '—'}</TableCell>
                 <TableCell className="text-right">{l.invoice_count ?? 0}</TableCell>
                 <TableCell className="text-right">{fmtNum(l.total_weight_kg, 0)} kg</TableCell>
                 <TableCell className="text-right">{fmtMoney(l.gross_cargo_value)}</TableCell>
