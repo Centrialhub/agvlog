@@ -147,8 +147,8 @@ export default function DriverStops() {
     window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(destination)}`, '_blank');
   };
 
-  const isDemo = canUseDriverDemo && !activeTrip;
-  const effectiveTrip: any = activeTrip || DEMO_TRIP;
+  const isDemo = canUseDriverDemo && !activeTrip && !driver;
+  const effectiveTrip: any = activeTrip || (isDemo ? DEMO_TRIP : null);
   const effectiveStops: any[] = isDemo ? demoStops : (activeTrip ? (stops as any[]) : []);
 
   return (
@@ -156,7 +156,7 @@ export default function DriverStops() {
       <div>
         <h1 className="text-lg font-bold">Paradas</h1>
         <p className="text-xs text-muted-foreground">
-          Carga {effectiveTrip.loads?.load_number || '—'} · {effectiveStops.length} parada(s)
+          Carga {effectiveTrip?.loads?.load_number || '—'} · {effectiveStops.length} parada(s)
         </p>
       </div>
 
@@ -167,7 +167,13 @@ export default function DriverStops() {
         />
       )}
 
-      {effectiveStops.length === 0 ? (
+      {!effectiveTrip && !isDemo ? (
+        <Card>
+          <CardContent className="py-6 text-center">
+            <p className="text-sm text-muted-foreground">Nenhuma parada definida nesta viagem.</p>
+          </CardContent>
+        </Card>
+      ) : effectiveStops.length === 0 ? (
         <Card>
           <CardContent className="py-6 text-center">
             <p className="text-sm text-muted-foreground">Nenhuma parada definida nesta viagem.</p>

@@ -95,7 +95,7 @@ export default function DriverJourney() {
     onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
   });
 
-  const isDemo = canUseDriverDemo && !trip;
+  const isDemo = canUseDriverDemo && !trip && !driver;
   const effectiveEvents = isDemo ? demoEvents : events;
 
   const handleEventClick = (eventType: string) => {
@@ -138,7 +138,7 @@ export default function DriverJourney() {
         />
       )}
 
-      {(trip || isDemo) && (
+      {(trip || isDemo) ? (
         <>
           {/* Checklist warnings */}
           {!isDemo && !checklist.isLoading && !checklist.preCompleted && (
@@ -231,6 +231,13 @@ export default function DriverJourney() {
             </Card>
           )}
         </>
+      ) : (
+        <Card>
+          <CardContent className="py-6 text-center">
+            <Clock className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+            <p className="text-sm text-muted-foreground">Seu veículo ainda não possui uma viagem ativa.</p>
+          </CardContent>
+        </Card>
       )}
     </div>
   );
