@@ -118,10 +118,10 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl, a
     console.warn('[NFSeBuilder] Data de emissão não informada.');
   }
   if (!doc?.cod_servico) {
-    throw new Error('Código do serviço (item da lista LC 116, ex. 11.04) é obrigatório para NFS-e');
+    console.warn('[NFSeBuilder] Código do serviço (item da lista LC 116, ex. 11.04) não informado. Enviando sem para aguardar retorno do Hub.');
   }
   if (money(doc?.valor_servicos) <= 0) {
-    throw new Error('Valor dos serviços deve ser maior que zero');
+    console.warn('[NFSeBuilder] Valor dos serviços deve ser maior que zero. Enviando rascunho incompleto.');
   }
 
   const integrationId = attempt > 0 ? `${doc.id}-r${attempt}` : String(doc.id);
