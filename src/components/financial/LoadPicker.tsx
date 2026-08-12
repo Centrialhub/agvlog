@@ -56,11 +56,12 @@ export default function LoadPicker({ driverId, includeSettlementId, selectedIds,
       <div className="text-xs text-muted-foreground">
         {isLoading ? 'Carregando romaneios…' : `${loads.length} romaneio(s) disponível(is) · ${selectedIds.length} selecionado(s)`}
       </div>
-      <div className="rounded-md border max-h-[380px] overflow-y-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-8"><Checkbox checked={allSelected} onCheckedChange={toggleAll} /></TableHead>
+      <div className="rounded-md border overflow-hidden">
+        <div className="overflow-x-auto overflow-y-auto max-h-[380px]">
+          <Table>
+            <TableHeader className="sticky top-0 bg-background z-10 shadow-sm">
+              <TableRow>
+                <TableHead className="w-8 sticky left-0 bg-background z-20"><Checkbox checked={allSelected} onCheckedChange={toggleAll} /></TableHead>
               <TableHead>Romaneio</TableHead>
               <TableHead>Data</TableHead>
               <TableHead>Origem → Destino</TableHead>
@@ -69,10 +70,10 @@ export default function LoadPicker({ driverId, includeSettlementId, selectedIds,
               <TableHead className="text-right">Peso</TableHead>
               <TableHead className="text-right">Valor</TableHead>
               <TableHead className="text-right">Frete</TableHead>
-              <TableHead>Status</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
             {loads.length === 0 && !isLoading && (
               <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-6">Nenhum romaneio disponível.</TableCell></TableRow>
             )}
@@ -82,32 +83,33 @@ export default function LoadPicker({ driverId, includeSettlementId, selectedIds,
                 return (
                 <TableRow
                   key={l.id}
-                  className={`hover:bg-accent ${blocked ? 'opacity-50' : 'cursor-pointer'}`}
+                  className={`hover:bg-accent/80 transition-colors ${blocked ? 'opacity-50' : 'cursor-pointer'} ${selectedSet.has(l.id) ? 'bg-primary/5 hover:bg-primary/10' : 'bg-background'}`}
                   onClick={() => { if (!blocked) toggle(l.id); }}
                   title={blocked ? 'Romaneio de outro motorista' : undefined}
                 >
-                <TableCell onClick={(e) => e.stopPropagation()}>
-                  <Checkbox
+                  <TableCell onClick={(e) => e.stopPropagation()} className="sticky left-0 bg-inherit z-10 border-r">
+                    <Checkbox
                     checked={selectedSet.has(l.id)}
                     disabled={blocked}
                     onCheckedChange={() => { if (!blocked) toggle(l.id); }}
                   />
                 </TableCell>
-                <TableCell className="font-medium">{l.load_number ?? '—'}</TableCell>
-                <TableCell>{l.load_date ?? '—'}</TableCell>
-                <TableCell className="max-w-xs truncate">{[l.origin, l.destination].filter(Boolean).join(' → ') || '—'}</TableCell>
-                <TableCell>{l.driver_name ?? '—'}</TableCell>
+                <TableCell className="font-medium whitespace-nowrap">{l.load_number ?? '—'}</TableCell>
+                <TableCell className="whitespace-nowrap">{l.load_date ?? '—'}</TableCell>
+                <TableCell className="max-w-[200px] truncate" title={[l.origin, l.destination].filter(Boolean).join(' → ')}>{[l.origin, l.destination].filter(Boolean).join(' → ') || '—'}</TableCell>
+                <TableCell className="whitespace-nowrap">{l.driver_name ?? '—'}</TableCell>
                 <TableCell className="text-right">{l.invoice_count ?? 0}</TableCell>
-                <TableCell className="text-right">{fmtNum(l.total_weight_kg, 0)} kg</TableCell>
-                <TableCell className="text-right">{fmtMoney(l.gross_cargo_value)}</TableCell>
-                <TableCell className="text-right">{fmtMoney(l.freight_amount)}</TableCell>
-                <TableCell><Badge variant="outline" className="text-[10px]">{l.status ?? '—'}</Badge></TableCell>
+                <TableCell className="text-right whitespace-nowrap">{fmtNum(l.total_weight_kg, 0)} kg</TableCell>
+                <TableCell className="text-right whitespace-nowrap">{fmtMoney(l.gross_cargo_value)}</TableCell>
+                <TableCell className="text-right whitespace-nowrap">{fmtMoney(l.freight_amount)}</TableCell>
+                <TableCell><Badge variant="outline" className="text-[10px] whitespace-nowrap">{l.status ?? '—'}</Badge></TableCell>
                 </TableRow>
                 );
               })()
             ))}
           </TableBody>
         </Table>
+        </div>
       </div>
     </div>
   );
