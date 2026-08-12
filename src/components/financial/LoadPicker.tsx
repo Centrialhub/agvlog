@@ -89,13 +89,13 @@ export default function LoadPicker({ driverId, includeSettlementId, selectedIds,
                   onClick={() => { if (!blocked) toggle(l.id); }}
                   title={blocked ? 'Romaneio de outro motorista' : undefined}
                 >
-                  <TableCell onClick={(e) => e.stopPropagation()} className="sticky left-0 bg-inherit z-10 border-r">
+                  <TableCell onClick={(e) => e.stopPropagation()} className="sticky left-0 bg-inherit z-20 border-r text-center">
                     <Checkbox
-                    checked={selectedSet.has(l.id)}
-                    disabled={blocked}
-                    onCheckedChange={() => { if (!blocked) toggle(l.id); }}
-                  />
-                </TableCell>
+                      checked={selectedSet.has(l.id)}
+                      disabled={blocked}
+                      onCheckedChange={() => { if (!blocked) toggle(l.id); }}
+                    />
+                  </TableCell>
                 <TableCell className="font-medium whitespace-nowrap">{l.load_number ?? '—'}</TableCell>
                 <TableCell className="whitespace-nowrap">{l.load_date ?? '—'}</TableCell>
                 <TableCell className="max-w-[200px] truncate" title={[l.origin, l.destination].filter(Boolean).join(' → ')}>{[l.origin, l.destination].filter(Boolean).join(' → ') || '—'}</TableCell>
