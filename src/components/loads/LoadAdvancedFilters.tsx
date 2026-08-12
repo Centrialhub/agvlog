@@ -91,6 +91,10 @@ const countApplied = (v: LoadAdvancedFiltersValue): number => {
   if (v.romaneioTypes.length) n++;
   if (v.smManager) n++;
   if (v.smRelease) n++;
+  if (v.remitter) n++;
+  if (v.client) n++;
+  if (v.city) n++;
+  if (v.supplier) n++;
   return n;
 };
 
@@ -185,7 +189,24 @@ export default function LoadAdvancedFilters({ value, onChange, drivers, vehicles
 
       <CollapsibleContent className="px-3 pb-3 pt-1 border-t border-border space-y-4">
         {/* Identificação */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div className="space-y-1">
+            <Label className="text-[11px] text-muted-foreground">Remetente</Label>
+            <Input value={value.remitter} onChange={e => set('remitter', e.target.value)} className="h-8 text-xs" placeholder="Nome do remetente" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-[11px] text-muted-foreground">Cliente</Label>
+            <Input value={value.client} onChange={e => set('client', e.target.value)} className="h-8 text-xs" placeholder="Nome do cliente" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-[11px] text-muted-foreground">Município</Label>
+            <Input value={value.city} onChange={e => set('city', e.target.value)} className="h-8 text-xs" placeholder="Cidade de destino" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-[11px] text-muted-foreground">Fornecedor</Label>
+            <Input value={value.supplier} onChange={e => set('supplier', e.target.value)} className="h-8 text-xs" placeholder="Nome do fornecedor" />
+          </div>
+
           <div className="space-y-1">
             <Label className="text-[11px] text-muted-foreground">Romaneio de Expedição</Label>
             <Input value={value.loadNumber} onChange={e => set('loadNumber', e.target.value)} className="h-8 text-xs" placeholder="Nº do romaneio" />
