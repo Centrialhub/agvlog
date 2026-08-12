@@ -19,53 +19,12 @@ import {
   Phone, MessageSquare, Send, Percent, FileText, RotateCcw, Clock, User as UserIcon, Loader2
 } from 'lucide-react';
 
-const IS_PROD = !canUseDriverDemo;
+const IS_PROD = import.meta.env.PROD;
 import { cn } from '@/lib/utils';
 import SignaturePad from '@/components/driver/SignaturePad';
-import DemoBanner from '@/components/driver/DemoBanner';
-import { canUseDriverDemo } from '@/lib/driver/demoMode';
 import { isStopTerminal } from '@/lib/status/stopStatus';
 
 
-// ====== Dados de demonstração ======
-const DEMO_TRIP = {
-  id: 'demo-trip',
-  loads: { load_number: '1042 (DEMO)' },
-};
-const DEMO_STOPS_INITIAL: any[] = [
-  { id: 'demo-1', stop_order: 1, status: 'arrived',  destination: 'Av. Brasil, 1200 - Centro, Pirapora/MG', notes: 'Pedido 2100077', clients: { company_name: 'AMANDA D', phone: '(38) 99876-1122', whatsapp: '5538998761122', email: 'amanda@cliente.com' } },
-  { id: 'demo-2', stop_order: 2, status: 'pending',  destination: 'Rua das Flores, 45 - Jaíba/MG',          notes: 'NF 2100098',     clients: { company_name: 'LINDSAY @', phone: '(38) 99811-2233', whatsapp: '5538998112233', email: 'lindsay@cliente.com' } },
-  { id: 'demo-3', stop_order: 3, status: 'pending',  destination: 'BR-365 km 12 - Pai Pedro/MG',            notes: 'Pedido 2100090', clients: { company_name: 'IRMÃOS FERREIRA', phone: '(38) 99700-1010', whatsapp: '5538997001010', email: 'financeiro@irmaosferreira.com' } },
-  { id: 'demo-4', stop_order: 4, status: 'pending',  destination: 'Rua A, 200 - Janaúba/MG',                notes: 'NF 2100083',     clients: { company_name: 'CG BEATRIZ', phone: '(38) 99655-7788' } },
-  { id: 'demo-5', stop_order: 5, status: 'pending',  destination: 'Av. JK, 800 - Montes Claros/MG',         notes: 'Pedido 2100115', clients: { company_name: 'VICTORIA', phone: '(38) 99511-4040' } },
-  { id: 'demo-6', stop_order: 6, status: 'completed',destination: 'Centro - Espinosa/MG',                   notes: 'NF 2100050',     clients: { company_name: 'MERCADO BOM PRECO' } },
-];
-
-// Produtos fictícios por parada (em produção, virá de load_items / order_items)
-type DemoProduct = { id: string; sku: string; name: string; qty: number; unit: string; price: number };
-const DEMO_PRODUCTS_BY_STOP: Record<string, DemoProduct[]> = {
-  'demo-1': [
-    { id: 'p1', sku: '7891234', name: 'Refrigerante Cola 2L',   qty: 24, unit: 'UN', price: 7.90 },
-    { id: 'p2', sku: '7891235', name: 'Suco Laranja 1L',         qty: 12, unit: 'UN', price: 5.50 },
-    { id: 'p3', sku: '7891236', name: 'Água Mineral 500ml fardo',qty:  6, unit: 'FD', price: 18.00 },
-  ],
-  'demo-2': [
-    { id: 'p4', sku: '7892001', name: 'Arroz 5kg Tipo 1',        qty: 20, unit: 'PC', price: 28.90 },
-    { id: 'p5', sku: '7892002', name: 'Feijão Carioca 1kg',      qty: 30, unit: 'PC', price: 8.40 },
-    { id: 'p6', sku: '7892003', name: 'Óleo Soja 900ml',         qty: 24, unit: 'UN', price: 6.20 },
-  ],
-  'demo-3': [
-    { id: 'p7', sku: '7893001', name: 'Cimento CP-II 50kg',      qty: 40, unit: 'SC', price: 38.00 },
-    { id: 'p8', sku: '7893002', name: 'Argamassa AC-II 20kg',    qty: 25, unit: 'SC', price: 22.50 },
-  ],
-  'demo-4': [
-    { id: 'p9', sku: '7894001', name: 'Detergente 500ml',        qty: 48, unit: 'UN', price: 2.10 },
-    { id: 'p10',sku: '7894002', name: 'Sabão em pó 1kg',         qty: 18, unit: 'UN', price: 11.50 },
-  ],
-  'demo-5': [
-    { id: 'p11',sku: '7895001', name: 'Café Torrado 500g',       qty: 30, unit: 'UN', price: 14.90 },
-  ],
-};
 
 // ====== Catálogo de eventos (inspirado no app de referência) ======
 type EventCategory = 'finalizador' | 'informativo';
@@ -123,10 +82,8 @@ export default function DriverDeliveries() {
   const { data: driver } = useCurrentDriver();
   const { data: trip } = useActiveTrip(driver?.id);
 
-  // Em produção, nunca usar dados demo: melhor mostrar lista vazia que poluir POD.
-  const isDemo = canUseDriverDemo && !trip && !driver;
-  const [demoStops, setDemoStops] = useState<any[]>(DEMO_STOPS_INITIAL);
-  const effectiveTrip: any = trip || DEMO_TRIP;
+  const isDemo = false;
+  const effectiveTrip: any = trip;
 
   const [tab, setTab] = useState<'em_rota' | 'concluidas'>('em_rota');
   const [search, setSearch] = useState('');
@@ -205,9 +162,7 @@ export default function DriverDeliveries() {
     enabled: !!eventForm?.stop && !isDemo && !!trip?.load_id && !!eventForm?.stop?.client_id,
   });
 
-  const stopProducts: DemoProduct[] = eventForm
-    ? (isDemo ? (DEMO_PRODUCTS_BY_STOP[eventForm.stop.id] || []) : realStopProducts)
-    : [];
+  const stopProducts: DemoProduct[] = realStopProducts;
 
   const totalReturnValue = stopProducts.reduce((sum, p) => {
     const q = returnedItems[p.id] || 0;
