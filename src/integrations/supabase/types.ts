@@ -15328,6 +15328,22 @@ export type Database = {
         }
         Returns: string
       }
+      register_driver_settlement_payment_v2: {
+        Args: {
+          _allow_overpayment?: boolean
+          _amount: number
+          _bank_account_id?: string
+          _cost_center?: string
+          _notes?: string
+          _overpayment_reason?: string
+          _payment_account?: string
+          _payment_method?: string
+          _payment_reference?: string
+          _receipt_url?: string
+          _settlement_id: string
+        }
+        Returns: string
+      }
       register_employee_advance: {
         Args: {
           _advance_date?: string
