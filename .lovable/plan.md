@@ -1,37 +1,27 @@
-# Plan: Complete Removal of Demo Functions in Driver App
+# Plan: Fix NFS-e CEP and Demo Cleanup
 
-We are removing all simulated data and "Demo Mode" logic from the driver application to ensure it only operates with real Supabase data.
+## Part 1: Fix NFS-e CEP Validation
+The Hub Fiscal is rejecting NFS-e because the CEP is not being properly resolved and formatted for the TOMADOR (taker).
+- **src/components/nfse/NFSeFromInvoicesDialog.tsx**:
+    - Update `tomador` memo to force `cep` validation (8 digits).
+    - Ensure `tomador.cep` is explicitly passed in `handleEmit` to the `create.mutateAsync` call.
+    - Check why `cliente_cep` was not hitting the backend correctly (the current `NFSeFromInvoicesDialog` uses `tomador.cep` but the `create` mutation sends `cliente_cep`).
+- **src/lib/fiscal/nfseBuilder.ts**:
+    - Ensure `endereco.cep` in `tomador` object is mandatory 8 digits.
 
-## User Review Required
-
-> [!IMPORTANT]
-> This will permanently disable the ability to use the driver app without a real assigned trip and driver login.
-
-## Proposed Changes
-
-### 1. Driver App Cleanup
-- **DriverDeliveries.tsx**:
-    - Remove `demoStops`, `setDemoStops`, `DEMO_STOPS_INITIAL`, `DEMO_PRODUCTS_BY_STOP`.
-    - Replace `DemoProduct` with a standard `Product` interface.
-    - Remove `isDemo` conditional blocks in `submitEvent`, `realStopProducts` query, and UI.
-    - Remove `DemoBanner` import and usage.
-- **DriverStops.tsx**:
-    - Remove `DEMO_TRIP`, `DEMO_STOPS_INITIAL`, `demoStops`, `setDemoStops`.
-    - Remove `isDemo` logic and `DemoBanner`.
-- **DriverIssues.tsx**:
-    - Remove `DEMO_EVENTS_INITIAL`, `demoEvents`, `setDemoEvents`.
-    - Remove `isDemo` logic and `DemoBanner`.
-- **DriverExpenses.tsx**:
-    - Remove `DEMO_EXPENSES_INITIAL`, `demoExpenses`, `setDemoExpenses`.
-    - Remove `isDemo` logic and `DemoBanner`.
-- **DriverJourney.tsx**:
-    - Remove `DEMO_EVENTS_INITIAL`, `demoEvents`, `setDemoEvents`.
-    - Remove `isDemo` logic and `DemoBanner`.
-
-### 2. Core Library Cleanup
-- **src/lib/driver/demoMode.ts**: Hardcode `canUseDriverDemo = false` or remove usage entirely.
-
-## Technical Details
-- Standardizing on `Product` interface for delivery items.
-- Cleaning up `useMutation` hooks to only call Supabase RPCs.
-- Ensuring `isDemo` is always `false` or removed where possible.
+## Part 2: Cleanup Driver Demo Mode
+- **src/pages/driver/DriverDeliveries.tsx**:
+    - Remove `demoStops`, `DEMO_STOPS_INITIAL`, `isDemo` logic.
+    - Replace `DemoProduct` with a standard `DeliveryItem` or just standard types.
+    - Remove `DemoBanner`.
+    - Fix the TS errors identified in the last build step.
+- **src/pages/driver/DriverStops.tsx**:
+    - Remove `demoStops`, `DEMO_TRIP`, `DEMO_STOPS_INITIAL`, `isDemo`.
+- **src/pages/driver/DriverIssues.tsx**:
+    - Remove `demoEvents`, `DEMO_EVENTS_INITIAL`, `isDemo`.
+- **src/pages/driver/DriverExpenses.tsx**:
+    - Remove `demoExpenses`, `DEMO_EXPENSES_INITIAL`, `isDemo`.
+- **src/pages/driver/DriverJourney.tsx**:
+    - Remove `demoEvents`, `DEMO_EVENTS_INITIAL`, `isDemo`.
+- **src/lib/driver/demoMode.ts**:
+    - Set `canUseDriverDemo = false`.
