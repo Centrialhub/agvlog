@@ -8,7 +8,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
 import {
-  useCteMonitor, useCteSefazEvents, useResendCte,
+  useCteMonitor, useCteSefazEvents, useResendCte, useCancelCTe,
   SEFAZ_STATUS_LABELS, SEFAZ_STATUS_TONE, SEFAZ_STATUSES,
   type CteMonitorRow, type CteMonitorFilters, type SefazStatus,
 } from '@/hooks/useCteMonitor';
