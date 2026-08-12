@@ -686,6 +686,64 @@ export default function Billing() {
             <Button
               variant="outline"
               size="sm"
+              disabled={filteredDocs.length === 0}
+              onClick={() => {
+                const docsToExport = selectedDocIds.size > 0
+                  ? filteredDocs.filter(d => selectedDocIds.has(d.id))
+                  : filteredDocs;
+
+                const escape = (str: any) => {
+                  if (str === null || str === undefined) return '';
+                  return String(str)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&apos;');
+                };
+
+                const formatDate = (date: string | null) => {
+                  if (!date) return '';
+                  try {
+                    return format(new Date(date), 'dd/MM/yyyy');
+                  } catch {
+                    return date;
+                  }
+                };
+
+                let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<Notas>\n';
+                docsToExport.forEach(d => {
+                  xml += '  <Nota>\n';
+                  xml += `    <NF>${escape(d.invoice_number)}</NF>\n`;
+                  xml += `    <Emissao>${escape(formatDate(d.issue_date))}</Emissao>\n`;
+                  xml += `    <Remetente>${escape(d.remitter)}</Remetente>\n`;
+                  xml += `    <Destinatario>${escape(d.recipient || d.clients?.company_name)}</Destinatario>\n`;
+                  xml += `    <CidadeDestino>${escape((d as any).recipient_city)}${(d as any).recipient_state ? `/${escape((d as any).recipient_state)}` : ''}</CidadeDestino>\n`;
+                  xml += `    <Pallets>${escape(d.pallet_count)}</Pallets>\n`;
+                  xml += `    <Peso>${escape(Number(d.weight_kg || 0).toLocaleString('pt-BR'))}</Peso>\n`;
+                  xml += `    <Valor>${escape(Number(d.value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }))}</Valor>\n`;
+                  xml += `    <Frete>${escape(d.freight_value ? Number(d.freight_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '')}</Frete>\n`;
+                  xml += '  </Nota>\n';
+                });
+                xml += '</Notas>';
+
+                const blob = new Blob([xml], { type: 'application/xml' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `notas_faturamento_${format(new Date(), 'yyyyMMdd_HHmm')}.xml`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+                toast.success('XML exportado com sucesso');
+              }}
+            >
+              <FileDown className="h-4 w-4 mr-1" /> Exportar XML
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               disabled={filteredDocs.length === 0 || recalcFreight.isPending}
               onClick={async () => {
                 const ids = (selectedDocIds.size > 0
