@@ -245,11 +245,21 @@ export function useCancelCTe() {
           .update({ cte_emitted_at: null, cte_emitted_outbound_id: null } as any)
           .eq('cte_emitted_outbound_id', args.fiscalDocumentId);
       } else {
-        // Se res.success for false (mesmo com HTTP 200/cancelRejected), a UI já
-        // mostrará o erro e o status local não será alterado para 'cancelled'
-        // erroneamente, preservando o estado original para novas tentativas.
+        // Se a rejeição for fiscal (ex: cStat 135 - Evento já registrado),
+        // o Hub retorna success=false. Preservamos o status original (authorized)
+        // para que o botão de cancelamento continue disponível.
         const hubError = res?.hub?.error || res?.error;
         const msg = hubError?.message || (hubError as any)?.technicalMessage || 'Cancelamento recusado pelo Hub Fiscal.';
+        
+        // Atualiza sefaz_message para que o usuário veja o motivo da rejeição no monitor
+        await supabase
+          .from('fiscal_documents')
+          .update({
+            sefaz_message: `Rejeição cancelamento: ${msg}`,
+            sefaz_status: 'authorized' // Garante que não fique travado em 'cancelling' ou mude para 'rejected'
+          } as any)
+          .eq('id', args.fiscalDocumentId);
+
         throw new Error(msg);
       }
       return res;
