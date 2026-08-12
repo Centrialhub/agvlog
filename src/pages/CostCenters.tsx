@@ -57,8 +57,8 @@ export default function CostCenters() {
       
       payRes.data?.forEach(p => all.push({ id: p.id, amount: -p.amount, description: p.description, cost_center: p.cost_center, date: p.created_at, type: 'Pagável' }));
       bankRes.data?.forEach(b => all.push({ id: b.id, amount: b.amount, description: b.description, cost_center: b.cost_center, date: b.posted_at, type: 'Banco' }));
-      expRes.data?.forEach(e => all.push({ id: e.id, amount: -e.amount, description: e.category, cost_center: e.cost_center, date: e.expense_at, type: 'Despesa' }));
-      maintRes.data?.forEach(m => all.push({ id: m.id, amount: -m.total_cost, description: m.maintenance_type, cost_center: m.cost_center, date: m.created_at, type: 'Manutenção' }));
+      expRes.data?.forEach((e: any) => all.push({ id: e.id, amount: -e.amount, description: e.category, cost_center: e.cost_center, date: e.expense_at, type: 'Despesa' }));
+      maintRes.data?.forEach((m: any) => all.push({ id: m.id, amount: -m.total_cost, description: m.maintenance_type, cost_center: m.cost_center, date: m.created_at, type: 'Manutenção' }));
 
       return all.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     },
