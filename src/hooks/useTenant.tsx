@@ -101,8 +101,10 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     // Safety net so the app never hangs on a stuck backend.
     const timer = setTimeout(() => setLoading(false), 8000);
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
-      fetchMemberships();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+        fetchMemberships();
+      }
     });
 
     return () => {

@@ -164,17 +164,41 @@ function RequireClientPortalAccess({ children }: { children: React.ReactNode }) 
 }
 
 function ProtectedRoute({ children, gate = 'internal' }: { children: React.ReactNode; gate?: 'internal' | 'any' }) {
-  const { user, loading } = useAuth();
-  if (loading) return <div className="flex h-screen items-center justify-center text-muted-foreground">Carregando...</div>;
+  const { user, loading: authLoading } = useAuth();
+  
+  if (authLoading) return <div className="flex h-screen items-center justify-center text-muted-foreground">Carregando...</div>;
   if (!user) return <Navigate to="/auth" replace />;
+
   return (
     <TenantProvider>
-      <AppLayout>
-        <Suspense fallback={<PageLoader />}>
-          {gate === 'internal' ? <RequireInternalRole>{children}</RequireInternalRole> : children}
-        </Suspense>
-      </AppLayout>
+      <ProtectedContent gate={gate}>
+        {children}
+      </ProtectedContent>
     </TenantProvider>
+  );
+}
+
+function ProtectedContent({ children, gate }: { children: React.ReactNode; gate: 'internal' | 'any' }) {
+  const { loading: tenantLoading, currentRole } = useTenant();
+  
+  if (tenantLoading) return <div className="flex h-screen items-center justify-center text-muted-foreground">Carregando...</div>;
+
+  // If we are on a driver route but currentRole is internal, RoleRouter usually handles the redirect.
+  // However, the issue is that internal Layout (AppLayout) might be showing for a driver.
+  const isDriver = currentRole === 'driver';
+  
+  if (isDriver && gate === 'internal') {
+    return <Navigate to="/driver" replace />;
+  }
+
+  const Layout = isDriver ? DriverLayout : AppLayout;
+
+  return (
+    <Layout>
+      <Suspense fallback={<PageLoader />}>
+        {gate === 'internal' ? <RequireInternalRole>{children}</RequireInternalRole> : children}
+      </Suspense>
+    </Layout>
   );
 }
 
