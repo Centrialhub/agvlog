@@ -114,8 +114,8 @@ export default function NewManualSettlementDialog({ open, onOpenChange, onCreate
               Romaneios selecionados pertencem a motoristas diferentes. Selecione romaneios de um único motorista.
             </div>
           )}
-          )}
         </div>
+      </div>
         <DialogFooter className="p-6 pt-2 border-t bg-muted/5">
           <div className="flex items-center gap-3 flex-1">
             {disabledReason && (
