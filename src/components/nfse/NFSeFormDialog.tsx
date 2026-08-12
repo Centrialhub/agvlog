@@ -113,13 +113,13 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
         cliente_municipio: first.recipient_city || f.cliente_municipio,
         cliente_uf: first.recipient_state || f.cliente_uf,
         cliente_bairro: first.recipient_neighborhood || f.cliente_bairro,
-        cliente_endereco: first.recipient_address || first.address || f.cliente_endereco,
-        cliente_numero: first.recipient_number || first.number || f.cliente_numero,
-        cliente_complemento: first.recipient_complement || first.complement || f.cliente_complemento,
-        cliente_cep: normalizeCep(first.recipient_zip || first.zip) || f.cliente_cep,
-        cliente_cod_municipio: normalizeIbgeCity(first.recipient_cod_municipio || first.city_ibge_code) || f.cliente_cod_municipio,
-        cliente_email: first.recipient_email || first.email || f.cliente_email,
-        cliente_telefone: normalizePhone(first.recipient_phone || first.phone) || f.cliente_telefone,
+        cliente_endereco: (first as any).recipient_address || (first as any).address || f.cliente_endereco,
+        cliente_numero: (first as any).recipient_number || (first as any).number || f.cliente_numero,
+        cliente_complemento: (first as any).recipient_complement || (first as any).complement || f.cliente_complemento,
+        cliente_cep: normalizeCep((first as any).recipient_zip || (first as any).zip) || f.cliente_cep,
+        cliente_cod_municipio: normalizeIbgeCity((first as any).recipient_cod_municipio || (first as any).city_ibge_code) || f.cliente_cod_municipio,
+        cliente_email: (first as any).recipient_email || (first as any).email || f.cliente_email,
+        cliente_telefone: normalizePhone((first as any).recipient_phone || (first as any).phone) || f.cliente_telefone,
       }));
     }
   }, [selectedIds, loadDocuments]);
