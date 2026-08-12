@@ -1,6 +1,6 @@
-// Consulta periódica de status das NFS-e que ficaram "processando" no provedor.
-// Invocada pelo pg_cron (a cada 5 min) e também sob demanda pela UI.
-// Para cada NFS-e pendente: consulta o Hub Fiscal (GET /hub_documents_get),
+// Consulta periódica de status dos CT-e que ficaram "processando" no provedor.
+// Invocada pelo pg_cron (a cada 1 min) e também sob demanda pela UI.
+// Para cada CT-e pendente: consulta o Hub Fiscal (GET /hub_documents_get),
 // grava a resposta completa (para conferência posterior) e atualiza o status
 // local quando o provedor sai de "processando".
 
@@ -52,8 +52,8 @@ async function resolveToken(admin: any, emitterId: string | null, environment?: 
   const list = (creds || []) as Array<Record<string, string>>;
   const pick = (fn: (c: Record<string, string>) => boolean) => list.find(fn);
   const match =
-    (environment && pick(c => c.doc_scope === 'nfse' && c.environment === environment)) ||
-    pick(c => c.doc_scope === 'nfse') ||
+    (environment && pick(c => c.doc_scope === 'cte' && c.environment === environment)) ||
+    pick(c => c.doc_scope === 'cte') ||
     (environment && pick(c => c.doc_scope === 'all' && c.environment === environment)) ||
     pick(c => c.doc_scope === 'all');
   if (!match) return DEFAULT_HUB_KEY;
@@ -155,10 +155,10 @@ Deno.serve(async (req) => {
         last_status_response: data,
       };
       if (outcome === 'issued') {
-        patch.status = 'issued';
-        patch.nfse_number = d.number || null;
-        patch.protocol_number = d.authorizationProtocol || d.plugnotasProtocol || null;
-        patch.verification_code = d.accessKey || null;
+        patch.status = 'authorized';
+        patch.sefaz_status = 'authorized';
+        patch.access_key = d.accessKey || null;
+        patch.sefaz_protocol = d.authorizationProtocol || d.plugnotasProtocol || null;
         patch.pdf_url = d.pdfUrl || null;
         patch.xml_url = d.xmlUrl || null;
         patch.authorization_date = new Date().toISOString();
@@ -178,7 +178,7 @@ Deno.serve(async (req) => {
         await admin.from('vehicle_events').insert({
           tenant_id: doc.tenant_id,
           document_id: doc.id,
-          event_type: outcome === 'issued' ? 'issued' : outcome,
+          event_type: outcome === 'issued' ? 'authorized' : outcome,
           message: outcome === 'issued'
             ? `Autorizada na consulta automática — nº ${d.number || '(sem número)'}`
             : `Consulta automática: ${rawStatus || outcome}${message ? ` — ${message}` : ''}`,
