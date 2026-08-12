@@ -113,6 +113,13 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
         cliente_municipio: first.recipient_city || f.cliente_municipio,
         cliente_uf: first.recipient_state || f.cliente_uf,
         cliente_bairro: first.recipient_neighborhood || f.cliente_bairro,
+        cliente_endereco: first.recipient_address || f.cliente_endereco,
+        cliente_numero: first.recipient_number || f.cliente_numero,
+        cliente_complemento: first.recipient_complement || f.cliente_complemento,
+        cliente_cep: normalizeCep(first.recipient_zip) || f.cliente_cep,
+        cliente_cod_municipio: normalizeIbgeCity(first.recipient_cod_municipio) || f.cliente_cod_municipio,
+        cliente_email: first.recipient_email || f.cliente_email,
+        cliente_telefone: normalizePhone(first.recipient_phone) || f.cliente_telefone,
       }));
     }
   }, [selectedIds, loadDocuments]);
@@ -233,6 +240,13 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
         cliente_municipio: doc.recipient_city || prev.cliente_municipio,
         cliente_uf: doc.recipient_state || prev.cliente_uf,
         cliente_bairro: doc.recipient_neighborhood || prev.cliente_bairro,
+        cliente_endereco: doc.recipient_address || prev.cliente_endereco,
+        cliente_numero: doc.recipient_number || prev.cliente_number,
+        cliente_complemento: doc.recipient_complement || prev.cliente_complemento,
+        cliente_cep: normalizeCep(doc.recipient_zip) || prev.cliente_cep,
+        cliente_cod_municipio: normalizeIbgeCity(doc.recipient_cod_municipio) || prev.cliente_cod_municipio,
+        cliente_email: doc.recipient_email || prev.cliente_email,
+        cliente_telefone: normalizePhone(doc.recipient_phone) || prev.cliente_telefone,
         reference_number: doc.invoice_number || prev.reference_number,
         valor_servicos: num(doc.freight_value || doc.value || 0),
         description: `Serviço de transporte ref. NF ${doc.invoice_number || ''}`,
