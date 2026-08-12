@@ -53,6 +53,7 @@ export interface NFSeDoc {
   insurer_endorsement?: string | null;
   insured_amount?: number | null;
   insurance_premium?: number | null;
+  regime_tributario?: string | null;
   created_at: string;
   updated_at: string;
 }
