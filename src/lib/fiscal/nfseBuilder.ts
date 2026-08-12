@@ -146,7 +146,7 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl, a
         nro: doc.cliente_numero || undefined,
         xBairro: doc.cliente_bairro || undefined,
         UF: doc.cliente_uf || undefined,
-        CEP: onlyDigits(doc.cliente_cep) || undefined,
+        CEP: onlyDigits(doc.cliente_cep).slice(0, 8) || undefined,
       },
     },
 
