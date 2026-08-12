@@ -17,6 +17,7 @@ import {
   useRegisterSettlementPayment, useSettleZeroDriverSettlement,
   SETTLEMENT_STATUS_LABEL, isLocked, DriverSettlementStatus,
   useDetachLoadFromSettlement, useAddSettlementManualExpense,
+  useDeleteDriverSettlement,
 } from '@/hooks/useDriverSettlements';
 import { useCostCenters } from '@/hooks/useCostCenters';
 import { useBankAccounts } from '@/hooks/useBankReconciliation';
@@ -44,6 +45,7 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
   const detachLoad = useDetachLoadFromSettlement();
   const [attachOpen, setAttachOpen] = useState(false);
   const addManualExp = useAddSettlementManualExpense();
+  const deleteSettlement = useDeleteDriverSettlement();
   const { data: costCenters } = useCostCenters();
 
   const s = data?.settlement;
@@ -142,6 +144,10 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
   const payableZero = Number(s?.driver_payable_amount ?? 0) === 0;
   const balanceZero = Number(s?.payment_balance ?? remaining) === 0;
   const canSettleZero = s?.status === 'approved' && (payableZero || balanceZero);
+
+  // Delete dialog
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteReason, setDeleteReason] = useState('');
 
   const allowedTransitions = (st: DriverSettlementStatus): DriverSettlementStatus[] => {
     switch (st) {
@@ -259,6 +265,11 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                   </Button>
                 );
               })}
+              {!locked && (
+                <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive hover:bg-destructive/10 ml-auto" onClick={() => setDeleteOpen(true)}>
+                  <Trash2 className="h-4 w-4 mr-1" /> Excluir acerto
+                </Button>
+              )}
             </div>
 
             <Tabs defaultValue="loads">
@@ -838,6 +849,44 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                       await updateStatus.mutateAsync({ id: s.id, status: 'closed', reason: closeReason.trim() });
                       setCloseOpen(false); setCloseReason('');
                     }}>Fechar</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* Delete Confirmation */}
+            <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 text-destructive">
+                    <AlertTriangle className="h-5 w-5" /> Excluir Acerto
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <p className="text-sm">
+                    Esta ação é **irreversível**. O acerto será removido permanentemente e os romaneios vinculados ficarão disponíveis para novos acertos.
+                  </p>
+                  <div className="space-y-2">
+                    <Label>Confirme o motivo da exclusão *</Label>
+                    <Textarea 
+                      value={deleteReason} 
+                      onChange={(e) => setDeleteReason(e.target.value)} 
+                      placeholder="Ex.: Acerto gerado em duplicidade, erro nos valores base..."
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setDeleteOpen(false)}>Cancelar</Button>
+                  <Button 
+                    variant="destructive"
+                    disabled={!deleteReason.trim() || deleteSettlement.isPending}
+                    onClick={async () => {
+                      await deleteSettlement.mutateAsync({ id: s.id, reason: deleteReason.trim() });
+                      setDeleteOpen(false);
+                      onOpenChange(false);
+                    }}
+                  >
+                    Confirmar Exclusão
+                  </Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>

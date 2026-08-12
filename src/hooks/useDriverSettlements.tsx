@@ -474,6 +474,25 @@ export function useDetachLoadFromSettlement() {
   });
 }
 
+export function useDeleteDriverSettlement() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (p: { id: string; reason: string }) => {
+      const { error } = await supabase.rpc('delete_driver_settlement' as any, {
+        _settlement_id: p.id,
+        _reason: p.reason,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: 'Acerto excluído com sucesso' });
+      qc.invalidateQueries({ queryKey: ['driver_settlements'] });
+      qc.invalidateQueries({ queryKey: ['available_loads_for_settlement'] });
+    },
+    onError: (e: any) => toast({ title: 'Falha ao excluir acerto', description: e.message, variant: 'destructive' }),
+  });
+}
+
 export function useAddSettlementManualExpense() {
   const qc = useQueryClient();
   return useMutation({
