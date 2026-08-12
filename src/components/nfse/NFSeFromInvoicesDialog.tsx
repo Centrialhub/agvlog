@@ -11,6 +11,8 @@ import { Badge } from '@/components/ui/badge';
 import { Loader2, Send, ArrowRight, ArrowLeft, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { useBillingDocuments } from '@/hooks/useBillingDocuments';
+import { normalizeCep, normalizeUf, normalizeIbgeCity, normalizeCityName, normalizePhone } from '@/lib/fiscal/fiscalAddress';
+import { sanitizeIe } from '@/lib/fiscal/partyRegistry';
 import { useClients } from '@/hooks/useClients';
 import { useEmitters } from '@/hooks/useEmitters';
 import { useCreateNFSe, useIssueNFSe } from '@/hooks/useNFSe';
@@ -196,19 +198,30 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
     const municipio = (match?.address_city || first.recipient_city || first.remitter_city || '').trim();
     const uf = (match?.address_state || first.recipient_state || first.remitter_state || '').trim();
     const zip = (match?.address_zip || first.recipient_zip || first.remitter_zip || '').trim();
-    const zipRaw = onlyDigits(zip).padStart(8, '0').slice(0, 8);
-    const municipioCod = (match as any)?.address_city_ibge_code || first.recipient_cod_municipio || first.remitter_cod_municipio || null;
+    // CEP só é enviado quando realmente existe: "00000000" faz a prefeitura
+    // rejeitar a nota por CEP inexistente / fora do município.
+    const cepNorm = normalizeCep(zip);
+    const municipioCod =
+      normalizeIbgeCity((match as any)?.address_city_ibge_code) ||
+      normalizeIbgeCity(first.recipient_cod_municipio) ||
+      normalizeIbgeCity(first.remitter_cod_municipio) ||
+      normalizeIbgeCity(municipio);
 
     return {
       nome: (match?.company_name || first[key] || '') as string,
       cnpj: cnpjDigits,
-      ie: (match?.state_registration || '') as string,
+      ie: sanitizeIe(match?.state_registration) || '',
+      im: (match as any)?.municipal_registration || '',
       endereco: (match?.address_street || '') as string,
+      numero: ((match as any)?.address_number || '') as string,
+      complemento: ((match as any)?.address_complement || '') as string,
       bairro: (match?.address_neighborhood || '') as string,
-      municipio,
+      email: ((match as any)?.email || '') as string,
+      telefone: normalizePhone((match as any)?.phone) || '',
+      municipio: normalizeCityName(municipio) || '',
       municipio_cod: municipioCod,
-      uf,
-      cep: zipRaw ? zipRaw.slice(0, 8).padStart(8, '0') : '',
+      uf: normalizeUf(uf) || '',
+      cep: cepNorm || '',
       cliente_id: match?.id || null,
     };
   }, [selectedDocs, tomadorMode, clients]);
@@ -225,6 +238,10 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
   const handleEmit = async () => {
     if (!emitterId) { toast.error('Selecione o emitente fiscal'); return; }
     if (!tomador?.cnpj) { toast.error('Tomador sem CNPJ — cadastre o cliente/fornecedor'); return; }
+    if (!tomador.municipio_cod) { toast.error('Tomador sem código IBGE do município — complete o cadastro do cliente'); return; }
+    if (!tomador.cep) { toast.error('Tomador sem CEP válido (8 dígitos) — complete o cadastro do cliente'); return; }
+    if (!tomador.uf) { toast.error('Tomador sem UF — complete o cadastro do cliente'); return; }
+    if (!tomador.endereco || !tomador.bairro) { toast.error('Tomador sem logradouro/bairro — complete o cadastro do cliente'); return; }
     if (totalServicos <= 0) { toast.error('Valor de serviços deve ser maior que zero'); return; }
     if (!insuranceCheck.ok) { toast.error(`Seguro: ${insuranceCheck.messages.join(' ')}`); return; }
 
@@ -242,7 +259,12 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
         cliente_id: tomador.cliente_id,
         cliente_nome: tomador.nome,
         cliente_cnpj: tomador.cnpj,
-        cliente_ie: tomador.ie,
+        cliente_ie: tomador.ie || null,
+        cliente_im: tomador.im || null,
+        cliente_email: tomador.email || null,
+        cliente_telefone: tomador.telefone || null,
+        cliente_numero: tomador.numero || null,
+        cliente_complemento: tomador.complemento || null,
         cliente_endereco: tomador.endereco,
         cliente_bairro: tomador.bairro,
         cliente_municipio: tomador.municipio,

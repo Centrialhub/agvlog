@@ -13,6 +13,8 @@ import { Plus, Trash2, Search, Loader2, UserSearch, FileText, Calculator, CheckC
 import { useCreateNFSe, useUpdateNFSe, type NFSeDoc } from '@/hooks/useNFSe';
 import { useFiscalDocuments } from '@/hooks/useFiscalDocuments';
 import { useEmitters } from '@/hooks/useEmitters';
+import { normalizeCep, normalizeUf, normalizeIbgeCity, normalizeCityName, normalizePhone } from '@/lib/fiscal/fiscalAddress';
+import { sanitizeIe } from '@/lib/fiscal/partyRegistry';
 import { useClients } from '@/hooks/useClients';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -153,6 +155,13 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
       cliente_bairro: (initial as any)?.cliente_bairro || '',
       cliente_municipio: (initial as any)?.cliente_municipio || '',
       cliente_uf: (initial as any)?.cliente_uf || '',
+      cliente_numero: (initial as any)?.cliente_numero || '',
+      cliente_complemento: (initial as any)?.cliente_complemento || '',
+      cliente_cep: (initial as any)?.cliente_cep || '',
+      cliente_cod_municipio: (initial as any)?.cliente_cod_municipio || '',
+      cliente_im: (initial as any)?.cliente_im || '',
+      cliente_email: (initial as any)?.cliente_email || '',
+      cliente_telefone: (initial as any)?.cliente_telefone || '',
       pagador_nome: initial?.pagador_nome || '',
       pagador_cnpj: initial?.pagador_cnpj || '',
       description: initial?.description || '',
@@ -255,11 +264,18 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
       ...prev,
       cliente_nome: client.company_name,
       cliente_cnpj: client.tax_id || '',
-      cliente_ie: client.state_registration || '',
-      cliente_endereco: `${client.address_street || ''}${client.address_number ? ', ' + client.address_number : ''}`,
+      cliente_ie: sanitizeIe(client.state_registration) || '',
+      cliente_im: (client as any).municipal_registration || '',
+      cliente_endereco: client.address_street || '',
+      cliente_numero: (client as any).address_number || '',
+      cliente_complemento: (client as any).address_complement || '',
       cliente_bairro: client.address_neighborhood || '',
-      cliente_municipio: client.address_city || '',
-      cliente_uf: client.address_state || '',
+      cliente_municipio: normalizeCityName(client.address_city) || '',
+      cliente_cod_municipio: normalizeIbgeCity((client as any).address_city_ibge_code) || '',
+      cliente_uf: normalizeUf(client.address_state) || '',
+      cliente_cep: normalizeCep((client as any).address_zip) || '',
+      cliente_email: (client as any).email || '',
+      cliente_telefone: normalizePhone((client as any).phone) || '',
     }));
     setClientSearchOpen(false);
     toast.info('Dados do tomador preenchidos');
@@ -268,6 +284,12 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
   const handleSave = async () => {
     if (!form.cliente_nome) { toast.error('Informe o tomador (cliente)'); return; }
     if (!form.cliente_municipio) { toast.error('Informe o município do tomador'); return; }
+    if (!normalizeIbgeCity(form.cliente_cod_municipio) && !normalizeIbgeCity(form.cliente_municipio)) {
+      toast.error('Informe o código IBGE (7 dígitos) do município do tomador');
+      return;
+    }
+    if (!normalizeCep(form.cliente_cep)) { toast.error('Informe um CEP válido (8 dígitos) do tomador'); return; }
+    if (!normalizeUf(form.cliente_uf)) { toast.error('Informe a UF do tomador (sigla de 2 letras)'); return; }
     if (totalServicos <= 0) { toast.error('Valor de serviços deve ser maior que zero'); return; }
     const payload: any = {
       ...form,
@@ -459,6 +481,13 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
                 <div className="col-span-2"><Label>Bairro</Label><Input value={form.cliente_bairro || ''} onChange={e => setField('cliente_bairro', e.target.value)} /></div>
                 <div><Label>UF</Label><Input value={form.cliente_uf || ''} onChange={e => setField('cliente_uf', e.target.value)} /></div>
                 <div className="col-span-3"><Label>Município</Label><Input value={form.cliente_municipio || ''} onChange={e => setField('cliente_municipio', e.target.value)} /></div>
+                <div><Label>Número</Label><Input value={form.cliente_numero || ''} onChange={e => setField('cliente_numero', e.target.value)} /></div>
+                <div className="col-span-2"><Label>Complemento</Label><Input value={form.cliente_complemento || ''} onChange={e => setField('cliente_complemento', e.target.value)} /></div>
+                <div><Label>CEP</Label><Input value={form.cliente_cep || ''} maxLength={9} onChange={e => setField('cliente_cep', e.target.value)} /></div>
+                <div className="col-span-2"><Label>Cód. IBGE Município</Label><Input value={form.cliente_cod_municipio || ''} maxLength={7} onChange={e => setField('cliente_cod_municipio', e.target.value)} /></div>
+                <div><Label>IM</Label><Input value={form.cliente_im || ''} onChange={e => setField('cliente_im', e.target.value)} /></div>
+                <div className="col-span-2"><Label>E-mail</Label><Input value={form.cliente_email || ''} onChange={e => setField('cliente_email', e.target.value)} /></div>
+                <div className="col-span-2"><Label>Telefone</Label><Input value={form.cliente_telefone || ''} onChange={e => setField('cliente_telefone', e.target.value)} /></div>
               </div>
             </div>
           </TabsContent>
