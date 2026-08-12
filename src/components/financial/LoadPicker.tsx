@@ -57,7 +57,7 @@ export default function LoadPicker({ driverId, includeSettlementId, selectedIds,
         {isLoading ? 'Carregando romaneios…' : `${loads.length} romaneio(s) disponível(is) · ${selectedIds.length} selecionado(s)`}
       </div>
       <div className="rounded-md border overflow-hidden">
-        <div className="overflow-x-auto overflow-y-auto max-h-[380px]">
+        <div className="overflow-x-auto overflow-y-auto max-h-[45vh] min-h-[200px]">
           <Table>
             <TableHeader className="sticky top-0 bg-background z-10 shadow-sm">
               <TableRow>

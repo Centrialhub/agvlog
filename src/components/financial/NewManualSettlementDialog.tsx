@@ -69,7 +69,7 @@ export default function NewManualSettlementDialog({ open, onOpenChange, onCreate
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl">
+      <DialogContent className="max-w-[95vw] md:max-w-5xl max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>Novo acerto manual</DialogTitle></DialogHeader>
         <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
           <div className="md:col-span-5">
