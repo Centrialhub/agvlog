@@ -19,7 +19,6 @@ import {
   Phone, MessageSquare, Send, Percent, FileText, RotateCcw, Clock, User as UserIcon, Loader2
 } from 'lucide-react';
 
-const IS_PROD = import.meta.env.PROD;
 import { cn } from '@/lib/utils';
 import SignaturePad from '@/components/driver/SignaturePad';
 import { isStopTerminal } from '@/lib/status/stopStatus';
@@ -82,7 +81,6 @@ export default function DriverDeliveries() {
   const { data: driver } = useCurrentDriver();
   const { data: trip } = useActiveTrip(driver?.id);
 
-  const isDemo = false;
   const effectiveTrip: any = trip;
 
   const [tab, setTab] = useState<'em_rota' | 'concluidas'>('em_rota');
@@ -159,7 +157,7 @@ export default function DriverDeliveries() {
         price: 0,
       })) as any[];
     },
-    enabled: !!eventForm?.stop && !isDemo && !!trip?.load_id && !!eventForm?.stop?.client_id,
+    enabled: !!eventForm?.stop && !!trip?.load_id && !!eventForm?.stop?.client_id,
   });
 
   const stopProducts: any[] = realStopProducts;
@@ -282,11 +280,6 @@ export default function DriverDeliveries() {
           status: def.needsOperatorReply ? 'pending' : 'info',
         };
       };
-
-      // Demo: muta apenas em memória, sem chamar Supabase
-      if (isDemo) {
-        return;
-      }
 
       // Upload de fotos resiliente: se qualquer uma falhar, remove as já enviadas para
       // evitar arquivos órfãos sem link com o evento.

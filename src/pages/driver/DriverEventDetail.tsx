@@ -20,8 +20,6 @@ import {
   Hash,
 } from 'lucide-react';
 
-import { DEMO_EVENTS_INITIAL } from './DriverEvents';
-import { canUseDriverDemo } from '@/lib/driver/demoMode';
 import { useCurrentDriver } from '@/hooks/useCurrentDriver';
 
 const FINAL_EVENT_TYPES = new Set([
@@ -51,7 +49,6 @@ export default function DriverEventDetail() {
     enabled: !!id && !!driver?.id,
   });
 
-  const isDemo = false;
   const event = realRow
       ? (() => {
           const details: any = realRow.report_details || {};

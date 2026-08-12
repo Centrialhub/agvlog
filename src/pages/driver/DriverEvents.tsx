@@ -9,9 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Search, CheckCircle2, AlertTriangle, FileText, ChevronRight, Clock, MapPin } from 'lucide-react';
 
-import { canUseDriverDemo } from '@/lib/driver/demoMode';
 
-export type DemoEvent = {
+export type DriverEventView = {
   id: string;
   type: 'finalizador' | 'informativo';
   code: string;
@@ -26,65 +25,6 @@ export type DemoEvent = {
   hasSignature?: boolean;
 };
 
-export const DEMO_EVENTS_INITIAL: DemoEvent[] = [
-  {
-    id: 'evt-1',
-    type: 'finalizador',
-    code: 'ENT',
-    label: 'Entregue',
-    stopName: 'AMANDA D - PAI PEDRO',
-    invoice: '12345',
-    receiver: 'Maria Silva',
-    document: '123.456.789-00',
-    occurredAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-    hasPhoto: true,
-    hasSignature: true,
-  },
-  {
-    id: 'evt-2',
-    type: 'informativo',
-    code: 'CHE',
-    label: 'Cheguei no cliente',
-    stopName: 'LINDSAY @ - PIRAPORA',
-    invoice: '12346',
-    occurredAt: new Date(Date.now() - 1000 * 60 * 90).toISOString(),
-  },
-  {
-    id: 'evt-3',
-    type: 'finalizador',
-    code: 'REC',
-    label: 'Recusado',
-    stopName: 'IRMÃOS FERREIRA - JAÍBA',
-    invoice: '12347',
-    receiver: 'João Pereira',
-    document: '987.654.321-00',
-    observation: 'Cliente recusou por divergência de quantidade.',
-    occurredAt: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(),
-    hasPhoto: true,
-  },
-  {
-    id: 'evt-4',
-    type: 'informativo',
-    code: 'SAI',
-    label: 'Saída para entrega',
-    stopName: 'CG BEATRIZ - PIRAPORA',
-    invoice: '12348',
-    occurredAt: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
-  },
-  {
-    id: 'evt-5',
-    type: 'finalizador',
-    code: 'ENT',
-    label: 'Entregue parcial',
-    stopName: 'VICTORIA - JAÍBA',
-    invoice: '12349',
-    receiver: 'Carlos Souza',
-    observation: '2 volumes danificados.',
-    occurredAt: new Date(Date.now() - 1000 * 60 * 60 * 7).toISOString(),
-    hasPhoto: true,
-    hasSignature: true,
-  },
-];
 
 // Event types that finalize a delivery (recusa/entregue/etc.) vs informativos.
 const FINAL_EVENT_TYPES = new Set([
@@ -92,8 +32,8 @@ const FINAL_EVENT_TYPES = new Set([
   'delivery_completed', 'delivery_failed',
 ]);
 
-function mapRowToEvent(row: any): DemoEvent {
-  const type: DemoEvent['type'] = FINAL_EVENT_TYPES.has(row.event_type) ? 'finalizador' : 'informativo';
+function mapRowToEvent(row: any): DriverEventView {
+  const type: DriverEventView['type'] = FINAL_EVENT_TYPES.has(row.event_type) ? 'finalizador' : 'informativo';
   const details: any = row.report_details || {};
   return {
     id: row.id,
@@ -123,7 +63,7 @@ export default function DriverEvents() {
   const { data: realEvents = [] } = useQuery({
     queryKey: ['driver_events', driver?.id, trip?.id],
     queryFn: async () => {
-      if (!driver?.id) return [] as DemoEvent[];
+      if (!driver?.id) return [] as DriverEventView[];
       let q = supabase
         .from('operational_events')
         .select('*')
@@ -153,8 +93,7 @@ export default function DriverEvents() {
     };
   }, [driver?.id, qc]);
 
-  const isDemo = false;
-  const events: DemoEvent[] = realEvents;
+  const events: DriverEventView[] = realEvents;
 
   const filtered = useMemo(() => {
     let list = events;

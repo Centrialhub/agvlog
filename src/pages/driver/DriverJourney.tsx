@@ -11,7 +11,6 @@ import { Clock, Play, Coffee, Moon, CheckCircle, ClipboardCheck, AlertTriangle }
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 
-import { canUseDriverDemo } from '@/lib/driver/demoMode';
 
 const eventLabels: Record<string, { label: string; icon: typeof Play }> = {
   start_shift: { label: 'Início de Jornada', icon: Play },
@@ -22,11 +21,6 @@ const eventLabels: Record<string, { label: string; icon: typeof Play }> = {
   end_shift: { label: 'Fim de Jornada', icon: CheckCircle },
 };
 
-const DEMO_EVENTS_INITIAL: any[] = [
-  { id: 'j1', event_type: 'start_shift', event_at: new Date(new Date().setHours(5, 0, 0, 0)).toISOString() },
-  { id: 'j2', event_type: 'lunch',       event_at: new Date(new Date().setHours(12, 0, 0, 0)).toISOString() },
-  { id: 'j3', event_type: 'resume',      event_at: new Date(new Date().setHours(13, 30, 0, 0)).toISOString() },
-];
 
 export default function DriverJourney() {
   const { currentTenant } = useTenant();
@@ -36,7 +30,6 @@ export default function DriverJourney() {
   const { data: driver } = useCurrentDriver();
   const { data: trip } = useActiveTrip(driver?.id);
   const checklist = useChecklistStatus(trip?.id);
-  const [demoEvents, setDemoEvents] = useState<any[]>(DEMO_EVENTS_INITIAL);
 
   const { data: events = [] } = useQuery({
     queryKey: ['driver_journey_events', trip?.id],
@@ -75,9 +68,7 @@ export default function DriverJourney() {
   const addEvent = useMutation({
     mutationFn: async (eventType: string) => {
       if (!trip || !currentTenant) {
-        // Demo
-        setDemoEvents((prev) => [...prev, { id: 'd' + Date.now(), event_type: eventType, event_at: new Date().toISOString() }]);
-        return;
+        throw new Error('Sem viagem ativa. Aguarde o despacho da carga pela operação.');
       }
       const { error } = await supabase.rpc('driver_create_event', {
         _trip_id: trip.id,
@@ -95,11 +86,10 @@ export default function DriverJourney() {
     onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
   });
 
-  const isDemo = false;
   const effectiveEvents = events;
 
   const handleEventClick = (eventType: string) => {
-    if (!isDemo && eventType === 'start_shift' && !checklist.preCompleted) {
+    if (eventType === 'start_shift' && !checklist.preCompleted) {
       toast({
         title: 'Checklist pré-viagem obrigatório',
         description: 'Complete o checklist pré-viagem antes de iniciar a jornada.',
@@ -108,7 +98,7 @@ export default function DriverJourney() {
       navigate('/driver/checklist');
       return;
     }
-    if (!isDemo && eventType === 'end_shift' && !checklist.postCompleted) {
+    if (eventType === 'end_shift' && !checklist.postCompleted) {
       toast({
         title: 'Checklist pós-viagem obrigatório',
         description: 'Complete o checklist pós-viagem antes de encerrar a jornada.',
@@ -121,7 +111,6 @@ export default function DriverJourney() {
   };
 
   const isEventBlocked = (eventType: string) => {
-    if (isDemo) return false;
     if (eventType === 'start_shift' && !checklist.preCompleted) return true;
     if (eventType === 'end_shift' && !checklist.postCompleted) return true;
     return false;
@@ -135,7 +124,7 @@ export default function DriverJourney() {
       {trip ? (
         <>
           {/* Checklist warnings */}
-          {!isDemo && !checklist.isLoading && !checklist.preCompleted && (
+          {!checklist.isLoading && !checklist.preCompleted && (
             <Card className="border-warning/50 bg-warning/5">
               <CardContent className="p-3 flex items-center gap-3">
                 <AlertTriangle className="h-5 w-5 text-warning shrink-0" />
@@ -153,7 +142,7 @@ export default function DriverJourney() {
             </Card>
           )}
 
-          {!isDemo && !checklist.isLoading && checklist.preCompleted && !checklist.postCompleted && (
+          {!checklist.isLoading && checklist.preCompleted && !checklist.postCompleted && (
             <Card className="border-blue-200 bg-blue-50/50">
               <CardContent className="p-3 flex items-center gap-3">
                 <ClipboardCheck className="h-5 w-5 text-blue-500 shrink-0" />

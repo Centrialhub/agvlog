@@ -10,7 +10,6 @@ import { Badge } from '@/components/ui/badge';
 import { Plus, Receipt, Fuel, UtensilsCrossed, Car, Wrench, ParkingCircle, Camera, Image, AlertTriangle } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 
-import { canUseDriverDemo } from '@/lib/driver/demoMode';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
@@ -32,12 +31,6 @@ const approvalLabels: Record<string, string> = {
   rejected: 'Rejeitada',
 };
 
-const DEMO_EXPENSES_INITIAL: any[] = [
-  { id: 'e1', category: 'fuel',     amount: 320.50, notes: 'Posto BR — 65L diesel S10', approval_status: 'approved', expense_at: new Date(Date.now() - 1*86400000).toISOString() },
-  { id: 'e2', category: 'food',     amount: 35.00,  notes: 'Almoço no restaurante de beira de estrada', approval_status: 'pending',  expense_at: new Date(Date.now() - 2*3600000).toISOString() },
-  { id: 'e3', category: 'toll',     amount: 18.40,  notes: 'Pedágio BR-365', approval_status: 'approved', expense_at: new Date(Date.now() - 4*3600000).toISOString() },
-  { id: 'e4', category: 'parking',  amount: 12.00,  notes: 'Estacionamento Pirapora', approval_status: 'rejected', expense_at: new Date(Date.now() - 26*3600000).toISOString() },
-];
 
 export default function DriverExpenses() {
   const { currentTenant } = useTenant();
@@ -63,7 +56,6 @@ export default function DriverExpenses() {
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const [demoExpenses, setDemoExpenses] = useState<any[]>(DEMO_EXPENSES_INITIAL);
 
   const { data: expenses = [] } = useQuery({
     queryKey: ['driver_expenses', driver?.id],
@@ -172,7 +164,6 @@ export default function DriverExpenses() {
     },
   });
 
-  const isDemo = false;
   const effectiveExpenses = expenses;
 
   return (
