@@ -16,6 +16,7 @@ import {
   FileText, FileDown, RefreshCw, Search, Filter as FilterIcon, X, AlertCircle, Eye,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useCancelCTe } from '@/hooks/useIssueCTe';
 import { PendingInvoicesBanner } from '@/components/billing/PendingInvoicesBanner';
 import { hubFiscal } from '@/lib/fiscal/hubFiscalClient';
 import { runBulkDownload, summarizeBulkResult } from '@/lib/fiscal/bulkFileMerge';
@@ -527,6 +528,20 @@ export default function CteMonitor() {
 
 function CteDetail({ row, onClose }: { row: CteMonitorRow; onClose: () => void }) {
   const { data: events = [] } = useCteSefazEvents(row.id);
+  const cancelCte = useCancelCTe();
+
+  const handleCancel = async () => {
+    const motive = window.prompt('Justificativa para o cancelamento (mínimo 15 caracteres):');
+    if (!motive) return;
+    try {
+      await cancelCte.mutateAsync({ fiscalDocumentId: row.id, justificativa: motive });
+      toast.success('Cancelamento solicitado com sucesso');
+      onClose();
+    } catch (e) {
+      // toast já disparado pelo hook
+    }
+  };
+
   return (
     <>
       <DialogHeader>
@@ -578,7 +593,18 @@ function CteDetail({ row, onClose }: { row: CteMonitorRow; onClose: () => void }
         </div>
       </div>
 
-      <div className="flex justify-end gap-2">
+      <div className="flex justify-end items-center gap-2">
+        {row.sefaz_status === 'processed' && row.source === 'hub' && (
+          <Button 
+            variant="destructive" 
+            size="sm" 
+            onClick={handleCancel}
+            disabled={cancelCte.isPending}
+          >
+            {cancelCte.isPending ? 'Cancelando...' : 'Cancelar CT-e'}
+          </Button>
+        )}
+        <div className="flex-1" />
         <Button variant="outline" size="sm" onClick={() => downloadHubFile(row, 'pdf', { view: true })}>
           <Eye className="h-4 w-4" /> Visualizar
         </Button>
