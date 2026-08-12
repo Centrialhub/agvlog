@@ -339,13 +339,16 @@ export function useIssueNFSe() {
         const isAuthorized = ['authorized', 'autorizado', 'concluido', 'issued'].includes(rawStatus);
         const isRejected = ['rejected', 'rejeitado', 'erro', 'error'].includes(rawStatus);
         const hubErrorMessage = deepHubError(res);
+
+        // Se o Hub retornar sucesso na requisição mas o status for rascunho/vazio, 
+        // assumimos 'submitted' (processando) em vez de manter 'draft'.
         const localStatus = !res.success
           ? 'rejected'
           : isAuthorized
             ? 'issued'
             : isRejected
               ? 'rejected'
-              : (rawStatus || 'processing');
+              : 'submitted'; // Força saída de 'draft' se o Hub aceitou a nota
         await (supabase as any).from('nfse_documents').update({
           status: localStatus,
           provider: 'hub_fiscal',
@@ -389,9 +392,15 @@ export function useIssueNFSe() {
       qc.invalidateQueries({ queryKey: ['nfse'] });
       qc.invalidateQueries({ queryKey: ['billing_documents'] });
       qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
-      if (data?.status === 'issued') toast.success('NFS-e emitida');
-      else if (data?.provider === 'hub_fiscal' && data?.status === 'processing') toast.info('NFS-e enviada ao Hub Fiscal — aguardando autorização da prefeitura');
-      else if (data?.provider === 'hub_fiscal') toast.success(`NFS-e no Hub Fiscal — ${data.status}`);
+      if (data?.status === 'issued') toast.success('NFS-e autorizada com sucesso!');
+      else if (data?.status === 'submitted' || (data?.provider === 'hub_fiscal' && data?.status === 'processing')) {
+        toast.info('NFS-e enviada ao Hub Fiscal — aguardando processamento da prefeitura', {
+          description: 'Acompanhe o status no Monitor de NFS-e.',
+          duration: 5000,
+        });
+      } else if (data?.provider === 'hub_fiscal') {
+        toast.success(`NFS-e no Hub Fiscal — Status: ${data.status}`);
+      }
       else if (data?.status === 'queued' || data?.simulated) toast.info('Provedor fiscal não configurado — NFS-e marcada como pronta para emissão');
       else if (data?.status === 'rejected') toast.error(`Rejeitada: ${data?.message ?? ''}`);
     },
