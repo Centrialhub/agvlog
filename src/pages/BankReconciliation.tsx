@@ -564,7 +564,7 @@ function ExtratoTab({ transactions, suggested, obligations }: { transactions: Ba
           <TableHead>Status</TableHead><TableHead>Candidato</TableHead><TableHead>Ações</TableHead>
         </TableRow></TableHeader>
         <TableBody>
-          {transactions.length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-8">Sem transações no período.</TableCell></TableRow>}
+          {transactions.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-8">Sem transações no período.</TableCell></TableRow>}
           {transactions.map(t => {
             const s = suggMap.get(t.id);
             return (
