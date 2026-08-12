@@ -347,6 +347,7 @@ function ImportStatementDialog({ accountId, periodStart, periodEnd }: { accountI
               <MappingSelect label="Saída (débito)" value={mapping.outflow || ''} onChange={v => setMapping(m => ({ ...m, outflow: v }))} headers={headers} />
               <MappingSelect label="Documento" value={mapping.document || ''} onChange={v => setMapping(m => ({ ...m, document: v }))} headers={headers} />
               <MappingSelect label="Saldo" value={mapping.balance || ''} onChange={v => setMapping(m => ({ ...m, balance: v }))} headers={headers} />
+              <MappingSelect label="Centro de Custo" value={mapping.costCenter || ''} onChange={v => setMapping(m => ({ ...m, costCenter: v }))} headers={headers} />
             </div>
           )}
           {headers.length > 0 && (
@@ -357,12 +358,13 @@ function ImportStatementDialog({ accountId, periodStart, periodEnd }: { accountI
           {preview.length > 0 && (
             <div className="max-h-60 overflow-auto border rounded">
               <Table>
-                <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Descrição</TableHead><TableHead className="text-right">Valor</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Descrição</TableHead><TableHead>Centro de Custo</TableHead><TableHead className="text-right">Valor</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {preview.map((p, i) => (
                     <TableRow key={i}>
                       <TableCell className="text-xs">{new Date(p.posted_at).toLocaleDateString('pt-BR')}</TableCell>
                       <TableCell className="text-xs truncate max-w-[300px]">{p.description}</TableCell>
+                      <TableCell className="text-xs">{p.cost_center || '-'}</TableCell>
                       <TableCell className="text-right text-xs">{fmt(p.amount)}</TableCell>
                     </TableRow>
                   ))}
@@ -391,8 +393,10 @@ function NewManualTransactionDialog({ accountId }: { accountId: string }) {
     amount: '',
     type: 'debit' as 'credit' | 'debit',
     document_number: '',
+    cost_center: '',
   });
   const create = useCreateManualTransaction();
+  const { data: costCenters = [] } = useCostCenters();
 
   const reset = () => setForm({
     posted_at: todayIso(),
@@ -400,6 +404,7 @@ function NewManualTransactionDialog({ accountId }: { accountId: string }) {
     amount: '',
     type: 'debit',
     document_number: '',
+    cost_center: '',
   });
 
   const handleSubmit = () => {
@@ -414,6 +419,7 @@ function NewManualTransactionDialog({ accountId }: { accountId: string }) {
       amount: finalAmount,
       transaction_type: form.type,
       document_number: form.document_number,
+      cost_center: form.cost_center,
     }, {
       onSuccess: () => {
         toast({ title: 'Lançamento manual criado' });
