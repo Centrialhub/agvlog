@@ -8,18 +8,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { MapPin, Navigation, CheckCircle, Clock, ArrowRight } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 
-import { canUseDriverDemo } from '@/lib/driver/demoMode';
 import { isStopTerminal, STOP_STATUS_LABELS } from '@/lib/status';
 
-const DEMO_TRIP = { id: 'demo-trip', loads: { load_number: '1042 (DEMO)' } };
-const DEMO_STOPS_INITIAL: any[] = [
-  { id: 'd1', stop_order: 1, status: 'arrived',  destination: 'Av. Brasil, 1200 - Pirapora/MG', notes: 'Pedido 2100077', clients: { company_name: 'AMANDA D' }, actual_arrival_at: new Date(Date.now() - 30*60000).toISOString() },
-  { id: 'd2', stop_order: 2, status: 'pending',  destination: 'Rua das Flores, 45 - Jaíba/MG',   notes: 'NF 2100098',     clients: { company_name: 'LINDSAY @' } },
-  { id: 'd3', stop_order: 3, status: 'pending',  destination: 'BR-365 km 12 - Pai Pedro/MG',     notes: 'Pedido 2100090', clients: { company_name: 'IRMÃOS FERREIRA' } },
-  { id: 'd4', stop_order: 4, status: 'completed',destination: 'Centro - Espinosa/MG',            notes: 'NF 2100050',     clients: { company_name: 'MERCADO BOM PRECO' }, actual_arrival_at: new Date(Date.now() - 4*3600000).toISOString(), actual_departure_at: new Date(Date.now() - 3*3600000).toISOString() },
-];
 
 const STATUS_LABELS: Record<string, string> = STOP_STATUS_LABELS as any;
 
@@ -62,7 +54,6 @@ export default function DriverStops() {
   });
 
   const activeTrip = tripIdParam ? trip : autoTrip;
-  const [demoStops, setDemoStops] = useState<any[]>(DEMO_STOPS_INITIAL);
 
   const { data: stops = [] } = useQuery({
     queryKey: ['driver_stops', activeTrip?.id],
@@ -99,16 +90,7 @@ export default function DriverStops() {
 
   const updateStop = useMutation({
     mutationFn: async ({ stopId, action, reason }: { stopId: string; action: 'arrival' | 'depart' | 'skipped' | 'refused' | 'damaged' | 'returned' | 'partial_delivery'; reason?: string }) => {
-      if (!activeTrip) {
-        if (!canUseDriverDemo) throw new Error('Sem viagem ativa.');
-        setDemoStops((prev) => prev.map((s) => {
-          if (s.id !== stopId) return s;
-          if (action === 'arrival') return { ...s, status: 'arrived', actual_arrival_at: new Date().toISOString() };
-          if (action === 'depart') return { ...s, status: 'completed', actual_departure_at: new Date().toISOString() };
-          return { ...s, status: action };
-        }));
-        return;
-      }
+      if (!activeTrip) throw new Error('Sem viagem ativa.');
       if (action === 'arrival') {
         const { error } = await supabase.rpc('driver_mark_arrival', { _stop_id: stopId });
         if (error) throw error;
@@ -147,7 +129,6 @@ export default function DriverStops() {
     window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(destination)}`, '_blank');
   };
 
-  const isDemo = false;
   const effectiveTrip: any = activeTrip;
   const effectiveStops: any[] = activeTrip ? (stops as any[]) : [];
 
@@ -161,7 +142,7 @@ export default function DriverStops() {
       </div>
 
 
-      {!effectiveTrip && !isDemo ? (
+      {!effectiveTrip ? (
         <Card>
           <CardContent className="py-6 text-center">
             <p className="text-sm text-muted-foreground">Nenhuma parada definida nesta viagem.</p>
