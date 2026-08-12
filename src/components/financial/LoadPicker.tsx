@@ -56,11 +56,12 @@ export default function LoadPicker({ driverId, includeSettlementId, selectedIds,
       <div className="text-xs text-muted-foreground">
         {isLoading ? 'Carregando romaneios…' : `${loads.length} romaneio(s) disponível(is) · ${selectedIds.length} selecionado(s)`}
       </div>
-      <div className="rounded-md border max-h-[380px] overflow-y-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-8"><Checkbox checked={allSelected} onCheckedChange={toggleAll} /></TableHead>
+      <div className="rounded-md border overflow-hidden">
+        <div className="overflow-x-auto overflow-y-auto max-h-[380px]">
+          <Table>
+            <TableHeader className="sticky top-0 bg-background z-10 shadow-sm">
+              <TableRow>
+                <TableHead className="w-8 sticky left-0 bg-background z-20"><Checkbox checked={allSelected} onCheckedChange={toggleAll} /></TableHead>
               <TableHead>Romaneio</TableHead>
               <TableHead>Data</TableHead>
               <TableHead>Origem → Destino</TableHead>
@@ -69,10 +70,10 @@ export default function LoadPicker({ driverId, includeSettlementId, selectedIds,
               <TableHead className="text-right">Peso</TableHead>
               <TableHead className="text-right">Valor</TableHead>
               <TableHead className="text-right">Frete</TableHead>
-              <TableHead>Status</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
             {loads.length === 0 && !isLoading && (
               <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-6">Nenhum romaneio disponível.</TableCell></TableRow>
             )}
@@ -86,8 +87,8 @@ export default function LoadPicker({ driverId, includeSettlementId, selectedIds,
                   onClick={() => { if (!blocked) toggle(l.id); }}
                   title={blocked ? 'Romaneio de outro motorista' : undefined}
                 >
-                <TableCell onClick={(e) => e.stopPropagation()}>
-                  <Checkbox
+                  <TableCell onClick={(e) => e.stopPropagation()} className="sticky left-0 bg-inherit z-10 border-r">
+                    <Checkbox
                     checked={selectedSet.has(l.id)}
                     disabled={blocked}
                     onCheckedChange={() => { if (!blocked) toggle(l.id); }}
@@ -108,6 +109,7 @@ export default function LoadPicker({ driverId, includeSettlementId, selectedIds,
             ))}
           </TableBody>
         </Table>
+        </div>
       </div>
     </div>
   );
