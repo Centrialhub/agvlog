@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button';
 import { Truck, MapPin, Package, Clock, ArrowRight, ClipboardCheck, AlertTriangle, Receipt, FileText, Map } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-import { canUseDriverDemo } from '@/lib/driver/demoMode';
 import NoLoadsHelp from '@/components/driver/NoLoadsHelp';
 import { useState, useEffect } from 'react';
 import DriverDeliveryMap, { DeliveryPoint } from '@/components/driver/DriverDeliveryMap';
@@ -17,24 +16,8 @@ import DriverLoadNotes from '@/components/driver/DriverLoadNotes';
 import { TRIP_ACTIVE_STATUSES, tripStatusLabel } from '@/lib/status';
 import { LOAD_STATUS_LABELS, TERMINAL_LOAD_STATUSES } from '@/lib/status/loadStatus';
 
-const IS_PROD = import.meta.env.PROD;
 
-const DEMO_TRIP = {
-  id: 'demo-trip',
-  status: 'in_progress',
-  loads: { load_number: '1042 (DEMO)', origin: 'CD Montes Claros/MG', destination: 'PAI PEDRO - PIRAPORA - JAÍBA' },
-  vehicles: { plate: 'DEM-1234', nickname: 'Demo' },
-};
 
-const DEMO_MAP_STOPS: DeliveryPoint[] = [
-  { id: 's1', name: 'CD Montes Claros', lat: -16.7286, lng: -43.8582, status: 'done', sequence: 0 },
-  { id: 's2', name: 'AMANDA D - Pai Pedro', lat: -15.4889, lng: -42.6692, status: 'done', sequence: 1 },
-  { id: 's3', name: 'LINDSAY @ - Pirapora', lat: -17.3447, lng: -44.9425, status: 'current', sequence: 2 },
-  { id: 's4', name: 'IRMÃOS FERREIRA - Jaíba', lat: -15.3225, lng: -43.6694, status: 'pending', sequence: 3 },
-  { id: 's5', name: 'CG BEATRIZ - Pirapora', lat: -17.3500, lng: -44.9400, status: 'pending', sequence: 4 },
-];
-
-const DEMO_VEHICLE_POS = { lat: -17.3447, lng: -44.9425, plate: 'DEM-1234' };
 
 export default function DriverHome() {
   const { currentTenant } = useTenant();
@@ -43,7 +26,6 @@ export default function DriverHome() {
   const queryClient = useTanstackQueryClient();
   const { data: autoTrip } = useActiveTrip(driver?.id);
   const checklist = useChecklistStatus(autoTrip?.id);
-  const [demoActive, setDemoActive] = useState(false);
 
   const { data: activeTrips = [], isLoading: tripsLoading } = useQuery({
     queryKey: ['driver_my_trips', driver?.id],
@@ -149,9 +131,7 @@ export default function DriverHome() {
 
   const loading = driverLoading || tripsLoading || loadsLoading;
 
-  // Demo mode only allowed in local development when no real data exists.
-  const isDemo = false;
-  const tripsToShow: any[] = isDemo ? [DEMO_TRIP] : activeTrips.filter(t => TRIP_ACTIVE_STATUSES.includes(t.status as any));
+  const tripsToShow: any[] = activeTrips.filter(t => TRIP_ACTIVE_STATUSES.includes(t.status as any));
 
   // Constrói pontos reais do mapa a partir das paradas com lat/lng.
   const TERMINAL_STOP_STATUSES = new Set(['completed', 'delivered', 'refused', 'returned', 'failed', 'partial_delivery']);
@@ -173,7 +153,7 @@ export default function DriverHome() {
     vehiclePos && vehiclePos.lat != null && vehiclePos.lng != null
       ? { lat: Number(vehiclePos.lat), lng: Number(vehiclePos.lng), plate: primaryTrip?.vehicles?.plate || '' }
       : undefined;
-  const showRealMap = !isDemo && realMapStops.length > 0;
+  const showRealMap = realMapStops.length > 0;
 
   return (
     <div className="space-y-4">

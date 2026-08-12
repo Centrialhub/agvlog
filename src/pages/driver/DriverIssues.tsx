@@ -15,14 +15,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AlertTriangle, Plus, Clock, MessageSquare, Send } from 'lucide-react';
 
-import { canUseDriverDemo } from '@/lib/driver/demoMode';
 import { useEventMessages, useSendEventMessage } from '@/hooks/useEventMessages';
 import { format } from 'date-fns';
 import { OCCURRENCE_TEMPLATES, getTemplateFields, formatOccurrenceReport } from '@/lib/occurrenceTemplate';
 import { EVENT_TYPE_LABELS, OperationalEventType } from '@/hooks/useOperationalEvents';
 import { Copy } from 'lucide-react';
-
-const IS_PROD = import.meta.env.PROD;
 
 // Tipos com modelo padronizado (texto pronto para o fornecedor) + tipos genéricos para casos do dia-a-dia.
 const TEMPLATE_TYPES = Object.keys(OCCURRENCE_TEMPLATES) as OperationalEventType[];
@@ -38,11 +35,6 @@ const SEVERITY_OPTIONS = [
   { value: 'high', label: 'Alta' },
 ];
 
-const DEMO_EVENTS_INITIAL: any[] = [
-  { id: 'de1', event_type: 'cargo_damage',     severity: 'medium', description: 'Caixa amassada no transporte — fotografada.', created_at: new Date(Date.now() - 2*3600000).toISOString() },
-  { id: 'de2', event_type: 'wrong_address',    severity: 'low',    description: 'Endereço da NF 2100090 estava desatualizado.', created_at: new Date(Date.now() - 5*3600000).toISOString() },
-  { id: 'de3', event_type: 'vehicle_breakdown',severity: 'high',   description: 'Pneu furado no km 142 da BR-365.',           created_at: new Date(Date.now() - 24*3600000).toISOString() },
-];
 
 export default function DriverIssues() {
   const { currentTenant } = useTenant();
@@ -54,7 +46,6 @@ export default function DriverIssues() {
   const [form, setForm] = useState<{ event_type: string; severity: string; description: string; details: Record<string, any> }>({
     event_type: 'missing_goods', severity: 'medium', description: '', details: {},
   });
-  const [demoEvents, setDemoEvents] = useState<any[]>(DEMO_EVENTS_INITIAL);
 
   const { data: events = [] } = useQuery({
     queryKey: ['driver_operational_events', driver?.id],
@@ -110,18 +101,7 @@ export default function DriverIssues() {
     mutationFn: async () => {
       const report = formatOccurrenceReport(form.event_type, form.details);
       const description = report || form.description || null;
-      if (!currentTenant || !driver || !trip) {
-        if (!canUseDriverDemo) throw new Error('Sem viagem ativa.');
-        setDemoEvents((prev) => [{
-          id: 'd' + Date.now(),
-          event_type: form.event_type,
-          severity: form.severity,
-          description,
-          report_details: form.details,
-          created_at: new Date().toISOString(),
-        }, ...prev]);
-        return;
-      }
+      if (!currentTenant || !driver || !trip) throw new Error('Sem viagem ativa.');
       const { error } = await supabase.rpc('driver_create_operational_occurrence', {
         _trip_id: trip.id,
         _event_type: form.event_type,
@@ -141,8 +121,6 @@ export default function DriverIssues() {
     onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
   });
 
-  // Padronizado com DriverHome/DriverDeliveries: nunca em produção.
-  const isDemo = false;
   const effectiveEvents = driver ? events : [];
   const [chatEvent, setChatEvent] = useState<any | null>(null);
 
@@ -296,7 +274,7 @@ export default function DriverIssues() {
           {effectiveEvents.map((evt: any) => {
             const typeLabel = EVENT_TYPE_LABELS[evt.event_type as OperationalEventType] || ISSUE_TYPES.find(t => t.value === evt.event_type)?.label || evt.event_type;
             return (
-              <Card key={evt.id} className="cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => !isDemo && setChatEvent(evt)}>
+              <Card key={evt.id} className="cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => setChatEvent(evt)}>
                 <CardContent className="p-3 space-y-1">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-medium">{typeLabel}</p>
@@ -308,11 +286,9 @@ export default function DriverIssues() {
                       <Clock className="h-2.5 w-2.5" />
                       {new Date(evt.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                     </span>
-                    {!isDemo && (
-                      <span className="flex items-center gap-1 text-primary">
-                        <MessageSquare className="h-2.5 w-2.5" /> Chat
-                      </span>
-                    )}
+                    <span className="flex items-center gap-1 text-primary">
+                      <MessageSquare className="h-2.5 w-2.5" /> Chat
+                    </span>
                   </div>
                 </CardContent>
               </Card>
