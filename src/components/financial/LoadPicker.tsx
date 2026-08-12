@@ -99,9 +99,9 @@ export default function LoadPicker({ driverId, includeSettlementId, selectedIds,
                 <TableCell className="max-w-[200px] truncate" title={[l.origin, l.destination].filter(Boolean).join(' → ')}>{[l.origin, l.destination].filter(Boolean).join(' → ') || '—'}</TableCell>
                 <TableCell className="whitespace-nowrap">{l.driver_name ?? '—'}</TableCell>
                 <TableCell className="text-right">{l.invoice_count ?? 0}</TableCell>
-                <TableCell className="text-right">{fmtNum(l.total_weight_kg, 0)} kg</TableCell>
-                <TableCell className="text-right">{fmtMoney(l.gross_cargo_value)}</TableCell>
-                <TableCell className="text-right">{fmtMoney(l.freight_amount)}</TableCell>
+                <TableCell className="text-right whitespace-nowrap">{fmtNum(l.total_weight_kg, 0)} kg</TableCell>
+                <TableCell className="text-right whitespace-nowrap">{fmtMoney(l.gross_cargo_value)}</TableCell>
+                <TableCell className="text-right whitespace-nowrap">{fmtMoney(l.freight_amount)}</TableCell>
                 <TableCell><Badge variant="outline" className="text-[10px] whitespace-nowrap">{l.status ?? '—'}</Badge></TableCell>
                 </TableRow>
                 );
