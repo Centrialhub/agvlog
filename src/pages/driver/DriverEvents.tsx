@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Search, CheckCircle2, AlertTriangle, FileText, ChevronRight, Clock, MapPin } from 'lucide-react';
-import DemoBanner from '@/components/driver/DemoBanner';
+
 import { canUseDriverDemo } from '@/lib/driver/demoMode';
 
 export type DemoEvent = {
@@ -115,7 +115,7 @@ export default function DriverEvents() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<'all' | 'finalizador' | 'informativo'>('all');
-  const [demoActive, setDemoActive] = useState(canUseDriverDemo);
+  const [demoActive, setDemoActive] = useState(false);
   const { data: driver } = useCurrentDriver();
   const { data: trip } = useActiveTrip(driver?.id);
   const qc = useQueryClient();
@@ -153,8 +153,8 @@ export default function DriverEvents() {
     };
   }, [driver?.id, qc]);
 
-  const isDemo = canUseDriverDemo && !driver && demoActive;
-  const events: DemoEvent[] = isDemo ? DEMO_EVENTS_INITIAL : realEvents;
+  const isDemo = false;
+  const events: DemoEvent[] = realEvents;
 
   const filtered = useMemo(() => {
     let list = events;
@@ -178,12 +178,6 @@ export default function DriverEvents() {
         <p className="text-sm text-muted-foreground">Histórico de eventos da viagem</p>
       </div>
 
-      {isDemo && (
-        <DemoBanner
-          message="Modo demonstração — eventos fictícios."
-          onReset={() => setDemoActive(false)}
-        />
-      )}
 
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
