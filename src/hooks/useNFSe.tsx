@@ -53,6 +53,7 @@ export interface NFSeDoc {
   insurer_endorsement?: string | null;
   insured_amount?: number | null;
   insurance_premium?: number | null;
+  regime_tributario?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -117,15 +118,22 @@ export function useCreateNFSe() {
       // Resolve emitter: explicit → default active
       let emitterId = input.emitter_id ?? null;
       let branch = input.branch_code || 'MATRIZ';
+      let regime = (input as any).regime_tributario || null;
+
       if (!emitterId) {
         const { data: def } = await (supabase as any)
-          .from('tenant_emitters').select('id, branch_code')
+          .from('tenant_emitters').select('id, branch_code, regime_tributario')
           .eq('tenant_id', currentTenant.id).eq('is_default', true).eq('active', true).maybeSingle();
-        if (def?.id) { emitterId = def.id; branch = def.branch_code || branch; }
+        if (def?.id) { 
+          emitterId = def.id; 
+          branch = def.branch_code || branch; 
+          regime = regime || def.regime_tributario || null;
+        }
       } else {
         const { data: em } = await (supabase as any)
-          .from('tenant_emitters').select('branch_code').eq('id', emitterId).maybeSingle();
+          .from('tenant_emitters').select('branch_code, regime_tributario').eq('id', emitterId).maybeSingle();
         if (em?.branch_code) branch = em.branch_code;
+        regime = regime || em?.regime_tributario || null;
       }
 
       // Allocate next RPS number atomically (prefer per-emitter, fallback to per-branch)
@@ -147,6 +155,7 @@ export function useCreateNFSe() {
         ...input,
         tenant_id: currentTenant.id,
         emitter_id: emitterId,
+        regime_tributario: regime,
         branch_code: branch,
         series,
         rps_number: String(nextNum),

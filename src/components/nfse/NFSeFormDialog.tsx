@@ -47,7 +47,9 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
   const { data: emitters = [] } = useEmitters();
   const { data: clients = [] } = useClients();
 
-  const [form, setForm] = useState<any>({});
+  const [form, setForm] = useState<any>({
+    regime_tributario: '3', // 3 = Normal, 1 = Simples Nacional
+  });
   const [items, setItems] = useState<NFSeItem[]>([]);
   const [loadingInvoice, setLoadingInvoice] = useState(false);
   const [invoiceSearch, setInvoiceSearch] = useState('');
@@ -141,6 +143,7 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
     setForm({
       branch_code: initial?.branch_code || 'MATRIZ',
       emitter_id: (initial as any)?.emitter_id ?? null,
+      regime_tributario: (initial as any)?.regime_tributario || '3',
       series: initial?.series || '1',
       doc_type: initial?.doc_type || 'NFS',
       situacao_doc: initial?.situacao_doc || '00',
@@ -421,6 +424,7 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
                   const em = emitters.find(e => e.id === v);
                   setField('emitter_id', v);
                   if (em?.branch_code) setField('branch_code', em.branch_code);
+                  if (em?.regime_tributario) setField('regime_tributario', em.regime_tributario);
                 }}>
                   <SelectTrigger><SelectValue placeholder={emitters.length ? 'Selecione o emitente' : 'Cadastre um emitente em Configurações'} /></SelectTrigger>
                   <SelectContent>
@@ -450,6 +454,16 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
               <div className="col-span-2"><Label>Cód. Trib. Municipal</Label><Input value={form.cod_trib_municipal || ''} onChange={e => setField('cod_trib_municipal', e.target.value)} /></div>
               <div className="col-span-2"><Label>Cód. Mun. Prestação</Label><Input value={form.cod_municipio_prestacao || ''} onChange={e => setField('cod_municipio_prestacao', e.target.value)} /></div>
               <div className="col-span-2"><Label>Tipo CTRC</Label><Input value={form.tipo_ctrc || ''} onChange={e => setField('tipo_ctrc', e.target.value)} /></div>
+              <div className="col-span-2">
+                <Label>Regime Tributário</Label>
+                <Select value={form.regime_tributario || '3'} onValueChange={v => setField('regime_tributario', v)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">Simples Nacional</SelectItem>
+                    <SelectItem value="3">Normal</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="space-y-2 pt-2">

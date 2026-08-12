@@ -9327,6 +9327,7 @@ export type Database = {
           quantity: number | null
           raw_response: Json | null
           reference_number: string | null
+          regime_tributario: string | null
           rejection_messages: Json | null
           related_cte_ids: string[] | null
           rps_number: string | null
@@ -9427,6 +9428,7 @@ export type Database = {
           quantity?: number | null
           raw_response?: Json | null
           reference_number?: string | null
+          regime_tributario?: string | null
           rejection_messages?: Json | null
           related_cte_ids?: string[] | null
           rps_number?: string | null
@@ -9527,6 +9529,7 @@ export type Database = {
           quantity?: number | null
           raw_response?: Json | null
           reference_number?: string | null
+          regime_tributario?: string | null
           rejection_messages?: Json | null
           related_cte_ids?: string[] | null
           rps_number?: string | null
