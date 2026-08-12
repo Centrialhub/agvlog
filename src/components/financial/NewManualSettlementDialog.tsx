@@ -69,8 +69,9 @@ export default function NewManualSettlementDialog({ open, onOpenChange, onCreate
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl">
-        <DialogHeader><DialogTitle>Novo acerto manual</DialogTitle></DialogHeader>
+      <DialogContent className="max-w-[95vw] md:max-w-5xl max-h-[95vh] overflow-y-auto flex flex-col p-0">
+        <DialogHeader className="p-6 pb-0"><DialogTitle>Novo acerto manual</DialogTitle></DialogHeader>
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
           <div className="md:col-span-5">
             <Label>Motorista *</Label>
@@ -114,7 +115,8 @@ export default function NewManualSettlementDialog({ open, onOpenChange, onCreate
             </div>
           )}
         </div>
-        <DialogFooter>
+      </div>
+        <DialogFooter className="p-6 pt-2 border-t bg-muted/5">
           <div className="flex items-center gap-3 flex-1">
             {disabledReason && (
               <span className="text-xs text-muted-foreground">{disabledReason}</span>

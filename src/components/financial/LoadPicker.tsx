@@ -57,20 +57,22 @@ export default function LoadPicker({ driverId, includeSettlementId, selectedIds,
         {isLoading ? 'Carregando romaneios…' : `${loads.length} romaneio(s) disponível(is) · ${selectedIds.length} selecionado(s)`}
       </div>
       <div className="rounded-md border overflow-hidden">
-        <div className="overflow-x-auto overflow-y-auto max-h-[380px]">
+        <div className="overflow-x-auto overflow-y-auto max-h-[45vh] min-h-[200px]">
           <Table>
-            <TableHeader className="sticky top-0 bg-background z-10 shadow-sm">
-              <TableRow>
-                <TableHead className="w-8 sticky left-0 bg-background z-20"><Checkbox checked={allSelected} onCheckedChange={toggleAll} /></TableHead>
-              <TableHead>Romaneio</TableHead>
-              <TableHead>Data</TableHead>
-              <TableHead>Origem → Destino</TableHead>
-              <TableHead>Motorista</TableHead>
-              <TableHead className="text-right">Notas</TableHead>
-              <TableHead className="text-right">Peso</TableHead>
-              <TableHead className="text-right">Valor</TableHead>
-              <TableHead className="text-right">Frete</TableHead>
-                <TableHead>Status</TableHead>
+            <TableHeader className="sticky top-0 bg-background z-30 shadow-sm">
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="w-12 sticky left-0 bg-background z-40 border-r text-center">
+                  <Checkbox checked={allSelected} onCheckedChange={toggleAll} />
+                </TableHead>
+                <TableHead className="whitespace-nowrap">Romaneio</TableHead>
+                <TableHead className="whitespace-nowrap">Data</TableHead>
+                <TableHead className="whitespace-nowrap">Origem → Destino</TableHead>
+                <TableHead className="whitespace-nowrap">Motorista</TableHead>
+                <TableHead className="text-right whitespace-nowrap">Notas</TableHead>
+                <TableHead className="text-right whitespace-nowrap">Peso</TableHead>
+                <TableHead className="text-right whitespace-nowrap">Valor</TableHead>
+                <TableHead className="text-right whitespace-nowrap">Frete</TableHead>
+                <TableHead className="whitespace-nowrap">Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -87,13 +89,13 @@ export default function LoadPicker({ driverId, includeSettlementId, selectedIds,
                   onClick={() => { if (!blocked) toggle(l.id); }}
                   title={blocked ? 'Romaneio de outro motorista' : undefined}
                 >
-                  <TableCell onClick={(e) => e.stopPropagation()} className="sticky left-0 bg-inherit z-10 border-r">
+                  <TableCell onClick={(e) => e.stopPropagation()} className="sticky left-0 bg-inherit z-20 border-r text-center">
                     <Checkbox
-                    checked={selectedSet.has(l.id)}
-                    disabled={blocked}
-                    onCheckedChange={() => { if (!blocked) toggle(l.id); }}
-                  />
-                </TableCell>
+                      checked={selectedSet.has(l.id)}
+                      disabled={blocked}
+                      onCheckedChange={() => { if (!blocked) toggle(l.id); }}
+                    />
+                  </TableCell>
                 <TableCell className="font-medium whitespace-nowrap">{l.load_number ?? '—'}</TableCell>
                 <TableCell className="whitespace-nowrap">{l.load_date ?? '—'}</TableCell>
                 <TableCell className="max-w-[200px] truncate" title={[l.origin, l.destination].filter(Boolean).join(' → ')}>{[l.origin, l.destination].filter(Boolean).join(' → ') || '—'}</TableCell>
