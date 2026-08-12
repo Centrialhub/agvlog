@@ -737,8 +737,11 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                         reference: payReference || null, receipt_url: payReceipt || null, notes: payNotes || null,
                         allow_overpayment: isOverpayment ? payAllowOver : false,
                         overpayment_reason: isOverpayment ? payOverReason : null,
+                        bank_account_id: payBankAccountId === 'none' ? null : payBankAccountId,
+                        cost_center: payCostCenter,
                       });
                       setPayOpen(false); setPayReference(''); setPayReceipt(''); setPayNotes(''); setPayAllowOver(false); setPayOverReason(''); setPayAccountOther('');
+                      setPayBankAccountId('none');
                     }}>Registrar</Button>
                 </DialogFooter>
               </DialogContent>
