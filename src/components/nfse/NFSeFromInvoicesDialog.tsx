@@ -195,7 +195,8 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
     // Fallback para os dados da própria NF (OCR/XML) quando o cadastro está incompleto
     const municipio = (match?.address_city || first.recipient_city || first.remitter_city || '').trim();
     const uf = (match?.address_state || first.recipient_state || first.remitter_state || '').trim();
-    const zip = (match?.address_zip || first.recipient_zip || first.remitter_zip || '').trim();
+    const zipRaw = onlyDigits(zip);
+    const municipioCod = match?.city_ibge || null;
 
     return {
       nome: (match?.company_name || first[key] || '') as string,
@@ -204,8 +205,9 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
       endereco: (match?.address_street || '') as string,
       bairro: (match?.address_neighborhood || '') as string,
       municipio,
+      municipio_cod: municipioCod,
       uf,
-      cep: String(onlyDigits(zip)).slice(0, 8).padStart(8, '0'),
+      cep: zipRaw ? zipRaw.slice(0, 8).padStart(8, '0') : '',
       cliente_id: match?.id || null,
     };
   }, [selectedDocs, tomadorMode, clients]);
@@ -244,7 +246,8 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
         cliente_bairro: tomador.bairro,
         cliente_municipio: tomador.municipio,
         cliente_uf: tomador.uf,
-        cliente_cep: tomador.cep,
+        cliente_cep: tomador.cep || null,
+        cliente_cod_municipio: tomador.municipio_cod,
         description,
         aliquota_iss: aliquotaIss,
         iss_retido: issRetido,
