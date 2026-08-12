@@ -301,7 +301,8 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
   const handleSave = async () => {
     if (!form.cliente_nome) { toast.error('Informe o tomador (cliente)'); return; }
     if (!form.cliente_municipio) { toast.error('Informe o município do tomador'); return; }
-    if (!normalizeIbgeCity(form.cliente_cod_municipio) && !normalizeIbgeCity(form.cliente_municipio)) {
+    const normalizedCityCode = normalizeIbgeCity(form.cliente_cod_municipio) || normalizeIbgeCity(form.cliente_municipio);
+    if (!normalizedCityCode) {
       toast.error('Informe o código IBGE (7 dígitos) do município do tomador');
       return;
     }
@@ -310,6 +311,8 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
     if (totalServicos <= 0) { toast.error('Valor de serviços deve ser maior que zero'); return; }
     const payload: any = {
       ...form,
+      cliente_cep: normalizeCep(form.cliente_cep),
+      cliente_cod_municipio: normalizedCityCode,
       items,
       valor_servicos: totalServicos,
       base_calculo: baseCalculo,
