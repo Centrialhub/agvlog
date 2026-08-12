@@ -14,7 +14,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AlertTriangle, Plus, Clock, MessageSquare, Send } from 'lucide-react';
-import DemoBanner from '@/components/driver/DemoBanner';
+
 import { canUseDriverDemo } from '@/lib/driver/demoMode';
 import { useEventMessages, useSendEventMessage } from '@/hooks/useEventMessages';
 import { format } from 'date-fns';
@@ -142,8 +142,8 @@ export default function DriverIssues() {
   });
 
   // Padronizado com DriverHome/DriverDeliveries: nunca em produção.
-  const isDemo = canUseDriverDemo && !trip && !driver;
-  const effectiveEvents = isDemo ? demoEvents : (driver ? events : []);
+  const isDemo = false;
+  const effectiveEvents = driver ? events : [];
   const [chatEvent, setChatEvent] = useState<any | null>(null);
 
   const severityColors: Record<string, string> = {
@@ -283,12 +283,6 @@ export default function DriverIssues() {
         </Dialog>
       </div>
 
-      {isDemo && (
-        <DemoBanner
-          message="Sem usuário motorista vinculado — ocorrências fictícias."
-          onReset={() => setDemoEvents(DEMO_EVENTS_INITIAL)}
-        />
-      )}
 
       {effectiveEvents.length === 0 ? (
         <Card>

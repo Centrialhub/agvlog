@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { MapPin, Navigation, CheckCircle, Clock, ArrowRight } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import DemoBanner from '@/components/driver/DemoBanner';
+
 import { canUseDriverDemo } from '@/lib/driver/demoMode';
 import { isStopTerminal, STOP_STATUS_LABELS } from '@/lib/status';
 
@@ -147,9 +147,9 @@ export default function DriverStops() {
     window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(destination)}`, '_blank');
   };
 
-  const isDemo = canUseDriverDemo && !activeTrip && !driver;
-  const effectiveTrip: any = activeTrip || (isDemo ? DEMO_TRIP : null);
-  const effectiveStops: any[] = isDemo ? demoStops : (activeTrip ? (stops as any[]) : []);
+  const isDemo = false;
+  const effectiveTrip: any = activeTrip;
+  const effectiveStops: any[] = activeTrip ? (stops as any[]) : [];
 
   return (
     <div className="space-y-4">
@@ -160,12 +160,6 @@ export default function DriverStops() {
         </p>
       </div>
 
-      {isDemo && (
-        <DemoBanner
-          message="Sem viagem ativa — paradas fictícias."
-          onReset={() => setDemoStops(DEMO_STOPS_INITIAL)}
-        />
-      )}
 
       {!effectiveTrip && !isDemo ? (
         <Card>
