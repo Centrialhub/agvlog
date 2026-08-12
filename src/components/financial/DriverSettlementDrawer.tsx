@@ -52,12 +52,16 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
   const payments = data?.payments ?? [];
 
   const [auditedKm, setAuditedKm] = useState<string>('');
+  const [kmStart, setKmStart] = useState<string>('');
+  const [kmEnd, setKmEnd] = useState<string>('');
   const [kmStatus, setKmStatus] = useState<'pending' | 'reviewed' | 'disputed'>('pending');
   const [kmNotes, setKmNotes] = useState('');
 
   useEffect(() => {
     if (s) {
       setAuditedKm(s.audited_km != null ? String(s.audited_km) : '');
+      setKmStart(s.km_start != null ? String(s.km_start) : '');
+      setKmEnd(s.km_end != null ? String(s.km_end) : '');
       setKmStatus(s.km_review_status ?? 'pending');
       setKmNotes(s.km_review_notes ?? '');
     }
@@ -172,6 +176,7 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                 <div><div className="text-muted-foreground text-xs">Fim</div><div>{fmtDate(s.trip_completed_at)}</div></div>
                 <div><div className="text-muted-foreground text-xs">KM estimado</div><div>{fmtNum(s.estimated_km, 1)} km</div></div>
                 <div><div className="text-muted-foreground text-xs">KM auditado</div><div>{s.audited_km != null ? `${fmtNum(s.audited_km, 1)} km` : '—'}</div></div>
+                <div><div className="text-muted-foreground text-xs">KM Inicial / Final</div><div>{s.km_start != null ? fmtNum(s.km_start, 0) : '—'} / {s.km_end != null ? fmtNum(s.km_end, 0) : '—'}</div></div>
                 <div><div className="text-muted-foreground text-xs">Peso total</div><div>{fmtNum(s.total_weight_kg, 0)} kg</div></div>
                 <div><div className="text-muted-foreground text-xs">Romaneios / Notas</div><div>{s.loads_count} / {s.documents_count}</div></div>
                 <div><div className="text-muted-foreground text-xs">Valor da mercadoria</div><div>{fmtMoney(s.total_goods_value ?? s.total_invoice_value)}</div></div>
@@ -445,7 +450,37 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                     <Input value={s.estimated_km != null ? fmtNum(s.estimated_km, 1) : '—'} readOnly />
                   </div>
                   <div>
-                    <Label>KM auditado</Label>
+                    <Label>KM Inicial</Label>
+                    <Input 
+                      type="number" 
+                      value={kmStart} 
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setKmStart(val);
+                        if (kmEnd && val) {
+                          setAuditedKm(String(Number(kmEnd) - Number(val)));
+                        }
+                      }} 
+                      disabled={locked} 
+                    />
+                  </div>
+                  <div>
+                    <Label>KM Final</Label>
+                    <Input 
+                      type="number" 
+                      value={kmEnd} 
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setKmEnd(val);
+                        if (kmStart && val) {
+                          setAuditedKm(String(Number(val) - Number(kmStart)));
+                        }
+                      }} 
+                      disabled={locked} 
+                    />
+                  </div>
+                  <div>
+                    <Label>KM Percorrido (Auditoria)</Label>
                     <Input type="number" step="0.1" value={auditedKm} onChange={(e) => setAuditedKm(e.target.value)} disabled={locked} />
                   </div>
                   <div>
@@ -472,6 +507,8 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                     audited_km: auditedKm === '' ? null : Number(auditedKm),
                     km_status: kmStatus,
                     notes: kmNotes || null,
+                    km_start: kmStart === '' ? null : Number(kmStart),
+                    km_end: kmEnd === '' ? null : Number(kmEnd),
                   })}
                 >
                   Salvar conferência de KM
