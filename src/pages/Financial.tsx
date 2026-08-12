@@ -41,6 +41,7 @@ export default function Financial() {
   const [selectedClient, setSelectedClient] = useState<string>('all');
   const [docType, setDocType] = useState<string>('all');
   const [expenseCategory, setExpenseCategory] = useState<string>('all');
+  const [selectedCostCenter, setSelectedCostCenter] = useState<string>('all');
 
   // ── Receivables ──
   const { data: receivables = [] } = useReceivables();
@@ -52,7 +53,7 @@ export default function Financial() {
       if (!currentTenant) return [];
       const { data } = await supabase
         .from('fiscal_documents')
-        .select('id, document_type, value, weight_kg, freight_value, status, created_at, issue_date, client_id, invoice_number')
+        .select('id, document_type, value, weight_kg, freight_value, status, created_at, issue_date, client_id, invoice_number, cost_center')
         .eq('tenant_id', currentTenant.id)
         .order('created_at', { ascending: false })
         .limit(1000);
@@ -84,7 +85,7 @@ export default function Financial() {
       if (!currentTenant) return [];
       const { data } = await supabase
         .from('driver_expenses')
-        .select('id, amount, category, approval_status, expense_at, driver_id, notes, drivers(name)')
+        .select('id, amount, category, approval_status, expense_at, driver_id, notes, cost_center, drivers(name)')
         .eq('tenant_id', currentTenant.id)
         .order('expense_at', { ascending: false })
         .limit(500);
@@ -116,7 +117,7 @@ export default function Financial() {
       if (!currentTenant) return [];
       const { data } = await supabase
         .from('maintenance_orders')
-        .select('id, total_cost, labor_cost, parts_cost, status, created_at, maintenance_type')
+        .select('id, total_cost, labor_cost, parts_cost, status, created_at, maintenance_type, cost_center')
         .eq('tenant_id', currentTenant.id)
         .limit(500);
       return data || [];
@@ -161,8 +162,9 @@ export default function Financial() {
     if (selectedClient !== 'all') count++;
     if (docType !== 'all') count++;
     if (expenseCategory !== 'all') count++;
+    if (selectedCostCenter !== 'all') count++;
     return count;
-  }, [dateFrom, dateTo, selectedClient, docType, expenseCategory]);
+  }, [dateFrom, dateTo, selectedClient, docType, expenseCategory, selectedCostCenter]);
 
   const clearFilters = () => {
     setDateFrom('');
@@ -170,6 +172,7 @@ export default function Financial() {
     setSelectedClient('all');
     setDocType('all');
     setExpenseCategory('all');
+    setSelectedCostCenter('all');
   };
 
   // ── Period filter ──
