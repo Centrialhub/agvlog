@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useReceivables } from '@/hooks/useReceivables';
 import { useClients } from '@/hooks/useClients';
+import { useCostCenters } from '@/hooks/useCostCenters';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -126,6 +127,7 @@ export default function Financial() {
   });
 
   const { data: clients = [] } = useClients();
+  const { data: costCenters = [] } = useCostCenters();
 
   // Documentos válidos (cancelados/rejeitados nunca entram em faturamento)
   const billableDocs = useMemo(() => fiscalDocs.filter((d: any) => isBillableFiscalDoc(d)), [fiscalDocs]);
@@ -200,6 +202,7 @@ export default function Financial() {
     let filteredDocs = billableDocs.filter((d: any) => filterByPeriod(d.issue_date || d.created_at));
     if (selectedClient !== 'all') filteredDocs = filteredDocs.filter((d: any) => d.client_id === selectedClient);
     if (docType !== 'all') filteredDocs = filteredDocs.filter((d: any) => d.document_type === docType);
+    if (selectedCostCenter !== 'all') filteredDocs = filteredDocs.filter((d: any) => d.cost_center === selectedCostCenter);
 
     const nfes = filteredDocs.filter((d: any) => d.document_type === 'inbound');
     // Receita só de CT-e confirmado: rascunho/transmitindo ainda pode rejeitar.
@@ -222,6 +225,7 @@ export default function Financial() {
 
     let filteredExpenses = expenses.filter((e: any) => filterByPeriod(e.expense_at));
     if (expenseCategory !== 'all') filteredExpenses = filteredExpenses.filter((e: any) => e.category === expenseCategory);
+    if (selectedCostCenter !== 'all') filteredExpenses = filteredExpenses.filter((e: any) => e.cost_center === selectedCostCenter);
     const totalExpenses = filteredExpenses.reduce((s: number, e: any) => s + (Number(e.amount) || 0), 0);
     const pendingExpenses = filteredExpenses.filter((e: any) => e.approval_status === 'pending');
 
@@ -239,7 +243,8 @@ export default function Financial() {
       .filter((r: any) => isOpen(r) && r.due_date && r.due_date < today)
       .reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0);
 
-    const filteredMaint = maintenanceCosts.filter((m: any) => filterByPeriod(m.created_at));
+    let filteredMaint = maintenanceCosts.filter((m: any) => filterByPeriod(m.created_at));
+    if (selectedCostCenter !== 'all') filteredMaint = filteredMaint.filter((m: any) => m.cost_center === selectedCostCenter);
     const totalMaintenance = filteredMaint.reduce((s: number, m: any) => s + (Number(m.total_cost) || 0), 0);
 
     const revenue = totalFreight + totalNfseValue;
@@ -257,7 +262,7 @@ export default function Financial() {
       revenue, outflow, balance,
       receivablesCount: filteredReceivables.length,
     };
-  }, [billableDocs, voidDocs, billableNfse, voidNfse, expenses, receivables, maintenanceCosts, periodStart, periodEnd, selectedClient, docType, expenseCategory]);
+  }, [billableDocs, voidDocs, billableNfse, voidNfse, expenses, receivables, maintenanceCosts, periodStart, periodEnd, selectedClient, docType, expenseCategory, selectedCostCenter]);
 
   // ── Chart: Revenue vs Expenses by day ──
   const revenueExpenseChart = useMemo(() => {
@@ -450,6 +455,22 @@ export default function Financial() {
                       <SelectItem value="all">Todas</SelectItem>
                       {expenseCategories.map((cat: string) => (
                         <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                      ))}
+                    </SelectContent>
+                    </Select>
+                </div>
+
+                {/* Cost Center */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Centro de Custo</label>
+                  <Select value={selectedCostCenter} onValueChange={setSelectedCostCenter}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="Todos" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      {costCenters.map((cc: string) => (
+                        <SelectItem key={cc} value={cc}>{cc}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
