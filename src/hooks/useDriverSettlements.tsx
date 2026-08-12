@@ -450,6 +450,43 @@ export function useDetachLoadFromSettlement() {
   });
 }
 
+export function useAddSettlementManualExpense() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (p: {
+      settlement_id: string;
+      category: string;
+      amount: number;
+      expense_at: string;
+      cost_center: string;
+      payment_source?: string;
+      reimbursable?: boolean;
+      receipt_url?: string;
+      notes?: string;
+    }) => {
+      const { data, error } = await supabase.rpc('add_driver_settlement_manual_expense' as any, {
+        _settlement_id: p.settlement_id,
+        _category: p.category,
+        _amount: p.amount,
+        _expense_at: p.expense_at,
+        _cost_center: p.cost_center,
+        _payment_source: p.payment_source ?? 'driver',
+        _reimbursable: p.reimbursable ?? true,
+        _receipt_url: p.receipt_url ?? null,
+        _notes: p.notes ?? null,
+      });
+      if (error) throw error;
+      return data as string;
+    },
+    onSuccess: () => {
+      toast({ title: 'Despesa manual adicionada' });
+      qc.invalidateQueries({ queryKey: ['driver_settlements'] });
+      qc.invalidateQueries({ queryKey: ['driver_settlement'] });
+    },
+    onError: (e: any) => toast({ title: 'Falha ao adicionar despesa', description: e.message, variant: 'destructive' }),
+  });
+}
+
 export const SETTLEMENT_STATUS_LABEL: Record<DriverSettlementStatus, string> = {
   pending_review: 'Pendente',
   in_review: 'Em conferência',
