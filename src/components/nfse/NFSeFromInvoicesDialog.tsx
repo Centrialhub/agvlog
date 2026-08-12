@@ -560,6 +560,16 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="col-span-2">
+                <Label>Regime Tributário</Label>
+                <Select value={regimeTributario} onValueChange={setRegimeTributario}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">Simples Nacional</SelectItem>
+                    <SelectItem value="3">Normal</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <div><Label>Data emissão</Label><Input type="date" value={issueDate} onChange={e => setIssueDate(e.target.value)} /></div>
               <div><Label>Alíquota ISS (%)</Label><Input type="number" step="0.0001" value={aliquotaIss} onChange={e => setAliquotaIss(+e.target.value)} /></div>
               <div className="flex items-end gap-2"><Checkbox checked={issRetido} onCheckedChange={v => setIssRetido(!!v)} /><Label>ISS Retido</Label></div>
