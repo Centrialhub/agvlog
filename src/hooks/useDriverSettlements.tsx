@@ -510,5 +510,7 @@ export const SETTLEMENT_STATUS_VARIANT: Record<DriverSettlementStatus, 'default'
 };
 
 export function isLocked(s: DriverSettlementStatus) {
-  return s === 'approved' || s === 'paid' || s === 'closed';
+  // Manual additions of expenses and adjustments are now allowed even when approved/paid
+  // Only 'closed' should strictly lock everything.
+  return s === 'closed';
 }
