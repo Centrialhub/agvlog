@@ -195,8 +195,9 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
     // Fallback para os dados da própria NF (OCR/XML) quando o cadastro está incompleto
     const municipio = (match?.address_city || first.recipient_city || first.remitter_city || '').trim();
     const uf = (match?.address_state || first.recipient_state || first.remitter_state || '').trim();
+    const zip = (match?.address_zip || first.recipient_zip || first.remitter_zip || '').trim();
     const zipRaw = onlyDigits(zip);
-    const municipioCod = match?.city_ibge || null;
+    const municipioCod = (match as any)?.address_city_ibge_code || first.recipient_cod_municipio || first.remitter_cod_municipio || null;
 
     return {
       nome: (match?.company_name || first[key] || '') as string,
