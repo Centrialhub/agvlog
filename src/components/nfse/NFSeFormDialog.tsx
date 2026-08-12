@@ -303,8 +303,7 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
     if (!form.cliente_municipio) { toast.error('Informe o município do tomador'); return; }
     const normalizedCityCode = normalizeIbgeCity(form.cliente_cod_municipio) || normalizeIbgeCity(form.cliente_municipio);
     if (!normalizedCityCode) {
-      toast.error('Informe o código IBGE (7 dígitos) do município do tomador');
-      return;
+      toast.warning('Código IBGE do município não informado.');
     }
     if (!normalizeCep(form.cliente_cep)) { toast.error('Informe um CEP válido (8 dígitos) do tomador'); return; }
     if (!normalizeUf(form.cliente_uf)) { toast.error('Informe a UF do tomador (sigla de 2 letras)'); return; }
