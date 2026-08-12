@@ -71,8 +71,8 @@ export default function NewManualSettlementDialog({ open, onOpenChange, onCreate
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl">
         <DialogHeader><DialogTitle>Novo acerto manual</DialogTitle></DialogHeader>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div>
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+          <div className="md:col-span-5">
             <Label>Motorista *</Label>
             <Select value={driverId} onValueChange={setDriverId}>
               <SelectTrigger><SelectValue placeholder="Selecione o motorista" /></SelectTrigger>
@@ -81,7 +81,7 @@ export default function NewManualSettlementDialog({ open, onOpenChange, onCreate
               </SelectContent>
             </Select>
           </div>
-          <div>
+          <div className="md:col-span-4">
             <Label>Veículo</Label>
             <Select value={vehicleId} onValueChange={setVehicleId}>
               <SelectTrigger><SelectValue /></SelectTrigger>
@@ -91,7 +91,7 @@ export default function NewManualSettlementDialog({ open, onOpenChange, onCreate
               </SelectContent>
             </Select>
           </div>
-          <div>
+          <div className="md:col-span-3">
             <Label>Data de referência</Label>
             <Input type="date" value={refDate} onChange={(e) => setRefDate(e.target.value)} />
           </div>
