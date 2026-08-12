@@ -311,6 +311,8 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
     if (totalServicos <= 0) { toast.error('Valor de serviços deve ser maior que zero'); return; }
     const payload: any = {
       ...form,
+      cliente_cep: normalizeCep(form.cliente_cep),
+      cliente_cod_municipio: normalizedCityCode,
       items,
       valor_servicos: totalServicos,
       base_calculo: baseCalculo,
