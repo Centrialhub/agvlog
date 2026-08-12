@@ -9263,12 +9263,17 @@ export type Database = {
           cliente_bairro: string | null
           cliente_cep: string | null
           cliente_cnpj: string | null
+          cliente_cod_municipio: string | null
+          cliente_complemento: string | null
           cliente_email: string | null
           cliente_endereco: string | null
           cliente_id: string | null
           cliente_ie: string | null
+          cliente_im: string | null
           cliente_municipio: string | null
           cliente_nome: string | null
+          cliente_numero: string | null
+          cliente_telefone: string | null
           cliente_uf: string | null
           cnae: string | null
           cod_municipio_prestacao: string | null
@@ -9358,12 +9363,17 @@ export type Database = {
           cliente_bairro?: string | null
           cliente_cep?: string | null
           cliente_cnpj?: string | null
+          cliente_cod_municipio?: string | null
+          cliente_complemento?: string | null
           cliente_email?: string | null
           cliente_endereco?: string | null
           cliente_id?: string | null
           cliente_ie?: string | null
+          cliente_im?: string | null
           cliente_municipio?: string | null
           cliente_nome?: string | null
+          cliente_numero?: string | null
+          cliente_telefone?: string | null
           cliente_uf?: string | null
           cnae?: string | null
           cod_municipio_prestacao?: string | null
@@ -9453,12 +9463,17 @@ export type Database = {
           cliente_bairro?: string | null
           cliente_cep?: string | null
           cliente_cnpj?: string | null
+          cliente_cod_municipio?: string | null
+          cliente_complemento?: string | null
           cliente_email?: string | null
           cliente_endereco?: string | null
           cliente_id?: string | null
           cliente_ie?: string | null
+          cliente_im?: string | null
           cliente_municipio?: string | null
           cliente_nome?: string | null
+          cliente_numero?: string | null
+          cliente_telefone?: string | null
           cliente_uf?: string | null
           cnae?: string | null
           cod_municipio_prestacao?: string | null
