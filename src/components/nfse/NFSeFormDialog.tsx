@@ -293,7 +293,6 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
       cliente_cep: normalizeCep((client as any).address_zip) || '',
       cliente_email: (client as any).email || '',
       cliente_telefone: normalizePhone((client as any).phone) || '',
-      regime_tributario: client.regime_tributario || prev.regime_tributario || '3',
     }));
     setClientSearchOpen(false);
     toast.info('Dados do tomador preenchidos');
@@ -425,6 +424,7 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
                   const em = emitters.find(e => e.id === v);
                   setField('emitter_id', v);
                   if (em?.branch_code) setField('branch_code', em.branch_code);
+                  if (em?.regime_tributario) setField('regime_tributario', em.regime_tributario);
                 }}>
                   <SelectTrigger><SelectValue placeholder={emitters.length ? 'Selecione o emitente' : 'Cadastre um emitente em Configurações'} /></SelectTrigger>
                   <SelectContent>
@@ -454,6 +454,16 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
               <div className="col-span-2"><Label>Cód. Trib. Municipal</Label><Input value={form.cod_trib_municipal || ''} onChange={e => setField('cod_trib_municipal', e.target.value)} /></div>
               <div className="col-span-2"><Label>Cód. Mun. Prestação</Label><Input value={form.cod_municipio_prestacao || ''} onChange={e => setField('cod_municipio_prestacao', e.target.value)} /></div>
               <div className="col-span-2"><Label>Tipo CTRC</Label><Input value={form.tipo_ctrc || ''} onChange={e => setField('tipo_ctrc', e.target.value)} /></div>
+              <div className="col-span-2">
+                <Label>Regime Tributário</Label>
+                <Select value={form.regime_tributario || '3'} onValueChange={v => setField('regime_tributario', v)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">Simples Nacional</SelectItem>
+                    <SelectItem value="3">Normal</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="space-y-2 pt-2">
