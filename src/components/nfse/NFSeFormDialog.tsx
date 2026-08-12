@@ -47,7 +47,9 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
   const { data: emitters = [] } = useEmitters();
   const { data: clients = [] } = useClients();
 
-  const [form, setForm] = useState<any>({});
+  const [form, setForm] = useState<any>({
+    regime_tributario: '3', // 3 = Normal, 1 = Simples Nacional
+  });
   const [items, setItems] = useState<NFSeItem[]>([]);
   const [loadingInvoice, setLoadingInvoice] = useState(false);
   const [invoiceSearch, setInvoiceSearch] = useState('');
@@ -141,6 +143,7 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
     setForm({
       branch_code: initial?.branch_code || 'MATRIZ',
       emitter_id: (initial as any)?.emitter_id ?? null,
+      regime_tributario: (initial as any)?.regime_tributario || '3',
       series: initial?.series || '1',
       doc_type: initial?.doc_type || 'NFS',
       situacao_doc: initial?.situacao_doc || '00',
@@ -290,6 +293,7 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
       cliente_cep: normalizeCep((client as any).address_zip) || '',
       cliente_email: (client as any).email || '',
       cliente_telefone: normalizePhone((client as any).phone) || '',
+      regime_tributario: client.regime_tributario || prev.regime_tributario || '3',
     }));
     setClientSearchOpen(false);
     toast.info('Dados do tomador preenchidos');

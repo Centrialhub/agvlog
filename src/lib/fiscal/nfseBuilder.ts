@@ -184,6 +184,7 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl, a
     natureza: doc.nat_operacao || '1', // 1 = Tributação no município
     regimeEspecialTributacao: doc.regime_tributario === '1' ? 1 : undefined, // 1 = Microempresa Municipal (Simples)
     optanteSimplesNacional: doc.regime_tributario === '1',
+    regimeApuracaoSN: doc.regime_tributario === '1' ? 1 : undefined, // 1 = Faturamento (Competência)
     ambiente: env === 'sandbox' ? 'homologacao' : 'producao',
 
     prestador: {
