@@ -472,12 +472,6 @@ export default function DriverDeliveries() {
         </p>
       </div>
 
-      {isDemo && (
-        <DemoBanner
-          message="Sem viagem ativa — paradas e eventos são fictícios."
-          onReset={() => setDemoStops(DEMO_STOPS_INITIAL)}
-        />
-      )}
 
       {/* Search */}
       <div className="relative">
