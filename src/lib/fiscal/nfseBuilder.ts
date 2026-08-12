@@ -162,7 +162,7 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl, a
       endorsement: doc.insurer_endorsement,
     });
     if (!check.ok) {
-      throw new Error(`Dados do seguro inválidos: ${check.messages.join(' ')}`);
+      console.warn(`[NFSeBuilder] Dados do seguro inválidos: ${check.messages.join(' ')}. Enviando mesmo assim.`);
     }
   }
   const insuranceText = buildInsuranceText(insurance);
