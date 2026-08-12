@@ -30,7 +30,7 @@ export function useCostCenters() {
         .order('name');
         
       if (error) throw error;
-      return (data as CostCenter[]).map(cc => cc.name);
+      return (data as any[] as CostCenter[]).map(cc => cc.name);
     },
     enabled: !!currentTenant,
   });
@@ -47,7 +47,7 @@ export function useCostCenters() {
         .order('name');
         
       if (error) throw error;
-      return data as CostCenter[];
+      return data as any[] as CostCenter[];
     },
     enabled: !!currentTenant,
   });
