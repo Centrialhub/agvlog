@@ -513,7 +513,7 @@ function NewManualTransactionDialog({ accountId }: { accountId: string }) {
             </Select>
           </div>
         </div>
-        </div>
+
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
           <Button
