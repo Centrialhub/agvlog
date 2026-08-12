@@ -51,11 +51,12 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
 
   // Step 2 — dados fiscais da NFS-e
   const [emitterId, setEmitterId] = useState<string>('');
+  const [regimeTributario, setRegimeTributario] = useState<string>('3'); // 3 = Normal, 1 = Simples Nacional
   const [aliquotaIss, setAliquotaIss] = useState<number>(5);
   const [issRetido, setIssRetido] = useState(false);
   const [codServico, setCodServico] = useState('');
   const [cnae, setCnae] = useState('');
-  const [natOperacao, setNatOperacao] = useState('');
+  const [natOperacao, setNatOperacao] = useState('1'); // 1 = Tributação no município (Normal)
   const [descricao, setDescricao] = useState('');
   const [issueDate, setIssueDate] = useState(new Date().toISOString().slice(0, 10));
   const [tomadorMode, setTomadorMode] = useState<'remetente' | 'destinatario'>('remetente');
@@ -88,7 +89,10 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
     setObservacoes('');
     setServiceValues({});
     const defEm = emitters.find(e => e.active && e.is_default) || emitters.find(e => e.active);
-    setEmitterId(defEm?.id || '');
+    if (defEm) {
+      setEmitterId(defEm.id);
+      setRegimeTributario(defEm.regime_tributario || '3');
+    }
   }, [open, emitters]);
 
   const filters = useMemo(() => ({
@@ -255,6 +259,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
 
       const created = await create.mutateAsync({
         emitter_id: emitterId,
+        regime_tributario: regimeTributario,
         issue_date: issueDate,
         cliente_id: tomador.cliente_id,
         cliente_nome: tomador.nome,

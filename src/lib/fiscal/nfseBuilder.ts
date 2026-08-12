@@ -181,7 +181,9 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl, a
     // Identificação do RPS
     idIntegracao: integrationId,
     tipo: (doc.doc_type || 'RPS').toUpperCase(),
-    natureza: doc.nat_operacao || undefined,
+    natureza: doc.nat_operacao || '1', // 1 = Tributação no município
+    regimeEspecialTributacao: doc.regime_tributario === '1' ? 1 : undefined, // 1 = Microempresa Municipal (Simples)
+    optanteSimplesNacional: doc.regime_tributario === '1',
     ambiente: env === 'sandbox' ? 'homologacao' : 'producao',
 
     prestador: {
