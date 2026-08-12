@@ -96,7 +96,7 @@ export default function LoadPicker({ driverId, includeSettlementId, selectedIds,
                 </TableCell>
                 <TableCell className="font-medium">{l.load_number ?? '—'}</TableCell>
                 <TableCell>{l.load_date ?? '—'}</TableCell>
-                <TableCell className="max-w-xs truncate">{[l.origin, l.destination].filter(Boolean).join(' → ') || '—'}</TableCell>
+                <TableCell className="max-w-[200px] truncate" title={[l.origin, l.destination].filter(Boolean).join(' → ')}>{[l.origin, l.destination].filter(Boolean).join(' → ') || '—'}</TableCell>
                 <TableCell>{l.driver_name ?? '—'}</TableCell>
                 <TableCell className="text-right">{l.invoice_count ?? 0}</TableCell>
                 <TableCell className="text-right">{fmtNum(l.total_weight_kg, 0)} kg</TableCell>
