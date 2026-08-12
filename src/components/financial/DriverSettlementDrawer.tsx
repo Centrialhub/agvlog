@@ -16,8 +16,9 @@ import {
   useUpdateSettlementKmReview, useAddSettlementAdjustment, useRemoveSettlementAdjustment,
   useRegisterSettlementPayment, useSettleZeroDriverSettlement,
   SETTLEMENT_STATUS_LABEL, isLocked, DriverSettlementStatus,
-  useDetachLoadFromSettlement,
+  useDetachLoadFromSettlement, useAddSettlementManualExpense,
 } from '@/hooks/useDriverSettlements';
+import { useCostCenters } from '@/hooks/useCostCenters';
 import AttachLoadsDialog from './AttachLoadsDialog';
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
@@ -41,6 +42,8 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
   const settleZero = useSettleZeroDriverSettlement();
   const detachLoad = useDetachLoadFromSettlement();
   const [attachOpen, setAttachOpen] = useState(false);
+  const addManualExp = useAddSettlementManualExpense();
+  const { data: costCenters } = useCostCenters();
 
   const s = data?.settlement;
   const items = data?.items ?? [];
@@ -81,6 +84,17 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
   const [adjAmount, setAdjAmount] = useState('');
   const [adjDesc, setAdjDesc] = useState('');
   const [adjReason, setAdjReason] = useState('');
+
+  // Manual Expense dialog
+  const [expOpen, setExpOpen] = useState(false);
+  const [expCategory, setExpCategory] = useState('');
+  const [expAmount, setExpAmount] = useState('');
+  const [expDate, setExpDate] = useState(() => new Date().toISOString().slice(0, 16));
+  const [expCostCenter, setExpCostCenter] = useState('');
+  const [expPaymentSource, setExpPaymentSource] = useState('driver');
+  const [expReimbursable, setExpReimbursable] = useState(true);
+  const [expReceipt, setExpReceipt] = useState('');
+  const [expNotes, setExpNotes] = useState('');
 
   // Payment dialog
   const [payOpen, setPayOpen] = useState(false);
@@ -312,9 +326,90 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
               </TabsContent>
 
               <TabsContent value="expenses">
-                <div className="rounded-md border">
-                  <Table>
-                    <TableHeader><TableRow><TableHead>Categoria</TableHead><TableHead>Valor</TableHead><TableHead>Data</TableHead><TableHead>Status</TableHead><TableHead>Reembolso</TableHead><TableHead>Fonte</TableHead><TableHead>Comprovante</TableHead></TableRow></TableHeader>
+                <div className="space-y-3">
+                  <div className="flex justify-end">
+                    <Dialog open={expOpen} onOpenChange={setExpOpen}>
+                      <DialogTrigger asChild>
+                        <Button size="sm" disabled={locked}><Plus className="h-4 w-4 mr-1" /> Nova despesa</Button>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-md">
+                        <DialogHeader><DialogTitle>Adicionar despesa manual</DialogTitle></DialogHeader>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="col-span-2">
+                            <Label>Categoria / Descrição *</Label>
+                            <Input value={expCategory} onChange={(e) => setExpCategory(e.target.value)} placeholder="Ex.: Refeição, Estacionamento, Manutenção" />
+                          </div>
+                          <div>
+                            <Label>Valor *</Label>
+                            <Input type="number" step="0.01" value={expAmount} onChange={(e) => setExpAmount(e.target.value)} />
+                          </div>
+                          <div>
+                            <Label>Data/Hora *</Label>
+                            <Input type="datetime-local" value={expDate} onChange={(e) => setExpDate(e.target.value)} />
+                          </div>
+                          <div>
+                            <Label>Centro de Custo *</Label>
+                            <Select value={expCostCenter} onValueChange={setExpCostCenter}>
+                              <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                              <SelectContent>
+                                {costCenters?.map(cc => (
+                                  <SelectItem key={cc} value={cc}>{cc}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label>Fonte do pagamento</Label>
+                            <Select value={expPaymentSource} onValueChange={setExpPaymentSource}>
+                              <SelectTrigger><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="driver">Motorista</SelectItem>
+                                <SelectItem value="company">Empresa</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="flex items-center gap-2 pt-6">
+                            <Label className="flex items-center gap-2">
+                              <input type="checkbox" checked={expReimbursable} onChange={(e) => setExpReimbursable(e.target.checked)} className="rounded border-gray-300" />
+                              Reembolsável?
+                            </Label>
+                          </div>
+                          <div className="col-span-2">
+                            <Label>URL do comprovante</Label>
+                            <Input value={expReceipt} onChange={(e) => setExpReceipt(e.target.value)} placeholder="Link para imagem/PDF" />
+                          </div>
+                          <div className="col-span-2">
+                            <Label>Observações</Label>
+                            <Textarea value={expNotes} onChange={(e) => setExpNotes(e.target.value)} />
+                          </div>
+                        </div>
+                        <DialogFooter>
+                          <Button variant="outline" onClick={() => setExpOpen(false)}>Cancelar</Button>
+                          <Button
+                            disabled={!expCategory || !expAmount || !expCostCenter || addManualExp.isPending}
+                            onClick={async () => {
+                              await addManualExp.mutateAsync({
+                                settlement_id: s.id,
+                                category: expCategory,
+                                amount: Number(expAmount),
+                                expense_at: new Date(expDate).toISOString(),
+                                cost_center: expCostCenter,
+                                payment_source: expPaymentSource,
+                                reimbursable: expReimbursable,
+                                receipt_url: expReceipt || undefined,
+                                notes: expNotes || undefined,
+                              });
+                              setExpOpen(false);
+                              setExpCategory(''); setExpAmount(''); setExpReceipt(''); setExpNotes('');
+                            }}
+                          >Salvar</Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader><TableRow><TableHead>Categoria</TableHead><TableHead>Valor</TableHead><TableHead>Data</TableHead><TableHead>Status</TableHead><TableHead>Reembolso</TableHead><TableHead>Fonte</TableHead><TableHead>Comprovante</TableHead></TableRow></TableHeader>
                     <TableBody>
                       {expItems.map((i: any) => (
                         <TableRow key={i.id}>
@@ -329,7 +424,8 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                       ))}
                       {expItems.length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">Sem despesas</TableCell></TableRow>}
                     </TableBody>
-                  </Table>
+                    </Table>
+                  </div>
                 </div>
               </TabsContent>
 
