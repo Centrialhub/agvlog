@@ -31,7 +31,7 @@ export default function DriverEventDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: driver } = useCurrentDriver();
-  const [demoActive, setDemoActive] = useState(false);
+  
 
   const { data: realRow } = useQuery({
     queryKey: ['driver_event_detail', id, driver?.id],

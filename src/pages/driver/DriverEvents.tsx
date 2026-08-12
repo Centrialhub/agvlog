@@ -55,7 +55,7 @@ export default function DriverEvents() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<'all' | 'finalizador' | 'informativo'>('all');
-  const [demoActive, setDemoActive] = useState(false);
+  
   const { data: driver } = useCurrentDriver();
   const { data: trip } = useActiveTrip(driver?.id);
   const qc = useQueryClient();
