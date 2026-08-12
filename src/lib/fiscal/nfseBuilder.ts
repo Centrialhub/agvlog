@@ -122,7 +122,7 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl, a
         codigoCidade: emitter.city_code || end.city_code || end.codigo_ibge || undefined,
         descricaoCidade: end.municipio || end.cidade || undefined,
         estado: end.uf || undefined,
-        cep: onlyDigits(end.cep) || undefined,
+        cep: onlyDigits(end.cep).slice(0, 8) || undefined,
       },
     },
 
