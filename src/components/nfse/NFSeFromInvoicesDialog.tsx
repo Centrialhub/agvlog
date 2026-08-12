@@ -268,9 +268,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
     const normalizedBairro = currentTomador.bairro?.trim();
 
     if (!normalizedCityCode) { 
-      toast.error('Código IBGE do município inválido (precisa ter 7 dígitos). Preencha no tomador.'); 
-      setIsEditingTomador(true);
-      return; 
+      toast.warning('Código IBGE do município não informado. Algumas prefeituras podem rejeitar a nota.'); 
     }
     if (!normalizedCep) { 
       toast.error('CEP do tomador inválido (precisa ter 8 dígitos).'); 

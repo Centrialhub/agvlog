@@ -72,7 +72,10 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl, a
   const tomadorCityCode =
     normalizeIbgeCity(doc?.cliente_cod_municipio) || normalizeIbgeCity(doc?.cliente_municipio) || normalizeIbgeCity(doc?.cliente_cod_ibge);
   if (!tomadorCityName) missing.push('município do tomador');
-  if (!tomadorCityCode) missing.push('código IBGE do município do tomador (cadastre no cliente)');
+  // IBGE code is highly recommended but allowed to be missing if the user insists
+  if (!tomadorCityCode) {
+    console.warn('[NFSeBuilder] Tomador city IBGE code is missing. This might cause rejection by some providers.');
+  }
 
   const tomadorUf = normalizeUf(doc?.cliente_uf);
   if (!tomadorUf) missing.push('UF do tomador');
