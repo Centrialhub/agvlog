@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Truck, MapPin, Package, Clock, ArrowRight, ClipboardCheck, AlertTriangle, Receipt, FileText, Map } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import DemoBanner from '@/components/driver/DemoBanner';
+
 import { canUseDriverDemo } from '@/lib/driver/demoMode';
 import NoLoadsHelp from '@/components/driver/NoLoadsHelp';
 import { useState, useEffect } from 'react';
@@ -43,7 +43,7 @@ export default function DriverHome() {
   const queryClient = useTanstackQueryClient();
   const { data: autoTrip } = useActiveTrip(driver?.id);
   const checklist = useChecklistStatus(autoTrip?.id);
-  const [demoActive, setDemoActive] = useState(canUseDriverDemo);
+  const [demoActive, setDemoActive] = useState(false);
 
   const { data: activeTrips = [], isLoading: tripsLoading } = useQuery({
     queryKey: ['driver_my_trips', driver?.id],
@@ -150,11 +150,7 @@ export default function DriverHome() {
   const loading = driverLoading || tripsLoading || loadsLoading;
 
   // Demo mode only allowed in local development when no real data exists.
-  const isDemo =
-    canUseDriverDemo &&
-    (!driver || (activeTrips.length === 0 && standaloneLoads.length === 0)) &&
-    demoActive &&
-    !loading;
+  const isDemo = false;
   const tripsToShow: any[] = isDemo ? [DEMO_TRIP] : activeTrips.filter(t => TRIP_ACTIVE_STATUSES.includes(t.status as any));
 
   // Constrói pontos reais do mapa a partir das paradas com lat/lng.
@@ -186,14 +182,8 @@ export default function DriverHome() {
         <p className="text-sm text-muted-foreground">Seu painel de viagem</p>
       </div>
 
-      {isDemo && (
-        <DemoBanner
-          message="Sem viagem real — mostrando uma viagem fictícia."
-          onReset={() => setDemoActive(false)}
-        />
-      )}
 
-      {!loading && !isDemo && (!driver || (activeTrips.length === 0 && standaloneLoads.length === 0)) && (
+      {!loading && (!driver || (activeTrips.length === 0 && standaloneLoads.length === 0)) && (
         <NoLoadsHelp
           driverLinked={!!driver}
           driverActive={!!driver && (driver as any).status !== 'inactive'}
@@ -308,34 +298,6 @@ export default function DriverHome() {
         </div>
       )}
 
-      {/* Delivery map dashboard — somente em modo demo (placeholder visual). */}
-      {isDemo && tripsToShow.length > 0 && (
-        <Card>
-          <CardContent className="p-3 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Map className="h-4 w-4 text-primary" />
-                <span className="text-sm font-medium">Mapa das entregas</span>
-              </div>
-              <Badge variant="outline" className="text-[10px]">
-                {DEMO_MAP_STOPS.filter((s) => s.status === 'done').length}/{DEMO_MAP_STOPS.length} entregues
-              </Badge>
-            </div>
-            <DriverDeliveryMap stops={DEMO_MAP_STOPS} vehicle={DEMO_VEHICLE_POS} height={240} />
-            <div className="flex items-center justify-around text-[10px] text-muted-foreground pt-1">
-              <span className="flex items-center gap-1">
-                <span className="h-2.5 w-2.5 rounded-full bg-success" /> Entregue
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="h-2.5 w-2.5 rounded-full bg-primary" /> Atual
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="h-2.5 w-2.5 rounded-full bg-muted-foreground" /> Pendente
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Delivery map com dados reais — só quando há paradas geolocalizadas na viagem. */}
       {showRealMap && (

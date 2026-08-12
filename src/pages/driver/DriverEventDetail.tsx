@@ -19,7 +19,7 @@ import {
   Package,
   Hash,
 } from 'lucide-react';
-import DemoBanner from '@/components/driver/DemoBanner';
+
 import { DEMO_EVENTS_INITIAL } from './DriverEvents';
 import { canUseDriverDemo } from '@/lib/driver/demoMode';
 import { useCurrentDriver } from '@/hooks/useCurrentDriver';
@@ -33,7 +33,7 @@ export default function DriverEventDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: driver } = useCurrentDriver();
-  const [demoActive, setDemoActive] = useState(canUseDriverDemo);
+  const [demoActive, setDemoActive] = useState(false);
 
   const { data: realRow } = useQuery({
     queryKey: ['driver_event_detail', id, driver?.id],
@@ -51,10 +51,8 @@ export default function DriverEventDetail() {
     enabled: !!id && !!driver?.id,
   });
 
-  const isDemo = !driver && demoActive;
-  const event = isDemo
-    ? DEMO_EVENTS_INITIAL.find((e) => e.id === id)
-      : realRow
+  const isDemo = false;
+  const event = realRow
       ? (() => {
           const details: any = realRow.report_details || {};
           const type: 'finalizador' | 'informativo' = FINAL_EVENT_TYPES.has(realRow.event_type) ? 'finalizador' : 'informativo';
@@ -100,12 +98,6 @@ export default function DriverEventDetail() {
         <ArrowLeft className="h-4 w-4 mr-1" /> Eventos
       </Button>
 
-      {isDemo && (
-        <DemoBanner
-          message="Modo demonstração — dados fictícios."
-          onReset={() => setDemoActive(false)}
-        />
-      )}
 
       {/* Header card */}
       <Card className="border-l-4 border-l-primary">

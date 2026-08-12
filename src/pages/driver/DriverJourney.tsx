@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Clock, Play, Coffee, Moon, CheckCircle, ClipboardCheck, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import DemoBanner from '@/components/driver/DemoBanner';
+
 import { canUseDriverDemo } from '@/lib/driver/demoMode';
 
 const eventLabels: Record<string, { label: string; icon: typeof Play }> = {
@@ -95,8 +95,8 @@ export default function DriverJourney() {
     onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
   });
 
-  const isDemo = canUseDriverDemo && !trip && !driver;
-  const effectiveEvents = isDemo ? demoEvents : events;
+  const isDemo = false;
+  const effectiveEvents = events;
 
   const handleEventClick = (eventType: string) => {
     if (!isDemo && eventType === 'start_shift' && !checklist.preCompleted) {
@@ -131,14 +131,8 @@ export default function DriverJourney() {
     <div className="space-y-4">
       <h1 className="text-lg font-bold">Jornada</h1>
 
-      {isDemo && (
-        <DemoBanner
-          message="Sem viagem ativa — jornada fictícia."
-          onReset={() => setDemoEvents(DEMO_EVENTS_INITIAL)}
-        />
-      )}
 
-      {(trip || isDemo) ? (
+      {trip ? (
         <>
           {/* Checklist warnings */}
           {!isDemo && !checklist.isLoading && !checklist.preCompleted && (

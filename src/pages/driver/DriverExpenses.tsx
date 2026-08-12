@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Badge } from '@/components/ui/badge';
 import { Plus, Receipt, Fuel, UtensilsCrossed, Car, Wrench, ParkingCircle, Camera, Image, AlertTriangle } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
-import DemoBanner from '@/components/driver/DemoBanner';
+
 import { canUseDriverDemo } from '@/lib/driver/demoMode';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -172,8 +172,8 @@ export default function DriverExpenses() {
     },
   });
 
-  const isDemo = canUseDriverDemo && !driver && !trip;
-  const effectiveExpenses = isDemo ? demoExpenses : expenses;
+  const isDemo = false;
+  const effectiveExpenses = expenses;
 
   return (
     <div className="space-y-4">
@@ -287,12 +287,6 @@ export default function DriverExpenses() {
         </Dialog>
       </div>
 
-      {isDemo && (
-        <DemoBanner
-          message="Sem usuário motorista vinculado — despesas fictícias."
-          onReset={() => setDemoExpenses(DEMO_EXPENSES_INITIAL)}
-        />
-      )}
 
       {effectiveExpenses.length === 0 ? (
         <Card>

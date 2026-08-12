@@ -122,7 +122,8 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl, a
         codigoCidade: emitter.city_code || end.city_code || end.codigo_ibge || undefined,
         descricaoCidade: end.municipio || end.cidade || undefined,
         estado: end.uf || undefined,
-        cep: onlyDigits(end.cep) ? onlyDigits(end.cep).slice(0, 8).padStart(8, '0') : undefined,
+        cep: onlyDigits(end.cep).padStart(8, '0').slice(0, 8),
+        CEP: onlyDigits(end.cep).padStart(8, '0').slice(0, 8),
       },
     },
 
@@ -140,13 +141,13 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl, a
         codigoCidade: doc.cliente_cod_municipio || undefined,
         descricaoCidade: doc.cliente_municipio || undefined,
         estado: doc.cliente_uf || undefined,
-        cep: onlyDigits(doc.cliente_cep) ? onlyDigits(doc.cliente_cep).slice(0, 8).padStart(8, '0') : undefined,
+        cep: onlyDigits(doc.cliente_cep).padStart(8, '0').slice(0, 8),
         // Campos canônicos para provedores que exigem xLgr/nro/xBairro/UF/CEP
         xLgr: doc.cliente_endereco || undefined,
         nro: doc.cliente_numero || undefined,
         xBairro: doc.cliente_bairro || undefined,
         UF: doc.cliente_uf || undefined,
-        CEP: onlyDigits(doc.cliente_cep) ? onlyDigits(doc.cliente_cep).slice(0, 8).padStart(8, '0') : undefined,
+        CEP: onlyDigits(doc.cliente_cep).padStart(8, '0').slice(0, 8),
       },
     },
 

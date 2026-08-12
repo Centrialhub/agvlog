@@ -136,7 +136,7 @@ export default function DriverDeliveries() {
   const { data: realStopProducts = [] } = useQuery({
     queryKey: ['driver_stop_products', trip?.load_id, eventForm?.stop?.client_id],
     queryFn: async () => {
-      if (!trip?.load_id || !eventForm?.stop?.client_id) return [] as DemoProduct[];
+      if (!trip?.load_id || !eventForm?.stop?.client_id) return [] as any[];
       const { data: docs, error: docsErr } = await supabase
         .from('fiscal_documents')
         .select('id, invoice_number')
@@ -144,7 +144,7 @@ export default function DriverDeliveries() {
         .eq('client_id', eventForm.stop.client_id);
       if (docsErr) throw docsErr;
       const docIds = (docs || []).map((d: any) => d.id);
-      if (docIds.length === 0) return [] as DemoProduct[];
+      if (docIds.length === 0) return [] as any[];
       const { data: items, error: itemsErr } = await supabase
         .from('load_items')
         .select('id, item_description, quantity, weight_kg, volume_m3, fiscal_document_id')
@@ -157,12 +157,12 @@ export default function DriverDeliveries() {
         qty: Number(it.quantity) || 0,
         unit: 'UN',
         price: 0,
-      })) as DemoProduct[];
+      })) as any[];
     },
     enabled: !!eventForm?.stop && !isDemo && !!trip?.load_id && !!eventForm?.stop?.client_id,
   });
 
-  const stopProducts: DemoProduct[] = realStopProducts;
+  const stopProducts: any[] = realStopProducts;
 
   const totalReturnValue = stopProducts.reduce((sum, p) => {
     const q = returnedItems[p.id] || 0;
@@ -184,7 +184,7 @@ export default function DriverDeliveries() {
     enabled: !!trip?.id,
   });
 
-  const effectiveStops: any[] = isDemo ? demoStops : (stops as any[]);
+  const effectiveStops: any[] = (stops as any[]);
 
   const filteredStops = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -285,54 +285,6 @@ export default function DriverDeliveries() {
 
       // Demo: muta apenas em memória, sem chamar Supabase
       if (isDemo) {
-        await new Promise((r) => setTimeout(r, 400));
-        const initialMsg = buildDriverSummary();
-        setThreads((prev) => ({ ...prev, [threadKey]: [...(prev[threadKey] || []), initialMsg] }));
-
-        // Atualiza stop conforme finalAction (mesmo se aguardando operador, para refletir UI)
-        setDemoStops((prev) =>
-          prev.map((s) => {
-            if (s.id !== eventForm.stop.id) return s;
-            if (def.finalAction && !def.needsOperatorReply) return { ...s, status: def.finalAction === 'delivered' ? 'completed' : def.finalAction };
-            if (def.key === 'chegada_no_cliente' && s.status === 'pending') return { ...s, status: 'arrived' };
-            return s;
-          })
-        );
-
-        // Simula resposta do operador (apenas demo)
-        if (def.needsOperatorReply) {
-          const replies: Record<string, { text: string; status: 'approved' | 'rejected' }> = {
-            devolucao_parcial: { text: 'Devolução autorizada. Pode trazer os volumes marcados de volta ao CD.', status: 'approved' },
-            devolucao_total: { text: 'Devolução total confirmada. Retorne com a carga e abriremos a NF de devolução.', status: 'approved' },
-            solicitar_desconto: { text: 'Desconto aprovado conforme solicitado. Pode finalizar a entrega normalmente.', status: 'approved' },
-            atualizar_boleto:   { text: 'Boleto atualizado e enviado por e-mail/WhatsApp ao cliente. Aguarde 2 min.', status: 'approved' },
-          };
-          const r = replies[def.key];
-          if (r) {
-            setTimeout(() => {
-              setThreads((prev) => {
-                const list = prev[threadKey] || [];
-                const reply: ThreadMsg = {
-                  id: `m-${Date.now()}-op`,
-                  from: 'operator',
-                  author: 'Operação CD',
-                  text: r.text,
-                  at: new Date().toISOString(),
-                  status: r.status,
-                };
-                // marca a primeira pendente como respondida
-                const updated = list.map((m, idx) =>
-                  idx === 0 && m.status === 'pending' ? { ...m, status: r.status } : m
-                );
-                return { ...prev, [threadKey]: [...updated, reply] };
-              });
-              if (def.finalAction === 'partial' || def.finalAction === 'refused') {
-                setDemoStops((prev) => prev.map((s) => s.id === eventForm.stop.id ? { ...s, status: 'completed' } : s));
-              }
-              toast({ title: 'Operação respondeu', description: r.text });
-            }, 2200);
-          }
-        }
         return;
       }
 
@@ -520,12 +472,6 @@ export default function DriverDeliveries() {
         </p>
       </div>
 
-      {isDemo && (
-        <DemoBanner
-          message="Sem viagem ativa — paradas e eventos são fictícios."
-          onReset={() => setDemoStops(DEMO_STOPS_INITIAL)}
-        />
-      )}
 
       {/* Search */}
       <div className="relative">
