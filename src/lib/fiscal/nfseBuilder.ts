@@ -64,7 +64,6 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl, a
 
   const tomadorDoc = normalizeCpfCnpj(doc?.cliente_cnpj);
   if (!doc?.cliente_cnpj) missing.push('CNPJ/CPF do tomador');
-  else if (!tomadorDoc) missing.push('CNPJ/CPF do tomador inválido (precisa ter 11 ou 14 dígitos)');
   const tomadorNome = fiscalText(doc?.cliente_nome, 150);
   if (!tomadorNome) missing.push('razão social do tomador');
 
@@ -72,16 +71,12 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl, a
   const tomadorCityCode =
     normalizeIbgeCity(doc?.cliente_cod_municipio) || normalizeIbgeCity(doc?.cliente_municipio) || normalizeIbgeCity(doc?.cliente_cod_ibge);
   if (!tomadorCityName) missing.push('município do tomador');
-  // IBGE code is highly recommended but allowed to be missing if the user insists
-  if (!tomadorCityCode) {
-    console.warn('[NFSeBuilder] Tomador city IBGE code is missing. This might cause rejection by some providers.');
-  }
 
   const tomadorUf = normalizeUf(doc?.cliente_uf);
   if (!tomadorUf) missing.push('UF do tomador');
 
   const tomadorCep = normalizeCep(doc?.cliente_cep);
-  if (!tomadorCep) missing.push('CEP do tomador (8 dígitos válidos)');
+  if (!tomadorCep) missing.push('CEP do tomador');
 
   const tomadorLogradouro = fiscalText(doc?.cliente_endereco, 120);
   if (!tomadorLogradouro) missing.push('logradouro do tomador');
@@ -90,10 +85,7 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl, a
   if (!tomadorBairro) missing.push('bairro do tomador');
 
   if (missing.length) {
-    throw new Error(
-      `Dados obrigatórios do tomador ausentes: ${missing.join(', ')}. ` +
-        'Complete o cadastro do cliente/fornecedor e tente novamente.',
-    );
+    console.warn(`[NFSeBuilder] Campos obrigatórios do tomador ausentes: ${missing.join(', ')}. Enviando rascunho incompleto para aguardar retorno do Hub.`);
   }
 
   // ---------------------------------------------------------------------------
@@ -116,14 +108,15 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl, a
   if (!fiscalText(endRaw.logradouro || endRaw.endereco, 120)) prestadorMissing.push('logradouro do emitente');
   if (!fiscalText(endRaw.bairro, 60)) prestadorMissing.push('bairro do emitente');
   if (prestadorMissing.length) {
-    throw new Error(
-      `Dados obrigatórios do emitente ausentes: ${prestadorMissing.join(', ')}. ` +
-        'Ajuste o cadastro do emitente fiscal.',
-    );
+    console.warn(`[NFSeBuilder] Campos obrigatórios do emitente ausentes: ${prestadorMissing.join(', ')}.`);
   }
 
-  if (!doc?.rps_number) throw new Error('RPS sem número — recrie o rascunho da NFS-e');
-  if (!doc?.issue_date) throw new Error('Data de emissão não informada');
+  if (!doc?.rps_number) {
+    console.warn('[NFSeBuilder] RPS sem número informado.');
+  }
+  if (!doc?.issue_date) {
+    console.warn('[NFSeBuilder] Data de emissão não informada.');
+  }
   if (!doc?.cod_servico) {
     throw new Error('Código do serviço (item da lista LC 116, ex. 11.04) é obrigatório para NFS-e');
   }

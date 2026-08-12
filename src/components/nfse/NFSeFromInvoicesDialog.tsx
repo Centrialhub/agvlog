@@ -268,26 +268,24 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
     const normalizedBairro = currentTomador.bairro?.trim();
 
     if (!normalizedCityCode) { 
-      toast.warning('Código IBGE do município não informado. Algumas prefeituras podem rejeitar a nota.'); 
+      toast.warning('Código IBGE do município não informado. O Hub pode rejeitar a nota.'); 
     }
     if (!normalizedCep) { 
-      toast.error('CEP do tomador inválido (precisa ter 8 dígitos).'); 
-      setIsEditingTomador(true);
-      return; 
+      toast.warning('CEP do tomador inválido ou ausente.'); 
     }
     if (!normalizedUfVal) { 
-      toast.error('UF do tomador inválida (use a sigla de 2 letras).'); 
-      setIsEditingTomador(true);
-      return; 
+      toast.warning('UF do tomador inválida ou ausente.'); 
     }
     if (!normalizedLogradouro || !normalizedBairro) { 
-      toast.error('Logradouro e bairro do tomador são obrigatórios.'); 
-      setIsEditingTomador(true);
-      return; 
+      toast.warning('Logradouro ou bairro do tomador ausente.'); 
     }
 
-    if (totalServicos <= 0) { toast.error('Valor de serviços deve ser maior que zero'); return; }
-    if (!insuranceCheck.ok) { toast.error(`Seguro: ${insuranceCheck.messages.join(' ')}`); return; }
+    if (totalServicos <= 0) { 
+      toast.warning('Valor de serviços é zero. O Hub pode rejeitar a nota.');
+    }
+    if (!insuranceCheck.ok) { 
+      toast.warning(`Seguro com inconsistências: ${insuranceCheck.messages.join(' ')}`); 
+    }
 
     setIssuing(true);
     try {
