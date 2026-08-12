@@ -4351,7 +4351,9 @@ export type Database = {
           approved_by: string | null
           approved_expenses_total: number | null
           approved_with_exception: boolean
+          audited_end_location: string | null
           audited_km: number | null
+          audited_start_location: string | null
           closed_at: string | null
           closed_by: string | null
           created_at: string
@@ -4413,7 +4415,9 @@ export type Database = {
           approved_by?: string | null
           approved_expenses_total?: number | null
           approved_with_exception?: boolean
+          audited_end_location?: string | null
           audited_km?: number | null
+          audited_start_location?: string | null
           closed_at?: string | null
           closed_by?: string | null
           created_at?: string
@@ -4475,7 +4479,9 @@ export type Database = {
           approved_by?: string | null
           approved_expenses_total?: number | null
           approved_with_exception?: boolean
+          audited_end_location?: string | null
           audited_km?: number | null
+          audited_start_location?: string | null
           closed_at?: string | null
           closed_by?: string | null
           created_at?: string
@@ -15494,7 +15500,9 @@ export type Database = {
       unhold_load: { Args: { _load_id: string }; Returns: undefined }
       update_driver_settlement_km_review: {
         Args: {
+          _audited_end_location?: string
           _audited_km: number
+          _audited_start_location?: string
           _km_end?: number
           _km_start?: number
           _km_status: string
@@ -15506,7 +15514,9 @@ export type Database = {
           approved_by: string | null
           approved_expenses_total: number | null
           approved_with_exception: boolean
+          audited_end_location: string | null
           audited_km: number | null
+          audited_start_location: string | null
           closed_at: string | null
           closed_by: string | null
           created_at: string
@@ -15582,7 +15592,9 @@ export type Database = {
           approved_by: string | null
           approved_expenses_total: number | null
           approved_with_exception: boolean
+          audited_end_location: string | null
           audited_km: number | null
+          audited_start_location: string | null
           closed_at: string | null
           closed_by: string | null
           created_at: string
