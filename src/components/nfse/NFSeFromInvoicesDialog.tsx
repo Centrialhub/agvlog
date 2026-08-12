@@ -205,7 +205,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
       bairro: (match?.address_neighborhood || '') as string,
       municipio,
       uf,
-      cep: onlyDigits(zip),
+      cep: String(onlyDigits(zip)).slice(0, 8).padStart(8, '0'),
       cliente_id: match?.id || null,
     };
   }, [selectedDocs, tomadorMode, clients]);

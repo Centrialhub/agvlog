@@ -281,9 +281,9 @@ function serializeParty(p: CteParty | null | undefined) {
           municipio: p.address.city || undefined,
           codigoMunicipio: p.address.city_ibge || undefined,
           uf: p.address.state || undefined,
-          cep: digits(p.address.zip).slice(0, 8) || undefined,
+          cep: String(digits(p.address.zip)).slice(0, 8).padStart(8, '0') || undefined,
           // Campos canônicos para provedores Hub Fiscal que exigem CEP maiúsculo no endereço
-          CEP: digits(p.address.zip).slice(0, 8) || undefined,
+          CEP: String(digits(p.address.zip)).slice(0, 8).padStart(8, '0') || undefined,
         }
       : undefined,
   };
