@@ -8,7 +8,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
 import {
-  useCteMonitor, useCteSefazEvents, useResendCte, useCancelCTe,
+  useCteMonitor, useCteSefazEvents, useResendCte,
   SEFAZ_STATUS_LABELS, SEFAZ_STATUS_TONE, SEFAZ_STATUSES,
   type CteMonitorRow, type CteMonitorFilters, type SefazStatus,
 } from '@/hooks/useCteMonitor';
@@ -16,6 +16,7 @@ import {
   FileText, FileDown, RefreshCw, Search, Filter as FilterIcon, X, AlertCircle, Eye,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useCancelCTe } from '@/hooks/useIssueCTe';
 import { PendingInvoicesBanner } from '@/components/billing/PendingInvoicesBanner';
 import { hubFiscal } from '@/lib/fiscal/hubFiscalClient';
 import { runBulkDownload, summarizeBulkResult } from '@/lib/fiscal/bulkFileMerge';
