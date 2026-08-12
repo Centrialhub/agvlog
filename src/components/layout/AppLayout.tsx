@@ -86,6 +86,7 @@ const navSections: NavSection[] = [
       { label: 'Acerto de Motoristas', href: '/driver-settlements', icon: <Receipt className="h-4 w-4" /> },
       { label: 'Conciliação Bancária', href: '/bank-reconciliation', icon: <Wallet className="h-4 w-4" /> },
       { label: 'Folha de Pagamento', href: '/payroll', icon: <Wallet className="h-4 w-4" /> },
+      { label: 'Centros de Custo', href: '/cost-centers', icon: <Tag className="h-4 w-4" /> },
     ],
   },
   {

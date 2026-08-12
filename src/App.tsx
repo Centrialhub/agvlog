@@ -88,6 +88,7 @@ const OccurrenceReports = lazy(() => import("@/pages/OccurrenceReports"));
 const OccurrenceReturnSheet = lazy(() => import("@/pages/OccurrenceReturnSheet"));
 const PalletReturns = lazy(() => import("@/pages/PalletReturns"));
 const MerchandiseShortages = lazy(() => import("@/pages/MerchandiseShortages"));
+const CostCenters = lazy(() => import("@/pages/CostCenters"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
 // Driver pages
@@ -267,6 +268,7 @@ const App = () => (
             <Route path="/receivables" element={<ProtectedRoute><Receivables /></ProtectedRoute>} />
             <Route path="/financial" element={<ProtectedRoute><Financial /></ProtectedRoute>} />
             <Route path="/driver-settlements" element={<ProtectedRoute><DriverSettlements /></ProtectedRoute>} />
+            <Route path="/cost-centers" element={<ProtectedRoute><CostCenters /></ProtectedRoute>} />
             <Route path="/bank-reconciliation" element={<ProtectedRoute><BankReconciliation /></ProtectedRoute>} />
             <Route path="/payables" element={<ProtectedRoute><Payables /></ProtectedRoute>} />
             <Route path="/client-invoices" element={<ProtectedRoute><ClientInvoices /></ProtectedRoute>} />
