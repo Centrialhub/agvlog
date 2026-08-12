@@ -495,6 +495,24 @@ function NewManualTransactionDialog({ accountId }: { accountId: string }) {
               />
             </div>
           </div>
+          <div className="space-y-2">
+            <Label>Centro de Custo</Label>
+            <Select
+              value={form.cost_center}
+              onValueChange={v => setForm(f => ({ ...f, cost_center: v }))}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione um centro de custo (opcional)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Nenhum</SelectItem>
+                {costCenters.map(cc => (
+                  <SelectItem key={cc} value={cc}>{cc}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
@@ -542,7 +560,7 @@ function ExtratoTab({ transactions, suggested, obligations }: { transactions: Ba
     <Card><CardContent className="p-0">
       <Table>
         <TableHeader><TableRow>
-          <TableHead>Data</TableHead><TableHead>Descrição</TableHead><TableHead className="text-right">Valor</TableHead>
+          <TableHead>Data</TableHead><TableHead>Descrição</TableHead><TableHead>C. Custo</TableHead><TableHead className="text-right">Valor</TableHead>
           <TableHead>Status</TableHead><TableHead>Candidato</TableHead><TableHead>Ações</TableHead>
         </TableRow></TableHeader>
         <TableBody>
@@ -553,6 +571,7 @@ function ExtratoTab({ transactions, suggested, obligations }: { transactions: Ba
               <TableRow key={t.id}>
                 <TableCell className="text-xs">{new Date(t.posted_at).toLocaleDateString('pt-BR')}</TableCell>
                 <TableCell className="text-xs max-w-[380px] truncate">{t.description}</TableCell>
+                <TableCell className="text-xs">{t.cost_center || '-'}</TableCell>
                 <TableCell className={`text-right text-xs ${t.amount < 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(t.amount)}</TableCell>
                 <TableCell><Badge variant={t.reconciliation_status === 'matched' ? 'default' : 'secondary'} className="text-[10px]">{STATUS_LABEL[t.reconciliation_status] || t.reconciliation_status}</Badge></TableCell>
                 <TableCell className="text-xs">
