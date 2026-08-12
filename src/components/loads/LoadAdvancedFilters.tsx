@@ -41,6 +41,10 @@ export interface LoadAdvancedFiltersValue {
   romaneioTypes: string[];
   smManager: string;
   smRelease: string;
+  remitter: string;
+  client: string;
+  city: string;
+  supplier: string;
 }
 
 export const EMPTY_LOAD_ADVANCED_FILTERS: LoadAdvancedFiltersValue = {
@@ -52,6 +56,7 @@ export const EMPTY_LOAD_ADVANCED_FILTERS: LoadAdvancedFiltersValue = {
   romexpTypes: [], monitored: 'all', manifest: 'all', ciot: 'all', dedicated: 'all',
   valueMin: '', valueMax: '', statuses: [], romaneioTypes: [],
   smManager: '', smRelease: '',
+  remitter: '', client: '', city: '', supplier: '',
 };
 
 const ROMEXP_TYPES = ['Normal', 'Devolução', 'Transferência', 'Redespacho', 'Subcontratação'];
