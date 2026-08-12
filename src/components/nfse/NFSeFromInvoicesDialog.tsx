@@ -259,10 +259,35 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
     if (!emitterId) { toast.error('Selecione o emitente fiscal'); return; }
     const currentTomador = manualTomador || tomador;
     if (!currentTomador?.cnpj) { toast.error('Tomador sem CNPJ — cadastre o cliente/fornecedor'); return; }
-    if (!currentTomador.municipio_cod) { toast.error('Tomador sem código IBGE do município — complete o cadastro do cliente'); return; }
-    if (!currentTomador.cep) { toast.error('Tomador sem CEP válido (8 dígitos) — complete o cadastro do cliente'); return; }
-    if (!currentTomador.uf) { toast.error('Tomador sem UF — complete o cadastro do cliente'); return; }
-    if (!currentTomador.endereco || !currentTomador.bairro) { toast.error('Tomador sem logradouro/bairro — complete o cadastro do cliente'); return; }
+    
+    // Alinha validação com o builder (nfseBuilder.ts)
+    const normalizedCep = normalizeCep(currentTomador.cep);
+    const normalizedCityCode = normalizeIbgeCity(currentTomador.municipio_cod) || normalizeIbgeCity(currentTomador.municipio);
+    const normalizedUfVal = normalizeUf(currentTomador.uf);
+    const normalizedLogradouro = currentTomador.endereco?.trim();
+    const normalizedBairro = currentTomador.bairro?.trim();
+
+    if (!normalizedCityCode) { 
+      toast.error('Código IBGE do município inválido (precisa ter 7 dígitos). Preencha no tomador.'); 
+      setIsEditingTomador(true);
+      return; 
+    }
+    if (!normalizedCep) { 
+      toast.error('CEP do tomador inválido (precisa ter 8 dígitos).'); 
+      setIsEditingTomador(true);
+      return; 
+    }
+    if (!normalizedUfVal) { 
+      toast.error('UF do tomador inválida (use a sigla de 2 letras).'); 
+      setIsEditingTomador(true);
+      return; 
+    }
+    if (!normalizedLogradouro || !normalizedBairro) { 
+      toast.error('Logradouro e bairro do tomador são obrigatórios.'); 
+      setIsEditingTomador(true);
+      return; 
+    }
+
     if (totalServicos <= 0) { toast.error('Valor de serviços deve ser maior que zero'); return; }
     if (!insuranceCheck.ok) { toast.error(`Seguro: ${insuranceCheck.messages.join(' ')}`); return; }
 
