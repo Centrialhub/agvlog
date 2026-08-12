@@ -103,18 +103,7 @@ export default function DriverExpenses() {
 
   const createExpense = useMutation({
     mutationFn: async () => {
-      if (!currentTenant || !driver) {
-        // Demo
-        setDemoExpenses((prev) => [{
-          id: 'd' + Date.now(),
-          category: form.category,
-          amount: parseFloat(form.amount) || 0,
-          notes: form.notes || null,
-          approval_status: 'pending',
-          expense_at: new Date().toISOString(),
-        }, ...prev]);
-        return;
-      }
+      if (!currentTenant || !driver) throw new Error('Não autenticado');
       if (!trip) throw new Error('Sem viagem ativa para vincular a despesa.');
 
       let receiptPath: string | null = null;

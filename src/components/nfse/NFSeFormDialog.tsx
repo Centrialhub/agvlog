@@ -113,6 +113,13 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
         cliente_municipio: first.recipient_city || f.cliente_municipio,
         cliente_uf: first.recipient_state || f.cliente_uf,
         cliente_bairro: first.recipient_neighborhood || f.cliente_bairro,
+        cliente_endereco: (first as any).recipient_address || (first as any).address || f.cliente_endereco,
+        cliente_numero: (first as any).recipient_number || (first as any).number || f.cliente_numero,
+        cliente_complemento: (first as any).recipient_complement || (first as any).complement || f.cliente_complemento,
+        cliente_cep: normalizeCep((first as any).recipient_zip || (first as any).zip) || f.cliente_cep,
+        cliente_cod_municipio: normalizeIbgeCity((first as any).recipient_cod_municipio || (first as any).city_ibge_code) || f.cliente_cod_municipio,
+        cliente_email: (first as any).recipient_email || (first as any).email || f.cliente_email,
+        cliente_telefone: normalizePhone((first as any).recipient_phone || (first as any).phone) || f.cliente_telefone,
       }));
     }
   }, [selectedIds, loadDocuments]);
@@ -233,6 +240,13 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
         cliente_municipio: doc.recipient_city || prev.cliente_municipio,
         cliente_uf: doc.recipient_state || prev.cliente_uf,
         cliente_bairro: doc.recipient_neighborhood || prev.cliente_bairro,
+        cliente_endereco: (doc as any).recipient_address || (doc as any).address || prev.cliente_endereco,
+        cliente_numero: (doc as any).recipient_number || (doc as any).number || prev.cliente_number,
+        cliente_complemento: (doc as any).recipient_complement || (doc as any).complement || prev.cliente_complemento,
+        cliente_cep: normalizeCep((doc as any).recipient_zip || (doc as any).zip) || prev.cliente_cep,
+        cliente_cod_municipio: normalizeIbgeCity((doc as any).recipient_cod_municipio || (doc as any).city_ibge_code) || prev.cliente_cod_municipio,
+        cliente_email: (doc as any).recipient_email || (doc as any).email || prev.cliente_email,
+        cliente_telefone: normalizePhone((doc as any).recipient_phone || (doc as any).phone) || prev.cliente_telefone,
         reference_number: doc.invoice_number || prev.reference_number,
         valor_servicos: num(doc.freight_value || doc.value || 0),
         description: `Serviço de transporte ref. NF ${doc.invoice_number || ''}`,
