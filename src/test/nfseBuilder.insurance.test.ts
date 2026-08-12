@@ -4,13 +4,16 @@ import { buildInsuranceText, hasInsuranceData } from '@/lib/fiscal/insuranceText
 
 const emitter: any = {
   cnpj: '11222333000181', razao_social: 'AGV Log', im: '123', ie: '456',
-  city_code: '3106200', endereco: { uf: 'MG', municipio: 'Janauba' },
+  city_code: '3106200',
+  endereco: { uf: 'MG', municipio: 'Janauba', logradouro: 'Av Central', numero: '100', bairro: 'Centro', cep: '39440000' },
 };
 const baseDoc: any = {
   id: 'doc-1', cliente_cnpj: '11222333000181', cliente_nome: 'Cliente X',
   valor_servicos: 100, aliquota_iss: 5, issue_date: '2026-07-31', rps_number: '10',
   description: 'Frete de transporte',
-  cliente_municipio: '3106200', cliente_uf: 'MG',
+  cod_servico: '11.04',
+  cliente_municipio: 'Janauba', cliente_cod_municipio: '3106200', cliente_uf: 'MG',
+  cliente_cep: '39440000', cliente_endereco: 'Rua A', cliente_numero: '10', cliente_bairro: 'Centro',
 };
 const ins = {
   insurer_name: 'Seguradora Brasil', insurer_cnpj: '11222333000181',
