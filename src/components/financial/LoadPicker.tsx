@@ -102,7 +102,7 @@ export default function LoadPicker({ driverId, includeSettlementId, selectedIds,
                 <TableCell className="text-right">{fmtNum(l.total_weight_kg, 0)} kg</TableCell>
                 <TableCell className="text-right">{fmtMoney(l.gross_cargo_value)}</TableCell>
                 <TableCell className="text-right">{fmtMoney(l.freight_amount)}</TableCell>
-                <TableCell><Badge variant="outline" className="text-[10px]">{l.status ?? '—'}</Badge></TableCell>
+                <TableCell><Badge variant="outline" className="text-[10px] whitespace-nowrap">{l.status ?? '—'}</Badge></TableCell>
                 </TableRow>
                 );
               })()
