@@ -54,6 +54,8 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
   const [auditedKm, setAuditedKm] = useState<string>('');
   const [kmStart, setKmStart] = useState<string>('');
   const [kmEnd, setKmEnd] = useState<string>('');
+  const [auditedStartLoc, setAuditedStartLoc] = useState<string>('');
+  const [auditedEndLoc, setAuditedEndLoc] = useState<string>('');
   const [kmStatus, setKmStatus] = useState<'pending' | 'reviewed' | 'disputed'>('pending');
   const [kmNotes, setKmNotes] = useState('');
 
@@ -62,6 +64,8 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
       setAuditedKm(s.audited_km != null ? String(s.audited_km) : '');
       setKmStart(s.km_start != null ? String(s.km_start) : '');
       setKmEnd(s.km_end != null ? String(s.km_end) : '');
+      setAuditedStartLoc(s.audited_start_location ?? '');
+      setAuditedEndLoc(s.audited_end_location ?? '');
       setKmStatus(s.km_review_status ?? 'pending');
       setKmNotes(s.km_review_notes ?? '');
     }
@@ -484,6 +488,14 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                     <Input type="number" step="0.1" value={auditedKm} onChange={(e) => setAuditedKm(e.target.value)} disabled={locked} />
                   </div>
                   <div>
+                    <Label>Destino Inicial (Auditoria)</Label>
+                    <Input value={auditedStartLoc} onChange={(e) => setAuditedStartLoc(e.target.value)} disabled={locked} placeholder={s.route_origin || "Origem"} />
+                  </div>
+                  <div>
+                    <Label>Destino Final (Auditoria)</Label>
+                    <Input value={auditedEndLoc} onChange={(e) => setAuditedEndLoc(e.target.value)} disabled={locked} placeholder={s.route_destination || "Destino"} />
+                  </div>
+                  <div>
                     <Label>Status</Label>
                     <Select value={kmStatus} onValueChange={(v: any) => setKmStatus(v)} disabled={locked}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
@@ -509,6 +521,8 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                     notes: kmNotes || null,
                     km_start: kmStart === '' ? null : Number(kmStart),
                     km_end: kmEnd === '' ? null : Number(kmEnd),
+                    audited_start_location: auditedStartLoc || null,
+                    audited_end_location: auditedEndLoc || null,
                   })}
                 >
                   Salvar conferência de KM

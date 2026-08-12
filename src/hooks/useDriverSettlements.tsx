@@ -56,6 +56,8 @@ export interface DriverSettlement {
   exception_reason?: string | null;
   km_start?: number | null;
   km_end?: number | null;
+  audited_start_location?: string | null;
+  audited_end_location?: string | null;
 }
 
 export interface DriverSettlementItem {
@@ -252,6 +254,8 @@ export function useUpdateSettlementKmReview() {
       notes: string | null;
       km_start?: number | null;
       km_end?: number | null;
+      audited_start_location?: string | null;
+      audited_end_location?: string | null;
     }) => {
       const { data, error } = await supabase.rpc('update_driver_settlement_km_review' as any, {
         _settlement_id: p.id, 
@@ -260,6 +264,8 @@ export function useUpdateSettlementKmReview() {
         _notes: p.notes,
         _km_start: p.km_start ?? null,
         _km_end: p.km_end ?? null,
+        _audited_start_location: p.audited_start_location ?? null,
+        _audited_end_location: p.audited_end_location ?? null,
       });
       if (error) throw error;
       return data;
