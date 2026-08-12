@@ -350,13 +350,14 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
         notes: observacoes.trim() || undefined,
       } as any);
 
-      toast.success(`RPS ${created.rps_number} criado — enviando ao Hub Fiscal…`);
+      // Removemos o toast intermediário de criação de RPS para usar o status final do issue.mutateAsync
       try {
         await issue.mutateAsync(created.id);
+        onOpenChange(false);
       } catch (e: any) {
-        toast.error(`NFS-e criada mas emissão falhou: ${e?.message || ''}`);
+        // O erro já é tratado pelo onError do useIssueNFSe, mas mantemos o catch para não quebrar o fluxo
+        console.error('[NFSeFromInvoicesDialog] Erro na emissão:', e);
       }
-      onOpenChange(false);
     } catch (e: any) {
       toast.error(e?.message || 'Falha ao criar NFS-e');
     } finally {
