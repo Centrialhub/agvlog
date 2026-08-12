@@ -54,6 +54,10 @@ export interface DriverSettlement {
   source_updated_at?: string | null;
   approved_with_exception?: boolean;
   exception_reason?: string | null;
+  km_start?: number | null;
+  km_end?: number | null;
+  audited_start_location?: string | null;
+  audited_end_location?: string | null;
 }
 
 export interface DriverSettlementItem {
@@ -243,9 +247,25 @@ export function useUpdateDriverSettlementStatus() {
 export function useUpdateSettlementKmReview() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (p: { id: string; audited_km: number | null; km_status: 'pending' | 'reviewed' | 'disputed'; notes: string | null }) => {
+    mutationFn: async (p: { 
+      id: string; 
+      audited_km: number | null; 
+      km_status: 'pending' | 'reviewed' | 'disputed'; 
+      notes: string | null;
+      km_start?: number | null;
+      km_end?: number | null;
+      audited_start_location?: string | null;
+      audited_end_location?: string | null;
+    }) => {
       const { data, error } = await supabase.rpc('update_driver_settlement_km_review' as any, {
-        _settlement_id: p.id, _audited_km: p.audited_km, _km_status: p.km_status, _notes: p.notes,
+        _settlement_id: p.id, 
+        _audited_km: p.audited_km, 
+        _km_status: p.km_status, 
+        _notes: p.notes,
+        _km_start: p.km_start ?? null,
+        _km_end: p.km_end ?? null,
+        _audited_start_location: p.audited_start_location ?? null,
+        _audited_end_location: p.audited_end_location ?? null,
       });
       if (error) throw error;
       return data;
