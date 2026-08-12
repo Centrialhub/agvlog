@@ -142,7 +142,7 @@ export default function DriverIssues() {
   });
 
   // Padronizado com DriverHome/DriverDeliveries: nunca em produção.
-  const isDemo = canUseDriverDemo && !trip;
+  const isDemo = canUseDriverDemo && !trip && !driver;
   const effectiveEvents = isDemo ? demoEvents : (driver ? events : []);
   const [chatEvent, setChatEvent] = useState<any | null>(null);
 
