@@ -588,11 +588,25 @@ export default function Billing() {
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            <Field label="Remetente"><Input value={supplier} onChange={e => setSupplier(e.target.value)} /></Field>
+            <Field label="Cliente"><Input value={cnpj} onChange={e => setCnpj(e.target.value)} placeholder="00.000.000/0000-00" /></Field>
+            <Field label="Município">
+              <select
+                className="h-10 rounded-md border bg-background px-3 text-sm"
+                value={recipientCity}
+                onChange={e => setRecipientCity(e.target.value)}
+              >
+                <option value={SENTINEL_NONE}>Todos os municípios</option>
+                {recipientCityOptions.map(opt => (
+                  <option key={opt.key} value={opt.key}>{opt.label} ({opt.count})</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Fornecedor"><Input value={supplierCnpj} onChange={e => setSupplierCnpj(e.target.value)} placeholder="CNPJ do fornecedor" /></Field>
+
             <Field label="Nº OS"><Input value={osNumber} onChange={e => setOsNumber(e.target.value)} /></Field>
             <Field label="Ordem de Coleta"><Input value={collectOrder} onChange={e => setCollectOrder(e.target.value)} /></Field>
             <Field label="Nº Referência"><Input value={referenceNumber} onChange={e => setReferenceNumber(e.target.value)} /></Field>
-            <Field label="CNPJ Cliente"><Input value={cnpj} onChange={e => setCnpj(e.target.value)} placeholder="00.000.000/0000-00" /></Field>
-
             <Field label="Nota Fiscal"><Input value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)} /></Field>
             <Field label="Emissão NF — Início"><Input type="date" value={issueDateStart} onChange={e => setIssueDateStart(e.target.value)} /></Field>
             <Field label="Emissão NF — Fim"><Input type="date" value={issueDateEnd} onChange={e => setIssueDateEnd(e.target.value)} /></Field>
@@ -618,8 +632,8 @@ export default function Billing() {
               </Select>
             </Field>
             <Field label="Placa"><Input value={plate} onChange={e => setPlate(e.target.value.toUpperCase())} placeholder="ABC1D23" /></Field>
-            <Field label="Fornecedor"><Input value={supplier} onChange={e => setSupplier(e.target.value)} /></Field>
-            <Field label="CNPJ Fornecedor"><Input value={supplierCnpj} onChange={e => setSupplierCnpj(e.target.value)} /></Field>
+            <Field label="Identificação Remetente"><Input value={supplier} onChange={e => setSupplier(e.target.value)} /></Field>
+            <Field label="Identificação Fornecedor"><Input value={supplierCnpj} onChange={e => setSupplierCnpj(e.target.value)} /></Field>
 
             <Field label="Carregamento Previsto — Início"><Input type="date" value={scheduledLoadStart} onChange={e => setScheduledLoadStart(e.target.value)} /></Field>
             <Field label="Carregamento Previsto — Fim"><Input type="date" value={scheduledLoadEnd} onChange={e => setScheduledLoadEnd(e.target.value)} /></Field>

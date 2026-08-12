@@ -187,6 +187,10 @@ export default function Loads() {
       if (!dateInRange((l as any).estimated_arrival_at, f.arrivalEstFrom, f.arrivalEstTo)) return false;
       if (!dateInRange((l as any).gate_departure_at, f.departureFrom, f.departureTo)) return false;
       if (!dateInRange((l as any).arrival_at, f.arrivalFrom, f.arrivalTo)) return false;
+      if (f.remitter && !opNorm(l.origin).includes(opNorm(f.remitter))) return false;
+      if (f.client && !opNorm(l.destination).includes(opNorm(f.client))) return false;
+      if (f.city && !opNorm(l.destination).includes(opNorm(f.city))) return false;
+      if (f.supplier && !opNorm(l.supplier_manifest).includes(opNorm(f.supplier))) return false;
       return true;
     });
   }, [customEnd, customStart, datePreset, loads, search, statusFilter, advFilters]);

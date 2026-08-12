@@ -362,11 +362,14 @@ export default function CteSearch() {
               <Field label="Nota Fiscal"><Input value={draft.invoiceNumber ?? ''} onChange={(e) => setDraft({ ...draft, invoiceNumber: e.target.value })} /></Field>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <Field label="Remetente"><Input value={draft.remitter ?? ''} onChange={(e) => setDraft({ ...draft, remitter: e.target.value })} /></Field>
-              <Field label="Destinatário"><Input value={draft.recipient ?? ''} onChange={(e) => setDraft({ ...draft, recipient: e.target.value })} /></Field>
+              <Field label="Cliente/Destinatário"><Input value={draft.recipient ?? ''} onChange={(e) => setDraft({ ...draft, recipient: e.target.value })} /></Field>
+              <Field label="Município"><Input value={draft.recipientCity ?? ''} onChange={(e) => setDraft({ ...draft, recipientCity: e.target.value })} /></Field>
+              <Field label="Fornecedor/Pagador"><Input value={draft.payer ?? ''} onChange={(e) => setDraft({ ...draft, payer: e.target.value })} /></Field>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               <Field label="Consignatário"><Input value={draft.consignee ?? ''} onChange={(e) => setDraft({ ...draft, consignee: e.target.value })} /></Field>
-              <Field label="Pagador"><Input value={draft.payer ?? ''} onChange={(e) => setDraft({ ...draft, payer: e.target.value })} /></Field>
               <Field label="Grp Pagador"><Input value={draft.payerGroup ?? ''} onChange={(e) => setDraft({ ...draft, payerGroup: e.target.value })} /></Field>
               <Field label="Seguradora"><Input value={draft.insuranceCompany ?? ''} onChange={(e) => setDraft({ ...draft, insuranceCompany: e.target.value })} /></Field>
             </div>
