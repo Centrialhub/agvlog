@@ -3655,6 +3655,7 @@ export type Database = {
           approved_by: string | null
           category: string
           city: string | null
+          cost_center: string | null
           created_at: string
           dispatch_trip_id: string | null
           document_number: string | null
@@ -3681,6 +3682,7 @@ export type Database = {
           approved_by?: string | null
           category?: string
           city?: string | null
+          cost_center?: string | null
           created_at?: string
           dispatch_trip_id?: string | null
           document_number?: string | null
@@ -3707,6 +3709,7 @@ export type Database = {
           approved_by?: string | null
           category?: string
           city?: string | null
+          cost_center?: string | null
           created_at?: string
           dispatch_trip_id?: string | null
           document_number?: string | null
@@ -8227,6 +8230,7 @@ export type Database = {
           asset_id: string | null
           checklist_results: Json | null
           completed_at: string | null
+          cost_center: string | null
           created_at: string
           created_by: string | null
           diagnosis: string | null
@@ -8262,6 +8266,7 @@ export type Database = {
           asset_id?: string | null
           checklist_results?: Json | null
           completed_at?: string | null
+          cost_center?: string | null
           created_at?: string
           created_by?: string | null
           diagnosis?: string | null
@@ -8297,6 +8302,7 @@ export type Database = {
           asset_id?: string | null
           checklist_results?: Json | null
           completed_at?: string | null
+          cost_center?: string | null
           created_at?: string
           created_by?: string | null
           diagnosis?: string | null
