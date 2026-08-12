@@ -4,6 +4,15 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { toast } from 'sonner';
 
+export interface CostCenter {
+  id: string;
+  tenant_id: string;
+  name: string;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export function useCostCenters() {
   const { currentTenant } = useTenant();
   const queryClient = useQueryClient();
@@ -14,14 +23,14 @@ export function useCostCenters() {
       if (!currentTenant) return [];
       
       const { data, error } = await supabase
-        .from('cost_centers')
+        .from('cost_centers' as any)
         .select('*')
         .eq('tenant_id', currentTenant.id)
         .eq('active', true)
         .order('name');
         
       if (error) throw error;
-      return data.map(cc => cc.name);
+      return (data as CostCenter[]).map(cc => cc.name);
     },
     enabled: !!currentTenant,
   });
@@ -32,13 +41,13 @@ export function useCostCenters() {
       if (!currentTenant) return [];
       
       const { data, error } = await supabase
-        .from('cost_centers')
+        .from('cost_centers' as any)
         .select('*')
         .eq('tenant_id', currentTenant.id)
         .order('name');
         
       if (error) throw error;
-      return data;
+      return data as CostCenter[];
     },
     enabled: !!currentTenant,
   });
@@ -47,7 +56,7 @@ export function useCostCenters() {
     mutationFn: async (name: string) => {
       if (!currentTenant) throw new Error('Tenant not found');
       const { error } = await supabase
-        .from('cost_centers')
+        .from('cost_centers' as any)
         .insert({ tenant_id: currentTenant.id, name });
       if (error) throw error;
     },
@@ -64,8 +73,8 @@ export function useCostCenters() {
   const toggleMutation = useMutation({
     mutationFn: async ({ id, active }: { id: string, active: boolean }) => {
       const { error } = await supabase
-        .from('cost_centers')
-        .update({ active })
+        .from('cost_centers' as any)
+        .update({ active } as any)
         .eq('id', id);
       if (error) throw error;
     },

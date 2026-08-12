@@ -1,12 +1,11 @@
 
 import { useState } from 'react';
-import { useCostCenters } from '@/hooks/useCostCenters';
+import { useCostCenters, CostCenter } from '@/hooks/useCostCenters';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
-import { Plus, Power, PowerOff, Trash2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { Plus, Power, PowerOff } from 'lucide-react';
 
 export function CostCenterManager() {
   const { fullData, isFullLoading, addCostCenter, toggleCostCenter } = useCostCenters();
@@ -55,11 +54,11 @@ export function CostCenterManager() {
             ) : fullData.length === 0 ? (
               <TableRow><TableCell colSpan={3} className="text-center py-4 text-muted-foreground">Nenhum centro de custo cadastrado.</TableCell></TableRow>
             ) : (
-              fullData.map((cc) => (
+              fullData.map((cc: CostCenter) => (
                 <TableRow key={cc.id}>
                   <TableCell className="font-medium">{cc.name}</TableCell>
                   <TableCell>
-                    <Badge variant={cc.active ? "success" : "secondary"}>
+                    <Badge variant={cc.active ? "secondary" : "outline"}>
                       {cc.active ? 'Ativo' : 'Inativo'}
                     </Badge>
                   </TableCell>
