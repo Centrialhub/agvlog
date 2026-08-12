@@ -14371,6 +14371,20 @@ export type Database = {
         }
         Returns: string
       }
+      add_driver_settlement_manual_expense: {
+        Args: {
+          _amount: number
+          _category: string
+          _cost_center: string
+          _expense_at: string
+          _notes?: string
+          _payment_source?: string
+          _receipt_url?: string
+          _reimbursable?: boolean
+          _settlement_id: string
+        }
+        Returns: string
+      }
       add_employee_incident_action: {
         Args: {
           _action_type: string
