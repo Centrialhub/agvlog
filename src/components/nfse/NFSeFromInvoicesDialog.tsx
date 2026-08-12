@@ -195,16 +195,16 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
     const match = clients.find((c: any) => onlyDigits(c.tax_id) === cnpjDigits);
     
     // Fallback para os dados da própria NF (OCR/XML) quando o cadastro está incompleto
-    const municipio = (match?.address_city || first.recipient_city || first.remitter_city || '').trim();
-    const uf = (match?.address_state || first.recipient_state || first.remitter_state || '').trim();
-    const zip = (match?.address_zip || first.recipient_zip || first.remitter_zip || '').trim();
+    const municipio = (match?.address_city || (first as any).recipient_city || (first as any).remitter_city || '').trim();
+    const uf = (match?.address_state || (first as any).recipient_state || (first as any).remitter_state || '').trim();
+    const zip = (match?.address_zip || (first as any).recipient_zip || (first as any).remitter_zip || (first as any).recipient_address_zip || (first as any).zip || '').trim();
     // CEP só é enviado quando realmente existe: "00000000" faz a prefeitura
     // rejeitar a nota por CEP inexistente / fora do município.
     const cepNorm = normalizeCep(zip);
     const municipioCod =
       normalizeIbgeCity((match as any)?.address_city_ibge_code) ||
-      normalizeIbgeCity(first.recipient_cod_municipio) ||
-      normalizeIbgeCity(first.remitter_cod_municipio) ||
+      normalizeIbgeCity((first as any).recipient_cod_municipio) ||
+      normalizeIbgeCity((first as any).remitter_cod_municipio) ||
       normalizeIbgeCity(municipio);
 
     return {
