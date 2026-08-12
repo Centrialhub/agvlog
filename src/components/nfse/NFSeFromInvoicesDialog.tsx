@@ -238,6 +238,10 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
   const handleEmit = async () => {
     if (!emitterId) { toast.error('Selecione o emitente fiscal'); return; }
     if (!tomador?.cnpj) { toast.error('Tomador sem CNPJ — cadastre o cliente/fornecedor'); return; }
+    if (!tomador.municipio_cod) { toast.error('Tomador sem código IBGE do município — complete o cadastro do cliente'); return; }
+    if (!tomador.cep) { toast.error('Tomador sem CEP válido (8 dígitos) — complete o cadastro do cliente'); return; }
+    if (!tomador.uf) { toast.error('Tomador sem UF — complete o cadastro do cliente'); return; }
+    if (!tomador.endereco || !tomador.bairro) { toast.error('Tomador sem logradouro/bairro — complete o cadastro do cliente'); return; }
     if (totalServicos <= 0) { toast.error('Valor de serviços deve ser maior que zero'); return; }
     if (!insuranceCheck.ok) { toast.error(`Seguro: ${insuranceCheck.messages.join(' ')}`); return; }
 
