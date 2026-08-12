@@ -83,7 +83,7 @@ export default function LoadPicker({ driverId, includeSettlementId, selectedIds,
                 return (
                 <TableRow
                   key={l.id}
-                  className={`hover:bg-accent ${blocked ? 'opacity-50' : 'cursor-pointer'}`}
+                  className={`hover:bg-accent/80 transition-colors ${blocked ? 'opacity-50' : 'cursor-pointer'} ${selectedSet.has(l.id) ? 'bg-primary/5 hover:bg-primary/10' : 'bg-background'}`}
                   onClick={() => { if (!blocked) toggle(l.id); }}
                   title={blocked ? 'Romaneio de outro motorista' : undefined}
                 >
