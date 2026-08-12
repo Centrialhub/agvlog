@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
-import { Landmark, Upload, RefreshCw, Play, Check, X, Link2, Plus, Calendar } from 'lucide-react';
+import { Landmark, Upload, RefreshCw, Play, Check, X, Link2, Plus, Calendar, Tag } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   useBankAccounts, useCreateBankAccount, useBankTransactions, useFinancialObligations,
@@ -20,6 +20,7 @@ import {
 import {
   parseWorkbook, buildParsedRows, computeFileHash, type ColumnMapping,
 } from '@/lib/bankStatementParser';
+import { useCostCenters } from '@/hooks/useCostCenters';
 
 const OBLIGATION_TYPE_LABEL: Record<string, string> = {
   receivable: 'Recebível',
