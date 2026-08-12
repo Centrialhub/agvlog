@@ -19,6 +19,7 @@ import {
   useDetachLoadFromSettlement, useAddSettlementManualExpense,
 } from '@/hooks/useDriverSettlements';
 import { useCostCenters } from '@/hooks/useCostCenters';
+import { useBankAccounts } from '@/hooks/useBankReconciliation';
 import AttachLoadsDialog from './AttachLoadsDialog';
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
@@ -106,6 +107,9 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
   const [payReference, setPayReference] = useState('');
   const [payReceipt, setPayReceipt] = useState('');
   const [payNotes, setPayNotes] = useState('');
+  const [payBankAccountId, setPayBankAccountId] = useState<string>('none');
+  const [payCostCenter, setPayCostCenter] = useState<string>('Operacional');
+  const { data: bankAccounts } = useBankAccounts();
   useEffect(() => { if (payOpen) setPayAmount(remaining > 0 ? String(remaining.toFixed(2)) : ''); }, [payOpen, remaining]);
   const [payAllowOver, setPayAllowOver] = useState(false);
   const [payOverReason, setPayOverReason] = useState('');
@@ -669,6 +673,29 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                     )}
                   </div>
                   <div>
+                    <Label>Vincular a conta bancária (Conciliação)</Label>
+                    <Select value={payBankAccountId} onValueChange={setPayBankAccountId}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Não vincular agora</SelectItem>
+                        {bankAccounts?.map(ba => (
+                          <SelectItem key={ba.id} value={ba.id}>{ba.name} ({ba.bank_name})</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Centro de Custo</Label>
+                    <Select value={payCostCenter} onValueChange={setPayCostCenter}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {costCenters?.map(cc => (
+                          <SelectItem key={cc} value={cc}>{cc}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
                     <Label>Referência / comprovante</Label>
                     <Input value={payReference} onChange={(e) => setPayReference(e.target.value)} placeholder="ID da transação" />
                   </div>
@@ -710,8 +737,11 @@ export function DriverSettlementDrawer({ settlementId, open, onOpenChange }: Pro
                         reference: payReference || null, receipt_url: payReceipt || null, notes: payNotes || null,
                         allow_overpayment: isOverpayment ? payAllowOver : false,
                         overpayment_reason: isOverpayment ? payOverReason : null,
+                        bank_account_id: payBankAccountId === 'none' ? null : payBankAccountId,
+                        cost_center: payCostCenter,
                       });
                       setPayOpen(false); setPayReference(''); setPayReceipt(''); setPayNotes(''); setPayAllowOver(false); setPayOverReason(''); setPayAccountOther('');
+                      setPayBankAccountId('none');
                     }}>Registrar</Button>
                 </DialogFooter>
               </DialogContent>

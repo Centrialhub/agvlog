@@ -304,14 +304,18 @@ export function useRegisterSettlementPayment() {
       method?: string | null; account?: string | null; reference?: string | null;
       receipt_url?: string | null; notes?: string | null;
       allow_overpayment?: boolean; overpayment_reason?: string | null;
+      bank_account_id?: string | null;
+      cost_center?: string | null;
     }) => {
-      const { data, error } = await supabase.rpc('register_driver_settlement_payment' as any, {
+      const { data, error } = await supabase.rpc('register_driver_settlement_payment_v2' as any, {
         _settlement_id: p.id, _amount: p.amount,
-        _payment_method: p.method ?? null, _payment_account: p.account ?? null,
+        _payment_method: p.method ?? 'pix', _payment_account: p.account ?? null,
         _payment_reference: p.reference ?? null, _receipt_url: p.receipt_url ?? null,
         _notes: p.notes ?? null,
         _allow_overpayment: p.allow_overpayment ?? false,
         _overpayment_reason: p.overpayment_reason ?? null,
+        _bank_account_id: p.bank_account_id ?? null,
+        _cost_center: p.cost_center ?? 'Operacional',
       });
       if (error) throw error;
       return data as string;
