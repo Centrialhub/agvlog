@@ -299,15 +299,15 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
   };
 
   const handleSave = async () => {
-    if (!form.cliente_nome) { toast.error('Informe o tomador (cliente)'); return; }
-    if (!form.cliente_municipio) { toast.error('Informe o município do tomador'); return; }
+    if (!form.cliente_nome) { toast.warning('Tomador (cliente) não informado.'); }
+    if (!form.cliente_municipio) { toast.warning('Município do tomador não informado.'); }
     const normalizedCityCode = normalizeIbgeCity(form.cliente_cod_municipio) || normalizeIbgeCity(form.cliente_municipio);
     if (!normalizedCityCode) {
       toast.warning('Código IBGE do município não informado.');
     }
-    if (!normalizeCep(form.cliente_cep)) { toast.error('Informe um CEP válido (8 dígitos) do tomador'); return; }
-    if (!normalizeUf(form.cliente_uf)) { toast.error('Informe a UF do tomador (sigla de 2 letras)'); return; }
-    if (totalServicos <= 0) { toast.error('Valor de serviços deve ser maior que zero'); return; }
+    if (!normalizeCep(form.cliente_cep)) { toast.warning('CEP do tomador inválido ou ausente.'); }
+    if (!normalizeUf(form.cliente_uf)) { toast.warning('UF do tomador inválida ou ausente.'); }
+    if (totalServicos <= 0) { toast.warning('Valor de serviços é zero.'); }
     const payload: any = {
       ...form,
       cliente_cep: normalizeCep(form.cliente_cep),
