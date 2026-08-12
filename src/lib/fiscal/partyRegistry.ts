@@ -31,6 +31,7 @@ export interface PartyAddress {
   complement: string | null;
   neighborhood: string | null;
   city: string | null;
+  city_ibge: string | null;
   state: string | null;
   zip: string | null;
 }
@@ -120,6 +121,7 @@ function addressFromClient(c: RegistryClient | null): PartyAddress | null {
     complement: c.address_complement || null,
     neighborhood: c.address_neighborhood || null,
     city: c.address_city || null,
+    city_ibge: c.address_city_ibge_code || null,
     state: c.address_state || null,
     zip: c.address_zip || null,
   };
@@ -153,6 +155,7 @@ export function resolveParty(
         complement: null,
         neighborhood: null,
         city: fallbackAddress.city || null,
+        city_ibge: (fallbackAddress as any).city_ibge || (fallbackAddress as any).codigoMunicipio || null,
         state: fallbackAddress.state || null,
         zip: null,
       }
@@ -163,6 +166,7 @@ export function resolveParty(
       ? {
           ...fromClient,
           city: fromClient.city || fallback.city,
+          city_ibge: fromClient.city_ibge || fallback.city_ibge,
           state: fromClient.state || fallback.state,
         }
       : fromClient || fallback;
