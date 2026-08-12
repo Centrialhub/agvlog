@@ -14641,6 +14641,10 @@ export type Database = {
       }
       cte_defaults_for_group: { Args: { p_load_ids: string[] }; Returns: Json }
       current_driver_id: { Args: { _tenant_id: string }; Returns: string }
+      delete_driver_settlement: {
+        Args: { _reason: string; _settlement_id: string }
+        Returns: undefined
+      }
       delete_load_safely: {
         Args: { _load_id: string; _tenant_id: string }
         Returns: Json
