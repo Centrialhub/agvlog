@@ -610,6 +610,30 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
     );
   }
 
+  // CFOP de prestação de serviço de transporte: 5351..5360 / 6351..6360 (ou 5932/6932).
+  // Qualquer outro valor é rejeitado pela SEFAZ ("Rejeicao: CFOP informado invalido").
+  const ufIni = String((inicio as { uf?: string } | undefined)?.uf || input.emitter?.address?.uf || '').toUpperCase();
+  const ufFim = String((fim as { uf?: string } | undefined)?.uf || '').toUpperCase();
+  const interstate = !!ufIni && !!ufFim && ufIni !== ufFim;
+  const cfopPrefix = interstate ? '6' : '5';
+  const rawCfop = digits(input.cfop || '');
+  const isTransportCfop = (c: string) =>
+    /^[56](3(5[1-9]|60)|932)$/.test(c);
+  let cfop = rawCfop;
+  if (cfop && isTransportCfop(cfop)) {
+    if (cfop[0] !== cfopPrefix) {
+      const fixed = `${cfopPrefix}${cfop.slice(1)}`;
+      warnings.push(`CFOP ${cfop} ajustado para ${fixed} (prestação ${interstate ? 'interestadual' : 'interna'}: ${ufIni} → ${ufFim}).`);
+      cfop = fixed;
+    }
+  } else {
+    const fallback = `${cfopPrefix}353`;
+    if (cfop) {
+      warnings.push(`CFOP ${cfop} não é válido para CT-e — substituído por ${fallback} (prestação de serviço de transporte).`);
+    }
+    cfop = fallback;
+  }
+
   const payload: Record<string, unknown> = {
     emitterCnpj: digits(input.emitter?.cnpj) || undefined,
     environment: input.emitter?.environment || 'sandbox',
@@ -623,8 +647,8 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
       crt: emitterRegimeCode,
       tipoCtrc: input.documentType || '01',
       naturezaOperacao: input.nature,
-      cfop: input.cfop || undefined,
-      CFOP: input.cfop || undefined,
+      cfop,
+      CFOP: cfop,
       serie: input.series != null && input.series !== '' ? String(input.series) : undefined,
       numero: input.number != null && input.number !== '' ? String(input.number) : undefined,
       cCT: input.cCT != null && input.cCT !== '' ? String(input.cCT) : undefined,
