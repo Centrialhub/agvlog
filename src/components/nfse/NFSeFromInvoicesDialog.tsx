@@ -19,6 +19,7 @@ import { useCreateNFSe, useIssueNFSe } from '@/hooks/useNFSe';
 import { useRecalculateInboundFreight } from '@/hooks/useRecalculateInboundFreight';
 import { formatCnpj, validateInsurance } from '@/lib/fiscal/insuranceValidation';
 import { hasInsuranceData } from '@/lib/fiscal/insuranceText';
+import { hasInsuranceProfile } from '@/lib/fiscal/insuranceProfile';
 import { Calculator, Save } from 'lucide-react';
 import { useInsuranceProfile, useUpdateInsuranceProfile } from '@/hooks/useInsuranceProfile';
 
