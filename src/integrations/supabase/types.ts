@@ -5579,6 +5579,8 @@ export type Database = {
           cte_payload: Json | null
           cte_taker_role: string | null
           cte_vehicle_id: string | null
+          deleted_at: string | null
+          deleted_by: string | null
           delivery_meta: Json
           document_type: string
           dynamic_lot: string | null
@@ -5664,6 +5666,8 @@ export type Database = {
           cte_payload?: Json | null
           cte_taker_role?: string | null
           cte_vehicle_id?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           delivery_meta?: Json
           document_type?: string
           dynamic_lot?: string | null
@@ -5749,6 +5753,8 @@ export type Database = {
           cte_payload?: Json | null
           cte_taker_role?: string | null
           cte_vehicle_id?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           delivery_meta?: Json
           document_type?: string
           dynamic_lot?: string | null
@@ -15514,6 +15520,10 @@ export type Database = {
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      soft_delete_fiscal_document: {
+        Args: { doc_id: string; user_id: string }
+        Returns: undefined
+      }
       stop_terminal_statuses: { Args: never; Returns: string[] }
       sync_financial_obligations: {
         Args: { _date_from?: string; _date_to?: string; _tenant_id: string }

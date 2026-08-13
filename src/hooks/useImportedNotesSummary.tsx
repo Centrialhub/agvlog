@@ -104,6 +104,7 @@ export function useImportedNotes(filters: ImportedNoteFilters) {
         `)
         .eq('tenant_id', currentTenant!.id)
         .eq('document_type', 'inbound')
+        .is('deleted_at', null)
         .order('imported_at', { ascending: false, nullsFirst: false })
         .limit(2000);
 
