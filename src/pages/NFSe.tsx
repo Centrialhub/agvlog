@@ -345,7 +345,7 @@ export default function NFSePage() {
                             <Edit className="h-3 w-3" />
                           </Button>
                         )}
-                        {(d.status === 'draft' || d.status === 'rejected' || d.status === 'error') && (
+                        {(d.status === 'draft' || d.status === 'rejected' || d.status === 'error' || d.status === 'submitted' || d.status === 'processing') && (
                           <Button size="sm" variant="outline" onClick={() => issue.mutate(d.id)} disabled={issue.isPending}>
                             <Send className="h-3 w-3 mr-1" /> {d.status === 'draft' ? 'Emitir' : 'Reenviar'}
                           </Button>
