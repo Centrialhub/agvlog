@@ -17,7 +17,7 @@ import {
   Search, X, Filter as FilterIcon, FileText, FileDown, Eye, RefreshCw,
   ChevronDown, ChevronUp, Download, Table as TableIcon, Trash2, Ban,
 } from 'lucide-react';
-import { useCancelCTe } from '@/hooks/useIssueCTe';
+import { useCancelCTe, useResendCte } from '@/hooks/useIssueCTe';
 import { useDeleteFailedCTe } from '@/hooks/useDeleteFailedCTe';
 
 const TONE_CLASS: Record<string, string> = {
@@ -125,6 +125,7 @@ function toCsv(rows: CteSearchRow[]) {
 
 export default function CteSearch() {
   const cancelCte = useCancelCTe();
+  const resendCte = useResendCte();
   const deleteCte = useDeleteFailedCTe();
   const [draft, setDraft] = useState<CteSearchFilters>(DEFAULT_FILTERS);
   const [filters, setFilters] = useState<CteSearchFilters>(DEFAULT_FILTERS);
@@ -273,6 +274,15 @@ export default function CteSearch() {
   async function handleDelete(row: CteSearchRow) {
     if (!window.confirm('Deseja excluir este registro de erro? Esta ação é irreversível e serve apenas para limpar tentativas que falharam.')) return;
     await deleteCte.mutateAsync(row.id);
+  }
+
+  async function handleResend(row: CteSearchRow) {
+    try {
+      await resendCte.mutateAsync(row.id);
+      toast.success('CT-e marcado para reenvio');
+    } catch (e: any) {
+      toast.error('Falha ao reenviar', { description: e?.message });
+    }
   }
 
   const activeCount = activeFilterCount(filters);
@@ -509,7 +519,16 @@ export default function CteSearch() {
                         aria-label={`Selecionar ${cteLabel(r)}`}
                       />
                     </td>
-                    <td className="px-3 py-2"><StatusPill status={r.sefaz_status} /></td>
+                    <td className="px-3 py-2">
+                      <div className="flex flex-col gap-0.5">
+                        <StatusPill status={r.sefaz_status} />
+                        {r.sefaz_status_reason && (
+                          <span className="text-[10px] text-destructive max-w-[150px] truncate" title={r.sefaz_status_reason}>
+                            {r.sefaz_status_reason}
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-3 py-2 text-xs">{CTE_TYPE_LABELS[r.cte_type as CteType] ?? r.cte_type}</td>
                     <td className="px-3 py-2 font-mono">{r.cte_number ?? '—'}</td>
                     <td className="px-3 py-2">{r.cte_series ?? '—'}</td>
@@ -542,7 +561,18 @@ export default function CteSearch() {
                             <Ban className="h-4 w-4" />
                           </Button>
                         )}
-                        {(r.sefaz_status === 'error' || r.sefaz_status === 'rejected') && !r.hub_document_id && (
+                        {r.sefaz_status.endsWith('_error') && (
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            title="Reenviar à SEFAZ" 
+                            disabled={resendCte.isPending}
+                            onClick={() => handleResend(r)}
+                          >
+                            <RefreshCw className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {(r.sefaz_status === 'error' || r.sefaz_status === 'rejected' || r.sefaz_status === 'sent_error' || r.sefaz_status === 'processed_error' || r.sefaz_status === 'sefaz_error') && !r.hub_document_id && (
                           <Button 
                             size="sm" 
                             variant="ghost" 
