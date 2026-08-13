@@ -65,6 +65,7 @@ export interface ImportedNoteRow {
   client_id: string | null;
   document_type: string | null;
   clients?: { company_name: string | null; tax_id: string | null } | null;
+  suppliers?: { company_name: string | null; tax_id: string | null } | null;
   loads?: { id: string; load_number: string | null; status: string | null; origin: any; destination: any; vehicle_id: string | null; driver_id: string | null } | null;
   cte_number?: string | null;
   cte_id?: string | null;
