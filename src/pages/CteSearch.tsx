@@ -263,7 +263,6 @@ export default function CteSearch() {
     try {
       await cancelCte.mutateAsync({ fiscalDocumentId: row.id, justificativa: motive });
       toast.success('Cancelamento solicitado com sucesso');
-      refetch();
     } catch (e) {
       // toast já disparado pelo hook
     }

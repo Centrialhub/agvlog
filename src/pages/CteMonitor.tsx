@@ -536,7 +536,6 @@ function CteDetail({ row, onClose }: { row: CteMonitorRow; onClose: () => void }
     try {
       await cancelCte.mutateAsync({ fiscalDocumentId: row.id, justificativa: motive });
       toast.success('Cancelamento solicitado com sucesso');
-      onClose();
     } catch (e) {
       // toast já disparado pelo hook
     }

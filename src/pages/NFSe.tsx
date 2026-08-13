@@ -351,7 +351,12 @@ export default function NFSePage() {
                           </Button>
                         )}
                         {d.status !== 'cancelled' && (
-                          <Button size="sm" variant="ghost" onClick={() => handleCancel(d.id)} disabled={cancel.isPending}>
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            onClick={() => handleCancel(d.id)} 
+                            disabled={cancel.isPending || d.status === 'transmitting'}
+                          >
                             <Ban className="h-3 w-3 mr-1" /> Cancelar
                           </Button>
                         )}
