@@ -90,13 +90,17 @@ export default function ImportedNotesSummary() {
     if (!deleteId) return;
     setIsDeleting(true);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Usuário não autenticado');
+
       const { error } = await supabase
-        .from('fiscal_documents')
-        .delete()
-        .eq('id', deleteId);
+        .rpc('soft_delete_fiscal_document', { 
+          doc_id: deleteId,
+          user_id: user.id
+        });
       
       if (error) throw error;
-      toast.success('Nota excluída com sucesso.');
+      toast.success('Nota excluída com sucesso (arquivada para histórico).');
       setDetailRow(null);
       refetch();
     } catch (e: any) {
