@@ -255,6 +255,7 @@ export default function BatchReimportDialog() {
       const { data: existingDocs, error: existingError } = await supabase
         .from('fiscal_documents')
         .select('invoice_number, access_key, remitter, recipient, recipient_city, recipient_state, recipient_neighborhood, issue_date, client_id, product_summary, pallet_count, weight_kg, value')
+        .is('deleted_at', null)
         .eq('tenant_id', currentTenant.id)
         .gte('issue_date', toDateParam(startDate))
         .lte('issue_date', toDateParam(endDate));
