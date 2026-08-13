@@ -529,7 +529,7 @@ export default function CteSearch() {
                             variant="ghost" 
                             className="text-destructive hover:text-destructive hover:bg-destructive/10" 
                             title="Cancelar CT-e" 
-                            disabled={cancelCte.isPending || r.sefaz_status === 'processing'} 
+                            disabled={cancelCte.isPending} 
                             onClick={() => handleCancel(r)}
                           >
                             <Trash2 className="h-4 w-4" />

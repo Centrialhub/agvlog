@@ -552,6 +552,20 @@ function CteDetail({ row, onClose }: { row: CteMonitorRow; onClose: () => void }
         </DialogDescription>
       </DialogHeader>
 
+      <div className="flex items-center gap-3 mb-4">
+        {(row.sefaz_status === 'processed' || row.sefaz_status === 'processed_error') && (
+          <Button size="sm" variant="outline" onClick={handleCancel} disabled={cancelCte.isPending}>
+            <Ban className="h-4 w-4 mr-2" /> Cancelar CT-e
+          </Button>
+        )}
+        {row.sefaz_status === 'cancelled' && (
+          <Badge variant="outline" className="text-destructive border-destructive/30">Documento Cancelado</Badge>
+        )}
+        {row.sefaz_status === 'processing' && (
+          <Badge variant="outline" className="text-amber-600 border-amber-500/30">Em processamento no Hub...</Badge>
+        )}
+      </div>
+
       <div className="grid grid-cols-2 gap-3 text-sm">
         <div><span className="text-muted-foreground">Pagador:</span> {row.payer_name ?? '—'}</div>
         <div><span className="text-muted-foreground">CNPJ Pagador:</span> {row.payer_cnpj ?? '—'}</div>
