@@ -146,20 +146,20 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl, a
   // Seguro da carga: mesmos campos do CT-e. O padrão ABRASF não tem bloco
   // próprio, então garantimos a impressão na discriminação + observação.
   const insurance = {
-    insurer_name: doc.insurer_name,
-    insurer_cnpj: doc.insurer_cnpj,
-    insurer_policy: doc.insurer_policy,
-    insurer_endorsement: doc.insurer_endorsement,
-    insured_amount: doc.insured_amount,
-    insurance_premium: doc.insurance_premium,
+    seguradora: doc.insurer_name || doc.seguradora || null,
+    cnpjSeguradora: cnpjDigits(doc.insurer_cnpj || doc.cnpjSeguradora),
+    apolice: doc.insurer_policy || doc.apolice || null,
+    averbacao: doc.insurer_endorsement || doc.averbacao || null,
+    valorSegurado: num(doc.insured_amount || doc.valorSegurado),
+    valorSeguro: num(doc.insurance_premium || doc.valorSeguro),
   };
   const hasInsurance = hasInsuranceData(insurance);
   if (hasInsurance) {
     const check = validateInsurance({
-      name: doc.insurer_name,
-      cnpj: doc.insurer_cnpj,
-      policy: doc.insurer_policy,
-      endorsement: doc.insurer_endorsement,
+      name: insurance.seguradora,
+      cnpj: insurance.cnpjSeguradora,
+      policy: insurance.apolice,
+      endorsement: insurance.averbacao,
     });
     if (!check.ok) {
       console.warn(`[NFSeBuilder] Dados do seguro inválidos: ${check.messages.join(' ')}. Enviando mesmo assim.`);
@@ -291,16 +291,9 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl, a
 
     // Bloco extra de seguro — enviado ao Hub para auditoria/impressão quando
     // o provedor municipal suportar campos adicionais.
-    seguro: hasInsurance
-      ? {
-          seguradora: (doc.insurer_name || '').trim() || undefined,
-          cnpjSeguradora: cnpjDigits(doc.insurer_cnpj) || undefined,
-          apolice: (doc.insurer_policy || '').trim() || undefined,
-          averbacao: (doc.insurer_endorsement || '').trim() || undefined,
-          valorSegurado: num(doc.insured_amount) || undefined,
-          valorSeguro: num(doc.insurance_premium) || undefined,
-        }
-      : undefined,
+    seguro: hasInsurance ? insurance : undefined,
+    seguradora: hasInsurance ? insurance : undefined,
+    seguros: hasInsurance ? [insurance] : undefined,
   });
 
   return {
