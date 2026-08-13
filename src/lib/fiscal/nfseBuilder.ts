@@ -165,14 +165,7 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl, a
       console.warn(`[NFSeBuilder] Dados do seguro inválidos: ${check.messages.join(' ')}. Enviando mesmo assim.`);
     }
   }
-  const insuranceText = buildInsuranceText({
-    insurer_name: insurance.seguradora,
-    insurer_cnpj: insurance.cnpjSeguradora,
-    insurer_policy: insurance.apolice,
-    insurer_endorsement: insurance.averbacao,
-    insured_amount: insurance.valorSegurado,
-    insurance_premium: insurance.valorSeguro,
-  });
+  const insuranceText = buildInsuranceText(insurance);
 
   const discriminacao = [baseDiscriminacao, insuranceText]
     .filter(Boolean)
