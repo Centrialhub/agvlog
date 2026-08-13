@@ -612,7 +612,9 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
 
   // CFOP de prestação de serviço de transporte: 5351..5360 / 6351..6360 (ou 5932/6932).
   // Qualquer outro valor é rejeitado pela SEFAZ ("Rejeicao: CFOP informado invalido").
-  const ufIni = String((inicio as { uf?: string } | undefined)?.uf || input.emitter?.address?.uf || '').toUpperCase();
+  const ufIni = String(
+    (inicio as { uf?: string } | undefined)?.uf || input.emitter?.address?.state || '',
+  ).toUpperCase();
   const ufFim = String((fim as { uf?: string } | undefined)?.uf || '').toUpperCase();
   const interstate = !!ufIni && !!ufFim && ufIni !== ufFim;
   const cfopPrefix = interstate ? '6' : '5';
