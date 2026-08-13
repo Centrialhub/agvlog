@@ -109,6 +109,70 @@ async function callHub(method: string, path: string, qs?: Record<string, string>
   return { status: 503, data: { code: 'BOOT_ERROR', message: 'Hub Fiscal indisponível' } };
 }
 
+function onlyDigits(value: unknown): string {
+  return String(value ?? '').replace(/\D+/g, '');
+}
+
+/**
+ * Última barreira de congruência para CT-e.
+ *
+ * Há clientes com bundles antigos em cache que ainda enviam `inicio` a partir
+ * do remetente e CFOP de venda (ex.: 5253). O Hub transforma esses campos em
+ * UFIni/UFfim antes de transmitir à SEFAZ; por isso a correção precisa ocorrer
+ * também no proxy, imediatamente antes do POST upstream.
+ */
+function normalizeCteEmissionBody(source: Record<string, unknown>): Record<string, unknown> {
+  const body = structuredClone(source) as Record<string, any>;
+  const inner = (body.payload && typeof body.payload === 'object'
+    ? body.payload
+    : body) as Record<string, any>;
+
+  const emitterAddress = inner.emitente?.endereco;
+  const destinationAddress = inner.recebedor?.endereco || inner.destinatario?.endereco;
+
+  const location = (address: Record<string, unknown> | undefined) => {
+    if (!address) return undefined;
+    const city = address.municipio || address.cidade;
+    const state = String(address.uf || address.estado || '').toUpperCase() || undefined;
+    const cityCode = onlyDigits(address.codigoMunicipio || address.codigoCidade || address.cMun) || undefined;
+    if (!city && !state && !cityCode) return undefined;
+    return {
+      codigoCidade: cityCode,
+      cMun: cityCode,
+      municipio: city,
+      cidade: city,
+      uf: state,
+      estado: state,
+    };
+  };
+
+  const inicio = location(emitterAddress);
+  const fim = location(destinationAddress);
+  if (inicio) inner.inicio = inicio;
+  if (fim) inner.fim = fim;
+
+  const ufIni = String(inner.inicio?.uf || '').toUpperCase();
+  const ufFim = String(inner.fim?.uf || '').toUpperCase();
+  const prefix = ufIni && ufFim && ufIni !== ufFim ? '6' : '5';
+  const rawCfop = onlyDigits(inner.CFOP || inner.cfop || inner.ide?.CFOP);
+  const validTransportCfop = /^[56](3(5[1-9]|60)|932)$/.test(rawCfop);
+  const normalizedCfop = validTransportCfop
+    ? `${prefix}${rawCfop.slice(1)}`
+    : `${prefix}353`;
+
+  inner.CFOP = normalizedCfop;
+  inner.cfop = normalizedCfop;
+  inner.ide = { ...(inner.ide || {}), CFOP: normalizedCfop };
+
+  console.log('[hub-fiscal-proxy] CT-e normalized before upstream emission', {
+    ufIni,
+    ufFim,
+    receivedCfop: rawCfop || null,
+    sentCfop: normalizedCfop,
+  });
+  return body;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -211,7 +275,9 @@ Deno.serve(async (req) => {
       case 'emit': {
         const type = payload.type;
         if (!type) return json(400, { success: false, error: { code: 'MISSING_TYPE' } });
-        const body = payload.body || {};
+        const body = type === 'cte'
+          ? normalizeCteEmissionBody(payload.body || {})
+          : (payload.body || {});
         const resolved = await resolveToken(type, payload.emitterId);
         console.log('[hub-fiscal-proxy] emit', { type, emitter_id: resolved.emitter_id, source: resolved.source });
         const { status, data } = await callHub('POST', '/hub_documents_emit', { type }, body, resolved.token);
