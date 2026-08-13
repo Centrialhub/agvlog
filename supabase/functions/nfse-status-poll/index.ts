@@ -14,8 +14,8 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const ENC_KEY = Deno.env.get('AGVLOG_ENCRYPTION_KEY') || '';
 
-const PENDING = ['processing', 'queued', 'submitted', 'pending', 'transmitting', 'issued'];
-const MAX_DOCS = 40;
+const PENDING = ['processing', 'queued', 'submitted', 'pending', 'transmitting', 'issued', 'error', 'rejected'];
+const MAX_DOCS = 50;
 
 function json(status: number, payload: unknown) {
   return new Response(JSON.stringify(payload), {

@@ -360,7 +360,7 @@ export default function NFSePage() {
                             <Ban className="h-3 w-3 mr-1" /> Cancelar
                           </Button>
                         )}
-                        {!['issued', 'authorized'].includes(d.status) && (
+                        {(!['issued', 'authorized'].includes(d.status) || d.status === 'rejected' || d.status === 'error') && (
                           <Button size="sm" variant="ghost" className="text-destructive" onClick={() => handleDelete(d)} disabled={del.isPending}>
                             <Trash2 className="h-3 w-3 mr-1" /> Excluir
                           </Button>
