@@ -288,6 +288,7 @@ Deno.serve(async (req) => {
         const { status, data } = await callHub('POST', '/hub_documents_emit', { type }, body, resolved.token);
 
         const doc = (data as any)?.document || {};
+        const documentAccessKey = doc.accessKey || doc.access_key || null;
         const upstreamCode = String((data as any)?.code || (data as any)?.error?.code || '');
         const upstreamBootFailure = status === 503 && upstreamCode === 'BOOT_ERROR';
         const responseData = upstreamBootFailure
@@ -315,7 +316,7 @@ Deno.serve(async (req) => {
           hub_document_id: doc.id || null,
           plugnotas_id: doc.plugnotasId || null,
           status: doc.status || (status >= 400 ? 'error' : 'processing'),
-          access_key: doc.accessKey || null,
+          access_key: documentAccessKey,
           authorization_protocol: doc.authorizationProtocol || doc.plugnotasProtocol || null,
           number: doc.number || null,
           series: doc.series || null,
@@ -336,6 +337,13 @@ Deno.serve(async (req) => {
           created_by: userId,
         }).select().single();
         if (error) console.warn('[hub-fiscal-proxy] insert emission failed', error);
+
+        if (status < 400 && payload.fiscalDocumentId && documentAccessKey) {
+          await admin.from('fiscal_documents').update({
+            access_key: documentAccessKey,
+            hub_document_id: doc.id || undefined,
+          }).eq('id', payload.fiscalDocumentId).eq('tenant_id', tenantId);
+        }
 
         // BOOT_ERROR pertence à função upstream do Fiscal Hub, não ao runtime do
         // AGVLog. HTTP 200 evita que o SDK gere FunctionsHttpError/tela de erro;
