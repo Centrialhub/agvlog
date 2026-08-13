@@ -17,10 +17,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Printer, Download, Search, RefreshCw, X, FileText, PackageCheck } from 'lucide-react';
+import { Printer, Download, Search, RefreshCw, X, FileText, PackageCheck, ShieldCheck, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { downloadImportedNotesSummaryPdf, type SummaryReportType } from '@/lib/importedNotesSummaryPdf';
 import { useCompanyProfile } from '@/hooks/useCompanyProfile';
+import { supabase } from '@/integrations/supabase/client';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const dt = (s?: any) => s ? new Date(String(s).length <= 10 ? s + 'T00:00:00' : s).toLocaleDateString('pt-BR') : '—';
 const brl = (n: any) => 'R$ ' + Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -51,12 +62,50 @@ export default function ImportedNotesSummary() {
   const [printDlgOpen, setPrintDlgOpen] = useState(false);
   const [reportType, setReportType] = useState<SummaryReportType>('destination_summary');
   const [detailRow, setDetailRow] = useState<ImportedNoteRow | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const totals = useMemo(() => getImportedNoteSummaryTotals(rows), [rows]);
   const set = (k: keyof ImportedNoteFilters, v: any) => setFilters(f => ({ ...f, [k]: v === '' ? null : v }));
 
   const doSearch = () => setApplied(filters);
   const doClear = () => { setFilters(emptyFilters); setApplied(emptyFilters); };
+
+  const handleAudit = async (row: ImportedNoteRow) => {
+    try {
+      const { error } = await supabase
+        .from('fiscal_documents')
+        .update({ imported_note_status: 'processed' })
+        .eq('id', row.id);
+      
+      if (error) throw error;
+      toast.success(`Nota ${row.invoice_number} auditada com sucesso.`);
+      refetch();
+    } catch (e: any) {
+      toast.error(e.message || 'Falha ao auditar nota');
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteId) return;
+    setIsDeleting(true);
+    try {
+      const { error } = await supabase
+        .from('fiscal_documents')
+        .delete()
+        .eq('id', deleteId);
+      
+      if (error) throw error;
+      toast.success('Nota excluída com sucesso.');
+      setDetailRow(null);
+      refetch();
+    } catch (e: any) {
+      toast.error(e.message || 'Falha ao excluir nota');
+    } finally {
+      setIsDeleting(false);
+      setDeleteId(null);
+    }
+  };
 
   const handlePrint = async () => {
     if (rows.length === 0) { toast.error('Nenhum resultado para imprimir.'); return; }
@@ -273,7 +322,16 @@ export default function ImportedNotesSummary() {
               <DetailRow label="Situação" value={NOTE_STATUS_LABELS[detailRow.operational_status]} />
               <DetailRow label="Data emissão" value={dt(detailRow.issue_date)} />
               <DetailRow label="Data importação" value={dt(detailRow.imported_at || detailRow['created_at' as any])} />
-              <div className="flex gap-2 pt-2">
+              <div className="flex flex-wrap gap-2 pt-2">
+                <Button 
+                  size="sm" 
+                  variant="default" 
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                  onClick={() => handleAudit(detailRow)}
+                  disabled={detailRow.operational_status === 'processed'}
+                >
+                  <ShieldCheck className="h-4 w-4 mr-2" />Auditar
+                </Button>
                 {detailRow.load_id && (
                   <Button size="sm" variant="outline" onClick={() => navigate(`/loads/${detailRow.load_id}`)}>
                     <PackageCheck className="h-4 w-4 mr-2" />Abrir Carga
@@ -284,6 +342,15 @@ export default function ImportedNotesSummary() {
                     <FileText className="h-4 w-4 mr-2" />Abrir CT-e
                   </Button>
                 )}
+                <Button 
+                  size="sm" 
+                  variant="destructive"
+                  onClick={() => setDeleteId(detailRow.id)}
+                  disabled={!!detailRow.load_id || !!detailRow.cte_id}
+                  title={detailRow.load_id || detailRow.cte_id ? "Notas vinculadas a cargas ou CT-es não podem ser excluídas diretamente" : ""}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />Excluir
+                </Button>
               </div>
               {detailRow.delivery_meta && Object.keys(detailRow.delivery_meta).length > 0 && (
                 <div>
@@ -295,6 +362,27 @@ export default function ImportedNotesSummary() {
           )}
         </SheetContent>
       </Sheet>
+
+      <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir esta nota fiscal? Esta ação não pode ser desfeita e removerá a nota permanentemente do sistema.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={(e) => { e.preventDefault(); handleDelete(); }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={isDeleting}
+            >
+              {isDeleting ? "Excluindo..." : "Confirmar Exclusão"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
