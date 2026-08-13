@@ -36,7 +36,6 @@ export function useIssueCTe() {
       if (!input.emitter?.id) throw new Error('Emitente não selecionado');
 
       const built = buildCtePayload(input);
-      const built = buildCtePayload(input);
       if (!built.ok) {
         throw new Error(`Campos obrigatórios ausentes: ${built.missing.join(', ')}`);
       }
