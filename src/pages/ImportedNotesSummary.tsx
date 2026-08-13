@@ -46,7 +46,7 @@ const STATUS_VARIANT: Record<string, any> = {
 const emptyFilters: ImportedNoteFilters = {
   branch: null, controlLot: null, dynamicLot: null,
   issueFrom: null, issueTo: null, importFrom: null, importTo: null,
-  remitter: null, clientId: null, originCity: null, destinationCity: null,
+  remitter: null, clientId: null, supplierId: null, originCity: null, destinationCity: null,
   status: 'all', invoiceNumber: null, grouped: true,
 };
 
@@ -185,6 +185,16 @@ export default function ImportedNotesSummary() {
               </SelectContent>
             </Select>
           </div>
+          <div>
+            <Label>Fornecedor</Label>
+            <Select value={filters.supplierId || '__all__'} onValueChange={(v) => set('supplierId', v === '__all__' ? null : v)}>
+              <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Todos</SelectItem>
+                {clients.filter(c => c.is_supplier).map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
           <div><Label>Município Origem</Label><Input value={filters.originCity || ''} onChange={e => set('originCity', e.target.value)} /></div>
           <div><Label>Município Destino</Label><Input value={filters.destinationCity || ''} onChange={e => set('destinationCity', e.target.value)} /></div>
           <div>
@@ -318,6 +328,7 @@ export default function ImportedNotesSummary() {
               <DetailRow label="Remetente" value={detailRow.remitter || '—'} />
               <DetailRow label="Destinatário" value={detailRow.recipient || '—'} />
               <DetailRow label="Cliente" value={detailRow.clients?.company_name || '—'} />
+              <DetailRow label="Fornecedor" value={detailRow.suppliers?.company_name || '—'} />
               <DetailRow label="Origem" value={detailRow.origin_city ? `${detailRow.origin_city}/${detailRow.origin_state || '--'}` : '—'} />
               <DetailRow label="Destino" value={detailRow.recipient_city ? `${detailRow.recipient_city}/${detailRow.recipient_state || '--'}` : '—'} />
               <DetailRow label="Valor" value={brl(detailRow.value)} />

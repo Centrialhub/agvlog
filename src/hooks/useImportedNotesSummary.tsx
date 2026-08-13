@@ -28,6 +28,7 @@ export interface ImportedNoteFilters {
   importTo?: string | null;
   remitter?: string | null;
   clientId?: string | null;
+  supplierId?: string | null;
   originCity?: string | null;
   destinationCity?: string | null;
   status?: NoteOperationalStatus | 'all' | null;
@@ -64,6 +65,7 @@ export interface ImportedNoteRow {
   client_id: string | null;
   document_type: string | null;
   clients?: { company_name: string | null; tax_id: string | null } | null;
+  suppliers?: { company_name: string | null; tax_id: string | null } | null;
   loads?: { id: string; load_number: string | null; status: string | null; origin: any; destination: any; vehicle_id: string | null; driver_id: string | null } | null;
   cte_number?: string | null;
   cte_id?: string | null;
@@ -100,6 +102,7 @@ export function useImportedNotes(filters: ImportedNoteFilters) {
           freight_value, freight_cif_value, freight_fob_value, imported_note_status,
           status, delivery_meta, load_id, client_id, document_type,
           clients:client_id(company_name, tax_id),
+          suppliers:supplier_id(company_name, tax_id),
           loads:load_id(id, load_number, status, origin, destination, vehicle_id, driver_id)
         `)
         .eq('tenant_id', currentTenant!.id)
@@ -117,6 +120,7 @@ export function useImportedNotes(filters: ImportedNoteFilters) {
       if (filters.remitter) q = q.ilike('remitter', `%${filters.remitter}%`);
       if (filters.invoiceNumber) q = q.ilike('invoice_number', `%${filters.invoiceNumber}%`);
       if (filters.clientId) q = q.eq('client_id', filters.clientId);
+      if (filters.supplierId) q = q.eq('supplier_id', filters.supplierId);
       if (filters.originCity) q = q.ilike('origin_city', `%${filters.originCity}%`);
       if (filters.destinationCity) q = q.ilike('recipient_city', `%${filters.destinationCity}%`);
       if (filters.status && filters.status !== 'all' && ['not_processed_redispatch','transferred','not_transferred'].includes(filters.status)) {
