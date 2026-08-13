@@ -119,6 +119,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
         .select('id, invoice_number, remitter, recipient, recipient_neighborhood, recipient_city, recipient_state, pallet_count, weight_kg, product_summary, load_id, created_at, loads(id, load_number), clients!fiscal_documents_client_id_fkey(company_name)')
         .eq('tenant_id', currentTenant.id)
         .eq('document_type', 'inbound')
+        .is('deleted_at', null)
         .order('created_at', { ascending: false })
         .limit(1000);
       if (error) throw error;
