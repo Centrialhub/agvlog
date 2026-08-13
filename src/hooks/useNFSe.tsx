@@ -322,17 +322,35 @@ export function useIssueNFSe() {
           attempt: (priorAttempts || 0),
         });
         console.log(`[useIssueNFSe] Transmitindo NFS-e ${doc.id} (emitter: ${emitter.id})`, { priorAttempts });
-        const res = await hubFiscal.emit({
-          type: 'nfse',
-          emitterId: emitter.id,
-          nfseDocumentId: doc.id,
-          body: {
-            emitterCnpj: built.emitterCnpj,
-            environment: built.environment,
-            externalId: built.externalId,
-            payload: built.payload,
-          },
-        });
+        let res: Awaited<ReturnType<typeof hubFiscal.emit>>;
+        try {
+          res = await hubFiscal.emit({
+            type: 'nfse',
+            emitterId: emitter.id,
+            nfseDocumentId: doc.id,
+            body: {
+              emitterCnpj: built.emitterCnpj,
+              environment: built.environment,
+              externalId: built.externalId,
+              payload: built.payload,
+            },
+          });
+        } catch (error: any) {
+          const message = error?.message || 'Falha ao enviar ao Hub Fiscal';
+          await (supabase as any).from('nfse_documents').update({
+            status: 'error',
+            provider: 'hub_fiscal',
+            rejection_messages: { message, retryable: /BOOT_ERROR|503|indisponível/i.test(message) },
+          }).eq('id', doc.id);
+          await (supabase as any).from('nfse_events').insert({
+            tenant_id: doc.tenant_id,
+            nfse_id: doc.id,
+            event_type: 'error',
+            message: `Falha de comunicação com o Hub Fiscal: ${message}`,
+            payload: { retryable: /BOOT_ERROR|503|indisponível/i.test(message) },
+          });
+          throw error;
+        }
         console.log(`[useIssueNFSe] Resposta do Hub:`, res);
 
         const hubDoc = (res as any)?.hub?.document || {};

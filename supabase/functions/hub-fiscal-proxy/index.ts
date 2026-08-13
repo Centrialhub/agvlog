@@ -74,18 +74,39 @@ function buildUrl(path: string, qs?: Record<string, string>) {
 async function callHub(method: string, path: string, qs?: Record<string, string>, body?: unknown, token?: string) {
   const key = token || DEFAULT_HUB_KEY;
   if (!key) throw new Error('Nenhum token do Hub Fiscal configurado');
-  const res = await fetch(buildUrl(path, qs), {
-    method,
-    headers: {
-      'Authorization': `Bearer ${key}`,
-      'Content-Type': 'application/json',
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const text = await res.text();
-  let data: any;
-  try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
-  return { status: res.status, data };
+  const requestBody = body ? JSON.stringify(body) : undefined;
+  const maxAttempts = method === 'POST' && path === '/hub_documents_emit' ? 3 : 1;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const res = await fetch(buildUrl(path, qs), {
+      method,
+      headers: {
+        'Authorization': `Bearer ${key}`,
+        'Content-Type': 'application/json',
+      },
+      body: requestBody,
+    });
+    const text = await res.text();
+    let data: any;
+    try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
+
+    const upstreamCode = String(data?.code || data?.error?.code || '');
+    const retryableBootFailure =
+      (res.status === 502 || res.status === 503) && upstreamCode === 'BOOT_ERROR';
+    if (!retryableBootFailure || attempt === maxAttempts) {
+      return { status: res.status, data };
+    }
+
+    console.warn('[hub-fiscal-proxy] Hub indisponível durante inicialização; repetindo emissão', {
+      path,
+      attempt,
+      maxAttempts,
+      upstreamCode,
+    });
+    await new Promise((resolve) => setTimeout(resolve, attempt * 750));
+  }
+
+  return { status: 503, data: { code: 'BOOT_ERROR', message: 'Hub Fiscal indisponível' } };
 }
 
 Deno.serve(async (req) => {
