@@ -268,6 +268,8 @@ export default function CteSearch() {
     } catch (e) {
       // toast já disparado pelo hook
     }
+  }
+
   async function handleDelete(row: CteSearchRow) {
     if (!window.confirm('Deseja excluir este registro de erro? Esta ação é irreversível e serve apenas para limpar tentativas que falharam.')) return;
     await deleteCte.mutateAsync(row.id);
