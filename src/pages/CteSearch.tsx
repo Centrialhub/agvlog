@@ -15,9 +15,10 @@ import { runBulkDownload, summarizeBulkResult } from '@/lib/fiscal/bulkFileMerge
 import { fetchCteBlob, cteFileName, cteLabel, canDownloadCte, saveBlob, openBlob } from '@/lib/fiscal/cteFiles';
 import {
   Search, X, Filter as FilterIcon, FileText, FileDown, Eye, RefreshCw,
-  ChevronDown, ChevronUp, Download, Table as TableIcon, Trash2,
+  ChevronDown, ChevronUp, Download, Table as TableIcon, Trash2, Ban,
 } from 'lucide-react';
 import { useCancelCTe } from '@/hooks/useIssueCTe';
+import { useDeleteFailedCTe } from '@/hooks/useDeleteFailedCTe';
 
 const TONE_CLASS: Record<string, string> = {
   default: 'bg-secondary text-secondary-foreground',
@@ -124,6 +125,7 @@ function toCsv(rows: CteSearchRow[]) {
 
 export default function CteSearch() {
   const cancelCte = useCancelCTe();
+  const deleteCte = useDeleteFailedCTe();
   const [draft, setDraft] = useState<CteSearchFilters>(DEFAULT_FILTERS);
   const [filters, setFilters] = useState<CteSearchFilters>(DEFAULT_FILTERS);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -266,6 +268,9 @@ export default function CteSearch() {
     } catch (e) {
       // toast já disparado pelo hook
     }
+  async function handleDelete(row: CteSearchRow) {
+    if (!window.confirm('Deseja excluir este registro de erro? Esta ação é irreversível e serve apenas para limpar tentativas que falharam.')) return;
+    await deleteCte.mutateAsync(row.id);
   }
 
   const activeCount = activeFilterCount(filters);
@@ -523,7 +528,7 @@ export default function CteSearch() {
                         <Button size="sm" variant="ghost" title="Baixar XML" disabled={!has} onClick={() => oneFile(r, 'xml')}>
                           <FileDown className="h-4 w-4" />
                         </Button>
-                        {(r.sefaz_status === 'processed' || r.sefaz_status === 'processed_error') && r.source === 'hub' && (
+                        {(r.sefaz_status === 'processed' || r.sefaz_status === 'processed_error' || r.sefaz_status === 'authorized') && r.source === 'hub' && (
                           <Button 
                             size="sm" 
                             variant="ghost" 
@@ -531,6 +536,18 @@ export default function CteSearch() {
                             title="Cancelar CT-e" 
                             disabled={cancelCte.isPending} 
                             onClick={() => handleCancel(r)}
+                          >
+                            <Ban className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {(r.sefaz_status === 'error' || r.sefaz_status === 'rejected') && !r.hub_document_id && (
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10" 
+                            title="Excluir registro de erro" 
+                            disabled={deleteCte.isPending} 
+                            onClick={() => handleDelete(r)}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
