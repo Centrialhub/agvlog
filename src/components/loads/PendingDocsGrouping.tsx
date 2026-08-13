@@ -89,6 +89,7 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
         .eq('status', 'confirmed')
         .eq('document_type', 'inbound')
         .is('load_id', null)
+        .is('deleted_at', null)
         .order('created_at', { ascending: true });
       if (error) throw error;
       return (data || []) as PendingDoc[];
