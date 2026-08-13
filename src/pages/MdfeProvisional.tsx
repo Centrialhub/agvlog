@@ -93,9 +93,29 @@ export default function MdfeProvisional() {
     setIsTransmitting(true);
     try {
       const selectedDocs = ctes?.filter(c => selectedIds.includes(c.id)) || [];
+
+      // A lista pode estar em cache sem a chave; busca o valor atual no banco.
+      const needsKey = selectedDocs.filter(doc => !/^\d{44}$/.test(doc.access_key || '')).map(d => d.id);
+      if (needsKey.length > 0) {
+        const { data: fresh } = await supabase
+          .from('fiscal_documents')
+          .select('id, access_key')
+          .in('id', needsKey);
+        for (const row of fresh || []) {
+          const target = selectedDocs.find(d => d.id === row.id);
+          if (target && /^\d{44}$/.test(String(row.access_key || ''))) {
+            target.access_key = String(row.access_key);
+          }
+        }
+      }
+
       const invalidDocuments = selectedDocs.filter(doc => !/^\d{44}$/.test(doc.access_key || ''));
       if (invalidDocuments.length > 0) {
-        toast.error(`${invalidDocuments.length} CT-e selecionado(s) não possui(em) chave de acesso válida`);
+        toast.error(
+          `${invalidDocuments.length} CT-e sem chave de acesso de 44 dígitos (CT-e ${invalidDocuments
+            .map(d => d.cte_number || d.id.slice(0, 8))
+            .join(', ')}). Sincronize o CT-e com o Hub antes de emitir o MDF-e.`
+        );
         return;
       }
       
