@@ -1,19 +1,57 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { useAuthorizedCteList, AuthorizedCte } from '@/hooks/useAuthorizedCteList';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useAuthorizedCteList } from '@/hooks/useAuthorizedCteList';
+import { useVehicles } from '@/hooks/useVehicles';
+import { useEmitters } from '@/hooks/useEmitters';
+import { supabase } from '@/integrations/supabase/client';
+import { buildMdfePayload, BuildMdfePayloadInput } from '@/lib/fiscal/mdfeBuilder';
 import { format } from 'date-fns';
-import { Loader2, Send, RefreshCw, XCircle, FileText } from 'lucide-react';
+import { Loader2, Send, RefreshCw, XCircle, FileText, Truck, User, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function MdfeProvisional() {
   const { data: ctes, isLoading, refetch } = useAuthorizedCteList();
+  const { data: vehicles = [] } = useVehicles();
+  const { data: emitters = [] } = useEmitters();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isTransmitting, setIsTransmitting] = useState(false);
+
+  // Form states
+  const [emitterId, setEmitterId] = useState<string>('');
+  const [vehicleId, setVehicleId] = useState<string>('');
+  const [driverName, setDriverName] = useState('');
+  const [driverCpf, setDriverCpf] = useState('');
+  const [originCity, setOriginCity] = useState('');
+  const [originIbge, setOriginIbge] = useState('');
+  const [originUf, setOriginUf] = useState('');
+  const [destCity, setDestCity] = useState('');
+  const [destIbge, setDestIbge] = useState('');
+  const [destUf, setDestUf] = useState('');
+
+  // Auto-fill from selected CTEs
+  useEffect(() => {
+    if (isDialogOpen && selectedIds.length > 0) {
+      const firstSelected = ctes?.find(c => c.id === selectedIds[0]);
+      if (firstSelected) {
+        setDestCity(firstSelected.recipient_city || '');
+        // Note: recipient_city is often just name, we might need a better source for IBGE/UF
+      }
+      if (emitters.length > 0 && !emitterId) {
+        const def = emitters.find(e => e.is_default) || emitters[0];
+        setEmitterId(def.id);
+      }
+    }
+  }, [isDialogOpen, selectedIds, ctes, emitters]);
 
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => 
@@ -29,17 +67,80 @@ export default function MdfeProvisional() {
     }
   };
 
-  const handleTransmit = async () => {
+  const handleOpenDialog = () => {
     if (selectedIds.length === 0) {
-      toast.error("Selecione ao menos um CT-e para o manifesto");
+      toast.error("Selecione ao menos um CT-e");
       return;
     }
-    
+    setIsDialogOpen(true);
+  };
+
+  const handleTransmit = async () => {
+    const emitter = emitters.find(e => e.id === emitterId);
+    const vehicle = vehicles.find(v => v.id === vehicleId);
+
+    if (!emitter || !vehicle || !driverCpf || !originIbge || !destIbge) {
+      toast.error("Preencha todos os campos obrigatórios");
+      return;
+    }
+
     setIsTransmitting(true);
     try {
-      // Implementação futura da transmissão via Hub
-      toast.info("Funcionalidade de transmissão em desenvolvimento (Engine v1 pronta)");
-      console.log("Selecionados para MDF-e:", selectedIds);
+      const selectedDocs = ctes?.filter(c => selectedIds.includes(c.id)) || [];
+      
+      const input: BuildMdfePayloadInput = {
+        emitter: {
+          cnpj: emitter.cnpj,
+          name: emitter.razao_social,
+          environment: 'sandbox', // TODO: sync with emitter config
+        },
+        driver: {
+          name: driverName,
+          cpf: driverCpf,
+        },
+        vehicle: {
+          plate: vehicle.plate,
+          state: vehicle.type || 'SP', // fallback
+        },
+        origin: {
+          city_ibge: originIbge,
+          city_name: originCity,
+          state: originUf,
+        },
+        destination: {
+          city_ibge: destIbge,
+          city_name: destCity,
+          state: destUf,
+        },
+        documents: selectedDocs.map(d => ({
+          key: d.access_key!,
+          type: 'cte'
+        }))
+      };
+
+      const { ok, payload, missing } = buildMdfePayload(input);
+      if (!ok) {
+        toast.error(`Dados ausentes: ${missing.join(', ')}`);
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke('hub-fiscal-proxy', {
+        body: { 
+          type: 'mdfe',
+          action: 'emit',
+          payload 
+        }
+      });
+
+      if (error) throw error;
+      
+      toast.success("MDF-e enviado para processamento");
+      setIsDialogOpen(false);
+      setSelectedIds([]);
+      refetch();
+    } catch (err: any) {
+      console.error(err);
+      toast.error(`Falha na transmissão: ${err.message}`);
     } finally {
       setIsTransmitting(false);
     }
@@ -60,15 +161,11 @@ export default function MdfeProvisional() {
             Sincronizar
           </Button>
           <Button 
-            disabled={selectedIds.length === 0 || isTransmitting}
-            onClick={handleTransmit}
+            disabled={selectedIds.length === 0}
+            onClick={handleOpenDialog}
           >
-            {isTransmitting ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Send className="mr-2 h-4 w-4" />
-            )}
-            Gerar e Transmitir MDF-e
+            <Send className="mr-2 h-4 w-4" />
+            Gerar Manifesto ({selectedIds.length})
           </Button>
         </div>
       </div>
@@ -128,7 +225,6 @@ export default function MdfeProvisional() {
                     <TableHead>Emissão</TableHead>
                     <TableHead>Remetente / Destinatário</TableHead>
                     <TableHead>Cidade Destino</TableHead>
-                    <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -154,13 +250,6 @@ export default function MdfeProvisional() {
                         <div className="text-[10px] text-muted-foreground truncate max-w-[200px]">{cte.recipient}</div>
                       </TableCell>
                       <TableCell>{cte.recipient_city}</TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="icon" onClick={() => {
-                          toast.error("Cancelamento direto de CT-e deve ser feito no Monitor de CT-e");
-                        }}>
-                          <XCircle className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -170,13 +259,115 @@ export default function MdfeProvisional() {
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <FileText className="h-12 w-12 text-muted-foreground/30 mb-4" />
               <h3 className="text-lg font-medium">Nenhum CT-e autorizado encontrado</h3>
-              <p className="text-sm text-muted-foreground">
-                Certifique-se de que os CT-es foram emitidos e autorizados com sucesso.
-              </p>
             </div>
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Finalizar MDF-e</DialogTitle>
+            <DialogDescription>
+              Preencha as informações complementares da viagem para transmitir o manifesto.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-6 py-4">
+            <div className="space-y-4">
+              <h4 className="flex items-center gap-2 text-sm font-semibold">
+                <FileText className="h-4 w-4" /> Emitente e Veículo
+              </h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Emitente</Label>
+                  <Select value={emitterId} onValueChange={setEmitterId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o emitente" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {emitters.map(e => (
+                        <SelectItem key={e.id} value={e.id}>{e.nome_fantasia || e.razao_social}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Veículo (Placa)</Label>
+                  <Select value={vehicleId} onValueChange={setVehicleId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o veículo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {vehicles.map(v => (
+                        <SelectItem key={v.id} value={v.id}>{v.plate} {v.nickname ? `(${v.nickname})` : ''}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h4 className="flex items-center gap-2 text-sm font-semibold">
+                <User className="h-4 w-4" /> Condutor
+              </h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Nome Completo</Label>
+                  <Input value={driverName} onChange={e => setDriverName(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>CPF (Somente números)</Label>
+                  <Input value={driverCpf} onChange={e => setDriverCpf(e.target.value)} placeholder="00000000000" />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h4 className="flex items-center gap-2 text-sm font-semibold">
+                <MapPin className="h-4 w-4" /> Rota
+              </h4>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Origem (Cidade)</Label>
+                  <Input value={originCity} onChange={e => setOriginCity(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>IBGE Origem</Label>
+                  <Input value={originIbge} onChange={e => setOriginIbge(e.target.value)} placeholder="Ex: 3550308" />
+                </div>
+                <div className="space-y-2">
+                  <Label>UF</Label>
+                  <Input value={originUf} onChange={e => setOriginUf(e.target.value)} maxLength={2} className="uppercase" />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Destino (Cidade)</Label>
+                  <Input value={destCity} onChange={e => setDestCity(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>IBGE Destino</Label>
+                  <Input value={destIbge} onChange={e => setDestIbge(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>UF</Label>
+                  <Input value={destUf} onChange={e => setDestUf(e.target.value)} maxLength={2} className="uppercase" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
+            <Button disabled={isTransmitting} onClick={handleTransmit}>
+              {isTransmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Confirmar e Transmitir
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
