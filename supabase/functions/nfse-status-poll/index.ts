@@ -170,6 +170,11 @@ Deno.serve(async (req) => {
         patch.status = 'cancelled';
         patch.cancelled = true;
         patch.cancellation_date = new Date().toISOString();
+        // Libera as NFs vinculadas — voltam a aparecer para novo faturamento
+        await admin
+          .from('fiscal_documents')
+          .update({ nfse_emitted_at: null, nfse_emitted_document_id: null })
+          .eq('nfse_emitted_document_id', doc.id);
       }
 
       await admin.from('nfse_documents').update(patch).eq('id', doc.id);
