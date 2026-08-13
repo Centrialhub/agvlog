@@ -31,6 +31,7 @@ export interface ImportedNoteFilters {
   originCity?: string | null;
   destinationCity?: string | null;
   status?: NoteOperationalStatus | 'all' | null;
+  invoiceNumber?: string | null;
   grouped?: boolean;
 }
 
@@ -113,6 +114,7 @@ export function useImportedNotes(filters: ImportedNoteFilters) {
       if (filters.importFrom) q = q.gte('imported_at', filters.importFrom);
       if (filters.importTo) q = q.lte('imported_at', filters.importTo + 'T23:59:59');
       if (filters.remitter) q = q.ilike('remitter', `%${filters.remitter}%`);
+      if (filters.invoiceNumber) q = q.ilike('invoice_number', `%${filters.invoiceNumber}%`);
       if (filters.clientId) q = q.eq('client_id', filters.clientId);
       if (filters.originCity) q = q.ilike('origin_city', `%${filters.originCity}%`);
       if (filters.destinationCity) q = q.ilike('recipient_city', `%${filters.destinationCity}%`);

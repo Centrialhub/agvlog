@@ -36,7 +36,7 @@ const emptyFilters: ImportedNoteFilters = {
   branch: null, controlLot: null, dynamicLot: null,
   issueFrom: null, issueTo: null, importFrom: null, importTo: null,
   remitter: null, clientId: null, originCity: null, destinationCity: null,
-  status: 'all', grouped: true,
+  status: 'all', invoiceNumber: null, grouped: true,
 };
 
 export default function ImportedNotesSummary() {
@@ -114,6 +114,7 @@ export default function ImportedNotesSummary() {
       <Card>
         <CardHeader><CardTitle className="text-base">Filtros</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div><Label>Nº Nota</Label><Input value={filters.invoiceNumber || ''} onChange={e => set('invoiceNumber', e.target.value)} placeholder="Ex: 12345" /></div>
           <div><Label>Lote Controle</Label><Input value={filters.controlLot || ''} onChange={e => set('controlLot', e.target.value)} /></div>
           <div><Label>Lote Dinâmico</Label><Input value={filters.dynamicLot || ''} onChange={e => set('dynamicLot', e.target.value)} /></div>
           <div><Label>Emissão de</Label><Input type="date" value={filters.issueFrom || ''} onChange={e => set('issueFrom', e.target.value)} /></div>
