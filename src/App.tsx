@@ -89,6 +89,7 @@ const OccurrenceReturnSheet = lazy(() => import("@/pages/OccurrenceReturnSheet")
 const PalletReturns = lazy(() => import("@/pages/PalletReturns"));
 const MerchandiseShortages = lazy(() => import("@/pages/MerchandiseShortages"));
 const CostCenters = lazy(() => import("@/pages/CostCenters"));
+const MdfeProvisional = lazy(() => import("@/pages/MdfeProvisional"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
 // Driver pages
@@ -315,6 +316,7 @@ const App = () => (
             <Route path="/ort-management" element={<ProtectedRoute><OrtManagement /></ProtectedRoute>} />
             <Route path="/product-traceability" element={<ProtectedRoute><ProductTraceability /></ProtectedRoute>} />
             <Route path="/product-history" element={<ProtectedRoute><ProductHistory /></ProtectedRoute>} />
+            <Route path="/mdfe-provisional" element={<ProtectedRoute><MdfeProvisional /></ProtectedRoute>} />
             <Route path="/imported-notes-summary" element={<ProtectedRoute><ImportedNotesSummary /></ProtectedRoute>} />
             <Route path="/load-control" element={<ProtectedRoute><LoadControl /></ProtectedRoute>} />
             <Route path="/closing-reports" element={<ProtectedRoute><ClosingReports /></ProtectedRoute>} />
