@@ -145,7 +145,8 @@ export async function fetchCteFiscalDocs(fiscalDocIds: string[]) {
   const { data, error } = await supabase
     .from('fiscal_documents')
     .select('id, invoice_number, issue_date, recipient, remitter, recipient_city, recipient_state, weight_kg, value')
-    .in('id', fiscalDocIds);
+    .in('id', fiscalDocIds)
+    .is('deleted_at', null);
   if (error) throw error;
   return data || [];
 }
