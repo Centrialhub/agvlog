@@ -136,6 +136,7 @@ export function useCteMonitor(filters: CteMonitorFilters) {
         .from('cte_documents')
         .select('*')
         .eq('tenant_id', currentTenant.id)
+        .is('deleted_at', null)
         .order('sefaz_status_at', { ascending: false, nullsFirst: false })
         .order('created_at', { ascending: false })
         .limit(2000);

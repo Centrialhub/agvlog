@@ -38,6 +38,7 @@ export function useAuthorizedCteList() {
           hub_document_id
         `)
         .eq('tenant_id', currentTenant!.id)
+        .is('deleted_at', null)
         .eq('document_type', 'outbound')
         .eq('status', 'authorized')
         .order('issue_date', { ascending: false })

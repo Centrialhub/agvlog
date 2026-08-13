@@ -88,6 +88,7 @@ export function useEligibleCtes(clientId: string | null) {
         .eq('client_id', clientId!)
         .is('cancelled_at', null)
         .neq('status', 'cancelled')
+        .is('deleted_at', null)
         .order('issued_at', { ascending: false })
         .limit(500);
       if (error) throw error;
@@ -119,6 +120,7 @@ export function useEligibleNfse(clientId: string | null) {
         .eq('cliente_id', clientId!)
         .eq('cancelled', false)
         .neq('status', 'cancelled')
+        .is('deleted_at', null)
         .order('issue_date', { ascending: false })
         .limit(500);
       if (error) throw error;
@@ -143,7 +145,8 @@ export async function fetchCteFiscalDocs(fiscalDocIds: string[]) {
   const { data, error } = await supabase
     .from('fiscal_documents')
     .select('id, invoice_number, issue_date, recipient, remitter, recipient_city, recipient_state, weight_kg, value')
-    .in('id', fiscalDocIds);
+    .in('id', fiscalDocIds)
+    .is('deleted_at', null);
   if (error) throw error;
   return data || [];
 }

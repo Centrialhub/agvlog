@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
+import { useImportedNotes } from '@/hooks/useImportedNotesSummary';
 import { useAuth } from '@/hooks/useAuth';
 import { calculateFreight, logFreightCalculation } from '@/hooks/useFreightCalculator';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -48,8 +49,8 @@ export default function CTeWorkbench({ loadId, loadNumber, destination, document
   const { user } = useAuth();
   const qc = useQueryClient();
 
-  const inboundDocs = useMemo(() => documents.filter(d => d.document_type === 'inbound'), [documents]);
-  const outboundDocs = useMemo(() => documents.filter(d => d.document_type === 'outbound'), [documents]);
+  const inboundDocs = useMemo(() => documents.filter(d => d.document_type === 'inbound' && !(d as any).deleted_at), [documents]);
+  const outboundDocs = useMemo(() => documents.filter(d => d.document_type === 'outbound' && !(d as any).deleted_at), [documents]);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [filters, setFilters] = useState({ invoice: '', recipient: '' });
