@@ -14,7 +14,7 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const ENC_KEY = Deno.env.get('AGVLOG_ENCRYPTION_KEY') || '';
 
-const PENDING = ['processing', 'queued', 'submitted', 'pending'];
+const PENDING = ['processing', 'queued', 'submitted', 'pending', 'transmitting'];
 const MAX_DOCS = 40;
 
 function json(status: number, payload: unknown) {
@@ -170,6 +170,11 @@ Deno.serve(async (req) => {
         patch.status = 'cancelled';
         patch.cancelled = true;
         patch.cancellation_date = new Date().toISOString();
+        // Libera as NFs vinculadas — voltam a aparecer para novo faturamento
+        await admin
+          .from('fiscal_documents')
+          .update({ nfse_emitted_at: null, nfse_emitted_document_id: null })
+          .eq('nfse_emitted_document_id', doc.id);
       }
 
       await admin.from('nfse_documents').update(patch).eq('id', doc.id);
