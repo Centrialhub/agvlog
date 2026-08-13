@@ -328,7 +328,7 @@ export default function ImportedNotesSummary() {
                   variant="default" 
                   className="bg-green-600 hover:bg-green-700 text-white"
                   onClick={() => handleAudit(detailRow)}
-                  disabled={detailRow.operational_status === 'processed'}
+                  disabled={false}
                 >
                   <ShieldCheck className="h-4 w-4 mr-2" />Auditar
                 </Button>
@@ -346,8 +346,8 @@ export default function ImportedNotesSummary() {
                   size="sm" 
                   variant="destructive"
                   onClick={() => setDeleteId(detailRow.id)}
-                  disabled={!!detailRow.load_id || !!detailRow.cte_id}
-                  title={detailRow.load_id || detailRow.cte_id ? "Notas vinculadas a cargas ou CT-es não podem ser excluídas diretamente" : ""}
+                  disabled={false}
+                  title=""
                 >
                   <Trash2 className="h-4 w-4 mr-2" />Excluir
                 </Button>
