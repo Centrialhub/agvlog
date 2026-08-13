@@ -31,9 +31,9 @@ export default function MdfeProvisional() {
   const [vehicleId, setVehicleId] = useState<string>('');
   const [driverName, setDriverName] = useState('');
   const [driverCpf, setDriverCpf] = useState('');
-  const [originCity, setOriginCity] = useState('');
-  const [originIbge, setOriginIbge] = useState('');
-  const [originUf, setOriginUf] = useState('');
+  const [originCity, setOriginCity] = useState('SAO PAULO');
+  const [originIbge, setOriginIbge] = useState('3550308');
+  const [originUf, setOriginUf] = useState('35');
   const [destCity, setDestCity] = useState('');
   const [destIbge, setDestIbge] = useState('');
   const [destUf, setDestUf] = useState('');
@@ -44,14 +44,13 @@ export default function MdfeProvisional() {
       const firstSelected = ctes?.find(c => c.id === selectedIds[0]);
       if (firstSelected) {
         setDestCity(firstSelected.recipient_city || '');
-        // Note: recipient_city is often just name, we might need a better source for IBGE/UF
       }
       if (emitters.length > 0 && !emitterId) {
         const def = emitters.find(e => e.is_default) || emitters[0];
         setEmitterId(def.id);
       }
     }
-  }, [isDialogOpen, selectedIds, ctes, emitters]);
+  }, [isDialogOpen, selectedIds, ctes, emitters, emitterId]);
 
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => 
@@ -92,7 +91,7 @@ export default function MdfeProvisional() {
         emitter: {
           cnpj: emitter.cnpj,
           name: emitter.razao_social,
-          environment: 'sandbox', // TODO: sync with emitter config
+          environment: 'sandbox',
         },
         driver: {
           name: driverName,
@@ -100,7 +99,7 @@ export default function MdfeProvisional() {
         },
         vehicle: {
           plate: vehicle.plate,
-          state: vehicle.type || 'SP', // fallback
+          state: vehicle.type || 'SP',
         },
         origin: {
           city_ibge: originIbge,
@@ -338,8 +337,8 @@ export default function MdfeProvisional() {
                   <Input value={originIbge} onChange={e => setOriginIbge(e.target.value)} placeholder="Ex: 3550308" />
                 </div>
                 <div className="space-y-2">
-                  <Label>UF</Label>
-                  <Input value={originUf} onChange={e => setOriginUf(e.target.value)} maxLength={2} className="uppercase" />
+                  <Label>UF/Código UF</Label>
+                  <Input value={originUf} onChange={e => setOriginUf(e.target.value)} placeholder="Ex: 35" />
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-4">
@@ -352,8 +351,8 @@ export default function MdfeProvisional() {
                   <Input value={destIbge} onChange={e => setDestIbge(e.target.value)} />
                 </div>
                 <div className="space-y-2">
-                  <Label>UF</Label>
-                  <Input value={destUf} onChange={e => setDestUf(e.target.value)} maxLength={2} className="uppercase" />
+                  <Label>UF/Código UF</Label>
+                  <Input value={destUf} onChange={e => setDestUf(e.target.value)} />
                 </div>
               </div>
             </div>
