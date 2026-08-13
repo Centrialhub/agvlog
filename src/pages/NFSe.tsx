@@ -324,26 +324,6 @@ export default function NFSePage() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right space-x-1">
-                        {(PENDING_STATUSES.includes(d.status) || d.status === 'error' || d.status === 'submitted') && (
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button 
-                                  size="sm" 
-                                  variant="outline" 
-                                  className="h-7 text-[11px] px-2"
-                                  onClick={() => issue.mutate(d.id)} 
-                                  disabled={issue.isPending}
-                                >
-                                  <Send className={`h-3 w-3 mr-1 ${issue.isPending ? 'animate-spin' : ''}`} /> Reenviar
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                Enviar novamente para o Hub Fiscal (usado em caso de erro de conexão ou processamento travado)
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        )}
                         {PENDING_STATUSES.includes(d.status) && (
                           <TooltipProvider>
                             <Tooltip>
