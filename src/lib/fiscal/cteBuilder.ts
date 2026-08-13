@@ -584,6 +584,12 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
     buildLocation(input.remitter?.address) ||
     buildLocation(input.emitter?.address);
   const fim = buildLocation(input.destination) || buildLocation(input.recipient?.address);
+  if (!fim) {
+    warnings.push(
+      'Fim da prestação não informado — preencha o local real de entrega (destinatário/recebedor). ' +
+        'O endereço do tomador não é usado para evitar operação interestadual indevida.',
+    );
+  }
   const autorizadosXml = (input.authorizedXmlCnpjs || [])
     .map((c) => digits(c))
     .filter((c) => c.length === 14);
