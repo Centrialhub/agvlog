@@ -321,14 +321,21 @@ export function useIssueNFSe() {
           environment,
           attempt: (priorAttempts || 0),
         });
-        console.log(`[useIssueNFSe] Transmitindo NFS-e ${doc.id} (emitter: ${emitter.id})`);
-        {/* Reenvio: O Hub/PlugNotas deduplica pelo idIntegracao. O status 'error' local
-            indica que a requisição nem chegou ao Hub (ex: BOOT_ERROR).
-            Permitimos reenviar para tentar novamente. */}
-        const isError = doc.status === 'error' || doc.status === 'rejected';
-        const canRetry = isError || PENDING_STATUSES.includes(doc.status);
-
         console.log(`[useIssueNFSe] Transmitindo NFS-e ${doc.id} (emitter: ${emitter.id})`, { priorAttempts });
+        const res = await hubFiscal.emit({
+          type: 'nfse',
+          emitterId: emitter.id,
+          nfseDocumentId: doc.id,
+          body: {
+            emitterCnpj: built.emitterCnpj,
+            environment: built.environment,
+            externalId: built.externalId,
+            payload: built.payload,
+          },
+        });
+        console.log(`[useIssueNFSe] Resposta do Hub:`, res);
+
+        const hubDoc = (res as any)?.hub?.document || {};
         const emission = (res as any)?.emission || {};
         // Normaliza status devolvido pelo Hub para o vocabulário local.
         const rawStatus = String(hubDoc.status || hubDoc.plugnotasStatus || '').toLowerCase();
