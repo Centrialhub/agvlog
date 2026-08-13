@@ -519,7 +519,16 @@ export default function CteSearch() {
                         aria-label={`Selecionar ${cteLabel(r)}`}
                       />
                     </td>
-                    <td className="px-3 py-2"><StatusPill status={r.sefaz_status} /></td>
+                    <td className="px-3 py-2">
+                      <div className="flex flex-col gap-0.5">
+                        <StatusPill status={r.sefaz_status} />
+                        {r.sefaz_status_reason && (
+                          <span className="text-[10px] text-destructive max-w-[150px] truncate" title={r.sefaz_status_reason}>
+                            {r.sefaz_status_reason}
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-3 py-2 text-xs">{CTE_TYPE_LABELS[r.cte_type as CteType] ?? r.cte_type}</td>
                     <td className="px-3 py-2 font-mono">{r.cte_number ?? '—'}</td>
                     <td className="px-3 py-2">{r.cte_series ?? '—'}</td>
