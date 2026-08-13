@@ -145,6 +145,13 @@ export default function MdfeProvisional() {
       });
 
       if (error) throw error;
+      if (!data?.success) {
+        const hubMessage = data?.hub?.error?.message
+          || data?.error?.message
+          || data?.emission?.message
+          || 'O Hub Fiscal recusou a emissão';
+        throw new Error(hubMessage);
+      }
       
       toast.success("MDF-e enviado para processamento");
       setIsDialogOpen(false);
