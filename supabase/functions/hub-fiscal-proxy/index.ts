@@ -217,6 +217,18 @@ Deno.serve(async (req) => {
         const { status, data } = await callHub('POST', '/hub_documents_emit', { type }, body, resolved.token);
 
         const doc = (data as any)?.document || {};
+        const upstreamCode = String((data as any)?.code || (data as any)?.error?.code || '');
+        const upstreamBootFailure = status === 503 && upstreamCode === 'BOOT_ERROR';
+        const responseData = upstreamBootFailure
+          ? {
+              error: {
+                code: 'HUB_TEMPORARILY_UNAVAILABLE',
+                message: 'O serviço de emissão do Fiscal Hub não iniciou. A tentativa foi registrada e pode ser reenviada.',
+                retryable: true,
+                upstreamCode,
+              },
+            }
+          : data;
         // Snapshot do bloco de seguro (seguradora/apólice/averbação) para auditoria
         const inner = ((body as any).payload || {}) as Record<string, any>;
         const seg = (inner.seguro || inner.seguradora || {}) as Record<string, any>;
@@ -228,7 +240,7 @@ Deno.serve(async (req) => {
           environment: (body as any).environment || 'sandbox',
           emitter_cnpj: (body as any).emitterCnpj || null,
           external_id: (body as any).externalId || null,
-          id_integracao: doc.idIntegracao || null,
+          id_integracao: doc.idIntegracao || (body as any)?.payload?.idIntegracao || (body as any).externalId || null,
           hub_document_id: doc.id || null,
           plugnotas_id: doc.plugnotasId || null,
           status: doc.status || (status >= 400 ? 'error' : 'processing'),
@@ -237,7 +249,7 @@ Deno.serve(async (req) => {
           number: doc.number || null,
           series: doc.series || null,
           c_stat: doc.cStat ?? null,
-          message: doc.message || null,
+          message: doc.message || (upstreamBootFailure ? (responseData as any).error.message : null),
           fiscal_document_id: payload.fiscalDocumentId || null,
           cte_document_id: payload.cteDocumentId || null,
           nfse_document_id: payload.nfseDocumentId || null,
@@ -249,12 +261,20 @@ Deno.serve(async (req) => {
             seg.averbacao || (Array.isArray(seg.nAver) ? seg.nAver[0] : seg.nAver) || null,
           insured_amount: segNum(seg.valorSegurado),
           insurance_premium: segNum(seg.valorSeguro),
-          last_response: data as any,
+          last_response: responseData as any,
           created_by: userId,
         }).select().single();
         if (error) console.warn('[hub-fiscal-proxy] insert emission failed', error);
 
-        return json(status, { success: status < 400, hub: data, emission: row });
+        // BOOT_ERROR pertence à função upstream do Fiscal Hub, não ao runtime do
+        // AGVLog. HTTP 200 evita que o SDK gere FunctionsHttpError/tela de erro;
+        // `success: false` mantém a operação como falha recuperável na aplicação.
+        return json(upstreamBootFailure ? 200 : status, {
+          success: status < 400 && !upstreamBootFailure,
+          hub: responseData,
+          emission: row,
+          retryable: upstreamBootFailure,
+        });
       }
 
       case 'get': {
