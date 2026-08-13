@@ -8,6 +8,7 @@ export interface Vehicle {
   plate: string;
   nickname: string | null;
   type: string | null;
+  uf: string | null;
   active: boolean;
   tags: any;
   created_at: string;

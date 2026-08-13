@@ -225,16 +225,21 @@ Deno.serve(async (req) => {
         .select('doc_scope, environment, secret_name, secret_ciphertext, enabled')
         .eq('emitter_id', emId).eq('enabled', true);
       const list = (creds || []) as any[];
-      // Prioriza: (scope exato + env exato) > (scope exato) > (all + env exato) > (all).
+      // Nunca cruza ambientes: uma emissão de produção não pode usar credencial sandbox e vice-versa.
       const pick = (fn: (c: any) => boolean) => list.find(fn);
-      const match =
-        (wantedEnv && pick(c => c.doc_scope === scope && c.environment === wantedEnv)) ||
-        pick(c => c.doc_scope === scope) ||
-        (wantedEnv && pick(c => c.doc_scope === 'all' && c.environment === wantedEnv)) ||
-        pick(c => c.doc_scope === 'all');
+      const match = wantedEnv
+        ? pick(c => c.doc_scope === scope && c.environment === wantedEnv)
+          || pick(c => c.doc_scope === 'all' && c.environment === wantedEnv)
+        : pick(c => c.doc_scope === scope) || pick(c => c.doc_scope === 'all');
       if (!match) {
         console.log('[hub-fiscal-proxy] no credential for emitter', { emitter_id: emId, scope, wantedEnv });
-        return { token: DEFAULT_HUB_KEY, source: 'default', emitter_id: emId, scope_matched: null };
+        const err: any = new Error(
+          wantedEnv
+            ? `Nenhuma credencial habilitada para ${scope} no ambiente ${wantedEnv}.`
+            : `Nenhuma credencial habilitada para ${scope}.`,
+        );
+        err.code = 'HUB_CREDENTIAL_ENVIRONMENT_MISMATCH';
+        throw err;
       }
       if (match.secret_ciphertext) {
         if (!ENC_KEY) {
@@ -283,6 +288,7 @@ Deno.serve(async (req) => {
         const { status, data } = await callHub('POST', '/hub_documents_emit', { type }, body, resolved.token);
 
         const doc = (data as any)?.document || {};
+        const documentAccessKey = doc.accessKey || doc.access_key || null;
         const upstreamCode = String((data as any)?.code || (data as any)?.error?.code || '');
         const upstreamBootFailure = status === 503 && upstreamCode === 'BOOT_ERROR';
         const responseData = upstreamBootFailure
@@ -310,7 +316,7 @@ Deno.serve(async (req) => {
           hub_document_id: doc.id || null,
           plugnotas_id: doc.plugnotasId || null,
           status: doc.status || (status >= 400 ? 'error' : 'processing'),
-          access_key: doc.accessKey || null,
+          access_key: documentAccessKey,
           authorization_protocol: doc.authorizationProtocol || doc.plugnotasProtocol || null,
           number: doc.number || null,
           series: doc.series || null,
@@ -331,6 +337,13 @@ Deno.serve(async (req) => {
           created_by: userId,
         }).select().single();
         if (error) console.warn('[hub-fiscal-proxy] insert emission failed', error);
+
+        if (status < 400 && payload.fiscalDocumentId && documentAccessKey) {
+          await admin.from('fiscal_documents').update({
+            access_key: documentAccessKey,
+            hub_document_id: doc.id || undefined,
+          }).eq('id', payload.fiscalDocumentId).eq('tenant_id', tenantId);
+        }
 
         // BOOT_ERROR pertence à função upstream do Fiscal Hub, não ao runtime do
         // AGVLog. HTTP 200 evita que o SDK gere FunctionsHttpError/tela de erro;

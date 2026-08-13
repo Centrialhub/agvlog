@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuthorizedCteList } from '@/hooks/useAuthorizedCteList';
 import { useVehicles } from '@/hooks/useVehicles';
-import { useEmitters } from '@/hooks/useEmitters';
+import { useEmitters, useHubCredentials } from '@/hooks/useEmitters';
 import { supabase } from '@/integrations/supabase/client';
 import { buildMdfePayload, BuildMdfePayloadInput } from '@/lib/fiscal/mdfeBuilder';
 import { format } from 'date-fns';
@@ -37,6 +37,7 @@ export default function MdfeProvisional() {
   const [destCity, setDestCity] = useState('');
   const [destIbge, setDestIbge] = useState('');
   const [destUf, setDestUf] = useState('');
+  const { data: hubCredentials = [] } = useHubCredentials(emitterId);
 
   // Auto-fill from selected CTEs
   useEffect(() => {
@@ -77,21 +78,32 @@ export default function MdfeProvisional() {
   const handleTransmit = async () => {
     const emitter = emitters.find(e => e.id === emitterId);
     const vehicle = vehicles.find(v => v.id === vehicleId);
+    const mdfeCredential = hubCredentials.find(c => c.enabled && c.doc_scope === 'mdfe')
+      || hubCredentials.find(c => c.enabled && c.doc_scope === 'all');
 
     if (!emitter || !vehicle || !driverCpf || !originIbge || !destIbge) {
       toast.error("Preencha todos os campos obrigatórios");
+      return;
+    }
+    if (!mdfeCredential) {
+      toast.error("O emitente selecionado não possui credencial habilitada para MDF-e");
       return;
     }
 
     setIsTransmitting(true);
     try {
       const selectedDocs = ctes?.filter(c => selectedIds.includes(c.id)) || [];
+      const invalidDocuments = selectedDocs.filter(doc => !/^\d{44}$/.test(doc.access_key || ''));
+      if (invalidDocuments.length > 0) {
+        toast.error(`${invalidDocuments.length} CT-e selecionado(s) não possui(em) chave de acesso válida`);
+        return;
+      }
       
       const input: BuildMdfePayloadInput = {
         emitter: {
           cnpj: emitter.cnpj,
           name: emitter.razao_social,
-          environment: 'sandbox',
+          environment: mdfeCredential.environment,
         },
         driver: {
           name: driverName,
@@ -99,7 +111,7 @@ export default function MdfeProvisional() {
         },
         vehicle: {
           plate: vehicle.plate,
-          state: vehicle.type || 'SP',
+          state: vehicle.uf || emitter.endereco?.uf || '',
         },
         origin: {
           city_ibge: originIbge,
@@ -133,6 +145,13 @@ export default function MdfeProvisional() {
       });
 
       if (error) throw error;
+      if (!data?.success) {
+        const hubMessage = data?.hub?.error?.message
+          || data?.error?.message
+          || data?.emission?.message
+          || 'O Hub Fiscal recusou a emissão';
+        throw new Error(hubMessage);
+      }
       
       toast.success("MDF-e enviado para processamento");
       setIsDialogOpen(false);

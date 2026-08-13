@@ -69,6 +69,9 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
   if (!input.driver?.cpf) missing.push('CPF do motorista');
   if (!input.vehicle?.plate) missing.push('Placa do veículo');
   if (!input.documents?.length) missing.push('Documentos vinculados (CT-e/NF-e)');
+  if (input.documents?.some(document => digits(document.key).length !== 44)) {
+    missing.push('Chave de acesso válida dos documentos vinculados');
+  }
   if (!input.origin?.city_ibge) missing.push('Cidade de origem (IBGE)');
   if (!input.destination?.city_ibge) missing.push('Cidade de destino (IBGE)');
 

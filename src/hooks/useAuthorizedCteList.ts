@@ -46,10 +46,35 @@ export function useAuthorizedCteList() {
 
       if (error) throw error;
 
+      const documentIds = (outbound || []).map(document => document.id);
+      const { data: emissions, error: emissionsError } = documentIds.length
+        ? await supabase
+            .from('hub_fiscal_emissions')
+            .select('fiscal_document_id, access_key, last_response, created_at')
+            .eq('tenant_id', currentTenant!.id)
+            .eq('doc_type', 'cte')
+            .in('fiscal_document_id', documentIds)
+            .order('created_at', { ascending: false })
+        : { data: [], error: null };
+
+      if (emissionsError) throw emissionsError;
+
+      const accessKeys = new Map<string, string>();
+      for (const emission of emissions || []) {
+        if (!emission.fiscal_document_id || accessKeys.has(emission.fiscal_document_id)) continue;
+        const response = emission.last_response as any;
+        const key = emission.access_key
+          || response?.document?.access_key
+          || response?.document?.accessKey;
+        if (/^\d{44}$/.test(String(key || ''))) {
+          accessKeys.set(emission.fiscal_document_id, String(key));
+        }
+      }
+
       return (outbound || []).map(d => ({
         id: d.id,
         cte_number: d.invoice_number,
-        access_key: d.access_key,
+        access_key: d.access_key || accessKeys.get(d.id) || null,
         issued_at: d.issue_date,
         remitter: d.remitter,
         recipient: d.recipient,
