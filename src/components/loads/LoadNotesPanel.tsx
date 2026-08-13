@@ -103,7 +103,7 @@ type DocMeta = {
 export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
   const qc = useQueryClient();
   const inboundDocs = useMemo(
-    () => (documents || []).filter((d: any) => d.document_type === 'inbound'),
+    () => (documents || []).filter((d: any) => d.document_type === 'inbound' && !d.deleted_at),
     [documents],
   );
 
