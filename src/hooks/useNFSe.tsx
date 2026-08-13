@@ -457,21 +457,17 @@ export function useCancelNFSe() {
             throw new Error(hubMsg || 'Falha ao cancelar no Hub Fiscal');
           }
           await (supabase as any).from('nfse_documents').update({
-            status: 'cancelled', cancelled: true,
-            cancellation_date: new Date().toISOString(),
+            status: 'transmitting', // Muda para transmitting enquanto espera confirmação do cancelamento no Hub
             cancellation_reason: reason ?? null,
           }).eq('id', id);
-          // Libera as NFs vinculadas — voltam a aparecer para novo faturamento
-          await (supabase as any)
-            .from('fiscal_documents')
-            .update({ nfse_emitted_at: null, nfse_emitted_document_id: null })
-            .eq('nfse_emitted_document_id', id);
+          
           await (supabase as any).from('nfse_events').insert({
             tenant_id: doc.tenant_id, nfse_id: id,
-            event_type: 'cancelled',
-            message: `Cancelada no Hub Fiscal — ${reason || ''}`,
+            event_type: 'cancellation_requested',
+            message: `Solicitado cancelamento no Hub Fiscal — Aguardando confirmação. Motivo: ${reason || ''}`,
           });
-          return { status: 'cancelled', provider: 'hub_fiscal' };
+          
+          return { status: 'transmitting', provider: 'hub_fiscal' };
         }
       }
 
