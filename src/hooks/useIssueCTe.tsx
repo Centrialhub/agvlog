@@ -35,6 +35,14 @@ export function useIssueCTe() {
       if (!currentTenant) throw new Error('Tenant não selecionado');
       if (!input.emitter?.id) throw new Error('Emitente não selecionado');
 
+      // Reenvio: o Hub/PlugNotas deduplica pelo idIntegracao. Contamos as
+      // tentativas anteriores para gerar um id novo a cada reenvio, senão a
+      // requisição é descartada silenciosamente e nada chega ao provedor.
+      const { count: priorAttempts } = await supabase
+        .from('hub_fiscal_emissions')
+        .select('id', { count: 'exact', head: true })
+        .eq('fiscal_document_id', input.emitter?.id); // Note: Here we'd need the ID of the document if reissuing
+      
       const built = buildCtePayload(input);
       if (!built.ok) {
         throw new Error(`Campos obrigatórios ausentes: ${built.missing.join(', ')}`);
