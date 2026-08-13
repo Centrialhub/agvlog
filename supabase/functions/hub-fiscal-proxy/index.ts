@@ -304,7 +304,7 @@ Deno.serve(async (req) => {
           emitter_id: payload.emitterId || null,
           doc_type: type,
           environment: (body as any).environment || 'sandbox',
-          emitter_cnpj: (body as any).emitterCnpj || null,
+          emitter_cnpj: (body as any).emitterCnpj || payload.emitterCnpj || null,
           external_id: (body as any).externalId || null,
           id_integracao: doc.idIntegracao || (body as any)?.payload?.idIntegracao || (body as any).externalId || null,
           hub_document_id: doc.id || null,
