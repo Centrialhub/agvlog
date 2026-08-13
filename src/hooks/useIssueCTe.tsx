@@ -35,11 +35,7 @@ export function useIssueCTe() {
       if (!currentTenant) throw new Error('Tenant não selecionado');
       if (!input.emitter?.id) throw new Error('Emitente não selecionado');
 
-      // Reenvio: o Hub/PlugNotas deduplica pelo idIntegracao. Contamos as
-      // tentativas anteriores para gerar um id novo a cada reenvio, senão a
-      // requisição é descartada silenciosamente e nada chega ao provedor.
-      // Como o CT-e gera um novo fiscal_documents a cada tentativa neste hook,
-      // usamos um prefixo estável baseado no tenant e timestamp para o externalId inicial.
+      const built = buildCtePayload(input);
       const built = buildCtePayload(input);
       if (!built.ok) {
         throw new Error(`Campos obrigatórios ausentes: ${built.missing.join(', ')}`);
