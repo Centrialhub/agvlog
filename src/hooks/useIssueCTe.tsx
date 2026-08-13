@@ -277,3 +277,46 @@ export function useCancelCTe() {
     },
   });
 }
+
+/** Marca CT-e para reenvio (status volta a 'pending') — integração fiscal real consome essa fila. */
+export function useResendCte() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      // Tenta atualizar em fiscal_documents primeiro (documentos reais)
+      const { data: realDoc } = await supabase
+        .from('fiscal_documents')
+        .select('id')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (realDoc) {
+        const { error } = await supabase
+          .from('fiscal_documents')
+          .update({
+            status: 'transmitting',
+            sefaz_status: 'pending',
+            sefaz_message: null,
+          } as any)
+          .eq('id', id);
+        if (error) throw error;
+      } else {
+        // Senão tenta em cte_documents (rascunhos)
+        const { error } = await supabase
+          .from('cte_documents')
+          .update({
+            sefaz_status: 'pending',
+            sefaz_status_reason: null,
+            sefaz_status_at: new Date().toISOString(),
+          } as any)
+          .eq('id', id);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
+      qc.invalidateQueries({ queryKey: ['cte_monitor'] });
+      qc.invalidateQueries({ queryKey: ['cte_search'] });
+    },
+  });
+}
