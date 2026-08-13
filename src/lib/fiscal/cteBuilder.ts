@@ -563,6 +563,7 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
         nome: input.insurer.name,
         seguradora: input.insurer.name,
         xSeg: input.insurer.name,
+        cnpjSeguradora: digits(input.insurer.cnpj) || undefined,
         cnpj: digits(input.insurer.cnpj) || undefined,
         apolice: input.insurer.policy || undefined,
         nApol: input.insurer.policy || undefined,
