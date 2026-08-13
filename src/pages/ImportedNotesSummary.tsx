@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Printer, Download, Search, RefreshCw, X, FileText, PackageCheck, ShieldCheck, Trash2 } from 'lucide-react';
+import { Printer, Download, Search, RefreshCw, X, FileText, PackageCheck, ShieldCheck, Trash2, CheckSquare } from 'lucide-react';
 import { toast } from 'sonner';
 import { downloadImportedNotesSummaryPdf, type SummaryReportType } from '@/lib/importedNotesSummaryPdf';
 import { useCompanyProfile } from '@/hooks/useCompanyProfile';
@@ -32,6 +32,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+
+import { Checkbox } from "@/components/ui/checkbox";
 
 const dt = (s?: any) => s ? new Date(String(s).length <= 10 ? s + 'T00:00:00' : s).toLocaleDateString('pt-BR') : '—';
 const brl = (n: any) => 'R$ ' + Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -64,6 +66,8 @@ export default function ImportedNotesSummary() {
   const [detailRow, setDetailRow] = useState<ImportedNoteRow | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkActionDlg, setBulkActionDlg] = useState<{ open: boolean; type: 'audit' | 'delete' | null }>({ open: false, type: null });
 
   const totals = useMemo(() => getImportedNoteSummaryTotals(rows), [rows]);
   const set = (k: keyof ImportedNoteFilters, v: any) => setFilters(f => ({ ...f, [k]: v === '' ? null : v }));
@@ -108,6 +112,74 @@ export default function ImportedNotesSummary() {
     } finally {
       setIsDeleting(false);
       setDeleteId(null);
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (selectedIds.size === rows.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(rows.map(r => r.id)));
+    }
+  };
+
+  const handleBulkAudit = async () => {
+    if (selectedIds.size === 0) return;
+    try {
+      const { error } = await supabase
+        .from('fiscal_documents')
+        .update({ imported_note_status: 'processed' })
+        .in('id', Array.from(selectedIds));
+      
+      if (error) throw error;
+      toast.success(`${selectedIds.size} notas auditadas com sucesso.`);
+      setSelectedIds(new Set());
+      setBulkActionDlg({ open: false, type: null });
+      refetch();
+    } catch (e: any) {
+      toast.error(e.message || 'Falha ao auditar notas em massa');
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    setIsDeleting(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Usuário não autenticado');
+
+      const ids = Array.from(selectedIds);
+      const promises = ids.map(id => 
+        supabase.rpc('soft_delete_fiscal_document', { 
+          doc_id: id,
+          user_id: user.id
+        })
+      );
+
+      const results = await Promise.all(promises);
+      const errors = results.filter(r => r.error);
+      
+      if (errors.length > 0) {
+        toast.error(`${errors.length} notas falharam ao ser excluídas.`);
+      }
+
+      toast.success(`${ids.length - errors.length} notas excluídas com sucesso.`);
+      setSelectedIds(new Set());
+      setBulkActionDlg({ open: false, type: null });
+      refetch();
+    } catch (e: any) {
+      toast.error(e.message || 'Falha ao excluir notas em massa');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -224,6 +296,26 @@ export default function ImportedNotesSummary() {
             <Button variant="outline" onClick={doClear}><X className="h-4 w-4 mr-2" />Limpar filtros</Button>
             <Button variant="outline" onClick={() => refetch()}><RefreshCw className="h-4 w-4 mr-2" />Atualizar</Button>
             <div className="flex-1" />
+            {selectedIds.size > 0 && (
+              <div className="flex gap-2 mr-4 bg-muted/50 p-1 px-2 rounded-md border animate-in fade-in zoom-in duration-200">
+                <span className="text-sm font-medium self-center mr-2">{selectedIds.size} selecionadas</span>
+                <Button 
+                  variant="secondary" 
+                  size="sm" 
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                  onClick={() => setBulkActionDlg({ open: true, type: 'audit' })}
+                >
+                  <ShieldCheck className="h-4 w-4 mr-2" />Auditar Massa
+                </Button>
+                <Button 
+                  variant="destructive" 
+                  size="sm"
+                  onClick={() => setBulkActionDlg({ open: true, type: 'delete' })}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />Excluir Massa
+                </Button>
+              </div>
+            )}
             <Button variant="outline" onClick={handleCsv} disabled={rows.length === 0}><Download className="h-4 w-4 mr-2" />Exportar CSV</Button>
             <Button onClick={() => setPrintDlgOpen(true)} disabled={rows.length === 0}><Printer className="h-4 w-4 mr-2" />Imprimir</Button>
           </div>
@@ -244,6 +336,12 @@ export default function ImportedNotesSummary() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-[40px]">
+                  <Checkbox 
+                    checked={rows.length > 0 && selectedIds.size === rows.length}
+                    onCheckedChange={toggleAll}
+                  />
+                </TableHead>
                 <TableHead>Nº Nota</TableHead>
                 <TableHead>Lote Imp.</TableHead>
                 <TableHead>Remetente</TableHead>
@@ -262,10 +360,20 @@ export default function ImportedNotesSummary() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading && <TableRow><TableCell colSpan={15} className="text-center text-muted-foreground">Carregando...</TableCell></TableRow>}
-              {!isLoading && rows.length === 0 && <TableRow><TableCell colSpan={15} className="text-center text-muted-foreground">Nenhuma nota encontrada.</TableCell></TableRow>}
+              {isLoading && <TableRow><TableCell colSpan={16} className="text-center text-muted-foreground">Carregando...</TableCell></TableRow>}
+              {!isLoading && rows.length === 0 && <TableRow><TableCell colSpan={16} className="text-center text-muted-foreground">Nenhuma nota encontrada.</TableCell></TableRow>}
               {rows.map(r => (
-                <TableRow key={r.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setDetailRow(r)}>
+                <TableRow 
+                  key={r.id} 
+                  className={`cursor-pointer hover:bg-muted/50 ${selectedIds.has(r.id) ? 'bg-primary/5' : ''}`}
+                  onClick={() => setDetailRow(r)}
+                >
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <Checkbox 
+                      checked={selectedIds.has(r.id)} 
+                      onCheckedChange={() => toggleSelect(r.id)}
+                    />
+                  </TableCell>
                   <TableCell className="font-mono text-xs">{r.invoice_number || '—'}</TableCell>
                   <TableCell>{r.import_batch_id || r.control_lot || '—'}</TableCell>
                   <TableCell className="max-w-[180px] truncate">{r.remitter || '—'}</TableCell>
@@ -394,6 +502,38 @@ export default function ImportedNotesSummary() {
               disabled={isDeleting}
             >
               {isDeleting ? "Excluindo..." : "Confirmar Exclusão"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog 
+        open={bulkActionDlg.open} 
+        onOpenChange={(open) => !open && setBulkActionDlg({ open: false, type: null })}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {bulkActionDlg.type === 'audit' ? 'Auditar em massa' : 'Excluir em massa'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {bulkActionDlg.type === 'audit' 
+                ? `Deseja auditar as ${selectedIds.size} notas selecionadas? O status será alterado para processado.`
+                : `Tem certeza que deseja excluir as ${selectedIds.size} notas selecionadas? Esta ação removerá as notas permanentemente e as arquivará no histórico.`
+              }
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={(e) => { 
+                e.preventDefault(); 
+                bulkActionDlg.type === 'audit' ? handleBulkAudit() : handleBulkDelete(); 
+              }}
+              className={bulkActionDlg.type === 'delete' ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}
+              disabled={isDeleting}
+            >
+              {isDeleting ? "Processando..." : "Confirmar"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
