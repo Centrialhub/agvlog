@@ -14669,6 +14669,7 @@ export type Database = {
         Args: { _reason: string; _settlement_id: string }
         Returns: undefined
       }
+      delete_load_if_empty: { Args: { v_load_id: string }; Returns: undefined }
       delete_load_safely: {
         Args: { _load_id: string; _tenant_id: string }
         Returns: Json
