@@ -579,11 +579,14 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
   if (rntrc && rntrc.length !== 8) {
     warnings.push('RNTRC informado não possui 8 dígitos — o Hub pode rejeitar a emissão.');
   }
-  const inicio =
-    buildLocation(input.origin) ||
-    buildLocation(input.remitter?.address) ||
-    buildLocation(input.emitter?.address);
-  const fim = buildLocation(input.destination) || buildLocation(input.recipient?.address);
+  // Regra fixa da operação: início da prestação = endereço da transportadora
+  // (emitente do CT-e); fim = endereço de destino da carga (destinatário/recebedor).
+  // O trajeto início→fim é o que define UFIni/UFFim e, portanto, o CFOP.
+  const inicio = buildLocation(input.emitter?.address) || buildLocation(input.origin);
+  const fim =
+    buildLocation(input.destination) ||
+    buildLocation(input.recebedor?.address) ||
+    buildLocation(input.recipient?.address);
   if (!fim) {
     warnings.push(
       'Fim da prestação não informado — preencha o local real de entrega (destinatário/recebedor). ' +
