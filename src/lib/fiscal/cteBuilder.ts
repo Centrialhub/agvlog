@@ -766,7 +766,7 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
         CRT: emitterRegimeCode,
         toma: TAKER_INDEX[input.takerRole],
         natOp: input.nature,
-        CFOP: input.cfop || undefined,
+        CFOP: cfop,
       },
       vPrest: {
         vTPrest: totalServico,
