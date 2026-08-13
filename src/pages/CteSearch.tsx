@@ -15,8 +15,9 @@ import { runBulkDownload, summarizeBulkResult } from '@/lib/fiscal/bulkFileMerge
 import { fetchCteBlob, cteFileName, cteLabel, canDownloadCte, saveBlob, openBlob } from '@/lib/fiscal/cteFiles';
 import {
   Search, X, Filter as FilterIcon, FileText, FileDown, Eye, RefreshCw,
-  ChevronDown, ChevronUp, Download, Table as TableIcon,
+  ChevronDown, ChevronUp, Download, Table as TableIcon, Trash2,
 } from 'lucide-react';
+import { useCancelCTe } from '@/hooks/useIssueCTe';
 
 const TONE_CLASS: Record<string, string> = {
   default: 'bg-secondary text-secondary-foreground',
@@ -122,6 +123,7 @@ function toCsv(rows: CteSearchRow[]) {
 }
 
 export default function CteSearch() {
+  const cancelCte = useCancelCTe();
   const [draft, setDraft] = useState<CteSearchFilters>(DEFAULT_FILTERS);
   const [filters, setFilters] = useState<CteSearchFilters>(DEFAULT_FILTERS);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -253,6 +255,18 @@ export default function CteSearch() {
     const stamp = new Date().toISOString().slice(0, 10);
     saveBlob(new Blob([toCsv(rows)], { type: 'text/csv;charset=utf-8' }), `consulta-ctes-${stamp}.csv`);
     toast.success(`CSV com ${rows.length} registro(s) gerado`);
+  }
+
+  async function handleCancel(row: CteSearchRow) {
+    const motive = window.prompt('Justificativa para o cancelamento (mínimo 15 caracteres):');
+    if (!motive) return;
+    try {
+      await cancelCte.mutateAsync({ fiscalDocumentId: row.id, justificativa: motive });
+      toast.success('Cancelamento solicitado com sucesso');
+      refetch();
+    } catch (e) {
+      // toast já disparado pelo hook
+    }
   }
 
   const activeCount = activeFilterCount(filters);
@@ -510,6 +524,11 @@ export default function CteSearch() {
                         <Button size="sm" variant="ghost" title="Baixar XML" disabled={!has} onClick={() => oneFile(r, 'xml')}>
                           <FileDown className="h-4 w-4" />
                         </Button>
+                        {r.sefaz_status === 'processed' && r.source === 'hub' && (
+                          <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive hover:bg-destructive/10" title="Cancelar CT-e" disabled={cancelCte.isPending} onClick={() => handleCancel(r)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>
