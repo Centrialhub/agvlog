@@ -165,6 +165,7 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
           'id, invoice_number, access_key, sefaz_status, sefaz_message, status, remitter, recipient, recipient_city, recipient_state, freight_value, value, issue_date, created_at, hub_document_id, emission_id',
         )
         .eq('tenant_id', currentTenant.id)
+        .is('deleted_at', null)
         .eq('document_type', 'outbound')
         .order('created_at', { ascending: false })
         .limit(3000);

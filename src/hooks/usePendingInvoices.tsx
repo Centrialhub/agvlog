@@ -30,6 +30,7 @@ export function usePendingInvoices() {
         .eq('tenant_id', currentTenant.id)
         .eq('document_type', 'inbound')
         .neq('status', 'cancelled')
+        .is('deleted_at', null)
         // Mesmo critério da tela de faturamento: NF já usada em CT-e/NFS-e não é pendente
         .is('cte_emitted_at', null)
         .is('nfse_emitted_at', null)

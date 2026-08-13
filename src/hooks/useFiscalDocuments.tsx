@@ -90,6 +90,7 @@ export function useFiscalDocuments() {
         .from('fiscal_documents')
         .select('*, clients!fiscal_documents_client_id_fkey(company_name), loads(load_number), orders(order_number)')
         .eq('tenant_id', currentTenant.id)
+        .is('deleted_at', null)
         .order('created_at', { ascending: false });
       if (error) throw error;
       return (data || []) as FiscalDocument[];
