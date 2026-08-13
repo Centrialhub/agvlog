@@ -127,7 +127,7 @@ export default function MdfeProvisional() {
         body: { 
           type: 'mdfe',
           action: 'emit',
-          emitterId: emitter.id, // Envia o emitterId para roteamento de credencial
+          emitterId: emitter.id,
           body: payload 
         }
       });
