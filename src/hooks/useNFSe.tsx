@@ -321,7 +321,7 @@ export function useIssueNFSe() {
           environment,
           attempt: (priorAttempts || 0),
         });
-        console.log(`[useIssueNFSe] Transmitindo NFS-e ${doc.id} (emitter: ${emitter.id})`);
+        console.log(`[useIssueNFSe] Transmitindo NFS-e ${doc.id} (emitter: ${emitter.id})`, { priorAttempts });
         const res = await hubFiscal.emit({
           type: 'nfse',
           emitterId: emitter.id,
