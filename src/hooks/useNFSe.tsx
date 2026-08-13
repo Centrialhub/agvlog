@@ -308,15 +308,18 @@ export function useIssueNFSe() {
         // Reenvio: o Hub/PlugNotas deduplica pelo idIntegracao. Contamos as
         // tentativas anteriores para gerar um id novo a cada reenvio, senão a
         // requisição é descartada silenciosamente e nada chega ao provedor.
+        // Use total emissions count for NFSe/CTe documents to guarantee a fresh idIntegracao
+        // even if some attempts failed before registering in hub_fiscal_emissions (due to 503).
         const { count: priorAttempts } = await (supabase as any)
           .from('hub_fiscal_emissions')
           .select('id', { count: 'exact', head: true })
-          .eq('nfse_document_id', doc.id);
+          .or(`nfse_document_id.eq.${doc.id},cte_document_id.eq.${doc.id},fiscal_document_id.eq.${doc.id}`);
+
         const built = buildNFSeEmitPayload({
           doc,
           emitter,
           environment,
-          attempt: priorAttempts || 0,
+          attempt: (priorAttempts || 0),
         });
         console.log(`[useIssueNFSe] Transmitindo NFS-e ${doc.id} (emitter: ${emitter.id})`);
         const res = await hubFiscal.emit({
