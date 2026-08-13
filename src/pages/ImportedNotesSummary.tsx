@@ -46,7 +46,7 @@ const STATUS_VARIANT: Record<string, any> = {
 const emptyFilters: ImportedNoteFilters = {
   branch: null, controlLot: null, dynamicLot: null,
   issueFrom: null, issueTo: null, importFrom: null, importTo: null,
-  remitter: null, clientId: null, originCity: null, destinationCity: null,
+  remitter: null, clientId: null, supplierId: null, originCity: null, destinationCity: null,
   status: 'all', invoiceNumber: null, grouped: true,
 };
 
@@ -182,6 +182,16 @@ export default function ImportedNotesSummary() {
               <SelectContent>
                 <SelectItem value="__all__">Todos</SelectItem>
                 {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Fornecedor</Label>
+            <Select value={filters.supplierId || '__all__'} onValueChange={(v) => set('supplierId', v === '__all__' ? null : v)}>
+              <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Todos</SelectItem>
+                {clients.filter(c => c.is_supplier).map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
