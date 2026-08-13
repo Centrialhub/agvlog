@@ -23,7 +23,14 @@ export interface HubDocument {
 
 export interface HubResponse<T = unknown> {
   success: boolean;
-  hub?: { success?: boolean; document?: HubDocument; result?: T; error?: { code: string; message?: string } };
+  hub?: {
+    success?: boolean;
+    document?: HubDocument;
+    result?: T;
+    code?: string;
+    message?: string;
+    error?: { code: string; message?: string; retryable?: boolean };
+  };
   emission?: { id: string } & Record<string, unknown>;
   error?: { code: string; message?: string };
 }
@@ -54,7 +61,7 @@ async function invoke(payload: Record<string, unknown>) {
     if (context) {
       try {
         const response = await context.clone().json();
-        const hubError = response?.hub?.error || response?.error;
+        const hubError = response?.hub?.error || response?.error || response?.hub;
         detail = [hubError?.code, hubError?.message].filter(Boolean).join(': ') || detail;
       } catch { /* mantém a mensagem padrão */ }
     }
@@ -62,7 +69,7 @@ async function invoke(payload: Record<string, unknown>) {
   }
   if ((data as HubResponse | null)?.success === false) {
     const response = data as HubResponse;
-    const hubError = response.hub?.error || response.error;
+    const hubError = response.hub?.error || response.error || response.hub;
     throw new Error([hubError?.code, hubError?.message].filter(Boolean).join(': ') || 'Operação recusada pelo Hub Fiscal');
   }
   return data as HubResponse;
