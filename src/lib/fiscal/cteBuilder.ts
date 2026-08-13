@@ -649,21 +649,14 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
       crt: emitterRegimeCode,
       tipoCtrc: input.documentType || '01',
       naturezaOperacao: input.nature,
-      cfop,
       CFOP: cfop,
       serie: input.series != null && input.series !== '' ? String(input.series) : undefined,
       numero: input.number != null && input.number !== '' ? String(input.number) : undefined,
       cCT: input.cCT != null && input.cCT !== '' ? String(input.cCT) : undefined,
-      dataEmissao: input.issueDate || undefined,
       dhEmi: input.issueDate || undefined,
       inicio,
       fim,
       autorizadosXml: autorizadosXml.length ? autorizadosXml : undefined,
-      numeroRef: input.refNumber || undefined,
-      numeroPedidoCliente: input.clientOrderNumber || undefined,
-      prioridadeFrete: input.freightPriority || undefined,
-      tipoDistribuicao: input.distribution || undefined,
-      operacao: input.operation || undefined,
       observacoes: usoExclusivoEmitente || undefined,
       // "USO EXCLUSIVO DO EMISSOR" no DACTE — carrega os dados extras que o
       // ManagerSaaS não transmite em grupo próprio (seguradora, motorista).
@@ -689,10 +682,7 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
       destinatario: serializeParty(input.recipient),
       expedidor: serializeParty(input.expedidor),
       recebedor: serializeParty(input.recebedor),
-      consignatario: serializeParty(input.consignee),
-      seguradora: seguroCarga,
       seguro: seguroCarga,
-      seguros: seguroCarga ? [seguroCarga] : undefined,
       tomador: {
         tipo: TAKER_INDEX[input.takerRole],
         role: input.takerRole,
@@ -742,20 +732,6 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
       // Componentes do valor da prestação (DACTE) — FRETE PESO / SEGURO / ICMS em destaque.
       // `soma: false` (ICMS por fora) = destaque impresso sem somar ao valor a receber.
       componentes: componentes.map((c) => ({ nome: c.nome, valor: c.valor, soma: c.soma })),
-      componentesValorPrestacao: componentes.map((c) => ({ nome: c.nome, valor: c.valor, soma: c.soma })),
-      // Estrutura canônica do grupo vPrest do CT-e, além dos aliases do Hub.
-      valorPrestacao: {
-        vTPrest: totalServico,
-        vRec: totalServico,
-        // O grupo Comp precisa fechar com vTPrest para o SEFAZ: apenas
-        // componentes somáveis entram aqui.
-        Comp: componentes
-          .filter((component) => component.soma)
-          .map((component) => ({
-            xNome: component.nome,
-            vComp: component.valor,
-          })),
-      },
       icms: icmsBlock,
       // ---- Estruturas canônicas do layout CT-e (SEFAZ) ----------------
       // Alguns mapeadores do Hub só reconhecem os nomes oficiais do schema.
@@ -787,31 +763,6 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
             },
             vTotTrib: icmsValue,
           }
-        : undefined,
-      // Bloco canônico de seguro da carga (layout SEFAZ / Hub Fiscal v1).
-      // respSeg 4 = seguro por conta do emitente do CT-e.
-      seg: seguroCarga
-        ? [
-            {
-              respSeg: 4,
-              xSeg: input.insurer?.name || undefined,
-              CNPJ: digits(input.insurer?.cnpj) || undefined,
-              nApol: input.insurer?.policy || undefined,
-              nAver: input.insurer?.endorsement || undefined,
-              vCarga: insuredAmount ?? undefined,
-              // Aliases aceitos pelo Hub para o mesmo grupo.
-              infSeg: {
-                xSeg: input.insurer?.name || undefined,
-                CNPJ: digits(input.insurer?.cnpj) || undefined,
-              },
-            },
-          ]
-        : undefined,
-      gnre: input.gnre
-        ? Object.fromEntries(Object.entries(input.gnre).filter(([, v]) => v != null))
-        : undefined,
-      cbsIbs: input.cbsIbs
-        ? Object.fromEntries(Object.entries(input.cbsIbs).filter(([, v]) => v != null))
         : undefined,
       // Campos aceitos pelo Hub v1: content | produto | species (vira proPred).
       mercadoria: input.cargo
