@@ -231,19 +231,16 @@ export function useCancelCTe() {
         args.fiscalDocumentId
       );
       if (res?.success === true) {
+        // Agora o cancelamento é assíncrono para garantir a "fonte da verdade".
+        // O poll de status (cte-status-poll) irá confirmar o cancelamento final.
         await supabase
           .from('fiscal_documents')
           .update({
-            status: 'cancelled',
-            sefaz_status: 'cancelled',
-            sefaz_message: args.justificativa,
+            status: 'transmitting',
+            sefaz_status: 'cancelling',
+            sefaz_message: `Cancelamento solicitado: ${args.justificativa}`,
           } as any)
           .eq('id', args.fiscalDocumentId);
-        // Libera as NFs de entrada vinculadas — voltam a aparecer no CT-e Hub
-        await supabase
-          .from('fiscal_documents')
-          .update({ cte_emitted_at: null, cte_emitted_outbound_id: null } as any)
-          .eq('cte_emitted_outbound_id', args.fiscalDocumentId);
       } else {
         // Se a rejeição for fiscal (ex: cStat 135 - Evento já registrado),
         // o Hub retorna success=false. Preservamos o status original (authorized)
