@@ -328,6 +328,7 @@ export default function ImportedNotesSummary() {
               <DetailRow label="Remetente" value={detailRow.remitter || '—'} />
               <DetailRow label="Destinatário" value={detailRow.recipient || '—'} />
               <DetailRow label="Cliente" value={detailRow.clients?.company_name || '—'} />
+              <DetailRow label="Fornecedor" value={detailRow.suppliers?.company_name || '—'} />
               <DetailRow label="Origem" value={detailRow.origin_city ? `${detailRow.origin_city}/${detailRow.origin_state || '--'}` : '—'} />
               <DetailRow label="Destino" value={detailRow.recipient_city ? `${detailRow.recipient_city}/${detailRow.recipient_state || '--'}` : '—'} />
               <DetailRow label="Valor" value={brl(detailRow.value)} />
