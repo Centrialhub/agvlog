@@ -19,7 +19,8 @@ import { useCreateNFSe, useIssueNFSe } from '@/hooks/useNFSe';
 import { useRecalculateInboundFreight } from '@/hooks/useRecalculateInboundFreight';
 import { formatCnpj, validateInsurance } from '@/lib/fiscal/insuranceValidation';
 import { hasInsuranceData } from '@/lib/fiscal/insuranceText';
-import { Calculator } from 'lucide-react';
+import { Calculator, Save } from 'lucide-react';
+import { useInsuranceProfile, useUpdateInsuranceProfile } from '@/hooks/useInsuranceProfile';
 
 interface Props {
   open: boolean;
@@ -37,6 +38,8 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
   const create = useCreateNFSe();
   const issue = useIssueNFSe();
   const recalcFreight = useRecalculateInboundFreight();
+  const { data: insuranceProfile } = useInsuranceProfile();
+  const saveInsuranceProfile = useUpdateInsuranceProfile();
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [supplierId, setSupplierId] = useState<string>(SENTINEL_NONE);
@@ -787,6 +790,50 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
                   <Label className="text-xs">Prêmio do seguro (R$)</Label>
                   <Input type="number" step="0.01" value={insurancePremium} onChange={e => setInsurancePremium(+e.target.value)} />
                 </div>
+              </div>
+              <div className="flex items-center gap-2 pt-2 border-t mt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-[10px]"
+                  disabled={saveInsuranceProfile.isPending || !insurerName}
+                  onClick={async () => {
+                    try {
+                      await saveInsuranceProfile.mutateAsync({
+                        name: insurerName,
+                        cnpj: insurerCnpj.replace(/\D/g, ''),
+                        policy: insurerPolicy,
+                      });
+                      toast.success('Seguradora salva como padrão');
+                    } catch (e: any) {
+                      toast.error('Falha ao salvar seguradora', { description: e?.message });
+                    }
+                  }}
+                >
+                  <Save className="h-3 w-3 mr-1" />
+                  Salvar como padrão
+                </Button>
+                {hasInsuranceProfile(insuranceProfile) && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-[10px]"
+                    onClick={() => {
+                      setInsurerName(insuranceProfile?.name || '');
+                      setInsurerCnpj(formatCnpj(insuranceProfile?.cnpj || ''));
+                      setInsurerPolicy(insuranceProfile?.policy || '');
+                      setInsurerEndorsement(insuranceProfile?.cnpj || ''); // Padrão: averbação = CNPJ
+                      toast.success('Seguradora padrão aplicada');
+                    }}
+                  >
+                    Usar padrão salvo
+                  </Button>
+                )}
+                <span className="text-[10px] text-muted-foreground ml-auto">
+                  Seguradora, CNPJ e apólice são compartilhados entre CT-e e NFS-e.
+                </span>
               </div>
             </div>
 

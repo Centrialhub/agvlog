@@ -486,8 +486,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
       (it) =>
         !it.insurerName ||
         !it.insurerCnpj ||
-        !it.insurerPolicy ||
-        !it.insurerEndorsement,
+        !it.insurerPolicy
     ),
   ]);
 
