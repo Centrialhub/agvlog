@@ -27,6 +27,14 @@ export function useDeleteFailedCTe() {
         throw new Error('Apenas notas com erro de transmissão e sem registro no Hub podem ser excluídas. Notas autorizadas devem ser canceladas.');
       }
 
+      // Retorna as NFs vinculadas se houver
+      const { error: releaseErr } = await (supabase as any)
+        .from('fiscal_documents')
+        .update({ cte_emitted_at: null, cte_emitted_document_id: null })
+        .eq('cte_emitted_document_id', fiscalDocumentId);
+
+      if (releaseErr) console.error('Erro ao liberar NFs vinculadas ao CT-e:', releaseErr);
+
       const { error: delErr } = await supabase
         .from('fiscal_documents')
         .delete()
