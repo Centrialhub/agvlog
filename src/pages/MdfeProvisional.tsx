@@ -55,7 +55,7 @@ export default function MdfeProvisional() {
         const targetVehicle = vehicles.find(v => v.plate?.toUpperCase() === 'GVJ3744');
         if (targetVehicle) {
           setVehicleId(targetVehicle.id);
-          setVehicleTara((vehicle as any).tara_kg?.toString() || '');
+          setVehicleTara((targetVehicle as any).tara_kg?.toString() || '');
         }
       }
     }
