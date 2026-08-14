@@ -549,7 +549,7 @@ export default function CteSearch() {
                         <Button size="sm" variant="ghost" title="Baixar XML" disabled={!has} onClick={() => oneFile(r, 'xml')}>
                           <FileDown className="h-4 w-4" />
                         </Button>
-                        {(r.sefaz_status === 'processed' || r.sefaz_status === 'processed_error' || r.sefaz_status === 'authorized') && r.source === 'hub' && (
+                        {(r.sefaz_status === 'processed' || r.sefaz_status === 'processed_error' || r.sefaz_status === 'authorized' || r.sefaz_status === 'rejected') && r.hub_document_id && r.source === 'hub' && (
                           <Button 
                             size="sm" 
                             variant="ghost" 
