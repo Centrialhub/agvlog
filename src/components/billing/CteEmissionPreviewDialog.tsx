@@ -1325,7 +1325,23 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                           
                           // Se não for bulk edit, calculamos base/valor apenas para o ativo aqui
                           // Se for bulk edit, o patch() cuidará de replicar e o useEffect cuidará da sugestão/recalculo
-                          if (!bulkEdit) {
+                          if (bulkEdit) {
+                            // Se for bulk edit, aplicamos a todos os itens do lote que não tenham trava manual
+                            setItems((prev) =>
+                              prev.map((it) => {
+                                if (it._aliqManual) return it;
+                                const itemR = recalcIcms(it.freightValue || 0, aliq, it.icmsEmbutido, isento);
+                                return {
+                                  ...it,
+                                  icmsCst: cst,
+                                  icmsIsento: isento,
+                                  icmsAliquota: aliq,
+                                  icmsBase: itemR.base,
+                                  icmsValor: itemR.valor,
+                                };
+                              }),
+                            );
+                          } else {
                             const r = recalcIcms(active.freightValue || 0, aliq, active.icmsEmbutido, isento);
                             patchData.icmsBase = r.base;
                             patchData.icmsValor = r.valor;
@@ -1425,12 +1441,25 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                           _aliqManual: false, // Resetamos a trava ao clicar em recalcular
                         };
 
-                        if (!bulkEdit) {
+                        if (bulkEdit) {
+                          setItems((prev) =>
+                            prev.map((it) => {
+                              const itemR = recalcIcms(it.freightValue || 0, aliq, it.icmsEmbutido, isento);
+                              return {
+                                ...it,
+                                icmsAliquota: aliq,
+                                icmsBase: itemR.base,
+                                icmsValor: itemR.valor,
+                                _aliqManual: false,
+                              };
+                            }),
+                          );
+                        } else {
                           const r = recalcIcms(active.freightValue || 0, aliq, active.icmsEmbutido, isento);
                           patchData.icmsBase = r.base;
                           patchData.icmsValor = r.valor;
                         }
-
+                        
                         patch(patchData);
                       }}
                     >
