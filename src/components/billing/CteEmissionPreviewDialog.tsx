@@ -524,12 +524,20 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
   // Auto-sugere alíquota de ICMS conforme UF de origem (emitente) e destino (destinatário) quando ainda não editada.
   useEffect(() => {
     if (!active) return;
+    
+    // Se a alíquota já foi alterada manualmente (ou for zero/nulo mas não isento por CST), não auto-sugere mais.
+    // Usamos um sinalizador para evitar que a sugestão automática sobrescreva a intenção do usuário.
+    if ((active as any)._aliqManual) return;
+
     const originUf = (emitterForActive as any)?.endereco?.uf || null;
     const destUf = active.recipientState || null;
     if (!originUf || !destUf) return;
+    
     const isento = icmsIsentoByCst(active.icmsCst);
     const suggested = isento ? 0 : suggestIcmsAliquota(originUf, destUf);
+    
     if (Math.abs(active.icmsAliquota - suggested) < 0.001) return;
+    
     const r = recalcIcms(active.freightValue || 0, suggested, active.icmsEmbutido, isento);
     setItems((prev) =>
       prev.map((it, i) =>
@@ -597,6 +605,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
       'fcFreightWeight', 'insurerInsuredAmount', 'insurerEndorsement',
       'invoices', 'loadIds', 'fiscalDocumentIds', 'clientId',
       'key', 'transmitted', 'transmitMessage',
+      '_aliqManual' as any,
     ]);
     if (!bulkEdit) {
       setItems((arr) => arr.map((it, i) => (i === activeIdx ? { ...it, ...patch } : it)));
@@ -1294,7 +1303,8 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                             icmsAliquota: aliq,
                             icmsBase: r.base,
                             icmsValor: r.valor,
-                          });
+                            _aliqManual: false, // Ao trocar o CST, resetamos a trava para a nova sugestão do CST agir
+                          } as any);
                         }}
                       >
                         <option value="00">00 — Tributação normal</option>
@@ -1343,7 +1353,8 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                             icmsAliquota: aliq,
                             icmsBase: r.base,
                             icmsValor: r.valor,
-                          });
+                            _aliqManual: true, // Marca que foi alterado manualmente para parar a sugestão
+                          } as any);
                         }}
                       />
                     </div>
@@ -1383,11 +1394,12 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                         const isento = icmsIsentoByCst(active.icmsCst);
                         const aliq = isento ? 0 : suggestIcmsAliquota(originUf, active.recipientState);
                         const r = recalcIcms(active.freightValue || 0, aliq, active.icmsEmbutido, isento);
-                        patch({
-                          icmsAliquota: aliq,
-                          icmsBase: r.base,
-                          icmsValor: r.valor,
-                        });
+                          patch({
+                            icmsAliquota: aliq,
+                            icmsBase: r.base,
+                            icmsValor: r.valor,
+                            _aliqManual: false, // Resetamos a trava ao clicar em recalcular
+                          } as any);
                       }}
                     >
                       Recalcular
