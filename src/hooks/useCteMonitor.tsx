@@ -262,7 +262,11 @@ function mapOutboundStatus(status?: string | null, sefaz?: string | null): Sefaz
   const st = (status || '').toLowerCase();
   if (st === 'cancelled' || s === 'cancelled') return 'cancelled';
   if (st === 'authorized' || s === 'authorized') return 'processed';
-  if (st === 'rejected' || s === 'error' || s === 'rejected') return 'processed_error';
+  if (st === 'rejected' || s === 'error' || s === 'rejected') {
+    // Se for rejeitado mas já tiver ID no hub, tratamos como 'processed' (autorizado) 
+    // para que a UI ofereça opções de manejo (como baixar arquivos ou cancelar novamente)
+    return hubId ? 'processed' : 'processed_error';
+  }
   if (st === 'transmitting' || s === 'processing') return 'processing';
   return 'pending';
 }
