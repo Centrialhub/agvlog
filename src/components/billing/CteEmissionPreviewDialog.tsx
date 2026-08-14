@@ -1302,7 +1302,8 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                             icmsAliquota: aliq,
                             icmsBase: r.base,
                             icmsValor: r.valor,
-                          });
+                            _aliqManual: false, // Ao trocar o CST, resetamos a trava para a nova sugestão do CST agir
+                          } as any);
                         }}
                       >
                         <option value="00">00 — Tributação normal</option>
