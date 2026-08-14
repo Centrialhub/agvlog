@@ -1316,15 +1316,22 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                           const isento = icmsIsentoByCst(cst);
                           const originUf = (emitterForActive as any)?.endereco?.uf || null;
                           const aliq = isento ? 0 : suggestIcmsAliquota(originUf, active.recipientState);
-                          const r = recalcIcms(active.freightValue || 0, aliq, active.icmsEmbutido, isento);
-                          patch({
+                          const patchData: any = {
                             icmsCst: cst,
                             icmsIsento: isento,
                             icmsAliquota: aliq,
-                            icmsBase: r.base,
-                            icmsValor: r.valor,
-                            _aliqManual: false, // Ao trocar o CST, resetamos a trava para a nova sugestão do CST agir
-                          } as any);
+                            _aliqManual: false, // Ao trocar o CST, resetamos a trava
+                          };
+                          
+                          // Se não for bulk edit, calculamos base/valor apenas para o ativo aqui
+                          // Se for bulk edit, o patch() cuidará de replicar e o useEffect cuidará da sugestão/recalculo
+                          if (!bulkEdit) {
+                            const r = recalcIcms(active.freightValue || 0, aliq, active.icmsEmbutido, isento);
+                            patchData.icmsBase = r.base;
+                            patchData.icmsValor = r.valor;
+                          }
+                          
+                          patch(patchData);
                         }}
                       >
                         <option value="00">00 — Tributação normal</option>
