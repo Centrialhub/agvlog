@@ -93,16 +93,18 @@ function has(haystack: unknown, needle: string) {
 /** Traduz status de `fiscal_documents` (saída) para o vocabulário SEFAZ do monitor. */
 function mapOutboundStatus(status?: string | null, sefaz?: string | null): string {
   const s = (sefaz || '').toLowerCase();
+  const st = (status || '').toLowerCase();
+  if (st === 'cancelled' || s === 'cancelled') return 'cancelled';
+  if (st === 'cancelling' || s === 'cancelling') return 'cancelling';
   if (s.includes('autoriz')) return 'processed';
   // Uma rejeição do evento de cancelamento não cancela o CT-e: ele continua
   // autorizado e deve permanecer disponível para uma nova tentativa.
   if (s === 'cancel_rejected' || s === 'cancel_error' || s.includes('cancel_rejeit')) return 'processed';
   if (s.includes('cancel')) return 'cancelled';
   if (s.includes('rejeit') || s.includes('erro')) return 'sefaz_error';
-  const st = (status || '').toLowerCase();
   if (st === 'authorized') return 'processed';
-  if (st === 'cancelled') return 'cancelled';
   if (st === 'rejected' || st === 'error') return 'sefaz_error';
+  if (st === 'transmitting' || s === 'processing') return 'processing';
   return 'pending';
 }
 
