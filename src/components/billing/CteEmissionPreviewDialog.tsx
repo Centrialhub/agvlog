@@ -128,6 +128,7 @@ interface EditableCte {
   cbsAliquota: number;
   ibsAliquota: number;
   cbsIbsBase: number;
+  _aliqManual?: boolean;
   // Mercadoria
   cargoContent: string;
   cargoSpecies: string;
@@ -540,16 +541,26 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     
     const r = recalcIcms(active.freightValue || 0, suggested, active.icmsEmbutido, isento);
     setItems((prev) =>
-      prev.map((it, i) =>
-        i === activeIdx
-          ? {
-              ...it,
-              icmsAliquota: suggested,
-              icmsBase: r.base,
-              icmsValor: r.valor,
-            }
-          : it,
-      ),
+      prev.map((it, i) => {
+        // Se bulkEdit estiver ligado, aplica a sugestão a todos que NÃO tiverem trava manual
+        // ou aplica apenas ao ativo se bulkEdit estiver desligado.
+        const shouldUpdate = bulkEdit ? !it._aliqManual : i === activeIdx;
+        
+        if (shouldUpdate) {
+          // Recalcula o ICMS para cada item do lote se for bulk, pois o frete varia
+          const itemR = bulkEdit 
+            ? recalcIcms(it.freightValue || 0, suggested, it.icmsEmbutido, isento)
+            : r;
+
+          return {
+            ...it,
+            icmsAliquota: suggested,
+            icmsBase: itemR.base,
+            icmsValor: itemR.valor,
+          };
+        }
+        return it;
+      }),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeIdx, active?.recipientState, active?.icmsCst, emitterForActive?.id]);
@@ -605,7 +616,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
       'fcFreightWeight', 'insurerInsuredAmount', 'insurerEndorsement',
       'invoices', 'loadIds', 'fiscalDocumentIds', 'clientId',
       'key', 'transmitted', 'transmitMessage',
-      '_aliqManual' as any,
+      '_aliqManual',
     ]);
     if (!bulkEdit) {
       setItems((arr) => arr.map((it, i) => (i === activeIdx ? { ...it, ...patch } : it)));
@@ -615,8 +626,17 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     const bulkPart: Record<string, any> = {};
     const activePart: Record<string, any> = {};
     for (const [k, v] of Object.entries(patch)) {
-      if (PER_ITEM_ONLY.has(k as keyof EditableCte)) activePart[k] = v;
-      else bulkPart[k] = v;
+      if (k === '_aliqManual') {
+        // _aliqManual é sempre aplicado a todos no lote se bulkEdit estiver on, 
+        // mas marcamos como PER_ITEM_ONLY para não ser sobrescrito acidentalmente 
+        // em outros fluxos. Contudo, aqui queremos que o lote inteiro siga a trava.
+        activePart[k] = v;
+        bulkPart[k] = v;
+      } else if (PER_ITEM_ONLY.has(k as keyof EditableCte)) {
+        activePart[k] = v;
+      } else {
+        bulkPart[k] = v;
+      }
     }
     setItems((arr) =>
       arr.map((it, i) => {
@@ -1296,15 +1316,22 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                           const isento = icmsIsentoByCst(cst);
                           const originUf = (emitterForActive as any)?.endereco?.uf || null;
                           const aliq = isento ? 0 : suggestIcmsAliquota(originUf, active.recipientState);
-                          const r = recalcIcms(active.freightValue || 0, aliq, active.icmsEmbutido, isento);
-                          patch({
+                          const patchData: any = {
                             icmsCst: cst,
                             icmsIsento: isento,
                             icmsAliquota: aliq,
-                            icmsBase: r.base,
-                            icmsValor: r.valor,
-                            _aliqManual: false, // Ao trocar o CST, resetamos a trava para a nova sugestão do CST agir
-                          } as any);
+                            _aliqManual: false, // Ao trocar o CST, resetamos a trava
+                          };
+                          
+                          // Se não for bulk edit, calculamos base/valor apenas para o ativo aqui
+                          // Se for bulk edit, o patch() cuidará de replicar e o useEffect cuidará da sugestão/recalculo
+                          if (!bulkEdit) {
+                            const r = recalcIcms(active.freightValue || 0, aliq, active.icmsEmbutido, isento);
+                            patchData.icmsBase = r.base;
+                            patchData.icmsValor = r.valor;
+                          }
+                          
+                          patch(patchData);
                         }}
                       >
                         <option value="00">00 — Tributação normal</option>
@@ -1393,13 +1420,18 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                         const originUf = (emitterForActive as any)?.endereco?.uf || null;
                         const isento = icmsIsentoByCst(active.icmsCst);
                         const aliq = isento ? 0 : suggestIcmsAliquota(originUf, active.recipientState);
-                        const r = recalcIcms(active.freightValue || 0, aliq, active.icmsEmbutido, isento);
-                          patch({
-                            icmsAliquota: aliq,
-                            icmsBase: r.base,
-                            icmsValor: r.valor,
-                            _aliqManual: false, // Resetamos a trava ao clicar em recalcular
-                          } as any);
+                        const patchData: any = {
+                          icmsAliquota: aliq,
+                          _aliqManual: false, // Resetamos a trava ao clicar em recalcular
+                        };
+
+                        if (!bulkEdit) {
+                          const r = recalcIcms(active.freightValue || 0, aliq, active.icmsEmbutido, isento);
+                          patchData.icmsBase = r.base;
+                          patchData.icmsValor = r.valor;
+                        }
+
+                        patch(patchData);
                       }}
                     >
                       Recalcular
