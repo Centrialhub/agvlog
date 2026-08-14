@@ -1420,13 +1420,18 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                         const originUf = (emitterForActive as any)?.endereco?.uf || null;
                         const isento = icmsIsentoByCst(active.icmsCst);
                         const aliq = isento ? 0 : suggestIcmsAliquota(originUf, active.recipientState);
-                        const r = recalcIcms(active.freightValue || 0, aliq, active.icmsEmbutido, isento);
-                          patch({
-                            icmsAliquota: aliq,
-                            icmsBase: r.base,
-                            icmsValor: r.valor,
-                            _aliqManual: false, // Resetamos a trava ao clicar em recalcular
-                          } as any);
+                        const patchData: any = {
+                          icmsAliquota: aliq,
+                          _aliqManual: false, // Resetamos a trava ao clicar em recalcular
+                        };
+
+                        if (!bulkEdit) {
+                          const r = recalcIcms(active.freightValue || 0, aliq, active.icmsEmbutido, isento);
+                          patchData.icmsBase = r.base;
+                          patchData.icmsValor = r.valor;
+                        }
+
+                        patch(patchData);
                       }}
                     >
                       Recalcular
