@@ -45,7 +45,8 @@ export function usePendingInvoices() {
       const { data: ctes, error: e2 } = await supabase
         .from('cte_documents')
         .select('fiscal_document_ids, status')
-        .eq('tenant_id', currentTenant.id);
+        .eq('tenant_id', currentTenant.id)
+        .is('deleted_at', null);
       if (e2) throw e2;
 
       const used = new Set<string>();
@@ -58,7 +59,8 @@ export function usePendingInvoices() {
       const { data: nfse, error: e3 } = await supabase
         .from('nfse_documents')
         .select('fiscal_document_ids, status')
-        .eq('tenant_id', currentTenant.id);
+        .eq('tenant_id', currentTenant.id)
+        .is('deleted_at', null);
       if (e3) throw e3;
       for (const n of (nfse || []) as any[]) {
         if (!isBillableNfse(n)) continue;

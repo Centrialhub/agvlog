@@ -357,9 +357,8 @@ export default function Billing() {
       }
       if (!matchesOp(load?.operation_type ?? (d as any).operation_type)) return false;
 
-      // Cidade do destinatário (já filtrada server-side se selecionada)
-      // Mantemos aqui apenas como redundância ou se quisermos filtrar por chave exata no client
-      // if (recipientCity !== SENTINEL_NONE && normalizeCity((d as any).recipient_city) !== recipientCity) return false;
+      // Cidade do destinatário (já filtrada server-side se selecionada, mas mantida para consistência no client)
+      if (recipientCity !== SENTINEL_NONE && normalizeCity(d.recipient_city) !== recipientCity) return false;
 
       return true;
     });

@@ -59,17 +59,14 @@ export function useBillingDocuments(filters: BillingDocumentFilters) {
 
       let q = supabase
         .from('fiscal_documents')
-        .select('*, clients!fiscal_documents_client_id_fkey(company_name), loads(load_number), orders(order_number)')
+        .select('*, clients!fiscal_documents_client_id_fkey(company_name), loads(load_number, operation_type), orders(order_number)')
         .eq('tenant_id', currentTenant.id)
         // Pré-filtros aplicados em todas as queries de Billing — usam idx_fiscal_documents_tenant_type_status
         .eq('document_type', 'inbound')
         .neq('status', 'cancelled')
         .is('deleted_at', null)
-        // Oculta NFs que já geraram CT-e (emissão direta) — evita dupla emissão.
-        // Cancelar o CT-e limpa este campo e a NF volta ao pool.
+        // Oculta NFs que já geraram CT-e ou NFS-e no nível da linha (emissões confirmadas)
         .is('cte_emitted_at', null)
-        // Também oculta NFs já usadas em NFS-e — a mesma NF não pode gerar dois
-        // documentos fiscais de saída (regra: uma NF vira 1 CT-e OU 1 NFS-e).
         .is('nfse_emitted_at', null);
 
       if (f.clientId) q = q.eq('client_id', f.clientId);
@@ -119,7 +116,23 @@ export function useBillingDocuments(filters: BillingDocumentFilters) {
         }
       }
 
-      return docs.filter(d => !emittedIds.has(d.id) && !(d as any).cte_emitted_at && !(d as any).nfse_emitted_at);
+      // Também oculta NFs que já estão em NFS-e não anuladas
+      const { data: nfse, error: nfseErr } = await supabase
+        .from('nfse_documents')
+        .select('fiscal_document_ids, status')
+        .eq('tenant_id', currentTenant.id)
+        .is('deleted_at', null);
+      if (nfseErr) throw nfseErr;
+
+      const { isBillableNfse } = await import('@/lib/fiscal/documentStatus');
+      for (const row of nfse || []) {
+        if (!isBillableNfse(row as any)) continue;
+        for (const id of ((row as { fiscal_document_ids: string[] | null }).fiscal_document_ids || [])) {
+          if (id) emittedIds.add(id);
+        }
+      }
+
+      return docs.filter(d => !emittedIds.has(d.id));
     },
     enabled: !!currentTenant,
     // Mantém o resultado anterior visível enquanto refiltra (digitação fluida)
