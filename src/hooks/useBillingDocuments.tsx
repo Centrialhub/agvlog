@@ -119,7 +119,7 @@ export function useBillingDocuments(filters: BillingDocumentFilters) {
         }
       }
 
-      return docs.filter(d => !emittedIds.has(d.id) && !(d as any).cte_emitted_at && !(d as any).nfse_emitted_at);
+      return docs.filter(d => !emittedIds.has(d.id));
     },
     enabled: !!currentTenant,
     // Mantém o resultado anterior visível enquanto refiltra (digitação fluida)
