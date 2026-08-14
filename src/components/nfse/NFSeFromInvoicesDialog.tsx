@@ -465,10 +465,10 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
               </Table>
             </div>
 
-            {selectedDocs.length > 0 && !allSameTomador && (
+            {selectedDocs.length > 0 && agrupar && !allSameTomador && (
               <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
                 As NFs selecionadas têm {tomadorMode === 'remetente' ? 'remetentes' : 'destinatários'} diferentes.
-                O tomador de uma NFS-e precisa ser único — ajuste a seleção ou troque o tipo de tomador.
+                Para agrupar em uma única NFS-e, o tomador precisa ser único.
               </div>
             )}
 
