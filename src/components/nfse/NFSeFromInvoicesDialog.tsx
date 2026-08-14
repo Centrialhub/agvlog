@@ -336,33 +336,33 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
         // Emissão individual
         toast.info(`Iniciando emissão individual de ${selectedDocs.length} nota(s)...`);
         
-        for (const d of selectedDocs) {
+        for (const d of selectedDocs as any[]) {
           // Precisamos derivar o tomador para CADA nota
           const key = tomadorMode === 'remetente' ? 'remitter' : 'recipient_name';
           const cnpjKey = tomadorMode === 'remetente' ? 'remitter_cnpj' : 'recipient_cnpj';
           const cnpjDigits = onlyDigits(d[cnpjKey]);
           const match = clients.find((c: any) => onlyDigits(c.tax_id) === cnpjDigits);
           
-          const municipio = (match?.address_city || d.recipient_city || d.remitter_city || '').trim();
-          const uf = (match?.address_state || d.recipient_state || d.remitter_state || '').trim();
-          const zip = (match?.address_zip || d.recipient_zip || d.remitter_zip || d.recipient_address_zip || d.zip || '').trim();
+          const municipio = (match?.address_city || d.recipient_city || (d as any).remitter_city || '').trim();
+          const uf = (match?.address_state || d.recipient_state || (d as any).remitter_state || '').trim();
+          const zip = (match?.address_zip || (d as any).recipient_zip || (d as any).remitter_zip || (d as any).recipient_address_zip || (d as any).zip || '').trim();
           const municipioCod =
-            normalizeIbgeCity(match?.address_city_ibge_code) ||
-            normalizeIbgeCity(d.recipient_cod_municipio) ||
-            normalizeIbgeCity(d.remitter_cod_municipio) ||
+            normalizeIbgeCity((match as any)?.address_city_ibge_code) ||
+            normalizeIbgeCity((d as any).recipient_cod_municipio) ||
+            normalizeIbgeCity((d as any).remitter_cod_municipio) ||
             normalizeIbgeCity(municipio);
 
           const docTomador = {
             nome: (match?.company_name || d[key] || '') as string,
             cnpj: cnpjDigits,
             ie: sanitizeIe(match?.state_registration) || '',
-            im: match?.municipal_registration || '',
-            endereco: (match?.address_street || d.recipient_address || d.remitter_address || '') as string,
-            numero: (match?.address_number || d.recipient_number || d.remitter_number || '') as string,
-            complemento: (match?.address_complement || d.recipient_complement || d.remitter_complement || '') as string,
-            bairro: (match?.address_neighborhood || d.recipient_neighborhood || d.remitter_neighborhood || '') as string,
-            email: (match?.email || d.recipient_email || d.remitter_email || '') as string,
-            telefone: normalizePhone(match?.phone || d.recipient_phone || d.remitter_phone) || '',
+            im: (match as any)?.municipal_registration || '',
+            endereco: (match?.address_street || (d as any).recipient_address || (d as any).remitter_address || '') as string,
+            numero: ((match as any)?.address_number || (d as any).recipient_number || (d as any).remitter_number || '') as string,
+            complemento: ((match as any)?.address_complement || (d as any).recipient_complement || (d as any).remitter_complement || '') as string,
+            bairro: (match?.address_neighborhood || (d as any).recipient_neighborhood || (d as any).remitter_neighborhood || '') as string,
+            email: ((match as any)?.email || (d as any).recipient_email || (d as any).remitter_email || '') as string,
+            telefone: normalizePhone((match as any)?.phone || (d as any).recipient_phone || (d as any).remitter_phone) || '',
             municipio: normalizeCityName(municipio) || '',
             municipio_cod: municipioCod,
             uf: normalizeUf(uf) || '',
