@@ -233,16 +233,8 @@ export function useCancelCTe() {
         args.fiscalDocumentId
       );
       if (res?.success === true) {
-        // Agora o cancelamento é assíncrono para garantir a "fonte da verdade".
-        // O poll de status (cte-status-poll) irá confirmar o cancelamento final.
-        await supabase
-          .from('fiscal_documents')
-          .update({
-            status: 'transmitting',
-            sefaz_status: 'cancelling',
-            sefaz_message: `Cancelamento solicitado: ${args.justificativa}`,
-          } as any)
-          .eq('id', args.fiscalDocumentId);
+        // O proxy persiste o estado devolvido pelo Hub. Não sobrescrever aqui:
+        // o Hub pode confirmar o cancelamento já nesta mesma resposta.
       } else {
         // Se a rejeição for fiscal (ex: cStat 135 - Evento já registrado),
         // o Hub retorna success=false. Preservamos o status original (authorized)
