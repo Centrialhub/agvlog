@@ -83,6 +83,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
   const [observacoes, setObservacoes] = useState('');
   const [manualTomador, setManualTomador] = useState<any>(null);
   const [isEditingTomador, setIsEditingTomador] = useState(false);
+  const [agrupar, setAgrupar] = useState(false);
 
   const suppliers = useMemo(() => clients.filter((c: any) => c.is_supplier), [clients]);
   const clientList = useMemo(() => clients.filter((c: any) => c.is_client !== false), [clients]);
@@ -257,113 +258,198 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
     return selectedDocs.every((d: any) => onlyDigits(d[key]) === first);
   }, [selectedDocs, tomadorMode]);
 
-  const canAdvance = selectedDocs.length > 0 && allSameTomador;
+  const canAdvance = selectedDocs.length > 0 && (agrupar ? allSameTomador : true);
 
   const handleEmit = async () => {
     if (!emitterId) { toast.error('Selecione o emitente fiscal'); return; }
-    const currentTomador = manualTomador || tomador;
-    if (!currentTomador?.cnpj) { toast.error('Tomador sem CNPJ — cadastre o cliente/fornecedor'); return; }
     
-    // Alinha validação com o builder (nfseBuilder.ts)
-    const normalizedCep = normalizeCep(currentTomador.cep);
-    const normalizedCityCode = normalizeIbgeCity(currentTomador.municipio_cod) || normalizeIbgeCity(currentTomador.municipio);
-    const normalizedUfVal = normalizeUf(currentTomador.uf);
-    const normalizedLogradouro = currentTomador.endereco?.trim();
-    const normalizedBairro = currentTomador.bairro?.trim();
-
-    if (!normalizedCityCode) { 
-      toast.warning('Código IBGE do município não informado. O Hub pode rejeitar a nota.'); 
-    }
-    if (!normalizedCep) { 
-      toast.warning('CEP do tomador inválido ou ausente.'); 
-    }
-    if (!normalizedUfVal) { 
-      toast.warning('UF do tomador inválida ou ausente.'); 
-    }
-    if (!normalizedLogradouro || !normalizedBairro) { 
-      toast.warning('Logradouro ou bairro do tomador ausente.'); 
-    }
-
-    if (totalServicos <= 0) { 
-      toast.warning('Valor de serviços é zero. O Hub pode rejeitar a nota.');
-    }
-    if (!insuranceCheck.ok) { 
-      toast.warning(`Seguro com inconsistências: ${insuranceCheck.messages.join(' ')}`); 
-    }
-
     setIssuing(true);
     try {
-      const fdIds = selectedDocs.map((d: any) => d.id);
-      const description = (descricao?.trim() ||
-        `Prestacao de servico de transporte referente a ${fdIds.length} NF(s): ` +
-        selectedDocs.map((d: any) => `NF ${d.invoice_number || d.access_key?.slice(-9)}`).join(', '))
-        .normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // Remove acentos para evitar rejeição em provedores legados
+      if (agrupar) {
+        // Lógica original de agrupamento
+        const currentTomador = manualTomador || tomador;
+        if (!currentTomador?.cnpj) { throw new Error('Tomador sem CNPJ — cadastre o cliente/fornecedor'); }
+        
+        const fdIds = selectedDocs.map((d: any) => d.id);
+        const description = (descricao?.trim() ||
+          `Prestacao de servico de transporte referente a ${fdIds.length} NF(s): ` +
+          selectedDocs.map((d: any) => `NF ${d.invoice_number || d.access_key?.slice(-9)}`).join(', '))
+          .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
-      const created = await create.mutateAsync({
-        emitter_id: emitterId,
-        regime_tributario: regimeTributario,
-        issue_date: issueDate,
-        cliente_id: currentTomador.cliente_id,
-        cliente_nome: currentTomador.nome,
-        cliente_cnpj: currentTomador.cnpj,
-        cliente_ie: currentTomador.ie || null,
-        cliente_im: currentTomador.im || null,
-        cliente_email: currentTomador.email || null,
-        cliente_telefone: currentTomador.telefone || null,
-        cliente_numero: currentTomador.numero || null,
-        cliente_complemento: currentTomador.complemento || null,
-        cliente_endereco: currentTomador.endereco,
-        cliente_bairro: currentTomador.bairro,
-        cliente_municipio: currentTomador.municipio,
-        cliente_uf: currentTomador.uf,
-        cliente_cep: normalizeCep(currentTomador.cep),
-        cliente_cod_municipio: normalizeIbgeCity(currentTomador.municipio_cod) || normalizeIbgeCity(currentTomador.municipio),
-        description,
-        aliquota_iss: aliquotaIss,
-        iss_retido: issRetido,
-        cod_servico: codServico || undefined,
-        cnae: cnae || undefined,
-        nat_operacao: natOperacao || undefined,
-        valor_servicos: totalServicos,
-        base_calculo: baseCalculo,
-        valor_iss: valorIss,
-        valor_liquido: valorLiquido,
-        valor_total: totalServicos,
-        valor_deducoes: num(valorDeducoes),
-        valor_pis: valorPis,
-        valor_cofins: valorCofins,
-        valor_inss: valorInss,
-        valor_ir: valorIr,
-        valor_csll: valorCsll,
-        outras_retencoes: num(outrasRetencoes),
-        insurer_name: insurerName.trim() || null,
-        insurer_cnpj: insurerCnpj.replace(/\D/g, '') || null,
-        insurer_policy: insurerPolicy.trim() || null,
-        insurer_endorsement: insurerEndorsement.trim() || null,
-        insured_amount: num(insuredAmount) || null,
-        insurance_premium: num(insurancePremium) || null,
-        items: selectedDocs.map((d: any) => ({
-          description: `NF ${d.invoice_number || ''} — ${d.remitter || ''}`.trim(),
-          quantity: 1,
-          unit_value: valorPorDoc(d),
-          total: valorPorDoc(d),
-          fiscal_document_id: d.id,
-          access_key: d.access_key,
-        })),
-        fiscal_document_ids: fdIds,
-        notes: observacoes.trim() || undefined,
-      } as any);
+        const created = await create.mutateAsync({
+          emitter_id: emitterId,
+          regime_tributario: regimeTributario,
+          issue_date: issueDate,
+          cliente_id: currentTomador.cliente_id,
+          cliente_nome: currentTomador.nome,
+          cliente_cnpj: currentTomador.cnpj,
+          cliente_ie: currentTomador.ie || null,
+          cliente_im: currentTomador.im || null,
+          cliente_email: currentTomador.email || null,
+          cliente_telefone: currentTomador.telefone || null,
+          cliente_numero: currentTomador.numero || null,
+          cliente_complemento: currentTomador.complemento || null,
+          cliente_endereco: currentTomador.endereco,
+          cliente_bairro: currentTomador.bairro,
+          cliente_municipio: currentTomador.municipio,
+          cliente_uf: currentTomador.uf,
+          cliente_cep: normalizeCep(currentTomador.cep),
+          cliente_cod_municipio: normalizeIbgeCity(currentTomador.municipio_cod) || normalizeIbgeCity(currentTomador.municipio),
+          description,
+          aliquota_iss: aliquotaIss,
+          iss_retido: issRetido,
+          cod_servico: codServico || undefined,
+          cnae: cnae || undefined,
+          nat_operacao: natOperacao || undefined,
+          valor_servicos: totalServicos,
+          base_calculo: baseCalculo,
+          valor_iss: valorIss,
+          valor_liquido: valorLiquido,
+          valor_total: totalServicos,
+          valor_deducoes: num(valorDeducoes),
+          valor_pis: valorPis,
+          valor_cofins: valorCofins,
+          valor_inss: valorInss,
+          valor_ir: valorIr,
+          valor_csll: valorCsll,
+          outras_retencoes: num(outrasRetencoes),
+          insurer_name: insurerName.trim() || null,
+          insurer_cnpj: insurerCnpj.replace(/\D/g, '') || null,
+          insurer_policy: insurerPolicy.trim() || null,
+          insurer_endorsement: insurerEndorsement.trim() || null,
+          insured_amount: num(insuredAmount) || null,
+          insurance_premium: num(insurancePremium) || null,
+          items: selectedDocs.map((d: any) => ({
+            description: `NF ${d.invoice_number || ''} — ${d.remitter || ''}`.trim(),
+            quantity: 1,
+            unit_value: valorPorDoc(d),
+            total: valorPorDoc(d),
+            fiscal_document_id: d.id,
+            access_key: d.access_key,
+          })),
+          fiscal_document_ids: fdIds,
+          notes: observacoes.trim() || undefined,
+        } as any);
 
-      // Removemos o toast intermediário de criação de RPS para usar o status final do issue.mutateAsync
-      try {
         await issue.mutateAsync(created.id);
-        onOpenChange(false);
-      } catch (e: any) {
-        // O erro já é tratado pelo onError do useIssueNFSe, mas mantemos o catch para não quebrar o fluxo
-        console.error('[NFSeFromInvoicesDialog] Erro na emissão:', e);
+      } else {
+        // Emissão individual
+        toast.info(`Iniciando emissão individual de ${selectedDocs.length} nota(s)...`);
+        
+        for (const d of selectedDocs as any[]) {
+          // Precisamos derivar o tomador para CADA nota
+          const key = tomadorMode === 'remetente' ? 'remitter' : 'recipient_name';
+          const cnpjKey = tomadorMode === 'remetente' ? 'remitter_cnpj' : 'recipient_cnpj';
+          const cnpjDigits = onlyDigits(d[cnpjKey]);
+          const match = clients.find((c: any) => onlyDigits(c.tax_id) === cnpjDigits);
+          
+          const municipio = (match?.address_city || d.recipient_city || (d as any).remitter_city || '').trim();
+          const uf = (match?.address_state || d.recipient_state || (d as any).remitter_state || '').trim();
+          const zip = (match?.address_zip || (d as any).recipient_zip || (d as any).remitter_zip || (d as any).recipient_address_zip || (d as any).zip || '').trim();
+          const municipioCod =
+            normalizeIbgeCity((match as any)?.address_city_ibge_code) ||
+            normalizeIbgeCity((d as any).recipient_cod_municipio) ||
+            normalizeIbgeCity((d as any).remitter_cod_municipio) ||
+            normalizeIbgeCity(municipio);
+
+          const docTomador = {
+            nome: (match?.company_name || d[key] || '') as string,
+            cnpj: cnpjDigits,
+            ie: sanitizeIe(match?.state_registration) || '',
+            im: (match as any)?.municipal_registration || '',
+            endereco: (match?.address_street || (d as any).recipient_address || (d as any).remitter_address || '') as string,
+            numero: ((match as any)?.address_number || (d as any).recipient_number || (d as any).remitter_number || '') as string,
+            complemento: ((match as any)?.address_complement || (d as any).recipient_complement || (d as any).remitter_complement || '') as string,
+            bairro: (match?.address_neighborhood || (d as any).recipient_neighborhood || (d as any).remitter_neighborhood || '') as string,
+            email: ((match as any)?.email || (d as any).recipient_email || (d as any).remitter_email || '') as string,
+            telefone: normalizePhone((match as any)?.phone || (d as any).recipient_phone || (d as any).remitter_phone) || '',
+            municipio: normalizeCityName(municipio) || '',
+            municipio_cod: municipioCod,
+            uf: normalizeUf(uf) || '',
+            cep: normalizeCep(zip) || '',
+            cliente_id: match?.id || null,
+          };
+
+          if (!docTomador.cnpj) continue;
+
+          const docValue = valorPorDoc(d);
+          const docBase = +(Math.max(0, docValue - (num(valorDeducoes) / selectedDocs.length))).toFixed(2);
+          const docIss = +(docBase * num(aliquotaIss) / 100).toFixed(2);
+          const docRet = +(
+            (issRetido ? docIss : 0) + 
+            (docBase * num(aliqPis) / 100) + 
+            (docBase * num(aliqCofins) / 100) + 
+            (docBase * num(aliqInss) / 100) + 
+            (docBase * num(aliqIr) / 100) + 
+            (docBase * num(aliqCsll) / 100) + 
+            (num(outrasRetencoes) / selectedDocs.length)
+          ).toFixed(2);
+          const docLiq = +(docValue - (num(valorDeducoes) / selectedDocs.length) - docRet).toFixed(2);
+
+          const description = `Prestacao de servico de transporte referente a NF ${d.invoice_number || d.access_key?.slice(-9)}`
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+          const created = await create.mutateAsync({
+            emitter_id: emitterId,
+            regime_tributario: regimeTributario,
+            issue_date: issueDate,
+            cliente_id: docTomador.cliente_id,
+            cliente_nome: docTomador.nome,
+            cliente_cnpj: docTomador.cnpj,
+            cliente_ie: docTomador.ie || null,
+            cliente_im: docTomador.im || null,
+            cliente_email: docTomador.email || null,
+            cliente_telefone: docTomador.telefone || null,
+            cliente_numero: docTomador.numero || null,
+            cliente_complemento: docTomador.complemento || null,
+            cliente_endereco: docTomador.endereco,
+            cliente_bairro: docTomador.bairro,
+            cliente_municipio: docTomador.municipio,
+            cliente_uf: docTomador.uf,
+            cliente_cep: docTomador.cep,
+            cliente_cod_municipio: docTomador.municipio_cod,
+            description,
+            aliquota_iss: aliquotaIss,
+            iss_retido: issRetido,
+            cod_servico: codServico || undefined,
+            cnae: cnae || undefined,
+            nat_operacao: natOperacao || undefined,
+            valor_servicos: docValue,
+            base_calculo: docBase,
+            valor_iss: docIss,
+            valor_liquido: docLiq,
+            valor_total: docValue,
+            valor_deducoes: +(num(valorDeducoes) / selectedDocs.length).toFixed(2),
+            valor_pis: +(docBase * num(aliqPis) / 100).toFixed(2),
+            valor_cofins: +(docBase * num(aliqCofins) / 100).toFixed(2),
+            valor_inss: +(docBase * num(aliqInss) / 100).toFixed(2),
+            valor_ir: +(docBase * num(aliqIr) / 100).toFixed(2),
+            valor_csll: +(docBase * num(aliqCsll) / 100).toFixed(2),
+            outras_retencoes: +(num(outrasRetencoes) / selectedDocs.length).toFixed(2),
+            insurer_name: insurerName.trim() || null,
+            insurer_cnpj: insurerCnpj.replace(/\D/g, '') || null,
+            insurer_policy: insurerPolicy.trim() || null,
+            insurer_endorsement: insurerEndorsement.trim() || null,
+            insured_amount: num(insuredAmount) || null,
+            insurance_premium: num(insurancePremium) || null,
+            items: [{
+              description: `NF ${d.invoice_number || ''} — ${d.remitter || ''}`.trim(),
+              quantity: 1,
+              unit_value: docValue,
+              total: docValue,
+              fiscal_document_id: d.id,
+              access_key: d.access_key,
+            }],
+            fiscal_document_ids: [d.id],
+            notes: observacoes.trim() || undefined,
+          } as any);
+
+          await issue.mutateAsync(created.id);
+        }
       }
+      onOpenChange(false);
     } catch (e: any) {
-      toast.error(e?.message || 'Falha ao criar NFS-e');
+      toast.error(e?.message || 'Falha ao processar emissão(ões)');
     } finally {
       setIssuing(false);
     }
@@ -464,10 +550,10 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
               </Table>
             </div>
 
-            {selectedDocs.length > 0 && !allSameTomador && (
+            {selectedDocs.length > 0 && agrupar && !allSameTomador && (
               <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
                 As NFs selecionadas têm {tomadorMode === 'remetente' ? 'remetentes' : 'destinatários'} diferentes.
-                O tomador de uma NFS-e precisa ser único — ajuste a seleção ou troque o tipo de tomador.
+                Para agrupar em uma única NFS-e, o tomador precisa ser único.
               </div>
             )}
 
@@ -495,6 +581,14 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
                     : <Calculator className="h-4 w-4 mr-1" />}
                   Recalcular frete
                 </Button>
+                <div className="flex items-center gap-2 border-r pr-3 mr-1">
+                  <Checkbox 
+                    id="agrupar-nfse"
+                    checked={agrupar} 
+                    onCheckedChange={v => setAgrupar(!!v)} 
+                  />
+                  <Label htmlFor="agrupar-nfse" className="text-xs cursor-pointer whitespace-nowrap">Agrupar</Label>
+                </div>
                 <div className="flex items-center gap-2">
                   <Label className="text-xs">Tomador é:</Label>
                   <Select value={tomadorMode} onValueChange={(v: any) => setTomadorMode(v)}>
