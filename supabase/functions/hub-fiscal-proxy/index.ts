@@ -425,6 +425,8 @@ Deno.serve(async (req) => {
           /cancel_rejected|cannot be cancelled/i.test(String(hubError?.message || ''))
         );
         const cancelFailed = status >= 400;
+        const hubDocumentStatus = String((data as any)?.document?.status || '').toLowerCase();
+        const cancellationConfirmed = status < 400 && hubDocumentStatus === 'cancelled';
         const rejectionMessage =
           hubError?.technicalMessage ||
           hubError?.message ||
@@ -445,13 +447,21 @@ Deno.serve(async (req) => {
             sefaz_status: 'cancel_rejected',
             sefaz_message: shouldPreserveOriginal ? previousMessage : rejectionMessage,
           }).eq('id', payload.fiscalDocumentId).eq('tenant_id', tenantId);
+        } else if (payload.fiscalDocumentId) {
+          await admin.from('fiscal_documents').update({
+            status: cancellationConfirmed ? 'cancelled' : 'transmitting',
+            sefaz_status: cancellationConfirmed ? 'cancelled' : 'cancelling',
+            sefaz_message: cancellationConfirmed
+              ? String((data as any)?.document?.message || 'CT-e cancelado')
+              : `Cancelamento solicitado: ${reason}`,
+          }).eq('id', payload.fiscalDocumentId).eq('tenant_id', tenantId);
         }
         if (payload.emissionId) {
           await admin.from('hub_fiscal_emissions').update({
-            status: status < 400 ? 'cancelled' : 'cancel_rejected',
-            message: status < 400 ? 'CT-e cancelado' : rejectionMessage,
+            status: cancellationConfirmed ? 'cancelled' : status < 400 ? 'cancelling' : 'cancel_rejected',
+            message: cancellationConfirmed ? 'CT-e cancelado' : status < 400 ? 'Cancelamento solicitado' : rejectionMessage,
             cancel_reason: reason,
-            cancelled_at: status < 400 ? new Date().toISOString() : null,
+            cancelled_at: cancellationConfirmed ? new Date().toISOString() : null,
             last_response: data as any,
           }).eq('id', payload.emissionId).eq('tenant_id', tenantId);
         }
