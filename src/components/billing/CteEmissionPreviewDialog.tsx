@@ -524,12 +524,20 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
   // Auto-sugere alíquota de ICMS conforme UF de origem (emitente) e destino (destinatário) quando ainda não editada.
   useEffect(() => {
     if (!active) return;
+    
+    // Se a alíquota já foi alterada manualmente (ou for zero/nulo mas não isento por CST), não auto-sugere mais.
+    // Usamos um sinalizador para evitar que a sugestão automática sobrescreva a intenção do usuário.
+    if ((active as any)._aliqManual) return;
+
     const originUf = (emitterForActive as any)?.endereco?.uf || null;
     const destUf = active.recipientState || null;
     if (!originUf || !destUf) return;
+    
     const isento = icmsIsentoByCst(active.icmsCst);
     const suggested = isento ? 0 : suggestIcmsAliquota(originUf, destUf);
+    
     if (Math.abs(active.icmsAliquota - suggested) < 0.001) return;
+    
     const r = recalcIcms(active.freightValue || 0, suggested, active.icmsEmbutido, isento);
     setItems((prev) =>
       prev.map((it, i) =>
