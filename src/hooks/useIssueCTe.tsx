@@ -127,7 +127,9 @@ export function useIssueCTe() {
 
       const doc = hubResponse?.hub?.document || {};
       const emissionId = hubResponse?.emission?.id;
-      const success = hubResponse?.success !== false && !doc?.error;
+      const hubStatus = String(doc?.status || '').trim().toLowerCase();
+      const rejectedByHub = ['rejected', 'error', 'failed', 'sefaz_error'].includes(hubStatus);
+      const success = hubResponse?.success !== false && !doc?.error && !rejectedByHub;
 
       const update: Record<string, any> = {
         hub_document_id: doc.id || null,
@@ -137,7 +139,7 @@ export function useIssueCTe() {
         sefaz_status: doc.status || (success ? 'processing' : 'error'),
         sefaz_status_code: doc.cStat != null ? String(doc.cStat) : null,
         sefaz_message: doc.message || null,
-        status: success ? (doc.status === 'authorized' ? 'authorized' : 'transmitting') : 'rejected',
+        status: success ? (hubStatus === 'authorized' ? 'authorized' : 'transmitting') : 'rejected',
       };
       for (const k of Object.keys(update)) if (update[k] == null) delete update[k];
 
