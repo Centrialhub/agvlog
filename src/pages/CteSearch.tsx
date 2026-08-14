@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useCancelCTe, useResendCte } from '@/hooks/useIssueCTe';
 import { useDeleteFailedCTe } from '@/hooks/useDeleteFailedCTe';
+import { usePollCteStatus } from '@/hooks/usePollCteStatus';
 
 const TONE_CLASS: Record<string, string> = {
   default: 'bg-secondary text-secondary-foreground',
