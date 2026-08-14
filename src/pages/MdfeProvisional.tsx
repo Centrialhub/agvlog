@@ -29,11 +29,11 @@ export default function MdfeProvisional() {
   // Form states
   const [emitterId, setEmitterId] = useState<string>('');
   const [vehicleId, setVehicleId] = useState<string>('');
-  const [driverName, setDriverName] = useState('');
-  const [driverCpf, setDriverCpf] = useState('');
-  const [originCity, setOriginCity] = useState('SAO PAULO');
-  const [originIbge, setOriginIbge] = useState('3550308');
-  const [originUf, setOriginUf] = useState('35');
+  const [driverName, setDriverName] = useState('HAMILTON SANTOS RAMOS');
+  const [driverCpf, setDriverCpf] = useState('07044266681');
+  const [originCity, setOriginCity] = useState('MONTES CLAROS');
+  const [originIbge, setOriginIbge] = useState('3143302');
+  const [originUf, setOriginUf] = useState('31');
   const [destCity, setDestCity] = useState('');
   const [destIbge, setDestIbge] = useState('');
   const [destUf, setDestUf] = useState('');
