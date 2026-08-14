@@ -1393,11 +1393,12 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                         const isento = icmsIsentoByCst(active.icmsCst);
                         const aliq = isento ? 0 : suggestIcmsAliquota(originUf, active.recipientState);
                         const r = recalcIcms(active.freightValue || 0, aliq, active.icmsEmbutido, isento);
-                        patch({
-                          icmsAliquota: aliq,
-                          icmsBase: r.base,
-                          icmsValor: r.valor,
-                        });
+                          patch({
+                            icmsAliquota: aliq,
+                            icmsBase: r.base,
+                            icmsValor: r.valor,
+                            _aliqManual: false, // Resetamos a trava ao clicar em recalcular
+                          } as any);
                       }}
                     >
                       Recalcular
