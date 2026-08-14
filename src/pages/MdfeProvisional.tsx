@@ -50,8 +50,14 @@ export default function MdfeProvisional() {
         const def = emitters.find(e => e.is_default) || emitters[0];
         setEmitterId(def.id);
       }
+      if (vehicles.length > 0 && !vehicleId) {
+        const targetVehicle = vehicles.find(v => v.plate?.toUpperCase() === 'GVJ3744');
+        if (targetVehicle) {
+          setVehicleId(targetVehicle.id);
+        }
+      }
     }
-  }, [isDialogOpen, selectedIds, ctes, emitters, emitterId]);
+  }, [isDialogOpen, selectedIds, ctes, emitters, emitterId, vehicles, vehicleId]);
 
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => 
