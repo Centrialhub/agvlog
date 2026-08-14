@@ -59,11 +59,12 @@ export function usePendingInvoices() {
       const { data: nfse, error: e3 } = await supabase
         .from('nfse_documents')
         .select('fiscal_document_ids, status')
-        .eq('tenant_id', currentTenant.id);
+        .eq('tenant_id', currentTenant.id)
+        .not('status', 'in', '("cancelled","rejected","error","failed")');
       if (e3) throw e3;
       for (const n of (nfse || []) as any[]) {
-        if (!isBillableNfse(n)) continue;
-        for (const id of (n.fiscal_document_ids || [])) used.add(id);
+        if (!n.fiscal_document_ids) continue;
+        for (const id of n.fiscal_document_ids) used.add(id);
       }
 
       let count = 0;
