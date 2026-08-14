@@ -1313,8 +1313,10 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                         onChange={(e) => {
                           const cst = e.target.value;
                           const isento = icmsIsentoByCst(cst);
+                          const regime = (emitterForActive as any)?.regime_tributario;
+                          const isSimples = regime === 'simples' || regime === 'mei';
                           const originUf = (emitterForActive as any)?.endereco?.uf || null;
-                          const aliq = isento ? 0 : suggestIcmsAliquota(originUf, active.recipientState);
+                          const aliq = (isento || isSimples) ? 0 : suggestIcmsAliquota(originUf, active.recipientState);
                           const patchData: any = {
                             icmsCst: cst,
                             icmsIsento: isento,
@@ -1363,9 +1365,12 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                         type="checkbox"
                         checked={active.icmsEmbutido}
                         onChange={(e) => {
+                          const regime = (emitterForActive as any)?.regime_tributario;
+                          const isSimples = regime === 'simples' || regime === 'mei';
                           const embutido = e.target.checked;
-                          const r = recalcIcms(active.freightValue || 0, active.icmsAliquota, embutido, active.icmsIsento);
-                          patch({ icmsEmbutido: embutido, icmsBase: r.base, icmsValor: r.valor });
+                          const aliq = isSimples ? 0 : active.icmsAliquota;
+                          const r = recalcIcms(active.freightValue || 0, aliq, embutido, active.icmsIsento || isSimples);
+                          patch({ icmsEmbutido: embutido, icmsBase: r.base, icmsValor: r.valor, icmsAliquota: aliq });
                         }}
                       />
                       Embutido
@@ -1375,9 +1380,12 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                         type="checkbox"
                         checked={active.icmsIsento}
                         onChange={(e) => {
-                          const isento = e.target.checked;
-                          const r = recalcIcms(active.freightValue || 0, active.icmsAliquota, active.icmsEmbutido, isento);
-                          patch({ icmsIsento: isento, icmsBase: r.base, icmsValor: r.valor });
+                          const regime = (emitterForActive as any)?.regime_tributario;
+                          const isSimples = regime === 'simples' || regime === 'mei';
+                          const isento = e.target.checked || isSimples;
+                          const aliq = isento ? 0 : active.icmsAliquota;
+                          const r = recalcIcms(active.freightValue || 0, aliq, active.icmsEmbutido, isento);
+                          patch({ icmsIsento: isento, icmsBase: r.base, icmsValor: r.valor, icmsAliquota: aliq });
                         }}
                       />
                       Isento
