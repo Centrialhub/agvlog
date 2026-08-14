@@ -14,7 +14,7 @@ export function useDeleteFailedCTe() {
       // Validamos se a nota realmente está em estado de erro passível de exclusão
       const { data: doc, error: fetchErr } = await supabase
         .from('fiscal_documents')
-        .select('id, sefaz_status, hub_document_id')
+        .select('id, sefaz_status, hub_document_id, fiscal_document_ids')
         .eq('id', fiscalDocumentId)
         .single();
 
@@ -27,11 +27,18 @@ export function useDeleteFailedCTe() {
         throw new Error('Apenas notas com erro de transmissão ou rejeitadas podem ser excluídas. Notas autorizadas devem ser canceladas.');
       }
 
-      // Retorna as NFs vinculadas se houver
-      const { error: releaseErr } = await (supabase as any)
+      // Retorna as NFs vinculadas se houver. 
+      // Verificamos tanto pelo vínculo direto (cte_emitted_outbound_id) 
+      // quanto pelo array de IDs persistido no próprio documento de saída.
+      const nfIds = new Set<string>();
+      if (doc.fiscal_document_ids?.length) {
+        doc.fiscal_document_ids.forEach((id: string) => nfIds.add(id));
+      }
+
+      const { error: releaseErr } = await supabase
         .from('fiscal_documents')
-        .update({ cte_emitted_at: null, cte_emitted_outbound_id: null })
-        .eq('cte_emitted_outbound_id', fiscalDocumentId);
+        .update({ cte_emitted_at: null, cte_emitted_outbound_id: null } as any)
+        .or(`cte_emitted_outbound_id.eq.${fiscalDocumentId}${nfIds.size > 0 ? `,id.in.(${Array.from(nfIds).join(',')})` : ''}`);
 
       if (releaseErr) console.error('Erro ao liberar NFs vinculadas ao CT-e:', releaseErr);
 
