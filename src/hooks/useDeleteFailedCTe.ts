@@ -29,7 +29,8 @@ export function useDeleteFailedCTe() {
         const { error: releaseErr } = await supabase
           .from('fiscal_documents')
           .update({ cte_emitted_at: null, cte_emitted_outbound_id: null } as any)
-          .eq('cte_emitted_outbound_id', fiscalDocumentId);
+          .eq('cte_emitted_outbound_id', fiscalDocumentId)
+          .is('deleted_at', null);
 
         if (releaseErr) console.error('Erro ao liberar NFs vinculadas ao CT-e (real):', releaseErr);
 
@@ -56,8 +57,9 @@ export function useDeleteFailedCTe() {
           if (ids.length > 0) {
             const { error: releaseErr } = await supabase
               .from('fiscal_documents')
-              .update({ cte_emitted_at: null, cte_emitted_outbound_id: null } as any)
-              .in('id', ids);
+            .update({ cte_emitted_at: null, cte_emitted_outbound_id: null } as any)
+            .in('id', ids)
+            .is('deleted_at', null);
             
             if (releaseErr) console.error('Erro ao liberar NFs vinculadas ao rascunho:', releaseErr);
           }

@@ -29,7 +29,8 @@ export function useDeleteFailedNFSe() {
         .from('fiscal_documents')
         .update({ nfse_emitted_at: null, nfse_emitted_document_id: null })
         .eq('nfse_emitted_document_id', nfseId)
-        .eq('tenant_id', doc.tenant_id);
+        .eq('tenant_id', doc.tenant_id)
+        .is('deleted_at', null);
 
       if (releaseErr) console.error('Erro ao liberar NFs vinculadas:', releaseErr);
 

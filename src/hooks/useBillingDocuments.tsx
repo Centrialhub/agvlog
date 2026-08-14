@@ -107,7 +107,8 @@ export function useBillingDocuments(filters: BillingDocumentFilters) {
       const { data: emitted, error: emittedErr } = await supabase
         .from('cte_documents')
         .select('fiscal_document_ids, status')
-        .eq('tenant_id', currentTenant.id);
+        .eq('tenant_id', currentTenant.id)
+        .is('deleted_at', null);
       if (emittedErr) throw emittedErr;
 
       const emittedIds = new Set<string>();

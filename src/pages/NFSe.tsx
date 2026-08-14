@@ -8,7 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Send, Ban, Edit, FileText, FilePlus2, Trash2, AlertCircle, RefreshCw, Clock, FileDown, X } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { useNFSeList, useIssueNFSe, useCancelNFSe, useDeleteNFSe, useSyncNFSeStatus, fetchNfseHubRefs, type NFSeDoc } from '@/hooks/useNFSe';
+import { useNFSeList, useIssueNFSe, useCancelNFSe, useDeleteNFSe, useSyncNFSeStatus, useResendNFSe, fetchNfseHubRefs, type NFSeDoc } from '@/hooks/useNFSe';
 import { hubFiscal } from '@/lib/fiscal/hubFiscalClient';
 import { runBulkDownload, summarizeBulkResult } from '@/lib/fiscal/bulkFileMerge';
 import { toast } from '@/components/ui/sonner';
@@ -46,6 +46,7 @@ export default function NFSePage() {
   const cancel = useCancelNFSe();
   const del = useDeleteNFSe();
   const sync = useSyncNFSeStatus();
+  const resend = useResendNFSe();
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -345,9 +346,14 @@ export default function NFSePage() {
                             <Edit className="h-3 w-3" />
                           </Button>
                         )}
-                        {(d.status === 'draft' || d.status === 'rejected' || d.status === 'error' || d.status === 'submitted' || d.status === 'processing') && (
+                        {d.status === 'draft' && (
                           <Button size="sm" variant="outline" onClick={() => issue.mutate(d.id)} disabled={issue.isPending}>
-                            <Send className="h-3 w-3 mr-1" /> {d.status === 'draft' ? 'Emitir' : 'Reenviar'}
+                            <Send className="h-3 w-3 mr-1" /> Emitir
+                          </Button>
+                        )}
+                        {(d.status === 'rejected' || d.status === 'error' || d.status === 'submitted' || d.status === 'processing') && (
+                          <Button size="sm" variant="outline" onClick={() => resend.mutate(d.id)} disabled={resend.isPending}>
+                            <RefreshCw className="h-3 w-3 mr-1" /> Reenviar
                           </Button>
                         )}
                         {d.status !== 'cancelled' && (
