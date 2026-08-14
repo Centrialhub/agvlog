@@ -210,11 +210,9 @@ function groupToEditable(g: CteGroupPreview, defaultEmitterId: string): Editable
     fcHelper: 0,
     icmsEmbutido: true,
     icmsIsento: false,
-    icmsAliquota: 12,
-    ...(() => {
-      const r = recalcIcms(g.freight_value || 0, 12, true, false);
-      return { icmsBase: r.base, icmsValor: r.valor };
-    })(),
+    icmsAliquota: 0,
+    icmsBase: 0,
+    icmsValor: 0,
     icmsCst: '00',
     cbsAliquota: 0.9,
     ibsAliquota: 0.1,
@@ -526,9 +524,10 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
   useEffect(() => {
     if (!active) return;
     
-    // Se a alíquota já foi alterada manualmente (ou for zero/nulo mas não isento por CST), não auto-sugere mais.
-    // Usamos um sinalizador para evitar que a sugestão automática sobrescreva a intenção do usuário.
-    if ((active as any)._aliqManual) return;
+    // Se a alíquota já foi alterada manualmente, ou se o emitente for Simples Nacional (trava em 0), não auto-sugere mais.
+    const regime = (emitterForActive as any)?.regime_tributario;
+    const isSimples = regime === 'simples' || regime === 'mei';
+    if ((active as any)._aliqManual || isSimples) return;
 
     const originUf = (emitterForActive as any)?.endereco?.uf || null;
     const destUf = active.recipientState || null;
