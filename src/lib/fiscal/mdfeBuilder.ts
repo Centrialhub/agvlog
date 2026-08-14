@@ -20,6 +20,7 @@ export interface MdfeDriver {
 export interface MdfeVehicle {
   plate: string;
   state: string;
+  tara?: number | null; // Tara em KG
   rntrc?: string | null;
   type?: string | null; // ex: '01' (Tração)
   bodyType?: string | null; // ex: '00' (Não aplicável)
@@ -96,6 +97,7 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
           veicTracao: {
             placa: input.vehicle.plate,
             UF: input.vehicle.state,
+            tara: input.vehicle.tara || 0,
             RNTRC: input.vehicle.rntrc || 'ISENTO',
             tpVeic: input.vehicle.type || '01',
             tpCar: input.vehicle.bodyType || '00',

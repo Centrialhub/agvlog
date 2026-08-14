@@ -37,6 +37,7 @@ export default function MdfeProvisional() {
   const [destCity, setDestCity] = useState('');
   const [destIbge, setDestIbge] = useState('');
   const [destUf, setDestUf] = useState('');
+  const [vehicleTara, setVehicleTara] = useState('');
   const { data: hubCredentials = [] } = useHubCredentials(emitterId);
 
   // Auto-fill from selected CTEs
@@ -54,6 +55,7 @@ export default function MdfeProvisional() {
         const targetVehicle = vehicles.find(v => v.plate?.toUpperCase() === 'GVJ3744');
         if (targetVehicle) {
           setVehicleId(targetVehicle.id);
+          setVehicleTara((targetVehicle as any).tara_kg?.toString() || '');
         }
       }
     }
@@ -138,6 +140,7 @@ export default function MdfeProvisional() {
         vehicle: {
           plate: vehicle.plate,
           state: vehicle.uf || emitter.endereco?.uf || '',
+          tara: Number(vehicleTara) || (vehicle as any).tara_kg || 0,
         },
         origin: {
           city_ibge: originIbge,
@@ -349,6 +352,15 @@ export default function MdfeProvisional() {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Tara do Veículo (KG)</Label>
+                  <Input 
+                    type="number" 
+                    value={vehicleTara} 
+                    onChange={e => setVehicleTara(e.target.value)} 
+                    placeholder="Ex: 5000"
+                  />
                 </div>
               </div>
             </div>
