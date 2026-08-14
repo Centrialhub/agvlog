@@ -1351,7 +1351,8 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                             icmsAliquota: aliq,
                             icmsBase: r.base,
                             icmsValor: r.valor,
-                          });
+                            _aliqManual: true, // Marca que foi alterado manualmente para parar a sugestão
+                          } as any);
                         }}
                       />
                     </div>
