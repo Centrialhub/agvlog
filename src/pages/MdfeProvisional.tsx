@@ -55,7 +55,7 @@ export default function MdfeProvisional() {
         const targetVehicle = vehicles.find(v => v.plate?.toUpperCase() === 'GVJ3744');
         if (targetVehicle) {
           setVehicleId(targetVehicle.id);
-          setVehicleTara(targetVehicle.tara_kg?.toString() || '');
+          setVehicleTara((vehicle as any).tara_kg?.toString() || '');
         }
       }
     }
@@ -140,7 +140,7 @@ export default function MdfeProvisional() {
         vehicle: {
           plate: vehicle.plate,
           state: vehicle.uf || emitter.endereco?.uf || '',
-          tara: Number(vehicleTara) || vehicle.tara_kg || 0,
+          tara: Number(vehicleTara) || (vehicle as any).tara_kg || 0,
         },
         origin: {
           city_ibge: originIbge,

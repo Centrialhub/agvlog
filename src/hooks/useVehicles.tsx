@@ -11,7 +11,6 @@ export interface Vehicle {
   uf: string | null;
   active: boolean;
   tags: any;
-  tara_kg?: number | null;
   created_at: string;
 }
 
