@@ -1,5 +1,6 @@
 import { useTheme } from "next-themes";
-import { Toaster as Sonner, toast } from "sonner";
+import { Toaster as Sonner, toast as sonnerToast } from "sonner";
+import { useAlertStore } from "@/hooks/useAlertStore";
 
 type ToasterProps = React.ComponentProps<typeof Sonner>;
 
@@ -22,6 +23,21 @@ const Toaster = ({ ...props }: ToasterProps) => {
       {...props}
     />
   );
+};
+
+const toast = {
+  ...sonnerToast,
+  error: (message: string | React.ReactNode, data?: any) => {
+    const description = data?.description || "";
+    // We use the store directly to bypass standard toast for errors
+    useAlertStore.getState().showAlert(String(message), String(description), 'error');
+    return "alert-popup";
+  },
+  warning: (message: string | React.ReactNode, data?: any) => {
+    const description = data?.description || "";
+    useAlertStore.getState().showAlert(String(message), String(description), 'warning');
+    return "alert-popup";
+  }
 };
 
 export { Toaster, toast };
