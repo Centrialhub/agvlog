@@ -59,17 +59,14 @@ export function useBillingDocuments(filters: BillingDocumentFilters) {
 
       let q = supabase
         .from('fiscal_documents')
-        .select('*, clients!fiscal_documents_client_id_fkey(company_name), loads(load_number), orders(order_number)')
+        .select('*, clients!fiscal_documents_client_id_fkey(company_name), loads(load_number, operation_type), orders(order_number)')
         .eq('tenant_id', currentTenant.id)
         // Pré-filtros aplicados em todas as queries de Billing — usam idx_fiscal_documents_tenant_type_status
         .eq('document_type', 'inbound')
         .neq('status', 'cancelled')
         .is('deleted_at', null)
-        // Oculta NFs que já geraram CT-e (emissão direta) — evita dupla emissão.
-        // Cancelar o CT-e limpa este campo e a NF volta ao pool.
+        // Oculta NFs que já geraram CT-e ou NFS-e no nível da linha (emissões confirmadas)
         .is('cte_emitted_at', null)
-        // Também oculta NFs já usadas em NFS-e — a mesma NF não pode gerar dois
-        // documentos fiscais de saída (regra: uma NF vira 1 CT-e OU 1 NFS-e).
         .is('nfse_emitted_at', null);
 
       if (f.clientId) q = q.eq('client_id', f.clientId);
