@@ -48,7 +48,7 @@ export default function NFSePage() {
   const sync = useSyncNFSeStatus();
 
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('issued');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
   const [seriesFilter, setSeriesFilter] = useState<string>('all');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -205,8 +205,8 @@ export default function NFSePage() {
                 <Select value={statusFilter} onValueChange={v => { setStatusFilter(v); setChecked(new Set()); }}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="issued">Emitidas / autorizadas</SelectItem>
                     <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="issued">Emitidas / autorizadas</SelectItem>
                     <SelectItem value="draft">Rascunho</SelectItem>
                     <SelectItem value="processing">Processando</SelectItem>
                     <SelectItem value="rejected">Rejeitada</SelectItem>
