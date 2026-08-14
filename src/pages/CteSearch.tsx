@@ -572,12 +572,12 @@ export default function CteSearch() {
                             <RefreshCw className="h-4 w-4" />
                           </Button>
                         )}
-                        {(r.sefaz_status === 'error' || r.sefaz_status === 'rejected' || r.sefaz_status === 'sent_error' || r.sefaz_status === 'processed_error' || r.sefaz_status === 'sefaz_error') && !r.hub_document_id && (
+                        {(r.sefaz_status === 'error' || r.sefaz_status === 'rejected' || r.sefaz_status === 'sent_error' || r.sefaz_status === 'processed_error' || r.sefaz_status === 'sefaz_error') && (
                           <Button 
                             size="sm" 
                             variant="ghost" 
                             className="text-destructive hover:text-destructive hover:bg-destructive/10" 
-                            title="Excluir registro de erro" 
+                            title={r.hub_document_id ? "Remover rascunho (possui ID no Hub)" : "Excluir registro de erro"} 
                             disabled={deleteCte.isPending} 
                             onClick={() => handleDelete(r)}
                           >
