@@ -382,9 +382,36 @@ Deno.serve(async (req) => {
         if (!payload.id) return json(400, { success: false, error: { code: 'MISSING_ID' } });
         const resolved = await resolveToken(payload.type || 'all', payload.emitterId);
         const { status, data } = await callHub('POST', '/hub_documents_sync', { id: payload.id }, undefined, resolved.token);
+        
+        // Se a ação for sync e o documento estiver no Hub, o proxy atualiza fiscal_documents
+        // para garantir que o polling reflita o estado real da SEFAZ.
+        const d = (data as any)?.document || {};
+        const success = status < 400 && !((data as any)?.error);
+
+        if (success && payload.fiscalDocumentId) {
+          const update: any = {
+            sefaz_status: d.status || undefined,
+            sefaz_status_code: d.cStat != null ? String(d.cStat) : undefined,
+            sefaz_message: d.message || undefined,
+            access_key: d.accessKey || undefined,
+            sefaz_protocol: d.authorizationProtocol || d.plugnotasProtocol || undefined,
+          };
+          
+          if (d.status === 'authorized') update.status = 'authorized';
+          if (d.status === 'cancelled') update.status = 'cancelled';
+          if (d.status === 'rejected') update.status = 'rejected';
+          
+          for (const k of Object.keys(update)) if (update[k] === undefined) delete update[k];
+
+          await admin.from('fiscal_documents')
+            .update(update)
+            .eq('id', payload.fiscalDocumentId)
+            .eq('tenant_id', tenantId);
+        }
+
         if (payload.emissionId) {
           await admin.rpc('increment_hfe_sync', { p_id: payload.emissionId }).catch(() => {});
-          const d = (data as any)?.document || {};
+          const dSync = (data as any)?.document || {};
           await admin.from('hub_fiscal_emissions').update({
             status: d.status || undefined,
             plugnotas_status: d.plugnotasStatus || undefined,

@@ -92,8 +92,8 @@ export const hubFiscal = {
     return invoke({ action: 'get', id: hubDocumentId, emissionId });
   },
 
-  sync(hubDocumentId: string, emissionId?: string) {
-    return invoke({ action: 'sync', id: hubDocumentId, emissionId });
+  sync(hubDocumentId: string, emissionId?: string, fiscalDocumentId?: string) {
+    return invoke({ action: 'sync', id: hubDocumentId, emissionId, fiscalDocumentId });
   },
 
   cancel(hubDocumentId: string, justificativa: string, emissionId?: string, fiscalDocumentId?: string) {
