@@ -552,7 +552,28 @@ export function useDeleteNFSe() {
  * A resposta bruta do provedor fica gravada em `nfse_documents.last_status_response`
  * e no histórico de `hub_fiscal_emissions` para conferência posterior.
  */
-export function useSyncNFSeStatus() {
+export function useResendNFSe() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('nfse_documents')
+        .update({
+          status: 'submitted',
+          rejection_messages: null,
+          updated_at: new Date().toISOString(),
+        } as any)
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['nfse'] });
+    },
+  });
+}
+
+/**
+ * Consulta o status das NFS-e que ficaram "processando" no provedor.
   const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
