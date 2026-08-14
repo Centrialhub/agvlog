@@ -165,7 +165,14 @@ Deno.serve(async (req) => {
         patch.rejection_messages = null;
       } else if (outcome === 'rejected') {
         patch.status = 'rejected';
+        patch.sefaz_status = 'rejected';
         patch.rejection_messages = { message: message || rawStatus || 'Rejeitada pelo provedor' };
+        // Rejeição não gera documento fiscal válido: devolve imediatamente as
+        // NFs vinculadas ao pool do CT-e Hub para permitir uma nova emissão.
+        await admin
+          .from('fiscal_documents')
+          .update({ cte_emitted_at: null, cte_emitted_outbound_id: null })
+          .eq('cte_emitted_outbound_id', doc.id);
       } else if (outcome === 'cancelled') {
         patch.cancelled = true;
         patch.cancellation_date = new Date().toISOString();

@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import type { FiscalDocument } from './useFiscalDocuments';
-import { cteConsumesInvoices } from '@/lib/fiscal/documentStatus';
+import { cteConsumesInvoices, isBillableNfse } from '@/lib/fiscal/documentStatus';
 
 /**
  * Filtros server-side para o Faturamento (CT-e).
@@ -104,8 +104,7 @@ export function useBillingDocuments(filters: BillingDocumentFilters) {
       const { data: emitted, error: emittedErr } = await supabase
         .from('cte_documents')
         .select('fiscal_document_ids, status')
-        .eq('tenant_id', currentTenant.id)
-        .is('deleted_at', null);
+        .eq('tenant_id', currentTenant.id);
       if (emittedErr) throw emittedErr;
 
       const emittedIds = new Set<string>();
@@ -120,11 +119,9 @@ export function useBillingDocuments(filters: BillingDocumentFilters) {
       const { data: nfse, error: nfseErr } = await supabase
         .from('nfse_documents')
         .select('fiscal_document_ids, status')
-        .eq('tenant_id', currentTenant.id)
-        .is('deleted_at', null);
+        .eq('tenant_id', currentTenant.id);
       if (nfseErr) throw nfseErr;
 
-      const { isBillableNfse } = await import('@/lib/fiscal/documentStatus');
       for (const row of nfse || []) {
         if (!isBillableNfse(row as any)) continue;
         for (const id of ((row as { fiscal_document_ids: string[] | null }).fiscal_document_ids || [])) {
