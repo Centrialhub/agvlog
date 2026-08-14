@@ -128,6 +128,7 @@ export default function CteSearch() {
   const cancelCte = useCancelCTe();
   const resendCte = useResendCte();
   const deleteCte = useDeleteFailedCTe();
+  const pollStatus = usePollCteStatus();
   const [draft, setDraft] = useState<CteSearchFilters>(DEFAULT_FILTERS);
   const [filters, setFilters] = useState<CteSearchFilters>(DEFAULT_FILTERS);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -135,6 +136,45 @@ export default function CteSearch() {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
   const { data: rows = [], isLoading, isFetching, refetch } = useCteSearch(filters);
+
+  // Polling automático para documentos em cancelamento ou transmissão
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pollingIdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const transientRows = rows.filter(r => 
+      r.hub_document_id && 
+      (r.sefaz_status === 'cancelling' || r.sefaz_status === 'processing')
+    );
+
+    if (transientRows.length > 0) {
+      if (!pollIntervalRef.current) {
+        pollIntervalRef.current = setInterval(() => {
+          transientRows.forEach(row => {
+            if (row.hub_document_id) {
+              pollStatus.mutate({ 
+                hubDocumentId: row.hub_document_id, 
+                emissionId: row.emission_id || undefined,
+                fiscalDocumentId: row.id 
+              });
+            }
+          });
+        }, 5000); // Polling a cada 5 segundos
+      }
+    } else {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    }
+
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    };
+  }, [rows, pollStatus]);
 
   function apply(next?: Partial<CteSearchFilters>) {
     const merged = { ...draft, ...(next ?? {}) };
