@@ -94,6 +94,9 @@ function has(haystack: unknown, needle: string) {
 function mapOutboundStatus(status?: string | null, sefaz?: string | null): string {
   const s = (sefaz || '').toLowerCase();
   if (s.includes('autoriz')) return 'processed';
+  // Uma rejeição do evento de cancelamento não cancela o CT-e: ele continua
+  // autorizado e deve permanecer disponível para uma nova tentativa.
+  if (s === 'cancel_rejected' || s === 'cancel_error' || s.includes('cancel_rejeit')) return 'processed';
   if (s.includes('cancel')) return 'cancelled';
   if (s.includes('rejeit') || s.includes('erro')) return 'sefaz_error';
   const st = (status || '').toLowerCase();
@@ -182,8 +185,8 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
         const match = r.access_key ? hubByKey.get(r.access_key) : null;
         if (match) usedHubIds.add(match.id);
         return {
-          id: r.id,
-          source: 'draft',
+          id: match?.id ?? r.id,
+          source: match ? 'hub' : 'draft',
           cte_number: r.cte_number ?? null,
           cte_series: r.cte_series ?? null,
           cte_type: r.cte_type ?? 'normal',

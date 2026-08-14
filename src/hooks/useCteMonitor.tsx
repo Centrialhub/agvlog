@@ -261,6 +261,8 @@ function mapOutboundStatus(status?: string | null, sefaz?: string | null, hubId?
   const s = (sefaz || '').toLowerCase();
   const st = (status || '').toLowerCase();
   if (st === 'cancelled' || s === 'cancelled') return 'cancelled';
+  // Cancelamento rejeitado mantém o documento fiscal autorizado e manejável.
+  if (s === 'cancel_rejected' || s === 'cancel_error' || s.includes('cancel_rejeit')) return 'processed';
   if (st === 'authorized' || s === 'authorized') return 'processed';
   if (st === 'rejected' || s === 'error' || s === 'rejected') {
     // Se for rejeitado mas já tiver ID no hub, tratamos como 'processed' (autorizado) 

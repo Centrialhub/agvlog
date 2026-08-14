@@ -165,6 +165,7 @@ export function useIssueCTe() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
+      qc.invalidateQueries({ queryKey: ['cte_search'] });
       qc.invalidateQueries({ queryKey: ['cte_batches'] });
       qc.invalidateQueries({ queryKey: ['loads'] });
       qc.invalidateQueries({ queryKey: ['billing_documents'] });
@@ -206,6 +207,7 @@ export function useSyncCTe() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
+      qc.invalidateQueries({ queryKey: ['cte_search'] });
     },
   });
 }
