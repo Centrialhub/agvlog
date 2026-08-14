@@ -541,16 +541,26 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     
     const r = recalcIcms(active.freightValue || 0, suggested, active.icmsEmbutido, isento);
     setItems((prev) =>
-      prev.map((it, i) =>
-        i === activeIdx
-          ? {
-              ...it,
-              icmsAliquota: suggested,
-              icmsBase: r.base,
-              icmsValor: r.valor,
-            }
-          : it,
-      ),
+      prev.map((it, i) => {
+        // Se bulkEdit estiver ligado, aplica a sugestão a todos que NÃO tiverem trava manual
+        // ou aplica apenas ao ativo se bulkEdit estiver desligado.
+        const shouldUpdate = bulkEdit ? !it._aliqManual : i === activeIdx;
+        
+        if (shouldUpdate) {
+          // Recalcula o ICMS para cada item do lote se for bulk, pois o frete varia
+          const itemR = bulkEdit 
+            ? recalcIcms(it.freightValue || 0, suggested, it.icmsEmbutido, isento)
+            : r;
+
+          return {
+            ...it,
+            icmsAliquota: suggested,
+            icmsBase: itemR.base,
+            icmsValor: itemR.valor,
+          };
+        }
+        return it;
+      }),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeIdx, active?.recipientState, active?.icmsCst, emitterForActive?.id]);
