@@ -116,6 +116,22 @@ export function useBillingDocuments(filters: BillingDocumentFilters) {
         }
       }
 
+      // Também oculta NFs que já estão em NFS-e não anuladas
+      const { data: nfse, error: nfseErr } = await supabase
+        .from('nfse_documents')
+        .select('fiscal_document_ids, status')
+        .eq('tenant_id', currentTenant.id)
+        .is('deleted_at', null);
+      if (nfseErr) throw nfseErr;
+
+      const { isBillableNfse } = await import('@/lib/fiscal/documentStatus');
+      for (const row of nfse || []) {
+        if (!isBillableNfse(row as any)) continue;
+        for (const id of ((row as { fiscal_document_ids: string[] | null }).fiscal_document_ids || [])) {
+          if (id) emittedIds.add(id);
+        }
+      }
+
       return docs.filter(d => !emittedIds.has(d.id));
     },
     enabled: !!currentTenant,
