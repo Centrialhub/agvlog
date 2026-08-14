@@ -11,50 +11,75 @@ export function useDeleteFailedCTe() {
 
   return useMutation({
     mutationFn: async (fiscalDocumentId: string) => {
-      // Validamos se a nota realmente está em estado de erro passível de exclusão
-      const { data: doc, error: fetchErr } = await supabase
+      // 1. Tenta buscar em fiscal_documents (emissões reais/tentativas no Hub)
+      const { data: realDoc, error: realErr } = await supabase
         .from('fiscal_documents')
-        .select('id, sefaz_status, hub_document_id, fiscal_document_ids')
+        .select('id, sefaz_status, hub_document_id')
         .eq('id', fiscalDocumentId)
-        .single();
+        .maybeSingle();
 
-      if (fetchErr) throw fetchErr;
-      
-      // Só permitimos excluir se for erro de SEFAZ e não tiver ID no Hub (ou seja, não foi autorizado)
-      // Se tiver hub_document_id, o correto é CANCELAR, não excluir.
-      const isFailed = doc.sefaz_status === 'error' || doc.sefaz_status === 'rejected' || doc.sefaz_status === 'processed_error' || doc.sefaz_status === 'sent_error' || doc.sefaz_status === 'sefaz_error';
-      if (!isFailed) {
-        throw new Error('Apenas notas com erro de transmissão ou rejeitadas podem ser excluídas. Notas autorizadas devem ser canceladas.');
+      if (realDoc) {
+        // Só permitimos excluir se for erro de SEFAZ e não tiver ID no Hub (ou seja, não foi autorizado)
+        const isFailed = ['error', 'rejected', 'processed_error', 'sent_error', 'sefaz_error'].includes(realDoc.sefaz_status || '');
+        if (!isFailed && realDoc.hub_document_id) {
+          throw new Error('Apenas notas com erro de transmissão ou rejeitadas podem ser excluídas. Notas autorizadas devem ser canceladas.');
+        }
+
+        // Libera as NFs vinculadas a este outbound_id
+        const { error: releaseErr } = await supabase
+          .from('fiscal_documents')
+          .update({ cte_emitted_at: null, cte_emitted_outbound_id: null } as any)
+          .eq('cte_emitted_outbound_id', fiscalDocumentId);
+
+        if (releaseErr) console.error('Erro ao liberar NFs vinculadas ao CT-e (real):', releaseErr);
+
+        const { error: delErr } = await supabase
+          .from('fiscal_documents')
+          .delete()
+          .eq('id', fiscalDocumentId);
+
+        if (delErr) throw delErr;
+        return true;
       }
 
-      // Retorna as NFs vinculadas se houver. 
-      // Verificamos tanto pelo vínculo direto (cte_emitted_outbound_id) 
-      // quanto pelo array de IDs persistido no próprio documento de saída.
-      const nfIds = new Set<string>();
-      if (doc.fiscal_document_ids?.length) {
-        doc.fiscal_document_ids.forEach((id: string) => nfIds.add(id));
+      // 2. Se não achou em fiscal_documents, tenta em cte_documents (rascunhos agrupados)
+      const { data: draftDoc, error: draftErr } = await supabase
+        .from('cte_documents')
+        .select('id, fiscal_document_ids')
+        .eq('id', fiscalDocumentId)
+        .maybeSingle();
+
+      if (draftDoc) {
+        // Libera as NFs cujos IDs estão no array do rascunho
+        if (draftDoc.fiscal_document_ids && Array.isArray(draftDoc.fiscal_document_ids)) {
+          const ids = draftDoc.fiscal_document_ids.filter(Boolean);
+          if (ids.length > 0) {
+            const { error: releaseErr } = await supabase
+              .from('fiscal_documents')
+              .update({ cte_emitted_at: null, cte_emitted_outbound_id: null } as any)
+              .in('id', ids);
+            
+            if (releaseErr) console.error('Erro ao liberar NFs vinculadas ao rascunho:', releaseErr);
+          }
+        }
+
+        const { error: delErr } = await supabase
+          .from('cte_documents')
+          .delete()
+          .eq('id', fiscalDocumentId);
+
+        if (delErr) throw delErr;
+        return true;
       }
 
-      const { error: releaseErr } = await supabase
-        .from('fiscal_documents')
-        .update({ cte_emitted_at: null, cte_emitted_outbound_id: null } as any)
-        .or(`cte_emitted_outbound_id.eq.${fiscalDocumentId}${nfIds.size > 0 ? `,id.in.(${Array.from(nfIds).join(',')})` : ''}`);
-
-      if (releaseErr) console.error('Erro ao liberar NFs vinculadas ao CT-e:', releaseErr);
-
-      const { error: delErr } = await supabase
-        .from('fiscal_documents')
-        .delete()
-        .eq('id', fiscalDocumentId);
-
-      if (delErr) throw delErr;
-      return true;
+      throw new Error('Documento não encontrado para exclusão.');
     },
     onSuccess: () => {
       toast.success('Registro de erro removido com sucesso');
       qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
       qc.invalidateQueries({ queryKey: ['cte_search'] });
       qc.invalidateQueries({ queryKey: ['cte_monitor'] });
+      qc.invalidateQueries({ queryKey: ['billing_documents'] });
     },
     onError: (err: any) => {
       toast.error('Falha ao excluir registro', { description: err.message });
