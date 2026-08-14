@@ -496,6 +496,14 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
                     : <Calculator className="h-4 w-4 mr-1" />}
                   Recalcular frete
                 </Button>
+                <div className="flex items-center gap-2 border-r pr-3 mr-1">
+                  <Checkbox 
+                    id="agrupar-nfse"
+                    checked={agrupar} 
+                    onCheckedChange={v => setAgrupar(!!v)} 
+                  />
+                  <Label htmlFor="agrupar-nfse" className="text-xs cursor-pointer whitespace-nowrap">Agrupar</Label>
+                </div>
                 <div className="flex items-center gap-2">
                   <Label className="text-xs">Tomador é:</Label>
                   <Select value={tomadorMode} onValueChange={(v: any) => setTomadorMode(v)}>
