@@ -16,6 +16,7 @@ export const SEFAZ_STATUSES = [
   'cancel_error',    // Cancelado (Erro)
   'closed',          // Encerrado
   'invalidated',     // Inutilizado
+  'sefaz_error',     // Erro SEFAZ genérico
 ] as const;
 export type SefazStatus = typeof SEFAZ_STATUSES[number];
 
@@ -33,6 +34,7 @@ export const SEFAZ_STATUS_LABELS: Record<SefazStatus, string> = {
   cancel_error: 'Cancelado (Erro)',
   closed: 'Encerrado',
   invalidated: 'Inutilizado',
+  sefaz_error: 'Erro SEFAZ',
 };
 
 export const SEFAZ_STATUS_TONE: Record<SefazStatus, 'default' | 'success' | 'warning' | 'danger' | 'muted'> = {
@@ -49,6 +51,7 @@ export const SEFAZ_STATUS_TONE: Record<SefazStatus, 'default' | 'success' | 'war
   cancel_error: 'danger',
   closed: 'muted',
   invalidated: 'muted',
+  sefaz_error: 'danger',
 };
 
 export interface CteMonitorRow {
