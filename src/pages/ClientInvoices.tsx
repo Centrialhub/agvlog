@@ -19,7 +19,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Plus, FileText, Download, Send, XCircle, Search } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/sonner';
 import { generateClientInvoicePdf, type InvoiceCharge, computeInvoiceTotals } from '@/lib/clientInvoicePdf';
 import { useCompanyProfile } from '@/hooks/useCompanyProfile';
 

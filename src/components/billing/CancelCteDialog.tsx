@@ -13,7 +13,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { AlertTriangle, XCircle } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/sonner';
 import { useCancelCTe } from '@/hooks/useIssueCTe';
 
 const CONFIRM_WORD = 'CANCELAR';

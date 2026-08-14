@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/sonner';
 import { hubFiscal } from '@/lib/fiscal/hubFiscalClient';
 import { buildNFSeEmitPayload } from '@/lib/fiscal/nfseBuilder';
 

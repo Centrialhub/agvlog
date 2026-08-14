@@ -13,7 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/sonner';
 import { Bell, CheckCircle2, Eye, EyeOff, Plus, AlertTriangle, Clock, X, Play } from 'lucide-react';
 import { addDays, differenceInCalendarDays, format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';

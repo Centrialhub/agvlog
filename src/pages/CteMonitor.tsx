@@ -15,7 +15,7 @@ import {
 import {
   FileText, FileDown, RefreshCw, Search, Filter as FilterIcon, X, AlertCircle, Eye, Ban,
 } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/sonner';
 import { useCancelCTe } from '@/hooks/useIssueCTe';
 import { PendingInvoicesBanner } from '@/components/billing/PendingInvoicesBanner';
 import { hubFiscal } from '@/lib/fiscal/hubFiscalClient';

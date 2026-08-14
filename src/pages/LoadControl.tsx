@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Download, Printer, Upload, Search, RefreshCw, FileText, CheckCircle2, Undo2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/sonner';
 import {
   useLoadControlList, useLoadDocuments, useUnloadingCharges, useImportBatches,
   useRegisterPayment, useMarkUnpaid, commitSpreadsheetImport, commitXmlImport,

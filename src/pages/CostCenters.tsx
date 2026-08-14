@@ -20,7 +20,7 @@ import {
 } from 'recharts';
 import { format, subDays } from 'date-fns';
 import { CostCenterManager } from '@/components/cost-centers/CostCenterManager';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/sonner';
 
 const COLORS = [
   'hsl(215, 80%, 48%)', 'hsl(142, 64%, 38%)', 'hsl(38, 92%, 50%)',

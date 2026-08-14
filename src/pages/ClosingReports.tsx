@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { AlertCircle, CheckCircle2, Download, FileText, Play, RefreshCw, Send, X, Upload, DollarSign, FileSpreadsheet } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/sonner';
 import {
   useClosingReportsList, useBuildPreview, useCreateClosingReport,
   useCloseClosingReport, useCancelClosingReport, useRegisterClosingPayment,

@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/sonner';
 import {
   Hexagon, Plus, Trash2, MapPin, Shield, Truck, Building2,
   Info, ArrowDownUp, Eye, EyeOff, Search, HelpCircle

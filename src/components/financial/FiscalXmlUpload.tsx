@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { FileUp, FileCheck2, AlertTriangle } from 'lucide-react';
 import { parseFiscalXml, type ParsedFiscalXml } from '@/lib/nfeXmlParser';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/sonner';
 
 type Props = {
   onExtracted: (data: ParsedFiscalXml, file: File) => void;

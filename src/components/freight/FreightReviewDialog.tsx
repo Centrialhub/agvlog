@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle2, AlertTriangle, History } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/sonner';
 import { supabase } from '@/integrations/supabase/client';
 import FreightBreakdownPanel from './FreightBreakdownPanel';
 import { useOverrideFreightValue, useConfirmFreightValue } from '@/hooks/useOverrideFreightValue';

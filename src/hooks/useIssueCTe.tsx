@@ -4,7 +4,7 @@ import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
 import { hubFiscal } from '@/lib/fiscal/hubFiscalClient';
 import { buildCtePayload, type BuildCtePayloadInput } from '@/lib/fiscal/cteBuilder';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/sonner';
 
 export interface IssueCteGroupInput extends BuildCtePayloadInput {
   /** Ids das NFs de entrada agrupadas neste CT-e. */

@@ -15,7 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { buildMdfePayload, BuildMdfePayloadInput } from '@/lib/fiscal/mdfeBuilder';
 import { format } from 'date-fns';
 import { Loader2, Send, RefreshCw, XCircle, FileText, Truck, User, MapPin } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/sonner';
 
 export default function MdfeProvisional() {
   const { data: ctes, isLoading, refetch } = useAuthorizedCteList();

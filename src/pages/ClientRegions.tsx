@@ -30,7 +30,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Plus, Search, Pencil, Trash2, MapPin, Upload } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/sonner';
 import * as XLSX from 'xlsx';
 import { useRef } from 'react';
 

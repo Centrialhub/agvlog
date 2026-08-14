@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Plus, Pencil, Trash2, Star, Key, Building2 } from 'lucide-react';
 import { hubFiscal } from '@/lib/fiscal/hubFiscalClient';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/sonner';
 
 export default function EmittersSettings() {
   const isAdmin = useIsAdmin();
