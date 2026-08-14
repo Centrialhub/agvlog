@@ -83,6 +83,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
   const [observacoes, setObservacoes] = useState('');
   const [manualTomador, setManualTomador] = useState<any>(null);
   const [isEditingTomador, setIsEditingTomador] = useState(false);
+  const [agrupar, setAgrupar] = useState(false);
 
   const suppliers = useMemo(() => clients.filter((c: any) => c.is_supplier), [clients]);
   const clientList = useMemo(() => clients.filter((c: any) => c.is_client !== false), [clients]);
