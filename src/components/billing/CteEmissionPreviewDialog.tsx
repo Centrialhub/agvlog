@@ -616,8 +616,17 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     const bulkPart: Record<string, any> = {};
     const activePart: Record<string, any> = {};
     for (const [k, v] of Object.entries(patch)) {
-      if (PER_ITEM_ONLY.has(k as keyof EditableCte)) activePart[k] = v;
-      else bulkPart[k] = v;
+      if (k === '_aliqManual') {
+        // _aliqManual é sempre aplicado a todos no lote se bulkEdit estiver on, 
+        // mas marcamos como PER_ITEM_ONLY para não ser sobrescrito acidentalmente 
+        // em outros fluxos. Contudo, aqui queremos que o lote inteiro siga a trava.
+        activePart[k] = v;
+        bulkPart[k] = v;
+      } else if (PER_ITEM_ONLY.has(k as keyof EditableCte)) {
+        activePart[k] = v;
+      } else {
+        bulkPart[k] = v;
+      }
     }
     setItems((arr) =>
       arr.map((it, i) => {
