@@ -29,7 +29,6 @@ const toast = {
   ...sonnerToast,
   error: (message: string | React.ReactNode, data?: any) => {
     const description = data?.description || "";
-    // We use the store directly to bypass standard toast for errors
     useAlertStore.getState().showAlert(String(message), String(description), 'error');
     return "alert-popup";
   },
@@ -37,6 +36,10 @@ const toast = {
     const description = data?.description || "";
     useAlertStore.getState().showAlert(String(message), String(description), 'warning');
     return "alert-popup";
+  },
+  loading: (message: string | React.ReactNode, data?: any) => {
+    // Keep loading toasts as standard toasts since they are temporary
+    return sonnerToast.loading(message, data);
   }
 };
 
