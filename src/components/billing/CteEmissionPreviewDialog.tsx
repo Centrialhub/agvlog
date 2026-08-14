@@ -1397,8 +1397,10 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                         step="0.01"
                         value={active.icmsAliquota}
                         onChange={(e) => {
-                          const aliq = Number(e.target.value);
-                          const r = recalcIcms(active.freightValue || 0, aliq, active.icmsEmbutido, active.icmsIsento);
+                          const regime = (emitterForActive as any)?.regime_tributario;
+                          const isSimples = regime === 'simples' || regime === 'mei';
+                          const aliq = isSimples ? 0 : Number(e.target.value);
+                          const r = recalcIcms(active.freightValue || 0, aliq, active.icmsEmbutido, active.icmsIsento || isSimples);
                           patch({
                             icmsAliquota: aliq,
                             icmsBase: r.base,
