@@ -258,7 +258,7 @@ export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
     return selectedDocs.every((d: any) => onlyDigits(d[key]) === first);
   }, [selectedDocs, tomadorMode]);
 
-  const canAdvance = selectedDocs.length > 0 && allSameTomador;
+  const canAdvance = selectedDocs.length > 0 && (agrupar ? allSameTomador : true);
 
   const handleEmit = async () => {
     if (!emitterId) { toast.error('Selecione o emitente fiscal'); return; }
