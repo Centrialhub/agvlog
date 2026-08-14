@@ -253,7 +253,7 @@ export function useCancelCTe() {
           .from('fiscal_documents')
           .update({
             sefaz_message: `Rejeição cancelamento: ${msg}`,
-            sefaz_status: 'authorized' // Garante que não fique travado em 'cancelling' ou mude para 'rejected'
+            sefaz_status: 'authorized' // Reverte para autorizado se o cancelamento falhar, permitindo nova tentativa
           } as any)
           .eq('id', args.fiscalDocumentId);
 

@@ -205,7 +205,7 @@ export function useCteMonitor(filters: CteMonitorFilters) {
         cte_series: null,
         access_key: d.access_key ?? null,
         protocol_number: d.sefaz_protocol ?? null,
-        sefaz_status: mapOutboundStatus(d.status, d.sefaz_status),
+        sefaz_status: mapOutboundStatus(d.status, d.sefaz_status, d.hub_document_id),
         sefaz_status_reason: d.sefaz_message ?? null,
         sefaz_status_code: d.sefaz_status_code ?? null,
         sefaz_status_at: d.created_at ?? null,
@@ -257,12 +257,16 @@ export function useCteMonitor(filters: CteMonitorFilters) {
 }
 
 /** Traduz status de `fiscal_documents` para o vocabulário do monitor SEFAZ. */
-function mapOutboundStatus(status?: string | null, sefaz?: string | null): SefazStatus {
+function mapOutboundStatus(status?: string | null, sefaz?: string | null, hubId?: string | null): SefazStatus {
   const s = (sefaz || '').toLowerCase();
   const st = (status || '').toLowerCase();
   if (st === 'cancelled' || s === 'cancelled') return 'cancelled';
   if (st === 'authorized' || s === 'authorized') return 'processed';
-  if (st === 'rejected' || s === 'error' || s === 'rejected') return 'processed_error';
+  if (st === 'rejected' || s === 'error' || s === 'rejected') {
+    // Se for rejeitado mas já tiver ID no hub, tratamos como 'processed' (autorizado) 
+    // para que a UI ofereça opções de manejo (como baixar arquivos ou cancelar novamente)
+    return hubId ? 'processed' : 'processed_error';
+  }
   if (st === 'transmitting' || s === 'processing') return 'processing';
   return 'pending';
 }
