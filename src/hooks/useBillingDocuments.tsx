@@ -118,7 +118,11 @@ export function useBillingDocuments(filters: BillingDocumentFilters) {
         }
       }
 
-      return docs.filter(d => !emittedIds.has(d.id));
+      // NOVO: Proteção extra contra vazamento. 
+      // Se a nota já possui cte_emitted_at preenchido no banco (via trigger ou mutation), 
+      // ela nem deveria ter chegado aqui pelo filtro .is('cte_emitted_at', null).
+      // Mas filtramos novamente os docs carregados caso algum tenha sido atualizado por outro operador.
+      return docs.filter(d => !emittedIds.has(d.id) && !d.cte_emitted_at && !d.nfse_emitted_at);
     },
     enabled: !!currentTenant,
     // Mantém o resultado anterior visível enquanto refiltra (digitação fluida)
