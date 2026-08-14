@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/select';
 import { Calculator, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { calculateFreight, type FreightResult } from '@/hooks/useFreightCalculator';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/sonner';
 import FreightBreakdownPanel from '@/components/freight/FreightBreakdownPanel';
 
 const NONE = '__none__';

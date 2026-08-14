@@ -17,7 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/sonner';
 import {
   ArrowLeft, MapPin, Clock, Gauge, Navigation, Activity, AlertTriangle, Info,
   Route, StopCircle, Bell, Hexagon, Fuel, Zap, Moon, Save, Wrench,

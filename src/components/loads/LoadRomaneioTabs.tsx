@@ -17,7 +17,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/sonner';
 import LoadItemsPanel from './LoadItemsPanel';
 import CTeWorkbench from './CTeWorkbench';
 import NFSePanel from './NFSePanel';

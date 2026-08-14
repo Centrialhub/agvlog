@@ -11,7 +11,7 @@ import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from '@/components/ui/select';
 import { ArrowRightLeft, Truck, Package, AlertTriangle, CheckCircle, ChevronRight, History, X, ExternalLink, Route as RouteIcon, Search, CheckSquare, Square } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';

@@ -18,7 +18,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Download, FileText, Send, XCircle, Settings, RefreshCw } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/sonner';
 import { generateDoccob } from '@/lib/doccob/doccobGenerator';
 import { validateDoccobExportInput, resolveFileName, validateFileName } from '@/lib/doccob/doccobValidator';
 import type { DoccobInvoiceInput, DoccobChargeInput, DoccobDetailInput } from '@/lib/doccob/doccobTypes';

@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Search, Plus, Wallet, Download, CheckCircle, XCircle, DollarSign, Receipt } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/sonner';
 import FiscalXmlUpload from '@/components/financial/FiscalXmlUpload';
 import PayablePaymentDialog from '@/components/financial/PayablePaymentDialog';
 import ManualExpenseDialog from '@/components/financial/ManualExpenseDialog';

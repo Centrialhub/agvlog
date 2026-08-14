@@ -11,7 +11,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useNFSeList, useIssueNFSe, useCancelNFSe, useDeleteNFSe, useSyncNFSeStatus, fetchNfseHubRefs, type NFSeDoc } from '@/hooks/useNFSe';
 import { hubFiscal } from '@/lib/fiscal/hubFiscalClient';
 import { runBulkDownload, summarizeBulkResult } from '@/lib/fiscal/bulkFileMerge';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/sonner';
 import NFSeFormDialog from '@/components/nfse/NFSeFormDialog';
 import NFSeFromInvoicesDialog from '@/components/nfse/NFSeFromInvoicesDialog';
 

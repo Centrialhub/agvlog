@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { ShieldCheck, Loader2, Pencil } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/sonner';
 import { useIsAdmin } from '@/hooks/useTenant';
 import {
   useInsuranceProfile,

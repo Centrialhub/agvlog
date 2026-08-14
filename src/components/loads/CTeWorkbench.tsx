@@ -16,7 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
 import { FileText, Calculator, AlertTriangle, CheckCircle, Eye, Edit3, Search } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/sonner';
 import FreightReviewDialog from '@/components/freight/FreightReviewDialog';
 
 interface Doc {

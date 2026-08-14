@@ -18,7 +18,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Printer, Download, Search, RefreshCw, X, FileText, PackageCheck, ShieldCheck, Trash2, CheckSquare } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/sonner';
 import { downloadImportedNotesSummaryPdf, type SummaryReportType } from '@/lib/importedNotesSummaryPdf';
 import { useCompanyProfile } from '@/hooks/useCompanyProfile';
 import { supabase } from '@/integrations/supabase/client';

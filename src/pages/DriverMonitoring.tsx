@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { AlertTriangle, CheckCircle2, Clock, Download, FileSpreadsheet, MapPin, Truck, Upload, Users } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/sonner';
 import {
   useDriverMonitorsList, useCreateMonitor, useAddProgressUpdate, useAddForecast,
   useUpdateMonitorStatus, useMonitorUpdates, useMonitorForecasts,

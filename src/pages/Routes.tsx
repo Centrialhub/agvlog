@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/sonner';
 import { Plus, Route, Trash2, Edit, MapPin, Fuel, Moon, UtensilsCrossed } from 'lucide-react';
 import { RouteDialog } from '@/components/routes/RouteDialog';
 import { getTypeConfig } from '@/components/routes/WaypointEditor';

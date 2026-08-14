@@ -20,7 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Plus, ClipboardCheck, Play, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/sonner';
 import { format, parseISO } from 'date-fns';
 
 const DEFAULT_ITEMS: Record<string, { key: string; label: string; required: boolean }[]> = {
