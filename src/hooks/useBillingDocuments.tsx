@@ -101,10 +101,14 @@ export function useBillingDocuments(filters: BillingDocumentFilters) {
       // Remove documentos já consumidos por um CT-e não anulado — inclusive
       // rascunhos/lotes. Mesmo critério de `usePendingInvoices` (cteConsumesInvoices),
       // para que o pool de faturamento e o KPI de pendentes nunca divirjam.
+      // Remove documentos já consumidos por um CT-e ou NFS-e não anulado.
+      // Priorizamos a flag no banco (cte_emitted_at/nfse_emitted_at), mas cross-referenciamos
+      // com rascunhos em memória para evitar que notas em processamento reapareçam.
       const { data: emitted, error: emittedErr } = await supabase
         .from('cte_documents')
         .select('fiscal_document_ids, status')
-        .eq('tenant_id', currentTenant.id);
+        .eq('tenant_id', currentTenant.id)
+        .is('deleted_at', null); // Garante que rascunhos excluídos não bloqueiem
       if (emittedErr) throw emittedErr;
 
       const emittedIds = new Set<string>();
@@ -115,7 +119,6 @@ export function useBillingDocuments(filters: BillingDocumentFilters) {
         }
       }
 
-      // Também oculta NFs que já estão em NFS-e não anuladas
       const { data: nfse, error: nfseErr } = await supabase
         .from('nfse_documents')
         .select('fiscal_document_ids, status')
@@ -129,6 +132,8 @@ export function useBillingDocuments(filters: BillingDocumentFilters) {
         }
       }
 
+      // Além do filtro SQL direto nas flags cte_emitted_at/nfse_emitted_at (que pega documentos autorizados),
+      // este filtro final em JS remove rascunhos e lotes pendentes identificados acima.
       return docs.filter(d => !emittedIds.has(d.id));
     },
     enabled: !!currentTenant,
