@@ -346,9 +346,14 @@ export default function NFSePage() {
                             <Edit className="h-3 w-3" />
                           </Button>
                         )}
-                        {(d.status === 'draft' || d.status === 'rejected' || d.status === 'error' || d.status === 'submitted' || d.status === 'processing') && (
+                        {d.status === 'draft' && (
                           <Button size="sm" variant="outline" onClick={() => issue.mutate(d.id)} disabled={issue.isPending}>
-                            <Send className="h-3 w-3 mr-1" /> {d.status === 'draft' ? 'Emitir' : 'Reenviar'}
+                            <Send className="h-3 w-3 mr-1" /> Emitir
+                          </Button>
+                        )}
+                        {(d.status === 'rejected' || d.status === 'error' || d.status === 'submitted' || d.status === 'processing') && (
+                          <Button size="sm" variant="outline" onClick={() => resend.mutate(d.id)} disabled={resend.isPending}>
+                            <RefreshCw className="h-3 w-3 mr-1" /> Reenviar
                           </Button>
                         )}
                         {d.status !== 'cancelled' && (
