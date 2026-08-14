@@ -22,9 +22,9 @@ export function useDeleteFailedCTe() {
       
       // Só permitimos excluir se for erro de SEFAZ e não tiver ID no Hub (ou seja, não foi autorizado)
       // Se tiver hub_document_id, o correto é CANCELAR, não excluir.
-      const isFailed = doc.sefaz_status === 'error' || doc.sefaz_status === 'rejected' || doc.sefaz_status === 'processed_error' || doc.sefaz_status === 'sent_error';
-      if (!isFailed || (doc.hub_document_id && doc.sefaz_status === 'authorized')) {
-        throw new Error('Apenas notas com erro de transmissão e sem registro no Hub podem ser excluídas. Notas autorizadas devem ser canceladas.');
+      const isFailed = doc.sefaz_status === 'error' || doc.sefaz_status === 'rejected' || doc.sefaz_status === 'processed_error' || doc.sefaz_status === 'sent_error' || doc.sefaz_status === 'sefaz_error';
+      if (!isFailed) {
+        throw new Error('Apenas notas com erro de transmissão ou rejeitadas podem ser excluídas. Notas autorizadas devem ser canceladas.');
       }
 
       // Retorna as NFs vinculadas se houver
