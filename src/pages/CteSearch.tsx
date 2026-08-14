@@ -69,7 +69,7 @@ function TriRadio({ label, value, onChange }: { label: string; value: TriState; 
 }
 
 /** Status usados no dia a dia — os demais ficam nos filtros avançados via busca. */
-const QUICK_STATUSES: SefazStatus[] = ['processed', 'pending', 'sent_error', 'processed_error', 'cancelled'];
+const QUICK_STATUSES: SefazStatus[] = ['processed', 'pending', 'sent_error', 'processed_error', 'sefaz_error', 'cancelled'];
 
 const ALL_CTE_TYPES: CteType[] = ['normal', 'complementary', 'voiding', 'substitute'];
 
