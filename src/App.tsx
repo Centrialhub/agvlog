@@ -250,6 +250,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
+      <GlobalAlert />
       <AuthProvider>
         <BrowserRouter>
           <Routes>
