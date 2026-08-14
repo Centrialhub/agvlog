@@ -132,9 +132,10 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl, a
 
   const end = endRaw;
   const totalServicos = money(doc.valor_servicos);
-  const baseCalculo = money(doc.base_calculo || totalServicos);
-  const aliquota = num(doc.aliquota_iss);
-  const valorIss = money(doc.valor_iss || (baseCalculo * aliquota) / 100);
+  const isSimples = emitter.regime_tributario === 'simples' || emitter.regime_tributario === 'mei' || doc.regime_tributario === '1';
+  const baseCalculo = isSimples ? 0 : money(doc.base_calculo || totalServicos);
+  const aliquota = isSimples ? 0 : num(doc.aliquota_iss);
+  const valorIss = isSimples ? 0 : money(doc.valor_iss || (baseCalculo * aliquota) / 100);
 
   const items = Array.isArray(doc.items) ? doc.items : [];
   const baseDiscriminacao = String(
@@ -178,9 +179,9 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl, a
     idIntegracao: integrationId,
     tipo: (doc.doc_type || 'RPS').toUpperCase(),
     natureza: doc.nat_operacao || '1', // 1 = Tributação no município
-    regimeEspecialTributacao: doc.regime_tributario === '1' ? 1 : undefined, // 1 = Microempresa Municipal (Simples)
-    optanteSimplesNacional: doc.regime_tributario === '1',
-    regimeApuracaoSN: doc.regime_tributario === '1' ? 1 : undefined, // 1 = Faturamento (Competência)
+    regimeEspecialTributacao: isSimples ? 1 : undefined, // 1 = Microempresa Municipal (Simples)
+    optanteSimplesNacional: isSimples,
+    regimeApuracaoSN: isSimples ? 1 : undefined, // 1 = Faturamento (Competência)
     ambiente: env === 'sandbox' ? 'homologacao' : 'producao',
 
     prestador: {

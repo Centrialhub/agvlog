@@ -210,11 +210,9 @@ function groupToEditable(g: CteGroupPreview, defaultEmitterId: string): Editable
     fcHelper: 0,
     icmsEmbutido: true,
     icmsIsento: false,
-    icmsAliquota: 12,
-    ...(() => {
-      const r = recalcIcms(g.freight_value || 0, 12, true, false);
-      return { icmsBase: r.base, icmsValor: r.valor };
-    })(),
+    icmsAliquota: 0,
+    icmsBase: 0,
+    icmsValor: 0,
     icmsCst: '00',
     cbsAliquota: 0.9,
     ibsAliquota: 0.1,
@@ -526,9 +524,10 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
   useEffect(() => {
     if (!active) return;
     
-    // Se a alíquota já foi alterada manualmente (ou for zero/nulo mas não isento por CST), não auto-sugere mais.
-    // Usamos um sinalizador para evitar que a sugestão automática sobrescreva a intenção do usuário.
-    if ((active as any)._aliqManual) return;
+    // Se a alíquota já foi alterada manualmente, ou se o emitente for Simples Nacional (trava em 0), não auto-sugere mais.
+    const regime = (emitterForActive as any)?.regime_tributario;
+    const isSimples = regime === 'simples' || regime === 'mei';
+    if ((active as any)._aliqManual || isSimples) return;
 
     const originUf = (emitterForActive as any)?.endereco?.uf || null;
     const destUf = active.recipientState || null;
@@ -1314,8 +1313,10 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                         onChange={(e) => {
                           const cst = e.target.value;
                           const isento = icmsIsentoByCst(cst);
+                          const regime = (emitterForActive as any)?.regime_tributario;
+                          const isSimples = regime === 'simples' || regime === 'mei';
                           const originUf = (emitterForActive as any)?.endereco?.uf || null;
-                          const aliq = isento ? 0 : suggestIcmsAliquota(originUf, active.recipientState);
+                          const aliq = (isento || isSimples) ? 0 : suggestIcmsAliquota(originUf, active.recipientState);
                           const patchData: any = {
                             icmsCst: cst,
                             icmsIsento: isento,
@@ -1364,9 +1365,12 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                         type="checkbox"
                         checked={active.icmsEmbutido}
                         onChange={(e) => {
+                          const regime = (emitterForActive as any)?.regime_tributario;
+                          const isSimples = regime === 'simples' || regime === 'mei';
                           const embutido = e.target.checked;
-                          const r = recalcIcms(active.freightValue || 0, active.icmsAliquota, embutido, active.icmsIsento);
-                          patch({ icmsEmbutido: embutido, icmsBase: r.base, icmsValor: r.valor });
+                          const aliq = isSimples ? 0 : active.icmsAliquota;
+                          const r = recalcIcms(active.freightValue || 0, aliq, embutido, active.icmsIsento || isSimples);
+                          patch({ icmsEmbutido: embutido, icmsBase: r.base, icmsValor: r.valor, icmsAliquota: aliq });
                         }}
                       />
                       Embutido
@@ -1376,9 +1380,12 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                         type="checkbox"
                         checked={active.icmsIsento}
                         onChange={(e) => {
-                          const isento = e.target.checked;
-                          const r = recalcIcms(active.freightValue || 0, active.icmsAliquota, active.icmsEmbutido, isento);
-                          patch({ icmsIsento: isento, icmsBase: r.base, icmsValor: r.valor });
+                          const regime = (emitterForActive as any)?.regime_tributario;
+                          const isSimples = regime === 'simples' || regime === 'mei';
+                          const isento = e.target.checked || isSimples;
+                          const aliq = isento ? 0 : active.icmsAliquota;
+                          const r = recalcIcms(active.freightValue || 0, aliq, active.icmsEmbutido, isento);
+                          patch({ icmsIsento: isento, icmsBase: r.base, icmsValor: r.valor, icmsAliquota: aliq });
                         }}
                       />
                       Isento
@@ -1390,8 +1397,10 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                         step="0.01"
                         value={active.icmsAliquota}
                         onChange={(e) => {
-                          const aliq = Number(e.target.value);
-                          const r = recalcIcms(active.freightValue || 0, aliq, active.icmsEmbutido, active.icmsIsento);
+                          const regime = (emitterForActive as any)?.regime_tributario;
+                          const isSimples = regime === 'simples' || regime === 'mei';
+                          const aliq = isSimples ? 0 : Number(e.target.value);
+                          const r = recalcIcms(active.freightValue || 0, aliq, active.icmsEmbutido, active.icmsIsento || isSimples);
                           patch({
                             icmsAliquota: aliq,
                             icmsBase: r.base,
