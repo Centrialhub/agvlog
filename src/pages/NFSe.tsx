@@ -46,6 +46,7 @@ export default function NFSePage() {
   const cancel = useCancelNFSe();
   const del = useDeleteNFSe();
   const sync = useSyncNFSeStatus();
+  const resend = useResendNFSe();
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
