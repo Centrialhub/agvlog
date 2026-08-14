@@ -572,8 +572,7 @@ export function useResendNFSe() {
   });
 }
 
-/**
- * Consulta o status das NFS-e que ficaram "processando" no provedor.
+export function useSyncNFSeStatus() {
   const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
