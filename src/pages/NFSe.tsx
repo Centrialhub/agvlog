@@ -205,8 +205,8 @@ export default function NFSePage() {
                 <Select value={statusFilter} onValueChange={v => { setStatusFilter(v); setChecked(new Set()); }}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="issued">Emitidas / autorizadas</SelectItem>
                     <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="issued">Emitidas / autorizadas</SelectItem>
                     <SelectItem value="draft">Rascunho</SelectItem>
                     <SelectItem value="processing">Processando</SelectItem>
                     <SelectItem value="rejected">Rejeitada</SelectItem>
