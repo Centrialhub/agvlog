@@ -48,7 +48,7 @@ export default function NFSePage() {
   const sync = useSyncNFSeStatus();
 
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('issued');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
   const [seriesFilter, setSeriesFilter] = useState<string>('all');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
