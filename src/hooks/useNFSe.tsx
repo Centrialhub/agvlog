@@ -68,7 +68,6 @@ export function useNFSeList(filters?: { status?: string; loadId?: string; client
         .from('nfse_documents')
         .select('*')
         .eq('tenant_id', currentTenant!.id)
-        
         .order('issue_date', { ascending: false })
         .order('created_at', { ascending: false })
         .limit(500);
