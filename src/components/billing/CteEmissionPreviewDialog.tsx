@@ -605,7 +605,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
       'fcFreightWeight', 'insurerInsuredAmount', 'insurerEndorsement',
       'invoices', 'loadIds', 'fiscalDocumentIds', 'clientId',
       'key', 'transmitted', 'transmitMessage',
-      '_aliqManual' as any,
+      '_aliqManual',
     ]);
     if (!bulkEdit) {
       setItems((arr) => arr.map((it, i) => (i === activeIdx ? { ...it, ...patch } : it)));
