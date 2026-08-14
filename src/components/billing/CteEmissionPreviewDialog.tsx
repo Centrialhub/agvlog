@@ -128,6 +128,7 @@ interface EditableCte {
   cbsAliquota: number;
   ibsAliquota: number;
   cbsIbsBase: number;
+  _aliqManual?: boolean;
   // Mercadoria
   cargoContent: string;
   cargoSpecies: string;
