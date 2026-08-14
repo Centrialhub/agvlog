@@ -123,12 +123,13 @@ export function useBillingDocuments(filters: BillingDocumentFilters) {
       const { data: nfse, error: nfseErr } = await supabase
         .from('nfse_documents')
         .select('fiscal_document_ids, status')
-        .eq('tenant_id', currentTenant.id);
+        .eq('tenant_id', currentTenant.id)
+        .not('status', 'in', '("cancelled","rejected","error","failed")');
       if (nfseErr) throw nfseErr;
 
       for (const row of nfse || []) {
-        if (!isBillableNfse(row as any)) continue;
-        for (const id of ((row as { fiscal_document_ids: string[] | null }).fiscal_document_ids || [])) {
+        if (!row.fiscal_document_ids) continue;
+        for (const id of row.fiscal_document_ids) {
           if (id) emittedIds.add(id);
         }
       }
