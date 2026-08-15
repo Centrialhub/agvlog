@@ -156,6 +156,7 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
             CNPJ: digits(input.insurance?.providerCnpj || ''),
           },
           nApol: input.insurance?.policyNumber || '',
+          nAv: '0', 
         }
       ],
       infAdic: {
