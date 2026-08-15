@@ -171,13 +171,15 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
       ],
       // O Hub v1 exige o grupo infToma quando ide/tpEmit=1 (Prestador de Transporte).
       // Agora formatado conforme expectativa do schema v1 para evitar erros de obrigatoriedade.
-      infToma: input.documents.length > 0 ? [
+      // O campo deve ser um array de objetos, onde cada objeto contém a chave infToma.
+      infToma: [
         {
           infToma: {
             CNPJ: digits(input.emitter.cnpj),
           },
         },
-      ] : undefined,
+      ],
+
 
       infAdic: {
         infCpl: input.observations || '',
