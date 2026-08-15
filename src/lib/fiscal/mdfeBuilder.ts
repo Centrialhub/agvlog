@@ -188,7 +188,9 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
       // Algumas versões do Hub v1 esperam o tomador dentro de infToma (como array ou objeto).
       // A estrutura padrão da SEFAZ para infToma é indicar quem é o responsável (toma).
       infToma: {
-        toma: '1', // 1=Contratante do serviço (Tomador do CT-e)
+        ide: {
+          toma: '1', // 1=Contratante do serviço (Tomador do CT-e)
+        }
       },
       // Quando tpEmit=1 (Prestador), é obrigatório informar ao menos um contratante no modal rodoviário.
       // Para simplificação e congruência, enviamos o próprio emitente como contratante padrão
