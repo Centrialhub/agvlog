@@ -57,7 +57,9 @@ describe('cteBuilder manual overrides', () => {
     };
 
     const result = buildCtePayload(input);
-    expect(result.payload.payload.remetente.endereco.logradouro).toBe('NEW REM ST');
-    expect(result.payload.payload.remetente.endereco.cep).toBe('12345678');
+    const payload = result.payload.payload as any;
+    expect(payload.remetente.endereco.logradouro).toBe('NEW REM ST');
+    expect(payload.remetente.endereco.cep).toBe('12345678');
+
   });
 });
