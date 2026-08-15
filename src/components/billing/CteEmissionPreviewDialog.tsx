@@ -1686,7 +1686,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                           _aliqManual: false, // Resetamos a trava ao clicar em recalcular
                         };
 
-                        if (bulkEdit) {
+                        if (bulkEditFiscal) {
                           setItems((prev) =>
                             prev.map((it) => {
                               const itemR = recalcIcms(it.freightValue || 0, aliq, it.icmsEmbutido, isento);
