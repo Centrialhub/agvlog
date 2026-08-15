@@ -119,12 +119,12 @@ export function useBillingDocuments(filters: BillingDocumentFilters) {
           .from('cte_documents')
           .select('fiscal_document_ids')
           .eq('tenant_id', currentTenant.id)
-          .not('status', 'in', '("cancelled","rejected","error","failed")'),
+          .not('status', 'in', '("cancelled","rejected","error","failed","sefaz_error")'),
         supabase
           .from('nfse_documents')
           .select('fiscal_document_ids')
           .eq('tenant_id', currentTenant.id)
-          .not('status', 'in', '("cancelled","rejected","error","failed")')
+          .not('status', 'in', '("cancelled","rejected","error","failed","sefaz_error")')
       ]);
 
       const emittedIds = new Set<string>();

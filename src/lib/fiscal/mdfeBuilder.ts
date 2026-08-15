@@ -73,6 +73,9 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
   if (input.documents?.some(document => digits(document.key).length !== 44)) {
     missing.push('Chave de acesso válida dos documentos vinculados');
   }
+  if (!input.vehicle?.tara || input.vehicle.tara <= 0) {
+    missing.push('Tara do veículo (obrigatório)');
+  }
   if (!input.origin?.city_ibge) missing.push('Cidade de origem (IBGE)');
   if (!input.destination?.city_ibge) missing.push('Cidade de destino (IBGE)');
 
@@ -82,7 +85,7 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
     externalId: input.externalId || undefined,
     payload: {
       ide: {
-        cUF: digits(input.origin.state),
+        cUF: digits(input.origin.state).slice(0, 2),
         tpEmit: '1', // 1=Prestador de serviço de transporte
         mod: '58',
         natureza: input.nature || 'PRESTACAO DE SERVICO DE TRANSPORTE',

@@ -89,8 +89,8 @@ export default function MdfeProvisional() {
     const mdfeCredential = hubCredentials.find(c => c.enabled && c.doc_scope === 'mdfe')
       || hubCredentials.find(c => c.enabled && c.doc_scope === 'all');
 
-    if (!emitter || !vehicle || !driverCpf || !originIbge || !destIbge) {
-      toast.error("Preencha todos os campos obrigatórios");
+    if (!emitter || !vehicle || !driverCpf || !originIbge || !destIbge || !vehicleTara) {
+      toast.error("Preencha todos os campos obrigatórios (incluindo a Tara do Veículo)");
       return;
     }
     if (!mdfeCredential) {
