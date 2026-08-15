@@ -320,8 +320,19 @@ function toBuildInput(
       e.clientId,
     ),
     overrides: {
-      remitter: null, // Remetente usa dados do sistema normalmente conforme pedido do usuário
-      recipient: (e.recipientStreet || e.recipientNumber || e.recipientNeighborhood || e.recipientZip || e.recipientCnpj || e.recipientIe || e.recipientCityIbge || e.recipientCity || e.recipientState) ? {
+      remitter: (e.remitterStreet || e.remitterNumber || e.remitterNeighborhood || e.remitterZip || e.remitterCnpj || e.remitterIe || e.remitterName) ? {
+        name: e.remitterName || null,
+        cnpj: e.remitterCnpj || null,
+        ie: e.remitterIe || null,
+        address: {
+          street: e.remitterStreet || null,
+          number: e.remitterNumber || null,
+          neighborhood: e.remitterNeighborhood || null,
+          zip: e.remitterZip || null
+        } as any
+      } : null,
+      recipient: (e.recipientStreet || e.recipientNumber || e.recipientNeighborhood || e.recipientZip || e.recipientCnpj || e.recipientIe || e.recipientCityIbge || e.recipientCity || e.recipientState || e.recipientName) ? {
+        name: e.recipientName || null,
         cnpj: e.recipientCnpj || null,
         ie: e.recipientIe || null,
         address: {
