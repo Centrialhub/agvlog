@@ -224,27 +224,33 @@ export function validateNFe(
   const recipientDoc = (nfe.recipientCnpj || '').replace(/\D/g, '');
   const recipientCity = (nfe.recipientCity || '').toUpperCase().trim();
   
-  // 1. Tenta por CNPJ (mais forte)
+  // 1. Tenta por CNPJ
   if (recipientDoc) {
     const matched = idx.clientByTaxId.get(recipientDoc);
     if (matched) {
       matchedClientId = matched.id;
       matchedClientName = matched.company_name;
+      
+      // Se houver múltiplas filiais com o mesmo CNPJ, tenta desempatar pela cidade
+      const matches = clients.filter(c => (c.tax_id || '').replace(/\D/g, '') === recipientDoc);
+      if (matches.length > 1) {
+        const byCity = matches.find(c => (c.address_city || '').toUpperCase().trim() === recipientCity);
+        if (byCity) {
+          matchedClientId = byCity.id;
+          matchedClientName = byCity.company_name;
+        }
+      }
     }
   }
 
-  // 2. Se não achou por CNPJ ou para garantir a filial correta, tenta por Nome + Cidade
+  // 2. Se não achou ou para reforçar por Nome + Cidade (filiais com nomes diferentes ou erro de CNPJ raiz)
   if (nfe.recipientName) {
     const city = recipientCity;
     const normName = nfe.recipientName.toLowerCase().trim();
-    
-    // Procura por match exato de Nome + Cidade
     const nameKey = `${normName}|${city}`;
     const matched = idx.clientByNameCity.get(nameKey);
     
     if (matched) {
-      // Se já tínhamos um match por CNPJ, mas o match por Nome+Cidade aponta para outro ID,
-      // priorizamos o match por Nome+Cidade pois ele é mais específico para a filial.
       matchedClientId = matched.id;
       matchedClientName = matched.company_name;
     }
@@ -329,10 +335,19 @@ export function validateOrderRows(
     let matchedClientName: string | null = null;
     const cnpjClean = (row.clientCnpj || '').replace(/\D/g, '');
     if (cnpjClean) {
-      const matched = clients.find(c => (c.tax_id || '').replace(/\D/g, '') === cnpjClean);
-      if (matched) {
-        matchedClientId = matched.id;
-        matchedClientName = matched.company_name;
+      const matches = clients.filter(c => (c.tax_id || '').replace(/\D/g, '') === cnpjClean);
+      if (matches.length > 1) {
+        const city = (row.destination || '').toUpperCase().trim();
+        const byCity = matches.find(c => (c.address_city || '').toUpperCase().trim() === city);
+        if (byCity) {
+          matchedClientId = byCity.id;
+          matchedClientName = byCity.company_name;
+        }
+      }
+      
+      if (!matchedClientId && matches.length > 0) {
+        matchedClientId = matches[0].id;
+        matchedClientName = matches[0].company_name;
       }
     }
     
