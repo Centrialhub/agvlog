@@ -17,9 +17,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Printer, Download, Search, RefreshCw, X, FileText, PackageCheck, ShieldCheck, Trash2, CheckSquare } from 'lucide-react';
+import { Printer, Download, Search, RefreshCw, X, FileText, PackageCheck, ShieldCheck, Trash2, CheckSquare, FileSpreadsheet } from 'lucide-react';
 import { toast } from '@/components/ui/sonner';
 import { downloadImportedNotesSummaryPdf, type SummaryReportType } from '@/lib/importedNotesSummaryPdf';
+import { downloadImportedNotesXlsx } from '@/lib/importedNotesXlsx';
 import { useCompanyProfile } from '@/hooks/useCompanyProfile';
 import { supabase } from '@/integrations/supabase/client';
 import {
