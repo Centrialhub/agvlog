@@ -179,6 +179,12 @@ export interface BuildCtePayloadInput {
   /** Override de UFIni/UFFim (inicio/fim da prestação). */
   origin?: CteParty['address'] | null;
   destination?: CteParty['address'] | null;
+  /** Override manual de endereços completos das partes (prioridade máxima). */
+  overrides?: {
+    remitter?: CteParty['address'] | null;
+    recipient?: CteParty['address'] | null;
+  } | null;
+
   /** CNPJs autorizados a baixar o XML. */
   authorizedXmlCnpjs?: string[] | null;
   invoices: CteReferencedNf[];
@@ -288,6 +294,7 @@ function serializeParty(p: CteParty | null | undefined) {
       : undefined,
   };
 }
+
 
 const TAKER_INDEX: Record<CteTakerRole, number> = {
   remetente: 0,
@@ -681,10 +688,19 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
             }
           : null,
       ),
-      remetente: serializeParty(input.remitter),
-      destinatario: serializeParty(input.recipient),
+      remetente: serializeParty(
+        input.overrides?.remitter
+          ? { ...input.remitter!, address: { ...input.remitter!.address, ...input.overrides.remitter } }
+          : input.remitter
+      ),
+      destinatario: serializeParty(
+        input.overrides?.recipient
+          ? { ...input.recipient!, address: { ...input.recipient!.address, ...input.overrides.recipient } }
+          : input.recipient
+      ),
       expedidor: serializeParty(input.expedidor),
       recebedor: serializeParty(input.recebedor),
+
       seguro: seguroCarga,
       tomador: {
         tipo: TAKER_INDEX[input.takerRole],

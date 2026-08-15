@@ -66,6 +66,10 @@ interface EditableCte {
   remitterName: string;
   remitterCnpj: string;
   remitterIe: string;
+  remitterStreet: string;
+  remitterNumber: string;
+  remitterNeighborhood: string;
+  remitterZip: string;
   recipientName: string;
   recipientCnpj: string;
   recipientIe: string;
@@ -111,6 +115,7 @@ interface EditableCte {
   cargoValue: number;
   weightKg: number;
   palletCount: number;
+
   // Composição do frete (opcional)
   fcFreightWeight: number;
   fcDeliveryFee: number;
@@ -162,6 +167,10 @@ function groupToEditable(g: CteGroupPreview, defaultEmitterId: string): Editable
     remitterName: g.remitter || '',
     remitterCnpj: first?.remitter_cnpj || '',
     remitterIe: '',
+    remitterStreet: '',
+    remitterNumber: '',
+    remitterNeighborhood: '',
+    remitterZip: '',
     recipientName: g.recipient || '',
     recipientCnpj: first?.recipient_cnpj || '',
     recipientIe: '',
@@ -171,6 +180,7 @@ function groupToEditable(g: CteGroupPreview, defaultEmitterId: string): Editable
     recipientNumber: '',
     recipientNeighborhood: '',
     recipientZip: '',
+
     consigneeClientId: null,
     consigneeName: '',
     consigneeCnpj: '',
@@ -286,7 +296,12 @@ function toBuildInput(
           },
         }
       : null,
-    remitter: enrichParty(e.remitterName, e.remitterCnpj, null, e.remitterIe),
+    remitter: enrichParty(e.remitterName, e.remitterCnpj, {
+      street: e.remitterStreet || null,
+      number: e.remitterNumber || null,
+      neighborhood: e.remitterNeighborhood || null,
+      zip: e.remitterZip || null
+    }, e.remitterIe),
     recipient: enrichParty(
       e.recipientName,
       e.recipientCnpj,
@@ -301,6 +316,21 @@ function toBuildInput(
       e.recipientIe,
       e.clientId,
     ),
+    overrides: {
+      remitter: (e.remitterStreet || e.remitterNumber || e.remitterNeighborhood || e.remitterZip) ? {
+        street: e.remitterStreet || null,
+        number: e.remitterNumber || null,
+        neighborhood: e.remitterNeighborhood || null,
+        zip: e.remitterZip || null
+      } : null,
+      recipient: (e.recipientStreet || e.recipientNumber || e.recipientNeighborhood || e.recipientZip) ? {
+        street: e.recipientStreet || null,
+        number: e.recipientNumber || null,
+        neighborhood: e.recipientNeighborhood || null,
+        zip: e.recipientZip || null
+      } : null,
+    },
+
     consignee: enrichParty(e.consigneeName, e.consigneeCnpj, null, null, e.consigneeClientId),
     expedidor: enrichParty(e.expedidorName, e.expedidorCnpj),
     recebedor: enrichParty(e.recebedorName, e.recebedorCnpj),
@@ -630,7 +660,9 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
       'remitterName', 'remitterCnpj', 'remitterIe',
       'recipientName', 'recipientCnpj', 'recipientIe',
       'recipientCity', 'recipientState',
+      'remitterStreet', 'remitterNumber', 'remitterNeighborhood', 'remitterZip',
       'recipientStreet', 'recipientNumber', 'recipientNeighborhood', 'recipientZip',
+
       'consigneeClientId', 'consigneeName', 'consigneeCnpj',
       'expedidorName', 'expedidorCnpj',
       'recebedorName', 'recebedorCnpj',
@@ -920,6 +952,27 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                     />
                   </div>
                 </div>
+
+                <div className="grid grid-cols-4 gap-2 border p-2 rounded bg-muted/20">
+                  <div className="col-span-4 text-xs font-semibold text-muted-foreground uppercase">Endereço Remetente (Manual)</div>
+                  <div className="col-span-2">
+                    <Label className="text-xs">Logradouro</Label>
+                    <Input className="h-8" value={active.remitterStreet} onChange={(e) => patch({ remitterStreet: e.target.value })} placeholder="Rua, Av, etc" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Número</Label>
+                    <Input className="h-8" value={active.remitterNumber} onChange={(e) => patch({ remitterNumber: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label className="text-xs">CEP</Label>
+                    <Input className="h-8" value={active.remitterZip} onChange={(e) => patch({ remitterZip: e.target.value })} />
+                  </div>
+                  <div className="col-span-2">
+                    <Label className="text-xs">Bairro</Label>
+                    <Input className="h-8" value={active.remitterNeighborhood} onChange={(e) => patch({ remitterNeighborhood: e.target.value })} />
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <Label>Destinatário</Label>
