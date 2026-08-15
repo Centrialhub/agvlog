@@ -229,7 +229,7 @@ export function useCteMonitor(filters: CteMonitorFilters) {
         payer_group: null,
         driver_name: null,
         vehicle_plate: null,
-        recipient: d.recipient ?? null,
+        recipient: (d.cte_payload?.payload?.destinatario?.nome || d.recipient) ?? null,
         recipient_city: (d.cte_payload?.payload?.fim?.municipio || d.cte_payload?.payload?.destinatario?.endereco?.municipio || d.recipient_city) ?? null,
         recipient_state: (d.cte_payload?.payload?.fim?.uf || d.cte_payload?.payload?.destinatario?.endereco?.uf || d.recipient_state) ?? null,
         remitter: d.remitter ?? null,
