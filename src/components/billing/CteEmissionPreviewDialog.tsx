@@ -1658,13 +1658,13 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                           patch({
                             icmsBase: base,
                             icmsValor: Number((base * (active.icmsAliquota || 0) / 100).toFixed(2)),
-                          });
+                          }, 'fiscal');
                         }}
                       />
                     </div>
                     <div>
                       <Label className="text-xs">Valor</Label>
-                      <Input type="number" step="0.01" value={active.icmsValor} onChange={(e) => patch({ icmsValor: Number(e.target.value) })} />
+                      <Input type="number" step="0.01" value={active.icmsValor} onChange={(e) => patch({ icmsValor: Number(e.target.value) }, 'fiscal')} />
                     </div>
                   </div>
                   <div className="flex items-center justify-between pt-1">
