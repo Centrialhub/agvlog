@@ -666,18 +666,8 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
   function patch(patch: Partial<EditableCte>) {
     // Chaves específicas de cada CT-e.
     const PER_ITEM_ONLY = new Set<keyof EditableCte>([
-      'remitterName', 'remitterCnpj', 'remitterIe',
-      'remitterStreet', 'remitterNumber', 'remitterNeighborhood', 'remitterZip',
-
-      'consigneeClientId', 'consigneeName', 'consigneeCnpj',
-      'expedidorName', 'expedidorCnpj',
-      'recebedorName', 'recebedorCnpj',
-      'refNumber', 'clientOrderNumber',
-      'freightValue', 'cargoValue', 'weightKg', 'palletCount',
-      'icmsBase', 'icmsValor', 'cbsIbsBase',
-      'fcFreightWeight', 'insurerInsuredAmount', 'insurerEndorsement',
-      'invoices', 'loadIds', 'fiscalDocumentIds', 'clientId',
       'key', 'transmitted', 'transmitMessage',
+      'invoices', 'loadIds', 'fiscalDocumentIds',
       '_aliqManual',
     ]);
     if (!bulkEdit) {
