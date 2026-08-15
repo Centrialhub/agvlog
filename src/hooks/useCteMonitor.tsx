@@ -193,7 +193,7 @@ export function useCteMonitor(filters: CteMonitorFilters) {
       const { data: outbound, error: outErr } = await supabase
         .from('fiscal_documents')
         .select(
-          'id, invoice_number, access_key, sefaz_protocol, sefaz_status, sefaz_status_code, sefaz_message, status, remitter, recipient, recipient_city, recipient_state, freight_value, value, issue_date, created_at, hub_document_id, emission_id',
+          'id, invoice_number, access_key, sefaz_protocol, sefaz_status, sefaz_status_code, sefaz_message, status, remitter, recipient, recipient_city, recipient_state, freight_value, value, issue_date, created_at, hub_document_id, emission_id, cte_payload',
         )
         .eq('tenant_id', currentTenant.id)
         .eq('document_type', 'outbound')
@@ -230,8 +230,8 @@ export function useCteMonitor(filters: CteMonitorFilters) {
         driver_name: null,
         vehicle_plate: null,
         recipient: d.recipient ?? null,
-        recipient_city: d.recipient_city ?? null,
-        recipient_state: d.recipient_state ?? null,
+        recipient_city: (d.cte_payload?.payload?.fim?.municipio || d.cte_payload?.payload?.destinatario?.endereco?.municipio || d.recipient_city) ?? null,
+        recipient_state: (d.cte_payload?.payload?.fim?.uf || d.cte_payload?.payload?.destinatario?.endereco?.uf || d.recipient_state) ?? null,
         remitter: d.remitter ?? null,
         freight_value: Number(d.freight_value ?? d.value ?? 0),
         cargo_value: Number(d.value ?? 0),

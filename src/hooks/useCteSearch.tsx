@@ -167,7 +167,7 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
       const { data: outbound, error: outErr } = await supabase
         .from('fiscal_documents')
         .select(
-          'id, invoice_number, access_key, sefaz_status, sefaz_message, status, remitter, recipient, recipient_city, recipient_state, freight_value, value, issue_date, created_at, hub_document_id, emission_id',
+          'id, invoice_number, access_key, sefaz_status, sefaz_message, status, remitter, recipient, recipient_city, recipient_state, freight_value, value, issue_date, created_at, hub_document_id, emission_id, cte_payload',
         )
         .eq('tenant_id', currentTenant.id)
         .is('deleted_at', null)
@@ -200,8 +200,8 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
           payer_name: r.payer_name ?? null,
           remitter: r.remitter ?? null,
           recipient: r.recipient ?? null,
-          recipient_city: r.recipient_city ?? null,
-          recipient_state: r.recipient_state ?? null,
+          recipient_city: (match?.cte_payload?.payload?.fim?.municipio || match?.cte_payload?.payload?.destinatario?.endereco?.municipio || r.recipient_city) ?? null,
+          recipient_state: (match?.cte_payload?.payload?.fim?.uf || match?.cte_payload?.payload?.destinatario?.endereco?.uf || r.recipient_state) ?? null,
           vehicle_plate: r.vehicle_plate ?? null,
           driver_name: r.driver_name ?? null,
           invoice_numbers: r.invoice_numbers ?? null,
@@ -230,8 +230,8 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
           payer_name: d.remitter ?? null,
           remitter: d.remitter ?? null,
           recipient: d.recipient ?? null,
-          recipient_city: d.recipient_city ?? null,
-          recipient_state: d.recipient_state ?? null,
+          recipient_city: (d.cte_payload?.payload?.fim?.municipio || d.cte_payload?.payload?.destinatario?.endereco?.municipio || d.recipient_city) ?? null,
+          recipient_state: (d.cte_payload?.payload?.fim?.uf || d.cte_payload?.payload?.destinatario?.endereco?.uf || d.recipient_state) ?? null,
           vehicle_plate: null,
           driver_name: null,
           invoice_numbers: null,
