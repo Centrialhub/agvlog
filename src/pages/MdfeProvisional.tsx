@@ -63,7 +63,7 @@ export default function MdfeProvisional() {
       }
       
       const selectedDocs = ctes?.filter(c => selectedIds.includes(c.id)) || [];
-      const total = selectedDocs.reduce((acc, doc) => acc + (Number(doc.cargo_value) || 0), 0);
+      const total = selectedDocs.reduce((acc, doc) => acc + (doc.cargo_value || 0), 0);
       setTotalCargoValue(total.toFixed(2));
     }
   }, [isDialogOpen, selectedIds, ctes, emitters, emitterId, vehicles, vehicleId]);
@@ -443,6 +443,22 @@ export default function MdfeProvisional() {
                 </div>
               </div>
             </div>
+
+            {insurance && (
+              <div className="rounded-lg bg-muted/50 p-3 space-y-2 border">
+                <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <Truck className="h-3 w-3" /> Seguro de Carga (Responsável: Emitente)
+                </h4>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                  <div className="text-muted-foreground">Seguradora:</div>
+                  <div className="font-medium">{insurance.name}</div>
+                  <div className="text-muted-foreground">CNPJ:</div>
+                  <div className="font-medium font-mono">{insurance.cnpj}</div>
+                  <div className="text-muted-foreground">Apólice:</div>
+                  <div className="font-medium font-mono">{insurance.policy}</div>
+                </div>
+              </div>
+            )}
           </div>
 
           <DialogFooter>
