@@ -179,6 +179,12 @@ export interface BuildCtePayloadInput {
   /** Override de UFIni/UFFim (inicio/fim da prestação). */
   origin?: CteParty['address'] | null;
   destination?: CteParty['address'] | null;
+  /** Override manual de endereços completos das partes (prioridade máxima). */
+  overrides?: {
+    remitter?: CteParty['address'] | null;
+    recipient?: CteParty['address'] | null;
+  } | null;
+
   /** CNPJs autorizados a baixar o XML. */
   authorizedXmlCnpjs?: string[] | null;
   invoices: CteReferencedNf[];
