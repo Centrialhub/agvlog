@@ -17,9 +17,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Printer, Download, Search, RefreshCw, X, FileText, PackageCheck, ShieldCheck, Trash2, CheckSquare } from 'lucide-react';
+import { Printer, Download, Search, RefreshCw, X, FileText, PackageCheck, ShieldCheck, Trash2, CheckSquare, FileSpreadsheet } from 'lucide-react';
 import { toast } from '@/components/ui/sonner';
 import { downloadImportedNotesSummaryPdf, type SummaryReportType } from '@/lib/importedNotesSummaryPdf';
+import { downloadImportedNotesXlsx } from '@/lib/importedNotesXlsx';
 import { useCompanyProfile } from '@/hooks/useCompanyProfile';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -225,6 +226,16 @@ export default function ImportedNotesSummary() {
     URL.revokeObjectURL(url);
   };
 
+  const handleXlsx = () => {
+    if (rows.length === 0) { toast.error('Nenhum resultado para exportar.'); return; }
+    try {
+      downloadImportedNotesXlsx(rows);
+      toast.success('Planilha gerada — pronta para enviar ao cliente.');
+    } catch (e: any) {
+      toast.error(e?.message || 'Falha ao gerar a planilha.');
+    }
+  };
+
   return (
     <div className="space-y-6 p-6">
       <div className="flex items-start justify-between">
@@ -317,6 +328,7 @@ export default function ImportedNotesSummary() {
               </div>
             )}
             <Button variant="outline" onClick={handleCsv} disabled={rows.length === 0}><Download className="h-4 w-4 mr-2" />Exportar CSV</Button>
+            <Button variant="outline" onClick={handleXlsx} disabled={rows.length === 0}><FileSpreadsheet className="h-4 w-4 mr-2" />Exportar Excel (Cliente)</Button>
             <Button onClick={() => setPrintDlgOpen(true)} disabled={rows.length === 0}><Printer className="h-4 w-4 mr-2" />Imprimir</Button>
           </div>
         </CardContent>
