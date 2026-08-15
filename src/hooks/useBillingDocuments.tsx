@@ -111,10 +111,21 @@ export function useBillingDocuments(filters: BillingDocumentFilters) {
 
       const emittedIds = new Set<string>();
       for (const row of emitted || []) {
-        if (!row.fiscal_document_ids) continue;
-        const ids = Array.isArray(row.fiscal_document_ids) ? row.fiscal_document_ids : [];
-        for (const id of ids) {
-          if (id) emittedIds.add(id);
+        const rawIds = row.fiscal_document_ids;
+        if (!rawIds) continue;
+        
+        // Hardening: lida com JSONB que pode vir como string ou array
+        let ids: string[] = [];
+        try {
+          ids = Array.isArray(rawIds) ? rawIds : (typeof rawIds === 'string' ? JSON.parse(rawIds) : []);
+        } catch (e) {
+          console.warn('[useBillingDocuments] falha ao parsear fiscal_document_ids', e);
+        }
+
+        if (Array.isArray(ids)) {
+          for (const id of ids) {
+            if (id) emittedIds.add(id);
+          }
         }
       }
 
@@ -126,10 +137,20 @@ export function useBillingDocuments(filters: BillingDocumentFilters) {
       if (nfseErr) throw nfseErr;
 
       for (const row of nfse || []) {
-        if (!row.fiscal_document_ids) continue;
-        const ids = Array.isArray(row.fiscal_document_ids) ? row.fiscal_document_ids : [];
-        for (const id of ids) {
-          if (id) emittedIds.add(id);
+        const rawIds = row.fiscal_document_ids;
+        if (!rawIds) continue;
+        
+        let ids: string[] = [];
+        try {
+          ids = Array.isArray(rawIds) ? rawIds : (typeof rawIds === 'string' ? JSON.parse(rawIds) : []);
+        } catch (e) {
+          console.warn('[useBillingDocuments] falha ao parsear fiscal_document_ids (NFSe)', e);
+        }
+
+        if (Array.isArray(ids)) {
+          for (const id of ids) {
+            if (id) emittedIds.add(id);
+          }
         }
       }
 
