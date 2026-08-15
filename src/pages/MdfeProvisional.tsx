@@ -184,6 +184,9 @@ export default function MdfeProvisional() {
         return;
       }
 
+      console.log('[MdfeProvisional] Payload final para o Hub:', JSON.stringify(payload, null, 2));
+
+
       const { data, error } = await supabase.functions.invoke('hub-fiscal-proxy', {
         body: { 
           type: 'mdfe',

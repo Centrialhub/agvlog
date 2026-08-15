@@ -170,8 +170,7 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
         },
       ],
       // O Hub v1 exige o grupo infToma quando ide/tpEmit=1 (Prestador de Transporte).
-      // Agora formatado conforme expectativa do schema v1 para evitar erros de obrigatoriedade.
-      // O campo deve ser um array de objetos, onde cada objeto contém a chave infToma.
+      // Estrutura corrigida para o schema v1: array de objetos com chave infToma interna.
       infToma: [
         {
           infToma: {
@@ -179,6 +178,7 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
           },
         },
       ],
+
 
 
       infAdic: {
