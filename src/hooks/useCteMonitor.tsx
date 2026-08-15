@@ -139,7 +139,6 @@ export function useCteMonitor(filters: CteMonitorFilters) {
         .from('cte_documents')
         .select('*')
         .eq('tenant_id', currentTenant.id)
-        .is('deleted_at', null)
         .order('sefaz_status_at', { ascending: false, nullsFirst: false })
         .order('created_at', { ascending: false })
         .limit(2000);
@@ -197,6 +196,7 @@ export function useCteMonitor(filters: CteMonitorFilters) {
           'id, invoice_number, access_key, sefaz_protocol, sefaz_status, sefaz_status_code, sefaz_message, status, remitter, recipient, recipient_city, recipient_state, freight_value, value, issue_date, created_at, hub_document_id, emission_id, cte_payload',
         )
         .eq('tenant_id', currentTenant.id)
+        .is('deleted_at', null)
         .eq('document_type', 'outbound')
         .order('created_at', { ascending: false })
         .limit(2000);
