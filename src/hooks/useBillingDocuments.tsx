@@ -68,9 +68,16 @@ export function useBillingDocuments(filters: BillingDocumentFilters) {
         .neq('status', 'cancelled')
         .is('deleted_at', null);
 
-      // Só aplica trava de emissão se NÃO estivermos filtrando explicitamente as notas problemáticas
-      if (!f.onlySpecificInvoices || f.onlySpecificInvoices.length === 0) {
+      // Quando isolando notas específicas, removemos filtros restritivos de estado/emissão
+      // para garantir que documentos problemáticos ou com flags órfãs apareçam.
+      const isIsolating = f.onlySpecificInvoices && f.onlySpecificInvoices.length > 0;
+
+      if (!isIsolating) {
         q = q.is('cte_emitted_at', null).is('nfse_emitted_at', null);
+      } else {
+        // Se estiver isolando, removemos filtros de status SEFAZ para forçar a exibição
+        // mesmo que o banco ache que elas estão vinculadas, permitindo a correção via UI.
+        q = q.eq('document_type', 'inbound'); 
       }
 
       if (f.clientId) q = q.eq('client_id', f.clientId as string);
@@ -138,6 +145,9 @@ export function useBillingDocuments(filters: BillingDocumentFilters) {
 
       (emitted || []).forEach(processRow);
       (nfse || []).forEach(processRow);
+
+      // Se estiver isolando, ignoramos a trava de memória (emittedIds)
+      if (isIsolating) return docs;
 
       return docs.filter(d => !emittedIds.has(d.id));
     },
