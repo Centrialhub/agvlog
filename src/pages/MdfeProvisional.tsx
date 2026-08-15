@@ -264,8 +264,8 @@ export default function MdfeProvisional() {
             <CardTitle className="text-sm font-medium">Status Motor</CardTitle>
           </CardHeader>
           <CardContent className="flex items-center gap-2">
-            <Badge className="bg-green-500/10 text-green-500">Engine v2.3 (Beta)</Badge>
-            <span className="text-xs text-muted-foreground">Correção contratantes (modalRodoviario)</span>
+            <Badge className="bg-green-500/10 text-green-500">Engine v2.4 (Beta)</Badge>
+            <span className="text-xs text-muted-foreground">Correção infToma.ide (toma: 1)</span>
           </CardContent>
         </Card>
       </div>
