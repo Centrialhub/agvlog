@@ -234,14 +234,22 @@ export function validateNFe(
   }
 
   // 2. Se não achou por CNPJ ou para garantir a filial correta, tenta por Nome + Cidade
-  if (!matchedClientId && nfe.recipientName) {
-    const nameKey = `${nfe.recipientName.toLowerCase()}|${recipientCity}`;
+  if (nfe.recipientName) {
+    const city = recipientCity;
+    const normName = nfe.recipientName.toLowerCase().trim();
+    
+    // Procura por match exato de Nome + Cidade
+    const nameKey = `${normName}|${city}`;
     const matched = idx.clientByNameCity.get(nameKey);
+    
     if (matched) {
+      // Se já tínhamos um match por CNPJ, mas o match por Nome+Cidade aponta para outro ID,
+      // priorizamos o match por Nome+Cidade pois ele é mais específico para a filial.
       matchedClientId = matched.id;
       matchedClientName = matched.company_name;
     }
   }
+
 
   if (!matchedClientId) {
     validations.push({
@@ -326,16 +334,37 @@ export function validateOrderRows(
         matchedClientId = matched.id;
         matchedClientName = matched.company_name;
       }
-    } else if (row.clientName) {
-      const matched = clients.find(c =>
-        c.company_name.toLowerCase().includes(row.clientName.toLowerCase()) ||
-        row.clientName.toLowerCase().includes(c.company_name.toLowerCase())
-      );
+    }
+    
+    // 2. Se não achou por CNPJ ou para garantir a filial correta, tenta por Nome + Cidade
+    if (row.clientName) {
+      const city = (row.destination || '').toUpperCase().trim();
+      const normName = row.clientName.toLowerCase().trim();
+      const nameKey = `${normName}|${city}`;
+      
+      // buildValidationIndexes já indexa clients por company_name.toLowerCase() | city
+      const matched = clients.find(c => {
+        const cName = (c.company_name || '').toLowerCase().trim();
+        const cCity = (c.address_city || '').toUpperCase().trim();
+        return cName === normName && cCity === city;
+      });
+
       if (matched) {
         matchedClientId = matched.id;
         matchedClientName = matched.company_name;
+      } else if (!matchedClientId) {
+        // Fallback para busca por nome aproximado se ainda não tiver ID
+        const fuzzyMatched = clients.find(c =>
+          c.company_name.toLowerCase().includes(normName) ||
+          normName.includes(c.company_name.toLowerCase())
+        );
+        if (fuzzyMatched) {
+          matchedClientId = fuzzyMatched.id;
+          matchedClientName = fuzzyMatched.company_name;
+        }
       }
     }
+
 
     if (!matchedClientId && (row.clientName || row.clientCnpj)) {
       validations.push({ field: 'client', message: `Cliente não encontrado: ${row.clientName || row.clientCnpj}`, severity: 'warning', index: idx });
