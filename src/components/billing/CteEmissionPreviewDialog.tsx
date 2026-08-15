@@ -79,6 +79,7 @@ interface EditableCte {
   recipientNumber: string;
   recipientNeighborhood: string;
   recipientZip: string;
+  recipientCityIbge: string;
   consigneeClientId: string | null;
   consigneeName: string;
   consigneeCnpj: string;
@@ -180,6 +181,7 @@ function groupToEditable(g: CteGroupPreview, defaultEmitterId: string): Editable
     recipientNumber: '',
     recipientNeighborhood: '',
     recipientZip: '',
+    recipientCityIbge: '',
 
     consigneeClientId: null,
     consigneeName: '',
@@ -311,22 +313,24 @@ function toBuildInput(
         street: e.recipientStreet || null,
         number: e.recipientNumber || null,
         neighborhood: e.recipientNeighborhood || null,
-        zip: e.recipientZip || null
-      },
+        zip: e.recipientZip || null,
+        city_ibge: e.recipientCityIbge || null
+      } as any,
       e.recipientIe,
       e.clientId,
     ),
     overrides: {
       remitter: null, // Remetente usa dados do sistema normalmente conforme pedido do usuário
-      recipient: (e.recipientStreet || e.recipientNumber || e.recipientNeighborhood || e.recipientZip || e.recipientCnpj || e.recipientIe) ? {
+      recipient: (e.recipientStreet || e.recipientNumber || e.recipientNeighborhood || e.recipientZip || e.recipientCnpj || e.recipientIe || e.recipientCityIbge) ? {
         cnpj: e.recipientCnpj || null,
         ie: e.recipientIe || null,
         address: {
           street: e.recipientStreet || null,
           number: e.recipientNumber || null,
           neighborhood: e.recipientNeighborhood || null,
-          zip: e.recipientZip || null
-        }
+          zip: e.recipientZip || null,
+          city_ibge: e.recipientCityIbge || null
+        } as any
       } : null,
     },
 
@@ -660,6 +664,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
       'recipientName', 'recipientCnpj', 'recipientIe',
       'recipientCity', 'recipientState',
       'remitterStreet', 'remitterNumber', 'remitterNeighborhood', 'remitterZip',
+      'recipientStreet', 'recipientNumber', 'recipientNeighborhood', 'recipientZip', 'recipientCityIbge',
 
       'consigneeClientId', 'consigneeName', 'consigneeCnpj',
       'expedidorName', 'expedidorCnpj',
@@ -1011,6 +1016,10 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                   <div>
                     <Label>CEP</Label>
                     <Input value={active.recipientZip} onChange={(e) => patch({ recipientZip: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label>Cód. Município (IBGE)</Label>
+                    <Input value={active.recipientCityIbge} onChange={(e) => patch({ recipientCityIbge: e.target.value })} placeholder="Ex: 3143302" />
                   </div>
                 </div>
                 <div>

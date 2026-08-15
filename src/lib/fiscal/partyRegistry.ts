@@ -147,6 +147,7 @@ export function resolveParty(
     number?: string | null;
     neighborhood?: string | null;
     zip?: string | null;
+    city_ibge?: string | null;
   } | null,
 ): ResolvedParty | null {
   const c = findRegistryClient(index, party);
