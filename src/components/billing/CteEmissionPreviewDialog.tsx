@@ -66,6 +66,10 @@ interface EditableCte {
   remitterName: string;
   remitterCnpj: string;
   remitterIe: string;
+  remitterStreet: string;
+  remitterNumber: string;
+  remitterNeighborhood: string;
+  remitterZip: string;
   recipientName: string;
   recipientCnpj: string;
   recipientIe: string;
@@ -111,6 +115,7 @@ interface EditableCte {
   cargoValue: number;
   weightKg: number;
   palletCount: number;
+
   // Composição do frete (opcional)
   fcFreightWeight: number;
   fcDeliveryFee: number;
