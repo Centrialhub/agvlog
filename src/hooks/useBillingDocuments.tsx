@@ -39,7 +39,7 @@ function nz(v: string | null | undefined): string | null {
 export function useBillingDocuments(filters: BillingDocumentFilters) {
   const { currentTenant } = useTenant();
 
-  const f = {
+  const f: Required<{ [K in keyof BillingDocumentFilters]: string | string[] | null }> = {
     clientId: nz(filters.clientId),
     periodStart: nz(filters.periodStart),
     periodEnd: nz(filters.periodEnd),
@@ -73,22 +73,22 @@ export function useBillingDocuments(filters: BillingDocumentFilters) {
 
       if (f.clientId) q = q.eq('client_id', f.clientId);
       if (f.supplierId) q = q.eq('supplier_id', f.supplierId);
-      if (f.periodStart) q = q.gte('issue_date', f.periodStart);
-      if (f.periodEnd) q = q.lte('issue_date', f.periodEnd);
-      if (f.invoiceNumber) q = q.ilike('invoice_number', `%${f.invoiceNumber}%`);
-      if (f.accessKey) q = q.ilike('access_key', `%${f.accessKey}%`);
-      if (f.remitter) q = q.ilike('remitter', `%${f.remitter}%`);
+      if (f.periodStart) q = q.gte('issue_date', f.periodStart as string);
+      if (f.periodEnd) q = q.lte('issue_date', f.periodEnd as string);
+      if (f.invoiceNumber) q = q.ilike('invoice_number', `%${f.invoiceNumber as string}%`);
+      if (f.accessKey) q = q.ilike('access_key', `%${f.accessKey as string}%`);
+      if (f.remitter) q = q.ilike('remitter', `%${f.remitter as string}%`);
       if (f.referenceNumber) {
         // Busca em ambas as colunas: reference_number (interno) e client_load_number (cliente)
-        const ref = f.referenceNumber.replace(/[,()]/g, '');
+        const ref = (f.referenceNumber as string).replace(/[,()]/g, '');
         q = q.or(`reference_number.ilike.%${ref}%,client_load_number.ilike.%${ref}%`);
       }
       if (f.recipientCnpj) {
-        const digits = f.recipientCnpj.replace(/\D/g, '');
+        const digits = (f.recipientCnpj as string).replace(/\D/g, '');
         if (digits) q = q.ilike('recipient_cnpj', `%${digits}%`);
       }
       if (f.remitterCnpj) {
-        const digits = f.remitterCnpj.replace(/\D/g, '');
+        const digits = (f.remitterCnpj as string).replace(/\D/g, '');
         if (digits) q = q.ilike('remitter_cnpj', `%${digits}%`);
       }
       if (f.recipientCity) q = q.ilike('recipient_city', `%${f.recipientCity as string}%`);
