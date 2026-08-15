@@ -22,7 +22,7 @@ describe('cteBuilder manual overrides', () => {
       invoices: [{ number: '1', access_key: '1'.repeat(44) }],
       insurer: {
         name: 'INS SA',
-        cnpj: '1'.repeat(14),
+        cnpj: '00000000000191',
         policy: 'POL123',
         endorsement: 'END123'
       },
