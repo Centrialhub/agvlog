@@ -1088,25 +1088,25 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                 <div className="grid grid-cols-2 gap-2 pt-2 border-t">
                   <div>
                     <Label>Expedidor (opcional)</Label>
-                    <Input value={active.expedidorName} onChange={(e) => patch({ expedidorName: e.target.value })} />
+                    <Input value={active.expedidorName} onChange={(e) => patch({ expedidorName: e.target.value }, 'partes')} />
                   </div>
                   <div>
                     <Label>CNPJ expedidor</Label>
-                    <Input value={active.expedidorCnpj} onChange={(e) => patch({ expedidorCnpj: e.target.value })} />
+                    <Input value={active.expedidorCnpj} onChange={(e) => patch({ expedidorCnpj: e.target.value }, 'partes')} />
                   </div>
                   <div>
                     <Label>Recebedor (opcional)</Label>
-                    <Input value={active.recebedorName} onChange={(e) => patch({ recebedorName: e.target.value })} />
+                    <Input value={active.recebedorName} onChange={(e) => patch({ recebedorName: e.target.value }, 'partes')} />
                   </div>
                   <div>
                     <Label>CNPJ recebedor</Label>
-                    <Input value={active.recebedorCnpj} onChange={(e) => patch({ recebedorCnpj: e.target.value })} />
+                    <Input value={active.recebedorCnpj} onChange={(e) => patch({ recebedorCnpj: e.target.value }, 'partes')} />
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-2 pt-2 border-t">
                   <div>
                     <Label>Seguradora</Label>
-                    <Input value={active.insurerName} onChange={(e) => patch({ insurerName: e.target.value })} />
+                    <Input value={active.insurerName} onChange={(e) => patch({ insurerName: e.target.value }, 'partes')} />
                     {insuranceErrors.name && (
                       <p className="text-[11px] text-destructive">{insuranceErrors.name}</p>
                     )}
@@ -1117,7 +1117,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                       value={formatCnpj(active.insurerCnpj)}
                       inputMode="numeric"
                       placeholder="00.000.000/0000-00"
-                      onChange={(e) => patch({ insurerCnpj: onlyDigits(e.target.value).slice(0, 14) })}
+                      onChange={(e) => patch({ insurerCnpj: onlyDigits(e.target.value).slice(0, 14) }, 'partes')}
                     />
                     {insuranceErrors.cnpj && (
                       <p className="text-[11px] text-destructive">{insuranceErrors.cnpj}</p>
@@ -1125,14 +1125,14 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                   </div>
                   <div>
                     <Label>Apólice</Label>
-                    <Input value={active.insurerPolicy} onChange={(e) => patch({ insurerPolicy: e.target.value })} />
+                    <Input value={active.insurerPolicy} onChange={(e) => patch({ insurerPolicy: e.target.value }, 'partes')} />
                     {insuranceErrors.policy && (
                       <p className="text-[11px] text-destructive">{insuranceErrors.policy}</p>
                     )}
                   </div>
                   <div>
                     <Label>Nº averbação / CGC</Label>
-                    <Input value={active.insurerEndorsement} onChange={(e) => patch({ insurerEndorsement: e.target.value })} />
+                    <Input value={active.insurerEndorsement} onChange={(e) => patch({ insurerEndorsement: e.target.value }, 'partes')} />
                     {insuranceErrors.endorsement && (
                       <p className="text-[11px] text-destructive">{insuranceErrors.endorsement}</p>
                     )}
@@ -1143,7 +1143,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                       type="number"
                       step="0.01"
                       value={active.insurerInsuredAmount || active.cargoValue || 0}
-                      onChange={(e) => patch({ insurerInsuredAmount: Number(e.target.value) })}
+                      onChange={(e) => patch({ insurerInsuredAmount: Number(e.target.value) }, 'partes')}
                     />
                   </div>
                   <div>
@@ -1152,7 +1152,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                       type="number"
                       step="0.01"
                       value={active.fcInsurance}
-                      onChange={(e) => patch({ fcInsurance: Number(e.target.value) })}
+                      onChange={(e) => patch({ fcInsurance: Number(e.target.value) }, 'partes')}
                     />
                   </div>
                 </div>
@@ -1206,8 +1206,22 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
               </TabsContent>
 
               <TabsContent value="tomador" className="space-y-3 pt-3">
+                <div className="flex items-center justify-between border-b pb-2 mb-2">
+                  <div className="text-xs font-semibold uppercase text-muted-foreground">Responsável pelo Pagamento</div>
+                  <label className="flex items-center gap-2 cursor-pointer select-none text-xs">
+                    <input
+                      type="checkbox"
+                      checked={bulkEditTomador}
+                      onChange={(e) => setBulkEditTomador(e.target.checked)}
+                      className="h-3 w-3"
+                    />
+                    <span className={bulkEditTomador ? 'font-medium text-primary' : 'text-muted-foreground'}>
+                      Replicar dados desta aba para o lote
+                    </span>
+                  </label>
+                </div>
                 <Label>Tomador do serviço</Label>
-                <RadioGroup value={active.takerRole} onValueChange={(v: any) => patch({ takerRole: v })}>
+                <RadioGroup value={active.takerRole} onValueChange={(v: any) => patch({ takerRole: v }, 'tomador')}>
                   {(['remetente', 'destinatario', 'expedidor', 'recebedor', 'terceiro'] as CteTakerRole[]).map((r) => (
                     <div key={r} className="flex items-center gap-2">
                       <RadioGroupItem value={r} id={`taker-${r}`} />
@@ -1219,21 +1233,35 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <Label>Nome/Razão</Label>
-                      <Input value={active.takerName} onChange={(e) => patch({ takerName: e.target.value })} />
+                      <Input value={active.takerName} onChange={(e) => patch({ takerName: e.target.value }, 'tomador')} />
                     </div>
                     <div>
                       <Label>CNPJ</Label>
-                      <Input value={active.takerCnpj} onChange={(e) => patch({ takerCnpj: e.target.value })} />
+                      <Input value={active.takerCnpj} onChange={(e) => patch({ takerCnpj: e.target.value }, 'tomador')} />
                     </div>
                   </div>
                 )}
               </TabsContent>
 
               <TabsContent value="transporte" className="space-y-3 pt-3">
+                <div className="flex items-center justify-between border-b pb-2 mb-2">
+                  <div className="text-xs font-semibold uppercase text-muted-foreground">Documento & Motorista</div>
+                  <label className="flex items-center gap-2 cursor-pointer select-none text-xs">
+                    <input
+                      type="checkbox"
+                      checked={bulkEditTransporte}
+                      onChange={(e) => setBulkEditTransporte(e.target.checked)}
+                      className="h-3 w-3"
+                    />
+                    <span className={bulkEditTransporte ? 'font-medium text-primary' : 'text-muted-foreground'}>
+                      Replicar dados desta aba para o lote
+                    </span>
+                  </label>
+                </div>
                 <div className="grid grid-cols-3 gap-2">
                   <div>
                     <Label>Tipo CT-e</Label>
-                    <Select value={active.documentType} onValueChange={(v: any) => patch({ documentType: v })}>
+                    <Select value={active.documentType} onValueChange={(v: any) => patch({ documentType: v }, 'transporte')}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="01">01 — Normal</SelectItem>
@@ -1245,11 +1273,11 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                   </div>
                   <div>
                     <Label>Nº Ref</Label>
-                    <Input value={active.refNumber} onChange={(e) => patch({ refNumber: e.target.value })} />
+                    <Input value={active.refNumber} onChange={(e) => patch({ refNumber: e.target.value }, 'transporte')} />
                   </div>
                   <div>
                     <Label>Nº Pedido Cliente</Label>
-                    <Input value={active.clientOrderNumber} onChange={(e) => patch({ clientOrderNumber: e.target.value })} />
+                    <Input value={active.clientOrderNumber} onChange={(e) => patch({ clientOrderNumber: e.target.value }, 'transporte')} />
                   </div>
                 </div>
                 <div>
@@ -1260,9 +1288,9 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                   <Select
                     value={active.driverId || 'none'}
                     onValueChange={(v) => {
-                      if (v === 'none') return patch({ driverId: null, driverName: '', driverCpf: '' });
+                      if (v === 'none') return patch({ driverId: null, driverName: '', driverCpf: '' }, 'transporte');
                       const d = drivers.find((x) => x.id === v);
-                      patch({ driverId: v, driverName: d?.name || '', driverCpf: d?.cpf || '' });
+                      patch({ driverId: v, driverName: d?.name || '', driverCpf: d?.cpf || '' }, 'transporte');
                     }}
                   >
                     <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
@@ -1277,11 +1305,11 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <Label>Nome</Label>
-                    <Input value={active.driverName} onChange={(e) => patch({ driverName: e.target.value })} />
+                    <Input value={active.driverName} onChange={(e) => patch({ driverName: e.target.value }, 'transporte')} />
                   </div>
                   <div>
                     <Label>CPF</Label>
-                    <Input value={active.driverCpf} onChange={(e) => patch({ driverCpf: e.target.value })} />
+                    <Input value={active.driverCpf} onChange={(e) => patch({ driverCpf: e.target.value }, 'transporte')} />
                   </div>
                 </div>
                 <div>
@@ -1292,9 +1320,9 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                   <Select
                     value={active.vehicleId || 'none'}
                     onValueChange={(v) => {
-                      if (v === 'none') return patch({ vehicleId: null, vehiclePlate: '' });
+                      if (v === 'none') return patch({ vehicleId: null, vehiclePlate: '' }, 'transporte');
                       const veh: any = vehicles.find((x: any) => x.id === v);
-                      patch({ vehicleId: v, vehiclePlate: veh?.plate || '' });
+                      patch({ vehicleId: v, vehiclePlate: veh?.plate || '' }, 'transporte');
                     }}
                   >
                     <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
