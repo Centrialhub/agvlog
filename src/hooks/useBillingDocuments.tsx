@@ -39,7 +39,7 @@ function nz(v: string | null | undefined): string | null {
 export function useBillingDocuments(filters: BillingDocumentFilters) {
   const { currentTenant } = useTenant();
 
-  const f: Required<{ [K in keyof BillingDocumentFilters]: string | string[] | null }> = {
+  const f = {
     clientId: nz(filters.clientId),
     periodStart: nz(filters.periodStart),
     periodEnd: nz(filters.periodEnd),
