@@ -1337,58 +1337,72 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                 <div className="grid grid-cols-3 gap-2">
                   <div>
                     <Label>Placa</Label>
-                    <Input value={active.vehiclePlate} onChange={(e) => patch({ vehiclePlate: e.target.value.toUpperCase() })} />
+                    <Input value={active.vehiclePlate} onChange={(e) => patch({ vehiclePlate: e.target.value.toUpperCase() }, 'transporte')} />
                   </div>
                   <div>
                     <Label>UF</Label>
-                    <Input value={active.vehicleState} onChange={(e) => patch({ vehicleState: e.target.value.toUpperCase() })} />
+                    <Input value={active.vehicleState} onChange={(e) => patch({ vehicleState: e.target.value.toUpperCase() }, 'transporte')} />
                   </div>
                   <div>
                     <Label>RENAVAM</Label>
-                    <Input value={active.vehicleRenavam} onChange={(e) => patch({ vehicleRenavam: e.target.value })} />
+                    <Input value={active.vehicleRenavam} onChange={(e) => patch({ vehicleRenavam: e.target.value }, 'transporte')} />
                   </div>
                 </div>
                 <div className="grid grid-cols-4 gap-2">
                   <div>
                     <Label>Tipo veículo</Label>
-                    <Input value={active.vehicleType} onChange={(e) => patch({ vehicleType: e.target.value })} placeholder="01" />
+                    <Input value={active.vehicleType} onChange={(e) => patch({ vehicleType: e.target.value }, 'transporte')} placeholder="01" />
                   </div>
                   <div>
                     <Label>Carreta 1</Label>
-                    <Input value={active.trailerPlate1} onChange={(e) => patch({ trailerPlate1: e.target.value.toUpperCase() })} />
+                    <Input value={active.trailerPlate1} onChange={(e) => patch({ trailerPlate1: e.target.value.toUpperCase() }, 'transporte')} />
                   </div>
                   <div>
                     <Label>Carreta 2</Label>
-                    <Input value={active.trailerPlate2} onChange={(e) => patch({ trailerPlate2: e.target.value.toUpperCase() })} />
+                    <Input value={active.trailerPlate2} onChange={(e) => patch({ trailerPlate2: e.target.value.toUpperCase() }, 'transporte')} />
                   </div>
                   <div>
                     <Label>Carreta 3</Label>
-                    <Input value={active.trailerPlate3} onChange={(e) => patch({ trailerPlate3: e.target.value.toUpperCase() })} />
+                    <Input value={active.trailerPlate3} onChange={(e) => patch({ trailerPlate3: e.target.value.toUpperCase() }, 'transporte')} />
                   </div>
                 </div>
               </TabsContent>
 
               <TabsContent value="carga" className="space-y-3 pt-3">
+                <div className="flex items-center justify-between border-b pb-2 mb-2">
+                  <div className="text-xs font-semibold uppercase text-muted-foreground">Mercadoria & Valores</div>
+                  <label className="flex items-center gap-2 cursor-pointer select-none text-xs">
+                    <input
+                      type="checkbox"
+                      checked={bulkEditCarga}
+                      onChange={(e) => setBulkEditCarga(e.target.checked)}
+                      className="h-3 w-3"
+                    />
+                    <span className={bulkEditCarga ? 'font-medium text-primary' : 'text-muted-foreground'}>
+                      Replicar dados desta aba para o lote
+                    </span>
+                  </label>
+                </div>
                 <div className="grid grid-cols-4 gap-2">
                   <div>
                     <Label>Frete peso — frete base (R$)</Label>
                     <Input type="number" step="0.01" value={Number(active.freightValue ?? 0).toFixed(2)}
-                      onChange={(e) => patch({ freightValue: Math.round(Number(e.target.value) * 100) / 100 })} />
+                      onChange={(e) => patch({ freightValue: Math.round(Number(e.target.value) * 100) / 100 }, 'carga')} />
                   </div>
                   <div>
                     <Label>Valor carga (R$)</Label>
                     <Input type="number" step="0.01" value={active.cargoValue}
-                      onChange={(e) => patch({ cargoValue: Number(e.target.value) })} />
+                      onChange={(e) => patch({ cargoValue: Number(e.target.value) }, 'carga')} />
                   </div>
                   <div>
                     <Label>Peso (kg)</Label>
                     <Input type="number" step="0.001" value={active.weightKg}
-                      onChange={(e) => patch({ weightKg: Number(e.target.value) })} />
+                      onChange={(e) => patch({ weightKg: Number(e.target.value) }, 'carga')} />
                   </div>
                   <div>
                     <Label>Pallets</Label>
                     <Input type="number" value={active.palletCount}
-                      onChange={(e) => patch({ palletCount: Number(e.target.value) })} />
+                      onChange={(e) => patch({ palletCount: Number(e.target.value) }, 'carga')} />
                   </div>
                 </div>
                 <div className="pt-2 border-t">
@@ -1396,15 +1410,15 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                   <div className="grid grid-cols-3 gap-2 pt-1">
                     <div>
                       <Label className="text-xs">Conteúdo</Label>
-                      <Input value={active.cargoContent} onChange={(e) => patch({ cargoContent: e.target.value })} />
+                      <Input value={active.cargoContent} onChange={(e) => patch({ cargoContent: e.target.value }, 'carga')} />
                     </div>
                     <div>
                       <Label className="text-xs">Espécie</Label>
-                      <Input value={active.cargoSpecies} onChange={(e) => patch({ cargoSpecies: e.target.value })} />
+                      <Input value={active.cargoSpecies} onChange={(e) => patch({ cargoSpecies: e.target.value }, 'carga')} />
                     </div>
                     <div>
                       <Label className="text-xs">Produto predominante</Label>
-                      <Input value={active.cargoPredominant} onChange={(e) => patch({ cargoPredominant: e.target.value })} />
+                      <Input value={active.cargoPredominant} onChange={(e) => patch({ cargoPredominant: e.target.value }, 'carga')} />
                     </div>
                   </div>
                 </div>
@@ -1429,7 +1443,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                           type="number"
                           step="0.01"
                           value={(active as any)[k]}
-                          onChange={(e) => patch({ [k]: Number(e.target.value) } as any)}
+                          onChange={(e) => patch({ [k]: Number(e.target.value) } as any, 'carga')}
                         />
                       </div>
                     ))}
@@ -1502,13 +1516,27 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
               </TabsContent>
 
               <TabsContent value="fiscal" className="space-y-3 pt-3">
+                <div className="flex items-center justify-between border-b pb-2 mb-2">
+                  <div className="text-xs font-semibold uppercase text-muted-foreground">Tributação & CFOP</div>
+                  <label className="flex items-center gap-2 cursor-pointer select-none text-xs">
+                    <input
+                      type="checkbox"
+                      checked={bulkEditFiscal}
+                      onChange={(e) => setBulkEditFiscal(e.target.checked)}
+                      className="h-3 w-3"
+                    />
+                    <span className={bulkEditFiscal ? 'font-medium text-primary' : 'text-muted-foreground'}>
+                      Replicar dados desta aba para o lote
+                    </span>
+                  </label>
+                </div>
                 <div>
                   <Label>Natureza da operação</Label>
-                  <Input value={active.nature} onChange={(e) => patch({ nature: e.target.value })} />
+                  <Input value={active.nature} onChange={(e) => patch({ nature: e.target.value }, 'fiscal')} />
                 </div>
                 <div>
                   <Label>CFOP</Label>
-                  <Input value={active.cfop} onChange={(e) => patch({ cfop: e.target.value })} placeholder="ex.: 5353, 6353" />
+                  <Input value={active.cfop} onChange={(e) => patch({ cfop: e.target.value }, 'fiscal')} placeholder="ex.: 5353, 6353" />
                 </div>
                 <div className="pt-2 border-t">
                   <Label className="text-xs font-semibold">ICMS</Label>
@@ -1534,7 +1562,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                           
                           // Se não for bulk edit, calculamos base/valor apenas para o ativo aqui
                           // Se for bulk edit, o patch() cuidará de replicar e o useEffect cuidará da sugestão/recalculo
-                          if (bulkEdit) {
+                          if (bulkEditFiscal) {
                             // Se for bulk edit, aplicamos a todos os itens do lote que não tenham trava manual
                             setItems((prev) =>
                               prev.map((it) => {
