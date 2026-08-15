@@ -320,8 +320,19 @@ function toBuildInput(
       e.clientId,
     ),
     overrides: {
-      remitter: null, // Remetente usa dados do sistema normalmente conforme pedido do usuário
-      recipient: (e.recipientStreet || e.recipientNumber || e.recipientNeighborhood || e.recipientZip || e.recipientCnpj || e.recipientIe || e.recipientCityIbge || e.recipientCity || e.recipientState) ? {
+      remitter: (e.remitterStreet || e.remitterNumber || e.remitterNeighborhood || e.remitterZip || e.remitterCnpj || e.remitterIe || e.remitterName) ? {
+        name: e.remitterName || null,
+        cnpj: e.remitterCnpj || null,
+        ie: e.remitterIe || null,
+        address: {
+          street: e.remitterStreet || null,
+          number: e.remitterNumber || null,
+          neighborhood: e.remitterNeighborhood || null,
+          zip: e.remitterZip || null
+        } as any
+      } : null,
+      recipient: (e.recipientStreet || e.recipientNumber || e.recipientNeighborhood || e.recipientZip || e.recipientCnpj || e.recipientIe || e.recipientCityIbge || e.recipientCity || e.recipientState || e.recipientName) ? {
+        name: e.recipientName || null,
         cnpj: e.recipientCnpj || null,
         ie: e.recipientIe || null,
         address: {
@@ -473,7 +484,16 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    const baseItems = groups.map((g) => groupToEditable(g, defaultEmitter?.id || ''));
+    const registry = clients.length > 0 ? buildClientIndex(clients as any[]) : null;
+    
+    const baseItems = groups.map((g) => {
+      const it = groupToEditable(g, defaultEmitter?.id || '');
+      // Pré-preenche com o cadastro se disponível
+      if (registry) {
+        return fillPartyFieldsFromRegistry(it, registry).item;
+      }
+      return it;
+    });
 
     setItems(baseItems);
     setActiveIdx(0);
@@ -489,16 +509,18 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
           });
           if (!data) return it;
           const d: any = data;
-          return {
+          
+          let updated = {
             ...it,
             driverId: it.driverId || d.driver?.id || null,
             driverName: it.driverName || d.driver?.name || '',
             driverCpf: it.driverCpf || d.driver?.cpf || '',
             vehicleId: it.vehicleId || d.vehicle?.id || null,
             vehiclePlate: it.vehiclePlate || d.vehicle?.plate || '',
+            vehicleState: it.vehicleState || d.vehicle?.state || '',
+            vehicleRenavam: it.vehicleRenavam || d.vehicle?.renavam || '',
             emitterId: it.emitterId || d.emitter?.id || '',
             nature: it.nature || d.nature_default || 'PRESTACAO DE SERVICO DE TRANSPORTE',
-            // Remetente/destinatário dominantes calculados pelo RPC a partir das NFs vinculadas
             remitterName: it.remitterName || d.remitter?.remitter || '',
             remitterCnpj: it.remitterCnpj || d.remitter?.remitter_cnpj || '',
             recipientName: it.recipientName || d.recipient?.recipient || '',
@@ -508,11 +530,16 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
             clientId: it.clientId || d.recipient?.client_id || null,
             cargoPredominant: it.cargoPredominant || d.cargo_predominant || '',
           };
+
+          // Após o RPC, tenta preencher lacunas de endereço/IE com o cadastro novamente
+          if (registry) {
+            updated = fillPartyFieldsFromRegistry(updated, registry).item;
+          }
+
+          return updated;
         }),
       );
       if (cancelled) return;
-      // Preserva a seguradora já aplicada/salva: o RPC é assíncrono e não deve
-      // sobrescrever o padrão do tenant aplicado enquanto ele carregava.
       setItems((prev) => {
         const previousByKey = new Map(prev.map((it) => [it.key, it]));
         return patched.map((it) => {
@@ -523,10 +550,8 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     })();
 
     return () => { cancelled = true; };
-    // groupsSignature representa integralmente as notas do lote; usar groups
-    // diretamente recriaria a prévia em renders sem mudança de seleção.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, groupsSignature, defaultEmitter?.id]);
+  }, [open, groupsSignature, defaultEmitter?.id, clients.length]);
 
   // Aplica a seguradora padrão salva em todos os CT-es do lote. O CNPJ da
   // seguradora também é usado como Nº de averbação/CGC quando o campo está vazio.
@@ -666,18 +691,8 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
   function patch(patch: Partial<EditableCte>) {
     // Chaves específicas de cada CT-e.
     const PER_ITEM_ONLY = new Set<keyof EditableCte>([
-      'remitterName', 'remitterCnpj', 'remitterIe',
-      'remitterStreet', 'remitterNumber', 'remitterNeighborhood', 'remitterZip',
-
-      'consigneeClientId', 'consigneeName', 'consigneeCnpj',
-      'expedidorName', 'expedidorCnpj',
-      'recebedorName', 'recebedorCnpj',
-      'refNumber', 'clientOrderNumber',
-      'freightValue', 'cargoValue', 'weightKg', 'palletCount',
-      'icmsBase', 'icmsValor', 'cbsIbsBase',
-      'fcFreightWeight', 'insurerInsuredAmount', 'insurerEndorsement',
-      'invoices', 'loadIds', 'fiscalDocumentIds', 'clientId',
       'key', 'transmitted', 'transmitMessage',
+      'invoices', 'loadIds', 'fiscalDocumentIds',
       '_aliqManual',
     ]);
     if (!bulkEdit) {
