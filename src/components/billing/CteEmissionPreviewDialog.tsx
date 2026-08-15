@@ -654,13 +654,12 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
   );
 
   function patch(patch: Partial<EditableCte>) {
-    // Chaves específicas de cada CT-e — nunca replicar para o lote.
+    // Chaves específicas de cada CT-e.
     const PER_ITEM_ONLY = new Set<keyof EditableCte>([
       'remitterName', 'remitterCnpj', 'remitterIe',
       'recipientName', 'recipientCnpj', 'recipientIe',
       'recipientCity', 'recipientState',
       'remitterStreet', 'remitterNumber', 'remitterNeighborhood', 'remitterZip',
-      'recipientStreet', 'recipientNumber', 'recipientNeighborhood', 'recipientZip',
 
       'consigneeClientId', 'consigneeName', 'consigneeCnpj',
       'expedidorName', 'expedidorCnpj',
