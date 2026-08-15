@@ -87,6 +87,10 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
   if (!input.insurance?.providerCnpj) missing.push('CNPJ da Seguradora');
   if (!input.insurance?.policyNumber) missing.push('Número da Apólice');
 
+  if (!input.insurance?.providerCnpj) missing.push('CNPJ da Seguradora');
+  if (!input.insurance?.policyNumber) missing.push('Número da Apólice');
+  if (!input.insurance?.providerName) missing.push('Nome da Seguradora');
+
   const payload: Record<string, unknown> = {
     emitterCnpj: digits(input.emitter.cnpj),
     environment: input.emitter.environment || 'sandbox',

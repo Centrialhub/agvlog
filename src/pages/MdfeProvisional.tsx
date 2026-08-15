@@ -105,6 +105,11 @@ export default function MdfeProvisional() {
       return;
     }
 
+    if (!insurance?.cnpj || !insurance?.policy || !insurance?.name) {
+      toast.error("Configure os dados da seguradora em Configurações > Empresa antes de emitir o MDF-e");
+      return;
+    }
+
     setIsTransmitting(true);
     try {
       const selectedDocs = ctes?.filter(c => selectedIds.includes(c.id)) || [];
