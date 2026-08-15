@@ -1705,7 +1705,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                           patchData.icmsValor = r.valor;
                         }
                         
-                        patch(patchData);
+                        patch(patchData, 'fiscal');
                       }}
                     >
                       Recalcular
