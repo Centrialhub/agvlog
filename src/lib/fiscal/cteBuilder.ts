@@ -179,11 +179,12 @@ export interface BuildCtePayloadInput {
   /** Override de UFIni/UFFim (inicio/fim da prestação). */
   origin?: CteParty['address'] | null;
   destination?: CteParty['address'] | null;
-  /** Override manual de endereços completos das partes (prioridade máxima). */
+  /** Override manual de dados completos das partes (prioridade máxima). */
   overrides?: {
-    remitter?: CteParty['address'] | null;
-    recipient?: CteParty['address'] | null;
+    remitter?: Partial<CteParty> | null;
+    recipient?: Partial<CteParty> | null;
   } | null;
+
 
   /** CNPJs autorizados a baixar o XML. */
   authorizedXmlCnpjs?: string[] | null;
@@ -690,14 +691,23 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
       ),
       remetente: serializeParty(
         input.overrides?.remitter
-          ? { ...input.remitter!, address: { ...input.remitter!.address, ...input.overrides.remitter } }
+          ? { 
+              ...input.remitter!, 
+              ...input.overrides.remitter,
+              address: { ...input.remitter!.address, ...input.overrides.remitter.address } 
+            }
           : input.remitter
       ),
       destinatario: serializeParty(
         input.overrides?.recipient
-          ? { ...input.recipient!, address: { ...input.recipient!.address, ...input.overrides.recipient } }
+          ? { 
+              ...input.recipient!, 
+              ...input.overrides.recipient,
+              address: { ...input.recipient!.address, ...input.overrides.recipient.address } 
+            }
           : input.recipient
       ),
+
       expedidor: serializeParty(input.expedidor),
       recebedor: serializeParty(input.recebedor),
 

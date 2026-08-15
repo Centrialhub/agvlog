@@ -317,18 +317,27 @@ function toBuildInput(
       e.clientId,
     ),
     overrides: {
-      remitter: (e.remitterStreet || e.remitterNumber || e.remitterNeighborhood || e.remitterZip) ? {
-        street: e.remitterStreet || null,
-        number: e.remitterNumber || null,
-        neighborhood: e.remitterNeighborhood || null,
-        zip: e.remitterZip || null
+      remitter: (e.remitterStreet || e.remitterNumber || e.remitterNeighborhood || e.remitterZip || e.remitterCnpj || e.remitterIe) ? {
+        cnpj: e.remitterCnpj || null,
+        ie: e.remitterIe || null,
+        address: {
+          street: e.remitterStreet || null,
+          number: e.remitterNumber || null,
+          neighborhood: e.remitterNeighborhood || null,
+          zip: e.remitterZip || null
+        }
       } : null,
-      recipient: (e.recipientStreet || e.recipientNumber || e.recipientNeighborhood || e.recipientZip) ? {
-        street: e.recipientStreet || null,
-        number: e.recipientNumber || null,
-        neighborhood: e.recipientNeighborhood || null,
-        zip: e.recipientZip || null
+      recipient: (e.recipientStreet || e.recipientNumber || e.recipientNeighborhood || e.recipientZip || e.recipientCnpj || e.recipientIe) ? {
+        cnpj: e.recipientCnpj || null,
+        ie: e.recipientIe || null,
+        address: {
+          street: e.recipientStreet || null,
+          number: e.recipientNumber || null,
+          neighborhood: e.recipientNeighborhood || null,
+          zip: e.recipientZip || null
+        }
       } : null,
+
     },
 
     consignee: enrichParty(e.consigneeName, e.consigneeCnpj, null, null, e.consigneeClientId),
