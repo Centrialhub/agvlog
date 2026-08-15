@@ -171,12 +171,16 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
         },
       ],
       // O Hub v1 exige o grupo infToma quando ide/tpEmit=1 (Prestador de Transporte).
-      // Estrutura padrão SEFAZ: array de objetos com CNPJ ou CPF do tomador.
+      // Algumas versões do Hub v1 esperam 'infToma' e outras 'toma' no nível raiz.
       infToma: [
         {
           CNPJ: digits(input.emitter.cnpj),
         },
       ],
+      toma: {
+        CNPJ: digits(input.emitter.cnpj),
+      },
+
 
 
 
