@@ -381,6 +381,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
   const [activeIdx, setActiveIdx] = useState(0);
   const [transmitting, setTransmitting] = useState(false);
   const [bulkEdit, setBulkEdit] = useState(true);
+  const { showAlert } = useAlertStore();
 
   const defaultEmitter = emitters.find((e: any) => e.is_default && e.active) || emitters[0];
 
@@ -646,13 +647,14 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     );
   }
 
-  async function transmit() {
+  async function transmit(forcedItems?: EditableCte[]) {
+    const itemsToTransmit = forcedItems || items;
     setTransmitting(true);
     let okCount = 0;
     const errors: string[] = [];
     try {
-      for (let i = 0; i < items.length; i++) {
-        const it = items[i];
+      for (let i = 0; i < itemsToTransmit.length; i++) {
+        const it = itemsToTransmit[i];
         const em = emitters.find((e: any) => e.id === it.emitterId) || defaultEmitter;
         // Ambiente da credencial do emitente da vez (CT-e específico → all → sandbox).
         const { data: itCreds } = await (supabase as any)
@@ -704,7 +706,45 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
       }
     } finally {
       setTransmitting(false);
+  }
+
+  function handleTransmitClick() {
+    const sameCityItems = items.filter((it) => {
+      const em = emitters.find((e: any) => e.id === it.emitterId) || defaultEmitter;
+      const emitterCity = (em?.endereco?.municipio || "").toLowerCase().trim();
+      const destCity = (it.recipientCity || "").toLowerCase().trim();
+      return emitterCity && destCity && emitterCity === destCity;
+    });
+
+    if (sameCityItems.length > 0) {
+      const sameCityNames = sameCityItems
+        .map((it) => it.recipientName || it.recipientCnpj)
+        .join(", ");
+
+      showAlert(
+        "Atenção: Destino igual ao Emitente",
+        `As seguintes notas têm destino para a mesma cidade do emitente: ${sameCityNames}. Deseja prosseguir?`,
+        "warning",
+        {
+          confirmLabel: "Continuar (emitir todas)",
+          secondaryLabel: "Ignorar notas da cidade do emitente",
+          cancelLabel: "Cancelar emissão",
+          onConfirm: () => transmit(),
+          onSecondaryConfirm: () => {
+            const filtered = items.filter((it) => !sameCityItems.includes(it));
+            if (filtered.length > 0) {
+              transmit(filtered);
+            } else {
+              toast.info("Nenhuma nota restante para emitir.");
+            }
+          },
+        }
+      );
+      return;
     }
+
+    transmit();
+  }
   }
 
   if (!open || items.length === 0) {
@@ -1528,7 +1568,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
             </Button>
           </div>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>
-          <Button disabled={!allValid || transmitting} onClick={transmit}>
+          <Button disabled={!allValid || transmitting} onClick={handleTransmitClick}>
             {transmitting ? (
               <><RotateCw className="h-4 w-4 mr-2 animate-spin" /> Transmitindo…</>
             ) : (
