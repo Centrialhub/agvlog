@@ -1,4 +1,4 @@
-import { buildNFSeEmitPayload } from './src/lib/fiscal/nfseBuilder';
+import { buildNFSeEmitPayload } from '../lib/fiscal/nfseBuilder';
 
 const emitter = {
   cnpj: '11222333000181', razao_social: 'AGV Log', im: '123', ie: '456', city_code: '3106200',
