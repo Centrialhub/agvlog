@@ -30,7 +30,9 @@ describe('cteBuilder manual overrides', () => {
 
     const result = buildCtePayload(input);
     expect(result.ok).toBe(true);
-    const dest = result.payload.payload.destinatario.endereco;
+    const payload = result.payload.payload as any;
+    const dest = payload.destinatario.endereco;
+
     expect(dest.logradouro).toBe('AV DEPUTADO PLINIO RIBEIRO');
     expect(dest.numero).toBe('3535');
     expect(dest.bairro).toBe('JARDIM PALMEIRAS');
