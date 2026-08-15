@@ -71,8 +71,8 @@ export function useBillingDocuments(filters: BillingDocumentFilters) {
         .is('cte_emitted_at', null)
         .is('nfse_emitted_at', null);
 
-      if (f.clientId) q = q.eq('client_id', f.clientId);
-      if (f.supplierId) q = q.eq('supplier_id', f.supplierId);
+      if (f.clientId) q = q.eq('client_id', f.clientId as string);
+      if (f.supplierId) q = q.eq('supplier_id', f.supplierId as string);
       if (f.periodStart) q = q.gte('issue_date', f.periodStart as string);
       if (f.periodEnd) q = q.lte('issue_date', f.periodEnd as string);
       if (f.invoiceNumber) q = q.ilike('invoice_number', `%${f.invoiceNumber as string}%`);
