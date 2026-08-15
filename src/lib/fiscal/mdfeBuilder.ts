@@ -185,12 +185,10 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
         },
       ],
       // O Hub v1 exige o grupo infToma quando ide/tpEmit=1 (Prestador de Transporte).
-      // Algumas versões do Hub v1 esperam 'infToma' e outras 'toma' no nível raiz.
+      // Algumas versões do Hub v1 esperam o tomador dentro de infToma (como array ou objeto).
+      // A estrutura padrão da SEFAZ para infToma é indicar quem é o responsável (toma).
       infToma: {
-        CNPJ: digits(input.emitter.cnpj),
-      },
-      toma: {
-        CNPJ: digits(input.emitter.cnpj),
+        toma: '1', // 1=Contratante do serviço (Tomador do CT-e)
       },
 
 
