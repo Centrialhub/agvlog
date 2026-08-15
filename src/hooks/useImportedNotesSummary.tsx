@@ -115,6 +115,7 @@ export function useImportedNotes(filters: ImportedNoteFilters) {
           recipient_city, recipient_state, value, weight_kg, volume_count, pallet_count,
           freight_value, freight_cif_value, freight_fob_value, imported_note_status,
           status, delivery_meta, load_id, client_id, document_type,
+          cte_emitted_at, cte_emitted_outbound_id, nfse_emitted_at, nfse_emitted_document_id,
           clients:client_id(company_name, tax_id),
           suppliers:supplier_id(company_name, tax_id),
           loads:load_id(id, load_number, status, origin, destination, vehicle_id, driver_id)
