@@ -85,7 +85,7 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
     externalId: input.externalId || undefined,
     payload: {
       ide: {
-        cUF: digits(input.origin.state),
+        cUF: digits(input.origin.state).slice(0, 2),
         tpEmit: '1', // 1=Prestador de serviço de transporte
         mod: '58',
         natureza: input.nature || 'PRESTACAO DE SERVICO DE TRANSPORTE',
