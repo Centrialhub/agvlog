@@ -679,13 +679,13 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
             },
           });
           setItems((arr) =>
-            arr.map((x, idx) => (idx === i ? { ...x, transmitted: 'ok' } : x)),
+            arr.map((x) => (x.key === it.key ? { ...x, transmitted: 'ok' } : x)),
           );
           okCount++;
         } catch (err: any) {
           setItems((arr) =>
-            arr.map((x, idx) =>
-              idx === i ? { ...x, transmitted: 'error', transmitMessage: err?.message } : x,
+            arr.map((x) =>
+              x.key === it.key ? { ...x, transmitted: 'error', transmitMessage: err?.message } : x,
             ),
           );
           errors.push(`#${i + 1}: ${err?.message || 'erro desconhecido'}`);
@@ -706,6 +706,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
       }
     } finally {
       setTransmitting(false);
+    }
   }
 
   function handleTransmitClick() {
@@ -744,7 +745,6 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     }
 
     transmit();
-  }
   }
 
   if (!open || items.length === 0) {
