@@ -71,7 +71,21 @@ export interface ImportedNoteRow {
   cte_id?: string | null;
   cte_freight_value?: number | null;
   cte_status?: string | null;
+  cte_access_key?: string | null;
+  nfse_number?: string | null;
+  nfse_id?: string | null;
   operational_status: NoteOperationalStatus;
+}
+
+/**
+ * Extrai o número do CT-e (nCT) da chave de acesso de 44 dígitos.
+ * Layout: cUF(2) AAMM(4) CNPJ(14) mod(2) serie(3) nCT(9) tpEmis(1) cCT(8) cDV(1)
+ */
+export function cteNumberFromAccessKey(key?: string | null): string | null {
+  const k = (key || '').replace(/\D/g, '');
+  if (k.length !== 44) return null;
+  const n = k.slice(25, 34).replace(/^0+/, '');
+  return n || null;
 }
 
 export function resolveNoteStatus(row: Partial<ImportedNoteRow> & { cte_id?: string | null; loads?: any }): NoteOperationalStatus {
@@ -101,6 +115,7 @@ export function useImportedNotes(filters: ImportedNoteFilters) {
           recipient_city, recipient_state, value, weight_kg, volume_count, pallet_count,
           freight_value, freight_cif_value, freight_fob_value, imported_note_status,
           status, delivery_meta, load_id, client_id, document_type,
+          cte_emitted_at, cte_emitted_outbound_id, nfse_emitted_at, nfse_emitted_document_id,
           clients:client_id(company_name, tax_id),
           suppliers:supplier_id(company_name, tax_id),
           loads:load_id(id, load_number, status, origin, destination, vehicle_id, driver_id)
@@ -150,14 +165,50 @@ export function useImportedNotes(filters: ImportedNoteFilters) {
         }
       }
 
+      // CT-e realmente emitidos ficam em `fiscal_documents` (outbound), referenciados
+      // por `cte_emitted_outbound_id` na própria NF. O número fiscal é derivado da chave.
+      const outboundIds = Array.from(
+        new Set(rows.map(r => r.cte_emitted_outbound_id).filter(Boolean)),
+      ) as string[];
+      const outboundMap = new Map<string, any>();
+      if (outboundIds.length > 0) {
+        const { data: outbound } = await supabase
+          .from('fiscal_documents')
+          .select('id, access_key, invoice_number, freight_value, status, sefaz_status')
+          .in('id', outboundIds);
+        for (const o of outbound || []) outboundMap.set(o.id, o);
+      }
+
+      // NFS-e (Montes Claros) — número real vem de `nfse_documents`
+      const nfseMap = new Map<string, any>();
+      if (ids.length > 0) {
+        const { data: nfses } = await supabase
+          .from('nfse_documents')
+          .select('id, nfse_number, rps_number, status, fiscal_document_ids, created_at')
+          .eq('tenant_id', currentTenant!.id)
+          .overlaps('fiscal_document_ids', ids as any)
+          .order('created_at', { ascending: false })
+          .limit(2000);
+        for (const n of (nfses || []) as any[]) {
+          if (n.status === 'cancelled') continue;
+          const fids = Array.isArray(n.fiscal_document_ids) ? n.fiscal_document_ids : [];
+          for (const fid of fids) if (!nfseMap.has(fid)) nfseMap.set(fid, n);
+        }
+      }
+
       const enriched: ImportedNoteRow[] = rows.map(r => {
         const cte = cteMap.get(r.id);
+        const out = r.cte_emitted_outbound_id ? outboundMap.get(r.cte_emitted_outbound_id) : null;
+        const nfse = nfseMap.get(r.id) || null;
         const base: any = {
           ...r,
-          cte_id: cte?.id ?? null,
-          cte_number: cte?.cte_number ?? null,
-          cte_freight_value: cte?.freight_value ?? null,
-          cte_status: cte?.status ?? null,
+          cte_id: cte?.id ?? out?.id ?? null,
+          cte_number: cte?.cte_number ?? cteNumberFromAccessKey(out?.access_key) ?? null,
+          cte_access_key: out?.access_key ?? null,
+          cte_freight_value: cte?.freight_value ?? out?.freight_value ?? null,
+          cte_status: cte?.status ?? out?.status ?? null,
+          nfse_id: nfse?.id ?? null,
+          nfse_number: nfse ? String(nfse.nfse_number ?? nfse.rps_number ?? '') || null : null,
         };
         base.operational_status = resolveNoteStatus(base);
         return base as ImportedNoteRow;
@@ -210,7 +261,7 @@ export function groupNotesBy(rows: ImportedNoteRow[], mode: 'destination' | 'ori
 
 export function exportImportedNotesCsv(rows: ImportedNoteRow[]): string {
   const header = [
-    'Empresa','Filial','Nº Nota','Lote Importação','Remetente','Destinatário','Nº CT-e','Tipo Documento',
+    'Empresa','Filial','Nº Nota','Lote Importação','Remetente','Destinatário','Nº CT-e','Nº NFS-e','Chave CT-e','Tipo Documento',
     'Valor Frete CIF','Valor Frete FOB','Data Emissão','Município Origem','UF Origem',
     'Município Destino','UF Destino','Valor Nota','Volume','Peso','Situação','Carga/Romaneio',
   ];
@@ -227,6 +278,8 @@ export function exportImportedNotesCsv(rows: ImportedNoteRow[]): string {
       fmt(r.remitter),
       fmt(r.recipient),
       fmt(r.cte_number),
+      fmt(r.nfse_number),
+      fmt(r.cte_access_key),
       fmt(r.document_type),
       num(r.freight_cif_value ?? r.freight_value),
       num(r.freight_fob_value),

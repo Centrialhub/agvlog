@@ -347,6 +347,7 @@ export default function ImportedNotesSummary() {
                 <TableHead>Remetente</TableHead>
                 <TableHead>Destinatário</TableHead>
                 <TableHead>Nº CT-e</TableHead>
+                <TableHead>Nº NFS-e</TableHead>
                 <TableHead>Emissão</TableHead>
                 <TableHead>Origem</TableHead>
                 <TableHead>Destino</TableHead>
@@ -360,8 +361,8 @@ export default function ImportedNotesSummary() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading && <TableRow><TableCell colSpan={16} className="text-center text-muted-foreground">Carregando...</TableCell></TableRow>}
-              {!isLoading && rows.length === 0 && <TableRow><TableCell colSpan={16} className="text-center text-muted-foreground">Nenhuma nota encontrada.</TableCell></TableRow>}
+              {isLoading && <TableRow><TableCell colSpan={17} className="text-center text-muted-foreground">Carregando...</TableCell></TableRow>}
+              {!isLoading && rows.length === 0 && <TableRow><TableCell colSpan={17} className="text-center text-muted-foreground">Nenhuma nota encontrada.</TableCell></TableRow>}
               {rows.map(r => (
                 <TableRow 
                   key={r.id} 
@@ -379,6 +380,7 @@ export default function ImportedNotesSummary() {
                   <TableCell className="max-w-[180px] truncate">{r.remitter || '—'}</TableCell>
                   <TableCell className="max-w-[180px] truncate">{r.recipient || '—'}</TableCell>
                   <TableCell className="font-mono text-xs">{r.cte_number || '—'}</TableCell>
+                  <TableCell className="font-mono text-xs">{r.nfse_number || '—'}</TableCell>
                   <TableCell>{dt(r.issue_date)}</TableCell>
                   <TableCell>{r.origin_city ? `${r.origin_city}${r.origin_state ? '/' + r.origin_state : ''}` : '—'}</TableCell>
                   <TableCell>{r.recipient_city ? `${r.recipient_city}${r.recipient_state ? '/' + r.recipient_state : ''}` : '—'}</TableCell>
