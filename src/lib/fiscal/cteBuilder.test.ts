@@ -29,9 +29,14 @@ describe('cteBuilder manual overrides', () => {
     };
 
     const result = buildCtePayload(input);
-    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      console.log('Missing fields:', result.missing);
+      console.log('Warnings:', result.warnings);
+    }
+    expect(result.ok, `Missing: ${result.missing.join(', ')}`).toBe(true);
     const payload = result.payload.payload as any;
     const dest = payload.destinatario.endereco;
+
 
     expect(dest.logradouro).toBe('AV DEPUTADO PLINIO RIBEIRO');
     expect(dest.numero).toBe('3535');
