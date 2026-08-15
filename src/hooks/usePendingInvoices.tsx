@@ -52,9 +52,17 @@ export function usePendingInvoices() {
 
       const used = new Set<string>();
       for (const c of (ctes || []) as any[]) {
-        if (!c.fiscal_document_ids) continue;
-        const ids = Array.isArray(c.fiscal_document_ids) ? c.fiscal_document_ids : [];
-        for (const id of ids) used.add(id);
+        const rawIds = c.fiscal_document_ids;
+        if (!rawIds) continue;
+        
+        let ids: string[] = [];
+        try {
+          ids = Array.isArray(rawIds) ? rawIds : (typeof rawIds === 'string' ? JSON.parse(rawIds) : []);
+        } catch { /* ignore parse error */ }
+        
+        if (Array.isArray(ids)) {
+          for (const id of ids) used.add(id);
+        }
       }
 
       const { data: nfse, error: e3 } = await supabase
@@ -64,9 +72,17 @@ export function usePendingInvoices() {
         .not('status', 'in', '("cancelled","rejected","error","failed")');
       if (e3) throw e3;
       for (const n of (nfse || []) as any[]) {
-        if (!n.fiscal_document_ids) continue;
-        const ids = Array.isArray(n.fiscal_document_ids) ? n.fiscal_document_ids : [];
-        for (const id of ids) used.add(id);
+        const rawIds = n.fiscal_document_ids;
+        if (!rawIds) continue;
+        
+        let ids: string[] = [];
+        try {
+          ids = Array.isArray(rawIds) ? rawIds : (typeof rawIds === 'string' ? JSON.parse(rawIds) : []);
+        } catch { /* ignore parse error */ }
+        
+        if (Array.isArray(ids)) {
+          for (const id of ids) used.add(id);
+        }
       }
 
       let count = 0;
