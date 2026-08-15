@@ -5583,6 +5583,7 @@ export type Database = {
           deleted_by: string | null
           delivery_meta: Json
           document_type: string
+          duplicate_note: string | null
           dynamic_lot: string | null
           emission_id: string | null
           emitter_id: string | null
@@ -5615,6 +5616,7 @@ export type Database = {
           insurer_policy: string | null
           invoice_number: string | null
           invoice_series: string | null
+          is_duplicate: boolean
           issue_date: string | null
           load_id: string | null
           nfse_emitted_at: string | null
@@ -5670,6 +5672,7 @@ export type Database = {
           deleted_by?: string | null
           delivery_meta?: Json
           document_type?: string
+          duplicate_note?: string | null
           dynamic_lot?: string | null
           emission_id?: string | null
           emitter_id?: string | null
@@ -5702,6 +5705,7 @@ export type Database = {
           insurer_policy?: string | null
           invoice_number?: string | null
           invoice_series?: string | null
+          is_duplicate?: boolean
           issue_date?: string | null
           load_id?: string | null
           nfse_emitted_at?: string | null
@@ -5757,6 +5761,7 @@ export type Database = {
           deleted_by?: string | null
           delivery_meta?: Json
           document_type?: string
+          duplicate_note?: string | null
           dynamic_lot?: string | null
           emission_id?: string | null
           emitter_id?: string | null
@@ -5789,6 +5794,7 @@ export type Database = {
           insurer_policy?: string | null
           invoice_number?: string | null
           invoice_series?: string | null
+          is_duplicate?: boolean
           issue_date?: string | null
           load_id?: string | null
           nfse_emitted_at?: string | null
