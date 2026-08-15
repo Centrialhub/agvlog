@@ -270,7 +270,7 @@ export default function MdfeProvisional() {
             <CardTitle className="text-sm font-medium">Status Motor</CardTitle>
           </CardHeader>
           <CardContent className="flex items-center gap-2">
-            <Badge className="bg-green-500/10 text-green-500">Engine v2.8 (Beta)</Badge>
+            <Badge className="bg-green-500/10 text-green-500">Engine v2.9 (Beta)</Badge>
             <span className="text-xs text-muted-foreground">Chaves no descarregamento do Hub</span>
           </CardContent>
         </Card>
