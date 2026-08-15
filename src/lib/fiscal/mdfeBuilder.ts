@@ -190,6 +190,16 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
       infToma: {
         toma: '1', // 1=Contratante do serviço (Tomador do CT-e)
       },
+      // Quando tpEmit=1 (Prestador), é obrigatório informar ao menos um contratante no modal rodoviário.
+      // Para simplificação e congruência, enviamos o próprio emitente como contratante padrão
+      // caso não tenhamos a lista de tomadores dos CT-es individuais.
+      modalRodoviario: {
+        contratantes: [
+          {
+            cpfCnpj: digits(input.emitter.cnpj),
+          },
+        ],
+      },
 
 
 
