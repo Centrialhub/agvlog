@@ -39,7 +39,7 @@ function nz(v: string | null | undefined): string | null {
 export function useBillingDocuments(filters: BillingDocumentFilters) {
   const { currentTenant } = useTenant();
 
-  const f: Required<{ [K in keyof BillingDocumentFilters]: string | null }> = {
+  const f: Required<{ [K in keyof BillingDocumentFilters]: string | string[] | null }> = {
     clientId: nz(filters.clientId),
     periodStart: nz(filters.periodStart),
     periodEnd: nz(filters.periodEnd),
@@ -91,8 +91,8 @@ export function useBillingDocuments(filters: BillingDocumentFilters) {
         const digits = f.remitterCnpj.replace(/\D/g, '');
         if (digits) q = q.ilike('remitter_cnpj', `%${digits}%`);
       }
-      if (f.recipientCity) q = q.ilike('recipient_city', `%${f.recipientCity}%`);
-      if (f.onlySpecificInvoices && f.onlySpecificInvoices.length > 0) {
+      if (f.recipientCity) q = q.ilike('recipient_city', `%${f.recipientCity as string}%`);
+      if (f.onlySpecificInvoices && Array.isArray(f.onlySpecificInvoices) && f.onlySpecificInvoices.length > 0) {
         q = q.in('invoice_number', f.onlySpecificInvoices);
       }
 
