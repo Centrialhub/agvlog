@@ -452,7 +452,16 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
   const [items, setItems] = useState<EditableCte[]>([]);
   const [activeIdx, setActiveIdx] = useState(0);
   const [transmitting, setTransmitting] = useState(false);
-  const [bulkEdit, setBulkEdit] = useState(true);
+  const [bulkEditPartes, setBulkEditPartes] = useState(false);
+  const [bulkEditTomador, setBulkEditTomador] = useState(false);
+  const [bulkEditTransporte, setBulkEditTransporte] = useState(false);
+  const [bulkEditCarga, setBulkEditCarga] = useState(false);
+  const [bulkEditFiscal, setBulkEditFiscal] = useState(true);
+  
+  const bulkEdit = useMemo(() => {
+    // Para retrocompatibilidade com a lógica de patch(), mas agora baseada na aba ativa.
+    return true; // Sempre tentamos aplicar bulk, a lógica de filtro está no patch()
+  }, []);
   const { showAlert } = useAlertStore();
 
   const defaultEmitter = emitters.find((e: any) => e.is_default && e.active) || emitters[0];
@@ -688,25 +697,32 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     [active],
   );
 
-  function patch(patch: Partial<EditableCte>) {
-    // Chaves específicas de cada CT-e.
+  function patch(patch: Partial<EditableCte>, tabScope?: 'partes' | 'tomador' | 'transporte' | 'carga' | 'fiscal') {
+    // Chaves específicas de cada CT-e que NUNCA devem ser replicadas.
     const PER_ITEM_ONLY = new Set<keyof EditableCte>([
       'key', 'transmitted', 'transmitMessage',
       'invoices', 'loadIds', 'fiscalDocumentIds',
       '_aliqManual',
     ]);
-    if (!bulkEdit) {
+
+    // Define se a edição atual deve ser replicada para o lote baseada na aba ativa
+    let shouldBulk = false;
+    if (tabScope === 'partes') shouldBulk = bulkEditPartes;
+    else if (tabScope === 'tomador') shouldBulk = bulkEditTomador;
+    else if (tabScope === 'transporte') shouldBulk = bulkEditTransporte;
+    else if (tabScope === 'carga') shouldBulk = bulkEditCarga;
+    else if (tabScope === 'fiscal') shouldBulk = bulkEditFiscal;
+
+    if (!shouldBulk) {
       setItems((arr) => arr.map((it, i) => (i === activeIdx ? { ...it, ...patch } : it)));
       return;
     }
+
     // Separa o patch em duas partes: bulk-safe e per-item.
     const bulkPart: Record<string, any> = {};
     const activePart: Record<string, any> = {};
     for (const [k, v] of Object.entries(patch)) {
       if (k === '_aliqManual') {
-        // _aliqManual é sempre aplicado a todos no lote se bulkEdit estiver on, 
-        // mas marcamos como PER_ITEM_ONLY para não ser sobrescrito acidentalmente 
-        // em outros fluxos. Contudo, aqui queremos que o lote inteiro siga a trava.
         activePart[k] = v;
         bulkPart[k] = v;
       } else if (PER_ITEM_ONLY.has(k as keyof EditableCte)) {
@@ -854,17 +870,9 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
               scope: {activeCteCred.doc_scope} · env: {activeCteCred.environment}
             </span>
           )}
-          <label className="ml-auto flex items-center gap-2 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={bulkEdit}
-              onChange={(e) => setBulkEdit(e.target.checked)}
-              className="h-3 w-3"
-            />
-            <span className={bulkEdit ? 'font-medium' : 'text-muted-foreground'}>
-              Aplicar edições a todas as {items.length} CT-es do lote
-            </span>
-          </label>
+          <div className="ml-auto flex items-center gap-4 text-xs text-muted-foreground italic">
+            Configurações de lote por aba (checkbox abaixo)
+          </div>
         </div>
 
         <div className="grid grid-cols-[220px_1fr] gap-4">
@@ -942,9 +950,23 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
               </TabsList>
 
               <TabsContent value="partes" className="space-y-3 pt-3">
+                <div className="flex items-center justify-between border-b pb-2 mb-2">
+                  <div className="text-xs font-semibold uppercase text-muted-foreground">Identificação & Endereços</div>
+                  <label className="flex items-center gap-2 cursor-pointer select-none text-xs">
+                    <input
+                      type="checkbox"
+                      checked={bulkEditPartes}
+                      onChange={(e) => setBulkEditPartes(e.target.checked)}
+                      className="h-3 w-3"
+                    />
+                    <span className={bulkEditPartes ? 'font-medium text-primary' : 'text-muted-foreground'}>
+                      Replicar dados desta aba para o lote
+                    </span>
+                  </label>
+                </div>
                 <div>
                   <Label>Emitente</Label>
-                  <Select value={active.emitterId} onValueChange={(v) => patch({ emitterId: v })}>
+                  <Select value={active.emitterId} onValueChange={(v) => patch({ emitterId: v }, 'partes')}>
                     <SelectTrigger><SelectValue placeholder="Selecione o emitente" /></SelectTrigger>
                     <SelectContent>
                       {emitters.map((e: any) => (
@@ -958,17 +980,17 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <Label>Remetente</Label>
-                    <Input value={active.remitterName} onChange={(e) => patch({ remitterName: e.target.value })} />
+                    <Input value={active.remitterName} onChange={(e) => patch({ remitterName: e.target.value }, 'partes')} />
                   </div>
                   <div>
                     <Label>CNPJ</Label>
-                    <Input value={active.remitterCnpj} onChange={(e) => patch({ remitterCnpj: e.target.value })} />
+                    <Input value={active.remitterCnpj} onChange={(e) => patch({ remitterCnpj: e.target.value }, 'partes')} />
                   </div>
                   <div>
                     <Label>IE remetente</Label>
                     <Input
                       value={active.remitterIe}
-                      onChange={(e) => patch({ remitterIe: e.target.value })}
+                      onChange={(e) => patch({ remitterIe: e.target.value }, 'partes')}
                       placeholder="ISENTO se não contribuinte"
                     />
                   </div>
@@ -978,66 +1000,66 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                   <div className="col-span-4 text-xs font-semibold text-muted-foreground uppercase">Endereço Remetente (Manual)</div>
                   <div className="col-span-2">
                     <Label className="text-xs">Logradouro</Label>
-                    <Input className="h-8" value={active.remitterStreet} onChange={(e) => patch({ remitterStreet: e.target.value })} placeholder="Rua, Av, etc" />
+                    <Input className="h-8" value={active.remitterStreet} onChange={(e) => patch({ remitterStreet: e.target.value }, 'partes')} placeholder="Rua, Av, etc" />
                   </div>
                   <div>
                     <Label className="text-xs">Número</Label>
-                    <Input className="h-8" value={active.remitterNumber} onChange={(e) => patch({ remitterNumber: e.target.value })} />
+                    <Input className="h-8" value={active.remitterNumber} onChange={(e) => patch({ remitterNumber: e.target.value }, 'partes')} />
                   </div>
                   <div>
                     <Label className="text-xs">CEP</Label>
-                    <Input className="h-8" value={active.remitterZip} onChange={(e) => patch({ remitterZip: e.target.value })} />
+                    <Input className="h-8" value={active.remitterZip} onChange={(e) => patch({ remitterZip: e.target.value }, 'partes')} />
                   </div>
                   <div className="col-span-2">
                     <Label className="text-xs">Bairro</Label>
-                    <Input className="h-8" value={active.remitterNeighborhood} onChange={(e) => patch({ remitterNeighborhood: e.target.value })} />
+                    <Input className="h-8" value={active.remitterNeighborhood} onChange={(e) => patch({ remitterNeighborhood: e.target.value }, 'partes')} />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <Label>Destinatário</Label>
-                    <Input value={active.recipientName} onChange={(e) => patch({ recipientName: e.target.value })} />
+                    <Input value={active.recipientName} onChange={(e) => patch({ recipientName: e.target.value }, 'partes')} />
                   </div>
                   <div>
                     <Label>CNPJ</Label>
-                    <Input value={active.recipientCnpj} onChange={(e) => patch({ recipientCnpj: e.target.value })} />
+                    <Input value={active.recipientCnpj} onChange={(e) => patch({ recipientCnpj: e.target.value }, 'partes')} />
                   </div>
                   <div>
                     <Label>IE destinatário</Label>
                     <Input
                       value={active.recipientIe}
-                      onChange={(e) => patch({ recipientIe: e.target.value })}
+                      onChange={(e) => patch({ recipientIe: e.target.value }, 'partes')}
                       placeholder="ISENTO se não contribuinte"
                     />
                   </div>
                   <div>
                     <Label>Município</Label>
-                    <Input value={active.recipientCity} onChange={(e) => patch({ recipientCity: e.target.value })} />
+                    <Input value={active.recipientCity} onChange={(e) => patch({ recipientCity: e.target.value }, 'partes')} />
                   </div>
                   <div>
                     <Label>UF</Label>
-                    <Input value={active.recipientState} onChange={(e) => patch({ recipientState: e.target.value })} />
+                    <Input value={active.recipientState} onChange={(e) => patch({ recipientState: e.target.value }, 'partes')} />
                   </div>
                   <div>
                     <Label>Logradouro (Manual)</Label>
-                    <Input value={active.recipientStreet} onChange={(e) => patch({ recipientStreet: e.target.value })} placeholder="Rua, Av, etc" />
+                    <Input value={active.recipientStreet} onChange={(e) => patch({ recipientStreet: e.target.value }, 'partes')} placeholder="Rua, Av, etc" />
                   </div>
                   <div>
                     <Label>Número</Label>
-                    <Input value={active.recipientNumber} onChange={(e) => patch({ recipientNumber: e.target.value })} />
+                    <Input value={active.recipientNumber} onChange={(e) => patch({ recipientNumber: e.target.value }, 'partes')} />
                   </div>
                   <div>
                     <Label>Bairro</Label>
-                    <Input value={active.recipientNeighborhood} onChange={(e) => patch({ recipientNeighborhood: e.target.value })} />
+                    <Input value={active.recipientNeighborhood} onChange={(e) => patch({ recipientNeighborhood: e.target.value }, 'partes')} />
                   </div>
                   <div>
                     <Label>CEP</Label>
-                    <Input value={active.recipientZip} onChange={(e) => patch({ recipientZip: e.target.value })} />
+                    <Input value={active.recipientZip} onChange={(e) => patch({ recipientZip: e.target.value }, 'partes')} />
                   </div>
                   <div>
                     <Label>Cód. Município (IBGE)</Label>
-                    <Input value={active.recipientCityIbge} onChange={(e) => patch({ recipientCityIbge: e.target.value })} placeholder="Ex: 3143302" />
+                    <Input value={active.recipientCityIbge} onChange={(e) => patch({ recipientCityIbge: e.target.value }, 'partes')} placeholder="Ex: 3143302" />
                   </div>
                 </div>
                 <div>
@@ -1045,13 +1067,13 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                   <Select
                     value={active.consigneeClientId || 'none'}
                     onValueChange={(v) => {
-                      if (v === 'none') return patch({ consigneeClientId: null, consigneeName: '', consigneeCnpj: '' });
+                      if (v === 'none') return patch({ consigneeClientId: null, consigneeName: '', consigneeCnpj: '' }, 'partes');
                       const c: any = clients.find((x: any) => x.id === v);
                       patch({
                         consigneeClientId: v,
                         consigneeName: c?.company_name || '',
                         consigneeCnpj: c?.cnpj || '',
-                      });
+                      }, 'partes');
                     }}
                   >
                     <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
