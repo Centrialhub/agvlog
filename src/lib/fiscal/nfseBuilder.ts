@@ -70,6 +70,7 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl, a
   const tomadorCityName = normalizeCityName(doc?.cliente_municipio);
   const tomadorCityCode =
     normalizeIbgeCity(doc?.cliente_cod_municipio) || normalizeIbgeCity(doc?.cliente_municipio) || normalizeIbgeCity(doc?.cliente_cod_ibge);
+  if (!tomadorCityCode) missing.push('código IBGE do município do tomador');
   if (!tomadorCityName) missing.push('município do tomador');
 
   const tomadorUf = normalizeUf(doc?.cliente_uf);

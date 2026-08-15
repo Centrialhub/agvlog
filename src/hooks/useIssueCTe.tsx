@@ -161,6 +161,19 @@ export function useIssueCTe() {
         } catch {
           /* marcação best-effort — não deve derrubar a emissão */
         }
+      } else if (!success && input.fiscal_document_ids?.length) {
+        // Se a transmissão falhou, garantimos que as flags de emissão estão limpas
+        // para que as notas voltem imediatamente ao pool de faturamento.
+        try {
+          await supabase
+            .from('fiscal_documents')
+            .update({
+              cte_emitted_at: null,
+              cte_emitted_outbound_id: null,
+            } as any)
+            .in('id', input.fiscal_document_ids)
+            .eq('tenant_id', currentTenant.id);
+        } catch { /* ignore */ }
       }
 
       return { fiscal_document_id: inserted.id, hub: hubResponse };
