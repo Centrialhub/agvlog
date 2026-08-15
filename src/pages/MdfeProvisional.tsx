@@ -62,6 +62,7 @@ export default function MdfeProvisional() {
         }
       }
       
+      const selectedDocs = ctes?.filter(c => selectedIds.includes(c.id)) || [];
       const total = selectedDocs.reduce((acc, doc) => acc + (doc.cargo_value || 0), 0);
       setTotalCargoValue(total.toFixed(2));
     }
