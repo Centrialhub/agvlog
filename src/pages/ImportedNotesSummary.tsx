@@ -347,6 +347,7 @@ export default function ImportedNotesSummary() {
                 <TableHead>Remetente</TableHead>
                 <TableHead>Destinatário</TableHead>
                 <TableHead>Nº CT-e</TableHead>
+                <TableHead>Nº NFS-e</TableHead>
                 <TableHead>Emissão</TableHead>
                 <TableHead>Origem</TableHead>
                 <TableHead>Destino</TableHead>
@@ -379,6 +380,7 @@ export default function ImportedNotesSummary() {
                   <TableCell className="max-w-[180px] truncate">{r.remitter || '—'}</TableCell>
                   <TableCell className="max-w-[180px] truncate">{r.recipient || '—'}</TableCell>
                   <TableCell className="font-mono text-xs">{r.cte_number || '—'}</TableCell>
+                  <TableCell className="font-mono text-xs">{r.nfse_number || '—'}</TableCell>
                   <TableCell>{dt(r.issue_date)}</TableCell>
                   <TableCell>{r.origin_city ? `${r.origin_city}${r.origin_state ? '/' + r.origin_state : ''}` : '—'}</TableCell>
                   <TableCell>{r.recipient_city ? `${r.recipient_city}${r.recipient_state ? '/' + r.recipient_state : ''}` : '—'}</TableCell>
