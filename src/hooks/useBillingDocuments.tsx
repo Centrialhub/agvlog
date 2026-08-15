@@ -98,64 +98,40 @@ export function useBillingDocuments(filters: BillingDocumentFilters) {
       if (error) throw error;
       const docs = (data || []) as FiscalDocument[];
 
-      // Remove documentos já consumidos por um CT-e ou NFS-e não anulado.
-      // Priorizamos a flag no banco (cte_emitted_at/nfse_emitted_at), mas cross-referenciamos
-      // com rascunhos em memória para evitar que notas em processamento reapareçam.
-      const { data: emitted, error: emittedErr } = await supabase
-        .from('cte_documents')
-        .select('fiscal_document_ids, status')
-        .eq('tenant_id', currentTenant.id)
-        .is('deleted_at', null)
-        .not('status', 'in', '("cancelled","rejected","error","failed")');
-      if (emittedErr) throw emittedErr;
+      // 1. O cross-reference server-side via SQL (cte_emitted_at IS NULL) já pegou autorizados/processados.
+      // 2. Agora buscamos cross-reference em memória para rascunhos 'issued' ou 'processing' que ainda não marcaram a NF.
+      const [{ data: emitted }, { data: nfse }] = await Promise.all([
+        supabase
+          .from('cte_documents')
+          .select('fiscal_document_ids')
+          .eq('tenant_id', currentTenant.id)
+          .not('status', 'in', '("cancelled","rejected","error","failed")'),
+        supabase
+          .from('nfse_documents')
+          .select('fiscal_document_ids')
+          .eq('tenant_id', currentTenant.id)
+          .not('status', 'in', '("cancelled","rejected","error","failed")')
+      ]);
 
       const emittedIds = new Set<string>();
-      for (const row of emitted || []) {
+      
+      const processRow = (row: any) => {
         const rawIds = row.fiscal_document_ids;
-        if (!rawIds) continue;
-        
-        // Hardening: lida com JSONB que pode vir como string ou array
+        if (!rawIds) return;
         let ids: string[] = [];
         try {
           ids = Array.isArray(rawIds) ? rawIds : (typeof rawIds === 'string' ? JSON.parse(rawIds) : []);
         } catch (e) {
-          console.warn('[useBillingDocuments] falha ao parsear fiscal_document_ids', e);
+          console.warn('[useBillingDocuments] falha ao parsear ids', e);
         }
-
         if (Array.isArray(ids)) {
-          for (const id of ids) {
-            if (id) emittedIds.add(id);
-          }
+          for (const id of ids) if (id) emittedIds.add(id);
         }
-      }
+      };
 
-      const { data: nfse, error: nfseErr } = await supabase
-        .from('nfse_documents')
-        .select('fiscal_document_ids, status')
-        .eq('tenant_id', currentTenant.id)
-        .not('status', 'in', '("cancelled","rejected","error","failed")');
-      if (nfseErr) throw nfseErr;
+      (emitted || []).forEach(processRow);
+      (nfse || []).forEach(processRow);
 
-      for (const row of nfse || []) {
-        const rawIds = row.fiscal_document_ids;
-        if (!rawIds) continue;
-        
-        let ids: string[] = [];
-        try {
-          ids = Array.isArray(rawIds) ? rawIds : (typeof rawIds === 'string' ? JSON.parse(rawIds) : []);
-        } catch (e) {
-          console.warn('[useBillingDocuments] falha ao parsear fiscal_document_ids (NFSe)', e);
-        }
-
-        if (Array.isArray(ids)) {
-          for (const id of ids) {
-            if (id) emittedIds.add(id);
-          }
-        }
-      }
-
-      // Além do filtro SQL direto nas flags cte_emitted_at/nfse_emitted_at (que pega documentos autorizados),
-      // este filtro final em JS remove rascunhos e lotes pendentes identificados acima.
       return docs.filter(d => !emittedIds.has(d.id));
     },
     enabled: !!currentTenant,
