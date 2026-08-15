@@ -203,34 +203,43 @@ export function fillPartyFieldsFromRegistry<T extends PartyFields>(
   index: ClientIndex,
 ): { item: T; changed: boolean } {
   const rem = findRegistryClient(index, {
-    cnpj: item.remitterCnpj,
-    name: item.remitterName,
+    cnpj: (item as any).remitterCnpj,
+    name: (item as any).remitterName,
   });
   const rec = findRegistryClient(index, {
-    id: item.clientId,
-    cnpj: item.recipientCnpj,
-    name: item.recipientName,
+    id: (item as any).clientId,
+    cnpj: (item as any).recipientCnpj,
+    name: (item as any).recipientName,
   });
   const next: T = { ...item };
   let changed = false;
-  const set = (key: keyof T, value?: string | null) => {
+  const set = (key: string, value?: string | null) => {
     const v = (value ?? '') === null ? '' : String(value ?? '').trim();
     if (!v) return;
-    if (((next[key] as unknown as string) || '').trim()) return;
-    (next[key] as unknown as string) = v;
+    if (((next as any)[key] || '').trim()) return;
+    (next as any)[key] = v;
     changed = true;
   };
   if (rem) {
-    set('remitterName' as keyof T, rem.company_name || rem.legal_name);
-    set('remitterCnpj' as keyof T, digitsOnly(rem.tax_id));
-    set('remitterIe' as keyof T, sanitizeIe(rem.state_registration));
+    set('remitterName', rem.company_name || rem.legal_name);
+    set('remitterCnpj', digitsOnly(rem.tax_id));
+    set('remitterIe', sanitizeIe(rem.state_registration));
+    set('remitterStreet', rem.address_street);
+    set('remitterNumber', rem.address_number);
+    set('remitterNeighborhood', rem.address_neighborhood);
+    set('remitterZip', rem.address_zip);
   }
   if (rec) {
-    set('recipientName' as keyof T, rec.company_name || rec.legal_name);
-    set('recipientCnpj' as keyof T, digitsOnly(rec.tax_id));
-    set('recipientIe' as keyof T, sanitizeIe(rec.state_registration));
-    set('recipientCity' as keyof T, rec.address_city);
-    set('recipientState' as keyof T, rec.address_state);
+    set('recipientName', rec.company_name || rec.legal_name);
+    set('recipientCnpj', digitsOnly(rec.tax_id));
+    set('recipientIe', sanitizeIe(rec.state_registration));
+    set('recipientCity', rec.address_city);
+    set('recipientState', rec.address_state);
+    set('recipientStreet', rec.address_street);
+    set('recipientNumber', rec.address_number);
+    set('recipientNeighborhood', rec.address_neighborhood);
+    set('recipientZip', rec.address_zip);
+    set('recipientCityIbge', rec.address_city_ibge_code);
   }
   // Limpa marcadores inválidos ('UNKNOWN') que possam ter vindo do cadastro/RPC.
   for (const key of ['remitterIe', 'recipientIe'] as const) {
