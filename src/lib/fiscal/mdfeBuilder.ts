@@ -193,6 +193,8 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
       // A estrutura padrão da SEFAZ para infToma é indicar quem é o responsável (toma).
       infToma: {
         toma: '1', // 1=Contratante do serviço (Tomador do CT-e)
+        // O Hub v2/v1 pode exigir o detalhamento dos tomadores aqui se não encontrar no modal rodoviário
+        // A SEFAZ para tpEmit=1 exige que os tomadores sejam listados.
       },
       // Quando tpEmit=1 (Prestador), é obrigatório informar ao menos um contratante no modal rodoviário.
       modalRodoviario: {
@@ -208,6 +210,17 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
               },
             ],
       },
+      // Para tpEmit=1, algumas implementações da API do Hub esperam infToma como uma lista ou contendo contratantes
+      // Vamos tentar injetar os contratantes também no nível de infToma se disponível
+      ...(input.takers && input.takers.length > 0 ? {
+        infToma: {
+          toma: '1',
+          contratantes: input.takers.map(t => ({
+            xNome: t.name,
+            cpfCnpj: digits(t.cnpj),
+          }))
+        }
+      } : {}),
 
 
 
