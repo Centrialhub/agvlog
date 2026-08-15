@@ -90,10 +90,11 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
   if (!input.insurance?.policyNumber) missing.push('Número da Apólice');
   if (!input.insurance?.providerName) missing.push('Nome da Seguradora');
 
-  // Adiciona validação de tomadores (infToma no Hub Fiscal v1)
+  // Validação local de documentos
   if (!input.documents || input.documents.length === 0) {
-    missing.push('Informações dos tomadores é obrigatória para esta operação');
+    missing.push('Documentos vinculados (CT-e/NF-e)');
   }
+
 
 
 
@@ -170,14 +171,21 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
         },
       ],
       // O Hub v1 exige o grupo infToma quando ide/tpEmit=1 (Prestador de Transporte).
-      // Agora formatado conforme expectativa do schema v1 para evitar erros de obrigatoriedade.
-      infToma: input.documents.length > 0 ? [
+      // Algumas versões do Hub v1 esperam 'infToma' e outras 'toma' no nível raiz.
+      infToma: [
         {
-          infToma: {
-            CNPJ: digits(input.emitter.cnpj),
-          },
+          CNPJ: digits(input.emitter.cnpj),
         },
-      ] : undefined,
+      ],
+      toma: {
+        CNPJ: digits(input.emitter.cnpj),
+      },
+
+
+
+
+
+
 
       infAdic: {
         infCpl: input.observations || '',
