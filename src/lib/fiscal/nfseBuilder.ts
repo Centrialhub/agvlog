@@ -91,8 +91,6 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl, a
     throw new Error(errorMsg);
   }
 
-
-
   // ---------------------------------------------------------------------------
   // Validação do PRESTADOR (emitente)
   // ---------------------------------------------------------------------------
@@ -172,7 +170,6 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl, a
       console.warn(`[NFSeBuilder] ${errorMsg}`);
       throw new Error(errorMsg);
     }
-
   }
   const insuranceText = buildInsuranceText(insurance);
 
