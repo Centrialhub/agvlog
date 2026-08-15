@@ -86,8 +86,11 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl, a
   if (!tomadorBairro) missing.push('bairro do tomador');
 
   if (missing.length) {
-    console.warn(`[NFSeBuilder] Campos obrigatórios do tomador ausentes: ${missing.join(', ')}. Enviando rascunho incompleto para aguardar retorno do Hub.`);
+    const errorMsg = `Campos obrigatórios do tomador ausentes: ${missing.join(', ')}.`;
+    console.warn(`[NFSeBuilder] ${errorMsg} Enviando rascunho incompleto para aguardar retorno do Hub.`);
+    throw new Error(errorMsg);
   }
+
 
   // ---------------------------------------------------------------------------
   // Validação do PRESTADOR (emitente)
@@ -164,8 +167,11 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl, a
       endorsement: insurance.averbacao,
     });
     if (!check.ok) {
-      console.warn(`[NFSeBuilder] Dados do seguro inválidos: ${check.messages.join(' ')}. Enviando mesmo assim.`);
+      const errorMsg = `Dados do seguro inválidos: ${check.messages.join(' ')}.`;
+      console.warn(`[NFSeBuilder] ${errorMsg}`);
+      throw new Error(errorMsg);
     }
+
   }
   const insuranceText = buildInsuranceText(insurance);
 
