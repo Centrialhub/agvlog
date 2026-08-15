@@ -55,6 +55,8 @@ export interface BuildMdfePayloadInput {
   nature?: string;
   observations?: string | null;
   externalId?: string | null;
+  valCarga?: number;
+  cMone?: string;
 }
 
 export interface BuildMdfePayloadResult {
@@ -103,6 +105,10 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
         tpEmit: '1', // 1=Prestador de serviço de transporte
         mod: '58',
         natureza: input.nature || 'PRESTACAO DE SERVICO DE TRANSPORTE',
+      },
+      tot: {
+        vCarga: input.valCarga || 0,
+        cMone: input.cMone || '098', // 098=BRL
       },
       emit: {
         cnpj: digits(input.emitter.cnpj),
