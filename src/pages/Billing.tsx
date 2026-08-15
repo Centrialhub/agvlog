@@ -396,7 +396,7 @@ export default function Billing() {
 
   // Limpa seleções que deixaram de fazer parte do universo filtrado.
   useEffect(() => {
-    if (selectedDocIds.size === 0) return;
+    if (selectedDocIds.size === 0 || docsLoading) return;
     const valid = new Set(filteredDocs.map(d => d.id));
     let changed = false;
     const next = new Set<string>();
@@ -405,7 +405,7 @@ export default function Billing() {
       else changed = true;
     });
     if (changed) setSelectedDocIds(next);
-  }, [filteredDocs]);
+  }, [filteredDocs, docsLoading]);
 
   const toggleDoc = (id: string) => {
     setSelectedDocIds(prev => {
