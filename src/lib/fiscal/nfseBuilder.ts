@@ -87,9 +87,10 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl, a
 
   if (missing.length) {
     const errorMsg = `Campos obrigatórios do tomador ausentes: ${missing.join(', ')}.`;
-    console.warn(`[NFSeBuilder] ${errorMsg} Enviando rascunho incompleto para aguardar retorno do Hub.`);
+    console.warn(`[NFSeBuilder] ${errorMsg}`);
     throw new Error(errorMsg);
   }
+
 
 
   // ---------------------------------------------------------------------------

@@ -29,12 +29,21 @@ describe('NFS-e — endereço e identificação', () => {
   });
 
   it('exige código IBGE do município do tomador', () => {
-    expect(() => buildNFSeEmitPayload({ doc: { ...doc, cliente_cod_municipio: null }, emitter }))
+    // cliente_cod_municipio, cliente_municipio e cliente_cod_ibge são normalizados via normalizeIbgeCity
+    expect(() => buildNFSeEmitPayload({ 
+      doc: { 
+        ...doc, 
+        cliente_cod_municipio: null,
+        cliente_municipio: 'Cidade Sem Codigo',
+        cliente_cod_ibge: null 
+      }, 
+      emitter 
+    }))
       .toThrow(/código IBGE/);
   });
 
   it('rejeita CNPJ com tamanho inválido', () => {
     expect(() => buildNFSeEmitPayload({ doc: { ...doc, cliente_cnpj: '123' }, emitter }))
-      .toThrow(/inválido/);
+      .toThrow(/CNPJ\/CPF do tomador/);
   });
 });
