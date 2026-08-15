@@ -949,10 +949,14 @@ export default function Ingestion() {
         }
       };
 
-      // Já existe no cadastro? (match por CNPJ → nome)
+      // Já existe no cadastro? (match por CNPJ + Cidade → Anti-erro de filial)
       if (cnpjDigits) {
-        const existing = clients.find(c => onlyDigits(c.tax_id || '') === cnpjDigits);
-        if (existing) { await backfillIe(existing.id); return existing.id; }
+        const matches = clients.filter(c => onlyDigits(c.tax_id || '') === cnpjDigits);
+        if (matches.length > 1 && cityKey) {
+          const byCity = matches.find(c => (c.address_city || '').trim().toLowerCase() === cityKey);
+          if (byCity) { await backfillIe(byCity.id); return byCity.id; }
+        }
+        if (matches.length > 0) { await backfillIe(matches[0].id); return matches[0].id; }
         if (autoCreatedByCnpj.has(cnpjDigits)) return autoCreatedByCnpj.get(cnpjDigits)!;
       }
       // Match por IE (com mesma UF quando disponível) — evita duplicar quando CNPJ não foi extraído
