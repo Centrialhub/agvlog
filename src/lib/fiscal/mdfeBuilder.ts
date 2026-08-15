@@ -102,6 +102,10 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
 
 
 
+  const contractors = (input.takers && input.takers.length > 0)
+    ? input.takers
+    : [{ cnpj: input.emitter.cnpj, name: input.emitter.name }];
+
   const payload: Record<string, unknown> = {
     emitterCnpj: digits(input.emitter.cnpj),
     environment: input.emitter.environment || 'sandbox',
@@ -124,6 +128,17 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
       infModal: {
         versaoModal: '3.00',
         rodo: {
+          // Grupo canônico da SEFAZ para os contratantes/tomadores do serviço
+          // (obrigatório quando tpEmit=1 - Prestador de Serviço de Transporte).
+          infANTT: {
+            RNTRC: input.vehicle.rntrc || 'ISENTO',
+            infContratante: contractors.map(t => {
+              const d = digits(t.cnpj);
+              return d.length === 11
+                ? { CPF: d, xNome: t.name }
+                : { CNPJ: d, xNome: t.name };
+            }),
+          },
           veicTracao: {
             placa: input.vehicle.plate,
             UF: input.vehicle.state,
@@ -209,17 +224,11 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
       },
       // Quando tpEmit=1 (Prestador), é obrigatório informar ao menos um contratante no modal rodoviário.
       modalRodoviario: {
-        contratantes: (input.takers && input.takers.length > 0)
-          ? input.takers.map(t => ({
-              xNome: t.name,
-              cpfCnpj: digits(t.cnpj),
-            }))
-          : [
-              {
-                xNome: input.emitter.name,
-                cpfCnpj: digits(input.emitter.cnpj),
-              },
-            ],
+        rntrc: input.vehicle.rntrc || 'ISENTO',
+        contratantes: contractors.map(t => ({
+          xNome: t.name,
+          cpfCnpj: digits(t.cnpj),
+        })),
       },
       infAdic: {
         infCpl: input.observations || '',
