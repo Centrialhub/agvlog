@@ -334,16 +334,37 @@ export function validateOrderRows(
         matchedClientId = matched.id;
         matchedClientName = matched.company_name;
       }
-    } else if (row.clientName) {
-      const matched = clients.find(c =>
-        c.company_name.toLowerCase().includes(row.clientName.toLowerCase()) ||
-        row.clientName.toLowerCase().includes(c.company_name.toLowerCase())
-      );
+    }
+    
+    // 2. Se não achou por CNPJ ou para garantir a filial correta, tenta por Nome + Cidade
+    if (row.clientName) {
+      const city = (row.destination || '').toUpperCase().trim();
+      const normName = row.clientName.toLowerCase().trim();
+      const nameKey = `${normName}|${city}`;
+      
+      // buildValidationIndexes já indexa clients por company_name.toLowerCase() | city
+      const matched = clients.find(c => {
+        const cName = (c.company_name || '').toLowerCase().trim();
+        const cCity = (c.address_city || '').toUpperCase().trim();
+        return cName === normName && cCity === city;
+      });
+
       if (matched) {
         matchedClientId = matched.id;
         matchedClientName = matched.company_name;
+      } else if (!matchedClientId) {
+        // Fallback para busca por nome aproximado se ainda não tiver ID
+        const fuzzyMatched = clients.find(c =>
+          c.company_name.toLowerCase().includes(normName) ||
+          normName.includes(c.company_name.toLowerCase())
+        );
+        if (fuzzyMatched) {
+          matchedClientId = fuzzyMatched.id;
+          matchedClientName = fuzzyMatched.company_name;
+        }
       }
     }
+
 
     if (!matchedClientId && (row.clientName || row.clientCnpj)) {
       validations.push({ field: 'client', message: `Cliente não encontrado: ${row.clientName || row.clientCnpj}`, severity: 'warning', index: idx });
