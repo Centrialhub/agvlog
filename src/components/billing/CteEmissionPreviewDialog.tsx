@@ -255,7 +255,14 @@ function toBuildInput(
   const enrichParty = (
     name: string,
     cnpj: string,
-    fallbackAddress?: { city?: string | null; state?: string | null } | null,
+    fallbackAddress?: { 
+      city?: string | null; 
+      state?: string | null;
+      street?: string | null;
+      number?: string | null;
+      neighborhood?: string | null;
+      zip?: string | null;
+    } | null,
     ieOverride?: string | null,
     clientId?: string | null,
   ) =>
