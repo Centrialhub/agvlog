@@ -167,6 +167,10 @@ function groupToEditable(g: CteGroupPreview, defaultEmitterId: string): Editable
     remitterName: g.remitter || '',
     remitterCnpj: first?.remitter_cnpj || '',
     remitterIe: '',
+    remitterStreet: '',
+    remitterNumber: '',
+    remitterNeighborhood: '',
+    remitterZip: '',
     recipientName: g.recipient || '',
     recipientCnpj: first?.recipient_cnpj || '',
     recipientIe: '',
@@ -176,6 +180,7 @@ function groupToEditable(g: CteGroupPreview, defaultEmitterId: string): Editable
     recipientNumber: '',
     recipientNeighborhood: '',
     recipientZip: '',
+
     consigneeClientId: null,
     consigneeName: '',
     consigneeCnpj: '',
@@ -291,7 +296,12 @@ function toBuildInput(
           },
         }
       : null,
-    remitter: enrichParty(e.remitterName, e.remitterCnpj, null, e.remitterIe),
+    remitter: enrichParty(e.remitterName, e.remitterCnpj, {
+      street: e.remitterStreet || null,
+      number: e.remitterNumber || null,
+      neighborhood: e.remitterNeighborhood || null,
+      zip: e.remitterZip || null
+    }, e.remitterIe),
     recipient: enrichParty(
       e.recipientName,
       e.recipientCnpj,
@@ -306,6 +316,21 @@ function toBuildInput(
       e.recipientIe,
       e.clientId,
     ),
+    overrides: {
+      remitter: (e.remitterStreet || e.remitterNumber || e.remitterNeighborhood || e.remitterZip) ? {
+        street: e.remitterStreet || null,
+        number: e.remitterNumber || null,
+        neighborhood: e.remitterNeighborhood || null,
+        zip: e.remitterZip || null
+      } : null,
+      recipient: (e.recipientStreet || e.recipientNumber || e.recipientNeighborhood || e.recipientZip) ? {
+        street: e.recipientStreet || null,
+        number: e.recipientNumber || null,
+        neighborhood: e.recipientNeighborhood || null,
+        zip: e.recipientZip || null
+      } : null,
+    },
+
     consignee: enrichParty(e.consigneeName, e.consigneeCnpj, null, null, e.consigneeClientId),
     expedidor: enrichParty(e.expedidorName, e.expedidorCnpj),
     recebedor: enrichParty(e.recebedorName, e.recebedorCnpj),
@@ -635,7 +660,9 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
       'remitterName', 'remitterCnpj', 'remitterIe',
       'recipientName', 'recipientCnpj', 'recipientIe',
       'recipientCity', 'recipientState',
+      'remitterStreet', 'remitterNumber', 'remitterNeighborhood', 'remitterZip',
       'recipientStreet', 'recipientNumber', 'recipientNeighborhood', 'recipientZip',
+
       'consigneeClientId', 'consigneeName', 'consigneeCnpj',
       'expedidorName', 'expedidorCnpj',
       'recebedorName', 'recebedorCnpj',
