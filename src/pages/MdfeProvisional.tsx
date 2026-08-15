@@ -96,6 +96,11 @@ export default function MdfeProvisional() {
       return;
     }
 
+    if (!mdfeCredential) {
+      toast.error("O emitente selecionado não possui credencial habilitada para MDF-e");
+      return;
+    }
+
     if (!insurance?.cnpj || !insurance?.policy || !insurance?.name) {
       toast.error("Configure os dados da seguradora em Configurações > Empresa antes de emitir o MDF-e");
       return;
