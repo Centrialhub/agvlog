@@ -440,7 +440,7 @@ export default function CteMonitor() {
                   <th className="text-left px-3 py-2">Nº CT-e</th>
                   <th className="text-left px-3 py-2">Série</th>
                   <th className="text-left px-3 py-2">Pagador</th>
-                  <th className="text-left px-3 py-2">Destinatário</th>
+                  <th className="text-left px-3 py-2">Cidade / UF</th>
                   <th className="text-left px-3 py-2">UF</th>
                   <th className="text-left px-3 py-2">Placa</th>
                   <th className="text-left px-3 py-2">Protocolo</th>
@@ -474,8 +474,9 @@ export default function CteMonitor() {
                     <td className="px-3 py-2 font-mono">{r.cte_number ?? '—'}</td>
                     <td className="px-3 py-2">{r.cte_series ?? '—'}</td>
                     <td className="px-3 py-2">{r.payer_name ?? r.recipient ?? '—'}</td>
-                    <td className="px-3 py-2">{r.recipient ?? '—'}</td>
-                    <td className="px-3 py-2">{r.recipient_state ?? '—'}</td>
+                    <td className="px-3 py-2 text-xs truncate max-w-[200px]" title={`${r.recipient_city} / ${r.recipient_state}`}>
+                      {r.recipient_city ?? '—'} / {r.recipient_state ?? '—'}
+                    </td>
                     <td className="px-3 py-2 font-mono">{r.vehicle_plate ?? '—'}</td>
                     <td className="px-3 py-2 font-mono text-xs">{r.protocol_number ?? '—'}</td>
                     <td className="px-3 py-2 text-xs">
