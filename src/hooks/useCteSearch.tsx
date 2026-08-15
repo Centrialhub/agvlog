@@ -195,7 +195,7 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
           access_key: r.access_key ?? null,
           sefaz_status: match ? mapOutboundStatus(match.status, match.sefaz_status) : r.sefaz_status ?? 'pending',
           sefaz_status_reason: r.sefaz_status_reason ?? match?.sefaz_message ?? null,
-          issued_at: r.issued_at ?? null,
+          issued_at: r.issued_at || r.created_at,
           created_at: r.created_at,
           payer_name: r.payer_name ?? null,
           remitter: r.remitter ?? null,
