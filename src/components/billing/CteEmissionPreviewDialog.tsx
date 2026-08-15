@@ -664,7 +664,6 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
       'recipientName', 'recipientCnpj', 'recipientIe',
       'recipientCity', 'recipientState',
       'remitterStreet', 'remitterNumber', 'remitterNeighborhood', 'remitterZip',
-      'recipientStreet', 'recipientNumber', 'recipientNeighborhood', 'recipientZip', 'recipientCityIbge',
 
       'consigneeClientId', 'consigneeName', 'consigneeCnpj',
       'expedidorName', 'expedidorCnpj',
