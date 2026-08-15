@@ -317,16 +317,7 @@ function toBuildInput(
       e.clientId,
     ),
     overrides: {
-      remitter: (e.remitterStreet || e.remitterNumber || e.remitterNeighborhood || e.remitterZip || e.remitterCnpj || e.remitterIe) ? {
-        cnpj: e.remitterCnpj || null,
-        ie: e.remitterIe || null,
-        address: {
-          street: e.remitterStreet || null,
-          number: e.remitterNumber || null,
-          neighborhood: e.remitterNeighborhood || null,
-          zip: e.remitterZip || null
-        }
-      } : null,
+      remitter: null, // Remetente usa dados do sistema normalmente conforme pedido do usuário
       recipient: (e.recipientStreet || e.recipientNumber || e.recipientNeighborhood || e.recipientZip || e.recipientCnpj || e.recipientIe) ? {
         cnpj: e.recipientCnpj || null,
         ie: e.recipientIe || null,
@@ -337,7 +328,6 @@ function toBuildInput(
           zip: e.recipientZip || null
         }
       } : null,
-
     },
 
     consignee: enrichParty(e.consigneeName, e.consigneeCnpj, null, null, e.consigneeClientId),
