@@ -168,6 +168,22 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
           return acc;
         }, [] as any[]),
       },
+      // Contrato de entrada do Hub Fiscal. O Hub converte este bloco para
+      // infDoc/infMunDescarga e usa as chaves para identificar os tomadores.
+      descarregamento: [
+        {
+          municipio: {
+            codigoIBGE: digits(input.destination.city_ibge),
+            nome: input.destination.city_name,
+          },
+          ctes: input.documents
+            .filter(document => document.type === 'cte')
+            .map(document => ({ chave: digits(document.key) })),
+          nfes: input.documents
+            .filter(document => document.type === 'nfe')
+            .map(document => ({ chave: digits(document.key) })),
+        },
+      ],
       infMunCarrega: [
         {
           cMunCarrega: digits(input.origin.city_ibge),
@@ -188,13 +204,8 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
           nAv: ['0'], // Conforme schema v1 exige array de strings
         },
       ],
-      // O Hub v1 exige o grupo infToma quando ide/tpEmit=1 (Prestador de Transporte).
-      // Algumas versões do Hub v1 esperam o tomador dentro de infToma (como array ou objeto).
-      // A estrutura padrão da SEFAZ para infToma é indicar quem é o responsável (toma).
       infToma: {
         toma: '1', // 1=Contratante do serviço (Tomador do CT-e)
-        // O Hub v2/v1 pode exigir o detalhamento dos tomadores aqui se não encontrar no modal rodoviário
-        // A SEFAZ para tpEmit=1 exige que os tomadores sejam listados.
       },
       // Quando tpEmit=1 (Prestador), é obrigatório informar ao menos um contratante no modal rodoviário.
       modalRodoviario: {
@@ -210,24 +221,6 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
               },
             ],
       },
-      // Para tpEmit=1, algumas implementações da API do Hub esperam infToma como uma lista ou contendo contratantes
-      // Vamos tentar injetar os contratantes também no nível de infToma se disponível
-      ...(input.takers && input.takers.length > 0 ? {
-        infToma: {
-          toma: '1',
-          contratantes: input.takers.map(t => ({
-            xNome: t.name,
-            cpfCnpj: digits(t.cnpj),
-          }))
-        }
-      } : {}),
-
-
-
-
-
-
-
       infAdic: {
         infCpl: input.observations || '',
       },

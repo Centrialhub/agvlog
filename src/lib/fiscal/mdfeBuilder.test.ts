@@ -30,6 +30,11 @@ describe('mdfeBuilder', () => {
     documents: [
       { key: '35260812345678000190570010000000011000000010', type: 'cte' }
     ],
+    insurance: {
+      providerName: 'SEGURADORA TESTE',
+      providerCnpj: '12345678000190',
+      policyNumber: 'APOLICE-1001',
+    },
     nature: 'VENDA DE SERVICO',
     observations: 'MDF-E DE TESTE',
     externalId: 'TRIP-1001'
@@ -48,6 +53,9 @@ describe('mdfeBuilder', () => {
     expect(inner.infModal.rodo.condutor[0].CPF).toBe('12345678900');
     expect(inner.infDoc.infMunDescarga[0].cMunDescarga).toBe('4106902');
     expect(inner.infDoc.infMunDescarga[0].infCTe[0].chCTe).toBe('35260812345678000190570010000000011000000010');
+    expect(inner.descarregamento[0].municipio.codigoIBGE).toBe('4106902');
+    expect(inner.descarregamento[0].ctes[0].chave).toBe('35260812345678000190570010000000011000000010');
+    expect(inner.descarregamento[0].nfes).toEqual([]);
   });
 
   it('should return missing fields when required data is absent', () => {
