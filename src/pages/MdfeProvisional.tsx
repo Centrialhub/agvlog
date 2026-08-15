@@ -13,6 +13,7 @@ import { useVehicles } from '@/hooks/useVehicles';
 import { useEmitters, useHubCredentials } from '@/hooks/useEmitters';
 import { supabase } from '@/integrations/supabase/client';
 import { buildMdfePayload, BuildMdfePayloadInput } from '@/lib/fiscal/mdfeBuilder';
+import { useInsuranceProfile } from '@/hooks/useInsuranceProfile';
 import { format } from 'date-fns';
 import { Loader2, Send, RefreshCw, XCircle, FileText, Truck, User, MapPin } from 'lucide-react';
 import { toast } from '@/components/ui/sonner';
@@ -21,6 +22,7 @@ export default function MdfeProvisional() {
   const { data: ctes, isLoading, refetch } = useAuthorizedCteList();
   const { data: vehicles = [] } = useVehicles();
   const { data: emitters = [] } = useEmitters();
+  const { data: insurance } = useInsuranceProfile();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -93,6 +95,11 @@ export default function MdfeProvisional() {
       toast.error("Preencha todos os campos obrigatórios (incluindo a Tara do Veículo)");
       return;
     }
+
+    if (!insurance?.cnpj || !insurance?.policy) {
+      toast.error("Configure os dados da seguradora em Configurações > Perfil da Empresa antes de emitir o MDF-e");
+      return;
+    }
     if (!mdfeCredential) {
       toast.error("O emitente selecionado não possui credencial habilitada para MDF-e");
       return;
@@ -155,7 +162,12 @@ export default function MdfeProvisional() {
         documents: selectedDocs.map(d => ({
           key: d.access_key!,
           type: 'cte'
-        }))
+        })),
+        insurance: {
+          providerName: insurance?.name || '',
+          providerCnpj: insurance?.cnpj || '',
+          policyNumber: insurance?.policy || '',
+        }
       };
 
       const { ok, payload, missing } = buildMdfePayload(input);
