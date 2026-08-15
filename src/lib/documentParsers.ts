@@ -1,7 +1,7 @@
 // NF-e XML parser — extracts structured data from Brazilian electronic invoice XML
 import * as XLSX from 'xlsx';
 import { detectPaymentMethodDetailed } from './paymentMethodDetection';
-import { normalizeIbgeCity, normalizeCep, normalizeUf, normalizePhone, normalizeCpfCnpj } from './fiscalAddress';
+import { normalizeIbgeCity, normalizeCep, normalizeUf, normalizePhone, normalizeCpfCnpj } from './fiscal/fiscalAddress';
 
 
 /**
