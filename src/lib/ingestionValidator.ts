@@ -234,14 +234,22 @@ export function validateNFe(
   }
 
   // 2. Se não achou por CNPJ ou para garantir a filial correta, tenta por Nome + Cidade
-  if (!matchedClientId && nfe.recipientName) {
-    const nameKey = `${nfe.recipientName.toLowerCase()}|${recipientCity}`;
+  if (nfe.recipientName) {
+    const city = recipientCity;
+    const normName = nfe.recipientName.toLowerCase().trim();
+    
+    // Procura por match exato de Nome + Cidade
+    const nameKey = `${normName}|${city}`;
     const matched = idx.clientByNameCity.get(nameKey);
+    
     if (matched) {
+      // Se já tínhamos um match por CNPJ, mas o match por Nome+Cidade aponta para outro ID,
+      // priorizamos o match por Nome+Cidade pois ele é mais específico para a filial.
       matchedClientId = matched.id;
       matchedClientName = matched.company_name;
     }
   }
+
 
   if (!matchedClientId) {
     validations.push({
