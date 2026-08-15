@@ -694,8 +694,10 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
         input.overrides?.remitter
           ? { 
               ...input.remitter!, 
-              ...input.overrides.remitter,
-              address: { ...input.remitter!.address, ...input.overrides.remitter.address } 
+              name: input.overrides.remitter.name ?? input.remitter?.name,
+              cnpj: input.overrides.remitter.cnpj ?? input.remitter?.cnpj,
+              ie: input.overrides.remitter.ie ?? input.remitter?.ie,
+              address: { ...input.remitter?.address, ...input.overrides.remitter.address } 
             }
           : input.remitter
       ),
@@ -703,8 +705,10 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
         input.overrides?.recipient
           ? { 
               ...input.recipient!, 
-              ...input.overrides.recipient,
-              address: { ...input.recipient!.address, ...input.overrides.recipient.address } 
+              name: input.overrides.recipient.name ?? input.recipient?.name,
+              cnpj: input.overrides.recipient.cnpj ?? input.recipient?.cnpj,
+              ie: input.overrides.recipient.ie ?? input.recipient?.ie,
+              address: { ...input.recipient?.address, ...input.overrides.recipient.address } 
             }
           : input.recipient
       ),
