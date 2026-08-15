@@ -140,7 +140,14 @@ export function resolveParty(
     cnpj?: string | null;
     ie?: string | null;
   },
-  fallbackAddress?: { city?: string | null; state?: string | null } | null,
+  fallbackAddress?: { 
+    city?: string | null; 
+    state?: string | null;
+    street?: string | null;
+    number?: string | null;
+    neighborhood?: string | null;
+    zip?: string | null;
+  } | null,
 ): ResolvedParty | null {
   const c = findRegistryClient(index, party);
   const name = (party.name || '').trim() || (c?.company_name || c?.legal_name || '').trim();
@@ -150,14 +157,14 @@ export function resolveParty(
   const fromClient = addressFromClient(c);
   const fallback: PartyAddress | null = fallbackAddress
     ? {
-        street: null,
-        number: null,
+        street: fallbackAddress.street || null,
+        number: fallbackAddress.number || null,
         complement: null,
-        neighborhood: null,
+        neighborhood: fallbackAddress.neighborhood || null,
         city: fallbackAddress.city || null,
         city_ibge: (fallbackAddress as any).city_ibge || (fallbackAddress as any).codigoMunicipio || null,
         state: fallbackAddress.state || null,
-        zip: null,
+        zip: fallbackAddress.zip || null,
       }
     : null;
   // Mescla: cadastro preenche o que o fallback (dados da NF) não tem e vice-versa.
