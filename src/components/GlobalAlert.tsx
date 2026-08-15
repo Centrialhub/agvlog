@@ -1,6 +1,7 @@
 import {
   AlertDialog,
   AlertDialogAction,
+  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
@@ -11,7 +12,19 @@ import { useAlertStore } from "@/hooks/useAlertStore";
 import { XCircle, AlertTriangle, Info, CheckCircle2 } from "lucide-react";
 
 export function GlobalAlert() {
-  const { isOpen, title, description, type, hideAlert } = useAlertStore();
+  const {
+    isOpen,
+    title,
+    description,
+    type,
+    hideAlert,
+    onConfirm,
+    onSecondaryConfirm,
+    onCancel,
+    confirmLabel,
+    secondaryLabel,
+    cancelLabel,
+  } = useAlertStore();
 
   const icons = {
     error: <XCircle className="h-6 w-6 text-destructive" />,
@@ -20,9 +33,24 @@ export function GlobalAlert() {
     success: <CheckCircle2 className="h-6 w-6 text-emerald-500" />,
   };
 
+  const handleConfirm = () => {
+    if (onConfirm) onConfirm();
+    hideAlert();
+  };
+
+  const handleSecondaryConfirm = () => {
+    if (onSecondaryConfirm) onSecondaryConfirm();
+    hideAlert();
+  };
+
+  const handleCancel = () => {
+    if (onCancel) onCancel();
+    hideAlert();
+  };
+
   return (
-    <AlertDialog open={isOpen} onOpenChange={(open) => !open && hideAlert()}>
-      <AlertDialogContent className="max-w-[400px]">
+    <AlertDialog open={isOpen} onOpenChange={(open) => !open && handleCancel()}>
+      <AlertDialogContent className="max-w-[500px]">
         <AlertDialogHeader>
           <div className="flex items-center gap-3 mb-2">
             {icons[type]}
@@ -34,10 +62,27 @@ export function GlobalAlert() {
             </AlertDialogDescription>
           )}
         </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogAction onClick={hideAlert} className="w-full sm:w-auto">
-            OK
-          </AlertDialogAction>
+        <AlertDialogFooter className="sm:flex-col sm:gap-2 sm:items-stretch">
+          <div className="flex flex-col sm:flex-row gap-2 sm:justify-end">
+            {cancelLabel && (
+              <AlertDialogCancel onClick={handleCancel} className="mt-0">
+                {cancelLabel}
+              </AlertDialogCancel>
+            )}
+            
+            {secondaryLabel && (
+              <AlertDialogAction
+                onClick={handleSecondaryConfirm}
+                className="bg-secondary text-secondary-foreground hover:bg-secondary/80"
+              >
+                {secondaryLabel}
+              </AlertDialogAction>
+            )}
+
+            <AlertDialogAction onClick={handleConfirm}>
+              {confirmLabel || "OK"}
+            </AlertDialogAction>
+          </div>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

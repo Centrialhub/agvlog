@@ -20,6 +20,7 @@ import { useClients } from '@/hooks/useClients';
 import { useTenant } from '@/hooks/useTenant';
 import { useIssueCTe } from '@/hooks/useIssueCTe';
 import { useInsuranceProfile, useUpdateInsuranceProfile } from '@/hooks/useInsuranceProfile';
+import { useAlertStore } from '@/hooks/useAlertStore';
 import type { CteGroupPreview } from '@/lib/cteGroupingModes';
 import { buildCtePayload, computeIcmsAmounts, type CteTakerRole, type BuildCtePayloadInput } from '@/lib/fiscal/cteBuilder';
 import type { CteDocType } from '@/lib/fiscal/cteBuilder';
@@ -380,6 +381,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
   const [activeIdx, setActiveIdx] = useState(0);
   const [transmitting, setTransmitting] = useState(false);
   const [bulkEdit, setBulkEdit] = useState(true);
+  const { showAlert } = useAlertStore();
 
   const defaultEmitter = emitters.find((e: any) => e.is_default && e.active) || emitters[0];
 
@@ -645,13 +647,14 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     );
   }
 
-  async function transmit() {
+  async function transmit(forcedItems?: EditableCte[]) {
+    const itemsToTransmit = forcedItems || items;
     setTransmitting(true);
     let okCount = 0;
     const errors: string[] = [];
     try {
-      for (let i = 0; i < items.length; i++) {
-        const it = items[i];
+      for (let i = 0; i < itemsToTransmit.length; i++) {
+        const it = itemsToTransmit[i];
         const em = emitters.find((e: any) => e.id === it.emitterId) || defaultEmitter;
         // Ambiente da credencial do emitente da vez (CT-e específico → all → sandbox).
         const { data: itCreds } = await (supabase as any)
@@ -676,13 +679,13 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
             },
           });
           setItems((arr) =>
-            arr.map((x, idx) => (idx === i ? { ...x, transmitted: 'ok' } : x)),
+            arr.map((x) => (x.key === it.key ? { ...x, transmitted: 'ok' } : x)),
           );
           okCount++;
         } catch (err: any) {
           setItems((arr) =>
-            arr.map((x, idx) =>
-              idx === i ? { ...x, transmitted: 'error', transmitMessage: err?.message } : x,
+            arr.map((x) =>
+              x.key === it.key ? { ...x, transmitted: 'error', transmitMessage: err?.message } : x,
             ),
           );
           errors.push(`#${i + 1}: ${err?.message || 'erro desconhecido'}`);
@@ -704,6 +707,44 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     } finally {
       setTransmitting(false);
     }
+  }
+
+  function handleTransmitClick() {
+    const sameCityItems = items.filter((it) => {
+      const em = emitters.find((e: any) => e.id === it.emitterId) || defaultEmitter;
+      const emitterCity = (em?.endereco?.municipio || "").toLowerCase().trim();
+      const destCity = (it.recipientCity || "").toLowerCase().trim();
+      return emitterCity && destCity && emitterCity === destCity;
+    });
+
+    if (sameCityItems.length > 0) {
+      const sameCityNames = sameCityItems
+        .map((it) => it.recipientName || it.recipientCnpj)
+        .join(", ");
+
+      showAlert(
+        "Atenção: Destino igual ao Emitente",
+        `As seguintes notas têm destino para a mesma cidade do emitente: ${sameCityNames}. Deseja prosseguir?`,
+        "warning",
+        {
+          confirmLabel: "Continuar (emitir todas)",
+          secondaryLabel: "Ignorar notas da cidade do emitente",
+          cancelLabel: "Cancelar emissão",
+          onConfirm: () => transmit(),
+          onSecondaryConfirm: () => {
+            const filtered = items.filter((it) => !sameCityItems.includes(it));
+            if (filtered.length > 0) {
+              transmit(filtered);
+            } else {
+              toast.info("Nenhuma nota restante para emitir.");
+            }
+          },
+        }
+      );
+      return;
+    }
+
+    transmit();
   }
 
   if (!open || items.length === 0) {
@@ -1527,7 +1568,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
             </Button>
           </div>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>
-          <Button disabled={!allValid || transmitting} onClick={transmit}>
+          <Button disabled={!allValid || transmitting} onClick={handleTransmitClick}>
             {transmitting ? (
               <><RotateCw className="h-4 w-4 mr-2 animate-spin" /> Transmitindo…</>
             ) : (
