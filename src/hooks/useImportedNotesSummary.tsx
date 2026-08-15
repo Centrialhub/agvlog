@@ -152,7 +152,7 @@ export function useImportedNotes(filters: ImportedNoteFilters) {
       if (ids.length > 0) {
         const { data: allCtes } = await supabase
           .from('cte_documents')
-          .select('id, cte_number, freight_value, issued_at, status, fiscal_document_ids, cancelled_at')
+          .select('id, cte_number, access_key, freight_value, issued_at, status, fiscal_document_ids, cancelled_at')
           .eq('tenant_id', currentTenant!.id)
           .overlaps('fiscal_document_ids', ids as any)
           .order('issued_at', { ascending: false })
