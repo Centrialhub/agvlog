@@ -164,7 +164,7 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
             CNPJ: digits(input.insurance?.providerCnpj || ''),
           },
           nApol: input.insurance?.policyNumber || '',
-          nAv: '0',
+          nAv: ['0'], // Array conforme schema v1
         },
       ],
       // O Hub v1 exige o grupo infToma quando ide/tpEmit=1 (Prestador de Transporte).
