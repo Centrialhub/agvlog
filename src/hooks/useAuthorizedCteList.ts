@@ -13,6 +13,7 @@ export interface AuthorizedCte {
   vehicle_plate: string | null;
   driver_name: string | null;
   hub_document_id: string | null;
+  cargo_value?: number | null;
 }
 
 export function useAuthorizedCteList() {
@@ -35,6 +36,7 @@ export function useAuthorizedCteList() {
           recipient, 
           recipient_city, 
           issue_date,
+          value,
           hub_document_id
         `)
         .eq('tenant_id', currentTenant!.id)
@@ -81,7 +83,8 @@ export function useAuthorizedCteList() {
         recipient_city: d.recipient_city,
         vehicle_plate: null, // fiscal_documents não tem placa direto, precisaríamos de join se fosse vital agora
         driver_name: null,
-        hub_document_id: d.hub_document_id
+        hub_document_id: d.hub_document_id,
+        cargo_value: d.value ? Number(d.value) : null
       }));
     }
   });

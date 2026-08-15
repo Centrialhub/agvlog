@@ -40,6 +40,7 @@ export default function MdfeProvisional() {
   const [destIbge, setDestIbge] = useState('');
   const [destUf, setDestUf] = useState('');
   const [vehicleTara, setVehicleTara] = useState('');
+  const [totalCargoValue, setTotalCargoValue] = useState('');
   const { data: hubCredentials = [] } = useHubCredentials(emitterId);
 
   // Auto-fill from selected CTEs
@@ -60,6 +61,10 @@ export default function MdfeProvisional() {
           setVehicleTara((targetVehicle as any).tara_kg?.toString() || '');
         }
       }
+      
+      const selectedDocs = ctes?.filter(c => selectedIds.includes(c.id)) || [];
+      const total = selectedDocs.reduce((acc, doc) => acc + (Number(doc.cargo_value) || 0), 0);
+      setTotalCargoValue(total.toFixed(2));
     }
   }, [isDialogOpen, selectedIds, ctes, emitters, emitterId, vehicles, vehicleId]);
 
@@ -168,7 +173,9 @@ export default function MdfeProvisional() {
           providerName: insurance?.name || '',
           providerCnpj: insurance?.cnpj || '',
           policyNumber: insurance?.policy || '',
-        }
+        },
+        valCarga: Number(totalCargoValue) || 0,
+        cMone: '098'
       };
 
       const { ok, payload, missing } = buildMdfePayload(input);
@@ -373,6 +380,15 @@ export default function MdfeProvisional() {
                     value={vehicleTara} 
                     onChange={e => setVehicleTara(e.target.value)} 
                     placeholder="Ex: 5000"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Valor Total da Carga (R$)</Label>
+                  <Input 
+                    type="number" 
+                    value={totalCargoValue} 
+                    onChange={e => setTotalCargoValue(e.target.value)} 
+                    placeholder="Ex: 50000.00"
                   />
                 </div>
               </div>
