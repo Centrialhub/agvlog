@@ -53,7 +53,8 @@ export function usePendingInvoices() {
       const used = new Set<string>();
       for (const c of (ctes || []) as any[]) {
         if (!c.fiscal_document_ids) continue;
-        for (const id of c.fiscal_document_ids) used.add(id);
+        const ids = Array.isArray(c.fiscal_document_ids) ? c.fiscal_document_ids : [];
+        for (const id of ids) used.add(id);
       }
 
       const { data: nfse, error: e3 } = await supabase
@@ -64,7 +65,8 @@ export function usePendingInvoices() {
       if (e3) throw e3;
       for (const n of (nfse || []) as any[]) {
         if (!n.fiscal_document_ids) continue;
-        for (const id of n.fiscal_document_ids) used.add(id);
+        const ids = Array.isArray(n.fiscal_document_ids) ? n.fiscal_document_ids : [];
+        for (const id of ids) used.add(id);
       }
 
       let count = 0;

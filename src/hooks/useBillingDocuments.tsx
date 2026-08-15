@@ -98,9 +98,6 @@ export function useBillingDocuments(filters: BillingDocumentFilters) {
       if (error) throw error;
       const docs = (data || []) as FiscalDocument[];
 
-      // Remove documentos já consumidos por um CT-e não anulado — inclusive
-      // rascunhos/lotes. Mesmo critério de `usePendingInvoices` (cteConsumesInvoices),
-      // para que o pool de faturamento e o KPI de pendentes nunca divirjam.
       // Remove documentos já consumidos por um CT-e ou NFS-e não anulado.
       // Priorizamos a flag no banco (cte_emitted_at/nfse_emitted_at), mas cross-referenciamos
       // com rascunhos em memória para evitar que notas em processamento reapareçam.
@@ -109,13 +106,14 @@ export function useBillingDocuments(filters: BillingDocumentFilters) {
         .select('fiscal_document_ids, status')
         .eq('tenant_id', currentTenant.id)
         .is('deleted_at', null)
-        .not('status', 'in', '("cancelled","rejected","error","failed")'); // Pula documentos que falharam e deveriam liberar as NFs
+        .not('status', 'in', '("cancelled","rejected","error","failed")');
       if (emittedErr) throw emittedErr;
 
       const emittedIds = new Set<string>();
       for (const row of emitted || []) {
         if (!row.fiscal_document_ids) continue;
-        for (const id of row.fiscal_document_ids) {
+        const ids = Array.isArray(row.fiscal_document_ids) ? row.fiscal_document_ids : [];
+        for (const id of ids) {
           if (id) emittedIds.add(id);
         }
       }
@@ -129,7 +127,8 @@ export function useBillingDocuments(filters: BillingDocumentFilters) {
 
       for (const row of nfse || []) {
         if (!row.fiscal_document_ids) continue;
-        for (const id of row.fiscal_document_ids) {
+        const ids = Array.isArray(row.fiscal_document_ids) ? row.fiscal_document_ids : [];
+        for (const id of ids) {
           if (id) emittedIds.add(id);
         }
       }
