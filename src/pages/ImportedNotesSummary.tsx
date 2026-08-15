@@ -361,8 +361,8 @@ export default function ImportedNotesSummary() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading && <TableRow><TableCell colSpan={16} className="text-center text-muted-foreground">Carregando...</TableCell></TableRow>}
-              {!isLoading && rows.length === 0 && <TableRow><TableCell colSpan={16} className="text-center text-muted-foreground">Nenhuma nota encontrada.</TableCell></TableRow>}
+              {isLoading && <TableRow><TableCell colSpan={17} className="text-center text-muted-foreground">Carregando...</TableCell></TableRow>}
+              {!isLoading && rows.length === 0 && <TableRow><TableCell colSpan={17} className="text-center text-muted-foreground">Nenhuma nota encontrada.</TableCell></TableRow>}
               {rows.map(r => (
                 <TableRow 
                   key={r.id} 
