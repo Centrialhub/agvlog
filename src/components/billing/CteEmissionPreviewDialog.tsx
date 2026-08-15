@@ -315,7 +315,7 @@ function toBuildInput(
         neighborhood: e.recipientNeighborhood || null,
         zip: e.recipientZip || null,
         city_ibge: e.recipientCityIbge || null
-      },
+      } as any,
       e.recipientIe,
       e.clientId,
     ),
@@ -330,7 +330,7 @@ function toBuildInput(
           neighborhood: e.recipientNeighborhood || null,
           zip: e.recipientZip || null,
           city_ibge: e.recipientCityIbge || null
-        }
+        } as any
       } : null,
     },
 
