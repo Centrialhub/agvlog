@@ -1584,7 +1584,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                             patchData.icmsValor = r.valor;
                           }
                           
-                          patch(patchData);
+                           patch(patchData, 'fiscal');
                         }}
                       >
                         <option value="00">00 — Tributação normal</option>
@@ -1606,7 +1606,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                           const embutido = e.target.checked;
                           const aliq = isSimples ? 0 : active.icmsAliquota;
                           const r = recalcIcms(active.freightValue || 0, aliq, embutido, active.icmsIsento || isSimples);
-                          patch({ icmsEmbutido: embutido, icmsBase: r.base, icmsValor: r.valor, icmsAliquota: aliq });
+                          patch({ icmsEmbutido: embutido, icmsBase: r.base, icmsValor: r.valor, icmsAliquota: aliq }, 'fiscal');
                         }}
                       />
                       Embutido
@@ -1621,7 +1621,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                           const isento = e.target.checked || isSimples;
                           const aliq = isento ? 0 : active.icmsAliquota;
                           const r = recalcIcms(active.freightValue || 0, aliq, active.icmsEmbutido, isento);
-                          patch({ icmsIsento: isento, icmsBase: r.base, icmsValor: r.valor, icmsAliquota: aliq });
+                          patch({ icmsIsento: isento, icmsBase: r.base, icmsValor: r.valor, icmsAliquota: aliq }, 'fiscal');
                         }}
                       />
                       Isento
@@ -1637,12 +1637,12 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                           const isSimples = regime === 'simples' || regime === 'mei';
                           const aliq = isSimples ? 0 : Number(e.target.value);
                           const r = recalcIcms(active.freightValue || 0, aliq, active.icmsEmbutido, active.icmsIsento || isSimples);
-                          patch({
+                           patch({
                             icmsAliquota: aliq,
                             icmsBase: r.base,
                             icmsValor: r.valor,
                             _aliqManual: true, // Marca que foi alterado manualmente para parar a sugestão
-                          } as any);
+                          } as any, 'fiscal');
                         }}
                       />
                     </div>
