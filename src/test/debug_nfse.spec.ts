@@ -16,12 +16,8 @@ const doc: any = {
 
 describe('DEBUG nfseBuilder', () => {
   it('should throw when tomador CEP is missing', () => {
-    try {
-      console.log('--- START TEST ---');
+    expect(() => {
       buildNFSeEmitPayload({ doc: { ...doc, cliente_cep: '' }, emitter });
-      console.log('--- FAILED: DID NOT THROW ---');
-    } catch (e: any) {
-      console.log('--- CAUGHT ERROR ---', e.message);
-    }
+    }).toThrow();
   });
 });
