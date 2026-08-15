@@ -176,14 +176,14 @@ export default function Billing() {
   const { data: docs = [], isLoading: docsLoading } = useBillingDocuments({
     clientId: clientId !== SENTINEL_NONE ? clientId : null,
     supplierId: supplierId !== SENTINEL_NONE ? supplierId : null,
-    periodStart: tab === 'period' ? periodStart : null,
-    periodEnd: tab === 'period' ? periodEnd : null,
-    invoiceNumber,
-    accessKey,
-    remitter: supplier,
-    referenceNumber,
-    recipientCnpj: cnpj,
-    remitterCnpj: supplierCnpj,
+    periodStart: (tab === 'period' && periodStart) ? periodStart : null,
+    periodEnd: (tab === 'period' && periodEnd) ? periodEnd : null,
+    invoiceNumber: invoiceNumber || null,
+    accessKey: accessKey || null,
+    remitter: supplier || null,
+    referenceNumber: referenceNumber || null,
+    recipientCnpj: cnpj || null,
+    remitterCnpj: supplierCnpj || null,
     recipientCity: recipientCity !== SENTINEL_NONE ? recipientCity : null,
   });
 
