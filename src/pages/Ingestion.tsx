@@ -101,6 +101,38 @@ export default function Ingestion() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // Função para buscar dados da NF-e via chave de acesso no Hub Fiscal (Anti-erro de filial)
+  const enrichRecipientFromHub = async (accessKey: string) => {
+    if (!accessKey || accessKey.length !== 44) return null;
+    try {
+      const { data, error } = await supabase.functions.invoke('hub-fiscal-proxy', {
+        body: {
+          action: 'import',
+          type: 'nfe',
+          body: { accessKey }
+        }
+      });
+      if (error || !data?.success) return null;
+      
+      const nfe = data.hub?.document;
+      if (!nfe) return null;
+
+      return {
+        recipientCnpj: nfe.destinatario?.cpfCnpj || nfe.destinatario?.cnpj || nfe.destinatario?.cpf,
+        recipientName: nfe.destinatario?.nome || nfe.destinatario?.razaoSocial,
+        recipientCity: nfe.destinatario?.endereco?.municipio,
+        recipientState: nfe.destinatario?.endereco?.uf,
+        recipientZip: nfe.destinatario?.endereco?.cep,
+        recipientAddress: nfe.destinatario?.endereco?.logradouro,
+        recipientAddressNumber: nfe.destinatario?.endereco?.numero,
+      };
+    } catch (e) {
+      console.warn('[Ingestion] Falha ao enriquecer via Hub', e);
+      return null;
+    }
+  };
+
+
   // Learn city → persist to operational_routes destinations
   const handleLearnCity = useCallback((routeId: string, cityName: string) => {
     const route = operationalRoutes.find(r => r.id === routeId);

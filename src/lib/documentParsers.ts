@@ -1,6 +1,8 @@
 // NF-e XML parser — extracts structured data from Brazilian electronic invoice XML
 import * as XLSX from 'xlsx';
 import { detectPaymentMethodDetailed } from './paymentMethodDetection';
+import { normalizeIbgeCity, normalizeCep, normalizeUf, normalizePhone, normalizeCpfCnpj } from './fiscal/fiscalAddress';
+
 
 /**
  * Regras configuráveis para extração do "número da carga do cliente" a partir do
@@ -163,23 +165,24 @@ function extractRecipient(infNFe: Element): RecipientFields {
   const addr = enderDest || infNFe;
   return {
     recipientName: getTagText(ctx, 'xNome'),
-    recipientCnpj: getTagText(ctx, 'CNPJ') || getTagText(ctx, 'CPF'),
+    recipientCnpj: normalizeCpfCnpj(getTagText(ctx, 'CNPJ') || getTagText(ctx, 'CPF')),
     recipientFantasyName: getTagText(ctx, 'xFant'),
     recipientStateRegistration: getTagText(ctx, 'IE'),
     recipientMunicipalRegistration: getTagText(ctx, 'IM'),
     recipientIeIndicator: getTagText(ctx, 'indIEDest'),
     recipientEmail: getTagText(ctx, 'email'),
-    recipientPhone: getTagText(addr, 'fone') || getTagText(ctx, 'fone'),
+    recipientPhone: normalizePhone(getTagText(addr, 'fone') || getTagText(ctx, 'fone')) || '',
     recipientCity: getTagText(addr, 'xMun'),
-    recipientCityCode: getTagText(addr, 'cMun'),
-    recipientState: getTagText(addr, 'UF'),
+    recipientCityCode: normalizeIbgeCity(getTagText(addr, 'cMun')),
+    recipientState: normalizeUf(getTagText(addr, 'UF')) || getTagText(addr, 'UF'),
     recipientNeighborhood: getTagText(addr, 'xBairro'),
     recipientAddress: getTagText(addr, 'xLgr'),
     recipientAddressNumber: getTagText(addr, 'nro'),
     recipientAddressComplement: getTagText(addr, 'xCpl'),
-    recipientZip: getTagText(addr, 'CEP'),
+    recipientZip: normalizeCep(getTagText(addr, 'CEP')) || getTagText(addr, 'CEP'),
     recipientCountry: getTagText(addr, 'xPais') || 'BRASIL',
     recipientCountryCode: getTagText(addr, 'cPais') || '1058',
+
   };
 }
 

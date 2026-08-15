@@ -15,6 +15,7 @@ describe('mdfeBuilder', () => {
       plate: 'ABC1D23',
       state: 'SP',
       rntrc: '12345678',
+      tara: 15000,
     },
     origin: {
       city_ibge: '3550308',

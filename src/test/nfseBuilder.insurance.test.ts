@@ -49,9 +49,12 @@ describe('NFS-e — propagação do seguro', () => {
   });
 
   it('bloqueia emissão com seguro incompleto/inválido', () => {
-    expect(() => buildNFSeEmitPayload({ doc: { ...baseDoc, insurer_policy: 'AP-1' }, emitter }))
-      .toThrow(/Dados do seguro inválidos/);
+    expect(() => {
+      buildNFSeEmitPayload({ doc: { ...baseDoc, insurer_policy: 'AP-1' }, emitter });
+    }).toThrow(/Dados do seguro inválidos/);
   });
+
+
 
   it('helpers de texto', () => {
     expect(hasInsuranceData(null)).toBe(false);
