@@ -152,7 +152,7 @@ export function useImportedNotes(filters: ImportedNoteFilters) {
       if (ids.length > 0) {
         const { data: allCtes } = await supabase
           .from('cte_documents')
-          .select('id, cte_number, freight_value, issued_at, status, fiscal_document_ids, cancelled_at')
+          .select('id, cte_number, access_key, freight_value, issued_at, status, fiscal_document_ids, cancelled_at')
           .eq('tenant_id', currentTenant!.id)
           .overlaps('fiscal_document_ids', ids as any)
           .order('issued_at', { ascending: false })
@@ -181,6 +181,7 @@ export function useImportedNotes(filters: ImportedNoteFilters) {
 
       // NFS-e (Montes Claros) — número real vem de `nfse_documents`
       const nfseMap = new Map<string, any>();
+      const nfseById = new Map<string, any>();
       if (ids.length > 0) {
         const { data: nfses } = await supabase
           .from('nfse_documents')
@@ -196,15 +197,37 @@ export function useImportedNotes(filters: ImportedNoteFilters) {
         }
       }
 
+      // Fallback: NFS-e vinculada diretamente na NF (`nfse_emitted_document_id`),
+      // usada quando `nfse_documents.fiscal_document_ids` não foi preenchido.
+      const nfseDirectIds = Array.from(
+        new Set(rows.map(r => r.nfse_emitted_document_id).filter(Boolean)),
+      ) as string[];
+      const missingNfseIds = nfseDirectIds.filter(id => !nfseById.has(id));
+      if (missingNfseIds.length > 0) {
+        const { data: extra } = await supabase
+          .from('nfse_documents')
+          .select('id, nfse_number, rps_number, status, fiscal_document_ids, created_at')
+          .in('id', missingNfseIds);
+        for (const n of (extra || []) as any[]) nfseById.set(n.id, n);
+      }
+
       const enriched: ImportedNoteRow[] = rows.map(r => {
         const cte = cteMap.get(r.id);
         const out = r.cte_emitted_outbound_id ? outboundMap.get(r.cte_emitted_outbound_id) : null;
-        const nfse = nfseMap.get(r.id) || null;
+        const nfse =
+          nfseMap.get(r.id) ||
+          (r.nfse_emitted_document_id ? nfseById.get(r.nfse_emitted_document_id) : null) ||
+          null;
         const base: any = {
           ...r,
           cte_id: cte?.id ?? out?.id ?? null,
-          cte_number: cte?.cte_number ?? cteNumberFromAccessKey(out?.access_key) ?? null,
-          cte_access_key: out?.access_key ?? null,
+          cte_number:
+            cte?.cte_number ??
+            cteNumberFromAccessKey(out?.access_key) ??
+            cteNumberFromAccessKey(cte?.access_key) ??
+            (out?.invoice_number ? String(out.invoice_number) : null) ??
+            null,
+          cte_access_key: out?.access_key ?? cte?.access_key ?? null,
           cte_freight_value: cte?.freight_value ?? out?.freight_value ?? null,
           cte_status: cte?.status ?? out?.status ?? null,
           nfse_id: nfse?.id ?? null,
