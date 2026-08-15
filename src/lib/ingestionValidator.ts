@@ -335,10 +335,19 @@ export function validateOrderRows(
     let matchedClientName: string | null = null;
     const cnpjClean = (row.clientCnpj || '').replace(/\D/g, '');
     if (cnpjClean) {
-      const matched = clients.find(c => (c.tax_id || '').replace(/\D/g, '') === cnpjClean);
-      if (matched) {
-        matchedClientId = matched.id;
-        matchedClientName = matched.company_name;
+      const matches = clients.filter(c => (c.tax_id || '').replace(/\D/g, '') === cnpjClean);
+      if (matches.length > 1) {
+        const city = (row.destination || '').toUpperCase().trim();
+        const byCity = matches.find(c => (c.address_city || '').toUpperCase().trim() === city);
+        if (byCity) {
+          matchedClientId = byCity.id;
+          matchedClientName = byCity.company_name;
+        }
+      }
+      
+      if (!matchedClientId && matches.length > 0) {
+        matchedClientId = matches[0].id;
+        matchedClientName = matches[0].company_name;
       }
     }
     
