@@ -174,11 +174,15 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
       // Algumas versões do Hub v1 esperam 'infToma' e outras 'toma' no nível raiz.
       infToma: [
         {
-          CNPJ: digits(input.emitter.cnpj),
+          infToma: {
+            CNPJ: digits(input.emitter.cnpj),
+          },
         },
       ],
       toma: {
-        CNPJ: digits(input.emitter.cnpj),
+        toma: {
+          CNPJ: digits(input.emitter.cnpj),
+        },
       },
 
 

@@ -201,6 +201,7 @@ export default function MdfeProvisional() {
         const hubMessage = data?.hub?.error?.message
           || data?.error?.message
           || data?.emission?.message
+          || (typeof data?.hub === 'string' ? data.hub : null)
           || 'O Hub Fiscal recusou a emissão';
         throw new Error(hubMessage);
       }
