@@ -79,6 +79,7 @@ interface EditableCte {
   recipientNumber: string;
   recipientNeighborhood: string;
   recipientZip: string;
+  recipientCityIbge: string;
   consigneeClientId: string | null;
   consigneeName: string;
   consigneeCnpj: string;
@@ -180,6 +181,7 @@ function groupToEditable(g: CteGroupPreview, defaultEmitterId: string): Editable
     recipientNumber: '',
     recipientNeighborhood: '',
     recipientZip: '',
+    recipientCityIbge: '',
 
     consigneeClientId: null,
     consigneeName: '',
@@ -311,21 +313,23 @@ function toBuildInput(
         street: e.recipientStreet || null,
         number: e.recipientNumber || null,
         neighborhood: e.recipientNeighborhood || null,
-        zip: e.recipientZip || null
+        zip: e.recipientZip || null,
+        city_ibge: e.recipientCityIbge || null
       },
       e.recipientIe,
       e.clientId,
     ),
     overrides: {
       remitter: null, // Remetente usa dados do sistema normalmente conforme pedido do usuário
-      recipient: (e.recipientStreet || e.recipientNumber || e.recipientNeighborhood || e.recipientZip || e.recipientCnpj || e.recipientIe) ? {
+      recipient: (e.recipientStreet || e.recipientNumber || e.recipientNeighborhood || e.recipientZip || e.recipientCnpj || e.recipientIe || e.recipientCityIbge) ? {
         cnpj: e.recipientCnpj || null,
         ie: e.recipientIe || null,
         address: {
           street: e.recipientStreet || null,
           number: e.recipientNumber || null,
           neighborhood: e.recipientNeighborhood || null,
-          zip: e.recipientZip || null
+          zip: e.recipientZip || null,
+          city_ibge: e.recipientCityIbge || null
         }
       } : null,
     },
