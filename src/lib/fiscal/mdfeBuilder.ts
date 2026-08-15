@@ -95,6 +95,7 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
     missing.push('Documentos vinculados (CT-e/NF-e)');
   }
 
+
   const payload: Record<string, unknown> = {
     emitterCnpj: digits(input.emitter.cnpj),
     environment: input.emitter.environment || 'sandbox',
