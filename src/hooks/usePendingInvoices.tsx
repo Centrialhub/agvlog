@@ -47,7 +47,7 @@ export function usePendingInvoices() {
         .select('fiscal_document_ids, status')
         .eq('tenant_id', currentTenant.id)
         .is('deleted_at', null)
-        .not('status', 'in', '("cancelled","rejected","error","failed")');
+        .not('status', 'in', '("cancelled","rejected","error","failed","sefaz_error")');
       if (e2) throw e2;
 
       const used = new Set<string>();
@@ -69,7 +69,7 @@ export function usePendingInvoices() {
         .from('nfse_documents')
         .select('fiscal_document_ids, status')
         .eq('tenant_id', currentTenant.id)
-        .not('status', 'in', '("cancelled","rejected","error","failed")');
+        .not('status', 'in', '("cancelled","rejected","error","failed","sefaz_error")');
       if (e3) throw e3;
       for (const n of (nfse || []) as any[]) {
         const rawIds = n.fiscal_document_ids;
