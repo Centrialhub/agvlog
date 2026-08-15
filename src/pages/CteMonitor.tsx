@@ -441,7 +441,6 @@ export default function CteMonitor() {
                   <th className="text-left px-3 py-2">Série</th>
                   <th className="text-left px-3 py-2">Pagador</th>
                   <th className="text-left px-3 py-2">Cidade / UF</th>
-                  <th className="text-left px-3 py-2">UF</th>
                   <th className="text-left px-3 py-2">Placa</th>
                   <th className="text-left px-3 py-2">Protocolo</th>
                   <th className="text-left px-3 py-2">Emissão</th>
