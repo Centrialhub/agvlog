@@ -148,7 +148,7 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
       seg: [
         {
           infResp: {
-            respSeg: '1', // 1=Emitente do MDF-e
+            respSeg: '1', // 1=Contratante do Serviço de Transporte
             CNPJ: digits(input.emitter.cnpj),
           },
           infSeg: {
@@ -156,7 +156,6 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
             CNPJ: digits(input.insurance?.providerCnpj || ''),
           },
           nApol: input.insurance?.policyNumber || '',
-          nAv: '0', // Número da Averbação - Campo obrigatório para alguns provedores
         }
       ],
       infAdic: {
