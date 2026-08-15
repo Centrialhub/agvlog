@@ -90,10 +90,11 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
   if (!input.insurance?.policyNumber) missing.push('Número da Apólice');
   if (!input.insurance?.providerName) missing.push('Nome da Seguradora');
 
-  // Adiciona validação de tomadores (infToma no Hub Fiscal v1)
+  // Validação local de documentos
   if (!input.documents || input.documents.length === 0) {
-    missing.push('Informações dos tomadores é obrigatória para esta operação');
+    missing.push('Documentos vinculados (CT-e/NF-e)');
   }
+
 
 
 
