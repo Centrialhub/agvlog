@@ -137,18 +137,32 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
         },
       },
       infDoc: {
-        infMunDescarga: [
-          {
-            cMunDescarga: digits(input.destination.city_ibge),
-            xMunDescarga: input.destination.city_name,
-            infCTe: input.documents
-              .filter(d => d.type === 'cte')
-              .map(d => ({ chCTe: digits(d.key) })),
-            infNFe: input.documents
-              .filter(d => d.type === 'nfe')
-              .map(d => ({ chNFe: digits(d.key) })),
-          },
-        ],
+        infMunDescarga: input.documents.reduce((acc, doc) => {
+          // Para MDF-e, o Hub espera que os documentos sejam agrupados por município de descarga.
+          // Se tivermos múltiplos documentos para o mesmo município, eles devem ir no mesmo array infCTe/infNFe.
+          // Como o input.destination é global por enquanto, agrupamos tudo nele.
+          // TODO: Se suportarmos multi-paradas no futuro, o input.documents deve carregar seu próprio city_ibge.
+          const cMun = digits(input.destination.city_ibge);
+          let group = acc.find(g => g.cMunDescarga === cMun);
+          
+          if (!group) {
+            group = {
+              cMunDescarga: cMun,
+              xMunDescarga: input.destination.city_name,
+              infCTe: [],
+              infNFe: [],
+            };
+            acc.push(group);
+          }
+
+          if (doc.type === 'cte') {
+            group.infCTe.push({ chCTe: digits(doc.key) });
+          } else {
+            group.infNFe.push({ chNFe: digits(doc.key) });
+          }
+
+          return acc;
+        }, [] as any[]),
       },
       infMunCarrega: [
         {
