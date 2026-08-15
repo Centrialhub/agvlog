@@ -744,45 +744,77 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     setTransmitting(true);
     let okCount = 0;
     const errors: string[] = [];
+    
+    // Cache de credenciais por emitente para evitar lookups repetitivos
+    const credsCache: Record<string, { env: 'sandbox' | 'production' }> = {};
+
     try {
+      // Processamento em lote com limite de concorrência (5)
+      const CONCURRENCY_LIMIT = 5;
+      const executing = new Set<Promise<void>>();
+      
       for (let i = 0; i < itemsToTransmit.length; i++) {
         const it = itemsToTransmit[i];
-        const em = emitters.find((e: any) => e.id === it.emitterId) || defaultEmitter;
-        // Ambiente da credencial do emitente da vez (CT-e específico → all → sandbox).
-        const { data: itCreds } = await (supabase as any)
-          .from('hub_fiscal_credentials')
-          .select('doc_scope, environment, enabled')
-          .eq('emitter_id', em?.id)
-          .eq('enabled', true);
-        const itCred =
-          (itCreds || []).find((c: any) => c.doc_scope === 'cte') ||
-          (itCreds || []).find((c: any) => c.doc_scope === 'all') ||
-          null;
-        const itEnv: 'sandbox' | 'production' =
-          itCred?.environment === 'production' ? 'production' : 'sandbox';
-        try {
-          await issueCte.mutateAsync({
-            ...toBuildInput(it, em, itEnv, clients),
-            fiscal_document_ids: it.fiscalDocumentIds,
-            load_ids: it.loadIds,
-            meta: {
-              client_id: it.clientId,
-              consignee_client_id: it.consigneeClientId,
-            },
-          });
-          setItems((arr) =>
-            arr.map((x) => (x.key === it.key ? { ...x, transmitted: 'ok' } : x)),
-          );
-          okCount++;
-        } catch (err: any) {
-          setItems((arr) =>
-            arr.map((x) =>
-              x.key === it.key ? { ...x, transmitted: 'error', transmitMessage: err?.message } : x,
-            ),
-          );
-          errors.push(`#${i + 1}: ${err?.message || 'erro desconhecido'}`);
+        
+        const task = (async () => {
+          try {
+            const em = emitters.find((e: any) => e.id === it.emitterId) || defaultEmitter;
+            
+            // Resolve ambiente (cacheado)
+            if (!credsCache[it.emitterId]) {
+              const { data: itCreds } = await supabase
+                .from('hub_fiscal_credentials')
+                .select('doc_scope, environment, enabled')
+                .eq('emitter_id', it.emitterId)
+                .eq('enabled', true);
+                
+              const itCred =
+                (itCreds || []).find((c: any) => c.doc_scope === 'cte') ||
+                (itCreds || []).find((c: any) => c.doc_scope === 'all') ||
+                null;
+                
+              credsCache[it.emitterId] = {
+                env: itCred?.environment === 'production' ? 'production' : 'sandbox'
+              };
+            }
+
+            const itEnv = credsCache[it.emitterId].env;
+
+            await issueCte.mutateAsync({
+              ...toBuildInput(it, em, itEnv, clients),
+              fiscal_document_ids: it.fiscalDocumentIds,
+              load_ids: it.loadIds,
+              meta: {
+                client_id: it.clientId,
+                consignee_client_id: it.consigneeClientId,
+              },
+            });
+
+            setItems((arr) =>
+              arr.map((x) => (x.key === it.key ? { ...x, transmitted: 'ok' } : x)),
+            );
+            okCount++;
+          } catch (err: any) {
+            setItems((arr) =>
+              arr.map((x) =>
+                x.key === it.key ? { ...x, transmitted: 'error', transmitMessage: err?.message } : x,
+              ),
+            );
+            errors.push(`#${i + 1}: ${err?.message || 'erro desconhecido'}`);
+          }
+        })();
+
+        executing.add(task);
+        task.finally(() => executing.delete(task));
+
+        if (executing.size >= CONCURRENCY_LIMIT) {
+          await Promise.race(executing);
         }
       }
+      
+      // Aguarda as últimas tarefas
+      await Promise.all(executing);
+
       if (okCount === 0) {
         toast.error('Nenhum CT-e chegou ao Hub Fiscal', {
           description: errors.slice(0, 3).join(' • ') || 'Verifique credenciais do emitente.',
