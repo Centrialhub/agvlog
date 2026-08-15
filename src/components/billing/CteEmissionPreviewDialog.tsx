@@ -1717,15 +1717,15 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                   <div className="grid grid-cols-3 gap-2 pt-1">
                     <div>
                       <Label className="text-xs">Base (R$)</Label>
-                      <Input type="number" step="0.01" value={active.cbsIbsBase} onChange={(e) => patch({ cbsIbsBase: Number(e.target.value) })} />
+                      <Input type="number" step="0.01" value={active.cbsIbsBase} onChange={(e) => patch({ cbsIbsBase: Number(e.target.value) }, 'fiscal')} />
                     </div>
                     <div>
                       <Label className="text-xs">CBS % (padrão 0,90)</Label>
-                      <Input type="number" step="0.01" value={active.cbsAliquota} onChange={(e) => patch({ cbsAliquota: Number(e.target.value) })} />
+                      <Input type="number" step="0.01" value={active.cbsAliquota} onChange={(e) => patch({ cbsAliquota: Number(e.target.value) }, 'fiscal')} />
                     </div>
                     <div>
                       <Label className="text-xs">IBS % (padrão 0,10)</Label>
-                      <Input type="number" step="0.01" value={active.ibsAliquota} onChange={(e) => patch({ ibsAliquota: Number(e.target.value) })} />
+                      <Input type="number" step="0.01" value={active.ibsAliquota} onChange={(e) => patch({ ibsAliquota: Number(e.target.value) }, 'fiscal')} />
                     </div>
                   </div>
                   <p className="text-[10px] text-muted-foreground pt-1">
@@ -1736,7 +1736,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                 </div>
                 <div>
                   <Label>Observações</Label>
-                  <Textarea rows={4} value={active.observations} onChange={(e) => patch({ observations: e.target.value })} />
+                  <Textarea rows={4} value={active.observations} onChange={(e) => patch({ observations: e.target.value }, 'fiscal')} />
                 </div>
               </TabsContent>
             </Tabs>
