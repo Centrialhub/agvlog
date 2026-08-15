@@ -444,7 +444,7 @@ export default function CteMonitor() {
                   <th className="text-left px-3 py-2">UF</th>
                   <th className="text-left px-3 py-2">Placa</th>
                   <th className="text-left px-3 py-2">Protocolo</th>
-                  <th className="text-left px-3 py-2">Processado em</th>
+                  <th className="text-left px-3 py-2">Emissão</th>
                   <th className="text-left px-3 py-2">Motivo / Erro</th>
                   <th className="text-right px-3 py-2">Ações</th>
                 </tr>
@@ -479,7 +479,7 @@ export default function CteMonitor() {
                     <td className="px-3 py-2 font-mono">{r.vehicle_plate ?? '—'}</td>
                     <td className="px-3 py-2 font-mono text-xs">{r.protocol_number ?? '—'}</td>
                     <td className="px-3 py-2 text-xs">
-                      {r.processed_at ? new Date(r.processed_at).toLocaleString('pt-BR') : '—'}
+                      {r.issued_at ? new Date(r.issued_at).toLocaleDateString('pt-BR') : '—'}
                     </td>
                     <td className="px-3 py-2 text-xs max-w-xs truncate" title={r.sefaz_status_reason ?? ''}>
                       {r.sefaz_status_reason ? (

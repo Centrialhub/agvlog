@@ -184,6 +184,7 @@ export function useCteMonitor(filters: CteMonitorFilters) {
       if (error) throw error;
       const draftRows = ((data || []) as unknown as CteMonitorRow[]).map((r) => ({
         ...r,
+        issued_at: r.issued_at || r.created_at,
         source: 'draft' as const,
       }));
 
@@ -235,7 +236,7 @@ export function useCteMonitor(filters: CteMonitorFilters) {
         remitter: d.remitter ?? null,
         freight_value: Number(d.freight_value ?? d.value ?? 0),
         cargo_value: Number(d.value ?? 0),
-        issued_at: d.issue_date ?? null,
+        issued_at: d.issue_date || d.created_at || null,
         created_at: d.created_at,
         batch_id: '',
         source: 'hub',
