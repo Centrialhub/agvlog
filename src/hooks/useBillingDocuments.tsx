@@ -66,10 +66,12 @@ export function useBillingDocuments(filters: BillingDocumentFilters) {
         // Pré-filtros aplicados em todas as queries de Billing — usam idx_fiscal_documents_tenant_type_status
         .eq('document_type', 'inbound')
         .neq('status', 'cancelled')
-        .is('deleted_at', null)
-        // Oculta NFs que já geraram CT-e ou NFS-e no nível da linha (emissões confirmadas)
-        .is('cte_emitted_at', null)
-        .is('nfse_emitted_at', null);
+        .is('deleted_at', null);
+
+      // Só aplica trava de emissão se NÃO estivermos filtrando explicitamente as notas problemáticas
+      if (!f.onlySpecificInvoices || f.onlySpecificInvoices.length === 0) {
+        q = q.is('cte_emitted_at', null).is('nfse_emitted_at', null);
+      }
 
       if (f.clientId) q = q.eq('client_id', f.clientId as string);
       if (f.supplierId) q = q.eq('supplier_id', f.supplierId as string);
