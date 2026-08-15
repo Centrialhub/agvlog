@@ -460,7 +460,6 @@ export default function MdfeProvisional() {
               </div>
             )}
           </div>
-          </div>
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
