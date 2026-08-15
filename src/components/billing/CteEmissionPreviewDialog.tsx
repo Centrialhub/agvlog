@@ -401,8 +401,12 @@ function toBuildInput(
     // Início / fim da prestação (override de UFIni/UFFim). Início = remetente
     // (o builder cai no endereço do emitente quando o remetente não tem UF).
     origin: null,
-    destination: e.recipientCity || e.recipientState
-      ? { city: e.recipientCity || null, state: e.recipientState || null }
+    destination: e.recipientCityIbge || e.recipientCity || e.recipientState
+      ? { 
+          city: e.recipientCity || null, 
+          state: e.recipientState || null,
+          city_ibge: e.recipientCityIbge || null
+        }
       : null,
     invoices: e.invoices,
     totals: {
@@ -664,7 +668,6 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
       'recipientName', 'recipientCnpj', 'recipientIe',
       'recipientCity', 'recipientState',
       'remitterStreet', 'remitterNumber', 'remitterNeighborhood', 'remitterZip',
-      'recipientStreet', 'recipientNumber', 'recipientNeighborhood', 'recipientZip', 'recipientCityIbge',
 
       'consigneeClientId', 'consigneeName', 'consigneeCnpj',
       'expedidorName', 'expedidorCnpj',

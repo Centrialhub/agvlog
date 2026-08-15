@@ -286,7 +286,8 @@ function serializeParty(p: CteParty | null | undefined) {
           complemento: p.address.complement || undefined,
           bairro: p.address.neighborhood || undefined,
           municipio: p.address.city || undefined,
-          codigoMunicipio: p.address.city_ibge || undefined,
+          cMun: digits(p.address.city_ibge) || undefined,
+          codigoMunicipio: digits(p.address.city_ibge) || undefined,
           uf: p.address.state || undefined,
           cep: digits(p.address.zip) ? digits(p.address.zip).slice(0, 8).padStart(8, '0') : undefined,
           // Campos canônicos para provedores Hub Fiscal que exigem CEP maiúsculo no endereço
