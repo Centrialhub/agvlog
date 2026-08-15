@@ -289,6 +289,7 @@ function serializeParty(p: CteParty | null | undefined) {
   };
 }
 
+
 const TAKER_INDEX: Record<CteTakerRole, number> = {
   remetente: 0,
   expedidor: 1,
