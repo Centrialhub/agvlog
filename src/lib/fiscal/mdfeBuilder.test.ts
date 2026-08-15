@@ -30,6 +30,11 @@ describe('mdfeBuilder', () => {
     documents: [
       { key: '35260812345678000190570010000000011000000010', type: 'cte' }
     ],
+    insurance: {
+      providerName: 'SEGURADORA TESTE',
+      providerCnpj: '12345678000190',
+      policyNumber: 'APOLICE-1001',
+    },
     nature: 'VENDA DE SERVICO',
     observations: 'MDF-E DE TESTE',
     externalId: 'TRIP-1001'
