@@ -162,10 +162,11 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
         },
       ],
       // O Hub v1 exige o grupo infToma quando ide/tpEmit=1 (Prestador de Transporte).
-      // Para MDF-e, o padrão é indicar o CNPJ do emitente como responsável pelo transporte.
-      disp: [
+      infToma: [
         {
-          CNPJ: digits(input.emitter.cnpj),
+          infToma: {
+            CNPJ: digits(input.emitter.cnpj),
+          },
         },
       ],
       infAdic: {
