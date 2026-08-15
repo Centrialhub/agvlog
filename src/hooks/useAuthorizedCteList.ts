@@ -14,6 +14,8 @@ export interface AuthorizedCte {
   driver_name: string | null;
   hub_document_id: string | null;
   cargo_value: number | null;
+  remitter_cnpj: string | null;
+  recipient_cnpj: string | null;
 }
 
 export function useAuthorizedCteList() {
@@ -33,8 +35,11 @@ export function useAuthorizedCteList() {
           status, 
           sefaz_status,
           remitter, 
+          remitter_cnpj,
           recipient, 
+          recipient_cnpj,
           recipient_city, 
+
           issue_date,
           value,
           hub_document_id
@@ -84,7 +89,9 @@ export function useAuthorizedCteList() {
         vehicle_plate: null, // fiscal_documents não tem placa direto, precisaríamos de join se fosse vital agora
         driver_name: null,
         hub_document_id: d.hub_document_id,
-        cargo_value: d.value ? Number(d.value) : 0
+        cargo_value: d.value ? Number(d.value) : 0,
+        remitter_cnpj: (d as any).remitter_cnpj,
+        recipient_cnpj: (d as any).recipient_cnpj
       }));
     }
   });

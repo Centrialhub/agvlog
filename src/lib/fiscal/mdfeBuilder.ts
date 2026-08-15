@@ -57,6 +57,10 @@ export interface BuildMdfePayloadInput {
   externalId?: string | null;
   valCarga?: number;
   cMone?: string;
+  takers?: Array<{
+    cnpj: string;
+    name: string;
+  }>;
 }
 
 export interface BuildMdfePayloadResult {
@@ -191,15 +195,18 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
         toma: '1', // 1=Contratante do serviço (Tomador do CT-e)
       },
       // Quando tpEmit=1 (Prestador), é obrigatório informar ao menos um contratante no modal rodoviário.
-      // Para simplificação e congruência, enviamos o próprio emitente como contratante padrão
-      // caso não tenhamos a lista de tomadores dos CT-es individuais.
       modalRodoviario: {
-        contratantes: [
-          {
-            xNome: input.emitter.name,
-            cpfCnpj: digits(input.emitter.cnpj),
-          },
-        ],
+        contratantes: (input.takers && input.takers.length > 0)
+          ? input.takers.map(t => ({
+              xNome: t.name,
+              cpfCnpj: digits(t.cnpj),
+            }))
+          : [
+              {
+                xNome: input.emitter.name,
+                cpfCnpj: digits(input.emitter.cnpj),
+              },
+            ],
       },
 
 

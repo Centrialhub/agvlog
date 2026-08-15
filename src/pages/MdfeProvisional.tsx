@@ -175,7 +175,13 @@ export default function MdfeProvisional() {
           policyNumber: insurance?.policy || '',
         },
         valCarga: Number(totalCargoValue) || 0,
-        cMone: '098'
+        cMone: '098',
+        takers: Array.from(new Map(
+          selectedDocs.map(d => [d.recipient_cnpj || d.remitter_cnpj, { 
+            cnpj: d.recipient_cnpj || d.remitter_cnpj || '', 
+            name: d.recipient || d.remitter || '' 
+          }])
+        ).values()).filter(t => t.cnpj)
       };
 
       const { ok, payload, missing } = buildMdfePayload(input);
@@ -264,8 +270,8 @@ export default function MdfeProvisional() {
             <CardTitle className="text-sm font-medium">Status Motor</CardTitle>
           </CardHeader>
           <CardContent className="flex items-center gap-2">
-            <Badge className="bg-green-500/10 text-green-500">Engine v2.5 (Beta)</Badge>
-            <span className="text-xs text-muted-foreground">Adicionado xNome em contratantes</span>
+            <Badge className="bg-green-500/10 text-green-500">Engine v2.6 (Beta)</Badge>
+            <span className="text-xs text-muted-foreground">Mapeamento dinâmico de contratantes</span>
           </CardContent>
         </Card>
       </div>
