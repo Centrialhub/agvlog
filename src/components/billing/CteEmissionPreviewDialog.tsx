@@ -321,7 +321,7 @@ function toBuildInput(
     ),
     overrides: {
       remitter: null, // Remetente usa dados do sistema normalmente conforme pedido do usuário
-      recipient: (e.recipientStreet || e.recipientNumber || e.recipientNeighborhood || e.recipientZip || e.recipientCnpj || e.recipientIe || e.recipientCityIbge) ? {
+      recipient: (e.recipientStreet || e.recipientNumber || e.recipientNeighborhood || e.recipientZip || e.recipientCnpj || e.recipientIe || e.recipientCityIbge || e.recipientCity || e.recipientState) ? {
         cnpj: e.recipientCnpj || null,
         ie: e.recipientIe || null,
         address: {
@@ -329,6 +329,8 @@ function toBuildInput(
           number: e.recipientNumber || null,
           neighborhood: e.recipientNeighborhood || null,
           zip: e.recipientZip || null,
+          city: e.recipientCity || null,
+          state: e.recipientState || null,
           city_ibge: e.recipientCityIbge || null
         } as any
       } : null,
@@ -665,8 +667,6 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     // Chaves específicas de cada CT-e.
     const PER_ITEM_ONLY = new Set<keyof EditableCte>([
       'remitterName', 'remitterCnpj', 'remitterIe',
-      'recipientName', 'recipientCnpj', 'recipientIe',
-      'recipientCity', 'recipientState',
       'remitterStreet', 'remitterNumber', 'remitterNeighborhood', 'remitterZip',
 
       'consigneeClientId', 'consigneeName', 'consigneeCnpj',
