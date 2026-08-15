@@ -37,6 +37,12 @@ export interface MdfeLocation {
   state: string;
 }
 
+export interface MdfeInsurance {
+  providerName: string;
+  providerCnpj: string;
+  policyNumber: string;
+}
+
 export interface BuildMdfePayloadInput {
   emitter: MdfeEmitter;
   driver: MdfeDriver;
@@ -45,6 +51,7 @@ export interface BuildMdfePayloadInput {
   origin: MdfeLocation;
   destination: MdfeLocation;
   documents: MdfeDocument[];
+  insurance?: MdfeInsurance | null; // Seguro da carga (obrigatório para prestador)
   nature?: string;
   observations?: string | null;
   externalId?: string | null;
@@ -77,7 +84,12 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
     missing.push('Tara do veículo (obrigatório)');
   }
   if (!input.origin?.city_ibge) missing.push('Cidade de origem (IBGE)');
-  if (!input.destination?.city_ibge) missing.push('Cidade de destino (IBGE)');
+  if (!input.insurance?.providerCnpj) missing.push('CNPJ da Seguradora');
+  if (!input.insurance?.policyNumber) missing.push('Número da Apólice');
+
+  if (!input.insurance?.providerCnpj) missing.push('CNPJ da Seguradora');
+  if (!input.insurance?.policyNumber) missing.push('Número da Apólice');
+  if (!input.insurance?.providerName) missing.push('Nome da Seguradora');
 
   const payload: Record<string, unknown> = {
     emitterCnpj: digits(input.emitter.cnpj),
@@ -132,6 +144,19 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
           cMunCarrega: digits(input.origin.city_ibge),
           xMunCarrega: input.origin.city_name,
         },
+      ],
+      seg: [
+        {
+          infResp: {
+            respSeg: '1', // 1=Emitente do MDF-e
+            CNPJ: digits(input.emitter.cnpj),
+          },
+          infSeg: {
+            xSeg: input.insurance?.providerName || '',
+            CNPJ: digits(input.insurance?.providerCnpj || ''),
+          },
+          nApol: input.insurance?.policyNumber || '',
+        }
       ],
       infAdic: {
         infCpl: input.observations || '',
