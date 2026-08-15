@@ -196,6 +196,7 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
       modalRodoviario: {
         contratantes: [
           {
+            xNome: input.emitter.name,
             cpfCnpj: digits(input.emitter.cnpj),
           },
         ],
