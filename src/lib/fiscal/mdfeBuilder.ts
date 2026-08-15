@@ -92,8 +92,9 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
 
   // Adiciona validação de tomadores (infToma no Hub Fiscal v1)
   if (!input.documents || input.documents.length === 0) {
-    missing.push('Documentos vinculados (CT-e/NF-e)');
+    missing.push('Informações dos tomadores é obrigatória para esta operação');
   }
+
 
 
   const payload: Record<string, unknown> = {
