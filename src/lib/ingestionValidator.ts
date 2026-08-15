@@ -46,7 +46,7 @@ export interface ValidationIndexes {
   accessKeySet: Set<string>;
   invoiceNumberSet: Set<string>;
   clientByTaxId: Map<string, Client>;
-  clientByNameLower: Map<string, Client>;
+  clientByNameCity: Map<string, Client>; // Nova indexação: "NOME|CIDADE"
   /** existing doc por chave de acesso — usado para detectar órfãos reutilizáveis */
   docByAccessKey: Map<string, FiscalDocument>;
   /** existing doc por número de nota (fallback quando falta a chave) */
@@ -54,6 +54,7 @@ export interface ValidationIndexes {
   /** existing doc por identidade fiscal composta: fornecedor + modelo + série + número */
   docByCompositeIdentity: Map<string, FiscalDocument>;
 }
+
 
 function fiscalCompositeKey(input: {
   emitterCnpj?: string | null;
@@ -94,13 +95,20 @@ export function buildValidationIndexes(existingDocs: FiscalDocument[], clients: 
     }
   }
   const clientByTaxId = new Map<string, Client>();
-  const clientByNameLower = new Map<string, Client>();
+  const clientByNameCity = new Map<string, Client>();
   for (const c of clients) {
     const tax = (c.tax_id || '').replace(/\D/g, '');
     if (tax) clientByTaxId.set(tax, c);
-    if (c.company_name) clientByNameLower.set(c.company_name.toLowerCase(), c);
+    
+    // Indexa por Nome + Cidade para diferenciar filiais
+    if (c.company_name) {
+      const city = (c.address_city || '').toUpperCase().trim();
+      const key = `${c.company_name.toLowerCase()}|${city}`;
+      clientByNameCity.set(key, c);
+    }
   }
-  return { accessKeySet, invoiceNumberSet, clientByTaxId, clientByNameLower, docByAccessKey, docByInvoiceNumber, docByCompositeIdentity };
+  return { accessKeySet, invoiceNumberSet, clientByTaxId, clientByNameCity, docByAccessKey, docByInvoiceNumber, docByCompositeIdentity };
+
 }
 
 // Validate a parsed NF-e against existing data
@@ -212,20 +220,37 @@ export function validateNFe(
 
   let matchedClientId: string | null = null;
   let matchedClientName: string | null = null;
+  
   const recipientDoc = (nfe.recipientCnpj || '').replace(/\D/g, '');
+  const recipientCity = (nfe.recipientCity || '').toUpperCase().trim();
+  
+  // 1. Tenta por CNPJ (mais forte)
   if (recipientDoc) {
     const matched = idx.clientByTaxId.get(recipientDoc);
     if (matched) {
       matchedClientId = matched.id;
       matchedClientName = matched.company_name;
-    } else {
-      validations.push({
-        field: 'client',
-        message: `Cliente não cadastrado: ${nfe.recipientName} (${nfe.recipientCnpj})`,
-        severity: 'warning',
-      });
     }
   }
+
+  // 2. Se não achou por CNPJ ou para garantir a filial correta, tenta por Nome + Cidade
+  if (!matchedClientId && nfe.recipientName) {
+    const nameKey = `${nfe.recipientName.toLowerCase()}|${recipientCity}`;
+    const matched = idx.clientByNameCity.get(nameKey);
+    if (matched) {
+      matchedClientId = matched.id;
+      matchedClientName = matched.company_name;
+    }
+  }
+
+  if (!matchedClientId) {
+    validations.push({
+      field: 'client',
+      message: `Cliente não cadastrado: ${nfe.recipientName} (${nfe.recipientCnpj || 'sem documento'}) em ${nfe.recipientCity || 'cidade não informada'}`,
+      severity: 'warning',
+    });
+  }
+
 
   if (!nfe.recipientCity && !nfe.recipientState) {
     validations.push({ field: 'destination', message: 'Endereço de destino incompleto', severity: 'warning' });
