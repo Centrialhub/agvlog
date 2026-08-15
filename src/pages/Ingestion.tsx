@@ -606,7 +606,23 @@ export default function Ingestion() {
       if (fb.kind === 'xml') {
         try {
           const parsed = parseNFeXml(fb.text);
-          docs.push(validateNFe(parsed, fb.file.name, existingDocs, clients, indexes));
+          const validated = validateNFe(parsed, fb.file.name, existingDocs, clients, indexes);
+          
+          // Re-validate specifically for multi-branch branch congruence if multiple CNPJ matches exist
+          const cnpj = (parsed.recipientCnpj || '').replace(/\D/g, '');
+          if (cnpj) {
+            const matches = clients.filter(c => (c.tax_id || '').replace(/\D/g, '') === cnpj);
+            if (matches.length > 1) {
+              const city = (parsed.recipientCity || '').toUpperCase().trim();
+              const branchMatch = matches.find(c => (c.address_city || '').toUpperCase().trim() === city);
+              if (branchMatch) {
+                validated.matchedClientId = branchMatch.id;
+                validated.matchedClientName = branchMatch.company_name;
+              }
+            }
+          }
+          
+          docs.push(validated);
         } catch (e: any) {
           docs.push({
             source: { invoiceNumber: '', accessKey: '', items: [] } as any,
