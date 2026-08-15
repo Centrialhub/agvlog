@@ -173,6 +173,9 @@ export default function Billing() {
   const [allOps, setAllOps] = useState(true);
 
   // ===== Pré-filtragem server-side (usa índices criados) =====
+  const [onlySpecific, setOnlySpecific] = useState<boolean>(false);
+  const problematicInvoices = ['444798', '444797', '444796', '446083', '446072', '446071', '446070', '446069', '446068', '446067', '446066', '446065', '446064'];
+
   const { data: docs = [], isLoading: docsLoading } = useBillingDocuments({
     clientId: clientId !== SENTINEL_NONE ? clientId : null,
     supplierId: supplierId !== SENTINEL_NONE ? supplierId : null,
@@ -185,6 +188,7 @@ export default function Billing() {
     recipientCnpj: cnpj || null,
     remitterCnpj: supplierCnpj || null,
     recipientCity: recipientCity !== SENTINEL_NONE ? recipientCity : null,
+    onlySpecificInvoices: onlySpecific ? problematicInvoices : null,
   });
 
   // ===== Hidrata estado a partir da preferência salva (uma única vez) =====
@@ -681,6 +685,14 @@ export default function Billing() {
             </Button>
             <Button variant="ghost" size="sm" onClick={clearDocSelection} disabled={selectedDocIds.size === 0}>
               <Eraser className="h-4 w-4 mr-1" /> Limpar seleção
+            </Button>
+            <Button 
+              variant={onlySpecific ? "default" : "outline"} 
+              size="sm" 
+              onClick={() => setOnlySpecific(!onlySpecific)}
+              className={onlySpecific ? "bg-amber-600 hover:bg-amber-700" : ""}
+            >
+              {onlySpecific ? "Mostrando 13" : "Isolar as 13"}
             </Button>
             <Button
               variant="outline"
