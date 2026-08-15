@@ -567,11 +567,13 @@ function CteDetail({ row, onClose }: { row: CteMonitorRow; onClose: () => void }
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-3 text-sm">
+      <div className="grid grid-cols-2 gap-3 text-sm border-b pb-4 mb-4">
+        <div><span className="text-muted-foreground">Emissão:</span> {row.issued_at ? new Date(row.issued_at).toLocaleString('pt-BR') : '—'}</div>
+        <div><span className="text-muted-foreground">Protocolo:</span> {row.protocol_number ?? '—'}</div>
+        <div><span className="text-muted-foreground">Remetente:</span> {row.remitter ?? '—'}</div>
         <div><span className="text-muted-foreground">Pagador:</span> {row.payer_name ?? '—'}</div>
-        <div><span className="text-muted-foreground">CNPJ Pagador:</span> {row.payer_cnpj ?? '—'}</div>
         <div><span className="text-muted-foreground">Destinatário:</span> {row.recipient ?? '—'}</div>
-        <div><span className="text-muted-foreground">Cidade/UF:</span> {row.recipient_city ?? '—'} / {row.recipient_state ?? '—'}</div>
+        <div><span className="text-muted-foreground">Cidade/UF Destino:</span> {row.recipient_city ?? '—'} / {row.recipient_state ?? '—'}</div>
         <div><span className="text-muted-foreground">Protocolo:</span> {row.protocol_number ?? '—'}</div>
         <div><span className="text-muted-foreground">Ambiente:</span> {row.sefaz_environment ?? '—'}</div>
         <div><span className="text-muted-foreground">Placa:</span> {row.vehicle_plate ?? '—'}</div>
