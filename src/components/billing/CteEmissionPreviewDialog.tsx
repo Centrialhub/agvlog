@@ -664,6 +664,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
       'recipientName', 'recipientCnpj', 'recipientIe',
       'recipientCity', 'recipientState',
       'remitterStreet', 'remitterNumber', 'remitterNeighborhood', 'remitterZip',
+      'recipientStreet', 'recipientNumber', 'recipientNeighborhood', 'recipientZip', 'recipientCityIbge',
 
       'consigneeClientId', 'consigneeName', 'consigneeCnpj',
       'expedidorName', 'expedidorCnpj',
@@ -1015,6 +1016,10 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                   <div>
                     <Label>CEP</Label>
                     <Input value={active.recipientZip} onChange={(e) => patch({ recipientZip: e.target.value })} />
+                  </div>
+                  <div>
+                    <Label>Cód. Município (IBGE)</Label>
+                    <Input value={active.recipientCityIbge} onChange={(e) => patch({ recipientCityIbge: e.target.value })} placeholder="Ex: 3143302" />
                   </div>
                 </div>
                 <div>
