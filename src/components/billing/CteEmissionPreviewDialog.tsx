@@ -401,8 +401,12 @@ function toBuildInput(
     // Início / fim da prestação (override de UFIni/UFFim). Início = remetente
     // (o builder cai no endereço do emitente quando o remetente não tem UF).
     origin: null,
-    destination: e.recipientCity || e.recipientState
-      ? { city: e.recipientCity || null, state: e.recipientState || null }
+    destination: e.recipientCityIbge || e.recipientCity || e.recipientState
+      ? { 
+          city: e.recipientCity || null, 
+          state: e.recipientState || null,
+          city_ibge: e.recipientCityIbge || null
+        }
       : null,
     invoices: e.invoices,
     totals: {
