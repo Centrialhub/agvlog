@@ -368,12 +368,12 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
                           <Package className={`h-3 w-3 shrink-0 ${selected ? 'text-primary' : 'text-muted-foreground'}`} />
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between gap-2">
-                              <span className="font-semibold text-primary truncate">
+                              <span className="font-semibold text-primary truncate min-w-0 flex-1">
                                 {item.item_description || 'Item sem descrição'}
                               </span>
                               {fd?.remitter && (
-                                <Badge variant="outline" className="text-[9px] h-4 px-1 bg-muted/30 border-primary/20 text-primary/80 shrink-0">
-                                  {fd.remitter.split(' ')[0]}
+                                <Badge variant="outline" className="text-[9px] h-4 px-1 bg-muted/30 border-primary/20 text-primary/80 shrink-0 max-w-[60px] truncate">
+                                  {fd.remitter}
                                 </Badge>
                               )}
                             </div>
