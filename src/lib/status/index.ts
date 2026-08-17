@@ -7,6 +7,7 @@ export const TRIP_ACTIVE_STATUSES = [
   'loading',
   'dispatched',
   'in_progress',
+  'in_transit',
 ] as const;
 export type TripActiveStatus = (typeof TRIP_ACTIVE_STATUSES)[number];
 
@@ -15,6 +16,7 @@ export const TRIP_STATUS_LABELS: Record<string, string> = {
   loading: 'Em carregamento',
   dispatched: 'Despachada',
   in_progress: 'Em andamento',
+  in_transit: 'Em trânsito',
   completed: 'Concluída',
   cancelled: 'Cancelada',
 };
