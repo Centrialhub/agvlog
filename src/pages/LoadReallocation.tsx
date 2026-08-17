@@ -372,9 +372,16 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
                                 {fd?.recipient || item.item_description || 'Item sem descrição'}
                               </span>
                               {fd?.remitter && (
-                                <Badge variant="outline" className="text-[10px] h-5 px-1.5 bg-muted/30 border-primary/20 text-primary shrink-0 max-w-[150px] truncate" title={`${fd.remitter} (CNPJ: ${fd.remitter_cnpj || 'N/A'})`}>
-                                  {fd.remitter} {fd.remitter_cnpj && <span className="ml-1 opacity-70">({fd.remitter_cnpj})</span>}
-                                </Badge>
+                                <div className="flex flex-col items-end shrink-0 max-w-[120px]">
+                                  <Badge variant="outline" className="text-[9px] h-3.5 px-1 bg-muted/30 border-primary/20 text-primary w-full justify-center truncate" title={fd.remitter}>
+                                    {fd.remitter}
+                                  </Badge>
+                                  {fd.remitter_cnpj && (
+                                    <span className="text-[8px] opacity-70 mt-0.5 font-mono">
+                                      {fd.remitter_cnpj}
+                                    </span>
+                                  )}
+                                </div>
                               )}
                             </div>
                           </div>
