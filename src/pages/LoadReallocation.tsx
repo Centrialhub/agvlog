@@ -150,9 +150,9 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
           <div className="space-y-1 rounded-md bg-muted/40 border border-border/60 p-1.5">
             {recipientsSummary.recipients.length > 0 && (
               <div className="flex flex-col gap-1">
-                <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground shrink-0">
-                    Fornecedores
+                <div className="flex items-start gap-1.5 min-w-0 overflow-hidden">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground shrink-0 mt-0.5">
+                    Rem.
                   </span>
                   <div className="flex flex-wrap gap-1 items-center min-w-0 overflow-hidden">
                     {recipientsSummary.remitters.slice(0, 3).map(([name, n]) => {
@@ -161,7 +161,7 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
                         <Badge
                           key={name}
                           variant="outline"
-                          className="text-[9px] font-normal border-primary/20 bg-primary/5 text-primary max-w-[90px] py-0 h-4"
+                          className="text-[9px] font-normal border-primary/20 bg-primary/5 text-primary max-w-[80px] py-0 h-4 px-1"
                           title={clientName ? `${clientName} (${name})` : name}
                         >
                           <span className="truncate">{clientName || name}</span>
@@ -176,16 +176,16 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground shrink-0">
-                    Clientes
+                <div className="flex items-start gap-1.5 min-w-0 overflow-hidden">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground shrink-0 mt-0.5">
+                    Dest.
                   </span>
                   <div className="flex flex-wrap gap-1 items-center min-w-0 overflow-hidden">
                     {recipientsSummary.recipients.slice(0, 4).map(([name, n]) => (
                       <Badge
                         key={name}
                         variant="secondary"
-                        className="text-[9px] font-normal max-w-[90px] py-0 h-4"
+                        className="text-[9px] font-normal max-w-[80px] py-0 h-4 px-1"
                         title={name}
                       >
                         <span className="truncate">{name}</span>
@@ -202,13 +202,13 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
               </div>
             )}
             {recipientsSummary.cities.length > 0 && (
-              <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground shrink-0">
-                  Cidades
+              <div className="flex items-start gap-1.5 min-w-0 overflow-hidden">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground shrink-0 mt-0.5">
+                  Cid.
                 </span>
                 <div className="flex flex-wrap gap-1 min-w-0 overflow-hidden">
                   {recipientsSummary.cities.slice(0, 5).map(([label, n]) => (
-                    <Badge key={label} variant="outline" className="text-[9px] font-normal max-w-[80px] py-0 h-4">
+                    <Badge key={label} variant="outline" className="text-[9px] font-normal max-w-[70px] py-0 h-4 px-1">
                       <span className="truncate">{label}</span>
                       <span className="ml-0.5 text-muted-foreground shrink-0 text-[8px]">·{n}</span>
                     </Badge>
