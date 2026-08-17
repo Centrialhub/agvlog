@@ -127,11 +127,18 @@ export default function DriverHome() {
 
   // Loads without an associated trip (driver assigned directly but no dispatch yet).
   const tripLoadIds = new Set(activeTrips.map((t: any) => t.loads?.id || t.load_id).filter(Boolean));
-  const standaloneLoads = myLoads.filter((l: any) => !l.trip_id && !tripLoadIds.has(l.id));
+  // Filtra cargas que não estão em uma viagem ativa mas estão atribuídas ao motorista
+  const standaloneLoads = myLoads.filter((l: any) => 
+    !l.trip_id && !tripLoadIds.has(l.id)
+  );
 
   const loading = driverLoading || tripsLoading || loadsLoading;
-
-  const tripsToShow: any[] = activeTrips.filter(t => TRIP_ACTIVE_STATUSES.includes(t.status as any));
+  
+  // Inclui também viagens onde a carga associada está em trânsito
+  const tripsToShow: any[] = activeTrips.filter(t => 
+    TRIP_ACTIVE_STATUSES.includes(t.status as any) || 
+    t.loads?.status === 'in_transit'
+  );
 
   // Constrói pontos reais do mapa a partir das paradas com lat/lng.
   const TERMINAL_STOP_STATUSES = new Set(['completed', 'delivered', 'refused', 'returned', 'failed', 'partial_delivery']);
