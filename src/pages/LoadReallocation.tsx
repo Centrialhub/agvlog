@@ -304,7 +304,7 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
           <p className="text-xs text-muted-foreground text-center py-4">
             Nenhum item encontrado no filtro
           </p>
-        ) : (
+        ) : (() => {
           // Agrupar por nota fiscal (invoice_number)
           const grouped = filteredItems.reduce((acc, item) => {
             const fd: any = Array.isArray(item.fiscal_documents) ? item.fiscal_documents[0] : (item.fiscal_documents || {});
