@@ -419,13 +419,15 @@ export default function LoadReallocation() {
 
   // Predominant client / city per load id
   const loadMeta = useMemo(() => {
-    const byLoad = new Map<string, { clients: Map<string, number>; cities: Map<string, number> }>();
+    const byLoad = new Map<string, { remitters: Map<string, number>; clients: Map<string, number>; cities: Map<string, number> }>();
     for (const row of allActiveItems) {
       const fd = row.fiscal_documents || {};
+      const rem = fd.remitter as string | null;
       const rec = fd.recipient as string | null;
       const city = fd.recipient_city as string | null;
       const state = fd.recipient_state as string | null;
-      const bucket = byLoad.get(row.load_id) || { clients: new Map(), cities: new Map() };
+      const bucket = byLoad.get(row.load_id) || { remitters: new Map(), clients: new Map(), cities: new Map() };
+      if (rem) bucket.remitters.set(rem, (bucket.remitters.get(rem) || 0) + 1);
       if (rec) bucket.clients.set(rec, (bucket.clients.get(rec) || 0) + 1);
       if (city) {
         const label = state ? `${city}/${state}` : city;
@@ -438,8 +440,8 @@ export default function LoadReallocation() {
       m.forEach((n, k) => { if (n > bestN) { bestN = n; best = k; } });
       return best;
     };
-    const out = new Map<string, { client: string | null; city: string | null }>();
-    byLoad.forEach((b, id) => out.set(id, { client: pick(b.clients), city: pick(b.cities) }));
+    const out = new Map<string, { remitter: string | null; client: string | null; city: string | null }>();
+    byLoad.forEach((b, id) => out.set(id, { remitter: pick(b.remitters), client: pick(b.clients), city: pick(b.cities) }));
     return out;
   }, [allActiveItems]);
 
