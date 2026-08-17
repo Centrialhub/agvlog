@@ -373,7 +373,7 @@ function DriverChat({ eventId, driverName }: { eventId: string; driverName: stri
       </div>
       <div className="p-3 border-t bg-background flex gap-2">
         <Input
-          placeholder="Mensagem para a operação..."
+          placeholder="Escreva sua mensagem..."
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
