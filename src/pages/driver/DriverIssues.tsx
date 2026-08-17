@@ -315,7 +315,7 @@ function DriverChatSheet({ event, driverName, onClose }: { event: any | null; dr
           <>
             <SheetHeader className="p-4 border-b">
               <SheetTitle className="text-base flex items-center gap-2">
-                <MessageSquare className="h-4 w-4 text-primary" /> Chat com a operação
+                <MessageSquare className="h-4 w-4 text-primary" /> Comunicação com a operação
               </SheetTitle>
               <p className="text-xs text-muted-foreground">{event.description || event.event_type}</p>
             </SheetHeader>
@@ -351,7 +351,7 @@ function DriverChat({ eventId, driverName }: { eventId: string; driverName: stri
           <div className="text-center text-xs text-muted-foreground py-4">Carregando...</div>
         ) : messages.length === 0 ? (
           <div className="text-center text-xs text-muted-foreground py-8">
-            Nenhuma mensagem ainda. A operação será notificada assim que você escrever.
+            Aguardando mensagens da equipe de operação.
           </div>
         ) : (
           messages.map((m: any) => {
