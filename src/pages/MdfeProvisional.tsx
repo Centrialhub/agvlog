@@ -82,11 +82,11 @@ export default function MdfeProvisional() {
       const total = selectedDocs.reduce((acc, doc) => acc + (doc.cargo_value || 0), 0);
       setTotalCargoValue(total.toFixed(2));
 
-      // Pré-preenche o tomador com o primeiro documento selecionado
+      // Pré-preenche o tomador com o fornecedor (Remetente) do primeiro documento selecionado
       const first = selectedDocs[0];
       if (first) {
-        setPayName(prev => prev || first.recipient || first.remitter || '');
-        setPayDoc(prev => prev || first.recipient_cnpj || first.remitter_cnpj || '');
+        setPayName(prev => prev || first.remitter || '');
+        setPayDoc(prev => prev || first.remitter_cnpj || '');
       }
     }
   }, [isDialogOpen, selectedIds, ctes, emitters, emitterId, vehicles, vehicleId]);
@@ -200,9 +200,9 @@ export default function MdfeProvisional() {
         valCarga: Number(totalCargoValue) || 0,
         cMone: '098',
         takers: Array.from(new Map(
-          selectedDocs.map(d => [d.recipient_cnpj || d.remitter_cnpj, { 
-            cnpj: d.recipient_cnpj || d.remitter_cnpj || '', 
-            name: d.recipient || d.remitter || '' 
+          selectedDocs.map(d => [d.remitter_cnpj, { 
+            cnpj: d.remitter_cnpj || '', 
+            name: d.remitter || '' 
           }])
         ).values()).filter(t => t.cnpj),
         payment: includePayment
