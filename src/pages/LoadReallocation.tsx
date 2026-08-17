@@ -303,7 +303,7 @@ function LoadColumn({ load, items, vehicles, selectedItems, onToggleItem, onSele
           const grouped = filteredItems.reduce((acc, item) => {
             const fd: any = Array.isArray(item.fiscal_documents) ? item.fiscal_documents[0] : (item.fiscal_documents || {});
             const invoice = fd?.invoice_number;
-            const key = invoice || (item.orders?.order_number ? `PED ${item.orders.order_number}` : `ITEM-${item.id}`);
+            const key = invoice ? `INV-${invoice}` : (item.orders?.order_number ? `ORD-${item.orders.order_number}` : `ID-${item.id}`);
             
             if (!acc[key]) acc[key] = { items: [], totalValue: 0, invoice: invoice };
             acc[key].items.push(item);
