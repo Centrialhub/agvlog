@@ -676,7 +676,7 @@ export default function LoadReallocation() {
   const selectedWeight = sourceItems.filter(i => selectedItems.has(i.id)).reduce((s, i) => s + (i.weight_kg || 0), 0);
 
   return (
-    <div className="animate-fade-in space-y-5 max-w-6xl">
+    <div className="animate-fade-in space-y-4 w-full">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
