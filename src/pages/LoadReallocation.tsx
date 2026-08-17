@@ -401,8 +401,8 @@ export default function LoadReallocation() {
     [loads]
   );
 
-  const { data: sourceItems = [] } = useLoadItems(sourceLoadId || undefined);
-  const { data: targetItems = [] } = useLoadItems(targetLoadId || undefined);
+  const { data: sourceItems = [], isLoading: loadingSource } = useLoadItems(sourceLoadId || undefined);
+  const { data: targetItems = [], isLoading: loadingTarget } = useLoadItems(targetLoadId || undefined);
 
   // Fetch aggregate metadata (client/city) for all active loads to allow
   // hierarchical grouping in the selectors: Client → City → Route → Load.
@@ -778,31 +778,49 @@ export default function LoadReallocation() {
       {sourceLoadId && targetLoadId ? (
         <div className="flex gap-4">
           {sourceLoad && (
-            <LoadColumn
-              load={sourceLoad}
-              items={sourceItems}
-              vehicles={vehicles as any[]}
-              selectedItems={selectedItems}
-              onToggleItem={toggleItem}
-              onSelectMany={(ids, checked) => {
-                setSelectedItems(prev => {
-                  const next = new Set(prev);
-                  if (checked) ids.forEach(id => next.add(id));
-                  else ids.forEach(id => next.delete(id));
-                  return next;
-                });
-              }}
-            />
+            loadingSource ? (
+              <Card className="flex-1">
+                <CardContent className="py-16 text-center">
+                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto mb-4" />
+                  <p className="text-sm text-muted-foreground">Carregando itens da origem...</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <LoadColumn
+                load={sourceLoad}
+                items={sourceItems}
+                vehicles={vehicles as any[]}
+                selectedItems={selectedItems}
+                onToggleItem={toggleItem}
+                onSelectMany={(ids, checked) => {
+                  setSelectedItems(prev => {
+                    const next = new Set(prev);
+                    if (checked) ids.forEach(id => next.add(id));
+                    else ids.forEach(id => next.delete(id));
+                    return next;
+                  });
+                }}
+              />
+            )
           )}
           {targetLoad && (
-            <LoadColumn
-              load={targetLoad}
-              items={targetItems}
-              vehicles={vehicles as any[]}
-              selectedItems={new Set()}
-              onToggleItem={() => {}}
-              isTarget
-            />
+            loadingTarget ? (
+              <Card className="flex-1">
+                <CardContent className="py-16 text-center">
+                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto mb-4" />
+                  <p className="text-sm text-muted-foreground">Carregando itens do destino...</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <LoadColumn
+                load={targetLoad}
+                items={targetItems}
+                vehicles={vehicles as any[]}
+                selectedItems={new Set()}
+                onToggleItem={() => {}}
+                isTarget
+              />
+            )
           )}
         </div>
       ) : (
