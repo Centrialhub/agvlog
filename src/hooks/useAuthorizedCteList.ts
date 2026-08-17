@@ -47,6 +47,7 @@ export function useAuthorizedCteList() {
           recipient, 
           recipient_cnpj,
           recipient_city, 
+          manual_payload,
 
           issue_date,
           value,
