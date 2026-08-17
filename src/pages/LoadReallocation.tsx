@@ -185,7 +185,7 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
                       <Badge
                         key={name}
                         variant="secondary"
-                        className="text-[9px] font-normal max-w-[90px] py-0 h-4"
+                        className="text-[9px] font-normal max-w-[80px] py-0 h-4 px-1"
                         title={name}
                       >
                         <span className="truncate">{name}</span>
