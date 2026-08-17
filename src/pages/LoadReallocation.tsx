@@ -119,12 +119,17 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
   }, [items]);
 
   return (
-    <Card className={`flex-1 min-w-0 ${isTarget ? 'ring-2 ring-primary/30' : ''}`}>
-      <CardHeader className="pb-2 space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-sm font-semibold truncate">Carga {load.load_number}</CardTitle>
+    <Card className={`flex flex-col h-full min-w-0 ${isTarget ? 'ring-2 ring-primary/30' : ''}`}>
+      <CardHeader className="pb-3 space-y-2 shrink-0">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <CardTitle className="text-sm font-bold truncate flex items-center gap-2">
+              <Package className="h-4 w-4 text-primary shrink-0" />
+              Carga {load.load_number}
+            </CardTitle>
+          </div>
           <div className="flex items-center gap-1 shrink-0">
-            <Badge variant="outline" className="text-[10px]">{load.destination || 'Sem destino'}</Badge>
+            <Badge variant="outline" className="text-[10px] bg-background/50 border-primary/20">{load.destination || 'Sem destino'}</Badge>
             <Link to={`/loads/${load.id}`}>
               <Button size="sm" variant="ghost" className="h-6 px-2 gap-1 text-[10px]" title="Abrir carga para fechar/emitir CT-e">
                 <ExternalLink className="h-3 w-3" />
@@ -290,7 +295,7 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
           </div>
         )}
       </CardHeader>
-      <CardContent className="p-2 space-y-2 max-h-[400px] overflow-y-auto">
+      <CardContent className="p-2 space-y-2 flex-1 overflow-y-auto min-h-0 bg-muted/5">
         {isLoading ? (
           <div className="py-8 text-center">
             <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent mx-auto mb-2" />
@@ -345,19 +350,20 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
                     )}
                   </div>
 
-                  {group.items.map(item => {
-                    const selected = selectedItems.has(item.id);
-                    const fd: any = Array.isArray(item.fiscal_documents) ? item.fiscal_documents[0] : (item.fiscal_documents || {});
-                    return (
-                      <button
-                        key={item.id}
-                        onClick={() => onToggleItem(item.id)}
-                        className={`w-full text-left rounded-md border p-2 text-xs transition-colors ${
-                          selected
-                            ? 'bg-primary/10 border-primary/40 ring-1 ring-primary/20'
-                            : 'bg-card border-border hover:bg-muted/50'
-                        }`}
-                      >
+                  <div className="space-y-1">
+                    {group.items.map(item => {
+                      const selected = selectedItems.has(item.id);
+                      const fd: any = Array.isArray(item.fiscal_documents) ? item.fiscal_documents[0] : (item.fiscal_documents || {});
+                      return (
+                        <button
+                          key={item.id}
+                          onClick={() => onToggleItem(item.id)}
+                          className={`w-full text-left rounded border p-2 text-xs transition-all ${
+                            selected
+                              ? 'bg-primary/10 border-primary/30 ring-1 ring-primary/20 shadow-sm'
+                              : 'bg-card border-border/60 hover:bg-muted/50 hover:border-primary/20'
+                          }`}
+                        >
                         <div className="flex items-center gap-2">
                           <Package className={`h-3 w-3 shrink-0 ${selected ? 'text-primary' : 'text-muted-foreground'}`} />
                           <div className="flex-1 min-w-0">
@@ -379,14 +385,15 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
                           {item.pallet_count > 0 && <span>• {item.pallet_count} PLT</span>}
                           {item.weight_kg > 0 && <span>• {item.weight_kg.toLocaleString('pt-BR')} kg</span>}
                           {fd?.recipient_city && (
-                            <span className="truncate border-l pl-2 ml-1">
+                            <span className="truncate border-l border-muted-foreground/30 pl-2 ml-1">
                               {fd.recipient_city}
                             </span>
                           )}
                         </div>
                       </button>
                     );
-                  })}
+                    })}
+                  </div>
                 </div>
               );
             });
@@ -805,10 +812,10 @@ export default function LoadReallocation() {
 
       {/* Side by side loads */}
       {sourceLoadId && targetLoadId ? (
-        <div className="flex gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-[700px]">
           {sourceLoad && (
             loadingSource ? (
-              <Card className="flex-1">
+              <Card className="h-full">
                 <CardContent className="py-16 text-center">
                   <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto mb-4" />
                   <p className="text-sm text-muted-foreground">Carregando itens da origem...</p>
@@ -835,7 +842,7 @@ export default function LoadReallocation() {
           )}
           {targetLoad && (
             loadingTarget ? (
-              <Card className="flex-1">
+              <Card className="h-full">
                 <CardContent className="py-16 text-center">
                   <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto mb-4" />
                   <p className="text-sm text-muted-foreground">Carregando itens do destino...</p>
