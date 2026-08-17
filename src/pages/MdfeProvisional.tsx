@@ -41,6 +41,22 @@ export default function MdfeProvisional() {
   const [destUf, setDestUf] = useState('');
   const [vehicleTara, setVehicleTara] = useState('');
   const [totalCargoValue, setTotalCargoValue] = useState('');
+
+  // Grupo de pagamento do tomador (Nota Técnica de piso mínimo de frete)
+  const [includePayment, setIncludePayment] = useState(false);
+  const [payName, setPayName] = useState('');
+  const [payDoc, setPayDoc] = useState('');
+  const [payContractValue, setPayContractValue] = useState('');
+  const [payCondition, setPayCondition] = useState<'avista' | 'aprazo'>('avista');
+  const [payAdvance, setPayAdvance] = useState('');
+  const [payPix, setPayPix] = useState('');
+  const [payBankCode, setPayBankCode] = useState('');
+  const [payAgency, setPayAgency] = useState('');
+  const [payAccount, setPayAccount] = useState('');
+  const [payIpefCnpj, setPayIpefCnpj] = useState('');
+  const [payInstallments, setPayInstallments] = useState<Array<{ dueDate: string; value: string }>>([
+    { dueDate: '', value: '' },
+  ]);
   const { data: hubCredentials = [] } = useHubCredentials(emitterId);
 
   // Auto-fill from selected CTEs
@@ -65,6 +81,13 @@ export default function MdfeProvisional() {
       const selectedDocs = ctes?.filter(c => selectedIds.includes(c.id)) || [];
       const total = selectedDocs.reduce((acc, doc) => acc + (doc.cargo_value || 0), 0);
       setTotalCargoValue(total.toFixed(2));
+
+      // Pré-preenche o tomador com o primeiro documento selecionado
+      const first = selectedDocs[0];
+      if (first) {
+        setPayName(prev => prev || first.recipient || first.remitter || '');
+        setPayDoc(prev => prev || first.recipient_cnpj || first.remitter_cnpj || '');
+      }
     }
   }, [isDialogOpen, selectedIds, ctes, emitters, emitterId, vehicles, vehicleId]);
 
@@ -181,7 +204,33 @@ export default function MdfeProvisional() {
             cnpj: d.recipient_cnpj || d.remitter_cnpj || '', 
             name: d.recipient || d.remitter || '' 
           }])
-        ).values()).filter(t => t.cnpj)
+        ).values()).filter(t => t.cnpj),
+        payment: includePayment
+          ? {
+              contractorName: payName,
+              contractorDoc: payDoc,
+              contractValue: Number(payContractValue) || 0,
+              paymentCondition: payCondition,
+              advanceValue: Number(payAdvance) || 0,
+              installments:
+                payCondition === 'aprazo'
+                  ? payInstallments
+                      .filter(p => p.dueDate || p.value)
+                      .map((p, idx) => ({
+                        number: idx + 1,
+                        dueDate: p.dueDate,
+                        value: Number(p.value) || 0,
+                      }))
+                  : [],
+              bank: {
+                pixKey: payPix,
+                bankCode: payBankCode,
+                agency: payAgency,
+                account: payAccount,
+                ipefCnpj: payIpefCnpj,
+              },
+            }
+          : null,
       };
 
       const { ok, payload, missing } = buildMdfePayload(input);
