@@ -274,7 +274,7 @@ function LoadColumn({ load, items, vehicles, selectedItems, onToggleItem, onSele
             return acc;
           }, {} as Record<string, { items: LoadItem[], totalValue: number, invoice: string | null }>);
 
-          return Object.entries(grouped).map(([key, group]) => {
+          return Object.entries(grouped).map(([key, group]: [string, any]) => {
             // Se o grupo está filtrado (algum item dele passa no filtro)
             const filteredGroupItems = group.items.filter(i => filteredItems.some(fi => fi.id === i.id));
             if (filteredGroupItems.length === 0) return null;
