@@ -360,14 +360,28 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
                       >
                         <div className="flex items-center gap-2">
                           <Package className={`h-3 w-3 shrink-0 ${selected ? 'text-primary' : 'text-muted-foreground'}`} />
-                          <span className="flex-1 truncate font-medium">{item.item_description}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-semibold text-primary truncate">
+                                {item.item_description || 'Item sem descrição'}
+                              </span>
+                              {fd?.remitter && (
+                                <Badge variant="outline" className="text-[9px] h-4 px-1 bg-muted/30 border-primary/20 text-primary/80 shrink-0">
+                                  {fd.remitter.split(' ')[0]}
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
                           {selected && <CheckCircle className="h-3 w-3 text-primary shrink-0" />}
                         </div>
-                        <div className="flex gap-3 mt-1 text-[10px] text-muted-foreground pl-5 flex-wrap">
-                          {item.pallet_count > 0 && <span>{item.pallet_count} pal</span>}
-                          {item.weight_kg > 0 && <span>{item.weight_kg.toLocaleString('pt-BR')} kg</span>}
-                          {item.quantity > 0 && <span>{item.quantity} un</span>}
-                          {fd.recipient_city && <span>{fd.recipient_city}{fd.recipient_state ? `/${fd.recipient_state}` : ''}</span>}
+                        <div className="flex items-center gap-2 mt-0.5 text-[10px] text-muted-foreground pl-5">
+                          <span>Qtd: {item.quantity}</span>
+                          {item.pallet_count > 0 && <span>• {item.pallet_count} PLT</span>}
+                          {fd?.recipient_city && (
+                            <span className="truncate border-l pl-2 ml-1">
+                              {fd.recipient_city}
+                            </span>
+                          )}
                         </div>
                       </button>
                     );
