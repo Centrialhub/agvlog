@@ -689,25 +689,32 @@ export default function LoadReallocation() {
       </div>
 
       {/* Load selectors */}
-      <div className="flex items-end gap-4 max-w-full overflow-hidden">
-        <div className="flex-1">
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] items-end gap-2 md:gap-4 max-w-full">
+        <div className="min-w-0">
           <label className="text-xs font-medium text-muted-foreground mb-1 block">Carga Origem</label>
           <Select value={sourceLoadId} onValueChange={v => { setSourceLoadId(v); setSelectedItems(new Set()); }}>
-            <SelectTrigger>
+            <SelectTrigger className="w-full">
               <SelectValue placeholder="Selecione a carga de origem..." />
             </SelectTrigger>
-            <SelectContent className="max-h-[420px]">
+            <SelectContent className="max-h-[420px] w-[var(--radix-select-trigger-width)] md:w-[450px]">
               {groupedLoads.map((g, idx) => (
                 <SelectGroup key={`src-${idx}`}>
-                  <SelectLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  <SelectLabel className="text-[10px] uppercase tracking-wide text-muted-foreground bg-muted/30 py-1.5 px-2 mb-1 sticky top-0 z-10">
                     {g.header}
                   </SelectLabel>
                   {g.loads.map(l => (
                     <SelectItem key={l.id} value={l.id} disabled={l.id === targetLoadId} className="pl-6 py-2">
                       <div className="flex flex-col gap-0.5 min-w-0">
-                        <span className="font-semibold text-sm">
-                          {l.load_number}{l.vehicles ? ` — ${l.vehicles.plate}` : ''}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-sm text-primary">
+                            {l.load_number}
+                          </span>
+                          {l.vehicles && (
+                            <Badge variant="outline" className="text-[10px] h-4 px-1 py-0 border-primary/20 bg-primary/5">
+                              {l.vehicles.plate}
+                            </Badge>
+                          )}
+                        </div>
                         <span className="text-[10px] text-muted-foreground leading-tight truncate">
                           {g.header}
                         </span>
@@ -720,26 +727,35 @@ export default function LoadReallocation() {
           </Select>
         </div>
 
-        <ChevronRight className="h-5 w-5 text-muted-foreground mb-2" />
+        <div className="hidden md:flex items-center justify-center mb-2">
+          <ChevronRight className="h-5 w-5 text-muted-foreground" />
+        </div>
 
-        <div className="flex-1">
+        <div className="min-w-0">
           <label className="text-xs font-medium text-muted-foreground mb-1 block">Carga Destino</label>
           <Select value={targetLoadId} onValueChange={setTargetLoadId}>
-            <SelectTrigger>
+            <SelectTrigger className="w-full">
               <SelectValue placeholder="Selecione a carga de destino..." />
             </SelectTrigger>
-            <SelectContent className="max-h-[420px]">
+            <SelectContent className="max-h-[420px] w-[var(--radix-select-trigger-width)] md:w-[450px]">
               {groupedLoads.map((g, idx) => (
                 <SelectGroup key={`tgt-${idx}`}>
-                  <SelectLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  <SelectLabel className="text-[10px] uppercase tracking-wide text-muted-foreground bg-muted/30 py-1.5 px-2 mb-1 sticky top-0 z-10">
                     {g.header}
                   </SelectLabel>
                   {g.loads.map(l => (
                     <SelectItem key={l.id} value={l.id} disabled={l.id === sourceLoadId} className="pl-6 py-2">
                       <div className="flex flex-col gap-0.5 min-w-0">
-                        <span className="font-semibold text-sm">
-                          {l.load_number}{l.vehicles ? ` — ${l.vehicles.plate}` : ''}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-sm text-primary">
+                            {l.load_number}
+                          </span>
+                          {l.vehicles && (
+                            <Badge variant="outline" className="text-[10px] h-4 px-1 py-0 border-primary/20 bg-primary/5">
+                              {l.vehicles.plate}
+                            </Badge>
+                          )}
+                        </div>
                         <span className="text-[10px] text-muted-foreground leading-tight truncate">
                           {g.header}
                         </span>
