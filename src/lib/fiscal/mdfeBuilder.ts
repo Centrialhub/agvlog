@@ -141,17 +141,12 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
   const payDoc = digits(pay?.contractorDoc);
   const hasPayment = Boolean(pay && (payDoc || (pay.contractValue || 0) > 0));
   const isTermPayment = pay?.paymentCondition === 'aprazo';
+
   const infPag = hasPayment
     ? [
         {
-          xNome: pay?.contractorName || contractors[0]?.name || '',
+          xNome: (pay?.contractorName || contractors[0]?.name || '').slice(0, 60),
           ...(payDoc.length === 11 ? { CPF: payDoc } : payDoc ? { CNPJ: payDoc } : {}),
-          Comp: [
-            {
-              tpComp: '01', // 01 = Vale-Pedágio/Serviço de transporte
-              vComp: Number(pay?.contractValue || 0),
-            },
-          ],
           vContrato: Number(pay?.contractValue || 0),
           indAntecipaAdiant: (pay?.advanceValue || 0) > 0 ? '1' : '0',
           vAdiant: Number(pay?.advanceValue || 0),
