@@ -359,11 +359,28 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
       // Quando tpEmit=1 (Prestador), é obrigatório informar ao menos um contratante no modal rodoviário.
       modalRodoviario: {
         rntrc: input.vehicle.rntrc || 'ISENTO',
-        contratantes: contractors.map(t => ({
-          xNome: t.name,
-          cpfCnpj: digits(t.cnpj),
-          ie: digits(t.ie) || 'ISENTO',
-        })),
+        contratantes: contractors.map(t => {
+          const d = digits(t.cnpj);
+          const c: any = {
+            xNome: t.name.slice(0, 60),
+            ...(d.length === 11 ? { CPF: d } : { CNPJ: d }),
+            ie: digits(t.ie) || 'ISENTO',
+          };
+
+          if (t.address) {
+            c.enderContratante = {
+              xLgr: (t.address.street || '').slice(0, 60),
+              nro: (t.address.number || 'SN').slice(0, 60),
+              xBairro: (t.address.neighborhood || '').slice(0, 60),
+              cMun: digits(t.address.city_ibge),
+              xMun: (t.address.city_name || '').slice(0, 60),
+              UF: t.address.state || '',
+              CEP: digits(t.address.zip),
+            };
+          }
+
+          return c;
+        }),
       },
       infAdic: {
         infCpl: input.observations || '',
