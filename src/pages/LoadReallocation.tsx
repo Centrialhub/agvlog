@@ -291,7 +291,12 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
         )}
       </CardHeader>
       <CardContent className="p-2 space-y-2 max-h-[400px] overflow-y-auto">
-        {items.length === 0 ? (
+        {isLoading ? (
+          <div className="py-8 text-center">
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent mx-auto mb-2" />
+            <p className="text-[10px] text-muted-foreground">Carregando itens...</p>
+          </div>
+        ) : items.length === 0 ? (
           <p className="text-xs text-muted-foreground text-center py-4">
             Nenhum item nesta carga
           </p>
@@ -299,7 +304,7 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
           <p className="text-xs text-muted-foreground text-center py-4">
             Nenhum item encontrado no filtro
           </p>
-        ) : (() => {
+        ) : (
           // Agrupar por nota fiscal (invoice_number)
           const grouped = filteredItems.reduce((acc, item) => {
             const fd: any = Array.isArray(item.fiscal_documents) ? item.fiscal_documents[0] : (item.fiscal_documents || {});
