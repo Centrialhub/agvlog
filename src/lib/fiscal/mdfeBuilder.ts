@@ -58,6 +58,16 @@ export interface MdfePaymentInstallment {
 export interface MdfePayment {
   contractorName?: string | null;
   contractorDoc?: string | null; // CPF ou CNPJ do tomador/contratante
+  contractorIe?: string | null;
+  contractorAddress?: {
+    street?: string | null;
+    number?: string | null;
+    neighborhood?: string | null;
+    city_ibge?: string | null;
+    city_name?: string | null;
+    state?: string | null;
+    zip?: string | null;
+  } | null;
   contractValue?: number | null; // Valor total do contrato
   paymentCondition?: 'avista' | 'aprazo' | null;
   advanceValue?: number | null; // Adiantamento
@@ -157,10 +167,24 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
         {
           xNome: (pay?.contractorName || contractors[0]?.name || '').slice(0, 60),
           ...(payDoc.length === 11 ? { CPF: payDoc } : payDoc ? { CNPJ: payDoc } : {}),
+          IE: digits(pay?.contractorIe) || 'ISENTO',
           vContrato: Number(pay?.contractValue || 0),
           indAntecipaAdiant: (pay?.advanceValue || 0) > 0 ? '1' : '0',
           vAdiant: Number(pay?.advanceValue || 0),
           indPag: isTermPayment ? '1' : '0', // 0 = à vista, 1 = a prazo
+          ...(pay?.contractorAddress
+            ? {
+                enderContratante: {
+                  xLgr: (pay.contractorAddress.street || '').slice(0, 60),
+                  nro: (pay.contractorAddress.number || 'SN').slice(0, 60),
+                  xBairro: (pay.contractorAddress.neighborhood || '').slice(0, 60),
+                  cMun: digits(pay.contractorAddress.city_ibge),
+                  xMun: (pay.contractorAddress.city_name || '').slice(0, 60),
+                  UF: pay.contractorAddress.state || '',
+                  CEP: digits(pay.contractorAddress.zip),
+                },
+              }
+            : {}),
           ...(isTermPayment && pay?.installments?.length
             ? {
                 infPrazo: pay.installments

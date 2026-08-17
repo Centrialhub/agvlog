@@ -46,6 +46,14 @@ export default function MdfeProvisional() {
   const [includePayment, setIncludePayment] = useState(false);
   const [payName, setPayName] = useState('');
   const [payDoc, setPayDoc] = useState('');
+  const [payIe, setPayIe] = useState('');
+  const [payStreet, setPayStreet] = useState('');
+  const [payNumber, setPayNumber] = useState('');
+  const [payNeighborhood, setPayNeighborhood] = useState('');
+  const [payCity, setPayCity] = useState('');
+  const [payCityIbge, setPayCityIbge] = useState('');
+  const [payState, setPayState] = useState('');
+  const [payZip, setPayZip] = useState('');
   const [payContractValue, setPayContractValue] = useState('');
   const [payCondition, setPayCondition] = useState<'avista' | 'aprazo'>('avista');
   const [payAdvance, setPayAdvance] = useState('');
@@ -87,6 +95,16 @@ export default function MdfeProvisional() {
       if (first) {
         setPayName(prev => prev || first.remitter || '');
         setPayDoc(prev => prev || first.remitter_cnpj || '');
+        
+        // Se o tomador ainda não tem endereço preenchido, tentamos buscar no primeiro CT-e
+        if (!payStreet && first.remitter_street) setPayStreet(first.remitter_street);
+        if (!payNumber && first.remitter_number) setPayNumber(first.remitter_number);
+        if (!payNeighborhood && first.remitter_neighborhood) setPayNeighborhood(first.remitter_neighborhood);
+        if (!payZip && first.remitter_zip) setPayZip(first.remitter_zip);
+        if (!payCity && first.remitter_city) setPayCity(first.remitter_city);
+        if (!payState && first.remitter_uf) setPayState(first.remitter_uf);
+        if (!payCityIbge && first.remitter_city_ibge) setPayCityIbge(first.remitter_city_ibge);
+        if (!payIe && first.remitter_ie) setPayIe(first.remitter_ie);
       }
     }
   }, [isDialogOpen, selectedIds, ctes, emitters, emitterId, vehicles, vehicleId]);
@@ -219,6 +237,16 @@ export default function MdfeProvisional() {
           ? {
               contractorName: payName,
               contractorDoc: payDoc,
+              contractorIe: payIe,
+              contractorAddress: {
+                street: payStreet,
+                number: payNumber,
+                neighborhood: payNeighborhood,
+                city_ibge: payCityIbge,
+                city_name: payCity,
+                state: payState,
+                zip: payZip,
+              },
               contractValue: Number(payContractValue) || 0,
               paymentCondition: payCondition,
               advanceValue: Number(payAdvance) || 0,
