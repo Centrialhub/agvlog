@@ -149,17 +149,20 @@ function LoadColumn({ load, items, vehicles, selectedItems, onToggleItem, onSele
                     Fornecedores
                   </span>
                   <div className="flex flex-wrap gap-1">
-                    {recipientsSummary.remitters.slice(0, 3).map(([name, n]) => (
-                      <Badge
-                        key={name}
-                        variant="outline"
-                        className="text-[10px] font-normal border-primary/20 bg-primary/5 text-primary max-w-[150px]"
-                        title={name}
-                      >
-                        <span className="truncate">{name}</span>
-                        <span className="ml-1 opacity-70">·{n}</span>
-                      </Badge>
-                    ))}
+                    {recipientsSummary.remitters.slice(0, 3).map(([name, n]) => {
+                      const clientName = items.find(i => i.fiscal_documents?.remitter === name)?.orders?.clients?.company_name;
+                      return (
+                        <Badge
+                          key={name}
+                          variant="outline"
+                          className="text-[10px] font-normal border-primary/20 bg-primary/5 text-primary max-w-[150px]"
+                          title={clientName ? `${clientName} (${name})` : name}
+                        >
+                          <span className="truncate">{clientName || name}</span>
+                          <span className="ml-1 opacity-70">·{n}</span>
+                        </Badge>
+                      );
+                    })}
                     {recipientsSummary.remitters.length > 3 && (
                       <Badge variant="outline" className="text-[10px] font-normal">
                         +{recipientsSummary.remitters.length - 3}
