@@ -293,7 +293,7 @@ function LoadColumn({ load, items, vehicles, selectedItems, onToggleItem, onSele
           </p>
         ) : (() => {
           // Agrupar por nota fiscal (invoice_number)
-          const grouped = items.reduce((acc, item) => {
+          const grouped = filteredItems.reduce((acc, item) => {
             const fd: any = item.fiscal_documents || {};
             const key = fd.invoice_number || `sem-nota-${item.id}`;
             if (!acc[key]) acc[key] = { items: [], totalValue: 0, invoice: fd.invoice_number };
@@ -303,10 +303,6 @@ function LoadColumn({ load, items, vehicles, selectedItems, onToggleItem, onSele
           }, {} as Record<string, { items: LoadItem[], totalValue: number, invoice: string | null }>);
 
           return Object.entries(grouped).map(([key, group]: [string, any]) => {
-            // Se o grupo está filtrado (algum item dele passa no filtro)
-            const filteredGroupItems = group.items.filter(i => filteredItems.some(fi => fi.id === i.id));
-            if (filteredGroupItems.length === 0) return null;
-
             const allSelected = group.items.every(i => selectedItems.has(i.id));
             const someSelected = group.items.some(i => selectedItems.has(i.id));
 
@@ -334,7 +330,6 @@ function LoadColumn({ load, items, vehicles, selectedItems, onToggleItem, onSele
                 </div>
 
                 {group.items.map(item => {
-                  if (!filteredItems.some(fi => fi.id === item.id)) return null;
                   const selected = selectedItems.has(item.id);
                   const fd: any = item.fiscal_documents || {};
                   return (
