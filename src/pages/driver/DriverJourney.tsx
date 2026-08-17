@@ -209,7 +209,7 @@ export default function DriverJourney() {
             <Card>
               <CardContent className="py-6 text-center">
                 <Clock className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                <p className="text-sm text-muted-foreground">Registre os eventos da sua jornada.</p>
+                <p className="text-sm text-muted-foreground">Aguardando início de atividade.</p>
               </CardContent>
             </Card>
           )}
@@ -218,7 +218,7 @@ export default function DriverJourney() {
         <Card>
           <CardContent className="py-6 text-center">
             <Clock className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-            <p className="text-sm text-muted-foreground">Seu veículo ainda não possui uma viagem ativa.</p>
+            <p className="text-sm text-muted-foreground">Aguardando liberação de viagem.</p>
           </CardContent>
         </Card>
       )}

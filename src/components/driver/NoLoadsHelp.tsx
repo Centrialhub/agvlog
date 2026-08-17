@@ -95,10 +95,10 @@ export default function NoLoadsHelp({
       <CardContent className="py-6 space-y-4">
         <div className="text-center">
           <Truck className="h-10 w-10 text-muted-foreground mx-auto mb-2" />
-          <p className="text-sm font-medium">Nenhuma carga ou viagem por aqui</p>
+          <p className="text-sm font-medium">Nenhuma carga atribuída no momento</p>
           <p className="text-xs text-muted-foreground mt-1">
             {driverName ? `Olá, ${driverName}.` : ''} As cargas aparecem automaticamente assim que a
-            operação atribuir você — não precisa recarregar.
+            operação atribuir você.
           </p>
         </div>
 
