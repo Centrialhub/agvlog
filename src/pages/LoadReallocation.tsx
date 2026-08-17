@@ -425,11 +425,11 @@ export default function LoadReallocation() {
   const loadMeta = useMemo(() => {
     const byLoad = new Map<string, { remitters: Map<string, number>; clients: Map<string, number>; cities: Map<string, number> }>();
     for (const row of allActiveItems) {
-      const fd = row.fiscal_documents || {};
-      const rem = fd.remitter as string | null;
-      const rec = fd.recipient as string | null;
-      const city = fd.recipient_city as string | null;
-      const state = fd.recipient_state as string | null;
+      const fd = Array.isArray(row.fiscal_documents) ? row.fiscal_documents[0] : (row.fiscal_documents || {});
+      const rem = fd?.remitter as string | null;
+      const rec = fd?.recipient as string | null;
+      const city = fd?.recipient_city as string | null;
+      const state = fd?.recipient_state as string | null;
       const bucket = byLoad.get(row.load_id) || { remitters: new Map(), clients: new Map(), cities: new Map() };
       if (rem) bucket.remitters.set(rem, (bucket.remitters.get(rem) || 0) + 1);
       if (rec) bucket.clients.set(rec, (bucket.clients.get(rec) || 0) + 1);
