@@ -451,6 +451,7 @@ export default function LoadReallocation() {
     const tree = new Map<string, Map<string, Map<string, Load[]>>>();
     for (const l of activeLoads) {
       const meta = loadMeta.get(l.id);
+      const remitter = meta?.remitter ? `[FORN: ${meta.remitter}] ` : '';
       const client = meta?.client || 'Sem cliente identificado';
       const city = meta?.city || 'Sem cidade';
       const route = l.destination || 'Sem rota';
