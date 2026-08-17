@@ -62,6 +62,7 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
   const [search, setSearch] = useState('');
   const [field, setField] = useState<FilterField>('all');
 
+  console.log(`LoadColumn [${load.load_number}]: items=`, items);
   const filteredItems = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return items;
