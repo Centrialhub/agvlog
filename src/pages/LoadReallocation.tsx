@@ -65,12 +65,12 @@ function LoadColumn({ load, items, vehicles, selectedItems, onToggleItem, onSele
     const q = search.trim().toLowerCase();
     if (!q) return items;
     return items.filter(i => {
-      const fd: any = i.fiscal_documents || {};
+      const fd: any = Array.isArray(i.fiscal_documents) ? i.fiscal_documents[0] : (i.fiscal_documents || {});
       const desc = (i.item_description || '').toLowerCase();
-      const remitter = (fd.remitter || '').toLowerCase();
-      const recipient = (fd.recipient || '').toLowerCase();
-      const city = (fd.recipient_city || '').toLowerCase();
-      const invoice = (fd.invoice_number || '').toLowerCase();
+      const remitter = (fd?.remitter || '').toLowerCase();
+      const recipient = (fd?.recipient || '').toLowerCase();
+      const city = (fd?.recipient_city || '').toLowerCase();
+      const invoice = (fd?.invoice_number || '').toLowerCase();
       switch (field) {
         case 'remitter': return remitter.includes(q);
         case 'recipient': return recipient.includes(q);
@@ -101,11 +101,11 @@ function LoadColumn({ load, items, vehicles, selectedItems, onToggleItem, onSele
     const cities = new Map<string, { label: string; count: number }>();
     const remitters = new Map<string, { label: string; count: number }>();
     for (const i of items) {
-      const fd: any = i.fiscal_documents || {};
-      const rec = (fd.recipient || '').trim();
-      const city = (fd.recipient_city || '').trim();
-      const state = (fd.recipient_state || '').trim();
-      const rem = (fd.remitter || '').trim();
+      const fd: any = Array.isArray(i.fiscal_documents) ? i.fiscal_documents[0] : (i.fiscal_documents || {});
+      const rec = (fd?.recipient || '').trim();
+      const city = (fd?.recipient_city || '').trim();
+      const state = (fd?.recipient_state || '').trim();
+      const rem = (fd?.remitter || '').trim();
       if (rec) bump(recipients, rec);
       if (city) bump(cities, state ? `${city}/${state}` : city);
       if (rem) bump(remitters, rem);
@@ -301,14 +301,13 @@ function LoadColumn({ load, items, vehicles, selectedItems, onToggleItem, onSele
         ) : (() => {
           // Agrupar por nota fiscal (invoice_number)
           const grouped = filteredItems.reduce((acc, item) => {
-            const fd: any = item.fiscal_documents || {};
-            // Use order_number or item id as fallback if invoice_number is missing
-            const invoice = fd.invoice_number;
+            const fd: any = Array.isArray(item.fiscal_documents) ? item.fiscal_documents[0] : (item.fiscal_documents || {});
+            const invoice = fd?.invoice_number;
             const key = invoice || (item.orders?.order_number ? `PED ${item.orders.order_number}` : `ITEM-${item.id}`);
             
             if (!acc[key]) acc[key] = { items: [], totalValue: 0, invoice: invoice };
             acc[key].items.push(item);
-            acc[key].totalValue += (fd.total_value || 0);
+            acc[key].totalValue += (fd?.total_value || 0);
             return acc;
           }, {} as Record<string, { items: LoadItem[], totalValue: number, invoice: string | null }>);
 
@@ -341,7 +340,7 @@ function LoadColumn({ load, items, vehicles, selectedItems, onToggleItem, onSele
 
                 {group.items.map(item => {
                   const selected = selectedItems.has(item.id);
-                  const fd: any = item.fiscal_documents || {};
+                  const fd: any = Array.isArray(item.fiscal_documents) ? item.fiscal_documents[0] : (item.fiscal_documents || {});
                   return (
                     <button
                       key={item.id}
@@ -401,8 +400,8 @@ export default function LoadReallocation() {
     [loads]
   );
 
-  const { data: sourceItems = [] } = useLoadItems(sourceLoadId || undefined);
-  const { data: targetItems = [] } = useLoadItems(targetLoadId || undefined);
+  const { data: sourceItems = [], isLoading: loadingSource } = useLoadItems(sourceLoadId || undefined);
+  const { data: targetItems = [], isLoading: loadingTarget } = useLoadItems(targetLoadId || undefined);
 
   // Fetch aggregate metadata (client/city) for all active loads to allow
   // hierarchical grouping in the selectors: Client → City → Route → Load.
@@ -426,11 +425,11 @@ export default function LoadReallocation() {
   const loadMeta = useMemo(() => {
     const byLoad = new Map<string, { remitters: Map<string, number>; clients: Map<string, number>; cities: Map<string, number> }>();
     for (const row of allActiveItems) {
-      const fd = row.fiscal_documents || {};
-      const rem = fd.remitter as string | null;
-      const rec = fd.recipient as string | null;
-      const city = fd.recipient_city as string | null;
-      const state = fd.recipient_state as string | null;
+      const fd = Array.isArray(row.fiscal_documents) ? row.fiscal_documents[0] : (row.fiscal_documents || {});
+      const rem = fd?.remitter as string | null;
+      const rec = fd?.recipient as string | null;
+      const city = fd?.recipient_city as string | null;
+      const state = fd?.recipient_state as string | null;
       const bucket = byLoad.get(row.load_id) || { remitters: new Map(), clients: new Map(), cities: new Map() };
       if (rem) bucket.remitters.set(rem, (bucket.remitters.get(rem) || 0) + 1);
       if (rec) bucket.clients.set(rec, (bucket.clients.get(rec) || 0) + 1);
@@ -488,7 +487,12 @@ export default function LoadReallocation() {
           const remitterName = remitterMatch ? remitterMatch[1] : null;
           const clientName = c.replace(/\[FORN: .*?\]\s*/, '');
           
-          const header = `${remitterName ? `${remitterName} → ` : ''}${clientName} · ${city}${r && r !== city ? ` · ${r}` : ''}`;
+          // Abrevia nomes muito longos no cabeçalho para evitar quebra de layout
+          const truncate = (s: string, max: number) => s.length > max ? s.slice(0, max) + '...' : s;
+          const displayClient = truncate(clientName, 30);
+          const displayRemitter = remitterName ? truncate(remitterName, 20) : null;
+
+          const header = `${displayRemitter ? `${displayRemitter} → ` : ''}${displayClient} · ${city}${r && r !== city ? ` · ${r}` : ''}`;
           groups.push({ header, loads: ls });
         }
       }
@@ -778,31 +782,49 @@ export default function LoadReallocation() {
       {sourceLoadId && targetLoadId ? (
         <div className="flex gap-4">
           {sourceLoad && (
-            <LoadColumn
-              load={sourceLoad}
-              items={sourceItems}
-              vehicles={vehicles as any[]}
-              selectedItems={selectedItems}
-              onToggleItem={toggleItem}
-              onSelectMany={(ids, checked) => {
-                setSelectedItems(prev => {
-                  const next = new Set(prev);
-                  if (checked) ids.forEach(id => next.add(id));
-                  else ids.forEach(id => next.delete(id));
-                  return next;
-                });
-              }}
-            />
+            loadingSource ? (
+              <Card className="flex-1">
+                <CardContent className="py-16 text-center">
+                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto mb-4" />
+                  <p className="text-sm text-muted-foreground">Carregando itens da origem...</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <LoadColumn
+                load={sourceLoad}
+                items={sourceItems}
+                vehicles={vehicles as any[]}
+                selectedItems={selectedItems}
+                onToggleItem={toggleItem}
+                onSelectMany={(ids, checked) => {
+                  setSelectedItems(prev => {
+                    const next = new Set(prev);
+                    if (checked) ids.forEach(id => next.add(id));
+                    else ids.forEach(id => next.delete(id));
+                    return next;
+                  });
+                }}
+              />
+            )
           )}
           {targetLoad && (
-            <LoadColumn
-              load={targetLoad}
-              items={targetItems}
-              vehicles={vehicles as any[]}
-              selectedItems={new Set()}
-              onToggleItem={() => {}}
-              isTarget
-            />
+            loadingTarget ? (
+              <Card className="flex-1">
+                <CardContent className="py-16 text-center">
+                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto mb-4" />
+                  <p className="text-sm text-muted-foreground">Carregando itens do destino...</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <LoadColumn
+                load={targetLoad}
+                items={targetItems}
+                vehicles={vehicles as any[]}
+                selectedItems={new Set()}
+                onToggleItem={() => {}}
+                isTarget
+              />
+            )
           )}
         </div>
       ) : (
