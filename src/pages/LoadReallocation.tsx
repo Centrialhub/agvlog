@@ -39,9 +39,10 @@ export function mergeDestinations(target?: string | null, source?: string | null
   return tokens.length ? tokens.join(' - ') : (target || null);
 }
 
-function LoadColumn({ load, items, vehicles, selectedItems, onToggleItem, onSelectMany, isTarget }: {
+function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleItem, onSelectMany, isTarget }: {
   load: Load;
   items: LoadItem[];
+  isLoading: boolean;
   vehicles: any[];
   selectedItems: Set<string>;
   onToggleItem: (id: string) => void;
@@ -290,7 +291,12 @@ function LoadColumn({ load, items, vehicles, selectedItems, onToggleItem, onSele
         )}
       </CardHeader>
       <CardContent className="p-2 space-y-2 max-h-[400px] overflow-y-auto">
-        {items.length === 0 ? (
+        {isLoading ? (
+          <div className="py-8 text-center">
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent mx-auto mb-2" />
+            <p className="text-[10px] text-muted-foreground">Carregando itens...</p>
+          </div>
+        ) : items.length === 0 ? (
           <p className="text-xs text-muted-foreground text-center py-4">
             Nenhum item nesta carga
           </p>
@@ -303,7 +309,7 @@ function LoadColumn({ load, items, vehicles, selectedItems, onToggleItem, onSele
           const grouped = filteredItems.reduce((acc, item) => {
             const fd: any = Array.isArray(item.fiscal_documents) ? item.fiscal_documents[0] : (item.fiscal_documents || {});
             const invoice = fd?.invoice_number;
-            const key = invoice || (item.orders?.order_number ? `PED ${item.orders.order_number}` : `ITEM-${item.id}`);
+            const key = invoice ? `INV-${invoice}` : (item.orders?.order_number ? `ORD-${item.orders.order_number}` : `ID-${item.id}`);
             
             if (!acc[key]) acc[key] = { items: [], totalValue: 0, invoice: invoice };
             acc[key].items.push(item);
@@ -793,6 +799,7 @@ export default function LoadReallocation() {
               <LoadColumn
                 load={sourceLoad}
                 items={sourceItems}
+                isLoading={loadingSource}
                 vehicles={vehicles as any[]}
                 selectedItems={selectedItems}
                 onToggleItem={toggleItem}
@@ -819,6 +826,7 @@ export default function LoadReallocation() {
               <LoadColumn
                 load={targetLoad}
                 items={targetItems}
+                isLoading={loadingTarget}
                 vehicles={vehicles as any[]}
                 selectedItems={new Set()}
                 onToggleItem={() => {}}
