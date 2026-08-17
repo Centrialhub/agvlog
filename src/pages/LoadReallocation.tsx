@@ -99,19 +99,22 @@ function LoadColumn({ load, items, vehicles, selectedItems, onToggleItem, onSele
     };
     const recipients = new Map<string, { label: string; count: number }>();
     const cities = new Map<string, { label: string; count: number }>();
+    const remitters = new Map<string, { label: string; count: number }>();
     for (const i of items) {
       const fd: any = i.fiscal_documents || {};
       const rec = (fd.recipient || '').trim();
       const city = (fd.recipient_city || '').trim();
       const state = (fd.recipient_state || '').trim();
+      const rem = (fd.remitter || '').trim();
       if (rec) bump(recipients, rec);
       if (city) bump(cities, state ? `${city}/${state}` : city);
+      if (rem) bump(remitters, rem);
     }
     const sortDesc = (m: Map<string, { label: string; count: number }>): Array<[string, number]> =>
       Array.from(m.values())
         .sort((a, b) => b.count - a.count)
         .map(v => [v.label, v.count] as [string, number]);
-    return { recipients: sortDesc(recipients), cities: sortDesc(cities) };
+    return { recipients: sortDesc(recipients), cities: sortDesc(cities), remitters: sortDesc(remitters) };
   }, [items]);
 
   return (
@@ -140,27 +143,52 @@ function LoadColumn({ load, items, vehicles, selectedItems, onToggleItem, onSele
         {(recipientsSummary.recipients.length > 0 || recipientsSummary.cities.length > 0) && (
           <div className="space-y-1 rounded-md bg-muted/40 border border-border/60 p-1.5">
             {recipientsSummary.recipients.length > 0 && (
-              <div className="flex items-start gap-1.5">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground shrink-0 mt-0.5">
-                  Clientes
-                </span>
-                <div className="flex flex-wrap gap-1">
-                  {recipientsSummary.recipients.slice(0, 4).map(([name, n]) => (
-                    <Badge
-                      key={name}
-                      variant="secondary"
-                      className="text-[10px] font-normal max-w-[180px]"
-                      title={name}
-                    >
-                      <span className="truncate">{name}</span>
-                      <span className="ml-1 text-muted-foreground">·{n}</span>
-                    </Badge>
-                  ))}
-                  {recipientsSummary.recipients.length > 4 && (
-                    <Badge variant="outline" className="text-[10px] font-normal">
-                      +{recipientsSummary.recipients.length - 4}
-                    </Badge>
-                  )}
+              <div className="flex flex-col gap-1">
+                <div className="flex items-start gap-1.5">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground shrink-0 mt-0.5">
+                    Fornecedores
+                  </span>
+                  <div className="flex flex-wrap gap-1">
+                    {recipientsSummary.remitters.slice(0, 3).map(([name, n]) => (
+                      <Badge
+                        key={name}
+                        variant="outline"
+                        className="text-[10px] font-normal border-primary/20 bg-primary/5 text-primary max-w-[150px]"
+                        title={name}
+                      >
+                        <span className="truncate">{name}</span>
+                        <span className="ml-1 opacity-70">·{n}</span>
+                      </Badge>
+                    ))}
+                    {recipientsSummary.remitters.length > 3 && (
+                      <Badge variant="outline" className="text-[10px] font-normal">
+                        +{recipientsSummary.remitters.length - 3}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-start gap-1.5">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground shrink-0 mt-0.5">
+                    Clientes
+                  </span>
+                  <div className="flex flex-wrap gap-1">
+                    {recipientsSummary.recipients.slice(0, 4).map(([name, n]) => (
+                      <Badge
+                        key={name}
+                        variant="secondary"
+                        className="text-[10px] font-normal max-w-[180px]"
+                        title={name}
+                      >
+                        <span className="truncate">{name}</span>
+                        <span className="ml-1 text-muted-foreground">·{n}</span>
+                      </Badge>
+                    ))}
+                    {recipientsSummary.recipients.length > 4 && (
+                      <Badge variant="outline" className="text-[10px] font-normal">
+                        +{recipientsSummary.recipients.length - 4}
+                      </Badge>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
@@ -380,7 +408,7 @@ export default function LoadReallocation() {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from('load_items')
-        .select('load_id, fiscal_documents(recipient, recipient_city, recipient_state)')
+        .select('load_id, fiscal_documents(remitter, recipient, recipient_city, recipient_state)')
         .in('load_id', activeLoadIds);
       if (error) throw error;
       return (data || []) as Array<{ load_id: string; fiscal_documents: any }>;
@@ -391,13 +419,15 @@ export default function LoadReallocation() {
 
   // Predominant client / city per load id
   const loadMeta = useMemo(() => {
-    const byLoad = new Map<string, { clients: Map<string, number>; cities: Map<string, number> }>();
+    const byLoad = new Map<string, { remitters: Map<string, number>; clients: Map<string, number>; cities: Map<string, number> }>();
     for (const row of allActiveItems) {
       const fd = row.fiscal_documents || {};
+      const rem = fd.remitter as string | null;
       const rec = fd.recipient as string | null;
       const city = fd.recipient_city as string | null;
       const state = fd.recipient_state as string | null;
-      const bucket = byLoad.get(row.load_id) || { clients: new Map(), cities: new Map() };
+      const bucket = byLoad.get(row.load_id) || { remitters: new Map(), clients: new Map(), cities: new Map() };
+      if (rem) bucket.remitters.set(rem, (bucket.remitters.get(rem) || 0) + 1);
       if (rec) bucket.clients.set(rec, (bucket.clients.get(rec) || 0) + 1);
       if (city) {
         const label = state ? `${city}/${state}` : city;
@@ -410,8 +440,8 @@ export default function LoadReallocation() {
       m.forEach((n, k) => { if (n > bestN) { bestN = n; best = k; } });
       return best;
     };
-    const out = new Map<string, { client: string | null; city: string | null }>();
-    byLoad.forEach((b, id) => out.set(id, { client: pick(b.clients), city: pick(b.cities) }));
+    const out = new Map<string, { remitter: string | null; client: string | null; city: string | null }>();
+    byLoad.forEach((b, id) => out.set(id, { remitter: pick(b.remitters), client: pick(b.clients), city: pick(b.cities) }));
     return out;
   }, [allActiveItems]);
 
@@ -421,10 +451,11 @@ export default function LoadReallocation() {
     const tree = new Map<string, Map<string, Map<string, Load[]>>>();
     for (const l of activeLoads) {
       const meta = loadMeta.get(l.id);
+      const remitter = meta?.remitter ? `[FORN: ${meta.remitter}] ` : '';
       const client = meta?.client || 'Sem cliente identificado';
       const city = meta?.city || 'Sem cidade';
       const route = l.destination || 'Sem rota';
-      const cKey = client;
+      const cKey = remitter + client;
       const cityKey = city;
       const rKey = route;
       let byCity = tree.get(cKey);
