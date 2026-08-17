@@ -586,8 +586,6 @@ export default function MdfeProvisional() {
                       <Input value={payDoc} onChange={e => setPayDoc(e.target.value)} placeholder="Somente números" />
                     </div>
                   </div>
-
-                  </div>
                   
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
