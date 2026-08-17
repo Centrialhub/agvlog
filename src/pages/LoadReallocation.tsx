@@ -549,6 +549,7 @@ export default function LoadReallocation() {
     }
     try {
       const tenantId = (sourceLoad as any)?.tenant_id || (targetLoad as any)?.tenant_id;
+      if (!tenantId) throw new Error('Tenant ID não encontrado');
       const { data, error } = await (supabase as any).rpc('move_load_items_between_loads', {
         _tenant_id: tenantId,
         _source_load_id: sourceLoadId,
@@ -565,6 +566,7 @@ export default function LoadReallocation() {
     qc.invalidateQueries({ queryKey: ['load_items'] });
     qc.invalidateQueries({ queryKey: ['loads'] });
     qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
+    qc.invalidateQueries({ queryKey: ['reallocation_load_meta'] });
 
     const fromLabel = sourceLoad?.load_number || '—';
     const toLabel = targetLoad?.load_number || '—';
@@ -805,7 +807,7 @@ export default function LoadReallocation() {
       {sourceLoadId && targetLoadId ? (
         <div className="flex gap-4">
           {sourceLoad && (
-            loadingSource ? (
+            isLoadingSource ? (
               <Card className="flex-1">
                 <CardContent className="py-16 text-center">
                   <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto mb-4" />
@@ -832,7 +834,7 @@ export default function LoadReallocation() {
             )
           )}
           {targetLoad && (
-            loadingTarget ? (
+            isLoadingTarget ? (
               <Card className="flex-1">
                 <CardContent className="py-16 text-center">
                   <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto mb-4" />
