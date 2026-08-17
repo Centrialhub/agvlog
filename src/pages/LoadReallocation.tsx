@@ -202,9 +202,9 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
               </div>
             )}
             {recipientsSummary.cities.length > 0 && (
-              <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground shrink-0">
-                  Cidades
+              <div className="flex items-start gap-1.5 min-w-0 overflow-hidden">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground shrink-0 mt-0.5">
+                  Cid.
                 </span>
                 <div className="flex flex-wrap gap-1 min-w-0 overflow-hidden">
                   {recipientsSummary.cities.slice(0, 5).map(([label, n]) => (
