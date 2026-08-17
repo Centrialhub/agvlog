@@ -518,6 +518,151 @@ export default function MdfeProvisional() {
                 </div>
               </div>
             )}
+
+            <div className="space-y-4 rounded-lg border p-3">
+              <div className="flex items-start gap-2">
+                <Checkbox
+                  id="mdfe-include-payment"
+                  checked={includePayment}
+                  onCheckedChange={v => setIncludePayment(Boolean(v))}
+                />
+                <div>
+                  <Label htmlFor="mdfe-include-payment" className="cursor-pointer">
+                    Informar grupo de pagamento do tomador (piso mínimo de frete)
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Em carga fracionada (múltiplos CT-e), a exigência normalmente é dispensada.
+                  </p>
+                </div>
+              </div>
+
+              {includePayment && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Nome / Razão Social do Tomador</Label>
+                      <Input value={payName} onChange={e => setPayName(e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>CPF ou CNPJ do Tomador</Label>
+                      <Input value={payDoc} onChange={e => setPayDoc(e.target.value)} placeholder="Somente números" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label>Valor Total do Contrato (R$)</Label>
+                      <Input
+                        type="number"
+                        value={payContractValue}
+                        onChange={e => setPayContractValue(e.target.value)}
+                        placeholder="Ex: 3500.00"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Condição de Pagamento</Label>
+                      <Select value={payCondition} onValueChange={(v: 'avista' | 'aprazo') => setPayCondition(v)}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="avista">À vista</SelectItem>
+                          <SelectItem value="aprazo">A prazo</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Adiantamento (R$)</Label>
+                      <Input
+                        type="number"
+                        value={payAdvance}
+                        onChange={e => setPayAdvance(e.target.value)}
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                      Dados de Recebimento
+                    </Label>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Chave Pix</Label>
+                        <Input value={payPix} onChange={e => setPayPix(e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>CNPJ da Instituição de Pagamento (IPEF)</Label>
+                        <Input value={payIpefCnpj} onChange={e => setPayIpefCnpj(e.target.value)} />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <Label>Banco</Label>
+                        <Input value={payBankCode} onChange={e => setPayBankCode(e.target.value)} placeholder="Ex: 001" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Agência</Label>
+                        <Input value={payAgency} onChange={e => setPayAgency(e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Conta</Label>
+                        <Input value={payAccount} onChange={e => setPayAccount(e.target.value)} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {payCondition === 'aprazo' && (
+                    <div className="space-y-2">
+                      <Label className="text-xs uppercase tracking-wider text-muted-foreground">Parcelas</Label>
+                      {payInstallments.map((p, idx) => (
+                        <div key={idx} className="flex items-end gap-2">
+                          <div className="space-y-1 flex-1">
+                            <Label className="text-xs">Vencimento {idx + 1}</Label>
+                            <Input
+                              type="date"
+                              value={p.dueDate}
+                              onChange={e =>
+                                setPayInstallments(prev =>
+                                  prev.map((it, i) => (i === idx ? { ...it, dueDate: e.target.value } : it))
+                                )
+                              }
+                            />
+                          </div>
+                          <div className="space-y-1 flex-1">
+                            <Label className="text-xs">Valor (R$)</Label>
+                            <Input
+                              type="number"
+                              value={p.value}
+                              onChange={e =>
+                                setPayInstallments(prev =>
+                                  prev.map((it, i) => (i === idx ? { ...it, value: e.target.value } : it))
+                                )
+                              }
+                            />
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setPayInstallments(prev => prev.filter((_, i) => i !== idx))}
+                            disabled={payInstallments.length === 1}
+                          >
+                            <XCircle className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPayInstallments(prev => [...prev, { dueDate: '', value: '' }])}
+                      >
+                        Adicionar parcela
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           <DialogFooter>
