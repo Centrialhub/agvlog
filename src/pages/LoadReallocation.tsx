@@ -417,12 +417,12 @@ export default function LoadReallocation() {
     queryKey: ['reallocation_load_meta', activeLoadIds.join(',')],
     enabled: activeLoadIds.length > 0,
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('load_items')
         .select('load_id, fiscal_documents(remitter, recipient, recipient_city, recipient_state)')
         .in('load_id', activeLoadIds);
       if (error) throw error;
-      return (data || []) as Array<{ load_id: string; fiscal_documents: any }>;
+      return (data || []) as any[];
     },
   });
 
