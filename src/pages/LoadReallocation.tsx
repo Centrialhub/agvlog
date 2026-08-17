@@ -99,19 +99,22 @@ function LoadColumn({ load, items, vehicles, selectedItems, onToggleItem, onSele
     };
     const recipients = new Map<string, { label: string; count: number }>();
     const cities = new Map<string, { label: string; count: number }>();
+    const remitters = new Map<string, { label: string; count: number }>();
     for (const i of items) {
       const fd: any = i.fiscal_documents || {};
       const rec = (fd.recipient || '').trim();
       const city = (fd.recipient_city || '').trim();
       const state = (fd.recipient_state || '').trim();
+      const rem = (fd.remitter || '').trim();
       if (rec) bump(recipients, rec);
       if (city) bump(cities, state ? `${city}/${state}` : city);
+      if (rem) bump(remitters, rem);
     }
     const sortDesc = (m: Map<string, { label: string; count: number }>): Array<[string, number]> =>
       Array.from(m.values())
         .sort((a, b) => b.count - a.count)
         .map(v => [v.label, v.count] as [string, number]);
-    return { recipients: sortDesc(recipients), cities: sortDesc(cities) };
+    return { recipients: sortDesc(recipients), cities: sortDesc(cities), remitters: sortDesc(remitters) };
   }, [items]);
 
   return (
@@ -140,27 +143,52 @@ function LoadColumn({ load, items, vehicles, selectedItems, onToggleItem, onSele
         {(recipientsSummary.recipients.length > 0 || recipientsSummary.cities.length > 0) && (
           <div className="space-y-1 rounded-md bg-muted/40 border border-border/60 p-1.5">
             {recipientsSummary.recipients.length > 0 && (
-              <div className="flex items-start gap-1.5">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground shrink-0 mt-0.5">
-                  Clientes
-                </span>
-                <div className="flex flex-wrap gap-1">
-                  {recipientsSummary.recipients.slice(0, 4).map(([name, n]) => (
-                    <Badge
-                      key={name}
-                      variant="secondary"
-                      className="text-[10px] font-normal max-w-[180px]"
-                      title={name}
-                    >
-                      <span className="truncate">{name}</span>
-                      <span className="ml-1 text-muted-foreground">·{n}</span>
-                    </Badge>
-                  ))}
-                  {recipientsSummary.recipients.length > 4 && (
-                    <Badge variant="outline" className="text-[10px] font-normal">
-                      +{recipientsSummary.recipients.length - 4}
-                    </Badge>
-                  )}
+              <div className="flex flex-col gap-1">
+                <div className="flex items-start gap-1.5">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground shrink-0 mt-0.5">
+                    Fornecedores
+                  </span>
+                  <div className="flex flex-wrap gap-1">
+                    {recipientsSummary.remitters.slice(0, 3).map(([name, n]) => (
+                      <Badge
+                        key={name}
+                        variant="outline"
+                        className="text-[10px] font-normal border-primary/20 bg-primary/5 text-primary max-w-[150px]"
+                        title={name}
+                      >
+                        <span className="truncate">{name}</span>
+                        <span className="ml-1 opacity-70">·{n}</span>
+                      </Badge>
+                    ))}
+                    {recipientsSummary.remitters.length > 3 && (
+                      <Badge variant="outline" className="text-[10px] font-normal">
+                        +{recipientsSummary.remitters.length - 3}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-start gap-1.5">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground shrink-0 mt-0.5">
+                    Clientes
+                  </span>
+                  <div className="flex flex-wrap gap-1">
+                    {recipientsSummary.recipients.slice(0, 4).map(([name, n]) => (
+                      <Badge
+                        key={name}
+                        variant="secondary"
+                        className="text-[10px] font-normal max-w-[180px]"
+                        title={name}
+                      >
+                        <span className="truncate">{name}</span>
+                        <span className="ml-1 text-muted-foreground">·{n}</span>
+                      </Badge>
+                    ))}
+                    {recipientsSummary.recipients.length > 4 && (
+                      <Badge variant="outline" className="text-[10px] font-normal">
+                        +{recipientsSummary.recipients.length - 4}
+                      </Badge>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
