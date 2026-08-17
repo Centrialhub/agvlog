@@ -57,7 +57,7 @@ export function useLoadItems(loadId: string | undefined) {
     queryKey: ['load_items', loadId],
     queryFn: async () => {
       if (!loadId) return [];
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('load_items')
         .select('*, orders(order_number, clients(company_name)), fiscal_documents(invoice_number, total_value, remitter, remitter_cnpj, recipient, recipient_city, recipient_state)')
         .eq('load_id', loadId)
