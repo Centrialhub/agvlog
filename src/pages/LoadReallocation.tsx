@@ -455,7 +455,7 @@ export default function LoadReallocation() {
       const client = meta?.client || 'Sem cliente identificado';
       const city = meta?.city || 'Sem cidade';
       const route = l.destination || 'Sem rota';
-      const cKey = client;
+      const cKey = remitter + client;
       const cityKey = city;
       const rKey = route;
       let byCity = tree.get(cKey);
