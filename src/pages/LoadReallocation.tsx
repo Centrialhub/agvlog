@@ -314,7 +314,7 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
               
               if (!acc[key]) acc[key] = { items: [], totalValue: 0, invoice: invoice };
               acc[key].items.push(item);
-              acc[key].totalValue += (fd?.total_value || 0);
+              acc[key].totalValue += (fd?.value || 0);
               return acc;
             }, {} as Record<string, { items: LoadItem[], totalValue: number, invoice: string | null }>);
 
