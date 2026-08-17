@@ -57,6 +57,7 @@ export interface Client {
   notes?: string | null;
   is_client?: boolean | null;
   is_supplier?: boolean | null;
+  address_city_ibge_code?: string | null;
 }
 
 export function useClients() {

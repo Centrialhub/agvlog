@@ -26,7 +26,7 @@ const empty = {
   budget_group_client: '', budget_group_supplier: '', client_type: '',
   country_code: '1058', country_name: 'BRASIL',
   address_street: '', address_number: '', address_complement: '', address_neighborhood: '',
-  address_city: '', address_state: '', address_zip: '',
+  address_city: '', address_state: '', address_zip: '', address_city_ibge_code: '',
   contact_name: '', email: '', phone: '', mobile: '', fax: '',
   blocked: false, billed: false, taxes_enabled: false,
   tax_code: '', tax_description: '',
@@ -151,6 +151,8 @@ export function ClientFormDialog({
         address_neighborhood: prev.address_neighborhood || d.neighborhood || '',
         address_city: prev.address_city || d.city || '',
         address_state: prev.address_state || d.state || '',
+        address_city_ibge_code: prev.address_city_ibge_code || d.city_ibge || '',
+
       }));
     } catch {}
   };
@@ -333,6 +335,11 @@ export function ClientFormDialog({
                 <Label>Cód. País</Label>
                 <Input value={form.country_code} onChange={e => set('country_code', e.target.value)} />
               </div>
+              <div className="col-span-3">
+                <Label>Cód. IBGE Município</Label>
+                <Input value={form.address_city_ibge_code} onChange={e => set('address_city_ibge_code', e.target.value)} placeholder="7 dígitos" />
+              </div>
+
             </div>
           </TabsContent>
 
