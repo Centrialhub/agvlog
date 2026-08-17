@@ -127,11 +127,16 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
               <Package className="h-4 w-4 text-primary shrink-0" />
               Carga {load.load_number}
             </CardTitle>
+            <div className="flex items-center gap-1.5 mt-1">
+              <Badge variant="outline" className="text-[10px] bg-background/50 border-primary/20 max-w-[200px] truncate py-0 h-5" title={load.destination || 'Sem destino'}>
+                <RouteIcon className="h-2.5 w-2.5 mr-1 text-primary/70" />
+                {load.destination || 'Sem destino'}
+              </Badge>
+            </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            <Badge variant="outline" className="text-[10px] bg-background/50 border-primary/20 max-w-[120px] truncate" title={load.destination || 'Sem destino'}>{load.destination || 'Sem destino'}</Badge>
             <Link to={`/loads/${load.id}`}>
-              <Button size="sm" variant="ghost" className="h-6 px-2 gap-1 text-[10px]" title="Abrir carga para fechar/emitir CT-e">
+              <Button size="sm" variant="outline" className="h-7 px-2 gap-1 text-[10px] border-primary/20 hover:bg-primary/5" title="Abrir carga para fechar/emitir CT-e">
                 <ExternalLink className="h-3 w-3" />
                 Abrir
               </Button>
