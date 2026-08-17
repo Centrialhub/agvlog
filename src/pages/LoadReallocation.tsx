@@ -39,9 +39,10 @@ export function mergeDestinations(target?: string | null, source?: string | null
   return tokens.length ? tokens.join(' - ') : (target || null);
 }
 
-function LoadColumn({ load, items, vehicles, selectedItems, onToggleItem, onSelectMany, isTarget }: {
+function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleItem, onSelectMany, isTarget }: {
   load: Load;
   items: LoadItem[];
+  isLoading: boolean;
   vehicles: any[];
   selectedItems: Set<string>;
   onToggleItem: (id: string) => void;
