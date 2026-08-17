@@ -88,6 +88,16 @@ export interface BuildMdfePayloadInput {
   takers?: Array<{
     cnpj: string;
     name: string;
+    ie?: string | null;
+    address?: {
+      street?: string | null;
+      number?: string | null;
+      neighborhood?: string | null;
+      city_ibge?: string | null;
+      city_name?: string | null;
+      state?: string | null;
+      zip?: string | null;
+    } | null;
   }>;
   payment?: MdfePayment | null;
 }
