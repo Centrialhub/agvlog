@@ -479,7 +479,13 @@ export default function LoadReallocation() {
         const routes = Array.from(byRoute.keys()).sort((a, b) => norm(a).localeCompare(norm(b)));
         for (const r of routes) {
           const ls = byRoute.get(r)!.slice().sort((a, b) => norm(a.load_number).localeCompare(norm(b.load_number)));
-          const header = `${c} · ${city}${r && r !== city ? ` · ${r}` : ''}`;
+          
+          // Extrai o nome do fornecedor da chave cKey ([FORN: Nome] Cliente) para não poluir o cabeçalho excessivamente
+          const remitterMatch = c.match(/\[FORN: (.*?)\]/);
+          const remitterName = remitterMatch ? remitterMatch[1] : null;
+          const clientName = c.replace(/\[FORN: .*?\]\s*/, '');
+          
+          const header = `${remitterName ? `${remitterName} → ` : ''}${clientName} · ${city}${r && r !== city ? ` · ${r}` : ''}`;
           groups.push({ header, loads: ls });
         }
       }
@@ -658,9 +664,15 @@ export default function LoadReallocation() {
                     {g.header}
                   </SelectLabel>
                   {g.loads.map(l => (
-                    <SelectItem key={l.id} value={l.id} disabled={l.id === targetLoadId} className="pl-6">
-                      {l.load_number}
-                      {l.vehicles ? ` — ${l.vehicles.plate}` : ''}
+                    <SelectItem key={l.id} value={l.id} disabled={l.id === targetLoadId} className="pl-6 py-2">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-semibold text-sm">
+                          {l.load_number}{l.vehicles ? ` — ${l.vehicles.plate}` : ''}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground leading-tight max-w-[500px] whitespace-normal">
+                          {g.header}
+                        </span>
+                      </div>
                     </SelectItem>
                   ))}
                 </SelectGroup>
@@ -684,9 +696,15 @@ export default function LoadReallocation() {
                     {g.header}
                   </SelectLabel>
                   {g.loads.map(l => (
-                    <SelectItem key={l.id} value={l.id} disabled={l.id === sourceLoadId} className="pl-6">
-                      {l.load_number}
-                      {l.vehicles ? ` — ${l.vehicles.plate}` : ''}
+                    <SelectItem key={l.id} value={l.id} disabled={l.id === sourceLoadId} className="pl-6 py-2">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-semibold text-sm">
+                          {l.load_number}{l.vehicles ? ` — ${l.vehicles.plate}` : ''}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground leading-tight max-w-[500px] whitespace-normal">
+                          {g.header}
+                        </span>
+                      </div>
                     </SelectItem>
                   ))}
                 </SelectGroup>
