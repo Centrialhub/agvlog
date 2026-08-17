@@ -549,6 +549,7 @@ export default function LoadReallocation() {
     }
     try {
       const tenantId = (sourceLoad as any)?.tenant_id || (targetLoad as any)?.tenant_id;
+      if (!tenantId) throw new Error('Tenant ID não encontrado');
       const { data, error } = await (supabase as any).rpc('move_load_items_between_loads', {
         _tenant_id: tenantId,
         _source_load_id: sourceLoadId,
@@ -565,6 +566,7 @@ export default function LoadReallocation() {
     qc.invalidateQueries({ queryKey: ['load_items'] });
     qc.invalidateQueries({ queryKey: ['loads'] });
     qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
+    qc.invalidateQueries({ queryKey: ['reallocation_load_meta'] });
 
     const fromLabel = sourceLoad?.load_number || '—';
     const toLabel = targetLoad?.load_number || '—';
