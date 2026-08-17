@@ -208,7 +208,7 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
                 </span>
                 <div className="flex flex-wrap gap-1 min-w-0 overflow-hidden">
                   {recipientsSummary.cities.slice(0, 5).map(([label, n]) => (
-                    <Badge key={label} variant="outline" className="text-[9px] font-normal max-w-[80px] py-0 h-4">
+                    <Badge key={label} variant="outline" className="text-[9px] font-normal max-w-[70px] py-0 h-4 px-1">
                       <span className="truncate">{label}</span>
                       <span className="ml-0.5 text-muted-foreground shrink-0 text-[8px]">·{n}</span>
                     </Badge>
