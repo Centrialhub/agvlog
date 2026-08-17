@@ -176,9 +176,9 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground shrink-0">
-                    Clientes
+                <div className="flex items-start gap-1.5 min-w-0 overflow-hidden">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground shrink-0 mt-0.5">
+                    Dest.
                   </span>
                   <div className="flex flex-wrap gap-1 items-center min-w-0 overflow-hidden">
                     {recipientsSummary.recipients.slice(0, 4).map(([name, n]) => (
