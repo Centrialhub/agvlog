@@ -310,7 +310,8 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
             const grouped = filteredItems.reduce((acc, item) => {
               const fd: any = Array.isArray(item.fiscal_documents) ? item.fiscal_documents[0] : (item.fiscal_documents || {});
               const invoice = fd?.invoice_number;
-              const key = invoice ? `INV-${invoice}` : (item.orders?.order_number ? `ORD-${item.orders.order_number}` : `ID-${item.id}`);
+              const orderNum = item.orders?.order_number;
+              const key = invoice ? `INV-${invoice}` : (orderNum ? `ORD-${orderNum}` : `ID-${item.id}`);
               
               if (!acc[key]) acc[key] = { items: [], totalValue: 0, invoice: invoice };
               acc[key].items.push(item);
@@ -334,7 +335,7 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
                         </button>
                       )}
                       <span className="text-[10px] font-bold uppercase text-muted-foreground">
-                        {group.invoice ? `NF ${group.invoice}` : 'Itens sem NF'}
+                        {group.invoice ? `NF ${group.invoice}` : group.items[0]?.orders?.order_number ? `PED ${group.items[0].orders.order_number}` : 'Itens sem Doc'}
                       </span>
                     </div>
                     {group.totalValue > 0 && (
@@ -419,7 +420,7 @@ export default function LoadReallocation() {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from('load_items')
-        .select('load_id, fiscal_documents(remitter, recipient, recipient_city, recipient_state)')
+        .select('load_id, order_id, orders(order_number), fiscal_documents(remitter, recipient, recipient_city, recipient_state, invoice_number)')
         .in('load_id', activeLoadIds);
       if (error) throw error;
       return (data || []) as any[];
