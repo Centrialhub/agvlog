@@ -587,6 +587,52 @@ export default function MdfeProvisional() {
                     </div>
                   </div>
 
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>IE do Tomador</Label>
+                      <Input value={payIe} onChange={e => setPayIe(e.target.value)} placeholder="Somente números ou ISENTO" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>CEP do Tomador</Label>
+                      <Input value={payZip} onChange={e => setPayZip(e.target.value)} placeholder="00000000" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-12 gap-4">
+                    <div className="col-span-8 space-y-2">
+                      <Label>Endereço (Logradouro)</Label>
+                      <Input value={payStreet} onChange={e => setPayStreet(e.target.value)} />
+                    </div>
+                    <div className="col-span-4 space-y-2">
+                      <Label>Número</Label>
+                      <Input value={payNumber} onChange={e => setPayNumber(e.target.value)} />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-12 gap-4">
+                    <div className="col-span-5 space-y-2">
+                      <Label>Bairro</Label>
+                      <Input value={payNeighborhood} onChange={e => setPayNeighborhood(e.target.value)} />
+                    </div>
+                    <div className="col-span-5 space-y-2">
+                      <Label>Município (Nome)</Label>
+                      <Input value={payCity} onChange={e => setPayCity(e.target.value)} />
+                    </div>
+                    <div className="col-span-2 space-y-2">
+                      <Label>UF</Label>
+                      <Input value={payState} onChange={e => setPayState(e.target.value)} placeholder="Ex: MG" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>IBGE Município</Label>
+                      <Input value={payCityIbge} onChange={e => setPayCityIbge(e.target.value)} placeholder="7 dígitos" />
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-3 gap-4">
                     <div className="space-y-2">
                       <Label>Valor Total do Contrato (R$)</Label>
