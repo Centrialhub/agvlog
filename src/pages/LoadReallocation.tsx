@@ -834,7 +834,7 @@ export default function LoadReallocation() {
 
       {/* Side by side loads */}
       {sourceLoadId && targetLoadId ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-[700px]">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-[calc(100vh-280px)] min-h-[600px]">
           {sourceLoad && (
             loadingSource ? (
               <Card className="h-full">
