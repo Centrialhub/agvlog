@@ -154,23 +154,23 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
                   <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground shrink-0 mt-0.5">
                     Fornecedores
                   </span>
-                  <div className="flex flex-wrap gap-1">
+                  <div className="flex flex-wrap gap-1 items-center">
                     {recipientsSummary.remitters.slice(0, 3).map(([name, n]) => {
                       const clientName = items.find(i => i.fiscal_documents?.remitter === name)?.orders?.clients?.company_name;
                       return (
                         <Badge
                           key={name}
                           variant="outline"
-                          className="text-[10px] font-normal border-primary/20 bg-primary/5 text-primary max-w-[150px]"
+                          className="text-[10px] font-normal border-primary/20 bg-primary/5 text-primary max-w-[120px]"
                           title={clientName ? `${clientName} (${name})` : name}
                         >
                           <span className="truncate">{clientName || name}</span>
-                          <span className="ml-1 opacity-70">·{n}</span>
+                          <span className="ml-1 opacity-70 shrink-0">·{n}</span>
                         </Badge>
                       );
                     })}
                     {recipientsSummary.remitters.length > 3 && (
-                      <Badge variant="outline" className="text-[10px] font-normal">
+                      <Badge variant="outline" className="text-[10px] font-normal shrink-0">
                         +{recipientsSummary.remitters.length - 3}
                       </Badge>
                     )}
@@ -180,20 +180,20 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
                   <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground shrink-0 mt-0.5">
                     Clientes
                   </span>
-                  <div className="flex flex-wrap gap-1">
+                  <div className="flex flex-wrap gap-1 items-center">
                     {recipientsSummary.recipients.slice(0, 4).map(([name, n]) => (
                       <Badge
                         key={name}
                         variant="secondary"
-                        className="text-[10px] font-normal max-w-[180px]"
+                        className="text-[10px] font-normal max-w-[120px]"
                         title={name}
                       >
                         <span className="truncate">{name}</span>
-                        <span className="ml-1 text-muted-foreground">·{n}</span>
+                        <span className="ml-1 text-muted-foreground shrink-0">·{n}</span>
                       </Badge>
                     ))}
                     {recipientsSummary.recipients.length > 4 && (
-                      <Badge variant="outline" className="text-[10px] font-normal">
+                      <Badge variant="outline" className="text-[10px] font-normal shrink-0">
                         +{recipientsSummary.recipients.length - 4}
                       </Badge>
                     )}
@@ -208,13 +208,13 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
                 </span>
                 <div className="flex flex-wrap gap-1">
                   {recipientsSummary.cities.slice(0, 5).map(([label, n]) => (
-                    <Badge key={label} variant="outline" className="text-[10px] font-normal">
-                      {label}
-                      <span className="ml-1 text-muted-foreground">·{n}</span>
+                    <Badge key={label} variant="outline" className="text-[10px] font-normal max-w-[100px]">
+                      <span className="truncate">{label}</span>
+                      <span className="ml-1 text-muted-foreground shrink-0">·{n}</span>
                     </Badge>
                   ))}
                   {recipientsSummary.cities.length > 5 && (
-                    <Badge variant="outline" className="text-[10px] font-normal">
+                    <Badge variant="outline" className="text-[10px] font-normal shrink-0">
                       +{recipientsSummary.cities.length - 5}
                     </Badge>
                   )}
@@ -339,7 +339,7 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
                           {allSelected ? <CheckSquare className="h-3.5 w-3.5 text-primary" /> : <Square className="h-3.5 w-3.5" />}
                         </button>
                       )}
-                      <span className="text-[10px] font-bold uppercase text-muted-foreground">
+                      <span className="text-[10px] font-bold uppercase text-muted-foreground truncate flex-1 min-w-0">
                         {group.invoice ? `NF ${group.invoice}` : group.items[0]?.orders?.order_number ? `PED ${group.items[0].orders.order_number}` : 'Itens sem Doc'}
                       </span>
                     </div>
