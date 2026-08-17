@@ -92,14 +92,22 @@ export function useAuthorizedCteList() {
         access_key: d.access_key || accessKeys.get(d.id) || null,
         issued_at: d.issue_date,
         remitter: d.remitter,
+        remitter_cnpj: d.remitter_cnpj,
+        remitter_ie: null,
+        remitter_street: null,
+        remitter_number: null,
+        remitter_neighborhood: null,
+        remitter_city: null,
+        remitter_city_ibge: null,
+        remitter_uf: null,
+        remitter_zip: null,
         recipient: d.recipient,
+        recipient_cnpj: d.recipient_cnpj,
         recipient_city: d.recipient_city,
-        vehicle_plate: null, // fiscal_documents não tem placa direto, precisaríamos de join se fosse vital agora
+        vehicle_plate: null,
         driver_name: null,
         hub_document_id: d.hub_document_id,
         cargo_value: d.value ? Number(d.value) : 0,
-        remitter_cnpj: (d as any).remitter_cnpj,
-        recipient_cnpj: (d as any).recipient_cnpj
       }));
     }
   });
