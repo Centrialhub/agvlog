@@ -15,6 +15,14 @@ export interface AuthorizedCte {
   hub_document_id: string | null;
   cargo_value: number | null;
   remitter_cnpj: string | null;
+  remitter_ie: string | null;
+  remitter_street: string | null;
+  remitter_number: string | null;
+  remitter_neighborhood: string | null;
+  remitter_city: string | null;
+  remitter_city_ibge: string | null;
+  remitter_uf: string | null;
+  remitter_zip: string | null;
   recipient_cnpj: string | null;
 }
 
