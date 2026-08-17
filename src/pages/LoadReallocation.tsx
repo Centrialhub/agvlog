@@ -129,7 +129,7 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
             </CardTitle>
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            <Badge variant="outline" className="text-[10px] bg-background/50 border-primary/20">{load.destination || 'Sem destino'}</Badge>
+            <Badge variant="outline" className="text-[10px] bg-background/50 border-primary/20 max-w-[120px] truncate" title={load.destination || 'Sem destino'}>{load.destination || 'Sem destino'}</Badge>
             <Link to={`/loads/${load.id}`}>
               <Button size="sm" variant="ghost" className="h-6 px-2 gap-1 text-[10px]" title="Abrir carga para fechar/emitir CT-e">
                 <ExternalLink className="h-3 w-3" />
