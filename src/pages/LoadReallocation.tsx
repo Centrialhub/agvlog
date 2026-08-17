@@ -408,7 +408,7 @@ export default function LoadReallocation() {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from('load_items')
-        .select('load_id, fiscal_documents(recipient, recipient_city, recipient_state)')
+        .select('load_id, fiscal_documents(remitter, recipient, recipient_city, recipient_state)')
         .in('load_id', activeLoadIds);
       if (error) throw error;
       return (data || []) as Array<{ load_id: string; fiscal_documents: any }>;
