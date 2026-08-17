@@ -756,7 +756,7 @@ export default function LoadReallocation() {
                             </Badge>
                           )}
                         </div>
-                        <span className="text-[10px] text-muted-foreground leading-tight truncate">
+                        <span className="text-[10px] text-muted-foreground leading-tight truncate max-w-[380px]">
                           {g.header}
                         </span>
                       </div>
