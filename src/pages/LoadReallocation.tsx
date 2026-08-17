@@ -121,7 +121,7 @@ function LoadColumn({ load, items, vehicles, selectedItems, onToggleItem, onSele
     <Card className={`flex-1 min-w-0 ${isTarget ? 'ring-2 ring-primary/30' : ''}`}>
       <CardHeader className="pb-2 space-y-2">
         <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-sm font-semibold truncate">{load.load_number}</CardTitle>
+          <CardTitle className="text-sm font-semibold truncate">Carga {load.load_number}</CardTitle>
           <div className="flex items-center gap-1 shrink-0">
             <Badge variant="outline" className="text-[10px]">{load.destination || 'Sem destino'}</Badge>
             <Link to={`/loads/${load.id}`}>
@@ -287,17 +287,23 @@ function LoadColumn({ load, items, vehicles, selectedItems, onToggleItem, onSele
         )}
       </CardHeader>
       <CardContent className="p-2 space-y-2 max-h-[400px] overflow-y-auto">
-        {filteredItems.length === 0 ? (
+        {items.length === 0 ? (
           <p className="text-xs text-muted-foreground text-center py-4">
-            {items.length === 0 ? 'Nenhum item nesta carga' : 'Nenhum item encontrado'}
+            Nenhum item nesta carga
+          </p>
+        ) : filteredItems.length === 0 ? (
+          <p className="text-xs text-muted-foreground text-center py-4">
+            Nenhum item encontrado no filtro
           </p>
         ) : (() => {
           // Agrupar por nota fiscal (invoice_number)
           const grouped = filteredItems.reduce((acc, item) => {
             const fd: any = item.fiscal_documents || {};
             // Use order_number or item id as fallback if invoice_number is missing
-            const key = fd.invoice_number || (item.orders?.order_number ? `PED ${item.orders.order_number}` : `ITEM-${item.id}`);
-            if (!acc[key]) acc[key] = { items: [], totalValue: 0, invoice: fd.invoice_number };
+            const invoice = fd.invoice_number;
+            const key = invoice || (item.orders?.order_number ? `PED ${item.orders.order_number}` : `ITEM-${item.id}`);
+            
+            if (!acc[key]) acc[key] = { items: [], totalValue: 0, invoice: invoice };
             acc[key].items.push(item);
             acc[key].totalValue += (fd.total_value || 0);
             return acc;
