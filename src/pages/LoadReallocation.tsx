@@ -339,12 +339,12 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
                           {allSelected ? <CheckSquare className="h-3.5 w-3.5 text-primary" /> : <Square className="h-3.5 w-3.5" />}
                         </button>
                       )}
-                      <span className="text-[10px] font-bold uppercase text-muted-foreground truncate flex-1 min-w-0">
+                      <span className="text-[9px] font-bold uppercase text-muted-foreground truncate flex-1 min-w-0">
                         {group.invoice ? `NF ${group.invoice}` : group.items[0]?.orders?.order_number ? `PED ${group.items[0].orders.order_number}` : 'Itens sem Doc'}
                       </span>
                     </div>
                     {group.totalValue > 0 && (
-                      <span className="text-[10px] font-semibold text-primary bg-primary/5 px-1.5 py-0.5 rounded border border-primary/10">
+                      <span className="text-[9px] font-semibold text-primary bg-primary/5 px-1 py-0.5 rounded border border-primary/10 shrink-0">
                         R$ {group.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </span>
                     )}
