@@ -65,12 +65,12 @@ function LoadColumn({ load, items, vehicles, selectedItems, onToggleItem, onSele
     const q = search.trim().toLowerCase();
     if (!q) return items;
     return items.filter(i => {
-      const fd: any = i.fiscal_documents || {};
+      const fd: any = Array.isArray(i.fiscal_documents) ? i.fiscal_documents[0] : (i.fiscal_documents || {});
       const desc = (i.item_description || '').toLowerCase();
-      const remitter = (fd.remitter || '').toLowerCase();
-      const recipient = (fd.recipient || '').toLowerCase();
-      const city = (fd.recipient_city || '').toLowerCase();
-      const invoice = (fd.invoice_number || '').toLowerCase();
+      const remitter = (fd?.remitter || '').toLowerCase();
+      const recipient = (fd?.recipient || '').toLowerCase();
+      const city = (fd?.recipient_city || '').toLowerCase();
+      const invoice = (fd?.invoice_number || '').toLowerCase();
       switch (field) {
         case 'remitter': return remitter.includes(q);
         case 'recipient': return recipient.includes(q);
@@ -101,11 +101,11 @@ function LoadColumn({ load, items, vehicles, selectedItems, onToggleItem, onSele
     const cities = new Map<string, { label: string; count: number }>();
     const remitters = new Map<string, { label: string; count: number }>();
     for (const i of items) {
-      const fd: any = i.fiscal_documents || {};
-      const rec = (fd.recipient || '').trim();
-      const city = (fd.recipient_city || '').trim();
-      const state = (fd.recipient_state || '').trim();
-      const rem = (fd.remitter || '').trim();
+      const fd: any = Array.isArray(i.fiscal_documents) ? i.fiscal_documents[0] : (i.fiscal_documents || {});
+      const rec = (fd?.recipient || '').trim();
+      const city = (fd?.recipient_city || '').trim();
+      const state = (fd?.recipient_state || '').trim();
+      const rem = (fd?.remitter || '').trim();
       if (rec) bump(recipients, rec);
       if (city) bump(cities, state ? `${city}/${state}` : city);
       if (rem) bump(remitters, rem);
@@ -301,14 +301,13 @@ function LoadColumn({ load, items, vehicles, selectedItems, onToggleItem, onSele
         ) : (() => {
           // Agrupar por nota fiscal (invoice_number)
           const grouped = filteredItems.reduce((acc, item) => {
-            const fd: any = item.fiscal_documents || {};
-            // Use order_number or item id as fallback if invoice_number is missing
-            const invoice = fd.invoice_number;
+            const fd: any = Array.isArray(item.fiscal_documents) ? item.fiscal_documents[0] : (item.fiscal_documents || {});
+            const invoice = fd?.invoice_number;
             const key = invoice || (item.orders?.order_number ? `PED ${item.orders.order_number}` : `ITEM-${item.id}`);
             
             if (!acc[key]) acc[key] = { items: [], totalValue: 0, invoice: invoice };
             acc[key].items.push(item);
-            acc[key].totalValue += (fd.total_value || 0);
+            acc[key].totalValue += (fd?.total_value || 0);
             return acc;
           }, {} as Record<string, { items: LoadItem[], totalValue: number, invoice: string | null }>);
 
@@ -341,7 +340,7 @@ function LoadColumn({ load, items, vehicles, selectedItems, onToggleItem, onSele
 
                 {group.items.map(item => {
                   const selected = selectedItems.has(item.id);
-                  const fd: any = item.fiscal_documents || {};
+                  const fd: any = Array.isArray(item.fiscal_documents) ? item.fiscal_documents[0] : (item.fiscal_documents || {});
                   return (
                     <button
                       key={item.id}
