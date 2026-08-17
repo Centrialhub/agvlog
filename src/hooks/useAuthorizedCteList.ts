@@ -15,6 +15,14 @@ export interface AuthorizedCte {
   hub_document_id: string | null;
   cargo_value: number | null;
   remitter_cnpj: string | null;
+  remitter_ie: string | null;
+  remitter_street: string | null;
+  remitter_number: string | null;
+  remitter_neighborhood: string | null;
+  remitter_city: string | null;
+  remitter_city_ibge: string | null;
+  remitter_uf: string | null;
+  remitter_zip: string | null;
   recipient_cnpj: string | null;
 }
 
@@ -78,21 +86,46 @@ export function useAuthorizedCteList() {
         }
       }
 
-      return (outbound || []).map(d => ({
-        id: d.id,
-        cte_number: d.invoice_number,
-        access_key: d.access_key || accessKeys.get(d.id) || null,
-        issued_at: d.issue_date,
-        remitter: d.remitter,
-        recipient: d.recipient,
-        recipient_city: d.recipient_city,
-        vehicle_plate: null, // fiscal_documents não tem placa direto, precisaríamos de join se fosse vital agora
-        driver_name: null,
-        hub_document_id: d.hub_document_id,
-        cargo_value: d.value ? Number(d.value) : 0,
-        remitter_cnpj: (d as any).remitter_cnpj,
-        recipient_cnpj: (d as any).recipient_cnpj
-      }));
+      const documentEmissions = new Map<string, any>();
+      for (const emission of emissions || []) {
+        if (!emission.fiscal_document_id || documentEmissions.has(emission.fiscal_document_id)) continue;
+        documentEmissions.set(emission.fiscal_document_id, emission);
+      }
+
+      return (outbound || []).map(d => {
+        const emission = documentEmissions.get(d.id);
+        const response = emission?.last_response as any;
+        const payload = response?.payload || response?.document?.payload || {};
+        
+        // As partes no payload do Hub seguem a estrutura ide/emit/rem/dest ou no corpo dependendo da versão
+        // No Hub v1 para CT-e costuma estar em payload.remetente
+        const remPart = payload.remetente || payload.rem || {};
+        const remAddr = remPart.endereco || {};
+
+        return {
+          id: d.id,
+          cte_number: d.invoice_number,
+          access_key: d.access_key || accessKeys.get(d.id) || null,
+          issued_at: d.issue_date,
+          remitter: d.remitter,
+          remitter_cnpj: d.remitter_cnpj,
+          remitter_ie: remPart.ie || null,
+          remitter_street: remAddr.logradouro || null,
+          remitter_number: remAddr.numero || null,
+          remitter_neighborhood: remAddr.bairro || null,
+          remitter_city: remAddr.municipio || null,
+          remitter_city_ibge: remAddr.cMun || remAddr.codigoMunicipio || null,
+          remitter_uf: remAddr.uf || null,
+          remitter_zip: remAddr.cep || remAddr.CEP || null,
+          recipient: d.recipient,
+          recipient_cnpj: d.recipient_cnpj,
+          recipient_city: d.recipient_city,
+          vehicle_plate: null,
+          driver_name: null,
+          hub_document_id: d.hub_document_id,
+          cargo_value: d.value ? Number(d.value) : 0,
+        };
+      });
     }
   });
 }

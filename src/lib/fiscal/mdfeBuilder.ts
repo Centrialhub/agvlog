@@ -88,6 +88,16 @@ export interface BuildMdfePayloadInput {
   takers?: Array<{
     cnpj: string;
     name: string;
+    ie?: string | null;
+    address?: {
+      street?: string | null;
+      number?: string | null;
+      neighborhood?: string | null;
+      city_ibge?: string | null;
+      city_name?: string | null;
+      state?: string | null;
+      zip?: string | null;
+    } | null;
   }>;
   payment?: MdfePayment | null;
 }
@@ -217,9 +227,25 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
             RNTRC: input.vehicle.rntrc || 'ISENTO',
             infContratante: contractors.map(t => {
               const d = digits(t.cnpj);
-              return d.length === 11
-                ? { CPF: d, xNome: t.name }
-                : { CNPJ: d, xNome: t.name };
+              const party: any = {
+                xNome: t.name.slice(0, 60),
+                ...(d.length === 11 ? { CPF: d } : { CNPJ: d }),
+                IE: digits(t.ie) || 'ISENTO',
+              };
+
+              if (t.address) {
+                party.enderContratante = {
+                  xLgr: (t.address.street || '').slice(0, 60),
+                  nro: (t.address.number || 'SN').slice(0, 60),
+                  xBairro: (t.address.neighborhood || '').slice(0, 60),
+                  cMun: digits(t.address.city_ibge),
+                  xMun: (t.address.city_name || '').slice(0, 60),
+                  UF: t.address.state || '',
+                  CEP: digits(t.address.zip),
+                };
+              }
+
+              return party;
             }),
             ...(infPag ? { infPag } : {}),
           },
@@ -312,6 +338,7 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
         contratantes: contractors.map(t => ({
           xNome: t.name,
           cpfCnpj: digits(t.cnpj),
+          ie: digits(t.ie) || 'ISENTO',
         })),
       },
       infAdic: {

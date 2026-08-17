@@ -202,7 +202,17 @@ export default function MdfeProvisional() {
         takers: Array.from(new Map(
           selectedDocs.map(d => [d.remitter_cnpj, { 
             cnpj: d.remitter_cnpj || '', 
-            name: d.remitter || '' 
+            name: d.remitter || '',
+            ie: d.remitter_ie || 'ISENTO',
+            address: {
+              street: d.remitter_street,
+              number: d.remitter_number,
+              neighborhood: d.remitter_neighborhood,
+              city_ibge: d.remitter_city_ibge,
+              city_name: d.remitter_city,
+              state: d.remitter_uf,
+              zip: d.remitter_zip
+            }
           }])
         ).values()).filter(t => t.cnpj),
         payment: includePayment
