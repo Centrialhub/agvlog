@@ -377,6 +377,7 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
                         <div className="flex items-center gap-2 mt-0.5 text-[10px] text-muted-foreground pl-5">
                           <span>Qtd: {item.quantity}</span>
                           {item.pallet_count > 0 && <span>• {item.pallet_count} PLT</span>}
+                          {item.weight_kg > 0 && <span>• {item.weight_kg.toLocaleString('pt-BR')} kg</span>}
                           {fd?.recipient_city && (
                             <span className="truncate border-l pl-2 ml-1">
                               {fd.recipient_city}
