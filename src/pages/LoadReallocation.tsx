@@ -62,7 +62,6 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
   const [search, setSearch] = useState('');
   const [field, setField] = useState<FilterField>('all');
 
-  console.log(`LoadColumn [${load.load_number}]: items=`, items);
   const filteredItems = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return items;
@@ -297,7 +296,7 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
             <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent mx-auto mb-2" />
             <p className="text-[10px] text-muted-foreground">Carregando itens...</p>
           </div>
-        ) : items.length === 0 ? (
+        ) : (items && items.length === 0) ? (
           <p className="text-xs text-muted-foreground text-center py-4">
             Nenhum item nesta carga
           </p>
