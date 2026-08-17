@@ -43,6 +43,34 @@ export interface MdfeInsurance {
   policyNumber: string;
 }
 
+/** Parcela do pagamento a prazo (grupo infPrazo). */
+export interface MdfePaymentInstallment {
+  number?: string | number | null;
+  dueDate?: string | null; // YYYY-MM-DD
+  value?: number | null;
+}
+
+/**
+ * Grupo de pagamento do tomador (infPag) exigido pela Nota Técnica de
+ * piso mínimo de frete. Em MDF-e de carga fracionada a exigência costuma
+ * ser dispensada, portanto este bloco é opcional.
+ */
+export interface MdfePayment {
+  contractorName?: string | null;
+  contractorDoc?: string | null; // CPF ou CNPJ do tomador/contratante
+  contractValue?: number | null; // Valor total do contrato
+  paymentCondition?: 'avista' | 'aprazo' | null;
+  advanceValue?: number | null; // Adiantamento
+  installments?: MdfePaymentInstallment[];
+  bank?: {
+    pixKey?: string | null;
+    bankCode?: string | null;
+    agency?: string | null;
+    account?: string | null;
+    ipefCnpj?: string | null; // CNPJ da Instituição de Pagamento Eletrônico
+  } | null;
+}
+
 export interface BuildMdfePayloadInput {
   emitter: MdfeEmitter;
   driver: MdfeDriver;
@@ -61,6 +89,7 @@ export interface BuildMdfePayloadInput {
     cnpj: string;
     name: string;
   }>;
+  payment?: MdfePayment | null;
 }
 
 export interface BuildMdfePayloadResult {
