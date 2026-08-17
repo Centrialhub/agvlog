@@ -807,7 +807,7 @@ export default function LoadReallocation() {
       {sourceLoadId && targetLoadId ? (
         <div className="flex gap-4">
           {sourceLoad && (
-            isLoadingSource ? (
+            loadingSource ? (
               <Card className="flex-1">
                 <CardContent className="py-16 text-center">
                   <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto mb-4" />
@@ -834,7 +834,7 @@ export default function LoadReallocation() {
             )
           )}
           {targetLoad && (
-            isLoadingTarget ? (
+            loadingTarget ? (
               <Card className="flex-1">
                 <CardContent className="py-16 text-center">
                   <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto mb-4" />
