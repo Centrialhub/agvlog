@@ -676,7 +676,7 @@ export default function LoadReallocation() {
   const selectedWeight = sourceItems.filter(i => selectedItems.has(i.id)).reduce((s, i) => s + (i.weight_kg || 0), 0);
 
   return (
-    <div className="animate-fade-in space-y-5 max-w-6xl">
+    <div className="animate-fade-in space-y-4 w-full">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
@@ -834,7 +834,7 @@ export default function LoadReallocation() {
 
       {/* Side by side loads */}
       {sourceLoadId && targetLoadId ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-[700px]">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-[calc(100vh-280px)] min-h-[600px]">
           {sourceLoad && (
             loadingSource ? (
               <Card className="h-full">
