@@ -200,9 +200,9 @@ export default function MdfeProvisional() {
         valCarga: Number(totalCargoValue) || 0,
         cMone: '098',
         takers: Array.from(new Map(
-          selectedDocs.map(d => [d.recipient_cnpj || d.remitter_cnpj, { 
-            cnpj: d.recipient_cnpj || d.remitter_cnpj || '', 
-            name: d.recipient || d.remitter || '' 
+          selectedDocs.map(d => [d.remitter_cnpj, { 
+            cnpj: d.remitter_cnpj || '', 
+            name: d.remitter || '' 
           }])
         ).values()).filter(t => t.cnpj),
         payment: includePayment
