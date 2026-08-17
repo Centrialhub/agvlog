@@ -150,9 +150,9 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
           <div className="space-y-1 rounded-md bg-muted/40 border border-border/60 p-1.5">
             {recipientsSummary.recipients.length > 0 && (
               <div className="flex flex-col gap-1">
-                <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground shrink-0">
-                    Fornecedores
+                <div className="flex items-start gap-1.5 min-w-0 overflow-hidden">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground shrink-0 mt-0.5">
+                    Rem.
                   </span>
                   <div className="flex flex-wrap gap-1 items-center min-w-0 overflow-hidden">
                     {recipientsSummary.remitters.slice(0, 3).map(([name, n]) => {
