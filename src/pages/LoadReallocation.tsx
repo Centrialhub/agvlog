@@ -161,16 +161,16 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
                         <Badge
                           key={name}
                           variant="outline"
-                          className="text-[10px] font-normal border-primary/20 bg-primary/5 text-primary max-w-[120px]"
+                          className="text-[9px] font-normal border-primary/20 bg-primary/5 text-primary max-w-[100px] py-0 h-4"
                           title={clientName ? `${clientName} (${name})` : name}
                         >
                           <span className="truncate">{clientName || name}</span>
-                          <span className="ml-1 opacity-70 shrink-0">·{n}</span>
+                          <span className="ml-1 opacity-70 shrink-0 text-[8px]">·{n}</span>
                         </Badge>
                       );
                     })}
                     {recipientsSummary.remitters.length > 3 && (
-                      <Badge variant="outline" className="text-[10px] font-normal shrink-0">
+                      <Badge variant="outline" className="text-[9px] font-normal shrink-0 py-0 h-4">
                         +{recipientsSummary.remitters.length - 3}
                       </Badge>
                     )}
@@ -185,15 +185,15 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
                       <Badge
                         key={name}
                         variant="secondary"
-                        className="text-[10px] font-normal max-w-[120px]"
+                        className="text-[9px] font-normal max-w-[100px] py-0 h-4"
                         title={name}
                       >
                         <span className="truncate">{name}</span>
-                        <span className="ml-1 text-muted-foreground shrink-0">·{n}</span>
+                        <span className="ml-1 text-muted-foreground shrink-0 text-[8px]">·{n}</span>
                       </Badge>
                     ))}
                     {recipientsSummary.recipients.length > 4 && (
-                      <Badge variant="outline" className="text-[10px] font-normal shrink-0">
+                      <Badge variant="outline" className="text-[9px] font-normal shrink-0 py-0 h-4">
                         +{recipientsSummary.recipients.length - 4}
                       </Badge>
                     )}
@@ -208,13 +208,13 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
                 </span>
                 <div className="flex flex-wrap gap-1">
                   {recipientsSummary.cities.slice(0, 5).map(([label, n]) => (
-                    <Badge key={label} variant="outline" className="text-[10px] font-normal max-w-[100px]">
+                    <Badge key={label} variant="outline" className="text-[9px] font-normal max-w-[90px] py-0 h-4">
                       <span className="truncate">{label}</span>
-                      <span className="ml-1 text-muted-foreground shrink-0">·{n}</span>
+                      <span className="ml-1 text-muted-foreground shrink-0 text-[8px]">·{n}</span>
                     </Badge>
                   ))}
                   {recipientsSummary.cities.length > 5 && (
-                    <Badge variant="outline" className="text-[10px] font-normal shrink-0">
+                    <Badge variant="outline" className="text-[9px] font-normal shrink-0 py-0 h-4">
                       +{recipientsSummary.cities.length - 5}
                     </Badge>
                   )}
