@@ -129,7 +129,7 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
             </CardTitle>
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            <Badge variant="outline" className="text-[10px]">{load.destination || 'Sem destino'}</Badge>
+            <Badge variant="outline" className="text-[10px] bg-background/50 border-primary/20">{load.destination || 'Sem destino'}</Badge>
             <Link to={`/loads/${load.id}`}>
               <Button size="sm" variant="ghost" className="h-6 px-2 gap-1 text-[10px]" title="Abrir carga para fechar/emitir CT-e">
                 <ExternalLink className="h-3 w-3" />
@@ -350,19 +350,20 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
                     )}
                   </div>
 
-                  {group.items.map(item => {
-                    const selected = selectedItems.has(item.id);
-                    const fd: any = Array.isArray(item.fiscal_documents) ? item.fiscal_documents[0] : (item.fiscal_documents || {});
-                    return (
-                      <button
-                        key={item.id}
-                        onClick={() => onToggleItem(item.id)}
-                        className={`w-full text-left rounded-md border p-2 text-xs transition-colors ${
-                          selected
-                            ? 'bg-primary/10 border-primary/40 ring-1 ring-primary/20'
-                            : 'bg-card border-border hover:bg-muted/50'
-                        }`}
-                      >
+                  <div className="space-y-1">
+                    {group.items.map(item => {
+                      const selected = selectedItems.has(item.id);
+                      const fd: any = Array.isArray(item.fiscal_documents) ? item.fiscal_documents[0] : (item.fiscal_documents || {});
+                      return (
+                        <button
+                          key={item.id}
+                          onClick={() => onToggleItem(item.id)}
+                          className={`w-full text-left rounded border p-2 text-xs transition-all ${
+                            selected
+                              ? 'bg-primary/10 border-primary/30 ring-1 ring-primary/20 shadow-sm'
+                              : 'bg-card border-border/60 hover:bg-muted/50 hover:border-primary/20'
+                          }`}
+                        >
                         <div className="flex items-center gap-2">
                           <Package className={`h-3 w-3 shrink-0 ${selected ? 'text-primary' : 'text-muted-foreground'}`} />
                           <div className="flex-1 min-w-0">
@@ -384,14 +385,15 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
                           {item.pallet_count > 0 && <span>• {item.pallet_count} PLT</span>}
                           {item.weight_kg > 0 && <span>• {item.weight_kg.toLocaleString('pt-BR')} kg</span>}
                           {fd?.recipient_city && (
-                            <span className="truncate border-l pl-2 ml-1">
+                            <span className="truncate border-l border-muted-foreground/30 pl-2 ml-1">
                               {fd.recipient_city}
                             </span>
                           )}
                         </div>
                       </button>
                     );
-                  })}
+                    })}
+                  </div>
                 </div>
               );
             });
