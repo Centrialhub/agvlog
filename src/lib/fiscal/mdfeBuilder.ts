@@ -338,6 +338,7 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
         contratantes: contractors.map(t => ({
           xNome: t.name,
           cpfCnpj: digits(t.cnpj),
+          ie: digits(t.ie) || 'ISENTO',
         })),
       },
       infAdic: {
