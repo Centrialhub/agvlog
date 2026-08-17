@@ -794,6 +794,7 @@ export default function LoadReallocation() {
               <LoadColumn
                 load={sourceLoad}
                 items={sourceItems}
+                isLoading={loadingSource}
                 vehicles={vehicles as any[]}
                 selectedItems={selectedItems}
                 onToggleItem={toggleItem}
@@ -820,6 +821,7 @@ export default function LoadReallocation() {
               <LoadColumn
                 load={targetLoad}
                 items={targetItems}
+                isLoading={loadingTarget}
                 vehicles={vehicles as any[]}
                 selectedItems={new Set()}
                 onToggleItem={() => {}}
