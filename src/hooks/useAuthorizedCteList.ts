@@ -33,7 +33,7 @@ export function useAuthorizedCteList() {
     queryKey: ['authorized_ctes', currentTenant?.id],
     enabled: !!currentTenant,
     queryFn: async (): Promise<AuthorizedCte[]> => {
-      // Buscamos em fiscal_documents (saída) que foram autorizados
+      // 1. Buscamos em fiscal_documents (saída) que foram autorizados
       const { data: outbound, error } = await supabase
         .from('fiscal_documents')
         .select(`
@@ -61,6 +61,7 @@ export function useAuthorizedCteList() {
 
       if (error) throw error;
 
+      // 2. Buscamos as emissões correspondentes para pegar o payload detalhado (e a chave se faltar)
       const documentIds = (outbound || []).map(document => document.id);
       const { data: emissions, error: emissionsError } = documentIds.length
         ? await supabase
@@ -73,6 +74,20 @@ export function useAuthorizedCteList() {
         : { data: [], error: null };
 
       if (emissionsError) throw emissionsError;
+
+      // 3. Buscamos TODOS os clientes do tenant para usar como fallback de endereço (CNPJ Match)
+      const { data: clients, error: clientsError } = await supabase
+        .from('clients')
+        .select('tax_id, address_street, address_number, address_neighborhood, address_city, address_state, address_zip, address_city_ibge_code, state_registration')
+        .eq('tenant_id', currentTenant!.id);
+
+      if (clientsError) throw clientsError;
+
+      const clientMap = new Map<string, any>();
+      for (const c of clients || []) {
+        const k = (c.tax_id || '').replace(/\D+/g, '');
+        if (k && !clientMap.has(k)) clientMap.set(k, c);
+      }
 
       const accessKeys = new Map<string, string>();
       for (const emission of emissions || []) {
@@ -98,9 +113,12 @@ export function useAuthorizedCteList() {
         const payload = response?.payload || response?.document?.payload || {};
         
         // As partes no payload do Hub seguem a estrutura ide/emit/rem/dest ou no corpo dependendo da versão
-        // No Hub v1 para CT-e costuma estar em payload.remetente
         const remPart = payload.remetente || payload.rem || {};
         const remAddr = remPart.endereco || {};
+
+        // Fallback para o cadastro do sistema (Match por CNPJ do remetente)
+        const remCnpj = (d.remitter_cnpj || '').replace(/\D+/g, '');
+        const client = clientMap.get(remCnpj);
 
         return {
           id: d.id,
@@ -109,14 +127,16 @@ export function useAuthorizedCteList() {
           issued_at: d.issue_date,
           remitter: d.remitter,
           remitter_cnpj: d.remitter_cnpj,
-          remitter_ie: remPart.ie || null,
-          remitter_street: remAddr.logradouro || null,
-          remitter_number: remAddr.numero || null,
-          remitter_neighborhood: remAddr.bairro || null,
-          remitter_city: remAddr.municipio || null,
-          remitter_city_ibge: remAddr.cMun || remAddr.codigoMunicipio || null,
-          remitter_uf: remAddr.uf || null,
-          remitter_zip: remAddr.cep || remAddr.CEP || null,
+          // IE: Payload -> Cadastro -> null
+          remitter_ie: remPart.ie || client?.state_registration || null,
+          // Endereço: Prioriza Payload do Hub, Fallback para Cadastro Local
+          remitter_street: remAddr.logradouro || client?.address_street || null,
+          remitter_number: remAddr.numero || client?.address_number || null,
+          remitter_neighborhood: remAddr.bairro || client?.address_neighborhood || null,
+          remitter_city: remAddr.municipio || client?.address_city || null,
+          remitter_city_ibge: remAddr.cMun || remAddr.codigoMunicipio || client?.address_city_ibge_code || null,
+          remitter_uf: remAddr.uf || client?.address_state || null,
+          remitter_zip: remAddr.cep || remAddr.CEP || client?.address_zip || null,
           recipient: d.recipient,
           recipient_cnpj: d.recipient_cnpj,
           recipient_city: d.recipient_city,
