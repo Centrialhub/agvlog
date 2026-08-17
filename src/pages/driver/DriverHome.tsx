@@ -159,7 +159,7 @@ export default function DriverHome() {
     <div className="space-y-4">
       <div>
         <h1 className="text-lg font-bold">Olá, {driver?.name || 'Motorista'}</h1>
-        <p className="text-sm text-muted-foreground">Seu painel de viagem</p>
+        <p className="text-sm text-muted-foreground">Painel de controle</p>
       </div>
 
 
@@ -213,7 +213,7 @@ export default function DriverHome() {
                   </div>
                 </div>
                 <p className="text-[10px] text-muted-foreground italic">
-                  Aguardando criação da viagem pela operação para liberar paradas.
+                  Aguardando liberação da viagem pela equipe de operação.
                 </p>
                 <DriverLoadNotes
                   loadId={load.id}

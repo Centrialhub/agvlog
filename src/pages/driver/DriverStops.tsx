@@ -145,13 +145,13 @@ export default function DriverStops() {
       {!effectiveTrip ? (
         <Card>
           <CardContent className="py-6 text-center">
-            <p className="text-sm text-muted-foreground">Nenhuma parada definida nesta viagem.</p>
+            <p className="text-sm text-muted-foreground">Nenhuma parada programada.</p>
           </CardContent>
         </Card>
       ) : effectiveStops.length === 0 ? (
         <Card>
           <CardContent className="py-6 text-center">
-            <p className="text-sm text-muted-foreground">Nenhuma parada definida nesta viagem.</p>
+            <p className="text-sm text-muted-foreground">Nenhuma parada programada.</p>
           </CardContent>
         </Card>
       ) : (
