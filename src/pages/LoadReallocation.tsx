@@ -385,7 +385,7 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
                           {item.pallet_count > 0 && <span>• {item.pallet_count} PLT</span>}
                           {item.weight_kg > 0 && <span>• {item.weight_kg.toLocaleString('pt-BR')} kg</span>}
                           {fd?.recipient_city && (
-                            <span className="truncate border-l border-muted-foreground/30 pl-2 ml-1">
+                            <span className="truncate border-l border-muted-foreground/30 pl-2 ml-1 max-w-[120px]">
                               {fd.recipient_city}
                             </span>
                           )}
