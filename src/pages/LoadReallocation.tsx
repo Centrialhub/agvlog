@@ -689,7 +689,7 @@ export default function LoadReallocation() {
       </div>
 
       {/* Load selectors */}
-      <div className="flex items-end gap-4">
+      <div className="flex items-end gap-4 max-w-full overflow-hidden">
         <div className="flex-1">
           <label className="text-xs font-medium text-muted-foreground mb-1 block">Carga Origem</label>
           <Select value={sourceLoadId} onValueChange={v => { setSourceLoadId(v); setSelectedItems(new Set()); }}>
@@ -704,11 +704,11 @@ export default function LoadReallocation() {
                   </SelectLabel>
                   {g.loads.map(l => (
                     <SelectItem key={l.id} value={l.id} disabled={l.id === targetLoadId} className="pl-6 py-2">
-                      <div className="flex flex-col gap-0.5">
+                      <div className="flex flex-col gap-0.5 min-w-0">
                         <span className="font-semibold text-sm">
                           {l.load_number}{l.vehicles ? ` — ${l.vehicles.plate}` : ''}
                         </span>
-                        <span className="text-[10px] text-muted-foreground leading-tight max-w-[500px] whitespace-normal">
+                        <span className="text-[10px] text-muted-foreground leading-tight truncate">
                           {g.header}
                         </span>
                       </div>
@@ -736,11 +736,11 @@ export default function LoadReallocation() {
                   </SelectLabel>
                   {g.loads.map(l => (
                     <SelectItem key={l.id} value={l.id} disabled={l.id === sourceLoadId} className="pl-6 py-2">
-                      <div className="flex flex-col gap-0.5">
+                      <div className="flex flex-col gap-0.5 min-w-0">
                         <span className="font-semibold text-sm">
                           {l.load_number}{l.vehicles ? ` — ${l.vehicles.plate}` : ''}
                         </span>
-                        <span className="text-[10px] text-muted-foreground leading-tight max-w-[500px] whitespace-normal">
+                        <span className="text-[10px] text-muted-foreground leading-tight truncate">
                           {g.header}
                         </span>
                       </div>
