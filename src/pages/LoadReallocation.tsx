@@ -258,39 +258,85 @@ function LoadColumn({ load, items, vehicles, selectedItems, onToggleItem, onSele
           </div>
         )}
       </CardHeader>
-      <CardContent className="p-2 space-y-1 max-h-[400px] overflow-y-auto">
+      <CardContent className="p-2 space-y-2 max-h-[400px] overflow-y-auto">
         {filteredItems.length === 0 ? (
           <p className="text-xs text-muted-foreground text-center py-4">
             {items.length === 0 ? 'Nenhum item nesta carga' : 'Nenhum item encontrado'}
           </p>
-        ) : filteredItems.map(item => {
-          const selected = selectedItems.has(item.id);
-          const fd: any = item.fiscal_documents || {};
-          return (
-            <button
-              key={item.id}
-              onClick={() => onToggleItem(item.id)}
-              className={`w-full text-left rounded-md border p-2 text-xs transition-colors ${
-                selected
-                  ? 'bg-primary/10 border-primary/40 ring-1 ring-primary/20'
-                  : 'bg-card border-border hover:bg-muted/50'
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <Package className={`h-3 w-3 shrink-0 ${selected ? 'text-primary' : 'text-muted-foreground'}`} />
-                <span className="flex-1 truncate font-medium">{item.item_description}</span>
-                {selected && <CheckCircle className="h-3 w-3 text-primary shrink-0" />}
+        ) : (() => {
+          // Agrupar por nota fiscal (invoice_number)
+          const grouped = items.reduce((acc, item) => {
+            const fd: any = item.fiscal_documents || {};
+            const key = fd.invoice_number || `sem-nota-${item.id}`;
+            if (!acc[key]) acc[key] = { items: [], totalValue: 0, invoice: fd.invoice_number };
+            acc[key].items.push(item);
+            acc[key].totalValue += (fd.total_value || 0);
+            return acc;
+          }, {} as Record<string, { items: LoadItem[], totalValue: number, invoice: string | null }>);
+
+          return Object.entries(grouped).map(([key, group]: [string, any]) => {
+            // Se o grupo está filtrado (algum item dele passa no filtro)
+            const filteredGroupItems = group.items.filter(i => filteredItems.some(fi => fi.id === i.id));
+            if (filteredGroupItems.length === 0) return null;
+
+            const allSelected = group.items.every(i => selectedItems.has(i.id));
+            const someSelected = group.items.some(i => selectedItems.has(i.id));
+
+            return (
+              <div key={key} className="space-y-1 border rounded-md p-1.5 bg-muted/20">
+                <div className="flex items-center justify-between px-1 mb-1">
+                  <div className="flex items-center gap-2">
+                    {canSelect && (
+                      <button 
+                        onClick={() => onSelectMany?.(group.items.map(i => i.id), !allSelected)}
+                        className="text-muted-foreground hover:text-primary transition-colors"
+                      >
+                        {allSelected ? <CheckSquare className="h-3.5 w-3.5 text-primary" /> : <Square className="h-3.5 w-3.5" />}
+                      </button>
+                    )}
+                    <span className="text-[10px] font-bold uppercase text-muted-foreground">
+                      {group.invoice ? `NF ${group.invoice}` : 'Itens sem NF'}
+                    </span>
+                  </div>
+                  {group.totalValue > 0 && (
+                    <span className="text-[10px] font-semibold text-primary bg-primary/5 px-1.5 py-0.5 rounded border border-primary/10">
+                      R$ {group.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </span>
+                  )}
+                </div>
+
+                {group.items.map(item => {
+                  if (!filteredItems.some(fi => fi.id === item.id)) return null;
+                  const selected = selectedItems.has(item.id);
+                  const fd: any = item.fiscal_documents || {};
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => onToggleItem(item.id)}
+                      className={`w-full text-left rounded-md border p-2 text-xs transition-colors ${
+                        selected
+                          ? 'bg-primary/10 border-primary/40 ring-1 ring-primary/20'
+                          : 'bg-card border-border hover:bg-muted/50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Package className={`h-3 w-3 shrink-0 ${selected ? 'text-primary' : 'text-muted-foreground'}`} />
+                        <span className="flex-1 truncate font-medium">{item.item_description}</span>
+                        {selected && <CheckCircle className="h-3 w-3 text-primary shrink-0" />}
+                      </div>
+                      <div className="flex gap-3 mt-1 text-[10px] text-muted-foreground pl-5 flex-wrap">
+                        {item.pallet_count > 0 && <span>{item.pallet_count} pal</span>}
+                        {item.weight_kg > 0 && <span>{item.weight_kg.toLocaleString('pt-BR')} kg</span>}
+                        {item.quantity > 0 && <span>{item.quantity} un</span>}
+                        {fd.recipient_city && <span>{fd.recipient_city}{fd.recipient_state ? `/${fd.recipient_state}` : ''}</span>}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
-              <div className="flex gap-3 mt-1 text-[10px] text-muted-foreground pl-5 flex-wrap">
-                {item.pallet_count > 0 && <span>{item.pallet_count} pal</span>}
-                {item.weight_kg > 0 && <span>{item.weight_kg.toLocaleString('pt-BR')} kg</span>}
-                {item.quantity > 0 && <span>{item.quantity} un</span>}
-                {fd.invoice_number && <span>NF {fd.invoice_number}</span>}
-                {fd.recipient_city && <span>{fd.recipient_city}{fd.recipient_state ? `/${fd.recipient_state}` : ''}</span>}
-              </div>
-            </button>
-          );
-        })}
+            );
+          });
+        })()}
       </CardContent>
     </Card>
   );
