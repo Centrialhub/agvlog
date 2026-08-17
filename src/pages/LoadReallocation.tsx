@@ -372,12 +372,12 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
                                 {fd?.recipient || item.item_description || 'Item sem descrição'}
                               </span>
                               {fd?.remitter && (
-                                <div className="flex flex-col items-end shrink-0 max-w-[120px]">
-                                  <Badge variant="outline" className="text-[9px] h-3.5 px-1 bg-muted/30 border-primary/20 text-primary w-full justify-center truncate" title={fd.remitter}>
+                                <div className="flex flex-col items-end shrink-0 max-w-[150px] bg-primary/5 rounded border border-primary/20 px-1.5 py-0.5">
+                                  <span className="text-[10px] font-bold text-primary truncate w-full text-right" title={fd.remitter}>
                                     {fd.remitter}
-                                  </Badge>
+                                  </span>
                                   {fd.remitter_cnpj && (
-                                    <span className="text-[8px] opacity-70 mt-0.5 font-mono">
+                                    <span className="text-[9px] font-bold text-primary tabular-nums">
                                       {fd.remitter_cnpj}
                                     </span>
                                   )}
