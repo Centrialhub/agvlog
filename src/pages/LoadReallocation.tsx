@@ -487,7 +487,12 @@ export default function LoadReallocation() {
           const remitterName = remitterMatch ? remitterMatch[1] : null;
           const clientName = c.replace(/\[FORN: .*?\]\s*/, '');
           
-          const header = `${remitterName ? `${remitterName} → ` : ''}${clientName} · ${city}${r && r !== city ? ` · ${r}` : ''}`;
+          // Abrevia nomes muito longos no cabeçalho para evitar quebra de layout
+          const truncate = (s: string, max: number) => s.length > max ? s.slice(0, max) + '...' : s;
+          const displayClient = truncate(clientName, 30);
+          const displayRemitter = remitterName ? truncate(remitterName, 20) : null;
+
+          const header = `${displayRemitter ? `${displayRemitter} → ` : ''}${displayClient} · ${city}${r && r !== city ? ` · ${r}` : ''}`;
           groups.push({ header, loads: ls });
         }
       }
