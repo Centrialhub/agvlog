@@ -43,6 +43,34 @@ export interface MdfeInsurance {
   policyNumber: string;
 }
 
+/** Parcela do pagamento a prazo (grupo infPrazo). */
+export interface MdfePaymentInstallment {
+  number?: string | number | null;
+  dueDate?: string | null; // YYYY-MM-DD
+  value?: number | null;
+}
+
+/**
+ * Grupo de pagamento do tomador (infPag) exigido pela Nota Técnica de
+ * piso mínimo de frete. Em MDF-e de carga fracionada a exigência costuma
+ * ser dispensada, portanto este bloco é opcional.
+ */
+export interface MdfePayment {
+  contractorName?: string | null;
+  contractorDoc?: string | null; // CPF ou CNPJ do tomador/contratante
+  contractValue?: number | null; // Valor total do contrato
+  paymentCondition?: 'avista' | 'aprazo' | null;
+  advanceValue?: number | null; // Adiantamento
+  installments?: MdfePaymentInstallment[];
+  bank?: {
+    pixKey?: string | null;
+    bankCode?: string | null;
+    agency?: string | null;
+    account?: string | null;
+    ipefCnpj?: string | null; // CNPJ da Instituição de Pagamento Eletrônico
+  } | null;
+}
+
 export interface BuildMdfePayloadInput {
   emitter: MdfeEmitter;
   driver: MdfeDriver;
@@ -61,6 +89,7 @@ export interface BuildMdfePayloadInput {
     cnpj: string;
     name: string;
   }>;
+  payment?: MdfePayment | null;
 }
 
 export interface BuildMdfePayloadResult {
@@ -106,6 +135,65 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
     ? input.takers
     : [{ cnpj: input.emitter.cnpj, name: input.emitter.name }];
 
+  // Grupo de pagamento do tomador (infPag). Enviado apenas quando informado;
+  // em carga fracionada (múltiplos CT-e) a exigência é normalmente dispensada.
+  const pay = input.payment;
+  const payDoc = digits(pay?.contractorDoc);
+  const hasPayment = Boolean(pay && (payDoc || (pay.contractValue || 0) > 0));
+  const isTermPayment = pay?.paymentCondition === 'aprazo';
+  const infPag = hasPayment
+    ? [
+        {
+          xNome: pay?.contractorName || contractors[0]?.name || '',
+          ...(payDoc.length === 11 ? { CPF: payDoc } : payDoc ? { CNPJ: payDoc } : {}),
+          Comp: [
+            {
+              tpComp: '01', // 01 = Vale-Pedágio/Serviço de transporte
+              vComp: Number(pay?.contractValue || 0),
+            },
+          ],
+          vContrato: Number(pay?.contractValue || 0),
+          indAntecipaAdiant: (pay?.advanceValue || 0) > 0 ? '1' : '0',
+          vAdiant: Number(pay?.advanceValue || 0),
+          indPag: isTermPayment ? '1' : '0', // 0 = à vista, 1 = a prazo
+          ...(isTermPayment && pay?.installments?.length
+            ? {
+                infPrazo: pay.installments
+                  .filter(p => (p.value || 0) > 0 || p.dueDate)
+                  .map((p, idx) => ({
+                    nParcela: String(p.number ?? idx + 1),
+                    dVenc: p.dueDate || '',
+                    vParcela: Number(p.value || 0),
+                  })),
+              }
+            : {}),
+          infBanc: {
+            PIX: pay?.bank?.pixKey || undefined,
+            codBanco: pay?.bank?.bankCode || undefined,
+            codAgencia: pay?.bank?.agency || undefined,
+            conta: pay?.bank?.account || undefined,
+            CNPJIPEF: digits(pay?.bank?.ipefCnpj) || undefined,
+          },
+        },
+      ]
+    : undefined;
+
+  if (hasPayment) {
+    if (!payDoc) missing.push('CPF/CNPJ do tomador (pagamento)');
+    if (!(pay?.contractorName || '').trim()) missing.push('Nome/Razão Social do tomador');
+    if (!((pay?.contractValue || 0) > 0)) missing.push('Valor total do contrato');
+    if (!pay?.paymentCondition) missing.push('Condição de pagamento');
+    const bank = pay?.bank;
+    const hasBank = Boolean(
+      bank?.pixKey || bank?.ipefCnpj || (bank?.bankCode && bank?.agency && bank?.account)
+    );
+    if (!hasBank) missing.push('Dados bancários ou de recebimento (Pix, banco/agência/conta ou CNPJ IPEF)');
+    if (isTermPayment) {
+      const parcels = (pay?.installments || []).filter(p => (p.value || 0) > 0 && p.dueDate);
+      if (parcels.length === 0) missing.push('Detalhamento das parcelas (valor e vencimento)');
+    }
+  }
+
   const payload: Record<string, unknown> = {
     emitterCnpj: digits(input.emitter.cnpj),
     environment: input.emitter.environment || 'sandbox',
@@ -138,6 +226,7 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
                 ? { CPF: d, xNome: t.name }
                 : { CNPJ: d, xNome: t.name };
             }),
+            ...(infPag ? { infPag } : {}),
           },
           veicTracao: {
             placa: input.vehicle.plate,

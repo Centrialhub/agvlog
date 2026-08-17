@@ -41,6 +41,22 @@ export default function MdfeProvisional() {
   const [destUf, setDestUf] = useState('');
   const [vehicleTara, setVehicleTara] = useState('');
   const [totalCargoValue, setTotalCargoValue] = useState('');
+
+  // Grupo de pagamento do tomador (Nota Técnica de piso mínimo de frete)
+  const [includePayment, setIncludePayment] = useState(false);
+  const [payName, setPayName] = useState('');
+  const [payDoc, setPayDoc] = useState('');
+  const [payContractValue, setPayContractValue] = useState('');
+  const [payCondition, setPayCondition] = useState<'avista' | 'aprazo'>('avista');
+  const [payAdvance, setPayAdvance] = useState('');
+  const [payPix, setPayPix] = useState('');
+  const [payBankCode, setPayBankCode] = useState('');
+  const [payAgency, setPayAgency] = useState('');
+  const [payAccount, setPayAccount] = useState('');
+  const [payIpefCnpj, setPayIpefCnpj] = useState('');
+  const [payInstallments, setPayInstallments] = useState<Array<{ dueDate: string; value: string }>>([
+    { dueDate: '', value: '' },
+  ]);
   const { data: hubCredentials = [] } = useHubCredentials(emitterId);
 
   // Auto-fill from selected CTEs
@@ -65,6 +81,13 @@ export default function MdfeProvisional() {
       const selectedDocs = ctes?.filter(c => selectedIds.includes(c.id)) || [];
       const total = selectedDocs.reduce((acc, doc) => acc + (doc.cargo_value || 0), 0);
       setTotalCargoValue(total.toFixed(2));
+
+      // Pré-preenche o tomador com o primeiro documento selecionado
+      const first = selectedDocs[0];
+      if (first) {
+        setPayName(prev => prev || first.recipient || first.remitter || '');
+        setPayDoc(prev => prev || first.recipient_cnpj || first.remitter_cnpj || '');
+      }
     }
   }, [isDialogOpen, selectedIds, ctes, emitters, emitterId, vehicles, vehicleId]);
 
@@ -181,7 +204,33 @@ export default function MdfeProvisional() {
             cnpj: d.recipient_cnpj || d.remitter_cnpj || '', 
             name: d.recipient || d.remitter || '' 
           }])
-        ).values()).filter(t => t.cnpj)
+        ).values()).filter(t => t.cnpj),
+        payment: includePayment
+          ? {
+              contractorName: payName,
+              contractorDoc: payDoc,
+              contractValue: Number(payContractValue) || 0,
+              paymentCondition: payCondition,
+              advanceValue: Number(payAdvance) || 0,
+              installments:
+                payCondition === 'aprazo'
+                  ? payInstallments
+                      .filter(p => p.dueDate || p.value)
+                      .map((p, idx) => ({
+                        number: idx + 1,
+                        dueDate: p.dueDate,
+                        value: Number(p.value) || 0,
+                      }))
+                  : [],
+              bank: {
+                pixKey: payPix,
+                bankCode: payBankCode,
+                agency: payAgency,
+                account: payAccount,
+                ipefCnpj: payIpefCnpj,
+              },
+            }
+          : null,
       };
 
       const { ok, payload, missing } = buildMdfePayload(input);
@@ -469,6 +518,151 @@ export default function MdfeProvisional() {
                 </div>
               </div>
             )}
+
+            <div className="space-y-4 rounded-lg border p-3">
+              <div className="flex items-start gap-2">
+                <Checkbox
+                  id="mdfe-include-payment"
+                  checked={includePayment}
+                  onCheckedChange={v => setIncludePayment(Boolean(v))}
+                />
+                <div>
+                  <Label htmlFor="mdfe-include-payment" className="cursor-pointer">
+                    Informar grupo de pagamento do tomador (piso mínimo de frete)
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Em carga fracionada (múltiplos CT-e), a exigência normalmente é dispensada.
+                  </p>
+                </div>
+              </div>
+
+              {includePayment && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Nome / Razão Social do Tomador</Label>
+                      <Input value={payName} onChange={e => setPayName(e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>CPF ou CNPJ do Tomador</Label>
+                      <Input value={payDoc} onChange={e => setPayDoc(e.target.value)} placeholder="Somente números" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label>Valor Total do Contrato (R$)</Label>
+                      <Input
+                        type="number"
+                        value={payContractValue}
+                        onChange={e => setPayContractValue(e.target.value)}
+                        placeholder="Ex: 3500.00"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Condição de Pagamento</Label>
+                      <Select value={payCondition} onValueChange={(v: 'avista' | 'aprazo') => setPayCondition(v)}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="avista">À vista</SelectItem>
+                          <SelectItem value="aprazo">A prazo</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Adiantamento (R$)</Label>
+                      <Input
+                        type="number"
+                        value={payAdvance}
+                        onChange={e => setPayAdvance(e.target.value)}
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                      Dados de Recebimento
+                    </Label>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Chave Pix</Label>
+                        <Input value={payPix} onChange={e => setPayPix(e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>CNPJ da Instituição de Pagamento (IPEF)</Label>
+                        <Input value={payIpefCnpj} onChange={e => setPayIpefCnpj(e.target.value)} />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <Label>Banco</Label>
+                        <Input value={payBankCode} onChange={e => setPayBankCode(e.target.value)} placeholder="Ex: 001" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Agência</Label>
+                        <Input value={payAgency} onChange={e => setPayAgency(e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Conta</Label>
+                        <Input value={payAccount} onChange={e => setPayAccount(e.target.value)} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {payCondition === 'aprazo' && (
+                    <div className="space-y-2">
+                      <Label className="text-xs uppercase tracking-wider text-muted-foreground">Parcelas</Label>
+                      {payInstallments.map((p, idx) => (
+                        <div key={idx} className="flex items-end gap-2">
+                          <div className="space-y-1 flex-1">
+                            <Label className="text-xs">Vencimento {idx + 1}</Label>
+                            <Input
+                              type="date"
+                              value={p.dueDate}
+                              onChange={e =>
+                                setPayInstallments(prev =>
+                                  prev.map((it, i) => (i === idx ? { ...it, dueDate: e.target.value } : it))
+                                )
+                              }
+                            />
+                          </div>
+                          <div className="space-y-1 flex-1">
+                            <Label className="text-xs">Valor (R$)</Label>
+                            <Input
+                              type="number"
+                              value={p.value}
+                              onChange={e =>
+                                setPayInstallments(prev =>
+                                  prev.map((it, i) => (i === idx ? { ...it, value: e.target.value } : it))
+                                )
+                              }
+                            />
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setPayInstallments(prev => prev.filter((_, i) => i !== idx))}
+                            disabled={payInstallments.length === 1}
+                          >
+                            <XCircle className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPayInstallments(prev => [...prev, { dueDate: '', value: '' }])}
+                      >
+                        Adicionar parcela
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           <DialogFooter>
