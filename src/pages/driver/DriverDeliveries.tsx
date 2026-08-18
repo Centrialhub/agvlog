@@ -78,6 +78,7 @@ export default function DriverDeliveries() {
   const { currentTenant } = useTenant();
   const { toast } = useToast();
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const { data: driver } = useCurrentDriver();
   const { data: trip } = useActiveTrip(driver?.id);
 
