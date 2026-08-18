@@ -3,11 +3,14 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCurrentDriver } from '@/hooks/useCurrentDriver';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Package, MapPin, Truck, ArrowRight, Calendar, Info } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { LOAD_STATUS_LABELS } from '@/lib/status/loadStatus';
 
 export default function DriverLoads() {
   const { data: driver, isLoading: driverLoading } = useCurrentDriver();
+  const navigate = useNavigate();
 
   const { data: loads = [], isLoading: loadsLoading } = useQuery({
     queryKey: ['driver_all_assigned_loads', driver?.id],
@@ -21,6 +24,7 @@ export default function DriverLoads() {
           origin, 
           destination, 
           status, 
+          trip_id,
           scheduled_load_at,
           total_pallet_count, 
           total_weight_kg,
@@ -109,6 +113,17 @@ export default function DriverLoads() {
                       <span>{Number(load.total_weight_kg || 0).toLocaleString('pt-BR')} kg</span>
                     </div>
                   </div>
+
+                  {['loading', 'ready', 'loaded', 'in_transit'].includes(load.status) && load.trip_id && (
+                    <Button 
+                      size="sm" 
+                      className="w-full mt-2" 
+                      onClick={() => navigate(`/driver/stops?trip=${load.trip_id}`)}
+                    >
+                      Acessar Viagem
+                    </Button>
+                  )}
+                </div>
                 </div>
               </CardContent>
             </Card>

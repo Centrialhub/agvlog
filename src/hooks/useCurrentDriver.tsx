@@ -52,12 +52,12 @@ export function useActiveTrip(driverId: string | undefined) {
       }
 
       // 2. If no trip is explicitly active, look for LOADS assigned to the driver
-      // that are in_transit, and find their associated trip.
+      // that are in a "ready to act" status, and find their associated trip.
       const { data: transitLoads, error: loadsError } = await supabase
         .from('loads')
         .select('trip_id')
         .eq('driver_id', driverId)
-        .eq('status', 'in_transit')
+        .in('status', ['in_transit', 'loading', 'ready', 'loaded'])
         .not('trip_id', 'is', null)
         .order('updated_at', { ascending: false })
         .limit(1);
