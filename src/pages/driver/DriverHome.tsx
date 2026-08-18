@@ -181,12 +181,12 @@ export default function DriverHome() {
       </div>
 
 
-      {!loading && (!driver || (activeTrips.length === 0 && standaloneLoads.length === 0)) && (
+      {!loading && (!driver || ((activeTrips.length === 0 && !autoTrip) && standaloneLoads.length === 0)) && (
         <NoLoadsHelp
           driverLinked={!!driver}
           driverActive={!!driver && (driver as any).status !== 'inactive'}
           hasAssignedLoads={standaloneLoads.length > 0 || myLoads.length > 0}
-          hasActiveTrip={activeTrips.length > 0}
+          hasActiveTrip={activeTrips.length > 0 || !!autoTrip}
           driverName={driver?.name}
           driverId={driver?.id}
         />
