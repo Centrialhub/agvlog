@@ -37,7 +37,9 @@ export function useActiveTrip(driverId: string | undefined) {
     queryKey: ['driver_active_trip', driverId],
     queryFn: async () => {
       if (!driverId) return null;
-      const { data, error } = await supabase
+      
+      // First, try to find a trip that is explicitly in an active status
+      const { data: activeTrip, error: activeError } = await supabase
         .from('dispatch_trips')
         .select('*, loads(load_number, origin, destination, status), vehicles(plate, nickname)')
         .eq('driver_id', driverId)
@@ -45,8 +47,23 @@ export function useActiveTrip(driverId: string | undefined) {
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
-      if (error) throw error;
-      return data;
+        
+      if (activeError) throw activeError;
+      if (activeTrip) return activeTrip;
+
+      // Fallback: If no "active" trip found, look for trips where the load is "in_transit"
+      // This handles cases where trip status might be lagging behind load status
+      const { data: transitTrip, error: transitError } = await supabase
+        .from('dispatch_trips')
+        .select('*, loads!inner(load_number, origin, destination, status), vehicles(plate, nickname)')
+        .eq('driver_id', driverId)
+        .eq('loads.status', 'in_transit')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (transitError) throw transitError;
+      return transitTrip;
     },
     enabled: !!driverId,
   });

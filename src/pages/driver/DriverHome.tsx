@@ -31,13 +31,16 @@ export default function DriverHome() {
     queryKey: ['driver_my_trips', driver?.id],
     queryFn: async () => {
       if (!driver) return [];
+      
+      // Direct statuses
       const { data, error } = await supabase
         .from('dispatch_trips')
         .select('*, loads(id, load_number, origin, destination, status), vehicles(plate, nickname)')
         .eq('driver_id', driver.id)
-        .in('status', TRIP_ACTIVE_STATUSES as unknown as string[])
+        .or(`status.in.(${TRIP_ACTIVE_STATUSES.join(',')})`)
         .order('created_at', { ascending: false })
         .limit(5);
+        
       if (error) throw error;
       return data || [];
     },
