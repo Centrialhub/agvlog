@@ -11,7 +11,7 @@ import { MapPin, Navigation, CheckCircle, Clock, ArrowRight, Package } from 'luc
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { isStopTerminal, STOP_STATUS_LABELS } from '@/lib/status';
+import { isStopTerminal, STOP_STATUS_LABELS, LOAD_ACTIVE_STATUSES } from '@/lib/status';
 
 
 const STATUS_LABELS: Record<string, string> = STOP_STATUS_LABELS as any;

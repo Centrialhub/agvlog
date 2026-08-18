@@ -13,7 +13,7 @@ import NoLoadsHelp from '@/components/driver/NoLoadsHelp';
 import { useState, useEffect } from 'react';
 import DriverDeliveryMap, { DeliveryPoint } from '@/components/driver/DriverDeliveryMap';
 import DriverLoadNotes from '@/components/driver/DriverLoadNotes';
-import { TRIP_ACTIVE_STATUSES, tripStatusLabel } from '@/lib/status';
+import { TRIP_ACTIVE_STATUSES, tripStatusLabel, LOAD_ACTIVE_STATUSES } from '@/lib/status';
 import { LOAD_STATUS_LABELS, TERMINAL_LOAD_STATUSES } from '@/lib/status/loadStatus';
 
 
@@ -49,7 +49,7 @@ export default function DriverHome() {
 
       return data.filter(trip => 
         (trip.status && (TRIP_ACTIVE_STATUSES as readonly string[]).includes(trip.status)) ||
-        (trip.loads?.status === 'in_transit')
+        (trip.loads?.status && (LOAD_ACTIVE_STATUSES as readonly string[]).includes(trip.loads.status))
       ).slice(0, 5);
     },
     enabled: !!driver,
@@ -148,10 +148,7 @@ export default function DriverHome() {
   // Inclui também viagens onde a carga associada está em estados operacionais
   const tripsToShow: any[] = activeTrips.filter(t => 
     TRIP_ACTIVE_STATUSES.includes(t.status as any) || 
-    t.loads?.status === 'in_transit' ||
-    t.loads?.status === 'loading' ||
-    t.loads?.status === 'ready' ||
-    t.loads?.status === 'loaded'
+    (t.loads?.status && (LOAD_ACTIVE_STATUSES as readonly string[]).includes(t.loads.status))
   );
 
   // Constrói pontos reais do mapa a partir das paradas com lat/lng.
