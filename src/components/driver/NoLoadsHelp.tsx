@@ -17,6 +17,7 @@ import {
   Link2,
   ClipboardList,
   MapPin,
+  Package,
 } from 'lucide-react';
 
 interface Check {
