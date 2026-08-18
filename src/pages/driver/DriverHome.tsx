@@ -49,7 +49,7 @@ export default function DriverHome() {
 
       return data.filter(trip => 
         (trip.status && (TRIP_ACTIVE_STATUSES as readonly string[]).includes(trip.status)) ||
-        (trip.loads?.status && LOAD_ACTIVE_STATUSES.includes(trip.loads.status))
+        (trip.loads?.status && (LOAD_ACTIVE_STATUSES as readonly string[]).includes(trip.loads.status))
       ).slice(0, 5);
     },
     enabled: !!driver,

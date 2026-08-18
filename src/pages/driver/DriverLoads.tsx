@@ -114,7 +114,7 @@ export default function DriverLoads() {
                     </div>
                   </div>
 
-                  {load.status && LOAD_ACTIVE_STATUSES.includes(load.status) && load.trip_id && (
+                  {load.status && (LOAD_ACTIVE_STATUSES as readonly string[]).includes(load.status) && load.trip_id && (
                     <Button 
                       size="sm" 
                       className="w-full mt-2" 
