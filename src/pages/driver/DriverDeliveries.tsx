@@ -417,6 +417,25 @@ export default function DriverDeliveries() {
     onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
   });
 
+  if (!effectiveTrip?.id && !stopsLoading) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center space-y-4">
+          <Package className="h-12 w-12 text-muted-foreground mx-auto opacity-20" />
+          <div className="space-y-1">
+            <p className="text-sm font-medium">Nenhuma viagem ativa</p>
+            <p className="text-xs text-muted-foreground">
+              Aguarde o despacho da carga pela operação para ver suas entregas.
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => navigate('/driver')}>
+            Voltar ao Início
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
   const def = eventForm ? getEventDef(eventForm.eventKey) : null;
   const totalReturnedQty = Object.values(returnedItems).reduce((a, b) => a + (b || 0), 0);
   const canSubmit =
