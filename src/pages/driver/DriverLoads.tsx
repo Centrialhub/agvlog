@@ -118,7 +118,17 @@ export default function DriverLoads() {
                     <Button 
                       size="sm" 
                       className="w-full mt-2" 
-                      onClick={() => navigate(`/driver/stops?trip=${load.trip_id}`)}
+                      onClick={async () => {
+                        // 1. Marcar a viagem como ativa (dispatched) se for a primeira interação
+                        const { error } = await supabase
+                          .from('dispatch_trips')
+                          .update({ status: 'dispatched' })
+                          .eq('id', load.trip_id)
+                          .eq('status', 'planned'); // Só muda se ainda estiver planejada
+                        
+                        // 2. Navegar para a página de paradas
+                        navigate(`/driver/stops?trip=${load.trip_id}`);
+                      }}
                     >
                       Acessar Viagem
                     </Button>
