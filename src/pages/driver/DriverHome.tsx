@@ -166,7 +166,7 @@ export default function DriverHome() {
     <div className="space-y-4">
       <div>
         <h1 className="text-lg font-bold">Olá, {driver?.name || 'Motorista'}</h1>
-        <p className="text-sm text-muted-foreground">Painel de controle</p>
+        <p className="text-sm text-muted-foreground">Comunicação com a Operação</p>
       </div>
 
 
