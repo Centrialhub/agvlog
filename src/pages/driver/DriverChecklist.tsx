@@ -63,13 +63,24 @@ function ChecklistSection({
   const saveChecklist = useMutation({
     mutationFn: async () => {
       if (!tripId || !tenantId) throw new Error('Nenhuma viagem ativa');
-      const kind = eventType === 'checklist_pre' ? 'pre' : 'post';
-      const { error } = await supabase.rpc('driver_save_checklist', {
-        _trip_id: tripId,
-        _kind: kind,
-        _payload: { checked_items: Array.from(checked), total_items: items.length } as any,
-      } as any);
-      if (error) throw error;
+      
+      try {
+        const kind = eventType === 'checklist_pre' ? 'pre' : 'post';
+        const { error, data } = await supabase.rpc('driver_save_checklist', {
+          _trip_id: tripId,
+          _kind: kind,
+          _payload: { checked_items: Array.from(checked), total_items: items.length } as any,
+        } as any);
+        
+        if (error) {
+          console.error('[DriverChecklist] RPC error:', error);
+          throw error;
+        }
+        return data;
+      } catch (err: any) {
+        console.error('[DriverChecklist] Mutation error:', err);
+        throw err;
+      }
     },
     onSuccess: () => {
       toast({ title: 'Checklist salvo' });
