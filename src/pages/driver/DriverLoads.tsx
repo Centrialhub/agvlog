@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Package, MapPin, Truck, ArrowRight, Calendar, Info } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { LOAD_STATUS_LABELS } from '@/lib/status/loadStatus';
+import { LOAD_STATUS_LABELS, LOAD_ACTIVE_STATUSES } from '@/lib/status/loadStatus';
 
 export default function DriverLoads() {
   const { data: driver, isLoading: driverLoading } = useCurrentDriver();
@@ -114,7 +114,7 @@ export default function DriverLoads() {
                     </div>
                   </div>
 
-                  {['loading', 'ready', 'loaded', 'in_transit'].includes(load.status) && load.trip_id && (
+                  {load.status && LOAD_ACTIVE_STATUSES.includes(load.status) && load.trip_id && (
                     <Button 
                       size="sm" 
                       className="w-full mt-2" 

@@ -11,6 +11,15 @@ export const TRIP_ACTIVE_STATUSES = [
 ] as const;
 export type TripActiveStatus = (typeof TRIP_ACTIVE_STATUSES)[number];
 
+export const LOAD_ACTIVE_STATUSES = [
+  'ready',
+  'loading',
+  'loaded',
+  'in_transit',
+  'partial_delivery',
+] as const;
+export type LoadActiveStatus = (typeof LOAD_ACTIVE_STATUSES)[number];
+
 export const TRIP_STATUS_LABELS: Record<string, string> = {
   planned: 'Planejada',
   loading: 'Em carregamento',
