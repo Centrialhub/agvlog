@@ -1,5 +1,6 @@
 import { useState, useRef, useMemo } from 'react';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useCurrentDriver, useActiveTrip } from '@/hooks/useCurrentDriver';
