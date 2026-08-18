@@ -32,12 +32,12 @@ export default function DriverHome() {
     queryFn: async () => {
       if (!driver) return [];
       
-      // Direct statuses
+      // Fetch both active trips and trips with in_transit loads
       const { data, error } = await supabase
         .from('dispatch_trips')
-        .select('*, loads(id, load_number, origin, destination, status), vehicles(plate, nickname)')
+        .select('*, loads!inner(id, load_number, origin, destination, status), vehicles(plate, nickname)')
         .eq('driver_id', driver.id)
-        .or(`status.in.(${TRIP_ACTIVE_STATUSES.join(',')})`)
+        .or(`status.in.(${TRIP_ACTIVE_STATUSES.join(',')}),loads.status.eq.in_transit`)
         .order('created_at', { ascending: false })
         .limit(5);
         
