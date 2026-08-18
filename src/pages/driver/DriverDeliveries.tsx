@@ -81,7 +81,7 @@ export default function DriverDeliveries() {
   const { data: driver } = useCurrentDriver();
   const { data: trip } = useActiveTrip(driver?.id);
 
-  const effectiveTrip: any = trip;
+  const effectiveTrip: any = trip || {};
 
   const [tab, setTab] = useState<'em_rota' | 'concluidas'>('em_rota');
   const [search, setSearch] = useState('');
@@ -182,7 +182,7 @@ export default function DriverDeliveries() {
     enabled: !!trip?.id,
   });
 
-  const effectiveStops: any[] = (stops as any[]);
+  const effectiveStops: any[] = (stops as any[]) || [];
 
   const filteredStops = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -461,7 +461,7 @@ export default function DriverDeliveries() {
       <div>
         <h1 className="text-lg font-bold">Entregas e Coletas</h1>
         <p className="text-xs text-muted-foreground">
-          Carga {effectiveTrip.loads?.load_number || '—'} · {completedStops.length}/{effectiveStops.length} concluídas
+          Carga {effectiveTrip?.loads?.load_number || '—'} · {completedStops.length}/{effectiveStops.length} concluídas
         </p>
       </div>
 
