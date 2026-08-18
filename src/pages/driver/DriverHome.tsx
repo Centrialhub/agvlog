@@ -148,7 +148,9 @@ export default function DriverHome() {
   // Inclui também viagens onde a carga associada está em trânsito
   const tripsToShow: any[] = activeTrips.filter(t => 
     TRIP_ACTIVE_STATUSES.includes(t.status as any) || 
-    t.loads?.status === 'in_transit'
+    t.loads?.status === 'in_transit' ||
+    t.loads?.status === 'loading' ||
+    t.loads?.status === 'ready'
   );
 
   // Constrói pontos reais do mapa a partir das paradas com lat/lng.
