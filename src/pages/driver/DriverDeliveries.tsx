@@ -1,5 +1,6 @@
 import { useState, useRef, useMemo } from 'react';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useCurrentDriver, useActiveTrip } from '@/hooks/useCurrentDriver';
@@ -78,6 +79,7 @@ export default function DriverDeliveries() {
   const { currentTenant } = useTenant();
   const { toast } = useToast();
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const { data: driver } = useCurrentDriver();
   const { data: trip } = useActiveTrip(driver?.id);
 
@@ -167,19 +169,19 @@ export default function DriverDeliveries() {
     return sum + q * p.price;
   }, 0);
 
-  const { data: stops = [] } = useQuery({
-    queryKey: ['driver_delivery_stops', trip?.id],
+  const { data: stops = [], isLoading: stopsLoading } = useQuery({
+    queryKey: ['driver_delivery_stops', effectiveTrip?.id],
     queryFn: async () => {
-      if (!trip) return [];
+      if (!effectiveTrip?.id) return [];
       const { data, error } = await supabase
         .from('dispatch_stops')
         .select('*, clients(company_name)')
-        .eq('dispatch_trip_id', trip.id)
+        .eq('dispatch_trip_id', effectiveTrip.id)
         .order('stop_order', { ascending: true });
       if (error) throw error;
       return data || [];
     },
-    enabled: !!trip?.id,
+    enabled: !!effectiveTrip?.id,
   });
 
   const effectiveStops: any[] = (stops as any[]) || [];
@@ -416,6 +418,25 @@ export default function DriverDeliveries() {
     },
     onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
   });
+
+  if (!effectiveTrip?.id && !stopsLoading) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center space-y-4">
+          <Package className="h-12 w-12 text-muted-foreground mx-auto opacity-20" />
+          <div className="space-y-1">
+            <p className="text-sm font-medium">Nenhuma viagem ativa</p>
+            <p className="text-xs text-muted-foreground">
+              Aguarde o despacho da carga pela operação para ver suas entregas.
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => navigate('/driver')}>
+            Voltar ao Início
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
 
   const def = eventForm ? getEventDef(eventForm.eventKey) : null;
   const totalReturnedQty = Object.values(returnedItems).reduce((a, b) => a + (b || 0), 0);

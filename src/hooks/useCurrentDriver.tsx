@@ -38,25 +38,44 @@ export function useActiveTrip(driverId: string | undefined) {
     queryFn: async () => {
       if (!driverId) return null;
       
-      // Fetch all trips for the driver that are either in active trip status OR have an in_transit load
-      // We use a broader query and filter locally to handle the inner join logic effectively
-      const { data, error } = await supabase
+      // 1. First, look for trips that are explicitly in an active status
+      const { data: activeStatusTrips, error: tripsError } = await supabase
         .from('dispatch_trips')
         .select('*, loads(id, load_number, origin, destination, status), vehicles(plate, nickname)')
         .eq('driver_id', driverId)
-        .order('created_at', { ascending: false })
-        .limit(10);
+        .in('status', TRIP_ACTIVE_STATUSES)
+        .order('created_at', { ascending: false });
+
+      if (tripsError) throw tripsError;
+      if (activeStatusTrips && activeStatusTrips.length > 0) {
+        return activeStatusTrips[0];
+      }
+
+      // 2. If no trip is explicitly active, look for LOADS assigned to the driver
+      // that are in_transit, and find their associated trip.
+      const { data: transitLoads, error: loadsError } = await supabase
+        .from('loads')
+        .select('trip_id')
+        .eq('driver_id', driverId)
+        .eq('status', 'in_transit')
+        .not('trip_id', 'is', null)
+        .order('updated_at', { ascending: false })
+        .limit(1);
+
+      if (loadsError) throw loadsError;
+
+      if (transitLoads && transitLoads.length > 0 && transitLoads[0].trip_id) {
+        const { data: tripFromLoad, error: tripError } = await supabase
+          .from('dispatch_trips')
+          .select('*, loads(id, load_number, origin, destination, status), vehicles(plate, nickname)')
+          .eq('id', transitLoads[0].trip_id)
+          .maybeSingle();
         
-      if (error) throw error;
-      if (!data) return null;
+        if (tripError) throw tripError;
+        if (tripFromLoad) return tripFromLoad;
+      }
 
-      // Find the first trip that satisfies either condition
-      const activeTrip = data.find(trip => 
-        (trip.status && (TRIP_ACTIVE_STATUSES as readonly string[]).includes(trip.status)) ||
-        (trip.loads?.status === 'in_transit')
-      );
-
-      return activeTrip || null;
+      return null;
     },
     enabled: !!driverId,
   });

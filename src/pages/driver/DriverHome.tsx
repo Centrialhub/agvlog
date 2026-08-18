@@ -28,10 +28,15 @@ export default function DriverHome() {
   const checklist = useChecklistStatus(autoTrip?.id);
 
   const { data: activeTrips = [], isLoading: tripsLoading } = useQuery({
-    queryKey: ['driver_my_trips', driver?.id],
+    queryKey: ['driver_my_trips', driver?.id, autoTrip?.id],
     queryFn: async () => {
       if (!driver) return [];
       
+      // If we already have an autoTrip from the hook, use it as the primary
+      if (autoTrip) {
+        return [autoTrip];
+      }
+
       const { data, error } = await supabase
         .from('dispatch_trips')
         .select('*, loads(id, load_number, origin, destination, status), vehicles(plate, nickname)')
@@ -42,7 +47,6 @@ export default function DriverHome() {
       if (error) throw error;
       if (!data) return [];
 
-      // Filter locally for performance and to handle the nested load status logic
       return data.filter(trip => 
         (trip.status && (TRIP_ACTIVE_STATUSES as readonly string[]).includes(trip.status)) ||
         (trip.loads?.status === 'in_transit')
@@ -177,12 +181,12 @@ export default function DriverHome() {
       </div>
 
 
-      {!loading && (!driver || (activeTrips.length === 0 && standaloneLoads.length === 0)) && (
+      {!loading && (!driver || ((activeTrips.length === 0 && !autoTrip) && standaloneLoads.length === 0)) && (
         <NoLoadsHelp
           driverLinked={!!driver}
           driverActive={!!driver && (driver as any).status !== 'inactive'}
           hasAssignedLoads={standaloneLoads.length > 0 || myLoads.length > 0}
-          hasActiveTrip={activeTrips.length > 0}
+          hasActiveTrip={activeTrips.length > 0 || !!autoTrip}
           driverName={driver?.name}
           driverId={driver?.id}
         />
@@ -243,6 +247,9 @@ export default function DriverHome() {
 
       {tripsToShow.length > 0 && (
         <div className="space-y-3">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+            Viagens ativas ({tripsToShow.length})
+          </p>
           {tripsToShow.map((trip: any) => (
             <Card key={trip.id} className="border-l-4 border-l-primary">
               <CardContent className="p-4 space-y-3">

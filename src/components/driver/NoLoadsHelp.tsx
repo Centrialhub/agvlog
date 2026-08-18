@@ -79,14 +79,18 @@ export default function NoLoadsHelp({
       hint: 'Um administrador precisa marcar seu cadastro como ativo em /drivers.',
     },
     {
-      label: 'Existe uma carga atribuída a você',
+      label: 'Existem cargas atribuídas a você',
       ok: hasAssignedLoads,
-      hint: 'A operação precisa criar uma carga e selecionar seu nome no campo "Motorista" (ou atribuir o veículo que está vinculado a você).',
+      hint: hasAssignedLoads 
+        ? 'Existem cargas vinculadas ao seu cadastro.' 
+        : 'Nenhuma carga foi encontrada vinculada ao seu ID ou CPF.',
     },
     {
-      label: 'A carga já virou uma viagem com paradas',
+      label: 'Viagem ativa detectada',
       ok: hasActiveTrip,
-      hint: 'Se a carga aparece em "Cargas atribuídas" mas não há paradas, aguarde a operação transformar a carga em viagem (menu Despacho).',
+      hint: hasActiveTrip 
+        ? 'Você possui uma viagem em andamento ou planejada.' 
+        : 'A carga ainda não foi transformada em viagem com paradas pela expedição.',
     },
   ];
 
