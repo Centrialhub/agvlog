@@ -167,19 +167,19 @@ export default function DriverDeliveries() {
     return sum + q * p.price;
   }, 0);
 
-  const { data: stops = [] } = useQuery({
-    queryKey: ['driver_delivery_stops', trip?.id],
+  const { data: stops = [], isLoading: stopsLoading } = useQuery({
+    queryKey: ['driver_delivery_stops', effectiveTrip?.id],
     queryFn: async () => {
-      if (!trip) return [];
+      if (!effectiveTrip?.id) return [];
       const { data, error } = await supabase
         .from('dispatch_stops')
         .select('*, clients(company_name)')
-        .eq('dispatch_trip_id', trip.id)
+        .eq('dispatch_trip_id', effectiveTrip.id)
         .order('stop_order', { ascending: true });
       if (error) throw error;
       return data || [];
     },
-    enabled: !!trip?.id,
+    enabled: !!effectiveTrip?.id,
   });
 
   const effectiveStops: any[] = (stops as any[]) || [];

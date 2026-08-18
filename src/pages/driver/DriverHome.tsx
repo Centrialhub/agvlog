@@ -28,10 +28,15 @@ export default function DriverHome() {
   const checklist = useChecklistStatus(autoTrip?.id);
 
   const { data: activeTrips = [], isLoading: tripsLoading } = useQuery({
-    queryKey: ['driver_my_trips', driver?.id],
+    queryKey: ['driver_my_trips', driver?.id, autoTrip?.id],
     queryFn: async () => {
       if (!driver) return [];
       
+      // If we already have an autoTrip from the hook, use it as the primary
+      if (autoTrip) {
+        return [autoTrip];
+      }
+
       const { data, error } = await supabase
         .from('dispatch_trips')
         .select('*, loads(id, load_number, origin, destination, status), vehicles(plate, nickname)')
@@ -42,7 +47,6 @@ export default function DriverHome() {
       if (error) throw error;
       if (!data) return [];
 
-      // Filter locally for performance and to handle the nested load status logic
       return data.filter(trip => 
         (trip.status && (TRIP_ACTIVE_STATUSES as readonly string[]).includes(trip.status)) ||
         (trip.loads?.status === 'in_transit')

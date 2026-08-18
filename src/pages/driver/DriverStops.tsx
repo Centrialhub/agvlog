@@ -7,8 +7,9 @@ import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, Navigation, CheckCircle, Clock, ArrowRight } from 'lucide-react';
+import { MapPin, Navigation, CheckCircle, Clock, ArrowRight, Package } from 'lucide-react';
 import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import { isStopTerminal, STOP_STATUS_LABELS } from '@/lib/status';
 
@@ -31,6 +32,7 @@ export default function DriverStops() {
   const { currentTenant } = useTenant();
   const { toast } = useToast();
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const tripIdParam = searchParams.get('trip');
   const { data: driver } = useCurrentDriver();
@@ -142,16 +144,26 @@ export default function DriverStops() {
       </div>
 
 
-      {!effectiveTrip ? (
+      {!effectiveTrip?.id ? (
         <Card>
-          <CardContent className="py-6 text-center">
-            <p className="text-sm text-muted-foreground">Nenhuma parada programada.</p>
+          <CardContent className="py-12 text-center space-y-4">
+            <MapPin className="h-12 w-12 text-muted-foreground mx-auto opacity-20" />
+            <div className="space-y-1">
+              <p className="text-sm font-medium">Nenhuma viagem ativa</p>
+              <p className="text-xs text-muted-foreground">
+                Aguarde o despacho da carga pela operação para ver suas paradas.
+              </p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => navigate('/driver')}>
+              Voltar ao Início
+            </Button>
           </CardContent>
         </Card>
       ) : effectiveStops.length === 0 ? (
         <Card>
-          <CardContent className="py-6 text-center">
-            <p className="text-sm text-muted-foreground">Nenhuma parada programada.</p>
+          <CardContent className="py-12 text-center space-y-4">
+            <MapPin className="h-12 w-12 text-muted-foreground mx-auto opacity-20" />
+            <p className="text-sm text-muted-foreground">Nenhuma parada programada para esta viagem.</p>
           </CardContent>
         </Card>
       ) : (
