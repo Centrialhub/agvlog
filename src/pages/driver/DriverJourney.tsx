@@ -70,14 +70,25 @@ export default function DriverJourney() {
       if (!trip || !currentTenant) {
         throw new Error('Sem viagem ativa. Aguarde o despacho da carga pela operação.');
       }
-      const { error } = await supabase.rpc('driver_create_event', {
-        _trip_id: trip.id,
-        _event_type: eventType,
-        _payload: { source: 'driver_app' } as any,
-        _stop_id: null,
-        _notes: null,
-      } as any);
-      if (error) throw error;
+      
+      try {
+        const { error, data } = await supabase.rpc('driver_create_event', {
+          _trip_id: trip.id,
+          _event_type: eventType,
+          _payload: { source: 'driver_app' } as any,
+          _stop_id: null,
+          _notes: null,
+        } as any);
+        
+        if (error) {
+          console.error('[DriverJourney] RPC error:', error);
+          throw error;
+        }
+        return data;
+      } catch (err: any) {
+        console.error('[DriverJourney] Mutation error:', err);
+        throw err;
+      }
     },
     onSuccess: () => {
       toast({ title: 'Evento registrado' });

@@ -117,23 +117,33 @@ export default function DriverExpenses() {
         receiptPath = path;
       }
 
-      const { error } = await supabase.rpc('driver_create_expense', {
-        _trip_id: trip.id,
-        _category: form.category,
-        _amount: parseFloat(form.amount) || 0,
-        _notes: form.notes || null,
-        _receipt_path: receiptPath,
-        _supplier_name: form.supplier_name || null,
-        _document_number: form.document_number || null,
-        _city: form.city || null,
-        _state: form.state || null,
-        _odometer: form.odometer ? parseFloat(form.odometer) : null,
-        _no_receipt: form.no_receipt,
-        _no_receipt_reason: form.no_receipt ? (form.no_receipt_reason || null) : null,
-        _paid_with_advance: form.paid_with_advance,
-        _payment_source: form.payment_source,
-      } as any);
-      if (error) throw error;
+      try {
+        const { error, data } = await supabase.rpc('driver_create_expense', {
+          _trip_id: trip.id,
+          _category: form.category,
+          _amount: parseFloat(form.amount) || 0,
+          _notes: form.notes || null,
+          _receipt_path: receiptPath,
+          _supplier_name: form.supplier_name || null,
+          _document_number: form.document_number || null,
+          _city: form.city || null,
+          _state: form.state || null,
+          _odometer: form.odometer ? parseFloat(form.odometer) : null,
+          _no_receipt: form.no_receipt,
+          _no_receipt_reason: form.no_receipt ? (form.no_receipt_reason || null) : null,
+          _paid_with_advance: form.paid_with_advance,
+          _payment_source: form.payment_source,
+        } as any);
+        
+        if (error) {
+          console.error('[DriverExpenses] RPC error:', error);
+          throw error;
+        }
+        return data;
+      } catch (err: any) {
+        console.error('[DriverExpenses] Mutation error:', err);
+        throw err;
+      }
     },
     onSuccess: () => {
       toast({ title: 'Despesa registrada' });

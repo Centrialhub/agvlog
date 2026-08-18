@@ -325,26 +325,42 @@ export default function DriverDeliveries() {
 
       // Caminho seguro: finalizador "ENTREGUE" passa por RPC transacional.
       if (def.finalAction === 'delivered') {
-        const { error: rpcErr } = await supabase.rpc('driver_finalize_delivery', {
-          _stop_id: eventForm.stop.id,
-          _receiver_name: receiverName.trim(),
-          _signature_path: signaturePath,
-          _photo_paths: photoPaths,
-          _receiver_document: receiverDoc.trim() || null,
-          _receiver_role: null,
-          _notes: notes || null,
-        } as any);
-        if (rpcErr) throw rpcErr;
-        return;
+        try {
+          const { error: rpcErr, data } = await supabase.rpc('driver_finalize_delivery', {
+            _stop_id: eventForm.stop.id,
+            _receiver_name: receiverName.trim(),
+            _signature_path: signaturePath,
+            _photo_paths: photoPaths,
+            _receiver_document: receiverDoc.trim() || null,
+            _receiver_role: null,
+            _notes: notes || null,
+          } as any);
+          if (rpcErr) {
+            console.error('[DriverDeliveries] Finalize RPC error:', rpcErr);
+            throw rpcErr;
+          }
+          return data;
+        } catch (err: any) {
+          console.error('[DriverDeliveries] Finalize mutation error:', err);
+          throw err;
+        }
       }
 
       // Mapa de eventos → RPCs seguras. Nenhum write direto em tabela operacional.
       const reason = notes?.trim() || null;
 
       if (def.key === 'chegada_no_cliente') {
-        const { error } = await supabase.rpc('driver_mark_arrival', { _stop_id: eventForm.stop.id } as any);
-        if (error) throw error;
-        return;
+        try {
+          const { error, data } = await supabase.rpc('driver_mark_arrival', { _stop_id: eventForm.stop.id } as any);
+          if (error) {
+            console.error('[DriverDeliveries] Arrival RPC error:', error);
+            throw error;
+          }
+          return data;
+        } catch (err: any) {
+          console.error('[DriverDeliveries] Arrival mutation error:', err);
+          throw err;
+        }
       }
 
       // Status finalizadores via driver_update_stop_status
@@ -356,14 +372,52 @@ export default function DriverDeliveries() {
       };
       const mappedStatus = STATUS_MAP[def.key];
       if (mappedStatus) {
-        const { error } = await supabase.rpc('driver_update_stop_status', {
-          _stop_id: eventForm.stop.id,
-          _new_status: mappedStatus,
-          _reason: reason,
-        } as any);
-        if (error) throw error;
-        // anexa evento contextual (fotos, recebedor, itens) sem alterar status
-        await supabase.rpc('driver_create_event', {
+        try {
+          const { error: statusErr } = await supabase.rpc('driver_update_stop_status', {
+            _stop_id: eventForm.stop.id,
+            _new_status: mappedStatus,
+            _reason: reason,
+          } as any);
+          
+          if (statusErr) {
+            console.error('[DriverDeliveries] Status update RPC error:', statusErr);
+            throw statusErr;
+          }
+
+          // anexa evento contextual (fotos, recebedor, itens) sem alterar status
+          const { error: evtErr } = await supabase.rpc('driver_create_event', {
+            _trip_id: trip!.id,
+            _event_type: `info_${def.key}`,
+            _payload: {
+              event_subtype: def.key,
+              event_label: def.label,
+              receiver_name: receiverName.trim() || null,
+              receiver_document: receiverDoc.trim() || null,
+              photo_paths: photoPaths,
+              photo_count: photoPaths.length,
+              signature_path: signaturePath,
+              returned_items: returnedItems,
+            },
+            _stop_id: eventForm.stop.id,
+            _notes: reason,
+          } as any);
+          
+          if (evtErr) {
+            console.error('[DriverDeliveries] Contextual event RPC error:', evtErr);
+            // Non-critical, but log it
+          }
+
+          setThreads((prev) => ({ ...prev, [threadKey]: [...(prev[threadKey] || []), buildDriverSummary()] }));
+          return;
+        } catch (err: any) {
+          console.error('[DriverDeliveries] Status update chain error:', err);
+          throw err;
+        }
+      }
+
+      // Eventos informativos (avaria, solicitar_desconto, atualizar_boleto, coleta_realizada, etc.)
+      try {
+        const { error: evtErr, data } = await supabase.rpc('driver_create_event', {
           _trip_id: trip!.id,
           _event_type: `info_${def.key}`,
           _payload: {
@@ -374,40 +428,27 @@ export default function DriverDeliveries() {
             photo_paths: photoPaths,
             photo_count: photoPaths.length,
             signature_path: signaturePath,
-            returned_items: returnedItems,
+            discount_amount: discountAmount || null,
+            discount_kind: discountKind,
+            discount_reason: discountReason || null,
+            boleto_due_date: boletoDueDate || null,
+            boleto_note: boletoNote || null,
           },
           _stop_id: eventForm.stop.id,
           _notes: reason,
         } as any);
-        // Popula thread local com o resumo do motorista para dar feedback visual imediato.
+        
+        if (evtErr) {
+          console.error('[DriverDeliveries] Info event RPC error:', evtErr);
+          throw evtErr;
+        }
+        
         setThreads((prev) => ({ ...prev, [threadKey]: [...(prev[threadKey] || []), buildDriverSummary()] }));
-        return;
+        return data;
+      } catch (err: any) {
+        console.error('[DriverDeliveries] Info event mutation error:', err);
+        throw err;
       }
-
-      // Eventos informativos (avaria, solicitar_desconto, atualizar_boleto, coleta_realizada, etc.)
-      const { error: evtErr } = await supabase.rpc('driver_create_event', {
-        _trip_id: trip!.id,
-        _event_type: `info_${def.key}`,
-        _payload: {
-          event_subtype: def.key,
-          event_label: def.label,
-          receiver_name: receiverName.trim() || null,
-          receiver_document: receiverDoc.trim() || null,
-          photo_paths: photoPaths,
-          photo_count: photoPaths.length,
-          signature_path: signaturePath,
-          discount_amount: discountAmount || null,
-          discount_kind: discountKind,
-          discount_reason: discountReason || null,
-          boleto_due_date: boletoDueDate || null,
-          boleto_note: boletoNote || null,
-        },
-        _stop_id: eventForm.stop.id,
-        _notes: reason,
-      } as any);
-      if (evtErr) throw evtErr;
-      // Popula thread local com o resumo do motorista para dar feedback visual imediato.
-      setThreads((prev) => ({ ...prev, [threadKey]: [...(prev[threadKey] || []), buildDriverSummary()] }));
     },
     onSuccess: () => {
       toast({ title: 'Evento lançado com sucesso' });

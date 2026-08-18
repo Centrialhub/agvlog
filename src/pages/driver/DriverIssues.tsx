@@ -102,15 +102,26 @@ export default function DriverIssues() {
       const report = formatOccurrenceReport(form.event_type, form.details);
       const description = report || form.description || null;
       if (!currentTenant || !driver || !trip) throw new Error('Sem viagem ativa.');
-      const { error } = await supabase.rpc('driver_create_operational_occurrence', {
-        _trip_id: trip.id,
-        _event_type: form.event_type,
-        _description: description || '',
-        _severity: form.severity,
-        _stop_id: form.details.stop_id || null,
-        _client_id: form.details.client_id || null,
-      });
-      if (error) throw error;
+      
+      try {
+        const { error, data } = await supabase.rpc('driver_create_operational_occurrence', {
+          _trip_id: trip.id,
+          _event_type: form.event_type,
+          _description: description || '',
+          _severity: form.severity,
+          _stop_id: form.details.stop_id || null,
+          _client_id: form.details.client_id || null,
+        });
+        
+        if (error) {
+          console.error('[DriverIssues] RPC error:', error);
+          throw error;
+        }
+        return data;
+      } catch (err: any) {
+        console.error('[DriverIssues] Mutation error:', err);
+        throw err;
+      }
     },
     onSuccess: () => {
       toast({ title: 'Ocorrência registrada' });

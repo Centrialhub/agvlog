@@ -18,17 +18,26 @@ export function useChecklistStatus(tripId: string | undefined): ChecklistStatus 
   const { data, isLoading } = useQuery({
     queryKey: ['checklist_status', tripId],
     queryFn: async () => {
-      if (!tripId) return { pre: null, post: null };
-      const { data: events, error } = await supabase
-        .from('dispatch_events')
-        .select('event_type, payload')
-        .eq('dispatch_trip_id', tripId)
-        .in('event_type', ['checklist_pre', 'checklist_post'])
-        .order('event_at', { ascending: false });
-      if (error) throw error;
-      const pre = events?.find((e: any) => e.event_type === 'checklist_pre');
-      const post = events?.find((e: any) => e.event_type === 'checklist_post');
-      return { pre, post };
+      try {
+        if (!tripId) return { pre: null, post: null };
+        const { data: events, error } = await supabase
+          .from('dispatch_events')
+          .select('event_type, payload')
+          .eq('dispatch_trip_id', tripId)
+          .in('event_type', ['checklist_pre', 'checklist_post'])
+          .order('event_at', { ascending: false });
+        
+        if (error) {
+          console.error('[useChecklistStatus] Query error:', error);
+          return { pre: null, post: null };
+        }
+        const pre = events?.find((e: any) => e.event_type === 'checklist_pre');
+        const post = events?.find((e: any) => e.event_type === 'checklist_post');
+        return { pre, post };
+      } catch (err) {
+        console.error('[useChecklistStatus] Fatal error:', err);
+        return { pre: null, post: null };
+      }
     },
     enabled: !!tripId,
   });
