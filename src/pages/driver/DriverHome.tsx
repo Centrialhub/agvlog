@@ -285,9 +285,18 @@ export default function DriverHome() {
                 <Button
                   size="sm"
                   className="w-full"
-                  onClick={() => navigate(`/driver/stops?trip=${trip.id}`)}
+                  onClick={async () => {
+                    // Marcar viagem como ativa se necessário
+                    await supabase
+                      .from('dispatch_trips')
+                      .update({ status: 'dispatched' })
+                      .eq('id', trip.id)
+                      .eq('status', 'planned');
+                    
+                    navigate(`/driver/stops?trip=${trip.id}`);
+                  }}
                 >
-                  Ver Paradas
+                  Acessar Viagem
                 </Button>
                 {trip.loads?.id && (
                   <DriverLoadNotes
