@@ -124,7 +124,6 @@ export default function DriverLoads() {
                     </Button>
                   )}
                 </div>
-                </div>
               </CardContent>
             </Card>
           ))}
