@@ -31,15 +31,22 @@ export default function DriverHome() {
     queryKey: ['driver_my_trips', driver?.id],
     queryFn: async () => {
       if (!driver) return [];
+      
       const { data, error } = await supabase
         .from('dispatch_trips')
         .select('*, loads(id, load_number, origin, destination, status), vehicles(plate, nickname)')
         .eq('driver_id', driver.id)
-        .in('status', TRIP_ACTIVE_STATUSES as unknown as string[])
         .order('created_at', { ascending: false })
-        .limit(5);
+        .limit(10);
+        
       if (error) throw error;
-      return data || [];
+      if (!data) return [];
+
+      // Filter locally for performance and to handle the nested load status logic
+      return data.filter(trip => 
+        (trip.status && (TRIP_ACTIVE_STATUSES as readonly string[]).includes(trip.status)) ||
+        (trip.loads?.status === 'in_transit')
+      ).slice(0, 5);
     },
     enabled: !!driver,
   });
