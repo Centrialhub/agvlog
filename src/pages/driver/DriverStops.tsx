@@ -154,8 +154,8 @@ export default function DriverStops() {
                 Aguarde o despacho da carga pela operação para ver suas paradas.
               </p>
             </div>
-            <Button variant="outline" size="sm" onClick={() => navigate('/driver')}>
-              Voltar ao Início
+            <Button variant="outline" size="sm" onClick={() => navigate('/driver/loads')}>
+              Ver Minhas Cargas
             </Button>
           </CardContent>
         </Card>
