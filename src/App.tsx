@@ -104,6 +104,7 @@ const DriverChecklist = lazy(() => import("@/pages/driver/DriverChecklist"));
 const DriverEvents = lazy(() => import("@/pages/driver/DriverEvents"));
 const DriverEventDetail = lazy(() => import("@/pages/driver/DriverEventDetail"));
 const DriverChat = lazy(() => import("@/pages/driver/DriverChat"));
+const DriverLoads = lazy(() => import("@/pages/driver/DriverLoads"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -330,8 +331,9 @@ const App = () => (
             <Route path="/merchandise-shortages" element={<ProtectedRoute><MerchandiseShortages /></ProtectedRoute>} />
 
             {/* Driver routes */}
-            <Route path="/driver" element={<DriverRoute><DriverHome /></DriverRoute>} />
-            <Route path="/driver/stops" element={<DriverRoute><DriverStops /></DriverRoute>} />
+          <Route path="/driver" element={<DriverRoute><DriverHome /></DriverRoute>} />
+          <Route path="/driver/loads" element={<DriverRoute><DriverLoads /></DriverRoute>} />
+          <Route path="/driver/stops" element={<DriverRoute><DriverStops /></DriverRoute>} />
             <Route path="/driver/deliveries" element={<DriverRoute><DriverDeliveries /></DriverRoute>} />
             <Route path="/driver/issues" element={<DriverRoute><DriverIssues /></DriverRoute>} />
             <Route path="/driver/journey" element={<DriverRoute><DriverJourney /></DriverRoute>} />

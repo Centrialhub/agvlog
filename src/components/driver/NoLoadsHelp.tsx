@@ -17,6 +17,7 @@ import {
   Link2,
   ClipboardList,
   MapPin,
+  Package,
 } from 'lucide-react';
 
 interface Check {
@@ -32,6 +33,7 @@ interface Props {
   hasActiveTrip: boolean;
   driverName?: string | null;
   driverId?: string | null;
+  onNavigateToLoads?: () => void;
 }
 
 export default function NoLoadsHelp({
@@ -41,6 +43,7 @@ export default function NoLoadsHelp({
   hasActiveTrip,
   driverName,
   driverId,
+  onNavigateToLoads,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
   const { user } = useAuth();
@@ -104,6 +107,12 @@ export default function NoLoadsHelp({
             {driverName ? `Olá, ${driverName}.` : ''} As cargas aparecem automaticamente assim que a
             operação atribuir você.
           </p>
+          {onNavigateToLoads && (
+            <Button variant="outline" size="sm" className="mt-4 text-xs" onClick={onNavigateToLoads}>
+              <Package className="h-3.5 w-3.5 mr-1.5" />
+              Ver histórico de cargas
+            </Button>
+          )}
         </div>
 
         {probe && probe.total > 0 && (

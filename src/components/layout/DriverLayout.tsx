@@ -15,8 +15,8 @@ import {
 
 const driverNav: { label: string; href: string; icon: typeof Home; match?: string[] }[] = [
   { label: 'Início', href: '/driver', icon: Home },
+  { label: 'Cargas', href: '/driver/loads', icon: Package },
   { label: 'Paradas', href: '/driver/stops', icon: MapPin },
-  { label: 'Entregas', href: '/driver/deliveries', icon: Package },
   { label: 'Chat', href: '/driver/chat', icon: MessageSquare },
   {
     label: 'Mais',

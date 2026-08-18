@@ -189,6 +189,7 @@ export default function DriverHome() {
           hasActiveTrip={activeTrips.length > 0 || !!autoTrip}
           driverName={driver?.name}
           driverId={driver?.id}
+          onNavigateToLoads={() => navigate('/driver/loads')}
         />
       )}
 
