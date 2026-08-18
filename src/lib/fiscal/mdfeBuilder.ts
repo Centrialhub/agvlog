@@ -22,8 +22,19 @@ export interface MdfeVehicle {
   state: string;
   tara?: number | null; // Tara em KG
   rntrc?: string | null;
+  renavam?: string | null;
   type?: string | null; // ex: '01' (Tração)
   bodyType?: string | null; // ex: '00' (Não aplicável)
+}
+
+export interface MdfeProprietor {
+  cnpj?: string | null;
+  cpf?: string | null;
+  name: string;
+  ie?: string | null;
+  state: string;
+  rntrc?: string | null;
+  type: '0' | '1' | '2'; // 0=TAC-Agregado, 1=TAC-Independente, 2=Outros
 }
 
 export interface MdfeDocument {
@@ -94,6 +105,7 @@ export interface BuildMdfePayloadInput {
   observations?: string | null;
   externalId?: string | null;
   valCarga?: number;
+  pesoBruto?: number;
   cMone?: string;
   takers?: Array<{
     cnpj: string;
@@ -110,6 +122,13 @@ export interface BuildMdfePayloadInput {
     } | null;
   }>;
   payment?: MdfePayment | null;
+  proprietor?: MdfeProprietor | null;
+  valePedagio?: {
+    cnpjFornecedor?: string | null;
+    cnpjPagador?: string | null;
+    numeroComprovante?: string | null;
+    valor?: number | null;
+  } | null;
 }
 
 export interface BuildMdfePayloadResult {
@@ -237,6 +256,7 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
       tot: {
         vCarga: input.valCarga || 0,
         cMone: input.cMone || '098', // 098=BRL
+        qCarga: input.pesoBruto || 0,
       },
       emit: {
         cnpj: digits(input.emitter.cnpj),
@@ -278,8 +298,19 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
             UF: input.vehicle.state,
             tara: input.vehicle.tara || 0,
             RNTRC: input.vehicle.rntrc || 'ISENTO',
+            RENAVAM: digits(input.vehicle.renavam),
             tpVeic: input.vehicle.type || '01',
             tpCar: input.vehicle.bodyType || '00',
+            ...(input.proprietor ? {
+              prop: {
+                ...(input.proprietor.cnpj ? { CNPJ: digits(input.proprietor.cnpj) } : { CPF: digits(input.proprietor.cpf) }),
+                RNTRC: input.proprietor.rntrc || 'ISENTO',
+                xNome: input.proprietor.name.slice(0, 60),
+                IE: digits(input.proprietor.ie) || 'ISENTO',
+                UF: input.proprietor.state,
+                tpProp: input.proprietor.type,
+              }
+            } : {}),
           },
           condutor: [
             {
@@ -359,6 +390,16 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
       // Quando tpEmit=1 (Prestador), é obrigatório informar ao menos um contratante no modal rodoviário.
       modalRodoviario: {
         rntrc: input.vehicle.rntrc || 'ISENTO',
+        ...(input.valePedagio ? {
+          valePed: [
+            {
+              CNPJForn: digits(input.valePedagio.cnpjFornecedor),
+              ...(input.valePedagio.cnpjPagador ? { CNPJPg: digits(input.valePedagio.cnpjPagador) } : {}),
+              nCompra: input.valePedagio.numeroComprovante || '0',
+              vValePed: Number(input.valePedagio.valor || 0),
+            }
+          ]
+        } : {}),
         contratantes: contractors.map(t => {
           const d = digits(t.cnpj);
           const c: any = {

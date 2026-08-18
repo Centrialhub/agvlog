@@ -41,6 +41,14 @@ export default function MdfeProvisional() {
   const [destUf, setDestUf] = useState('');
   const [vehicleTara, setVehicleTara] = useState('');
   const [totalCargoValue, setTotalCargoValue] = useState('');
+  const [totalCargoWeight, setTotalCargoWeight] = useState('');
+  const [vehicleRenavam, setVehicleRenavam] = useState('');
+  
+  // Vale Pedágio
+  const [includeValePedagio, setIncludeValePedagio] = useState(false);
+  const [vpFornCnpj, setVpFornCnpj] = useState('04898488000177'); // Padrão observado no PDF
+  const [vpComprovante, setVpComprovante] = useState('');
+  const [vpValor, setVpValor] = useState('');
 
   // Grupo de pagamento do tomador (Nota Técnica de piso mínimo de frete)
   const [includePayment, setIncludePayment] = useState(false);
@@ -83,12 +91,16 @@ export default function MdfeProvisional() {
         if (targetVehicle) {
           setVehicleId(targetVehicle.id);
           setVehicleTara((targetVehicle as any).tara_kg?.toString() || '');
+          setVehicleRenavam((targetVehicle as any).renavam || '');
         }
       }
       
       const selectedDocs = ctes?.filter(c => selectedIds.includes(c.id)) || [];
       const total = selectedDocs.reduce((acc, doc) => acc + (doc.cargo_value || 0), 0);
+      const totalWeight = selectedDocs.reduce((acc, doc) => acc + (doc.cargo_weight || 0), 0);
+      
       setTotalCargoValue(total.toFixed(2));
+      setTotalCargoWeight(totalWeight.toFixed(3));
 
       // Pré-preenche o tomador com o fornecedor (Remetente) do primeiro documento selecionado
       const first = selectedDocs[0];
@@ -195,6 +207,7 @@ export default function MdfeProvisional() {
           plate: vehicle.plate,
           state: vehicle.uf || emitter.endereco?.uf || '',
           tara: Number(vehicleTara) || (vehicle as any).tara_kg || 0,
+          renavam: vehicleRenavam || (vehicle as any).renavam || '',
         },
         origin: {
           city_ibge: originIbge,
@@ -216,6 +229,7 @@ export default function MdfeProvisional() {
           policyNumber: insurance?.policy || '',
         },
         valCarga: Number(totalCargoValue) || 0,
+        pesoBruto: Number(totalCargoWeight) || 0,
         cMone: '098',
         takers: Array.from(new Map(
           selectedDocs.map(d => [d.remitter_cnpj, { 
@@ -269,6 +283,11 @@ export default function MdfeProvisional() {
               },
             }
           : null,
+        valePedagio: includeValePedagio ? {
+          cnpjFornecedor: vpFornCnpj,
+          numeroComprovante: vpComprovante,
+          valor: Number(vpValor) || 0
+        } : null
       };
 
       const { ok, payload, missing } = buildMdfePayload(input);
@@ -480,12 +499,29 @@ export default function MdfeProvisional() {
                   />
                 </div>
                 <div className="space-y-2">
+                  <Label>RENAVAM</Label>
+                  <Input 
+                    value={vehicleRenavam} 
+                    onChange={e => setVehicleRenavam(e.target.value)} 
+                    placeholder="Somente números"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Peso Bruto Total (KG)</Label>
+                  <Input 
+                    type="number" 
+                    value={totalCargoWeight} 
+                    onChange={e => setTotalCargoWeight(e.target.value)} 
+                    placeholder="Ex: 3682.63"
+                  />
+                </div>
+                <div className="space-y-2">
                   <Label>Valor Total da Carga (R$)</Label>
                   <Input 
                     type="number" 
                     value={totalCargoValue} 
                     onChange={e => setTotalCargoValue(e.target.value)} 
-                    placeholder="Ex: 50000.00"
+                    placeholder="Ex: 51165.88"
                   />
                 </div>
               </div>
@@ -742,6 +778,38 @@ export default function MdfeProvisional() {
                       </Button>
                     </div>
                   )}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-4 rounded-lg border p-3">
+              <div className="flex items-start gap-2">
+                <Checkbox
+                  id="mdfe-include-valeped"
+                  checked={includeValePedagio}
+                  onCheckedChange={v => setIncludeValePedagio(Boolean(v))}
+                />
+                <div>
+                  <Label htmlFor="mdfe-include-valeped" className="cursor-pointer">
+                    Informar Vale-Pedágio
+                  </Label>
+                </div>
+              </div>
+
+              {includeValePedagio && (
+                <div className="grid grid-cols-2 gap-4 pt-2">
+                  <div className="space-y-2">
+                    <Label>CNPJ Fornecedor ANTT</Label>
+                    <Input value={vpFornCnpj} onChange={e => setVpFornCnpj(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Nº Comprovante</Label>
+                    <Input value={vpComprovante} onChange={e => setVpComprovante(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Valor (R$)</Label>
+                    <Input type="number" value={vpValor} onChange={e => setVpValor(e.target.value)} />
+                  </div>
                 </div>
               )}
             </div>
