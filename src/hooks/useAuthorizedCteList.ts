@@ -24,6 +24,7 @@ export interface AuthorizedCte {
   remitter_uf: string | null;
   remitter_zip: string | null;
   recipient_cnpj: string | null;
+  cargo_weight: number | null;
 }
 
 export function useAuthorizedCteList() {
@@ -50,6 +51,7 @@ export function useAuthorizedCteList() {
 
           issue_date,
           value,
+          weight_kg,
           hub_document_id
         `)
         .eq('tenant_id', currentTenant!.id)
@@ -144,6 +146,7 @@ export function useAuthorizedCteList() {
           driver_name: null,
           hub_document_id: d.hub_document_id,
           cargo_value: d.value ? Number(d.value) : 0,
+          cargo_weight: (d as any).weight_kg ? Number((d as any).weight_kg) : 0,
         };
       });
     }
