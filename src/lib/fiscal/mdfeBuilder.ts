@@ -340,7 +340,17 @@ export function buildMdfePayload(input: BuildMdfePayloadInput): BuildMdfePayload
           }
 
           if (doc.type === 'cte') {
-            group.infCTe.push({ chCTe: digits(doc.key) });
+            group.infCTe.push({ 
+              chCTe: digits(doc.key),
+              ...(input.insurance?.policyNumber ? {
+                infSeg: {
+                  xSeg: input.insurance.providerName.slice(0, 60),
+                  CNPJ: digits(input.insurance.providerCnpj),
+                },
+                nApol: input.insurance.policyNumber,
+                nAv: ['0'],
+              } : {}),
+            });
           } else {
             group.infNFe.push({ chNFe: digits(doc.key) });
           }
