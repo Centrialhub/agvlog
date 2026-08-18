@@ -247,6 +247,9 @@ export default function DriverHome() {
 
       {tripsToShow.length > 0 && (
         <div className="space-y-3">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+            Viagens ativas ({tripsToShow.length})
+          </p>
           {tripsToShow.map((trip: any) => (
             <Card key={trip.id} className="border-l-4 border-l-primary">
               <CardContent className="p-4 space-y-3">
