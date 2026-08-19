@@ -138,10 +138,8 @@ export function useCteMonitor(filters: CteMonitorFilters) {
       let q = supabase
         .from('cte_documents')
         .select('*')
-        .eq('tenant_id', currentTenant.id)
-        .order('sefaz_status_at', { ascending: false, nullsFirst: false })
-        .order('created_at', { ascending: false })
-        .limit(2000);
+        .eq('tenant_id', currentTenant.id);
+
 
       const docNumber = nz(filters.docNumber);
       if (docNumber) q = q.ilike('cte_number', `%${docNumber}%`);

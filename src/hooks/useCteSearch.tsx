@@ -120,10 +120,8 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
       let q = supabase
         .from('cte_documents')
         .select('*')
-        .eq('tenant_id', currentTenant.id)
-        .order('issued_at', { ascending: false, nullsFirst: false })
-        .order('created_at', { ascending: false })
-        .limit(3000);
+        .eq('tenant_id', currentTenant.id);
+
 
       const f = filters;
       const text = nz(f.text);
