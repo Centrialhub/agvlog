@@ -349,6 +349,8 @@ export default function Traceability() {
     });
   }, [filters, rows]);
 
+  const { sortedItems: sortedFilteredRows, requestSort, sortConfig } = useSortableData(filteredRows);
+
   const counts = useMemo(() => ({
     total: filteredRows.length,
     pending: filteredRows.filter(r => r.siatStatus === 'pending').length,
