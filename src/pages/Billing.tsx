@@ -376,12 +376,6 @@ export default function Billing() {
   const ciIncludes = (haystack: string | null | undefined, needle: string) =>
     !needle || (haystack || '').toLowerCase().includes(needle.toLowerCase());
 
-  // Index loads by id (O(1) lookup vs O(n) com Array.find a cada documento)
-  const loadsById = useMemo(() => {
-    const m = new Map<string, typeof loads[number]>();
-    for (const l of loads) m.set(l.id, l);
-    return m;
-  }, [loads]);
 
   // Filtra documentos. Filtros de alta seletividade (cliente, período, NF, chave, remitente,
   // referência) já foram aplicados server-side pelo useBillingDocuments. Aqui só restam
