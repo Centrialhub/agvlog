@@ -290,6 +290,17 @@ export default function MdfeProvisional() {
               },
             }
           : null,
+        proprietor: includeProprietor
+          ? {
+              name: propName,
+              cnpj: propDoc.length > 11 ? propDoc : null,
+              cpf: propDoc.length <= 11 ? propDoc : null,
+              ie: propIe,
+              state: propState,
+              rntrc: propRntrc,
+              type: propType,
+            }
+          : null,
         valePedagio: includeValePedagio ? {
           cnpjFornecedor: vpFornCnpj,
           numeroComprovante: vpComprovante,
