@@ -258,57 +258,6 @@ export default function Billing() {
     ])
   );
   const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
-  const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
-  const [recipientCity, setRecipientCity] = useState<string>(SENTINEL_NONE);
-  const [modeId, setModeId] = useState<number>(1);
-  const [previewOpen, setPreviewOpen] = useState(false);
-  const [modeDialogOpen, setModeDialogOpen] = useState(false);
-  const [emitPreviewOpen, setEmitPreviewOpen] = useState(false);
-
-  // ===== Filtros avançados (SIAT) =====
-  const [osNumber, setOsNumber] = useState('');
-  const [collectOrder, setCollectOrder] = useState('');
-  const [referenceNumber, setReferenceNumber] = useState('');
-  const [cnpj, setCnpj] = useState('');
-  const [invoiceNumber, setInvoiceNumber] = useState('');
-  const [issueDateStart, setIssueDateStart] = useState('');
-  const [issueDateEnd, setIssueDateEnd] = useState('');
-  const [importDateStart, setImportDateStart] = useState('');
-  const [importDateEnd, setImportDateEnd] = useState('');
-  const [supplierManifest, setSupplierManifest] = useState('');
-  const [distributionManifest, setDistributionManifest] = useState('');
-  const [shipmentManifest, setShipmentManifest] = useState('');
-  const [originManifest, setOriginManifest] = useState('');
-  const [loadStatus, setLoadStatus] = useState<string>(SENTINEL_NONE);
-  const [plate, setPlate] = useState('');
-  const [scheduledLoadStart, setScheduledLoadStart] = useState('');
-  const [scheduledLoadEnd, setScheduledLoadEnd] = useState('');
-  const [actualLoadStart, setActualLoadStart] = useState('');
-  const [actualLoadEnd, setActualLoadEnd] = useState('');
-  const [supplier, setSupplier] = useState('');
-  const [supplierCnpj, setSupplierCnpj] = useState('');
-  const [accessKey, setAccessKey] = useState('');
-  const [opTypes, setOpTypes] = useState<Set<OpType>>(new Set());
-  const [allOps, setAllOps] = useState(true);
-
-  // ===== Pré-filtragem server-side (usa índices criados) =====
-  const [onlySpecific, setOnlySpecific] = useState<boolean>(false);
-  const problematicInvoices = ['444798', '444797', '444796', '446083', '446072', '446071', '446070', '446069', '446068', '446067', '446066', '446065', '446064'];
-
-  const { data: docs = [], isLoading: docsLoading } = useBillingDocuments({
-    clientId: clientId !== SENTINEL_NONE ? clientId : null,
-    supplierId: supplierId !== SENTINEL_NONE ? supplierId : null,
-    periodStart: (tab === 'period' && periodStart) ? periodStart : null,
-    periodEnd: (tab === 'period' && periodEnd) ? periodEnd : null,
-    invoiceNumber: invoiceNumber || null,
-    accessKey: accessKey || null,
-    remitter: supplier || null,
-    referenceNumber: referenceNumber || null,
-    recipientCnpj: cnpj || null,
-    remitterCnpj: supplierCnpj || null,
-    recipientCity: recipientCity !== SENTINEL_NONE ? recipientCity : null,
-    onlySpecificInvoices: onlySpecific ? problematicInvoices : null,
-  });
 
   // ===== Hidrata estado a partir da preferência salva (uma única vez) =====
   const hydratedRef = useRef(false);
