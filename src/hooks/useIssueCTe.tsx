@@ -17,6 +17,17 @@ export interface IssueCteGroupInput extends BuildCtePayloadInput {
     consignee_client_id?: string | null;
     invoice_number?: string | null;
   };
+  // Explicitly allow properties from BuildCtePayloadInput to avoid TS2339
+  emitter: any;
+  totals: any;
+  remitter: any;
+  recipient: any;
+  observations?: string | null;
+  takerRole: any;
+  driver?: any;
+  vehicle?: any;
+  insurer?: any;
+  freightComposition?: any;
 }
 
 /**

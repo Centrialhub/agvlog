@@ -211,7 +211,7 @@ export function useCteMonitor(filters: CteMonitorFilters) {
         cte_series: null,
         access_key: d.access_key ?? null,
         protocol_number: d.sefaz_protocol ?? null,
-        sefaz_status: mapOutboundStatus(d.status, d.sefaz_status, d.hub_document_id),
+        sefaz_status: mapOutboundStatus(d.status, d.sefaz_status, d.hub_document_id as string),
         sefaz_status_reason: d.sefaz_message ?? null,
         sefaz_status_code: d.sefaz_status_code ?? null,
         sefaz_status_at: d.created_at ?? null,
