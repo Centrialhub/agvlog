@@ -245,7 +245,7 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
           xml_url: null,
         }))
         // Filtros equivalentes aplicados em memória (a fonte é outra tabela).
-        .filter((r) => {
+        .filter((r: any) => {
           if (docNumber && !has(r.cte_number, docNumber)) return false;
           if (accessKey && !has(r.access_key, accessKey.replace(/\D/g, ''))) return false;
           if (remitter && !has(r.remitter, remitter)) return false;
