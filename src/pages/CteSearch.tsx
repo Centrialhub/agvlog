@@ -20,6 +20,8 @@ import {
 import { useCancelCTe, useResendCte } from '@/hooks/useIssueCTe';
 import { useDeleteFailedCTe } from '@/hooks/useDeleteFailedCTe';
 import { usePollCteStatus } from '@/hooks/usePollCteStatus';
+import { useSortableData } from '@/hooks/useSortableData';
+import { Table, TableHead, TableHeader, TableRow, TableBody, TableCell } from '@/components/ui/table';
 
 const TONE_CLASS: Record<string, string> = {
   default: 'bg-secondary text-secondary-foreground',
@@ -135,7 +137,8 @@ export default function CteSearch() {
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
-  const { data: rows = [], isLoading, isFetching, refetch } = useCteSearch(filters);
+  const { data: rowsData = [], isLoading, isFetching, refetch } = useCteSearch(filters);
+  const { sortedItems: rows, requestSort, sortConfig } = useSortableData(rowsData);
 
   // Polling automático para documentos em cancelamento ou transmissão
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
