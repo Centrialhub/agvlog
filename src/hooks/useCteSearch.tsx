@@ -120,10 +120,8 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
       let q = supabase
         .from('cte_documents')
         .select('*')
-        .eq('tenant_id', currentTenant.id)
-        .order('issued_at', { ascending: false, nullsFirst: false })
-        .order('created_at', { ascending: false })
-        .limit(3000);
+        .eq('tenant_id', currentTenant.id);
+
 
       const f = filters;
       const text = nz(f.text);
@@ -164,7 +162,7 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
 
       // As CT-e realmente transmitidas ficam em `fiscal_documents` (saída) e são
       // as únicas com id no Hub Fiscal — sem esse merge a consulta não permitia baixar arquivos.
-      const { data: outbound, error: outErr } = await supabase
+      const { data: outboundData, error: outErr } = await supabase
         .from('fiscal_documents')
         .select(
           'id, invoice_number, invoice_numbers, access_key, sefaz_status, sefaz_message, status, remitter, recipient, recipient_city, recipient_state, freight_value, value, issue_date, created_at, hub_document_id, emission_id, cte_payload',
@@ -175,6 +173,8 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
         .eq('document_type', 'outbound');
       
       if (outErr) throw outErr;
+      const outbound = outboundData as any[];
+
 
 
       const hubByKey = new Map<string, any>();
@@ -248,7 +248,11 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
         }))
         // Filtros equivalentes aplicados em memória (a fonte é outra tabela).
         .filter((r: any) => {
-          if (docNumber && !has(r.cte_number, docNumber)) return false;
+          if (docNumber) {
+            const hit = has(r.cte_number, docNumber) || has(r.invoice_numbers, docNumber);
+            if (!hit) return false;
+          }
+
           if (accessKey && !has(r.access_key, accessKey.replace(/\D/g, ''))) return false;
           if (remitter && !has(r.remitter, remitter)) return false;
           if (recipient && !has(r.recipient, recipient)) return false;
@@ -270,9 +274,11 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
           const hit =
             has(r.cte_number, text) || has(r.access_key, text) || has(r.remitter, text) ||
             has(r.recipient, text) || has(r.payer_name, text) || has(r.vehicle_plate, text) ||
-            has(r.driver_name, text) || has(r.invoice_numbers, text) || has(r.recipient_city, text);
+            has(r.driver_name, text) || has(r.invoice_numbers, text) || has(r.recipient_city, text) ||
+            has(r.cte_number, text) || has(r.invoice_numbers, text);
           if (!hit) return false;
         }
+
         if (f.downloadable === 'yes' && !(r.hub_document_id || r.pdf_url || r.xml_url)) return false;
         if (f.downloadable === 'no' && (r.hub_document_id || r.pdf_url || r.xml_url)) return false;
         return true;

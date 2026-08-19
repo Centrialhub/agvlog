@@ -95,7 +95,9 @@ export interface CteMonitorRow {
   source?: 'draft' | 'hub';
   hub_document_id?: string | null;
   emission_id?: string | null;
+  invoice_numbers?: string | null;
 }
+
 
 export interface CteMonitorFilters {
   docNumber?: string;
@@ -138,10 +140,8 @@ export function useCteMonitor(filters: CteMonitorFilters) {
       let q = supabase
         .from('cte_documents')
         .select('*')
-        .eq('tenant_id', currentTenant.id)
-        .order('sefaz_status_at', { ascending: false, nullsFirst: false })
-        .order('created_at', { ascending: false })
-        .limit(2000);
+        .eq('tenant_id', currentTenant.id);
+
 
       const docNumber = nz(filters.docNumber);
       if (docNumber) q = q.ilike('cte_number', `%${docNumber}%`);
@@ -185,10 +185,10 @@ export function useCteMonitor(filters: CteMonitorFilters) {
       // CT-es realmente transmitidos ao Hub Fiscal ficam em `fiscal_documents`
       // (document_type = 'outbound'). Sem esse merge o monitor não mostrava as
       // emissões reais — e por isso não havia como baixar PDF/XML de retorno.
-      const { data: outbound, error: outErr } = await supabase
+      const { data: outboundData, error: outErr } = await supabase
         .from('fiscal_documents')
         .select(
-          'id, invoice_number, access_key, sefaz_protocol, sefaz_status, sefaz_status_code, sefaz_message, status, remitter, recipient, recipient_city, recipient_state, freight_value, value, issue_date, created_at, hub_document_id, emission_id, cte_payload',
+          'id, invoice_number, invoice_numbers, access_key, sefaz_protocol, sefaz_status, sefaz_status_code, sefaz_message, status, remitter, recipient, recipient_city, recipient_state, freight_value, value, issue_date, created_at, hub_document_id, emission_id, cte_payload',
         )
         .eq('tenant_id', currentTenant.id)
         .is('deleted_at', null)
@@ -196,11 +196,13 @@ export function useCteMonitor(filters: CteMonitorFilters) {
         .eq('document_type', 'outbound');
       
       if (outErr) throw outErr;
+      const outbound = (outboundData || []) as any[];
+
 
       const usedHubIds = new Set<string>();
-      const draftRows = ((data || []) as unknown as CteMonitorRow[]).map((r: any) => {
+      const draftRows = (data || []).map((r: any) => {
         // Tenta encontrar o vínculo real em fiscal_documents via access_key
-        const match = r.access_key ? outbound?.find(o => o.access_key === r.access_key) : null;
+        const match = r.access_key ? outbound.find((o: any) => o.access_key === r.access_key) : null;
         if (match) usedHubIds.add(match.id);
         
         return {
@@ -210,10 +212,13 @@ export function useCteMonitor(filters: CteMonitorFilters) {
           source: (match ? 'hub' : 'draft') as any,
           hub_document_id: match?.hub_document_id ?? r.hub_document_id,
           emission_id: match?.emission_id ?? r.emission_id,
+          invoice_numbers: match?.invoice_numbers ?? r.invoice_numbers,
           sefaz_status: match ? mapOutboundStatus(match.status, match.sefaz_status, match.hub_document_id) : r.sefaz_status,
           sefaz_status_reason: match?.sefaz_message ?? r.sefaz_status_reason,
-        };
+        } as CteMonitorRow;
       });
+
+
 
       const hubRows: CteMonitorRow[] = (outbound || [])
         .filter((d: any) => !usedHubIds.has(d.id))
@@ -257,12 +262,21 @@ export function useCteMonitor(filters: CteMonitorFilters) {
           source: 'hub',
           hub_document_id: d.hub_document_id ?? null,
           emission_id: d.emission_id ?? null,
+          invoice_numbers: d.invoice_numbers ?? null,
         }));
+
 
 
       const filteredHub = hubRows.filter((r) => {
         if (filters.statuses?.length && !filters.statuses.includes(r.sefaz_status)) return false;
-        if (docNumber && !(r.cte_number || '').toLowerCase().includes(docNumber.toLowerCase())) return false;
+        if (docNumber) {
+          const hit = (r.cte_number || '').toLowerCase().includes(docNumber.toLowerCase()) || 
+                      (r.invoice_numbers || '').toLowerCase().includes(docNumber.toLowerCase());
+          if (!hit) return false;
+        }
+
+
+
         if (key && !(r.access_key || '').includes(key)) return false;
         if (payer && !(r.payer_name || '').toLowerCase().includes(payer.toLowerCase())) return false;
         if (filters.plate && !(r.vehicle_plate || '').toLowerCase().includes(filters.plate.replace(/\W/g, '').toLowerCase())) return false;
