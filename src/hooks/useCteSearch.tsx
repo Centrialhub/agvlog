@@ -248,7 +248,11 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
         }))
         // Filtros equivalentes aplicados em memória (a fonte é outra tabela).
         .filter((r: any) => {
-          if (docNumber && !has(r.cte_number, docNumber)) return false;
+          if (docNumber) {
+            const hit = has(r.cte_number, docNumber) || has(r.invoice_numbers, docNumber);
+            if (!hit) return false;
+          }
+
           if (accessKey && !has(r.access_key, accessKey.replace(/\D/g, ''))) return false;
           if (remitter && !has(r.remitter, remitter)) return false;
           if (recipient && !has(r.recipient, recipient)) return false;
@@ -270,9 +274,11 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
           const hit =
             has(r.cte_number, text) || has(r.access_key, text) || has(r.remitter, text) ||
             has(r.recipient, text) || has(r.payer_name, text) || has(r.vehicle_plate, text) ||
-            has(r.driver_name, text) || has(r.invoice_numbers, text) || has(r.recipient_city, text);
+            has(r.driver_name, text) || has(r.invoice_numbers, text) || has(r.recipient_city, text) ||
+            has(r.cte_number, text) || has(r.invoice_numbers, text);
           if (!hit) return false;
         }
+
         if (f.downloadable === 'yes' && !(r.hub_document_id || r.pdf_url || r.xml_url)) return false;
         if (f.downloadable === 'no' && (r.hub_document_id || r.pdf_url || r.xml_url)) return false;
         return true;
