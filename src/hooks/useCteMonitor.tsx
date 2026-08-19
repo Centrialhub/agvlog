@@ -185,7 +185,7 @@ export function useCteMonitor(filters: CteMonitorFilters) {
       // CT-es realmente transmitidos ao Hub Fiscal ficam em `fiscal_documents`
       // (document_type = 'outbound'). Sem esse merge o monitor não mostrava as
       // emissões reais — e por isso não havia como baixar PDF/XML de retorno.
-      const { data: outbound, error: outErr } = await supabase
+      const { data: outboundData, error: outErr } = await supabase
         .from('fiscal_documents')
         .select(
           'id, invoice_number, invoice_numbers, access_key, sefaz_protocol, sefaz_status, sefaz_status_code, sefaz_message, status, remitter, recipient, recipient_city, recipient_state, freight_value, value, issue_date, created_at, hub_document_id, emission_id, cte_payload',
@@ -194,10 +194,10 @@ export function useCteMonitor(filters: CteMonitorFilters) {
         .is('deleted_at', null)
         .eq('is_duplicate', false)
         .eq('document_type', 'outbound');
-
-
       
       if (outErr) throw outErr;
+      const outbound = (outboundData || []) as any[];
+
 
       const usedHubIds = new Set<string>();
       const draftRows = ((data || []) as unknown as CteMonitorRow[]).map((r: any) => {
