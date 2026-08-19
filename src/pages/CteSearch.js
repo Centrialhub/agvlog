@@ -1,3 +1,4 @@
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -26,29 +27,20 @@ const TONE_CLASS = {
 const BRL = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 function StatusPill({ status }) {
     const tone = SEFAZ_STATUS_TONE[status] ?? 'default';
-    return (<span className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${TONE_CLASS[tone]}`}>
-      {SEFAZ_STATUS_LABELS[status] ?? status}
-    </span>);
+    return (_jsx("span", { className: `inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${TONE_CLASS[tone]}`, children: SEFAZ_STATUS_LABELS[status] ?? status }));
 }
 function Field({ label, children, className = '' }) {
-    return (<div className={`flex flex-col gap-1 ${className}`}>
-      <label className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</label>
-      {children}
-    </div>);
+    return (_jsxs("div", { className: `flex flex-col gap-1 ${className}`, children: [
+            _jsx("label", { className: "text-[11px] uppercase tracking-wide text-muted-foreground", children: label }), children] }));
 }
 function TriRadio({ label, value, onChange }) {
     const opts = [
         { v: 'all', l: 'Todos' }, { v: 'yes', l: 'Sim' }, { v: 'no', l: 'Não' },
     ];
-    return (<div className="flex flex-col gap-1">
-      <span className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</span>
-      <div className="flex gap-2">
-        {opts.map((o) => (<label key={o.v} className="flex items-center gap-1 text-xs cursor-pointer">
-            <input type="radio" checked={value === o.v} onChange={() => onChange(o.v)}/>
-            {o.l}
-          </label>))}
-      </div>
-    </div>);
+    return (_jsxs("div", { className: "flex flex-col gap-1", children: [
+            _jsx("span", { className: "text-[11px] uppercase tracking-wide text-muted-foreground", children: label }), _jsx("div", { className: "flex gap-2", children: opts.map((o) => (_jsxs("label", { className: "flex items-center gap-1 text-xs cursor-pointer", children: [
+                        _jsx("input", { type: "radio", checked: value === o.v, onChange: () => onChange(o.v) }), o.l] }, o.v))) })
+        ] }));
 }
 /** Status usados no dia a dia — os demais ficam nos filtros avançados via busca. */
 const QUICK_STATUSES = ['processed', 'pending', 'sent_error', 'processed_error', 'sefaz_error', 'cancelled'];
@@ -312,244 +304,90 @@ export default function CteSearch() {
         }
     }
     const activeCount = activeFilterCount(filters);
-    return (<div className="flex flex-col gap-4 p-4">
-      <PendingInvoicesBanner from="search"/>
-
-      <header className="flex items-center justify-between flex-wrap gap-2">
-        <div>
-          <h1 className="text-2xl font-semibold">Consulta CT-e</h1>
-          <p className="text-sm text-muted-foreground">
-            Busca nos CT-e emitidos (rascunhos e transmitidos) com download em lote de DACTE e XML.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge variant="outline">{totals.count} registro(s)</Badge>
-          <Button variant="outline" size="sm" onClick={exportCsv} disabled={rows.length === 0}>
-            <TableIcon className="h-4 w-4"/> CSV
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
-            <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`}/> Atualizar
-          </Button>
-        </div>
-      </header>
-
-      {/* Busca rápida */}
-      <Card className="p-4 flex flex-col gap-3">
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="flex-1 min-w-[240px]">
-            <Field label="Busca rápida (nº, chave, cliente, cidade, placa, NF)">
-              <div className="flex gap-2">
-                <Input value={draft.text ?? ''} placeholder="Ex.: 1234, Santiago, JANAUBA, ABC1D23" onChange={(e) => setDraft({ ...draft, text: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter')
-        apply(); }}/>
-                <Button size="sm" onClick={() => apply()}><Search className="h-4 w-4"/> Buscar</Button>
-              </div>
-            </Field>
-          </div>
-          <Field label="Emissão — Início" className="w-[150px]">
-            <Input type="date" value={draft.issueDateStart ?? ''} onChange={(e) => apply({ issueDateStart: e.target.value })}/>
-          </Field>
-          <Field label="Emissão — Fim" className="w-[150px]">
-            <Input type="date" value={draft.issueDateEnd ?? ''} onChange={(e) => apply({ issueDateEnd: e.target.value })}/>
-          </Field>
-          <Field label="Cidade destino" className="w-[200px]">
-            <select className="h-9 rounded-md border bg-background px-2 text-sm" value={filters.recipientCity ?? ''} onChange={(e) => apply({ recipientCity: e.target.value })}>
-              <option value="">Todas as cidades</option>
-              {cities.map(([c, n]) => <option key={c} value={c}>{c} ({n})</option>)}
-            </select>
-          </Field>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Período</span>
-          {[{ l: 'Hoje', d: 0 }, { l: '7 dias', d: 7 }, { l: '30 dias', d: 30 }, { l: '90 dias', d: 90 }].map((p) => (<Button key={p.l} size="sm" variant="outline" onClick={() => setPeriod(p.d)}>{p.l}</Button>))}
-          <Button size="sm" variant="ghost" onClick={() => setPeriod(null)}>Tudo</Button>
-
-          <span className="ml-2 text-[11px] uppercase tracking-wide text-muted-foreground">Status</span>
-          {QUICK_STATUSES.map((s) => {
-            const on = (filters.statuses ?? []).includes(s);
-            return (<button key={s} onClick={() => toggleStatus(s)} className={`rounded-full border px-2.5 py-0.5 text-xs ${on ? 'bg-primary text-primary-foreground border-primary' : 'text-muted-foreground'}`}>
-                {SEFAZ_STATUS_LABELS[s] ?? s}
-              </button>);
-        })}
-
-          <button onClick={() => apply({ downloadable: filters.downloadable === 'yes' ? 'all' : 'yes' })} className={`rounded-full border px-2.5 py-0.5 text-xs ${filters.downloadable === 'yes' ? 'bg-primary text-primary-foreground border-primary' : 'text-muted-foreground'}`}>
-            Só com arquivo
-          </button>
-
-          <div className="ml-auto flex items-center gap-2">
-            {activeCount > 0 && <Badge variant="secondary">{activeCount} filtro(s) ativo(s)</Badge>}
-            <Button size="sm" variant="ghost" onClick={() => setShowAdvanced((v) => !v)}>
-              <FilterIcon className="h-4 w-4"/> Filtros avançados
-              {showAdvanced ? <ChevronUp className="h-4 w-4"/> : <ChevronDown className="h-4 w-4"/>}
-            </Button>
-            <Button size="sm" variant="outline" onClick={clear}><X className="h-4 w-4"/> Limpar</Button>
-          </div>
-        </div>
-
-        {showAdvanced && (<div className="border-t pt-3 flex flex-col gap-3">
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-              <Field label="Nº Doc"><Input value={draft.docNumber ?? ''} onChange={(e) => setDraft({ ...draft, docNumber: e.target.value })}/></Field>
-              <Field label="Chave de acesso"><Input value={draft.accessKey ?? ''} onChange={(e) => setDraft({ ...draft, accessKey: e.target.value })}/></Field>
-              <Field label="Nº Interno"><Input value={draft.internalNumber ?? ''} onChange={(e) => setDraft({ ...draft, internalNumber: e.target.value })}/></Field>
-              <Field label="Nº Ref."><Input value={draft.referenceNumber ?? ''} onChange={(e) => setDraft({ ...draft, referenceNumber: e.target.value })}/></Field>
-              <Field label="Série"><Input value={draft.series ?? ''} onChange={(e) => setDraft({ ...draft, series: e.target.value })}/></Field>
-              <Field label="Nota Fiscal"><Input value={draft.invoiceNumber ?? ''} onChange={(e) => setDraft({ ...draft, invoiceNumber: e.target.value })}/></Field>
-            </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <Field label="Remetente"><Input value={draft.remitter ?? ''} onChange={(e) => setDraft({ ...draft, remitter: e.target.value })}/></Field>
-              <Field label="Cliente/Destinatário"><Input value={draft.recipient ?? ''} onChange={(e) => setDraft({ ...draft, recipient: e.target.value })}/></Field>
-              <Field label="Município"><Input value={draft.recipientCity ?? ''} onChange={(e) => setDraft({ ...draft, recipientCity: e.target.value })}/></Field>
-              <Field label="Fornecedor/Pagador"><Input value={draft.payer ?? ''} onChange={(e) => setDraft({ ...draft, payer: e.target.value })}/></Field>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              <Field label="Consignatário"><Input value={draft.consignee ?? ''} onChange={(e) => setDraft({ ...draft, consignee: e.target.value })}/></Field>
-              <Field label="Grp Pagador"><Input value={draft.payerGroup ?? ''} onChange={(e) => setDraft({ ...draft, payerGroup: e.target.value })}/></Field>
-              <Field label="Seguradora"><Input value={draft.insuranceCompany ?? ''} onChange={(e) => setDraft({ ...draft, insuranceCompany: e.target.value })}/></Field>
-            </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-              <Field label="Motorista"><Input value={draft.driverName ?? ''} onChange={(e) => setDraft({ ...draft, driverName: e.target.value })}/></Field>
-              <Field label="Placa"><Input value={draft.vehiclePlate ?? ''} onChange={(e) => setDraft({ ...draft, vehiclePlate: e.target.value })}/></Field>
-              <Field label="Placa Carreta"><Input value={draft.trailerPlate ?? ''} onChange={(e) => setDraft({ ...draft, trailerPlate: e.target.value })}/></Field>
-              <Field label="Nº Contrato"><Input value={draft.contractNumber ?? ''} onChange={(e) => setDraft({ ...draft, contractNumber: e.target.value })}/></Field>
-              <Field label="Nº Viagem"><Input value={draft.tripNumber ?? ''} onChange={(e) => setDraft({ ...draft, tripNumber: e.target.value })}/></Field>
-              <Field label="Romexp"><Input value={draft.romexpNumber ?? ''} onChange={(e) => setDraft({ ...draft, romexpNumber: e.target.value })}/></Field>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-2">Tipo CT-e</p>
-                <div className="flex flex-wrap gap-3">
-                  {ALL_CTE_TYPES.map((t) => (<label key={t} className="flex items-center gap-2 text-sm cursor-pointer">
-                      <Checkbox checked={(draft.cteTypes ?? []).includes(t)} onCheckedChange={() => toggleType(t)}/>
-                      {CTE_TYPE_LABELS[t]}
-                    </label>))}
-                </div>
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                <TriRadio label="Anulado" value={draft.voided ?? 'all'} onChange={(v) => setDraft({ ...draft, voided: v })}/>
-                <TriRadio label="Encerrado" value={draft.closed ?? 'all'} onChange={(v) => setDraft({ ...draft, closed: v })}/>
-                <TriRadio label="Compensado" value={draft.compensated ?? 'all'} onChange={(v) => setDraft({ ...draft, compensated: v })}/>
-                <TriRadio label="Frete Autônomo" value={draft.autonomousFreight ?? 'all'} onChange={(v) => setDraft({ ...draft, autonomousFreight: v })}/>
-                <TriRadio label="Doc. Complementar" value={draft.complementaryDoc ?? 'all'} onChange={(v) => setDraft({ ...draft, complementaryDoc: v })}/>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Button onClick={() => apply()} size="sm"><Search className="h-4 w-4"/> Aplicar filtros</Button>
-              <Button onClick={clear} variant="outline" size="sm"><X className="h-4 w-4"/> Limpar</Button>
-            </div>
-          </div>)}
-      </Card>
-
-      {/* Totais */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card className="p-3"><p className="text-xs text-muted-foreground">CT-e encontrados</p><p className="text-2xl font-semibold">{totals.count}</p></Card>
-        <Card className="p-3"><p className="text-xs text-muted-foreground">Autorizados / com arquivo</p><p className="text-2xl font-semibold">{totals.authorized} / {totals.downloadable}</p></Card>
-        <Card className="p-3"><p className="text-xs text-muted-foreground">Total Frete</p><p className="text-2xl font-semibold">{BRL(totals.freight)}</p></Card>
-        <Card className="p-3"><p className="text-xs text-muted-foreground">Total Carga</p><p className="text-2xl font-semibold">{BRL(totals.cargo)}</p></Card>
-      </div>
-
-      {/* Barra de download em lote */}
-      {(checkedRows.length > 0 || bulkBusy) && (<Card className="p-3 flex flex-wrap items-center gap-3 border-primary/40">
-          <span className="text-sm font-medium">
-            {checkedRows.length} selecionado(s) — frete {BRL(selectedTotals.freight)}
-          </span>
-          <span className="text-xs text-muted-foreground">
-            {bulkProgress
-                ? `Baixando ${bulkProgress.done}/${bulkProgress.total} do Hub Fiscal...`
-                : 'O PDF sai em arquivo único (uma nota por página); XML sai em ZIP.'}
-          </span>
-          <div className="ml-auto flex flex-wrap items-center gap-2">
-            <Button size="sm" variant="outline" onClick={toggleAll} disabled={bulkBusy}>
-              {checked.size === downloadableRows.length ? 'Limpar seleção' : `Selecionar todos com arquivo (${downloadableRows.length})`}
-            </Button>
-            <Button size="sm" onClick={() => bulkDownload('pdf')} disabled={bulkBusy}>
-              <Download className="h-4 w-4"/> Baixar PDF único
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => bulkDownload('xml')} disabled={bulkBusy}>
-              <FileDown className="h-4 w-4"/> Baixar XMLs (ZIP)
-            </Button>
-          </div>
-        </Card>)}
-
-      <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader className="bg-muted/50 text-xs uppercase">
-              <TableRow>
-                <TableHead className="px-3 py-2 w-8">
-                  <Checkbox checked={downloadableRows.length > 0 && checked.size === downloadableRows.length} onCheckedChange={toggleAll} aria-label="Selecionar todos"/>
-                </TableHead>
-                <TableHead sortKey="sefaz_status" sortConfig={sortConfig} onSort={requestSort}>Status</TableHead>
-                <TableHead sortKey="cte_type" sortConfig={sortConfig} onSort={requestSort}>Tipo</TableHead>
-                <TableHead sortKey="cte_number" sortConfig={sortConfig} onSort={requestSort}>Nº CT-e</TableHead>
-                <TableHead sortKey="cte_series" sortConfig={sortConfig} onSort={requestSort}>Sér.</TableHead>
-                <TableHead sortKey="issued_at" sortConfig={sortConfig} onSort={requestSort}>Emissão</TableHead>
-                <TableHead sortKey="remitter" sortConfig={sortConfig} onSort={requestSort}>Remetente</TableHead>
-                <TableHead sortKey="recipient" sortConfig={sortConfig} onSort={requestSort}>Destinatário</TableHead>
-                <TableHead sortKey="recipient_city" sortConfig={sortConfig} onSort={requestSort}>Cidade / UF</TableHead>
-                <TableHead sortKey="vehicle_plate" sortConfig={sortConfig} onSort={requestSort}>Placa</TableHead>
-                <TableHead sortKey="freight_value" sortConfig={sortConfig} onSort={requestSort} className="text-right">Frete</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading && <TableRow><TableCell colSpan={12} className="text-center text-muted-foreground py-8">Carregando…</TableCell></TableRow>}
-              {!isLoading && rows.length === 0 && (<TableRow><TableCell colSpan={12} className="text-center text-muted-foreground py-8">
-                  Nenhum CT-e encontrado com os filtros atuais.
-                </TableCell></TableRow>)}
-              {rows.map((r) => {
-            const has = canDownloadCte(r);
-            return (<TableRow key={r.id} className={`border-t hover:bg-muted/30 ${checked.has(r.id) ? 'bg-primary/5' : ''}`}>
-                    <TableCell className="px-3 py-2">
-                      <Checkbox checked={checked.has(r.id)} onCheckedChange={() => toggleRow(r.id)} disabled={!has} aria-label={`Selecionar ${cteLabel(r)}`}/>
-                    </TableCell>
-                    <TableCell className="px-3 py-2">
-                      <div className="flex flex-col gap-0.5">
-                        <StatusPill status={r.sefaz_status}/>
-                        {r.sefaz_status_reason && (<span className="text-[10px] text-destructive max-w-[200px] whitespace-normal font-medium mt-1 leading-tight" title={r.sefaz_status_reason}>
-                            {r.sefaz_status_reason}
-                          </span>)}
-                      </div>
-                    </TableCell>
-                    <TableCell className="px-3 py-2 text-xs">{CTE_TYPE_LABELS[r.cte_type] ?? r.cte_type}</TableCell>
-                    <TableCell className="px-3 py-2 font-mono">{r.cte_number ?? '—'}</TableCell>
-                    <TableCell className="px-3 py-2">{r.cte_series ?? '—'}</TableCell>
-                    <TableCell className="px-3 py-2 text-xs">{r.issued_at ? new Date(r.issued_at).toLocaleDateString('pt-BR') : '—'}</TableCell>
-                    <TableCell className="px-3 py-2 text-xs truncate max-w-[150px]" title={r.remitter ?? ''}>{r.remitter ?? '—'}</TableCell>
-                    <TableCell className="px-3 py-2 text-xs truncate max-w-[150px]" title={r.recipient ?? ''}>{r.recipient ?? '—'}</TableCell>
-                    <TableCell className="px-3 py-2 text-xs">{[r.recipient_city, r.recipient_state].filter(Boolean).join(' / ') || '—'}</TableCell>
-                    <TableCell className="px-3 py-2 font-mono text-xs">{r.vehicle_plate ?? '—'}</TableCell>
-                    <TableCell className="px-3 py-2 text-right text-xs">{BRL(r.freight_value)}</TableCell>
-                    <TableCell className="px-3 py-2 text-right">
-                      <div className="inline-flex gap-1">
-                        <Button size="sm" variant="ghost" title="Visualizar DACTE" disabled={!has} onClick={() => oneFile(r, 'pdf', true)}>
-                          <Eye className="h-4 w-4"/>
-                        </Button>
-                        <Button size="sm" variant="ghost" title="Baixar PDF" disabled={!has} onClick={() => oneFile(r, 'pdf')}>
-                          <FileText className="h-4 w-4"/>
-                        </Button>
-                        <Button size="sm" variant="ghost" title="Baixar XML" disabled={!has} onClick={() => oneFile(r, 'xml')}>
-                          <FileDown className="h-4 w-4"/>
-                        </Button>
-                        {(r.sefaz_status === 'processed' || r.sefaz_status === 'processed_error' || r.sefaz_status === 'authorized' || r.sefaz_status === 'rejected') && r.hub_document_id && r.source === 'hub' && (<Button size="sm" variant="ghost" className="text-destructive hover:text-destructive hover:bg-destructive/10" title="Cancelar CT-e" disabled={cancelCte.isPending} onClick={() => handleCancel(r)}>
-                            <Ban className="h-4 w-4"/>
-                          </Button>)}
-                        {r.sefaz_status.endsWith('_error') && (<Button size="sm" variant="ghost" title="Reenviar à SEFAZ" disabled={resendCte.isPending} onClick={() => handleResend(r)}>
-                            <RefreshCw className="h-4 w-4"/>
-                          </Button>)}
-                        {(r.sefaz_status === 'error' || r.sefaz_status === 'rejected' || r.sefaz_status === 'sent_error' || r.sefaz_status === 'processed_error' || r.sefaz_status === 'sefaz_error') && (<Button size="sm" variant="ghost" className="text-destructive hover:text-destructive hover:bg-destructive/10" title={r.hub_document_id ? "Remover rascunho (possui ID no Hub)" : "Excluir registro de erro"} disabled={deleteCte.isPending} onClick={() => handleDelete(r)}>
-                            <Trash2 className="h-4 w-4"/>
-                          </Button>)}
-                      </div>
-                    </TableCell>
-                  </TableRow>);
-        })}
-            </TableBody>
-          </Table>
-        </div>
-      </Card>
-    </div>);
+    return (_jsxs("div", { className: "flex flex-col gap-4 p-4", children: [
+            _jsx(PendingInvoicesBanner, { from: "search" }), _jsxs("header", { className: "flex items-center justify-between flex-wrap gap-2", children: [
+                    _jsxs("div", { children: [
+                            _jsx("h1", { className: "text-2xl font-semibold", children: "Consulta CT-e" }), _jsx("p", { className: "text-sm text-muted-foreground", children: "Busca nos CT-e emitidos (rascunhos e transmitidos) com download em lote de DACTE e XML." })
+                        ] }), _jsxs("div", { className: "flex items-center gap-2", children: [
+                            _jsxs(Badge, { variant: "outline", children: [totals.count, " registro(s)"] }), _jsxs(Button, { variant: "outline", size: "sm", onClick: exportCsv, disabled: rows.length === 0, children: [
+                                    _jsx(TableIcon, { className: "h-4 w-4" }),
+                                    " CSV"] }), _jsxs(Button, { variant: "outline", size: "sm", onClick: () => refetch(), disabled: isFetching, children: [
+                                    _jsx(RefreshCw, { className: `h-4 w-4 ${isFetching ? 'animate-spin' : ''}` }),
+                                    " Atualizar"] })
+                        ] })
+                ] }), _jsxs(Card, { className: "p-4 flex flex-col gap-3", children: [
+                    _jsxs("div", { className: "flex flex-wrap items-end gap-2", children: [
+                            _jsx("div", { className: "flex-1 min-w-[240px]", children: _jsx(Field, { label: "Busca r\u00E1pida (n\u00BA, chave, cliente, cidade, placa, NF)", children: _jsxs("div", { className: "flex gap-2", children: [
+                                            _jsx(Input, { value: draft.text ?? '', placeholder: "Ex.: 1234, Santiago, JANAUBA, ABC1D23", onChange: (e) => setDraft({ ...draft, text: e.target.value }), onKeyDown: (e) => { if (e.key === 'Enter')
+                                                    apply(); } }), _jsxs(Button, { size: "sm", onClick: () => apply(), children: [
+                                                    _jsx(Search, { className: "h-4 w-4" }),
+                                                    " Buscar"] })
+                                        ] }) }) }), _jsx(Field, { label: "Emiss\u00E3o \u2014 In\u00EDcio", className: "w-[150px]", children: _jsx(Input, { type: "date", value: draft.issueDateStart ?? '', onChange: (e) => apply({ issueDateStart: e.target.value }) }) }), _jsx(Field, { label: "Emiss\u00E3o \u2014 Fim", className: "w-[150px]", children: _jsx(Input, { type: "date", value: draft.issueDateEnd ?? '', onChange: (e) => apply({ issueDateEnd: e.target.value }) }) }), _jsx(Field, { label: "Cidade destino", className: "w-[200px]", children: _jsxs("select", { className: "h-9 rounded-md border bg-background px-2 text-sm", value: filters.recipientCity ?? '', onChange: (e) => apply({ recipientCity: e.target.value }), children: [
+                                        _jsx("option", { value: "", children: "Todas as cidades" }), cities.map(([c, n]) => _jsxs("option", { value: c, children: [c, " (", n, ")"] }, c))] }) })
+                        ] }), _jsxs("div", { className: "flex flex-wrap items-center gap-2", children: [
+                            _jsx("span", { className: "text-[11px] uppercase tracking-wide text-muted-foreground", children: "Per\u00EDodo" }), [{ l: 'Hoje', d: 0 }, { l: '7 dias', d: 7 }, { l: '30 dias', d: 30 }, { l: '90 dias', d: 90 }].map((p) => (_jsx(Button, { size: "sm", variant: "outline", onClick: () => setPeriod(p.d), children: p.l }, p.l))), _jsx(Button, { size: "sm", variant: "ghost", onClick: () => setPeriod(null), children: "Tudo" }), _jsx("span", { className: "ml-2 text-[11px] uppercase tracking-wide text-muted-foreground", children: "Status" }), QUICK_STATUSES.map((s) => {
+                                const on = (filters.statuses ?? []).includes(s);
+                                return (_jsx("button", { onClick: () => toggleStatus(s), className: `rounded-full border px-2.5 py-0.5 text-xs ${on ? 'bg-primary text-primary-foreground border-primary' : 'text-muted-foreground'}`, children: SEFAZ_STATUS_LABELS[s] ?? s }, s));
+                            }), _jsx("button", { onClick: () => apply({ downloadable: filters.downloadable === 'yes' ? 'all' : 'yes' }), className: `rounded-full border px-2.5 py-0.5 text-xs ${filters.downloadable === 'yes' ? 'bg-primary text-primary-foreground border-primary' : 'text-muted-foreground'}`, children: "S\u00F3 com arquivo" }), _jsxs("div", { className: "ml-auto flex items-center gap-2", children: [activeCount > 0 && _jsxs(Badge, { variant: "secondary", children: [activeCount, " filtro(s) ativo(s)"] }), _jsxs(Button, { size: "sm", variant: "ghost", onClick: () => setShowAdvanced((v) => !v), children: [
+                                            _jsx(FilterIcon, { className: "h-4 w-4" }),
+                                            " Filtros avan\u00E7ados", showAdvanced ? _jsx(ChevronUp, { className: "h-4 w-4" }) : _jsx(ChevronDown, { className: "h-4 w-4" })] }), _jsxs(Button, { size: "sm", variant: "outline", onClick: clear, children: [
+                                            _jsx(X, { className: "h-4 w-4" }),
+                                            " Limpar"] })
+                                ] })
+                        ] }), showAdvanced && (_jsxs("div", { className: "border-t pt-3 flex flex-col gap-3", children: [
+                            _jsxs("div", { className: "grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3", children: [
+                                    _jsx(Field, { label: "N\u00BA Doc", children: _jsx(Input, { value: draft.docNumber ?? '', onChange: (e) => setDraft({ ...draft, docNumber: e.target.value }) }) }), _jsx(Field, { label: "Chave de acesso", children: _jsx(Input, { value: draft.accessKey ?? '', onChange: (e) => setDraft({ ...draft, accessKey: e.target.value }) }) }), _jsx(Field, { label: "N\u00BA Interno", children: _jsx(Input, { value: draft.internalNumber ?? '', onChange: (e) => setDraft({ ...draft, internalNumber: e.target.value }) }) }), _jsx(Field, { label: "N\u00BA Ref.", children: _jsx(Input, { value: draft.referenceNumber ?? '', onChange: (e) => setDraft({ ...draft, referenceNumber: e.target.value }) }) }), _jsx(Field, { label: "S\u00E9rie", children: _jsx(Input, { value: draft.series ?? '', onChange: (e) => setDraft({ ...draft, series: e.target.value }) }) }), _jsx(Field, { label: "Nota Fiscal", children: _jsx(Input, { value: draft.invoiceNumber ?? '', onChange: (e) => setDraft({ ...draft, invoiceNumber: e.target.value }) }) })
+                                ] }), _jsxs("div", { className: "grid grid-cols-2 md:grid-cols-4 gap-3", children: [
+                                    _jsx(Field, { label: "Remetente", children: _jsx(Input, { value: draft.remitter ?? '', onChange: (e) => setDraft({ ...draft, remitter: e.target.value }) }) }), _jsx(Field, { label: "Cliente/Destinat\u00E1rio", children: _jsx(Input, { value: draft.recipient ?? '', onChange: (e) => setDraft({ ...draft, recipient: e.target.value }) }) }), _jsx(Field, { label: "Munic\u00EDpio", children: _jsx(Input, { value: draft.recipientCity ?? '', onChange: (e) => setDraft({ ...draft, recipientCity: e.target.value }) }) }), _jsx(Field, { label: "Fornecedor/Pagador", children: _jsx(Input, { value: draft.payer ?? '', onChange: (e) => setDraft({ ...draft, payer: e.target.value }) }) })
+                                ] }), _jsxs("div", { className: "grid grid-cols-2 md:grid-cols-3 gap-3", children: [
+                                    _jsx(Field, { label: "Consignat\u00E1rio", children: _jsx(Input, { value: draft.consignee ?? '', onChange: (e) => setDraft({ ...draft, consignee: e.target.value }) }) }), _jsx(Field, { label: "Grp Pagador", children: _jsx(Input, { value: draft.payerGroup ?? '', onChange: (e) => setDraft({ ...draft, payerGroup: e.target.value }) }) }), _jsx(Field, { label: "Seguradora", children: _jsx(Input, { value: draft.insuranceCompany ?? '', onChange: (e) => setDraft({ ...draft, insuranceCompany: e.target.value }) }) })
+                                ] }), _jsxs("div", { className: "grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3", children: [
+                                    _jsx(Field, { label: "Motorista", children: _jsx(Input, { value: draft.driverName ?? '', onChange: (e) => setDraft({ ...draft, driverName: e.target.value }) }) }), _jsx(Field, { label: "Placa", children: _jsx(Input, { value: draft.vehiclePlate ?? '', onChange: (e) => setDraft({ ...draft, vehiclePlate: e.target.value }) }) }), _jsx(Field, { label: "Placa Carreta", children: _jsx(Input, { value: draft.trailerPlate ?? '', onChange: (e) => setDraft({ ...draft, trailerPlate: e.target.value }) }) }), _jsx(Field, { label: "N\u00BA Contrato", children: _jsx(Input, { value: draft.contractNumber ?? '', onChange: (e) => setDraft({ ...draft, contractNumber: e.target.value }) }) }), _jsx(Field, { label: "N\u00BA Viagem", children: _jsx(Input, { value: draft.tripNumber ?? '', onChange: (e) => setDraft({ ...draft, tripNumber: e.target.value }) }) }), _jsx(Field, { label: "Romexp", children: _jsx(Input, { value: draft.romexpNumber ?? '', onChange: (e) => setDraft({ ...draft, romexpNumber: e.target.value }) }) })
+                                ] }), _jsxs("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-4", children: [
+                                    _jsxs("div", { children: [
+                                            _jsx("p", { className: "text-[11px] uppercase tracking-wide text-muted-foreground mb-2", children: "Tipo CT-e" }), _jsx("div", { className: "flex flex-wrap gap-3", children: ALL_CTE_TYPES.map((t) => (_jsxs("label", { className: "flex items-center gap-2 text-sm cursor-pointer", children: [
+                                                        _jsx(Checkbox, { checked: (draft.cteTypes ?? []).includes(t), onCheckedChange: () => toggleType(t) }), CTE_TYPE_LABELS[t]] }, t))) })
+                                        ] }), _jsxs("div", { className: "grid grid-cols-2 md:grid-cols-3 gap-3", children: [
+                                            _jsx(TriRadio, { label: "Anulado", value: draft.voided ?? 'all', onChange: (v) => setDraft({ ...draft, voided: v }) }), _jsx(TriRadio, { label: "Encerrado", value: draft.closed ?? 'all', onChange: (v) => setDraft({ ...draft, closed: v }) }), _jsx(TriRadio, { label: "Compensado", value: draft.compensated ?? 'all', onChange: (v) => setDraft({ ...draft, compensated: v }) }), _jsx(TriRadio, { label: "Frete Aut\u00F4nomo", value: draft.autonomousFreight ?? 'all', onChange: (v) => setDraft({ ...draft, autonomousFreight: v }) }), _jsx(TriRadio, { label: "Doc. Complementar", value: draft.complementaryDoc ?? 'all', onChange: (v) => setDraft({ ...draft, complementaryDoc: v }) })
+                                        ] })
+                                ] }), _jsxs("div", { className: "flex items-center gap-2", children: [
+                                    _jsxs(Button, { onClick: () => apply(), size: "sm", children: [
+                                            _jsx(Search, { className: "h-4 w-4" }),
+                                            " Aplicar filtros"] }), _jsxs(Button, { onClick: clear, variant: "outline", size: "sm", children: [
+                                            _jsx(X, { className: "h-4 w-4" }),
+                                            " Limpar"] })
+                                ] })
+                        ] }))] }), _jsxs("div", { className: "grid grid-cols-2 md:grid-cols-4 gap-3", children: [
+                    _jsxs(Card, { className: "p-3", children: [
+                            _jsx("p", { className: "text-xs text-muted-foreground", children: "CT-e encontrados" }), _jsx("p", { className: "text-2xl font-semibold", children: totals.count })
+                        ] }), _jsxs(Card, { className: "p-3", children: [
+                            _jsx("p", { className: "text-xs text-muted-foreground", children: "Autorizados / com arquivo" }), _jsxs("p", { className: "text-2xl font-semibold", children: [totals.authorized, " / ", totals.downloadable] })
+                        ] }), _jsxs(Card, { className: "p-3", children: [
+                            _jsx("p", { className: "text-xs text-muted-foreground", children: "Total Frete" }), _jsx("p", { className: "text-2xl font-semibold", children: BRL(totals.freight) })
+                        ] }), _jsxs(Card, { className: "p-3", children: [
+                            _jsx("p", { className: "text-xs text-muted-foreground", children: "Total Carga" }), _jsx("p", { className: "text-2xl font-semibold", children: BRL(totals.cargo) })
+                        ] })
+                ] }), (checkedRows.length > 0 || bulkBusy) && (_jsxs(Card, { className: "p-3 flex flex-wrap items-center gap-3 border-primary/40", children: [
+                    _jsxs("span", { className: "text-sm font-medium", children: [checkedRows.length, " selecionado(s) \u2014 frete ", BRL(selectedTotals.freight)] }), _jsx("span", { className: "text-xs text-muted-foreground", children: bulkProgress
+                            ? `Baixando ${bulkProgress.done}/${bulkProgress.total} do Hub Fiscal...`
+                            : 'O PDF sai em arquivo único (uma nota por página); XML sai em ZIP.' }), _jsxs("div", { className: "ml-auto flex flex-wrap items-center gap-2", children: [
+                            _jsx(Button, { size: "sm", variant: "outline", onClick: toggleAll, disabled: bulkBusy, children: checked.size === downloadableRows.length ? 'Limpar seleção' : `Selecionar todos com arquivo (${downloadableRows.length})` }), _jsxs(Button, { size: "sm", onClick: () => bulkDownload('pdf'), disabled: bulkBusy, children: [
+                                    _jsx(Download, { className: "h-4 w-4" }),
+                                    " Baixar PDF \u00FAnico"] }), _jsxs(Button, { size: "sm", variant: "outline", onClick: () => bulkDownload('xml'), disabled: bulkBusy, children: [
+                                    _jsx(FileDown, { className: "h-4 w-4" }),
+                                    " Baixar XMLs (ZIP)"] })
+                        ] })
+                ] })), _jsx(Card, { className: "overflow-hidden", children: _jsx("div", { className: "overflow-x-auto", children: _jsxs(Table, { children: [
+                            _jsx(TableHeader, { className: "bg-muted/50 text-xs uppercase", children: _jsxs(TableRow, { children: [
+                                        _jsx(TableHead, { className: "px-3 py-2 w-8", children: _jsx(Checkbox, { checked: downloadableRows.length > 0 && checked.size === downloadableRows.length, onCheckedChange: toggleAll, "aria-label": "Selecionar todos" }) }), _jsx(TableHead, { sortKey: "sefaz_status", sortConfig: sortConfig, onSort: requestSort, children: "Status" }), _jsx(TableHead, { sortKey: "cte_type", sortConfig: sortConfig, onSort: requestSort, children: "Tipo" }), _jsx(TableHead, { sortKey: "cte_number", sortConfig: sortConfig, onSort: requestSort, children: "N\u00BA CT-e" }), _jsx(TableHead, { sortKey: "cte_series", sortConfig: sortConfig, onSort: requestSort, children: "S\u00E9r." }), _jsx(TableHead, { sortKey: "issued_at", sortConfig: sortConfig, onSort: requestSort, children: "Emiss\u00E3o" }), _jsx(TableHead, { sortKey: "remitter", sortConfig: sortConfig, onSort: requestSort, children: "Remetente" }), _jsx(TableHead, { sortKey: "recipient", sortConfig: sortConfig, onSort: requestSort, children: "Destinat\u00E1rio" }), _jsx(TableHead, { sortKey: "recipient_city", sortConfig: sortConfig, onSort: requestSort, children: "Cidade / UF" }), _jsx(TableHead, { sortKey: "vehicle_plate", sortConfig: sortConfig, onSort: requestSort, children: "Placa" }), _jsx(TableHead, { sortKey: "freight_value", sortConfig: sortConfig, onSort: requestSort, className: "text-right", children: "Frete" }), _jsx(TableHead, { className: "text-right", children: "A\u00E7\u00F5es" })
+                                    ] }) }), _jsxs(TableBody, { children: [isLoading && _jsx(TableRow, { children: _jsx(TableCell, { colSpan: 12, className: "text-center text-muted-foreground py-8", children: "Carregando\u2026" }) }), !isLoading && rows.length === 0 && (_jsx(TableRow, { children: _jsx(TableCell, { colSpan: 12, className: "text-center text-muted-foreground py-8", children: "Nenhum CT-e encontrado com os filtros atuais." }) })), rows.map((r) => {
+                                        const has = canDownloadCte(r);
+                                        return (_jsxs(TableRow, { className: `border-t hover:bg-muted/30 ${checked.has(r.id) ? 'bg-primary/5' : ''}`, children: [
+                                                _jsx(TableCell, { className: "px-3 py-2", children: _jsx(Checkbox, { checked: checked.has(r.id), onCheckedChange: () => toggleRow(r.id), disabled: !has, "aria-label": `Selecionar ${cteLabel(r)}` }) }), _jsx(TableCell, { className: "px-3 py-2", children: _jsxs("div", { className: "flex flex-col gap-0.5", children: [
+                                                            _jsx(StatusPill, { status: r.sefaz_status }), r.sefaz_status_reason && (_jsx("span", { className: "text-[10px] text-destructive max-w-[200px] whitespace-normal font-medium mt-1 leading-tight", title: r.sefaz_status_reason, children: r.sefaz_status_reason }))] }) }), _jsx(TableCell, { className: "px-3 py-2 text-xs", children: CTE_TYPE_LABELS[r.cte_type] ?? r.cte_type }), _jsx(TableCell, { className: "px-3 py-2 font-mono", children: r.cte_number ?? '—' }), _jsx(TableCell, { className: "px-3 py-2", children: r.cte_series ?? '—' }), _jsx(TableCell, { className: "px-3 py-2 text-xs", children: r.issued_at ? new Date(r.issued_at).toLocaleDateString('pt-BR') : '—' }), _jsx(TableCell, { className: "px-3 py-2 text-xs truncate max-w-[150px]", title: r.remitter ?? '', children: r.remitter ?? '—' }), _jsx(TableCell, { className: "px-3 py-2 text-xs truncate max-w-[150px]", title: r.recipient ?? '', children: r.recipient ?? '—' }), _jsx(TableCell, { className: "px-3 py-2 text-xs", children: [r.recipient_city, r.recipient_state].filter(Boolean).join(' / ') || '—' }), _jsx(TableCell, { className: "px-3 py-2 font-mono text-xs", children: r.vehicle_plate ?? '—' }), _jsx(TableCell, { className: "px-3 py-2 text-right text-xs", children: BRL(r.freight_value) }), _jsx(TableCell, { className: "px-3 py-2 text-right", children: _jsxs("div", { className: "inline-flex gap-1", children: [
+                                                            _jsx(Button, { size: "sm", variant: "ghost", title: "Visualizar DACTE", disabled: !has, onClick: () => oneFile(r, 'pdf', true), children: _jsx(Eye, { className: "h-4 w-4" }) }), _jsx(Button, { size: "sm", variant: "ghost", title: "Baixar PDF", disabled: !has, onClick: () => oneFile(r, 'pdf'), children: _jsx(FileText, { className: "h-4 w-4" }) }), _jsx(Button, { size: "sm", variant: "ghost", title: "Baixar XML", disabled: !has, onClick: () => oneFile(r, 'xml'), children: _jsx(FileDown, { className: "h-4 w-4" }) }), (r.sefaz_status === 'processed' || r.sefaz_status === 'processed_error' || r.sefaz_status === 'authorized' || r.sefaz_status === 'rejected') && r.hub_document_id && r.source === 'hub' && (_jsx(Button, { size: "sm", variant: "ghost", className: "text-destructive hover:text-destructive hover:bg-destructive/10", title: "Cancelar CT-e", disabled: cancelCte.isPending, onClick: () => handleCancel(r), children: _jsx(Ban, { className: "h-4 w-4" }) })), r.sefaz_status.endsWith('_error') && (_jsx(Button, { size: "sm", variant: "ghost", title: "Reenviar \u00E0 SEFAZ", disabled: resendCte.isPending, onClick: () => handleResend(r), children: _jsx(RefreshCw, { className: "h-4 w-4" }) })), (r.sefaz_status === 'error' || r.sefaz_status === 'rejected' || r.sefaz_status === 'sent_error' || r.sefaz_status === 'processed_error' || r.sefaz_status === 'sefaz_error') && (_jsx(Button, { size: "sm", variant: "ghost", className: "text-destructive hover:text-destructive hover:bg-destructive/10", title: r.hub_document_id ? "Remover rascunho (possui ID no Hub)" : "Excluir registro de erro", disabled: deleteCte.isPending, onClick: () => handleDelete(r), children: _jsx(Trash2, { className: "h-4 w-4" }) }))] }) })
+                                            ] }, r.id));
+                                    })] })
+                        ] }) }) })
+        ] }));
 }
