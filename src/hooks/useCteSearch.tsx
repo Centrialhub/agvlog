@@ -178,6 +178,8 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
         .limit(3000);
       if (outErr) throw outErr;
 
+      console.log(`[useCteSearch] Outbound records found: ${outbound?.length || 0}`);
+
       const hubByKey = new Map<string, any>();
       for (const d of outbound || []) {
         const key = (d as any).access_key;
