@@ -204,7 +204,7 @@ export function useCteMonitor(filters: CteMonitorFilters) {
         .limit(2000);
       if (outErr) throw outErr;
 
-      const hubRows: CteMonitorRow[] = (outbound || []).map((d: any) => {
+      const hubRows: CteMonitorRow[] = (outbound || []).map((d: any) => ({
         id: d.id,
         tenant_id: currentTenant.id,
         cte_number: d.invoice_number ?? null,
