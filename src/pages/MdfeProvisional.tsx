@@ -800,6 +800,89 @@ export default function MdfeProvisional() {
               )}
             </div>
 
+            {/* Proprietário do Veículo */}
+            <div className="space-y-4 rounded-lg border p-3">
+              <div className="flex items-start gap-2">
+                <Checkbox
+                  id="mdfe-include-prop"
+                  checked={includeProprietor}
+                  onCheckedChange={v => setIncludeProprietor(Boolean(v))}
+                />
+                <div>
+                  <Label htmlFor="mdfe-include-prop" className="cursor-pointer">
+                    Informar Proprietário do Veículo (Se não for o emitente)
+                  </Label>
+                  <p className="text-[10px] text-muted-foreground">
+                    Obrigatório quando o veículo não pertence ao emitente.
+                  </p>
+                </div>
+              </div>
+
+              {includeProprietor && (
+                <div className="grid grid-cols-2 gap-3 pt-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Razão Social / Nome</Label>
+                    <Input
+                      value={propName}
+                      onChange={e => setPropName(e.target.value)}
+                      placeholder="Nome do proprietário"
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">CPF/CNPJ</Label>
+                    <Input
+                      value={propDoc}
+                      onChange={e => setPropDoc(e.target.value)}
+                      placeholder="Apenas números"
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">IE</Label>
+                    <Input
+                      value={propIe}
+                      onChange={e => setPropIe(e.target.value)}
+                      placeholder="ISENTO"
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">UF</Label>
+                    <Input
+                      value={propState}
+                      onChange={e => setPropState(e.target.value.toUpperCase())}
+                      placeholder="MG"
+                      maxLength={2}
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">RNTRC</Label>
+                    <Input
+                      value={propRntrc}
+                      onChange={e => setPropRntrc(e.target.value)}
+                      placeholder="Número RNTRC"
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Tipo</Label>
+                    <Select value={propType} onValueChange={(v: any) => setPropType(v)}>
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="0">0 - TAC Agregado</SelectItem>
+                        <SelectItem value="1">1 - TAC Independente</SelectItem>
+                        <SelectItem value="2">2 - Outros</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="space-y-4 rounded-lg border p-3">
               <div className="flex items-start gap-2">
                 <Checkbox
