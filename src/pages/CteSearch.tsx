@@ -521,49 +521,49 @@ export default function CteSearch() {
 
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50 text-xs uppercase">
-              <tr>
-                <th className="px-3 py-2 w-8">
+          <Table>
+            <TableHeader className="bg-muted/50 text-xs uppercase">
+              <TableRow>
+                <TableHead className="px-3 py-2 w-8">
                   <Checkbox
                     checked={downloadableRows.length > 0 && checked.size === downloadableRows.length}
                     onCheckedChange={toggleAll}
                     aria-label="Selecionar todos"
                   />
-                </th>
-                <th className="text-left px-3 py-2">Status</th>
-                <th className="text-left px-3 py-2">Tipo</th>
-                <th className="text-left px-3 py-2">Nº CT-e</th>
-                <th className="text-left px-3 py-2">Sér.</th>
-                <th className="text-left px-3 py-2">Emissão</th>
-                <th className="text-left px-3 py-2">Remetente</th>
-                <th className="text-left px-3 py-2">Destinatário</th>
-                <th className="text-left px-3 py-2">Cidade / UF</th>
-                <th className="text-left px-3 py-2">Placa</th>
-                <th className="text-right px-3 py-2">Frete</th>
-                <th className="text-right px-3 py-2">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {isLoading && <tr><td colSpan={12} className="text-center text-muted-foreground py-8">Carregando…</td></tr>}
+                </TableHead>
+                <TableHead sortKey="sefaz_status" sortConfig={sortConfig} onSort={requestSort}>Status</TableHead>
+                <TableHead sortKey="cte_type" sortConfig={sortConfig} onSort={requestSort}>Tipo</TableHead>
+                <TableHead sortKey="cte_number" sortConfig={sortConfig} onSort={requestSort}>Nº CT-e</TableHead>
+                <TableHead sortKey="cte_series" sortConfig={sortConfig} onSort={requestSort}>Sér.</TableHead>
+                <TableHead sortKey="issued_at" sortConfig={sortConfig} onSort={requestSort}>Emissão</TableHead>
+                <TableHead sortKey="remitter" sortConfig={sortConfig} onSort={requestSort}>Remetente</TableHead>
+                <TableHead sortKey="recipient" sortConfig={sortConfig} onSort={requestSort}>Destinatário</TableHead>
+                <TableHead sortKey="recipient_city" sortConfig={sortConfig} onSort={requestSort}>Cidade / UF</TableHead>
+                <TableHead sortKey="vehicle_plate" sortConfig={sortConfig} onSort={requestSort}>Placa</TableHead>
+                <TableHead sortKey="freight_value" sortConfig={sortConfig} onSort={requestSort} className="text-right">Frete</TableHead>
+                <TableHead className="text-right">Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading && <TableRow><TableCell colSpan={12} className="text-center text-muted-foreground py-8">Carregando…</TableCell></TableRow>}
               {!isLoading && rows.length === 0 && (
-                <tr><td colSpan={12} className="text-center text-muted-foreground py-8">
+                <TableRow><TableCell colSpan={12} className="text-center text-muted-foreground py-8">
                   Nenhum CT-e encontrado com os filtros atuais.
-                </td></tr>
+                </TableCell></TableRow>
               )}
               {rows.map((r) => {
                 const has = canDownloadCte(r);
                 return (
-                  <tr key={r.id} className={`border-t hover:bg-muted/30 ${checked.has(r.id) ? 'bg-primary/5' : ''}`}>
-                    <td className="px-3 py-2">
+                  <TableRow key={r.id} className={`border-t hover:bg-muted/30 ${checked.has(r.id) ? 'bg-primary/5' : ''}`}>
+                    <TableCell className="px-3 py-2">
                       <Checkbox
                         checked={checked.has(r.id)}
                         onCheckedChange={() => toggleRow(r.id)}
                         disabled={!has}
                         aria-label={`Selecionar ${cteLabel(r)}`}
                       />
-                    </td>
-                    <td className="px-3 py-2">
+                    </TableCell>
+                    <TableCell className="px-3 py-2">
                       <div className="flex flex-col gap-0.5">
                         <StatusPill status={r.sefaz_status} />
                         {r.sefaz_status_reason && (
@@ -572,17 +572,17 @@ export default function CteSearch() {
                           </span>
                         )}
                       </div>
-                    </td>
-                    <td className="px-3 py-2 text-xs">{CTE_TYPE_LABELS[r.cte_type as CteType] ?? r.cte_type}</td>
-                    <td className="px-3 py-2 font-mono">{r.cte_number ?? '—'}</td>
-                    <td className="px-3 py-2">{r.cte_series ?? '—'}</td>
-                    <td className="px-3 py-2 text-xs">{r.issued_at ? new Date(r.issued_at).toLocaleDateString('pt-BR') : '—'}</td>
-                    <td className="px-3 py-2">{r.remitter ?? '—'}</td>
-                    <td className="px-3 py-2">{r.recipient ?? '—'}</td>
-                    <td className="px-3 py-2 text-xs">{[r.recipient_city, r.recipient_state].filter(Boolean).join(' / ') || '—'}</td>
-                    <td className="px-3 py-2 font-mono">{r.vehicle_plate ?? '—'}</td>
-                    <td className="px-3 py-2 text-right">{BRL(r.freight_value)}</td>
-                    <td className="px-3 py-2 text-right">
+                    </TableCell>
+                    <TableCell className="px-3 py-2 text-xs">{CTE_TYPE_LABELS[r.cte_type as CteType] ?? r.cte_type}</TableCell>
+                    <TableCell className="px-3 py-2 font-mono">{r.cte_number ?? '—'}</TableCell>
+                    <TableCell className="px-3 py-2">{r.cte_series ?? '—'}</TableCell>
+                    <TableCell className="px-3 py-2 text-xs">{r.issued_at ? new Date(r.issued_at).toLocaleDateString('pt-BR') : '—'}</TableCell>
+                    <TableCell className="px-3 py-2 text-xs truncate max-w-[150px]" title={r.remitter ?? ''}>{r.remitter ?? '—'}</TableCell>
+                    <TableCell className="px-3 py-2 text-xs truncate max-w-[150px]" title={r.recipient ?? ''}>{r.recipient ?? '—'}</TableCell>
+                    <TableCell className="px-3 py-2 text-xs">{[r.recipient_city, r.recipient_state].filter(Boolean).join(' / ') || '—'}</TableCell>
+                    <TableCell className="px-3 py-2 font-mono text-xs">{r.vehicle_plate ?? '—'}</TableCell>
+                    <TableCell className="px-3 py-2 text-right text-xs">{BRL(r.freight_value)}</TableCell>
+                    <TableCell className="px-3 py-2 text-right">
                       <div className="inline-flex gap-1">
                         <Button size="sm" variant="ghost" title="Visualizar DACTE" disabled={!has} onClick={() => oneFile(r, 'pdf', true)}>
                           <Eye className="h-4 w-4" />
@@ -629,12 +629,12 @@ export default function CteSearch() {
                           </Button>
                         )}
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 );
               })}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       </Card>
     </div>
