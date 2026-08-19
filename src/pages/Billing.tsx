@@ -377,12 +377,6 @@ export default function Billing() {
     !needle || (haystack || '').toLowerCase().includes(needle.toLowerCase());
 
 
-  // Filtra documentos. Filtros de alta seletividade (cliente, período, NF, chave, remitente,
-  // referência) já foram aplicados server-side pelo useBillingDocuments. Aqui só restam
-  // filtros que dependem de tabelas relacionadas (loads/vehicles).
-  // Filtra documentos. Filtros de alta seletividade (cliente, período, NF, chave, remitente,
-  // referência) já foram aplicados server-side pelo useBillingDocuments.
-  // Movido para o useSortableData acima.
 
   // Cidades de destino disponíveis nas notas elegíveis (chave normalizada -> rótulo exibido)
   const recipientCityOptions = useMemo(() => {
