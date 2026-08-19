@@ -162,7 +162,7 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
 
       // As CT-e realmente transmitidas ficam em `fiscal_documents` (saída) e são
       // as únicas com id no Hub Fiscal — sem esse merge a consulta não permitia baixar arquivos.
-      const { data: outbound, error: outErr } = await supabase
+      const { data: outboundData, error: outErr } = await supabase
         .from('fiscal_documents')
         .select(
           'id, invoice_number, invoice_numbers, access_key, sefaz_status, sefaz_message, status, remitter, recipient, recipient_city, recipient_state, freight_value, value, issue_date, created_at, hub_document_id, emission_id, cte_payload',
@@ -173,6 +173,8 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
         .eq('document_type', 'outbound');
       
       if (outErr) throw outErr;
+      const outbound = outboundData as any[];
+
 
 
       const hubByKey = new Map<string, any>();
