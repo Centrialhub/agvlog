@@ -454,45 +454,45 @@ export default function CteMonitor() {
               </TableHeader>
               <TableBody>
                 {isLoading && (
-                  <tr><td colSpan={12} className="text-center text-muted-foreground py-8">Carregando…</td></tr>
+                  <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-8">Carregando…</TableCell></TableRow>
                 )}
                 {!isLoading && rows.length === 0 && (
-                  <tr><td colSpan={12} className="text-center text-muted-foreground py-8">Nenhum CT-e encontrado com os filtros atuais.</td></tr>
+                  <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-8">Nenhum CT-e encontrado com os filtros atuais.</TableCell></TableRow>
                 )}
                 {rows.map((r) => (
-                  <tr
+                  <TableRow
                     key={r.id}
                     className="border-t hover:bg-muted/30 cursor-pointer"
                     onClick={() => setSelected(r)}
                   >
-                    <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                    <TableCell className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
                       <Checkbox
                         checked={checked.has(r.id)}
                         onCheckedChange={() => toggleRow(r.id)}
                         disabled={!r.hub_document_id && !r.pdf_url && !r.xml_url}
                         aria-label="Selecionar CT-e"
                       />
-                    </td>
-                    <td className="px-3 py-2"><StatusPill status={r.sefaz_status} /></td>
-                    <td className="px-3 py-2 font-mono">{r.cte_number ?? '—'}</td>
-                    <td className="px-3 py-2">{r.cte_series ?? '—'}</td>
-                    <td className="px-3 py-2">{r.payer_name ?? r.recipient ?? '—'}</td>
-                    <td className="px-3 py-2 text-xs truncate max-w-[200px]" title={`${r.recipient_city} / ${r.recipient_state}`}>
+                    </TableCell>
+                    <TableCell className="px-3 py-2"><StatusPill status={r.sefaz_status} /></TableCell>
+                    <TableCell className="px-3 py-2 font-mono">{r.cte_number ?? '—'}</TableCell>
+                    <TableCell className="px-3 py-2">{r.cte_series ?? '—'}</TableCell>
+                    <TableCell className="px-3 py-2">{r.payer_name ?? r.recipient ?? '—'}</TableCell>
+                    <TableCell className="px-3 py-2 text-xs truncate max-w-[200px]" title={`${r.recipient_city} / ${r.recipient_state}`}>
                       {r.recipient_city ?? '—'} / {r.recipient_state ?? '—'}
-                    </td>
-                    <td className="px-3 py-2 font-mono">{r.vehicle_plate ?? '—'}</td>
-                    <td className="px-3 py-2 font-mono text-xs">{r.protocol_number ?? '—'}</td>
-                    <td className="px-3 py-2 text-xs">
+                    </TableCell>
+                    <TableCell className="px-3 py-2 font-mono">{r.vehicle_plate ?? '—'}</TableCell>
+                    <TableCell className="px-3 py-2 font-mono text-xs">{r.protocol_number ?? '—'}</TableCell>
+                    <TableCell className="px-3 py-2 text-xs">
                       {r.issued_at ? new Date(r.issued_at).toLocaleDateString('pt-BR') : '—'}
-                    </td>
-                    <td className="px-3 py-2 text-xs max-w-xs truncate" title={r.sefaz_status_reason ?? ''}>
+                    </TableCell>
+                    <TableCell className="px-3 py-2 text-xs max-w-xs truncate" title={r.sefaz_status_reason ?? ''}>
                       {r.sefaz_status_reason ? (
                         <span className="inline-flex items-center gap-1 text-destructive">
                           <AlertCircle className="h-3 w-3" /> {r.sefaz_status_reason}
                         </span>
                       ) : '—'}
-                    </td>
-                    <td className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
+                    </TableCell>
+                    <TableCell className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="inline-flex gap-1">
                         <Button size="sm" variant="ghost" title="Visualizar DACTE (PDF)" onClick={() => downloadHubFile(r, 'pdf', { view: true })}>
                           <Eye className="h-4 w-4" />
@@ -512,11 +512,11 @@ export default function CteMonitor() {
                           </Button>
                         )}
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         </Card>
 
