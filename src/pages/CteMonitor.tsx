@@ -457,7 +457,7 @@ export default function CteMonitor() {
                   <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-8">Carregando…</TableCell></TableRow>
                 )}
                 {!isLoading && rows.length === 0 && (
-                  <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-8">Nenhum CT-e encontrado com os filtros atuais.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-8">ainda não consta nenhum cte</TableCell></TableRow>
                 )}
                 {rows.map((r) => (
                   <TableRow

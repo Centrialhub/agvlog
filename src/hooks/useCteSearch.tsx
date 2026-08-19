@@ -171,11 +171,9 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
         )
         .eq('tenant_id', currentTenant.id)
         .is('deleted_at', null)
-        // CT-e marcados como duplicados ficam fora da consulta e do lote
         .eq('is_duplicate', false)
-        .eq('document_type', 'outbound')
-        .order('created_at', { ascending: false })
-        .limit(3000);
+        .eq('document_type', 'outbound');
+      
       if (outErr) throw outErr;
 
 
