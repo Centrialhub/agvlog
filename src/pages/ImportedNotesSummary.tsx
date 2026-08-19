@@ -23,6 +23,7 @@ import { downloadImportedNotesSummaryPdf, type SummaryReportType } from '@/lib/i
 import { downloadImportedNotesXlsx } from '@/lib/importedNotesXlsx';
 import { useCompanyProfile } from '@/hooks/useCompanyProfile';
 import { supabase } from '@/integrations/supabase/client';
+import { useSortableData } from '@/hooks/useSortableData';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -60,7 +61,8 @@ export default function ImportedNotesSummary() {
   const { data: clients = [] } = useClients();
   const [filters, setFilters] = useState<ImportedNoteFilters>(emptyFilters);
   const [applied, setApplied] = useState<ImportedNoteFilters>(emptyFilters);
-  const { data: rows = [], isLoading, refetch } = useImportedNotes(applied);
+  const { data: rowsData = [], isLoading, refetch } = useImportedNotes(applied);
+  const { sortedItems: rows, requestSort, sortConfig } = useSortableData(rowsData);
 
   const [printDlgOpen, setPrintDlgOpen] = useState(false);
   const [reportType, setReportType] = useState<SummaryReportType>('destination_summary');
@@ -354,22 +356,22 @@ export default function ImportedNotesSummary() {
                     onCheckedChange={toggleAll}
                   />
                 </TableHead>
-                <TableHead>Nº Nota</TableHead>
-                <TableHead>Lote Imp.</TableHead>
-                <TableHead>Remetente</TableHead>
-                <TableHead>Destinatário</TableHead>
-                <TableHead>Nº CT-e</TableHead>
-                <TableHead>Nº NFS-e</TableHead>
-                <TableHead>Emissão</TableHead>
-                <TableHead>Origem</TableHead>
-                <TableHead>Destino</TableHead>
-                <TableHead className="text-right">Valor NF</TableHead>
-                <TableHead className="text-right">Peso</TableHead>
-                <TableHead className="text-right">Volume</TableHead>
-                <TableHead className="text-right">CIF</TableHead>
-                <TableHead className="text-right">FOB</TableHead>
-                <TableHead>Situação</TableHead>
-                <TableHead>Carga</TableHead>
+                <TableHead sortKey="invoice_number" sortConfig={sortConfig} onSort={requestSort}>Nº Nota</TableHead>
+                <TableHead sortKey="control_lot" sortConfig={sortConfig} onSort={requestSort}>Lote Imp.</TableHead>
+                <TableHead sortKey="remitter" sortConfig={sortConfig} onSort={requestSort}>Remetente</TableHead>
+                <TableHead sortKey="recipient" sortConfig={sortConfig} onSort={requestSort}>Destinatário</TableHead>
+                <TableHead sortKey="cte_number" sortConfig={sortConfig} onSort={requestSort}>Nº CT-e</TableHead>
+                <TableHead sortKey="nfse_number" sortConfig={sortConfig} onSort={requestSort}>Nº NFS-e</TableHead>
+                <TableHead sortKey="issue_date" sortConfig={sortConfig} onSort={requestSort}>Emissão</TableHead>
+                <TableHead sortKey="origin_city" sortConfig={sortConfig} onSort={requestSort}>Origem</TableHead>
+                <TableHead sortKey="recipient_city" sortConfig={sortConfig} onSort={requestSort}>Destino</TableHead>
+                <TableHead className="text-right" sortKey="value" sortConfig={sortConfig} onSort={requestSort}>Valor NF</TableHead>
+                <TableHead className="text-right" sortKey="weight_kg" sortConfig={sortConfig} onSort={requestSort}>Peso</TableHead>
+                <TableHead className="text-right" sortKey="volume_count" sortConfig={sortConfig} onSort={requestSort}>Volume</TableHead>
+                <TableHead className="text-right" sortKey="freight_cif_value" sortConfig={sortConfig} onSort={requestSort}>CIF</TableHead>
+                <TableHead className="text-right" sortKey="freight_fob_value" sortConfig={sortConfig} onSort={requestSort}>FOB</TableHead>
+                <TableHead sortKey="operational_status" sortConfig={sortConfig} onSort={requestSort}>Situação</TableHead>
+                <TableHead sortKey="loads.load_number" sortConfig={sortConfig} onSort={requestSort}>Carga</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

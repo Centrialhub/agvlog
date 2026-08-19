@@ -41,18 +41,40 @@ const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTML
 );
 TableRow.displayName = "TableRow";
 
-const TableHead = React.forwardRef<HTMLTableCellElement, React.ThHTMLAttributes<HTMLTableCellElement>>(
-  ({ className, ...props }, ref) => (
+const TableHead = React.forwardRef<
+  HTMLTableCellElement,
+  React.ThHTMLAttributes<HTMLTableCellElement> & {
+    sortConfig?: { key: string; direction: 'asc' | 'desc' | null } | null;
+    sortKey?: string;
+    onSort?: (key: string) => void;
+  }
+>(({ className, sortConfig, sortKey, onSort, children, ...props }, ref) => {
+  const isSorted = sortConfig && sortKey && sortConfig.key === sortKey;
+  const direction = isSorted ? sortConfig.direction : null;
+
+  return (
     <th
       ref={ref}
       className={cn(
         "h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0",
-        className,
+        onSort && sortKey && "cursor-pointer select-none hover:text-foreground transition-colors",
+        className
       )}
+      onClick={() => onSort && sortKey && onSort(sortKey)}
       {...props}
-    />
-  ),
-);
+    >
+      <div className="flex items-center gap-1">
+        {children}
+        {onSort && sortKey && (
+          <div className="flex flex-col opacity-40 group-hover:opacity-100">
+            <span className={cn("text-[8px] leading-[4px]", direction === 'asc' && "text-primary opacity-100 font-bold")}>▲</span>
+            <span className={cn("text-[8px] leading-[4px]", direction === 'desc' && "text-primary opacity-100 font-bold")}>▼</span>
+          </div>
+        )}
+      </div>
+    </th>
+  );
+});
 TableHead.displayName = "TableHead";
 
 const TableCell = React.forwardRef<HTMLTableCellElement, React.TdHTMLAttributes<HTMLTableCellElement>>(

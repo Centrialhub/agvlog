@@ -22,6 +22,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Progress } from '@/components/ui/progress';
 import { analyzeObservations, type AnalyzerResult } from '@/lib/observationPatternAnalyzer';
 import { CLIENT_LOAD_OBSERVATION_RULES } from '@/lib/documentParsers';
+import { useSortableData } from '@/hooks/useSortableData';
 
 type SiatStatus = 'pending' | 'in_transit' | 'delivered';
 
@@ -348,6 +349,8 @@ export default function Traceability() {
       return true;
     });
   }, [filters, rows]);
+
+  const { sortedItems: sortedFilteredRows, requestSort, sortConfig } = useSortableData(filteredRows);
 
   const counts = useMemo(() => ({
     total: filteredRows.length,
@@ -935,13 +938,33 @@ export default function Traceability() {
             <table className="min-w-max w-full caption-bottom text-sm">
               <TableHeader className="sticky top-0 z-10 bg-background shadow-[0_1px_0_0_hsl(var(--border))]">
                   <TableRow>
-                    <TableHead className="w-10"></TableHead><TableHead>Palete</TableHead><TableHead title="Comprovante de entrega (POD)">POD</TableHead><TableHead title="Canhoto recebido — clique para ver histórico">Canhoto</TableHead><TableHead>Situação</TableHead><TableHead>Nº NF</TableHead><TableHead title="Data/hora em que a NF foi importada — base do prazo de romaneio">Importada em</TableHead><TableHead>Nº Carga (empresa)</TableHead><TableHead>Carga Cliente (NF-e)</TableHead><TableHead>Ref. Pedido</TableHead><TableHead>Forma pgto</TableHead><TableHead>Valor Nota</TableHead><TableHead>Valor Frete</TableHead><TableHead>Cliente</TableHead><TableHead>Fornecedor</TableHead><TableHead>Placa</TableHead><TableHead>Motorista</TableHead><TableHead title="Data/hora da entrega (última parada concluída)">Entrega</TableHead><TableHead title={`Lead-time da importação até a entrega. Vermelho se > ${slaThresholdH}h.`}>SLA Entrega</TableHead><TableHead>Ocorrência</TableHead><TableHead></TableHead>
+                    <TableHead className="w-10"></TableHead>
+                    <TableHead sortKey="doc.pallet_count" sortConfig={sortConfig} onSort={requestSort}>Palete</TableHead>
+                    <TableHead title="Comprovante de entrega (POD)">POD</TableHead>
+                    <TableHead title="Canhoto recebido — clique para ver histórico">Canhoto</TableHead>
+                    <TableHead sortKey="siatStatus" sortConfig={sortConfig} onSort={requestSort}>Situação</TableHead>
+                    <TableHead sortKey="doc.invoice_number" sortConfig={sortConfig} onSort={requestSort}>Nº NF</TableHead>
+                    <TableHead title="Data/hora em que a NF foi importada — base do prazo de romaneio" sortKey="doc.created_at" sortConfig={sortConfig} onSort={requestSort}>Importada em</TableHead>
+                    <TableHead sortKey="doc.loads.load_number" sortConfig={sortConfig} onSort={requestSort}>Nº Carga (empresa)</TableHead>
+                    <TableHead sortKey="doc.client_load_number" sortConfig={sortConfig} onSort={requestSort}>Carga Cliente (NF-e)</TableHead>
+                    <TableHead sortKey="doc.orders.order_number" sortConfig={sortConfig} onSort={requestSort}>Ref. Pedido</TableHead>
+                    <TableHead>Forma pgto</TableHead>
+                    <TableHead sortKey="doc.value" sortConfig={sortConfig} onSort={requestSort}>Valor Nota</TableHead>
+                    <TableHead sortKey="doc.freight_value" sortConfig={sortConfig} onSort={requestSort}>Valor Frete</TableHead>
+                    <TableHead sortKey="doc.recipient" sortConfig={sortConfig} onSort={requestSort}>Cliente</TableHead>
+                    <TableHead sortKey="doc.remitter" sortConfig={sortConfig} onSort={requestSort}>Fornecedor</TableHead>
+                    <TableHead sortKey="doc.loads.vehicles.plate" sortConfig={sortConfig} onSort={requestSort}>Placa</TableHead>
+                    <TableHead sortKey="doc.loads.drivers.name" sortConfig={sortConfig} onSort={requestSort}>Motorista</TableHead>
+                    <TableHead title="Data/hora da entrega (última parada concluída)">Entrega</TableHead>
+                    <TableHead title={`Lead-time da importação até a entrega. Vermelho se > ${slaThresholdH}h.`}>SLA Entrega</TableHead>
+                    <TableHead>Ocorrência</TableHead>
+                    <TableHead></TableHead>
                   </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? <TableRow><TableCell colSpan={22} className="py-10 text-center text-muted-foreground">Carregando rastreabilidade...</TableCell></TableRow>
-                : filteredRows.length === 0 ? <TableRow><TableCell colSpan={22} className="py-10 text-center text-muted-foreground">Nenhum registro encontrado</TableCell></TableRow>
-                : filteredRows.map(row => {
+                : sortedFilteredRows.length === 0 ? <TableRow><TableCell colSpan={22} className="py-10 text-center text-muted-foreground">Nenhum registro encontrado</TableCell></TableRow>
+                : sortedFilteredRows.map(row => {
                   const lastStop = row.stops.at(-1);
                   const extr = extractionStatus(row.doc);
                   const delivered = row.siatStatus === 'delivered';

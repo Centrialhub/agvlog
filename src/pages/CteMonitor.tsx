@@ -20,6 +20,8 @@ import { useCancelCTe } from '@/hooks/useIssueCTe';
 import { PendingInvoicesBanner } from '@/components/billing/PendingInvoicesBanner';
 import { hubFiscal } from '@/lib/fiscal/hubFiscalClient';
 import { runBulkDownload, summarizeBulkResult } from '@/lib/fiscal/bulkFileMerge';
+import { useSortableData } from '@/hooks/useSortableData';
+import { Table, TableHead, TableHeader, TableRow, TableBody, TableCell } from '@/components/ui/table';
 
 function saveBlob(blob: Blob, filename: string) {
   const objectUrl = URL.createObjectURL(blob);
@@ -156,8 +158,10 @@ export default function CteMonitor() {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
 
-  const { data: rows = [], isLoading, refetch, isFetching } = useCteMonitor(filters);
+  const { data: rowsData = [], isLoading, refetch, isFetching } = useCteMonitor(filters);
   const resend = useResendCte();
+
+  const { sortedItems: rows, requestSort, sortConfig } = useSortableData(rowsData);
 
   const downloadableRows = useMemo(() => rows.filter((r) => r.hub_document_id || r.pdf_url || r.xml_url), [rows]);
   const checkedRows = useMemo(() => rows.filter((r) => checked.has(r.id)), [rows, checked]);
@@ -426,69 +430,69 @@ export default function CteMonitor() {
             </div>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 text-xs uppercase">
-                <tr>
-                  <th className="px-3 py-2 w-8">
+            <Table>
+              <TableHeader className="bg-muted/50 text-xs uppercase">
+                <TableRow>
+                  <TableHead className="px-3 py-2 w-8">
                     <Checkbox
                       checked={downloadableRows.length > 0 && checked.size === downloadableRows.length}
                       onCheckedChange={toggleAll}
                       aria-label="Selecionar todos"
                     />
-                  </th>
-                  <th className="text-left px-3 py-2">Status</th>
-                  <th className="text-left px-3 py-2">Nº CT-e</th>
-                  <th className="text-left px-3 py-2">Série</th>
-                  <th className="text-left px-3 py-2">Pagador</th>
-                  <th className="text-left px-3 py-2">Cidade / UF</th>
-                  <th className="text-left px-3 py-2">Placa</th>
-                  <th className="text-left px-3 py-2">Protocolo</th>
-                  <th className="text-left px-3 py-2">Emissão</th>
-                  <th className="text-left px-3 py-2">Motivo / Erro</th>
-                  <th className="text-right px-3 py-2">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
+                  </TableHead>
+                  <TableHead className="px-3 py-2" sortKey="sefaz_status" sortConfig={sortConfig} onSort={requestSort}>Status</TableHead>
+                  <TableHead className="px-3 py-2" sortKey="cte_number" sortConfig={sortConfig} onSort={requestSort}>Nº CT-e</TableHead>
+                  <TableHead className="px-3 py-2" sortKey="cte_series" sortConfig={sortConfig} onSort={requestSort}>Série</TableHead>
+                  <TableHead className="px-3 py-2" sortKey="payer_name" sortConfig={sortConfig} onSort={requestSort}>Pagador</TableHead>
+                  <TableHead className="px-3 py-2" sortKey="recipient_city" sortConfig={sortConfig} onSort={requestSort}>Cidade / UF</TableHead>
+                  <TableHead className="px-3 py-2" sortKey="vehicle_plate" sortConfig={sortConfig} onSort={requestSort}>Placa</TableHead>
+                  <TableHead className="px-3 py-2" sortKey="protocol_number" sortConfig={sortConfig} onSort={requestSort}>Protocolo</TableHead>
+                  <TableHead className="px-3 py-2" sortKey="issued_at" sortConfig={sortConfig} onSort={requestSort}>Emissão</TableHead>
+                  <TableHead className="px-3 py-2" sortKey="sefaz_status_reason" sortConfig={sortConfig} onSort={requestSort}>Motivo / Erro</TableHead>
+                  <TableHead className="text-right px-3 py-2">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {isLoading && (
-                  <tr><td colSpan={12} className="text-center text-muted-foreground py-8">Carregando…</td></tr>
+                  <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-8">Carregando…</TableCell></TableRow>
                 )}
                 {!isLoading && rows.length === 0 && (
-                  <tr><td colSpan={12} className="text-center text-muted-foreground py-8">Nenhum CT-e encontrado com os filtros atuais.</td></tr>
+                  <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-8">Nenhum CT-e encontrado com os filtros atuais.</TableCell></TableRow>
                 )}
                 {rows.map((r) => (
-                  <tr
+                  <TableRow
                     key={r.id}
                     className="border-t hover:bg-muted/30 cursor-pointer"
                     onClick={() => setSelected(r)}
                   >
-                    <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                    <TableCell className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
                       <Checkbox
                         checked={checked.has(r.id)}
                         onCheckedChange={() => toggleRow(r.id)}
                         disabled={!r.hub_document_id && !r.pdf_url && !r.xml_url}
                         aria-label="Selecionar CT-e"
                       />
-                    </td>
-                    <td className="px-3 py-2"><StatusPill status={r.sefaz_status} /></td>
-                    <td className="px-3 py-2 font-mono">{r.cte_number ?? '—'}</td>
-                    <td className="px-3 py-2">{r.cte_series ?? '—'}</td>
-                    <td className="px-3 py-2">{r.payer_name ?? r.recipient ?? '—'}</td>
-                    <td className="px-3 py-2 text-xs truncate max-w-[200px]" title={`${r.recipient_city} / ${r.recipient_state}`}>
+                    </TableCell>
+                    <TableCell className="px-3 py-2"><StatusPill status={r.sefaz_status} /></TableCell>
+                    <TableCell className="px-3 py-2 font-mono">{r.cte_number ?? '—'}</TableCell>
+                    <TableCell className="px-3 py-2">{r.cte_series ?? '—'}</TableCell>
+                    <TableCell className="px-3 py-2">{r.payer_name ?? r.recipient ?? '—'}</TableCell>
+                    <TableCell className="px-3 py-2 text-xs truncate max-w-[200px]" title={`${r.recipient_city} / ${r.recipient_state}`}>
                       {r.recipient_city ?? '—'} / {r.recipient_state ?? '—'}
-                    </td>
-                    <td className="px-3 py-2 font-mono">{r.vehicle_plate ?? '—'}</td>
-                    <td className="px-3 py-2 font-mono text-xs">{r.protocol_number ?? '—'}</td>
-                    <td className="px-3 py-2 text-xs">
+                    </TableCell>
+                    <TableCell className="px-3 py-2 font-mono">{r.vehicle_plate ?? '—'}</TableCell>
+                    <TableCell className="px-3 py-2 font-mono text-xs">{r.protocol_number ?? '—'}</TableCell>
+                    <TableCell className="px-3 py-2 text-xs">
                       {r.issued_at ? new Date(r.issued_at).toLocaleDateString('pt-BR') : '—'}
-                    </td>
-                    <td className="px-3 py-2 text-xs max-w-xs truncate" title={r.sefaz_status_reason ?? ''}>
+                    </TableCell>
+                    <TableCell className="px-3 py-2 text-xs max-w-xs truncate" title={r.sefaz_status_reason ?? ''}>
                       {r.sefaz_status_reason ? (
                         <span className="inline-flex items-center gap-1 text-destructive">
                           <AlertCircle className="h-3 w-3" /> {r.sefaz_status_reason}
                         </span>
                       ) : '—'}
-                    </td>
-                    <td className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
+                    </TableCell>
+                    <TableCell className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="inline-flex gap-1">
                         <Button size="sm" variant="ghost" title="Visualizar DACTE (PDF)" onClick={() => downloadHubFile(r, 'pdf', { view: true })}>
                           <Eye className="h-4 w-4" />
@@ -508,11 +512,11 @@ export default function CteMonitor() {
                           </Button>
                         )}
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         </Card>
 
