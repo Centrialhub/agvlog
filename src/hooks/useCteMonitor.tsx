@@ -186,12 +186,13 @@ export function useCteMonitor(filters: CteMonitorFilters) {
       const { data: outbound, error: outErr } = await supabase
         .from('fiscal_documents')
         .select(
-          'id, invoice_number, access_key, sefaz_protocol, sefaz_status, sefaz_status_code, sefaz_message, status, remitter, recipient, recipient_city, recipient_state, freight_value, value, issue_date, created_at, hub_document_id, emission_id, cte_payload',
+          'id, invoice_number, invoice_numbers, access_key, sefaz_protocol, sefaz_status, sefaz_status_code, sefaz_message, status, remitter, recipient, recipient_city, recipient_state, freight_value, value, issue_date, created_at, hub_document_id, emission_id, cte_payload',
         )
         .eq('tenant_id', currentTenant.id)
         .is('deleted_at', null)
         .eq('is_duplicate', false)
         .eq('document_type', 'outbound');
+
       
       if (outErr) throw outErr;
 
@@ -260,7 +261,11 @@ export function useCteMonitor(filters: CteMonitorFilters) {
 
       const filteredHub = hubRows.filter((r) => {
         if (filters.statuses?.length && !filters.statuses.includes(r.sefaz_status)) return false;
-        if (docNumber && !(r.cte_number || '').toLowerCase().includes(docNumber.toLowerCase())) return false;
+        if (docNumber && !(r.cte_number || '').toLowerCase().includes(docNumber.toLowerCase())) {
+          // Também tenta buscar por NF nas autorizadas
+          if (!(r.invoice_numbers || '').toLowerCase().includes(docNumber.toLowerCase())) return false;
+        }
+
         if (key && !(r.access_key || '').includes(key)) return false;
         if (payer && !(r.payer_name || '').toLowerCase().includes(payer.toLowerCase())) return false;
         if (filters.plate && !(r.vehicle_plate || '').toLowerCase().includes(filters.plate.replace(/\W/g, '').toLowerCase())) return false;
