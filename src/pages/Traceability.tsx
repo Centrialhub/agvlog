@@ -22,6 +22,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Progress } from '@/components/ui/progress';
 import { analyzeObservations, type AnalyzerResult } from '@/lib/observationPatternAnalyzer';
 import { CLIENT_LOAD_OBSERVATION_RULES } from '@/lib/documentParsers';
+import { useSortableData } from '@/hooks/useSortableData';
 
 type SiatStatus = 'pending' | 'in_transit' | 'delivered';
 
