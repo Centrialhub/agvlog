@@ -70,6 +70,13 @@ export default function MdfeProvisional() {
   const [payAgency, setPayAgency] = useState('');
   const [payAccount, setPayAccount] = useState('');
   const [payIpefCnpj, setPayIpefCnpj] = useState('');
+  const [includeProprietor, setIncludeProprietor] = useState(false);
+  const [propName, setPropName] = useState('');
+  const [propDoc, setPropDoc] = useState('');
+  const [propIe, setPropIe] = useState('');
+  const [propState, setPropState] = useState('');
+  const [propRntrc, setPropRntrc] = useState('');
+  const [propType, setPropType] = useState<'0' | '1' | '2'>('2');
   const [payInstallments, setPayInstallments] = useState<Array<{ dueDate: string; value: string }>>([
     { dueDate: '', value: '' },
   ]);
