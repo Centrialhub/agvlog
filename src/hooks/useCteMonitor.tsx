@@ -200,9 +200,9 @@ export function useCteMonitor(filters: CteMonitorFilters) {
 
 
       const usedHubIds = new Set<string>();
-      const draftRows = ((data || []) as unknown as CteMonitorRow[]).map((r: any) => {
+      const draftRows = (data || []).map((r: any) => {
         // Tenta encontrar o vínculo real em fiscal_documents via access_key
-        const match = r.access_key ? outbound?.find(o => o.access_key === r.access_key) : null;
+        const match = r.access_key ? outbound.find((o: any) => o.access_key === r.access_key) : null;
         if (match) usedHubIds.add(match.id);
         
         return {
@@ -215,8 +215,9 @@ export function useCteMonitor(filters: CteMonitorFilters) {
           invoice_numbers: match?.invoice_numbers ?? r.invoice_numbers,
           sefaz_status: match ? mapOutboundStatus(match.status, match.sefaz_status, match.hub_document_id) : r.sefaz_status,
           sefaz_status_reason: match?.sefaz_message ?? r.sefaz_status_reason,
-        };
+        } as CteMonitorRow;
       });
+
 
 
       const hubRows: CteMonitorRow[] = (outbound || [])
