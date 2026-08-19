@@ -26,8 +26,8 @@ export interface IssueCteGroupInput {
   insurer?: any;
   driver?: any;
   vehicle?: any;
-  docType?: any;
-  nature?: any;
+  documentType?: any;
+  nature: any;
   observations?: string | null;
   totals: any;
   freightComposition?: any;
@@ -35,7 +35,7 @@ export interface IssueCteGroupInput {
   gnre?: any;
   cbsIbs?: any;
   cargo?: any;
-  referencedNfs?: any[];
+  invoices: any[];
   takerRole: any;
 }
 
