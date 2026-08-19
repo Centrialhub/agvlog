@@ -192,11 +192,9 @@ export function useCteMonitor(filters: CteMonitorFilters) {
         )
         .eq('tenant_id', currentTenant.id)
         .is('deleted_at', null)
-        // CT-e marcados como duplicados ficam fora da lista e do download em lote
         .eq('is_duplicate', false)
-        .eq('document_type', 'outbound')
-        .order('created_at', { ascending: false })
-        .limit(2000);
+        .eq('document_type', 'outbound');
+      
       if (outErr) throw outErr;
 
       const usedHubIds = new Set<string>();
