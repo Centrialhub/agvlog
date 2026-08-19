@@ -20,6 +20,8 @@ import { useCancelCTe } from '@/hooks/useIssueCTe';
 import { PendingInvoicesBanner } from '@/components/billing/PendingInvoicesBanner';
 import { hubFiscal } from '@/lib/fiscal/hubFiscalClient';
 import { runBulkDownload, summarizeBulkResult } from '@/lib/fiscal/bulkFileMerge';
+import { useSortableData } from '@/hooks/useSortableData';
+import { Table, TableHead, TableHeader, TableRow, TableBody } from '@/components/ui/table';
 
 function saveBlob(blob: Blob, filename: string) {
   const objectUrl = URL.createObjectURL(blob);
@@ -156,8 +158,10 @@ export default function CteMonitor() {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
 
-  const { data: rows = [], isLoading, refetch, isFetching } = useCteMonitor(filters);
+  const { data: rowsData = [], isLoading, refetch, isFetching } = useCteMonitor(filters);
   const resend = useResendCte();
+
+  const { sortedItems: rows, requestSort, sortConfig } = useSortableData(rowsData);
 
   const downloadableRows = useMemo(() => rows.filter((r) => r.hub_document_id || r.pdf_url || r.xml_url), [rows]);
   const checkedRows = useMemo(() => rows.filter((r) => checked.has(r.id)), [rows, checked]);
@@ -426,29 +430,29 @@ export default function CteMonitor() {
             </div>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 text-xs uppercase">
-                <tr>
-                  <th className="px-3 py-2 w-8">
+            <Table>
+              <TableHeader className="bg-muted/50 text-xs uppercase">
+                <TableRow>
+                  <TableHead className="px-3 py-2 w-8">
                     <Checkbox
                       checked={downloadableRows.length > 0 && checked.size === downloadableRows.length}
                       onCheckedChange={toggleAll}
                       aria-label="Selecionar todos"
                     />
-                  </th>
-                  <th className="text-left px-3 py-2">Status</th>
-                  <th className="text-left px-3 py-2">Nº CT-e</th>
-                  <th className="text-left px-3 py-2">Série</th>
-                  <th className="text-left px-3 py-2">Pagador</th>
-                  <th className="text-left px-3 py-2">Cidade / UF</th>
-                  <th className="text-left px-3 py-2">Placa</th>
-                  <th className="text-left px-3 py-2">Protocolo</th>
-                  <th className="text-left px-3 py-2">Emissão</th>
-                  <th className="text-left px-3 py-2">Motivo / Erro</th>
-                  <th className="text-right px-3 py-2">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
+                  </TableHead>
+                  <TableHead className="px-3 py-2" sortKey="sefaz_status" sortConfig={sortConfig} onSort={requestSort}>Status</TableHead>
+                  <TableHead className="px-3 py-2" sortKey="cte_number" sortConfig={sortConfig} onSort={requestSort}>Nº CT-e</TableHead>
+                  <TableHead className="px-3 py-2" sortKey="cte_series" sortConfig={sortConfig} onSort={requestSort}>Série</TableHead>
+                  <TableHead className="px-3 py-2" sortKey="payer_name" sortConfig={sortConfig} onSort={requestSort}>Pagador</TableHead>
+                  <TableHead className="px-3 py-2" sortKey="recipient_city" sortConfig={sortConfig} onSort={requestSort}>Cidade / UF</TableHead>
+                  <TableHead className="px-3 py-2" sortKey="vehicle_plate" sortConfig={sortConfig} onSort={requestSort}>Placa</TableHead>
+                  <TableHead className="px-3 py-2" sortKey="protocol_number" sortConfig={sortConfig} onSort={requestSort}>Protocolo</TableHead>
+                  <TableHead className="px-3 py-2" sortKey="issued_at" sortConfig={sortConfig} onSort={requestSort}>Emissão</TableHead>
+                  <TableHead className="px-3 py-2" sortKey="sefaz_status_reason" sortConfig={sortConfig} onSort={requestSort}>Motivo / Erro</TableHead>
+                  <TableHead className="text-right px-3 py-2">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {isLoading && (
                   <tr><td colSpan={12} className="text-center text-muted-foreground py-8">Carregando…</td></tr>
                 )}
