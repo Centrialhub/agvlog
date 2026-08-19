@@ -178,6 +178,7 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
         .limit(3000);
       if (outErr) throw outErr;
 
+
       const hubByKey = new Map<string, any>();
       for (const d of outbound || []) {
         const key = (d as any).access_key;
@@ -188,6 +189,9 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
       const draftRows: CteSearchRow[] = ((data || []) as any[]).map((r) => {
         const match = r.access_key ? hubByKey.get(r.access_key) : null;
         if (match) usedHubIds.add(match.id);
+        
+        // Prioriza dados do rascunho (cte_documents) que tem mais colunas, 
+        // mas usa o status e ids reais do Hub quando houver vínculo.
         return {
           id: match?.id ?? r.id,
           source: match ? 'hub' : 'draft',
