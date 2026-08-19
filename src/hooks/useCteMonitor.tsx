@@ -269,9 +269,12 @@ export function useCteMonitor(filters: CteMonitorFilters) {
 
       const filteredHub = hubRows.filter((r) => {
         if (filters.statuses?.length && !filters.statuses.includes(r.sefaz_status)) return false;
-        if (docNumber && !(r.cte_number || '').toLowerCase().includes(docNumber.toLowerCase())) {
-          if (!(r.invoice_numbers || '').toLowerCase().includes(docNumber.toLowerCase())) return false;
+        if (docNumber) {
+          const hit = (r.cte_number || '').toLowerCase().includes(docNumber.toLowerCase()) || 
+                      (r.invoice_numbers || '').toLowerCase().includes(docNumber.toLowerCase());
+          if (!hit) return false;
         }
+
 
 
         if (key && !(r.access_key || '').includes(key)) return false;
