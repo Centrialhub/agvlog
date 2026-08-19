@@ -95,7 +95,9 @@ export interface CteMonitorRow {
   source?: 'draft' | 'hub';
   hub_document_id?: string | null;
   emission_id?: string | null;
+  invoice_numbers?: string | null;
 }
+
 
 export interface CteMonitorFilters {
   docNumber?: string;
@@ -193,6 +195,7 @@ export function useCteMonitor(filters: CteMonitorFilters) {
         .eq('is_duplicate', false)
         .eq('document_type', 'outbound');
 
+
       
       if (outErr) throw outErr;
 
@@ -209,10 +212,12 @@ export function useCteMonitor(filters: CteMonitorFilters) {
           source: (match ? 'hub' : 'draft') as any,
           hub_document_id: match?.hub_document_id ?? r.hub_document_id,
           emission_id: match?.emission_id ?? r.emission_id,
+          invoice_numbers: match?.invoice_numbers ?? r.invoice_numbers,
           sefaz_status: match ? mapOutboundStatus(match.status, match.sefaz_status, match.hub_document_id) : r.sefaz_status,
           sefaz_status_reason: match?.sefaz_message ?? r.sefaz_status_reason,
         };
       });
+
 
       const hubRows: CteMonitorRow[] = (outbound || [])
         .filter((d: any) => !usedHubIds.has(d.id))
@@ -256,15 +261,17 @@ export function useCteMonitor(filters: CteMonitorFilters) {
           source: 'hub',
           hub_document_id: d.hub_document_id ?? null,
           emission_id: d.emission_id ?? null,
+          invoice_numbers: d.invoice_numbers ?? null,
         }));
+
 
 
       const filteredHub = hubRows.filter((r) => {
         if (filters.statuses?.length && !filters.statuses.includes(r.sefaz_status)) return false;
         if (docNumber && !(r.cte_number || '').toLowerCase().includes(docNumber.toLowerCase())) {
-          // Também tenta buscar por NF nas autorizadas
           if (!(r.invoice_numbers || '').toLowerCase().includes(docNumber.toLowerCase())) return false;
         }
+
 
         if (key && !(r.access_key || '').includes(key)) return false;
         if (payer && !(r.payer_name || '').toLowerCase().includes(payer.toLowerCase())) return false;
