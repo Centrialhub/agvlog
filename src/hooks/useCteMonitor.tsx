@@ -204,47 +204,68 @@ export function useCteMonitor(filters: CteMonitorFilters) {
         .limit(2000);
       if (outErr) throw outErr;
 
-      const hubRows: CteMonitorRow[] = (outbound || []).map((d: any) => ({
-        id: d.id,
-        tenant_id: currentTenant.id,
-        cte_number: d.invoice_number ?? null,
-        cte_series: null,
-        access_key: d.access_key ?? null,
-        protocol_number: d.sefaz_protocol ?? null,
-        sefaz_status: mapOutboundStatus(d.status, d.sefaz_status, d.hub_document_id as string),
-        sefaz_status_reason: d.sefaz_message ?? null,
-        sefaz_status_code: d.sefaz_status_code ?? null,
-        sefaz_status_at: d.created_at ?? null,
-        sefaz_environment: null,
-        sent_at: d.created_at ?? null,
-        processed_at: d.status === 'authorized' ? d.created_at ?? null : null,
-        cancelled_at: d.status === 'cancelled' ? d.created_at ?? null : null,
-        cancellation_reason: null,
-        correction_letter: false,
-        pdf_url: null,
-        xml_url: null,
-        reference_number: null,
-        internal_number: d.invoice_number ?? null,
-        payer_name: d.remitter ?? null,
-        payer_cnpj: null,
-        company_branch: null,
-        company_group: null,
-        payer_group: null,
-        driver_name: null,
-        vehicle_plate: null,
-        recipient: (d.cte_payload?.payload?.destinatario?.nome || d.recipient) ?? null,
-        recipient_city: (d.cte_payload?.payload?.fim?.municipio || d.cte_payload?.payload?.destinatario?.endereco?.municipio || d.recipient_city) ?? null,
-        recipient_state: (d.cte_payload?.payload?.fim?.uf || d.cte_payload?.payload?.destinatario?.endereco?.uf || d.recipient_state) ?? null,
-        remitter: d.remitter ?? null,
-        freight_value: Number(d.freight_value ?? d.value ?? 0),
-        cargo_value: Number(d.value ?? 0),
-        issued_at: d.issue_date || d.created_at || null,
-        created_at: d.created_at,
-        batch_id: '',
-        source: 'hub',
-        hub_document_id: d.hub_document_id ?? null,
-        emission_id: d.emission_id ?? null,
-      }));
+      const usedHubIds = new Set<string>();
+      const draftRows = ((data || []) as unknown as CteMonitorRow[]).map((r: any) => {
+        // Tenta encontrar o vínculo real em fiscal_documents via access_key
+        const match = r.access_key ? outbound?.find(o => o.access_key === r.access_key) : null;
+        if (match) usedHubIds.add(match.id);
+        
+        return {
+          ...r,
+          id: match?.id ?? r.id,
+          issued_at: r.issued_at || r.created_at,
+          source: (match ? 'hub' : 'draft') as any,
+          hub_document_id: match?.hub_document_id ?? r.hub_document_id,
+          emission_id: match?.emission_id ?? r.emission_id,
+          sefaz_status: match ? mapOutboundStatus(match.status, match.sefaz_status, match.hub_document_id) : r.sefaz_status,
+          sefaz_status_reason: match?.sefaz_message ?? r.sefaz_status_reason,
+        };
+      });
+
+      const hubRows: CteMonitorRow[] = (outbound || [])
+        .filter((d: any) => !usedHubIds.has(d.id))
+        .map((d: any) => ({
+          id: d.id,
+          tenant_id: currentTenant.id,
+          cte_number: d.invoice_number ?? null,
+          cte_series: null,
+          access_key: d.access_key ?? null,
+          protocol_number: d.sefaz_protocol ?? null,
+          sefaz_status: mapOutboundStatus(d.status, d.sefaz_status, d.hub_document_id as string),
+          sefaz_status_reason: d.sefaz_message ?? null,
+          sefaz_status_code: d.sefaz_status_code ?? null,
+          sefaz_status_at: d.created_at ?? null,
+          sefaz_environment: null,
+          sent_at: d.created_at ?? null,
+          processed_at: d.status === 'authorized' ? d.created_at ?? null : null,
+          cancelled_at: d.status === 'cancelled' ? d.created_at ?? null : null,
+          cancellation_reason: null,
+          correction_letter: false,
+          pdf_url: null,
+          xml_url: null,
+          reference_number: null,
+          internal_number: d.invoice_number ?? null,
+          payer_name: d.remitter ?? null,
+          payer_cnpj: null,
+          company_branch: null,
+          company_group: null,
+          payer_group: null,
+          driver_name: null,
+          vehicle_plate: null,
+          recipient: (d.cte_payload?.payload?.destinatario?.nome || d.recipient) ?? null,
+          recipient_city: (d.cte_payload?.payload?.fim?.municipio || d.cte_payload?.payload?.destinatario?.endereco?.municipio || d.recipient_city) ?? null,
+          recipient_state: (d.cte_payload?.payload?.fim?.uf || d.cte_payload?.payload?.destinatario?.endereco?.uf || d.recipient_state) ?? null,
+          remitter: d.remitter ?? null,
+          freight_value: Number(d.freight_value ?? d.value ?? 0),
+          cargo_value: Number(d.value ?? 0),
+          issued_at: d.issue_date || d.created_at || null,
+          created_at: d.created_at,
+          batch_id: '',
+          source: 'hub',
+          hub_document_id: d.hub_document_id ?? null,
+          emission_id: d.emission_id ?? null,
+        }));
+
 
       const filteredHub = hubRows.filter((r) => {
         if (filters.statuses?.length && !filters.statuses.includes(r.sefaz_status)) return false;
