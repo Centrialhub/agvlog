@@ -548,7 +548,7 @@ export default function CteSearch() {
               {isLoading && <TableRow><TableCell colSpan={12} className="text-center text-muted-foreground py-8">Carregando…</TableCell></TableRow>}
               {!isLoading && rows.length === 0 && (
                 <TableRow><TableCell colSpan={12} className="text-center text-muted-foreground py-8">
-                  ainda não consta nenhum cte
+                  ainda sem documentos aparecendo essa quebra aconteceu apos consertar buscar pelo número de nf
 
                 </TableCell></TableRow>
               )}
