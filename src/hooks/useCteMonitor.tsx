@@ -251,6 +251,8 @@ export function useCteMonitor(filters: CteMonitorFilters) {
         if (docNumber && !(r.cte_number || '').toLowerCase().includes(docNumber.toLowerCase())) return false;
         if (key && !(r.access_key || '').includes(key)) return false;
         if (payer && !(r.payer_name || '').toLowerCase().includes(payer.toLowerCase())) return false;
+        if (filters.plate && !(r.vehicle_plate || '').toLowerCase().includes(filters.plate.replace(/\W/g, '').toLowerCase())) return false;
+        if (filters.series && r.cte_series !== filters.series) return false;
         if (filters.correctionLetter === 'yes') return false;
         return true;
       });

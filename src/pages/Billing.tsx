@@ -30,6 +30,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { toast } from '@/components/ui/sonner';
+import { useSortableData } from '@/hooks/useSortableData';
 import { format } from 'date-fns';
 import { PendingInvoicesBanner } from '@/components/billing/PendingInvoicesBanner';
 import { normalizeCity } from '@/lib/utils/normalizeCity';
@@ -139,7 +140,6 @@ export default function Billing() {
   const [periodStart, setPeriodStart] = useState<string>('');
   const [periodEnd, setPeriodEnd] = useState<string>('');
   const [selectedLoadIds, setSelectedLoadIds] = useState<Set<string>>(new Set());
-  const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
   const [recipientCity, setRecipientCity] = useState<string>(SENTINEL_NONE);
   const [modeId, setModeId] = useState<number>(1);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -190,6 +190,74 @@ export default function Billing() {
     recipientCity: recipientCity !== SENTINEL_NONE ? recipientCity : null,
     onlySpecificInvoices: onlySpecific ? problematicInvoices : null,
   });
+
+  const loadsById = useMemo(() => {
+    const m = new Map<string, typeof loads[number]>();
+    for (const l of loads) m.set(l.id, l);
+    return m;
+  }, [loads]);
+
+  const { sortedItems: filteredDocs, requestSort, sortConfig } = useSortableData(
+    useMemo(() => {
+      return docs.filter(d => {
+        if (tab === 'loads') {
+          if (!d.load_id || !selectedLoadIds.has(d.load_id)) return false;
+        }
+
+        // Janela secundária de emissão (independente do tab)
+        if (issueDateStart && (!d.issue_date || d.issue_date < issueDateStart)) return false;
+        if (issueDateEnd && (!d.issue_date || d.issue_date > issueDateEnd)) return false;
+
+        // Janela de data de importação (created_at do documento fiscal)
+        if (importDateStart || importDateEnd) {
+          const imp = d.created_at ? d.created_at.slice(0, 10) : null;
+          if (!imp) return false;
+          if (importDateStart && imp < importDateStart) return false;
+          if (importDateEnd && imp > importDateEnd) return false;
+        }
+
+        // Filtros que dependem da carga associada
+        const load = d.load_id ? loadsById.get(d.load_id) : null;
+        if (osNumber && !ciIncludes(load?.os_number, osNumber)) return false;
+        if (collectOrder && !ciIncludes(load?.load_number, collectOrder)) return false;
+        if (loadStatus !== SENTINEL_NONE && load?.status !== loadStatus) return false;
+        if (plate && !ciIncludes(load?.vehicles?.plate, plate)) return false;
+        if (supplierManifest && !ciIncludes(load?.supplier_manifest, supplierManifest)) return false;
+        if (distributionManifest && !ciIncludes(load?.distribution_manifest, distributionManifest)) return false;
+        if (shipmentManifest && !ciIncludes(load?.shipment_manifest, shipmentManifest)) return false;
+        if (originManifest && !ciIncludes(load?.origin_manifest, originManifest)) return false;
+        // Janelas de carregamento (agendado/realizado) — comparam apenas a parte de data
+        if (scheduledLoadStart || scheduledLoadEnd) {
+          const sch = load?.scheduled_load_at ? load.scheduled_load_at.slice(0, 10) : null;
+          if (!sch) return false;
+          if (scheduledLoadStart && sch < scheduledLoadStart) return false;
+          if (scheduledLoadEnd && sch > scheduledLoadEnd) return false;
+        }
+        if (actualLoadStart || actualLoadEnd) {
+          const act = load?.actual_load_at ? load.actual_load_at.slice(0, 10) : null;
+          if (!act) return false;
+          if (actualLoadStart && act < actualLoadStart) return false;
+          if (actualLoadEnd && act > actualLoadEnd) return false;
+        }
+        if (!matchesOp(load?.operation_type ?? (d as any).operation_type)) return false;
+
+        // Cidade do destinatário (já filtrada server-side se selecionada, mas mantida para consistência no client)
+        if (recipientCity !== SENTINEL_NONE && normalizeCity(d.recipient_city) !== recipientCity) return false;
+
+        return true;
+      });
+    }, [
+      docs, loadsById, tab, selectedLoadIds,
+      osNumber, collectOrder,
+      issueDateStart, issueDateEnd,
+      importDateStart, importDateEnd,
+      supplierManifest, distributionManifest,
+      shipmentManifest, originManifest, loadStatus, plate,
+      scheduledLoadStart, scheduledLoadEnd, actualLoadStart, actualLoadEnd,
+      opTypes, allOps, recipientCity,
+    ])
+  );
+  const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
 
   // ===== Hidrata estado a partir da preferência salva (uma única vez) =====
   const hydratedRef = useRef(false);
@@ -308,74 +376,7 @@ export default function Billing() {
   const ciIncludes = (haystack: string | null | undefined, needle: string) =>
     !needle || (haystack || '').toLowerCase().includes(needle.toLowerCase());
 
-  // Index loads by id (O(1) lookup vs O(n) com Array.find a cada documento)
-  const loadsById = useMemo(() => {
-    const m = new Map<string, typeof loads[number]>();
-    for (const l of loads) m.set(l.id, l);
-    return m;
-  }, [loads]);
 
-  // Filtra documentos. Filtros de alta seletividade (cliente, período, NF, chave, remitente,
-  // referência) já foram aplicados server-side pelo useBillingDocuments. Aqui só restam
-  // filtros que dependem de tabelas relacionadas (loads/vehicles).
-  const filteredDocs = useMemo(() => {
-    return docs.filter(d => {
-      if (tab === 'loads') {
-        if (!d.load_id || !selectedLoadIds.has(d.load_id)) return false;
-      }
-
-      // Janela secundária de emissão (independente do tab)
-      if (issueDateStart && (!d.issue_date || d.issue_date < issueDateStart)) return false;
-      if (issueDateEnd && (!d.issue_date || d.issue_date > issueDateEnd)) return false;
-
-      // Janela de data de importação (created_at do documento fiscal)
-      if (importDateStart || importDateEnd) {
-        const imp = d.created_at ? d.created_at.slice(0, 10) : null;
-        if (!imp) return false;
-        if (importDateStart && imp < importDateStart) return false;
-        if (importDateEnd && imp > importDateEnd) return false;
-      }
-
-      // Filtros que dependem da carga associada
-      const load = d.load_id ? loadsById.get(d.load_id) : null;
-      if (osNumber && !ciIncludes(load?.os_number, osNumber)) return false;
-      if (collectOrder && !ciIncludes(load?.load_number, collectOrder)) return false;
-      if (loadStatus !== SENTINEL_NONE && load?.status !== loadStatus) return false;
-      if (plate && !ciIncludes(load?.vehicles?.plate, plate)) return false;
-      if (supplierManifest && !ciIncludes(load?.supplier_manifest, supplierManifest)) return false;
-      if (distributionManifest && !ciIncludes(load?.distribution_manifest, distributionManifest)) return false;
-      if (shipmentManifest && !ciIncludes(load?.shipment_manifest, shipmentManifest)) return false;
-      if (originManifest && !ciIncludes(load?.origin_manifest, originManifest)) return false;
-      // Janelas de carregamento (agendado/realizado) — comparam apenas a parte de data
-      if (scheduledLoadStart || scheduledLoadEnd) {
-        const sch = load?.scheduled_load_at ? load.scheduled_load_at.slice(0, 10) : null;
-        if (!sch) return false;
-        if (scheduledLoadStart && sch < scheduledLoadStart) return false;
-        if (scheduledLoadEnd && sch > scheduledLoadEnd) return false;
-      }
-      if (actualLoadStart || actualLoadEnd) {
-        const act = load?.actual_load_at ? load.actual_load_at.slice(0, 10) : null;
-        if (!act) return false;
-        if (actualLoadStart && act < actualLoadStart) return false;
-        if (actualLoadEnd && act > actualLoadEnd) return false;
-      }
-      if (!matchesOp(load?.operation_type ?? (d as any).operation_type)) return false;
-
-      // Cidade do destinatário (já filtrada server-side se selecionada, mas mantida para consistência no client)
-      if (recipientCity !== SENTINEL_NONE && normalizeCity(d.recipient_city) !== recipientCity) return false;
-
-      return true;
-    });
-  }, [
-    docs, loadsById, tab, selectedLoadIds,
-    osNumber, collectOrder,
-    issueDateStart, issueDateEnd,
-    importDateStart, importDateEnd,
-    supplierManifest, distributionManifest,
-    shipmentManifest, originManifest, loadStatus, plate,
-    scheduledLoadStart, scheduledLoadEnd, actualLoadStart, actualLoadEnd,
-    opTypes, allOps, recipientCity,
-  ]);
 
   // Cidades de destino disponíveis nas notas elegíveis (chave normalizada -> rótulo exibido)
   const recipientCityOptions = useMemo(() => {
@@ -805,15 +806,15 @@ export default function Billing() {
                       onCheckedChange={(v) => v ? selectAllDocs() : clearDocSelection()}
                     />
                   </TableHead>
-                  <TableHead>NF</TableHead>
-                  <TableHead>Emissão</TableHead>
-                  <TableHead>Remetente</TableHead>
-                  <TableHead>Destinatário</TableHead>
-                  <TableHead>Cidade destino</TableHead>
-                  <TableHead className="text-right">Pallets</TableHead>
-                  <TableHead className="text-right">Peso</TableHead>
-                  <TableHead className="text-right">Valor</TableHead>
-                  <TableHead className="text-right">Frete</TableHead>
+                  <TableHead sortKey="invoice_number" sortConfig={sortConfig} onSort={requestSort}>NF</TableHead>
+                  <TableHead sortKey="issue_date" sortConfig={sortConfig} onSort={requestSort}>Emissão</TableHead>
+                  <TableHead sortKey="remitter" sortConfig={sortConfig} onSort={requestSort}>Remetente</TableHead>
+                  <TableHead sortKey="recipient" sortConfig={sortConfig} onSort={requestSort}>Destinatário</TableHead>
+                  <TableHead sortKey="recipient_city" sortConfig={sortConfig} onSort={requestSort}>Cidade destino</TableHead>
+                  <TableHead className="text-right" sortKey="pallet_count" sortConfig={sortConfig} onSort={requestSort}>Pallets</TableHead>
+                  <TableHead className="text-right" sortKey="weight_kg" sortConfig={sortConfig} onSort={requestSort}>Peso</TableHead>
+                  <TableHead className="text-right" sortKey="value" sortConfig={sortConfig} onSort={requestSort}>Valor</TableHead>
+                  <TableHead className="text-right" sortKey="freight_value" sortConfig={sortConfig} onSort={requestSort}>Frete</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
