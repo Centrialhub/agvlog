@@ -6,7 +6,7 @@ import { hubFiscal } from '@/lib/fiscal/hubFiscalClient';
 import { buildCtePayload, type BuildCtePayloadInput } from '@/lib/fiscal/cteBuilder';
 import { toast } from '@/components/ui/sonner';
 
-export interface IssueCteGroupInput extends BuildCtePayloadInput {
+export interface IssueCteGroupInput {
   /** Ids das NFs de entrada agrupadas neste CT-e. */
   fiscal_document_ids: string[];
   /** Ids das cargas cobertas pelo CT-e. */
@@ -17,17 +17,26 @@ export interface IssueCteGroupInput extends BuildCtePayloadInput {
     consignee_client_id?: string | null;
     invoice_number?: string | null;
   };
-  // Explicitly allow properties from BuildCtePayloadInput to avoid TS2339
   emitter: any;
-  totals: any;
   remitter: any;
   recipient: any;
-  observations?: string | null;
-  takerRole: any;
+  expedidor?: any;
+  recebedor?: any;
+  consignee?: any;
+  insurer?: any;
   driver?: any;
   vehicle?: any;
-  insurer?: any;
+  docType?: any;
+  nature?: any;
+  observations?: string | null;
+  totals: any;
   freightComposition?: any;
+  icms?: any;
+  gnre?: any;
+  cbsIbs?: any;
+  cargo?: any;
+  referencedNfs?: any[];
+  takerRole: any;
 }
 
 /**
