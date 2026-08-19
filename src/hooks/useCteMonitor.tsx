@@ -181,11 +181,6 @@ export function useCteMonitor(filters: CteMonitorFilters) {
 
       const { data, error } = await q;
       if (error) throw error;
-      const draftRows = ((data || []) as unknown as CteMonitorRow[]).map((r: any) => ({
-        ...r,
-        issued_at: r.issued_at || r.created_at,
-        source: 'draft' as const,
-      }));
 
       // CT-es realmente transmitidos ao Hub Fiscal ficam em `fiscal_documents`
       // (document_type = 'outbound'). Sem esse merge o monitor não mostrava as
