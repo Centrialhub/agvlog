@@ -70,6 +70,13 @@ export default function MdfeProvisional() {
   const [payAgency, setPayAgency] = useState('');
   const [payAccount, setPayAccount] = useState('');
   const [payIpefCnpj, setPayIpefCnpj] = useState('');
+  const [includeProprietor, setIncludeProprietor] = useState(false);
+  const [propName, setPropName] = useState('');
+  const [propDoc, setPropDoc] = useState('');
+  const [propIe, setPropIe] = useState('');
+  const [propState, setPropState] = useState('');
+  const [propRntrc, setPropRntrc] = useState('');
+  const [propType, setPropType] = useState<'0' | '1' | '2'>('2');
   const [payInstallments, setPayInstallments] = useState<Array<{ dueDate: string; value: string }>>([
     { dueDate: '', value: '' },
   ]);
@@ -283,6 +290,17 @@ export default function MdfeProvisional() {
               },
             }
           : null,
+        proprietor: includeProprietor
+          ? {
+              name: propName,
+              cnpj: propDoc.length > 11 ? propDoc : null,
+              cpf: propDoc.length <= 11 ? propDoc : null,
+              ie: propIe,
+              state: propState,
+              rntrc: propRntrc,
+              type: propType,
+            }
+          : null,
         valePedagio: includeValePedagio ? {
           cnpjFornecedor: vpFornCnpj,
           numeroComprovante: vpComprovante,
@@ -334,7 +352,7 @@ export default function MdfeProvisional() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">MDF-e (Provisório)</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Emissão de MDF-e</h1>
           <p className="text-muted-foreground">
             Selecione CT-es autorizados para vincular ao manifesto.
           </p>
@@ -778,6 +796,89 @@ export default function MdfeProvisional() {
                       </Button>
                     </div>
                   )}
+                </div>
+              )}
+            </div>
+
+            {/* Proprietário do Veículo */}
+            <div className="space-y-4 rounded-lg border p-3">
+              <div className="flex items-start gap-2">
+                <Checkbox
+                  id="mdfe-include-prop"
+                  checked={includeProprietor}
+                  onCheckedChange={v => setIncludeProprietor(Boolean(v))}
+                />
+                <div>
+                  <Label htmlFor="mdfe-include-prop" className="cursor-pointer">
+                    Informar Proprietário do Veículo (Se não for o emitente)
+                  </Label>
+                  <p className="text-[10px] text-muted-foreground">
+                    Obrigatório quando o veículo não pertence ao emitente.
+                  </p>
+                </div>
+              </div>
+
+              {includeProprietor && (
+                <div className="grid grid-cols-2 gap-3 pt-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Razão Social / Nome</Label>
+                    <Input
+                      value={propName}
+                      onChange={e => setPropName(e.target.value)}
+                      placeholder="Nome do proprietário"
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">CPF/CNPJ</Label>
+                    <Input
+                      value={propDoc}
+                      onChange={e => setPropDoc(e.target.value)}
+                      placeholder="Apenas números"
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">IE</Label>
+                    <Input
+                      value={propIe}
+                      onChange={e => setPropIe(e.target.value)}
+                      placeholder="ISENTO"
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">UF</Label>
+                    <Input
+                      value={propState}
+                      onChange={e => setPropState(e.target.value.toUpperCase())}
+                      placeholder="MG"
+                      maxLength={2}
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">RNTRC</Label>
+                    <Input
+                      value={propRntrc}
+                      onChange={e => setPropRntrc(e.target.value)}
+                      placeholder="Número RNTRC"
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Tipo</Label>
+                    <Select value={propType} onValueChange={(v: any) => setPropType(v)}>
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="0">0 - TAC Agregado</SelectItem>
+                        <SelectItem value="1">1 - TAC Independente</SelectItem>
+                        <SelectItem value="2">2 - Outros</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               )}
             </div>
