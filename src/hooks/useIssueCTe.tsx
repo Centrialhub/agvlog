@@ -6,7 +6,7 @@ import { hubFiscal } from '@/lib/fiscal/hubFiscalClient';
 import { buildCtePayload, type BuildCtePayloadInput } from '@/lib/fiscal/cteBuilder';
 import { toast } from '@/components/ui/sonner';
 
-export interface IssueCteGroupInput extends BuildCtePayloadInput {
+export interface IssueCteGroupInput {
   /** Ids das NFs de entrada agrupadas neste CT-e. */
   fiscal_document_ids: string[];
   /** Ids das cargas cobertas pelo CT-e. */
@@ -17,6 +17,26 @@ export interface IssueCteGroupInput extends BuildCtePayloadInput {
     consignee_client_id?: string | null;
     invoice_number?: string | null;
   };
+  emitter: any;
+  remitter: any;
+  recipient: any;
+  expedidor?: any;
+  recebedor?: any;
+  consignee?: any;
+  insurer?: any;
+  driver: any;
+  vehicle: any;
+  documentType?: any;
+  nature: any;
+  observations?: string | null;
+  totals: any;
+  freightComposition?: any;
+  icms?: any;
+  gnre?: any;
+  cbsIbs?: any;
+  cargo?: any;
+  invoices: any[];
+  takerRole: any;
 }
 
 /**

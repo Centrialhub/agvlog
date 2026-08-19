@@ -1,0 +1,271 @@
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useTenant } from './useTenant';
+export const SEFAZ_STATUSES = [
+    'pending', // Enviar
+    'sending', // Enviando
+    'sent', // Enviado
+    'sent_error', // Enviado (Erro)
+    'processing', // Processando
+    'processed', // Processado
+    'processed_error', // Processado (Erro)
+    'cancel_pending', // À Cancelar
+    'cancelling', // Cancelando
+    'cancelled', // Cancelado
+    'cancel_error', // Cancelado (Erro)
+    'closed', // Encerrado
+    'invalidated', // Inutilizado
+    'sefaz_error', // Erro SEFAZ genérico
+];
+export const SEFAZ_STATUS_LABELS = {
+    pending: 'Enviar',
+    sending: 'Enviando',
+    sent: 'Enviado',
+    sent_error: 'Enviado (Erro)',
+    processing: 'Processando',
+    processed: 'Processado',
+    processed_error: 'Processado (Erro)',
+    cancel_pending: 'À Cancelar',
+    cancelling: 'Cancelando',
+    cancelled: 'Cancelado',
+    cancel_error: 'Cancelado (Erro)',
+    closed: 'Encerrado',
+    invalidated: 'Inutilizado',
+    sefaz_error: 'Erro SEFAZ',
+};
+export const SEFAZ_STATUS_TONE = {
+    pending: 'muted',
+    sending: 'default',
+    sent: 'success',
+    sent_error: 'danger',
+    processing: 'default',
+    processed: 'success',
+    processed_error: 'danger',
+    cancel_pending: 'warning',
+    cancelling: 'warning',
+    cancelled: 'muted',
+    cancel_error: 'danger',
+    closed: 'muted',
+    invalidated: 'muted',
+    sefaz_error: 'danger',
+};
+function nz(v) {
+    if (!v)
+        return null;
+    const t = v.trim();
+    return t.length === 0 ? null : t;
+}
+export function useCteMonitor(filters) {
+    const { currentTenant } = useTenant();
+    return useQuery({
+        queryKey: ['cte_monitor', currentTenant?.id, filters],
+        enabled: !!currentTenant,
+        placeholderData: (prev) => prev,
+        staleTime: 15000,
+        queryFn: async () => {
+            if (!currentTenant)
+                return [];
+            let q = supabase
+                .from('cte_documents')
+                .select('*')
+                .eq('tenant_id', currentTenant.id)
+                .order('sefaz_status_at', { ascending: false, nullsFirst: false })
+                .order('created_at', { ascending: false })
+                .limit(2000);
+            const docNumber = nz(filters.docNumber);
+            if (docNumber)
+                q = q.ilike('cte_number', `%${docNumber}%`);
+            const payer = nz(filters.payer);
+            if (payer)
+                q = q.ilike('payer_name', `%${payer}%`);
+            const internal = nz(filters.internalNumber);
+            if (internal)
+                q = q.ilike('internal_number', `%${internal}%`);
+            const ref = nz(filters.referenceNumber);
+            if (ref)
+                q = q.ilike('reference_number', `%${ref}%`);
+            const protocol = nz(filters.protocolNumber);
+            if (protocol)
+                q = q.ilike('protocol_number', `%${protocol}%`);
+            const key = nz(filters.accessKey);
+            if (key)
+                q = q.ilike('access_key', `%${key}%`);
+            const plate = nz(filters.plate);
+            if (plate)
+                q = q.ilike('vehicle_plate', `%${plate.replace(/\W/g, '')}%`);
+            const driver = nz(filters.driver);
+            if (driver)
+                q = q.ilike('driver_name', `%${driver}%`);
+            const series = nz(filters.series);
+            if (series)
+                q = q.eq('cte_series', series);
+            const branch = nz(filters.branch);
+            if (branch)
+                q = q.ilike('company_branch', `%${branch}%`);
+            const cg = nz(filters.companyGroup);
+            if (cg)
+                q = q.ilike('company_group', `%${cg}%`);
+            const pg = nz(filters.payerGroup);
+            if (pg)
+                q = q.ilike('payer_group', `%${pg}%`);
+            if (filters.statuses && filters.statuses.length > 0) {
+                q = q.in('sefaz_status', filters.statuses);
+            }
+            if (filters.correctionLetter === 'yes')
+                q = q.eq('correction_letter', true);
+            if (filters.correctionLetter === 'no')
+                q = q.eq('correction_letter', false);
+            if (filters.processedStart)
+                q = q.gte('processed_at', filters.processedStart);
+            if (filters.processedEnd)
+                q = q.lte('processed_at', filters.processedEnd + 'T23:59:59');
+            if (filters.issuedStart)
+                q = q.gte('issued_at', filters.issuedStart);
+            if (filters.issuedEnd)
+                q = q.lte('issued_at', filters.issuedEnd + 'T23:59:59');
+            const { data, error } = await q;
+            if (error)
+                throw error;
+            const draftRows = (data || []).map((r) => ({
+                ...r,
+                issued_at: r.issued_at || r.created_at,
+                source: 'draft',
+            }));
+            // CT-es realmente transmitidos ao Hub Fiscal ficam em `fiscal_documents`
+            // (document_type = 'outbound'). Sem esse merge o monitor não mostrava as
+            // emissões reais — e por isso não havia como baixar PDF/XML de retorno.
+            const { data: outbound, error: outErr } = await supabase
+                .from('fiscal_documents')
+                .select('id, invoice_number, access_key, sefaz_protocol, sefaz_status, sefaz_status_code, sefaz_message, status, remitter, recipient, recipient_city, recipient_state, freight_value, value, issue_date, created_at, hub_document_id, emission_id, cte_payload')
+                .eq('tenant_id', currentTenant.id)
+                .is('deleted_at', null)
+                // CT-e marcados como duplicados ficam fora da lista e do download em lote
+                .eq('is_duplicate', false)
+                .eq('document_type', 'outbound')
+                .order('created_at', { ascending: false })
+                .limit(2000);
+            if (outErr)
+                throw outErr;
+            const hubRows = (outbound || []).map((d) => ({
+                id: d.id,
+                tenant_id: currentTenant.id,
+                cte_number: d.invoice_number ?? null,
+                cte_series: null,
+                access_key: d.access_key ?? null,
+                protocol_number: d.sefaz_protocol ?? null,
+                sefaz_status: mapOutboundStatus(d.status, d.sefaz_status, d.hub_document_id),
+                sefaz_status_reason: d.sefaz_message ?? null,
+                sefaz_status_code: d.sefaz_status_code ?? null,
+                sefaz_status_at: d.created_at ?? null,
+                sefaz_environment: null,
+                sent_at: d.created_at ?? null,
+                processed_at: d.status === 'authorized' ? d.created_at ?? null : null,
+                cancelled_at: d.status === 'cancelled' ? d.created_at ?? null : null,
+                cancellation_reason: null,
+                correction_letter: false,
+                pdf_url: null,
+                xml_url: null,
+                reference_number: null,
+                internal_number: d.invoice_number ?? null,
+                payer_name: d.remitter ?? null,
+                payer_cnpj: null,
+                company_branch: null,
+                company_group: null,
+                payer_group: null,
+                driver_name: null,
+                vehicle_plate: null,
+                recipient: (d.cte_payload?.payload?.destinatario?.nome || d.recipient) ?? null,
+                recipient_city: (d.cte_payload?.payload?.fim?.municipio || d.cte_payload?.payload?.destinatario?.endereco?.municipio || d.recipient_city) ?? null,
+                recipient_state: (d.cte_payload?.payload?.fim?.uf || d.cte_payload?.payload?.destinatario?.endereco?.uf || d.recipient_state) ?? null,
+                remitter: d.remitter ?? null,
+                freight_value: Number(d.freight_value ?? d.value ?? 0),
+                cargo_value: Number(d.value ?? 0),
+                issued_at: d.issue_date || d.created_at || null,
+                created_at: d.created_at,
+                batch_id: '',
+                source: 'hub',
+                hub_document_id: d.hub_document_id ?? null,
+                emission_id: d.emission_id ?? null,
+            }));
+            const filteredHub = hubRows.filter((r) => {
+                if (filters.statuses?.length && !filters.statuses.includes(r.sefaz_status))
+                    return false;
+                if (docNumber && !(r.cte_number || '').toLowerCase().includes(docNumber.toLowerCase()))
+                    return false;
+                if (key && !(r.access_key || '').includes(key))
+                    return false;
+                if (payer && !(r.payer_name || '').toLowerCase().includes(payer.toLowerCase()))
+                    return false;
+                if (filters.plate && !(r.vehicle_plate || '').toLowerCase().includes(filters.plate.replace(/\W/g, '').toLowerCase()))
+                    return false;
+                if (filters.series && r.cte_series !== filters.series)
+                    return false;
+                if (filters.correctionLetter === 'yes')
+                    return false;
+                return true;
+            });
+            return [...filteredHub, ...draftRows].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        },
+    });
+}
+/** Traduz status de `fiscal_documents` para o vocabulário do monitor SEFAZ. */
+function mapOutboundStatus(status, sefaz, hubId) {
+    const s = (sefaz || '').toLowerCase();
+    const st = (status || '').toLowerCase();
+    if (st === 'cancelled' || s === 'cancelled')
+        return 'cancelled';
+    if (st === 'cancelling' || s === 'cancelling')
+        return 'cancelling';
+    // Cancelamento rejeitado mantém o documento fiscal autorizado e manejável.
+    if (s === 'cancel_rejected' || s === 'cancel_error' || s.includes('cancel_rejeit'))
+        return 'processed';
+    if (st === 'authorized' || s === 'authorized')
+        return 'processed';
+    if (st === 'rejected' || s === 'error' || s === 'rejected') {
+        // Se for rejeitado mas já tiver ID no hub, tratamos como 'processed' (autorizado) 
+        // para que a UI ofereça opções de manejo (como baixar arquivos ou cancelar novamente)
+        return hubId ? 'processed' : 'processed_error';
+    }
+    if (st === 'transmitting' || s === 'processing')
+        return 'processing';
+    return 'pending';
+}
+export function useCteSefazEvents(cteDocumentId) {
+    return useQuery({
+        queryKey: ['cte_sefaz_events', cteDocumentId],
+        enabled: !!cteDocumentId,
+        queryFn: async () => {
+            if (!cteDocumentId)
+                return [];
+            const { data, error } = await supabase
+                .from('cte_sefaz_events')
+                .select('*')
+                .eq('cte_document_id', cteDocumentId)
+                .order('occurred_at', { ascending: false });
+            if (error)
+                throw error;
+            return (data || []);
+        },
+    });
+}
+/** Marca CT-e para reenvio (status volta a 'pending') — integração fiscal real consome essa fila. */
+export function useResendCte() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: async (id) => {
+            const { error } = await supabase
+                .from('cte_documents')
+                .update({
+                sefaz_status: 'pending',
+                sefaz_status_reason: null,
+                sefaz_status_at: new Date().toISOString(),
+            })
+                .eq('id', id);
+            if (error)
+                throw error;
+        },
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ['cte_monitor'] });
+        },
+    });
+}
