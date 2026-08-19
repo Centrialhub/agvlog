@@ -334,7 +334,7 @@ export default function MdfeProvisional() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">MDF-e (Provisório)</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Emissão de MDF-e</h1>
           <p className="text-muted-foreground">
             Selecione CT-es autorizados para vincular ao manifesto.
           </p>
