@@ -549,6 +549,7 @@ export default function CteSearch() {
               {!isLoading && rows.length === 0 && (
                 <TableRow><TableCell colSpan={12} className="text-center text-muted-foreground py-8">
                   ainda não consta nenhum cte
+
                 </TableCell></TableRow>
               )}
               {rows.map((r) => {
