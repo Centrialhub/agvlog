@@ -24,8 +24,8 @@ export interface IssueCteGroupInput {
   recebedor?: any;
   consignee?: any;
   insurer?: any;
-  driver?: any;
-  vehicle?: any;
+  driver: any;
+  vehicle: any;
   documentType?: any;
   nature: any;
   observations?: string | null;
