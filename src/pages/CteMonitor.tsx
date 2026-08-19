@@ -21,7 +21,7 @@ import { PendingInvoicesBanner } from '@/components/billing/PendingInvoicesBanne
 import { hubFiscal } from '@/lib/fiscal/hubFiscalClient';
 import { runBulkDownload, summarizeBulkResult } from '@/lib/fiscal/bulkFileMerge';
 import { useSortableData } from '@/hooks/useSortableData';
-import { Table, TableHead, TableHeader, TableRow, TableBody } from '@/components/ui/table';
+import { Table, TableHead, TableHeader, TableRow, TableBody, TableCell } from '@/components/ui/table';
 
 function saveBlob(blob: Blob, filename: string) {
   const objectUrl = URL.createObjectURL(blob);
