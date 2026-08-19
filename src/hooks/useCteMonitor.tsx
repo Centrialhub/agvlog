@@ -181,7 +181,7 @@ export function useCteMonitor(filters: CteMonitorFilters) {
 
       const { data, error } = await q;
       if (error) throw error;
-      const draftRows = ((data || []) as unknown as CteMonitorRow[]).map((r) => ({
+      const draftRows = ((data || []) as unknown as CteMonitorRow[]).map((r: any) => ({
         ...r,
         issued_at: r.issued_at || r.created_at,
         source: 'draft' as const,
@@ -204,7 +204,7 @@ export function useCteMonitor(filters: CteMonitorFilters) {
         .limit(2000);
       if (outErr) throw outErr;
 
-      const hubRows: CteMonitorRow[] = (outbound || []).map((d: any) => ({
+      const hubRows: CteMonitorRow[] = (outbound || []).map((d: any) => {
         id: d.id,
         tenant_id: currentTenant.id,
         cte_number: d.invoice_number ?? null,
