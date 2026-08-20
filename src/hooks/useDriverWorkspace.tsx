@@ -100,6 +100,7 @@ export interface PodData {
   latitude?: number;
   longitude?: number;
   accuracy?: number;
+  [key: string]: any;
 }
 
 export function useDriverExecution() {
