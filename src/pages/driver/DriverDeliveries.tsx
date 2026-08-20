@@ -317,7 +317,7 @@ export default function DriverDeliveries() {
       const reason = notes?.trim() || null;
       try {
         let eventType: DriverEventType = 'departure';
-        if (def.finalAction === 'delivered') eventType = 'delivery_complete';
+        if (def.finalAction === 'delivered') eventType = 'delivery_success';
         else if (def.key === 'chegada_no_cliente') eventType = 'arrival';
         else if (def.key === 'cliente_recusou') eventType = 'delivery_refusal';
 
