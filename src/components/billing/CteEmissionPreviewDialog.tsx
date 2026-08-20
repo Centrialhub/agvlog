@@ -953,7 +953,10 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
             <div className="space-y-1">
               {items.map((it, i) => {
                 const em = emitters.find((e: any) => e.id === it.emitterId) || defaultEmitter;
-                const ok = buildCtePayload(toBuildInput(it, em, 'sandbox', clients)).ok;
+                const regime = (em as any)?.regime_tributario;
+                const isSimples = regime === 'simples' || regime === 'mei';
+                const hasMismatch = isSimples && (it.icmsAliquota !== 0 || it.icmsBase !== 0 || it.icmsValor !== 0);
+                const ok = buildCtePayload(toBuildInput(it, em, 'sandbox', clients)).ok && !hasMismatch;
                 return (
                   <button
                     key={it.key}
