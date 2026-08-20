@@ -25,70 +25,20 @@ export default function DriverHome() {
   const { data: driver, isLoading: driverLoading } = useCurrentDriver();
   const navigate = useNavigate();
   const queryClient = useTanstackQueryClient();
-  const { data: autoTrip } = useActiveTrip(driver?.id);
-  const checklist = useChecklistStatus(autoTrip?.id);
+  const { data: workspace, isLoading: workspaceLoading } = useDriverWorkspace();
+  const { reportEvent } = useDriverExecution();
+  
+  const trip = workspace?.trip;
+  const checklist = useChecklistStatus(trip?.id);
 
-  const { data: activeTrips = [], isLoading: tripsLoading } = useQuery({
-    queryKey: ['driver_my_trips', driver?.id, autoTrip?.id],
-    queryFn: async () => {
-      if (!driver) return [];
-      
-      // If we already have an autoTrip from the hook, use it as the primary
-      if (autoTrip) {
-        return [autoTrip];
-      }
-
-      const { data, error } = await supabase
-        .from('dispatch_trips')
-        .select('*, loads(id, load_number, origin, destination, status), vehicles(plate, nickname)')
-        .eq('driver_id', driver.id)
-        .order('created_at', { ascending: false })
-        .limit(10);
-        
-      if (error) throw error;
-      if (!data) return [];
-
-      return data.filter(trip => 
-        (trip.status && (TRIP_ACTIVE_STATUSES as readonly string[]).includes(trip.status)) ||
-        (trip.loads?.status && (LOAD_ACTIVE_STATUSES as readonly string[]).includes(trip.loads.status))
-      ).slice(0, 5);
-    },
-    enabled: !!driver,
-  });
-
-  const { data: myLoads = [], isLoading: loadsLoading } = useQuery({
-    queryKey: ['driver_my_loads', driver?.id],
-    queryFn: async () => {
-      if (!driver) return [];
-      const { data, error } = await supabase
-        .from('loads')
-        .select('id, load_number, origin, destination, status, trip_id, total_pallet_count, total_weight_kg, scheduled_load_at, vehicles(plate, nickname)')
-        .eq('driver_id', driver.id)
-        .not('status', 'in', `(${TERMINAL_LOAD_STATUSES.join(',')})`)
-        .order('created_at', { ascending: false })
-        .limit(20);
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!driver,
-  });
+  const activeTrips = workspace?.has_active_trip ? [workspace.trip] : [];
+  const tripsLoading = workspaceLoading;
+  const loadsLoading = workspaceLoading;
+  const standaloneLoads = workspace?.has_active_trip ? [] : (workspace?.loads || []);
 
   // Paradas + posição do veículo para o mapa quando houver viagem real.
   const primaryTrip: any = activeTrips[0];
-  const { data: realStops = [] } = useQuery({
-    queryKey: ['driver_home_stops', primaryTrip?.id],
-    queryFn: async () => {
-      if (!primaryTrip?.id) return [];
-      const { data, error } = await supabase
-        .from('dispatch_stops')
-        .select('id, stop_order, destination, status, latitude, longitude, clients(company_name)')
-        .eq('dispatch_trip_id', primaryTrip.id)
-        .order('stop_order', { ascending: true });
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!primaryTrip?.id,
-  });
+  const realStops = workspace?.stops || [];
 
   const { data: vehiclePos } = useQuery({
     queryKey: ['driver_home_vehicle_pos', primaryTrip?.vehicle_id],
@@ -104,53 +54,30 @@ export default function DriverHome() {
     enabled: !!primaryTrip?.vehicle_id,
   });
 
-  // Realtime: refresh assigned loads/trips whenever the driver assignment or status changes.
+  // Realtime subscription moved to useDriverWorkspace for simplified UI logic
+  // but keeping a manual invalidation trigger for UI consistency if needed
   useEffect(() => {
     if (!driver?.id) return;
     const channel = supabase
-      .channel(`driver_home_${driver.id}`)
+      .channel(`driver_workspace_events_${driver.id}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'loads', filter: `driver_id=eq.${driver.id}` },
+        { event: '*', schema: 'public', table: 'dispatch_events', filter: `tenant_id=eq.${currentTenant?.id}` },
         () => {
-          queryClient.invalidateQueries({ queryKey: ['driver_my_loads', driver.id] });
-          queryClient.invalidateQueries({ queryKey: ['driver_my_trips', driver.id] });
+          queryClient.invalidateQueries({ queryKey: ['driver_workspace'] });
         },
       )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'dispatch_trips', filter: `driver_id=eq.${driver.id}` },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ['driver_my_trips', driver.id] });
-          queryClient.invalidateQueries({ queryKey: ['driver_my_loads', driver.id] });
-        },
-      )
-      .subscribe((status) => {
-        console.log(`[DriverHome] Realtime subscription for driver ${driver.id}: ${status}`);
-        if (status === 'SUBSCRIBED') {
-          queryClient.invalidateQueries({ queryKey: ['driver_my_loads', driver.id] });
-          queryClient.invalidateQueries({ queryKey: ['driver_my_trips', driver.id] });
-        }
-      });
+      .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [driver?.id, queryClient]);
+  }, [driver?.id, currentTenant?.id, queryClient]);
 
-  // Loads without an associated trip (driver assigned directly but no dispatch yet).
-  const tripLoadIds = new Set(activeTrips.map((t: any) => t.loads?.id || t.load_id).filter(Boolean));
-  // Filtra cargas que não estão em uma viagem ativa mas estão atribuídas ao motorista
-  const standaloneLoads = myLoads.filter((l: any) => 
-    !l.trip_id && !tripLoadIds.has(l.id)
-  );
+  const loading = driverLoading || workspaceLoading;
 
   const loading = driverLoading || tripsLoading || loadsLoading;
   
-  // Inclui também viagens onde a carga associada está em estados operacionais
-  const tripsToShow: any[] = activeTrips.filter(t => 
-    TRIP_ACTIVE_STATUSES.includes(t.status as any) || 
-    (t.loads?.status && (LOAD_ACTIVE_STATUSES as readonly string[]).includes(t.loads.status))
-  );
+  const tripsToShow = activeTrips;
 
   // Constrói pontos reais do mapa a partir das paradas com lat/lng.
   const TERMINAL_STOP_STATUSES = new Set(['completed', 'delivered', 'refused', 'returned', 'failed', 'partial_delivery']);
@@ -182,12 +109,12 @@ export default function DriverHome() {
       </div>
 
 
-      {!loading && (!driver || ((activeTrips.length === 0 && !autoTrip) && standaloneLoads.length === 0)) && (
+      {!loading && (!driver || (!workspace?.has_active_trip && standaloneLoads.length === 0)) && (
         <NoLoadsHelp
           driverLinked={!!driver}
           driverActive={!!driver && (driver as any).status !== 'inactive'}
           hasAssignedLoads={standaloneLoads.length > 0 || myLoads.length > 0}
-          hasActiveTrip={activeTrips.length > 0 || !!autoTrip}
+          hasActiveTrip={workspace?.has_active_trip || false}
           driverName={driver?.name}
           driverId={driver?.id}
           onNavigateToLoads={() => navigate('/driver/loads')}
@@ -285,12 +212,11 @@ export default function DriverHome() {
                   className="w-full"
                   onClick={async () => {
                     if (trip.status === 'planned') {
-                      await supabase.rpc('transition_trip_status_v1', {
-                        p_tenant_id: currentTenant?.id,
-                        p_trip_id: trip.id,
-                        p_to_status: 'in_transit',
-                        p_actor_id: driver?.user_id,
-                        p_idempotency_key: `trip-start-${trip.id}-${Date.now()}`
+                      reportEvent.mutate({
+                        tripId: trip.id,
+                        eventType: 'trip_start',
+                        payload: { odometer: 0 }, // Should ideally prompt for this
+                        idempotencyKey: `trip-start-${trip.id}`
                       });
                     }
                     
@@ -344,7 +270,7 @@ export default function DriverHome() {
       )}
 
       {/* Checklist status banner */}
-      {autoTrip && !checklist.isLoading && (!checklist.preCompleted || !checklist.postCompleted) && (
+      {trip && !checklist.isLoading && (!checklist.preCompleted || !checklist.postCompleted) && (
         <Card
           className="border-warning/50 bg-warning/5 cursor-pointer hover:bg-warning/10 transition-colors"
           onClick={() => navigate('/driver/checklist')}
