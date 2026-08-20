@@ -5,7 +5,7 @@ const Index = () => {
     <div className="fixed inset-0 bg-background flex flex-col items-center justify-center p-8 text-center space-y-4">
       <h1 className="text-xl font-bold text-primary">Arquitetura de Cargas Consolidada</h1>
       <p className="max-w-2xl text-muted-foreground">
-        Refaça o portal sobre um único escopo autorizado. Se houver um cliente, selecione-o automaticamente; com vários, ofereça seleção e modo Todos. Resumo, busca, documentos, entregas, alertas e rastreamento devem usar o mesmo conjunto efetivo por client_id, remetente ou destinatário, sem retornar vazio por clientId nulo. Crie portal_shipment_read_model e timeline única, aplique RLS/ownership e elimine consultas paralelas. Teste usuário com 1 cliente, vários, remetente, destinatário e tentativa cross-tenant.
+        Torne operational_events a fonte canônica de eventos logísticos. Incidents será gestão de caso vinculada; delivery_occurrences ficará como legado/projeção até migração. Unifique criação, classificação, resolução e anexos em RPCs idempotentes. POD deve ser imutável e versionado, com foto, assinatura, recebedor, geolocalização, hash e vínculo à parada/documentos; correções geram nova versão. Crie timeline única carga→viagem→parada→documento→evento→POD usada por operação, motorista e portal. Migre com dry-run e teste duplicidade.
       </p>
       <div className="pt-4">
         <Navigate to="/dashboard" replace />
