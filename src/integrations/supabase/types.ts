@@ -15308,6 +15308,10 @@ export type Database = {
         Args: { _protocol_id: string; _reason: string }
         Returns: undefined
       }
+      check_tenant_membership: {
+        Args: { p_tenant_id: string }
+        Returns: undefined
+      }
       clear_reimport_batch_data:
         | { Args: { _tenant_id: string }; Returns: Json }
         | {
