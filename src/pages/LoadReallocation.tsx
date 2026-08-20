@@ -562,21 +562,18 @@ export default function LoadReallocation() {
     const movedItems: Array<{ desc: string; pallets: number; weight: number }> = [];
 
     const itemIds = Array.from(selectedItems);
-    for (const id of itemIds) {
-      const item = sourceItems.find(i => i.id === id);
-      if (item) movedItems.push({ desc: item.item_description, pallets: item.pallet_count || 0, weight: item.weight_kg || 0 });
-    }
     try {
-      const tenantId = (sourceLoad as any)?.tenant_id || (targetLoad as any)?.tenant_id;
+      const tenantId = currentTenant?.id || (sourceLoad as any)?.tenant_id || (targetLoad as any)?.tenant_id;
       if (!tenantId) throw new Error('Tenant ID não encontrado');
-      const { data, error } = await (supabase as any).rpc('move_load_items_v2', {
-        _tenant_id: tenantId,
-        _source_load_id: sourceLoadId,
-        _target_load_id: targetLoadId,
-        _document_ids: itemIds.map(id => sourceItems.find(i => i.id === id)?.fiscal_document_id).filter(Boolean),
+      
+      const { data, error } = await (supabase as any).rpc('move_load_items_v3', {
+        p_tenant_id: tenantId,
+        p_source_load_id: sourceLoadId,
+        p_target_load_id: targetLoadId,
+        p_item_ids: itemIds,
       });
       if (error) throw error;
-      moved = (data && (data as any).moved) ?? itemIds.length;
+      moved = itemIds.length;
     } catch (e: any) {
       errors = itemIds.length;
       toast.error(e?.message || 'Falha ao mover itens');
