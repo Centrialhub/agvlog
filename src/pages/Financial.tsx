@@ -1,4 +1,6 @@
 import { useState, useMemo } from 'react';
+
+
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
@@ -346,6 +348,8 @@ export default function Financial() {
 
   return (
     <div className="animate-fade-in space-y-5">
+
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -372,8 +376,10 @@ export default function Financial() {
         </div>
       </div>
 
+
       {/* ── Collapsible Filter Bar ── */}
       <Collapsible open={filtersOpen} onOpenChange={setFiltersOpen}>
+
         <div className="flex items-center gap-2">
           <CollapsibleTrigger asChild>
             <Button

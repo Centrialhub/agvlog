@@ -3126,6 +3126,69 @@ export type Database = {
           },
         ]
       }
+      data_repair_batch_items: {
+        Row: {
+          action_type: string
+          after_state: Json | null
+          batch_id: string
+          before_state: Json | null
+          created_at: string | null
+          entity_id: string
+          entity_type: string
+          error_message: string | null
+          executed_at: string | null
+          id: string
+          payload: Json | null
+          status: string | null
+          tenant_id: string
+        }
+        Insert: {
+          action_type: string
+          after_state?: Json | null
+          batch_id: string
+          before_state?: Json | null
+          created_at?: string | null
+          entity_id: string
+          entity_type: string
+          error_message?: string | null
+          executed_at?: string | null
+          id?: string
+          payload?: Json | null
+          status?: string | null
+          tenant_id: string
+        }
+        Update: {
+          action_type?: string
+          after_state?: Json | null
+          batch_id?: string
+          before_state?: Json | null
+          created_at?: string | null
+          entity_id?: string
+          entity_type?: string
+          error_message?: string | null
+          executed_at?: string | null
+          id?: string
+          payload?: Json | null
+          status?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "data_repair_batch_items_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "data_repair_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "data_repair_batch_items_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       data_repair_batches: {
         Row: {
           approved_at: string | null
@@ -15548,7 +15611,7 @@ export type Database = {
         Returns: Json
       }
       execute_data_repair_v1: {
-        Args: { p_batch_id: string; p_tenant_id: string }
+        Args: { p_batch_id: string; p_dry_run?: boolean; p_tenant_id: string }
         Returns: Json
       }
       finalize_driver_delivery: {
@@ -16044,6 +16107,16 @@ export type Database = {
           p_cursor?: string
           p_limit?: number
           p_search?: string
+          p_tenant_id: string
+        }
+        Returns: Json
+      }
+      list_employees_v1: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_status?: string
           p_tenant_id: string
         }
         Returns: Json

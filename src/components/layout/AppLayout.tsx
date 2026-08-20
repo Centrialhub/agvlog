@@ -3,6 +3,8 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useTenant } from '@/hooks/useTenant';
 import { useCompanyProfile } from '@/hooks/useCompanyProfile';
+import { isFeatureEnabled, FeatureKey } from '@/lib/featureFlags';
+
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,9 +16,10 @@ import {
   PackageOpen, MonitorPlay, Sprout, Tag, ShieldCheck,
 } from 'lucide-react';
 
-type NavLeaf = { label: string; href: string; icon: ReactNode };
-type NavGroup = { label: string; icon: ReactNode; items: NavLeaf[] };
+type NavLeaf = { label: string; href: string; icon: ReactNode; feature?: FeatureKey };
+type NavGroup = { label: string; icon: ReactNode; items: NavLeaf[]; feature?: FeatureKey };
 type NavEntry = NavLeaf | NavGroup;
+
 
 interface NavSection {
   label: string;
@@ -41,7 +44,7 @@ const navSections: NavSection[] = [
           { label: 'NFS-e (Serviços)', href: '/nfse', icon: <FileSpreadsheet className="h-4 w-4" /> },
           { label: 'ORT', href: '/ort-management', icon: <FileSearch className="h-4 w-4" /> },
           { label: 'Auditoria ICMS', href: '/cte-consistency', icon: <ShieldCheck className="h-4 w-4" /> },
-          { label: 'MDF (provisório)', href: '/mdfe-provisional', icon: <FileText className="h-4 w-4" /> },
+          { label: 'MDF (provisório)', href: '/mdfe-provisional', icon: <FileText className="h-4 w-4" />, feature: 'DRIVER_WORKSPACE' },
         ],
       },
       {
@@ -65,11 +68,12 @@ const navSections: NavSection[] = [
         ],
       },
       { label: 'Controle de Cargas', href: '/load-control', icon: <PackageCheck className="h-4 w-4" /> },
-      { label: 'Monitoramento de Motoristas', href: '/driver-monitoring', icon: <Users className="h-4 w-4" /> },
+      { label: 'Monitoramento de Motoristas', href: '/driver-monitoring', icon: <Users className="h-4 w-4" />, feature: 'DRIVER_WORKSPACE' },
       { label: 'Devolução de Paletes', href: '/pallet-returns', icon: <Boxes className="h-4 w-4" /> },
       { label: 'Falta de Mercadoria', href: '/merchandise-shortages', icon: <AlertOctagon className="h-4 w-4" /> },
       { label: 'Eventos Operacionais', href: '/events', icon: <AlertOctagon className="h-4 w-4" /> },
       { label: 'Ocorrências Formais (RH/Auditoria)', href: '/incidents', icon: <AlertOctagon className="h-4 w-4" /> },
+
       { label: 'Relatórios de Ocorrências', href: '/occurrence-reports', icon: <FileSpreadsheet className="h-4 w-4" /> },
       { label: 'Checklists', href: '/checklists', icon: <ClipboardCheck className="h-4 w-4" /> },
       { label: 'Produtividade', href: '/productivity', icon: <TrendingUp className="h-4 w-4" /> },
@@ -79,6 +83,7 @@ const navSections: NavSection[] = [
     label: 'Financeiro',
     items: [
       { label: 'Painel Financeiro', href: '/financial', icon: <Wallet className="h-4 w-4" /> },
+
       { label: 'Contas a Receber', href: '/receivables', icon: <DollarSign className="h-4 w-4" /> },
       { label: 'Contas a Pagar', href: '/payables', icon: <DollarSign className="h-4 w-4" /> },
       { label: 'Faturas por Cliente', href: '/client-invoices', icon: <FileText className="h-4 w-4" /> },
@@ -88,7 +93,9 @@ const navSections: NavSection[] = [
       { label: 'Acerto de Motoristas', href: '/driver-settlements', icon: <Receipt className="h-4 w-4" /> },
       { label: 'Conciliação Bancária', href: '/bank-reconciliation', icon: <Wallet className="h-4 w-4" /> },
       { label: 'Folha de Pagamento', href: '/payroll', icon: <Wallet className="h-4 w-4" /> },
+      { label: 'Razão Operacional', href: '/ledger', icon: <FileText className="h-4 w-4" />, feature: 'OPERATIONAL_LEDGER' },
       { label: 'Centros de Custo', href: '/cost-centers', icon: <Tag className="h-4 w-4" /> },
+
     ],
   },
   {
@@ -128,6 +135,8 @@ const navSections: NavSection[] = [
     label: 'Sistema',
     items: [
       { label: 'Equipe & Acessos', href: '/team', icon: <Users className="h-4 w-4" /> },
+      { label: 'Auditoria de Dados', href: '/data-quality', icon: <ShieldCheck className="h-4 w-4" />, feature: 'DATA_QUALITY_CENTER' },
+
       { label: 'Integrações', href: '/integration-health', icon: <Plug className="h-4 w-4" /> },
       { label: 'Configurações', href: '/settings', icon: <Settings className="h-4 w-4" /> },
     ],
@@ -223,7 +232,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 )}
                 {(!sectionCollapsed || collapsed) && (
                   <div className="space-y-0.5 px-1.5">
-                    {section.items.map(entry => {
+                    {section.items.filter(entry => !entry.feature || isFeatureEnabled(entry.feature)).map(entry => {
                       if (!isGroup(entry)) {
                         const active = isActive(entry.href);
                         return (
@@ -249,7 +258,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                         // Mini mode: render children flat with icons only
                         return (
                           <div key={entry.label} className="space-y-0.5">
-                            {entry.items.map(item => {
+                            {entry.items.filter(item => !item.feature || isFeatureEnabled(item.feature)).map(item => {
+
                               const active = isActive(item.href);
                               return (
                                 <Link
@@ -287,7 +297,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                           </button>
                           {!groupCollapsed && (
                             <div className="ml-3 mt-0.5 space-y-0.5 border-l border-sidebar-border/60 pl-2">
-                              {entry.items.map(item => {
+                              {entry.items.filter(item => !item.feature || isFeatureEnabled(item.feature)).map(item => {
                                 const active = isActive(item.href);
                                 return (
                                   <Link
