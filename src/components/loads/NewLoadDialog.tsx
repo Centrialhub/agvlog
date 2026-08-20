@@ -54,7 +54,7 @@ function useDebouncedValue<T>(value: T, delay: number) {
 }
 
 export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
-  const createLoad = useCreateLoadWithNextNumber();
+  const createLoad = useCreateLoad();
   const { currentTenant } = useTenant();
   const { user } = useAuth();
   const { data: clients = [] } = useClientsArray();
