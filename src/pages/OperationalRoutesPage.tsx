@@ -35,9 +35,12 @@ export default function OperationalRoutesPage() {
   });
   const [newDest, setNewDest] = useState('');
 
+  const { data: routesData } = useOperationalRoutesArray({ includeInactive: true });
+  const routes = (routesData as any) || [];
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return routes.filter(r => {
+    return routes.filter((r: any) => {
       if (!showInactive && !r.active) return false;
       if (!q) return true;
       return r.name.toLowerCase().includes(q) || (r.region_name || '').toLowerCase().includes(q);

@@ -99,7 +99,8 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
 
   // Group docs by operational route
   const groups = useMemo(() => {
-    const routeRefs = operationalRoutes.map(r => ({
+    const routes = (operationalRoutes as any) || [];
+    const routeRefs = routes.map((r: any) => ({
       id: r.id,
       name: r.name,
       destinations: Array.isArray(r.destinations)

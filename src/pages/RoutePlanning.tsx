@@ -133,7 +133,7 @@ export default function RoutePlanning() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const dispatchPlan = useDispatchRoutePlan();
-  const { data: operationalRoutes = [] } = useOperationalRoutesArray();
+  const { data: routesData } = useOperationalRoutesArray(); const operationalRoutes = (routesData as any) || [];
 
   const { data: drivers = [] } = useQuery({
     queryKey: ['drivers_for_routing', currentTenant?.id],

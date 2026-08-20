@@ -90,7 +90,7 @@ export default function Ingestion() {
   const { data: vehicles = [] } = useVehicles();
   const { data: drivers = [] } = useDrivers();
   const { data: loadsData } = useLoadsArray(); const loads = (loadsData as any) || [];
-  const { data: operationalRoutes = [] } = useOperationalRoutesArray();
+  const { data: routesData } = useOperationalRoutesArray(); const operationalRoutes = (routesData as any) || [];
   const { currentTenant } = useTenant();
   const { user } = useAuth();
   const createDoc = useCreateFiscalDocument();
