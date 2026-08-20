@@ -117,16 +117,16 @@ export function useCreateLoadWithNextNumber() {
 }
 
 export function useUpdateLoad() {
+  const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...changes }: Partial<Load> & { id: string }) => {
-      const { data, error } = await supabase
-        // linter:allow-direct-write loads manual-load-update 2026-12-31
-      .from('loads')
-        .update(changes as any)
-        .eq('id', id)
-        .select()
-        .single();
+      if (!currentTenant) throw new Error('Tenant not found');
+      const { data, error } = await supabase.rpc('update_load_v1', {
+        p_tenant_id: currentTenant.id,
+        p_load_id: id,
+        p_changes: changes as any,
+      });
       if (error) throw error;
       return data;
     },
