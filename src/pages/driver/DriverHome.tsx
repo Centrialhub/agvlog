@@ -27,6 +27,7 @@ export default function DriverHome() {
   const queryClient = useTanstackQueryClient();
   const { data: workspace, isLoading: workspaceLoading } = useDriverWorkspace();
   const { reportEvent } = useDriverExecution();
+  const { outbox, syncAll, isSyncing, isOffline } = useDriverSync();
   
   const trip = workspace?.trip;
   const checklist = useChecklistStatus(trip?.id);
