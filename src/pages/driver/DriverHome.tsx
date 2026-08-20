@@ -283,12 +283,15 @@ export default function DriverHome() {
                   size="sm"
                   className="w-full"
                   onClick={async () => {
-                    // guardrail:allow-direct-write
-                    await supabase
-                      .from('dispatch_trips')
-                      .update({ status: 'dispatched' })
-                      .eq('id', trip.id)
-                      .eq('status', 'planned');
+                    if (trip.status === 'planned') {
+                      await supabase.rpc('transition_trip_status_v1', {
+                        p_tenant_id: currentTenant?.id,
+                        p_trip_id: trip.id,
+                        p_to_status: 'in_transit',
+                        p_actor_id: driver?.user_id,
+                        p_idempotency_key: `trip-start-${trip.id}-${Date.now()}`
+                      });
+                    }
                     
                     navigate(`/driver/stops?trip=${trip.id}`);
                   }}

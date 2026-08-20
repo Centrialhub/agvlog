@@ -5473,6 +5473,48 @@ export type Database = {
         }
         Relationships: []
       }
+      entity_state_audit_log: {
+        Row: {
+          actor_id: string | null
+          created_at: string | null
+          entity_id: string
+          entity_type: string
+          from_status: string | null
+          id: string
+          idempotency_key: string | null
+          metadata: Json | null
+          reason: string | null
+          tenant_id: string
+          to_status: string
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string | null
+          entity_id: string
+          entity_type: string
+          from_status?: string | null
+          id?: string
+          idempotency_key?: string | null
+          metadata?: Json | null
+          reason?: string | null
+          tenant_id: string
+          to_status: string
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string | null
+          entity_id?: string
+          entity_type?: string
+          from_status?: string | null
+          id?: string
+          idempotency_key?: string | null
+          metadata?: Json | null
+          reason?: string | null
+          tenant_id?: string
+          to_status?: string
+        }
+        Relationships: []
+      }
       events: {
         Row: {
           created_at: string
@@ -14818,6 +14860,10 @@ export type Database = {
           suggested_action: string
         }[]
       }
+      audit_data_consistency_v3: {
+        Args: { p_fix?: boolean; p_tenant_id: string }
+        Returns: Json
+      }
       build_fiscal_documents_deleted_recovery_dry_run: {
         Args: { _end_time: string; _start_time: string; _tenant_id?: string }
         Returns: {
@@ -15031,6 +15077,10 @@ export type Database = {
       }
       delete_payroll_entry_item: {
         Args: { _item_id: string; _reason: string }
+        Returns: undefined
+      }
+      derive_trip_and_load_status_v1: {
+        Args: { p_tenant_id: string; p_trip_id: string }
         Returns: undefined
       }
       detach_load_from_driver_settlement: {
@@ -15944,6 +15994,30 @@ export type Database = {
       sync_financial_obligations: {
         Args: { _date_from?: string; _date_to?: string; _tenant_id: string }
         Returns: Json
+      }
+      transition_stop_status_v1: {
+        Args: {
+          p_actor_id: string
+          p_idempotency_key?: string
+          p_metadata?: Json
+          p_reason?: string
+          p_stop_id: string
+          p_tenant_id: string
+          p_to_status: string
+        }
+        Returns: string
+      }
+      transition_trip_status_v1: {
+        Args: {
+          p_actor_id: string
+          p_idempotency_key?: string
+          p_metadata?: Json
+          p_reason?: string
+          p_tenant_id: string
+          p_to_status: string
+          p_trip_id: string
+        }
+        Returns: string
       }
       unhold_load: { Args: { _load_id: string }; Returns: undefined }
       unlink_fiscal_documents_from_load_v1: {

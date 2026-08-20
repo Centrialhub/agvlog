@@ -2,17 +2,17 @@ import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
+import { useAuth } from '@/hooks/useAuth';
 import { useCurrentDriver, useActiveTrip } from '@/hooks/useCurrentDriver';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, Navigation, CheckCircle, Clock, ArrowRight, Package } from 'lucide-react';
+import { MapPin, Navigation, CheckCircle, Clock, ArrowRight } from 'lucide-react';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { isStopTerminal, STOP_STATUS_LABELS, LOAD_ACTIVE_STATUSES } from '@/lib/status';
-
+import { isStopTerminal, STOP_STATUS_LABELS } from '@/lib/status';
 
 const STATUS_LABELS: Record<string, string> = STOP_STATUS_LABELS as any;
 
@@ -35,10 +35,10 @@ export default function DriverStops() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const tripIdParam = searchParams.get('trip');
+  const { user } = useAuth();
   const { data: driver } = useCurrentDriver();
   const { data: autoTrip } = useActiveTrip(driver?.id);
 
-  // If tripId is in URL use it, otherwise use auto-detected active trip
   const { data: trip } = useQuery({
     queryKey: ['driver_trip_specific', tripIdParam],
     queryFn: async () => {
@@ -72,7 +72,6 @@ export default function DriverStops() {
     enabled: !!activeTrip?.id,
   });
 
-  // Realtime: refresh stops when operator marks arrival/departure or updates status.
   useEffect(() => {
     if (!activeTrip?.id) return;
     const channel = supabase
@@ -92,24 +91,21 @@ export default function DriverStops() {
 
   const updateStop = useMutation({
     mutationFn: async ({ stopId, action, reason }: { stopId: string; action: 'arrival' | 'depart' | 'skipped' | 'refused' | 'damaged' | 'returned' | 'partial_delivery'; reason?: string }) => {
-      if (!activeTrip) throw new Error('Sem viagem ativa.');
-      if (action === 'arrival') {
-        const { error } = await supabase.rpc('driver_mark_arrival', { _stop_id: stopId });
-        if (error) throw error;
-        return;
-      }
-      if (action === 'depart') {
-        // "Registrar saída" — apenas marca actual_departure_at e gera evento de departure.
-        // A conclusão real da entrega acontece em DriverDeliveries via driver_finalize_delivery.
-        const { error } = await supabase.rpc('driver_register_departure', {
-          _stop_id: stopId, _notes: null,
-        } as any);
-        if (error) throw error;
-        return;
-      }
-      const { error } = await supabase.rpc('driver_update_stop_status', {
-        _stop_id: stopId, _new_status: action, _reason: reason || null,
+      if (!activeTrip || !currentTenant || !user) throw new Error('Dados incompletos para atualização.');
+      
+      const newStatus = action === 'arrival' ? 'arrived' : 
+                       action === 'depart' ? 'servicing' : 
+                       action;
+
+      const { error } = await supabase.rpc('transition_stop_status_v1', {
+        p_tenant_id: currentTenant.id,
+        p_stop_id: stopId,
+        p_to_status: newStatus,
+        p_actor_id: user.id,
+        p_reason: reason || null,
+        p_idempotency_key: `${stopId}-${newStatus}-${Date.now()}`,
       });
+      
       if (error) throw error;
     },
     onSuccess: () => {
@@ -142,7 +138,6 @@ export default function DriverStops() {
           Carga {effectiveTrip?.loads?.load_number || '—'} · {effectiveStops.length} parada(s)
         </p>
       </div>
-
 
       {!effectiveTrip?.id ? (
         <Card>

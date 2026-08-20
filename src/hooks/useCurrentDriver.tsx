@@ -8,6 +8,7 @@ export interface CurrentDriver {
   id: string;
   name: string;
   tenant_id: string;
+  user_id?: string;
 }
 
 export function useCurrentDriver() {
@@ -21,7 +22,7 @@ export function useCurrentDriver() {
         if (!user || !currentTenant) return null;
         const { data, error } = await (supabase
           .from('drivers')
-          .select('id, name, tenant_id') as any)
+          .select('id, name, tenant_id, user_id') as any)
           .eq('user_id', user.id)
           .eq('tenant_id', currentTenant.id)
           .eq('active', true)
