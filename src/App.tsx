@@ -83,6 +83,7 @@ const ProductHistory = lazy(() => import("@/pages/ProductHistory"));
 const ImportedNotesSummary = lazy(() => import("@/pages/ImportedNotesSummary"));
 const LoadControl = lazy(() => import("@/pages/LoadControl"));
 const ClosingReports = lazy(() => import("@/pages/ClosingReports"));
+const CteConsistencyReport = lazy(() => import("@/pages/CteConsistencyReport"));
 const RuralClients = lazy(() => import("@/pages/RuralClients"));
 const DriverMonitoring = lazy(() => import("@/pages/DriverMonitoring"));
 const OccurrenceReports = lazy(() => import("@/pages/OccurrenceReports"));
@@ -315,6 +316,7 @@ const App = () => (
             <Route path="/cte-search" element={<ProtectedRoute><CteSearch /></ProtectedRoute>} />
             <Route path="/cte-hub" element={<ProtectedRoute><CteHub /></ProtectedRoute>} />
             <Route path="/nfse" element={<ProtectedRoute><NFSe /></ProtectedRoute>} />
+            <Route path="/cte-consistency" element={<ProtectedRoute><CteConsistencyReport /></ProtectedRoute>} />
             <Route path="/pickup-orders" element={<ProtectedRoute><PickupOrders /></ProtectedRoute>} />
             <Route path="/ort-management" element={<ProtectedRoute><OrtManagement /></ProtectedRoute>} />
             <Route path="/product-traceability" element={<ProtectedRoute><ProductTraceability /></ProtectedRoute>} />
