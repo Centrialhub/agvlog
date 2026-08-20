@@ -11,6 +11,7 @@ export interface DriverWorkspace {
     status: string;
     start_km: number | null;
     created_at: string;
+    vehicle_id: string | null;
   };
   loads: Array<{
     id: string;
@@ -30,6 +31,8 @@ export interface DriverWorkspace {
     address: string | null;
     arrival_time: string | null;
     departure_time: string | null;
+    latitude: number | null;
+    longitude: number | null;
     documents: Array<{
       id: string;
       number: string;
@@ -74,7 +77,7 @@ export function useDriverWorkspace() {
       return data as unknown as DriverWorkspace;
     },
     enabled: !!driver && !!currentTenant,
-    refetchInterval: 30000, // Refresh every 30s
+    refetchInterval: 30000,
   });
 }
 
