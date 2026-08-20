@@ -323,18 +323,23 @@ export default function DriverDeliveries() {
         signaturePath = path;
       }
 
-      // Caminho seguro: finalizador "ENTREGUE" passa por RPC transacional.
+      // Caminho seguro: finalizador "ENTREGUE" passa por RPC transacional de transição de estado.
       if (def.finalAction === 'delivered') {
         try {
-          const { error: rpcErr, data } = await supabase.rpc('driver_finalize_delivery', {
-            _stop_id: eventForm.stop.id,
-            _receiver_name: receiverName.trim(),
-            _signature_path: signaturePath,
-            _photo_paths: photoPaths,
-            _receiver_document: receiverDoc.trim() || null,
-            _receiver_role: null,
-            _notes: notes || null,
-          } as any);
+          const { error: rpcErr, data } = await supabase.rpc('transition_stop_status_v1', {
+            p_tenant_id: currentTenant!.id,
+            p_stop_id: eventForm.stop.id,
+            p_to_status: 'delivered',
+            p_actor_id: driver?.user_id,
+            p_reason: notes?.trim() || 'Entrega realizada via App',
+            p_idempotency_key: `finalize-${eventForm.stop.id}-${Date.now()}`,
+            p_metadata: {
+              receiver_name: receiverName.trim(),
+              receiver_document: receiverDoc.trim() || null,
+              signature_path: signaturePath,
+              photo_paths: photoPaths,
+            }
+          });
           if (rpcErr) {
             console.error('[DriverDeliveries] Finalize RPC error:', rpcErr);
             throw rpcErr;
