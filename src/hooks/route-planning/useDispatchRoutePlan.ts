@@ -24,29 +24,21 @@ export function useDispatchRoutePlan() {
       s.manual_order ?? s.optimized_order ?? s.original_order ?? 9999;
     const stops = [...payload.stops]
         .sort((a, b) => orderOf(a) - orderOf(b))
-        .map((s) => ({
-          client_id: s.client_id,
+        .map((s, idx) => ({
           destination: s.destination,
-          latitude: s.latitude ?? null,
-          longitude: s.longitude ?? null,
-          planned_arrival_at: s.planned_arrival_at,
-          estimated_departure_at: s.estimated_departure_at,
-          service_time_minutes: s.service_time_minutes,
-          delivery_window_start: s.delivery_window_start,
-          delivery_window_end: s.delivery_window_end,
-          risk_level: s.risk_level,
-          risk_reason: s.risk_reason,
-          notes: s.notes,
-          document_ids: s.fiscal_document_ids, // Mapped to document_ids for new RPC
+          client_id: s.client_id,
+          stop_order: idx + 1,
+          document_ids: s.fiscal_document_ids || [],
         }));
 
     const { data, error } = await supabase.rpc('plan_dispatch_trip_v2', {
       p_tenant_id: currentTenant.id,
       p_driver_id: payload.driver_id,
       p_vehicle_id: payload.vehicle_id,
+      p_route_name: payload.route_name,
       p_load_ids: payload.load_ids,
       p_stops: stops,
-      p_route_name: payload.route_name,
+      p_idempotency_key: payload.planning_draft_id || null,
     });
 
     if (error) throw new Error(error.message || String(error));
