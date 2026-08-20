@@ -155,13 +155,19 @@ export function useDeleteLoad() {
 }
 
 export function useDeleteLoads() {
+  const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (ids: string[]) => {
-      const { error } = await supabase
-        // linter:allow-direct-write loads manual-load-batch-delete 2026-12-31
-      .from('loads').delete().in('id', ids);
-      if (error) throw error;
+      if (!currentTenant) throw new Error('Tenant not found');
+      // Sequential RPC calls for batch deletion to ensure triggers and logic apply per-load
+      for (const id of ids) {
+        const { error } = await supabase.rpc('delete_load_v1', {
+          p_tenant_id: currentTenant.id,
+          p_load_id: id,
+        });
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['loads'] });
