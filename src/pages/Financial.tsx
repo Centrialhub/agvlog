@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useReceivables } from '@/hooks/useReceivables';
-import { useOperationalFinancialSummary } from '@/hooks/useOperationalFinancialSummary';
+// import { useOperationalFinancialSummary } from '@/hooks/useOperationalFinancialSummary';
 import { useClients, useClientsArray } from '@/hooks/useClients';
 import { useCostCenters } from '@/hooks/useCostCenters';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -199,10 +199,14 @@ export default function Financial() {
   };
 
   // ── Computed KPIs ──
+  const summaryKpis: any = null;
+  const isSummaryLoading = false;
+  /*
   const { data: summaryKpis, isLoading: isSummaryLoading } = useOperationalFinancialSummary(
     dateFrom || (period === 'all' ? '' : format(subDays(new Date(), period === '7d' ? 7 : period === '30d' ? 30 : 90), 'yyyy-MM-dd')),
     dateTo || format(new Date(), 'yyyy-MM-dd')
   );
+  */
 
   const kpis = useMemo(() => {
     let filteredDocs = billableDocs.filter((d: any) => filterByPeriod(d.issue_date || d.created_at));
