@@ -160,13 +160,14 @@ export default function LoadDetail() {
         fiscal_document_ids: idx === 0 ? fdIds : [],
       }));
 
-      const { data: tripId, error } = await (supabase as any).rpc('plan_dispatch_trip_v2', {
+      const { data: tripId, error } = await supabase.rpc('plan_dispatch_trip_v2', {
         p_tenant_id: currentTenant.id,
         p_driver_id: dispatchForm.driver_id || load.driver_id,
         p_vehicle_id: dispatchForm.vehicle_id || load.vehicle_id,
         p_route_name: `Carga ${load.load_number}`,
         p_load_ids: [load.id],
         p_stops: stopsPayload,
+        p_idempotency_key: `dispatch-${load.id}-${Date.now()}`
       });
       if (error) throw error;
       return { id: tripId };
