@@ -49,6 +49,19 @@ type SourceTab = 'period' | 'loads';
 const OPERATION_TYPES = OPERATION_TYPE_OPTIONS;
 type OpType = OperationType;
 
+function matchesOperation(
+  opType: string | null | undefined,
+  allOperations: boolean,
+  selectedOperations: ReadonlySet<OpType>,
+) {
+  if (allOperations || selectedOperations.size === 0) return true;
+  return opType ? selectedOperations.has(opType as OpType) : false;
+}
+
+function ciIncludes(haystack: string | null | undefined, needle: string) {
+  return !needle || (haystack || '').toLowerCase().includes(needle.toLowerCase());
+}
+
 // ============================================================================
 // Preferências do usuário — persistência por tenant
 // ============================================================================
@@ -172,14 +185,6 @@ export default function Billing() {
   const [opTypes, setOpTypes] = useState<Set<OpType>>(new Set());
   const [allOps, setAllOps] = useState(true);
 
-  const matchesOp = (opType: string | null | undefined) => {
-    if (allOps || opTypes.size === 0) return true;
-    return opType ? opTypes.has(opType as OpType) : false;
-  };
-
-  const ciIncludes = (haystack: string | null | undefined, needle: string) =>
-    !needle || (haystack || '').toLowerCase().includes(needle.toLowerCase());
-
   // ===== Pré-filtragem server-side (usa índices criados) =====
   const [onlySpecific, setOnlySpecific] = useState<boolean>(false);
   const problematicInvoices = ['444798', '444797', '444796', '446083', '446072', '446071', '446070', '446069', '446068', '446067', '446066', '446065', '446064'];
@@ -248,7 +253,7 @@ export default function Billing() {
           if (actualLoadStart && act < actualLoadStart) return false;
           if (actualLoadEnd && act > actualLoadEnd) return false;
         }
-        if (!matchesOp(load?.operation_type ?? (d as any).operation_type)) return false;
+        if (!matchesOperation(load?.operation_type ?? (d as any).operation_type, allOps, opTypes)) return false;
 
         // Cidade do destinatário (já filtrada server-side se selecionada, mas mantida para consistência no client)
         if (recipientCity !== SENTINEL_NONE && normalizeCity(d.recipient_city) !== recipientCity) return false;
