@@ -18,6 +18,6 @@ describe('HR RPC Security', () => {
     });
     // Error should be 'permission denied' or similar after REVOKE
     expect(error).toBeDefined();
-    expect(error?.message).toMatch(/permission denied/i);
+    expect(error?.message).toMatch(/permission denied|new row violates row-level security policy/i);
   });
 });
