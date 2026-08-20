@@ -15243,6 +15243,18 @@ export type Database = {
         Args: { _dispatch_trip_id: string; _reason: string; _tenant_id: string }
         Returns: undefined
       }
+      monitor_simples_nacional_icms_violations: {
+        Args: never
+        Returns: {
+          created_at: string
+          cte_number: string
+          emitter_name: string
+          fiscal_document_id: string
+          icms_aliquota: number
+          icms_base: number
+          icms_valor: number
+        }[]
+      }
       move_load_items_between_loads: {
         Args: {
           _item_ids: string[]
