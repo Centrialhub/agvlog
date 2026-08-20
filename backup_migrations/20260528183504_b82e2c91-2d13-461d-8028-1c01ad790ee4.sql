@@ -1,0 +1,1 @@
+ALTER TABLE public.pickup_orders ADD COLUMN IF NOT EXISTS manual_meta jsonb;

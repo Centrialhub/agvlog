@@ -1,0 +1,25 @@
+
+INSERT INTO public.operational_routes (tenant_id, name, classification, destinations, region_name, active)
+VALUES
+  ('db36dc9b-2bfb-4e3f-985b-ec4880b7ee97', 'MG-ARACUAI', 'municipality', '[{"name":"ARAÇUAÍ"}]'::jsonb, 'ROTA ARACUAI', true),
+  ('db36dc9b-2bfb-4e3f-985b-ec4880b7ee97', 'MG-BOCAIUVA', 'municipality', '[{"name":"BOCAIÚVA"},{"name":"GUARACIAMA"}]'::jsonb, 'MG BOCAIUVA', true),
+  ('db36dc9b-2bfb-4e3f-985b-ec4880b7ee97', 'MG-BR. DE MINAS', 'municipality', '[{"name":"BRASÍLIA DE MINAS"},{"name":"CAMPO AZUL"},{"name":"SÃO ROMÃO"},{"name":"UBAÍ"}]'::jsonb, 'MG-BRASILIA DE MINAS', true),
+  ('db36dc9b-2bfb-4e3f-985b-ec4880b7ee97', 'MG-C. JESUS', 'municipality', '[{"name":"SÃO JOÃO DO PACUÍ"},{"name":"SÃO JOÃO DA LAGOA"},{"name":"CORAÇÃO DE JESUS"},{"name":"CLARO DOS POÇÕES"},{"name":"LAGOA DOS PATOS"}]'::jsonb, 'MG-CORAÇÃO JESUS', true),
+  ('db36dc9b-2bfb-4e3f-985b-ec4880b7ee97', 'MG-CURVELO', 'municipality', '[{"name":"JOAQUIM FELÍCIO"},{"name":"SANTO HIPÓLITO"},{"name":"PRESIDENTE JUSCELINO"},{"name":"OLHOS-D ÁGUA"},{"name":"MORRO DA GARÇA"},{"name":"INIMUTABA"},{"name":"CORINTO"},{"name":"ENGENHEIRO NAVARRO"},{"name":"CURVELO"},{"name":"BUENÓPOLIS"},{"name":"AUGUSTO DE LIMA"},{"name":"FRANCISCO DUMONT"}]'::jsonb, 'MG-CURVELO', true),
+  ('db36dc9b-2bfb-4e3f-985b-ec4880b7ee97', 'MG-DIAMANTINA', 'municipality', '[{"name":"OLHOS-D ÁGUA"},{"name":"SERRO"},{"name":"SENADOR M. GONÇALVES"},{"name":"SÃO G. DO RIO PRETO"},{"name":"PRESIDENTE KUBITCHEK"},{"name":"GOUVEIA"},{"name":"COUTO DE M. DE MINAS"},{"name":"DIAMANTINA"},{"name":"DATAS"},{"name":"CONGONHAS DO NORTE"},{"name":"CONCEIÇÃO M. DENTRO"},{"name":"FELÍCIO DOS SANTOS"}]'::jsonb, 'MG-DIAMANTINA', true),
+  ('db36dc9b-2bfb-4e3f-985b-ec4880b7ee97', 'MG-ESPINOSA', 'municipality', '[{"name":"PAI PEDRO"},{"name":"MATO VERDE"},{"name":"MAMONAS"},{"name":"MONTE AZUL"},{"name":"ESPINOSA"},{"name":"CATUTI"},{"name":"GAMELEIRAS"}]'::jsonb, 'MG-ESPINOSA', true),
+  ('db36dc9b-2bfb-4e3f-985b-ec4880b7ee97', 'MG-FRANCISCO SA', 'municipality', '[{"name":"BOTUMIRIM"},{"name":"CRISTÁLIA"},{"name":"FRANCISCO SÁ"},{"name":"GRÃO MOGOL"}]'::jsonb, 'MG-FRANCISCO SA', true),
+  ('db36dc9b-2bfb-4e3f-985b-ec4880b7ee97', 'MG-ITACAMBIRA', 'municipality', '[{"name":"GLAUCILÂNDIA"},{"name":"ITACAMBIRA"},{"name":"JURAMENTO"}]'::jsonb, 'MG-ITACAMBIRA', true),
+  ('db36dc9b-2bfb-4e3f-985b-ec4880b7ee97', 'MG-JAIBA', 'municipality', '[{"name":"MONTALVÂNIA"},{"name":"VERDELÂNDIA"},{"name":"MIRAVÂNIA"},{"name":"MANGA"},{"name":"JUVENÍLIA"},{"name":"JAÍBA"},{"name":"MATIAS CARDOSO"}]'::jsonb, 'MG-JAIBA', true),
+  ('db36dc9b-2bfb-4e3f-985b-ec4880b7ee97', 'MG-JANAUBA', 'municipality', '[{"name":"CAPITÃO ENÉAS"},{"name":"JANAÚBA"},{"name":"NOVA PORTEIRINHA"}]'::jsonb, 'MG-JANAUBA', true),
+  ('db36dc9b-2bfb-4e3f-985b-ec4880b7ee97', 'MG-JANUARIA', 'municipality', '[{"name":"PEDRAS DE M. DA CRUZ"},{"name":"BONITO DE MINAS"},{"name":"CÔNEGO MARINHO"},{"name":"ITACARAMBI"},{"name":"JANUÁRIA"},{"name":"LONTRA"},{"name":"SÃO JOÃO DAS MISSÕES"}]'::jsonb, 'MG-JANUARIA', true),
+  ('db36dc9b-2bfb-4e3f-985b-ec4880b7ee97', 'MG-MC-001', 'municipality', '[{"name":"MONTES CLAROS"}]'::jsonb, 'MG-Montes Claros 001', true),
+  ('db36dc9b-2bfb-4e3f-985b-ec4880b7ee97', 'MG-MIRABELA', 'municipality', '[{"name":"MIRABELA"}]'::jsonb, 'MG-MIRABELA', true),
+  ('db36dc9b-2bfb-4e3f-985b-ec4880b7ee97', 'MG-PIRAPORA', 'municipality', '[{"name":"BURITIZEIRO"},{"name":"IBIAÍ"},{"name":"JEQUITAÍ"},{"name":"LASSANCE"},{"name":"PIRAPORA"},{"name":"PONTO CHIQUE"},{"name":"VÁRZEA DA PALMA"}]'::jsonb, 'MG-PIRAPORA', true),
+  ('db36dc9b-2bfb-4e3f-985b-ec4880b7ee97', 'MG-PORTEIRINHA', 'municipality', '[{"name":"RIACHO DOS MACHADOS"},{"name":"SERRANÓPILIS DE MINA"},{"name":"PORTEIRINHA"}]'::jsonb, 'MG-PORTEIRINHA', true),
+  ('db36dc9b-2bfb-4e3f-985b-ec4880b7ee97', 'MG-SALINAS', 'municipality', '[{"name":"SANTA CRUZ DE MINAS"},{"name":"SALINAS"},{"name":"SANTA C. DE SALINAS"},{"name":"RUBELITA"},{"name":"CURRAL DE DENTRO"},{"name":"NOVORIZONTE"},{"name":"JOSENÓPOLIS"},{"name":"FRUTA DE LEITE"},{"name":"PADRE CARVALHO"}]'::jsonb, 'MG-SALINAS', true),
+  ('db36dc9b-2bfb-4e3f-985b-ec4880b7ee97', 'MG-SAO FRANCISCO', 'municipality', '[{"name":"ICARAÍ DE MINAS"},{"name":"LUISLÂNDIA"},{"name":"PINTÓPOLIS"},{"name":"SÃO FRANCISCO 31"}]'::jsonb, 'MG-SAO FRANCISCO', true),
+  ('db36dc9b-2bfb-4e3f-985b-ec4880b7ee97', 'MG-SAO J. DO PARAISO', 'municipality', '[{"name":"VARGEM G. RIO PARDO"},{"name":"SÃO J. DO PARAÍSO"},{"name":"SANTO A. DO RETIRO"},{"name":"MONTEZUMA"},{"name":"NINHEIRA"},{"name":"INDAIABIRA"},{"name":"RIO PARDO DE MINAS"}]'::jsonb, 'MG-SAO JOAO DO PARAISO', true),
+  ('db36dc9b-2bfb-4e3f-985b-ec4880b7ee97', 'MG-SAO J. DA PONTE', 'municipality', '[{"name":"SÃO JOÃO DA PONTE"},{"name":"IBIRACATU"},{"name":"JAPONVAR"},{"name":"PATIS"},{"name":"VARZELÂNDIA"}]'::jsonb, 'MG-SAO JOAO DA PONTE', true),
+  ('db36dc9b-2bfb-4e3f-985b-ec4880b7ee97', 'MG-TAIOBEIRAS', 'municipality', '[{"name":"BERIZAL"},{"name":"TAIOBEIRAS"}]'::jsonb, 'MG-TAIOBEIRAS', true)
+ON CONFLICT DO NOTHING;

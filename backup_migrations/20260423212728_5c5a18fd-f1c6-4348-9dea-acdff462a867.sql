@@ -1,0 +1,2 @@
+ALTER TABLE public.fiscal_documents ADD COLUMN IF NOT EXISTS client_load_source jsonb;
+COMMENT ON COLUMN public.fiscal_documents.client_load_source IS 'Auditoria de extração da carga do cliente: { source: "xPed"|"observation"|"none", ruleId?: string, ruleLabel?: string }';
