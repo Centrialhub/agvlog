@@ -5,7 +5,7 @@ const Index = () => {
     <div className="fixed inset-0 bg-background flex flex-col items-center justify-center p-8 text-center space-y-4">
       <h1 className="text-xl font-bold text-primary">Arquitetura de Cargas Consolidada</h1>
       <p className="max-w-2xl text-muted-foreground">
-        Consolide cargas e documentos operacionais. load_items será a fonte única da composição; fiscal_documents.load_id e load_documents serão espelhos/projeções compatíveis. Crie RPCs transacionais e idempotentes para adicionar, remover, mover e vincular documentos, recalculando peso, valor e quantidade no servidor e auditando antes/depois. Substitua toda escrita direta do frontend nessas relações. Crie read model único de carga com documentos e divergências. Adicione diagnóstico e reparo por tenant com dry-run e execução somente por IDs aprovados; proíba UPDATE global.
+        Consolide o núcleo operacional: dispatch_trip_loads será a relação canônica viagem-carga; dispatch_stop_documents, parada-documento; dispatch_stops, execução. loads.trip_id e dispatch_trips.load_id serão apenas espelhos controlados. Remova UNIONs e fallbacks que misturam relações. Crie RPC transacional para planejar, despachar e iniciar viagem e um read model workspace com viagem, cargas, paradas, documentos, motorista e veículo. Migre os chamadores e valide tenant, ownership, versão e idempotência.
       </p>
       <div className="pt-4">
         <Navigate to="/dashboard" replace />
