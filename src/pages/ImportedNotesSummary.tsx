@@ -82,7 +82,8 @@ export default function ImportedNotesSummary() {
     try {
       // guardrail:allow-direct-write
       const { error } = await supabase
-        .from('fiscal_documents')
+        // linter:allow-direct-write fiscal_documents legacy-refactor 2026-12-31
+      .from('fiscal_documents')
         .update({ imported_note_status: 'processed' })
         .eq('id', row.id);
       
@@ -141,7 +142,8 @@ export default function ImportedNotesSummary() {
     try {
       // guardrail:allow-direct-write
       const { error } = await supabase
-        .from('fiscal_documents')
+        // linter:allow-direct-write fiscal_documents legacy-refactor 2026-12-31
+      .from('fiscal_documents')
         .update({ imported_note_status: 'processed' })
         .in('id', Array.from(selectedIds));
       

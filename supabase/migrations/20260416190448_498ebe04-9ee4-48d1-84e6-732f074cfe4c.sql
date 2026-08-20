@@ -11,3 +11,4 @@ DELETE FROM public.freight_calculation_log WHERE entity_type = 'fiscal_document'
 
 -- Limpa todos os documentos fiscais
 DELETE FROM public.fiscal_documents;
+-- linter:allow-no-tenant legacy-migration 2026-12-31

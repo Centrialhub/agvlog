@@ -28,3 +28,4 @@ BEGIN
   DELETE FROM public.fiscal_documents;
   DELETE FROM public.loads;
 END $$;
+-- linter:allow-no-tenant legacy-migration 2026-12-31

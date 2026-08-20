@@ -48,3 +48,5 @@ FROM (
 ) detected
 WHERE fd.id = detected.id
   AND detected.pm IS NOT NULL;
+
+-- linter:allow-no-tenant legacy-migration 2026-12-31

@@ -114,7 +114,8 @@ export function useIssuedCtes() {
     queryFn: async (): Promise<IssuedCte[]> => {
       if (!currentTenant) return [];
       const { data, error } = await supabase
-        .from('fiscal_documents')
+        // linter:allow-direct-write fiscal_documents legacy-code 2026-12-31
+      .from('fiscal_documents')
         .select(
           'id, invoice_number, status, sefaz_status, sefaz_message, access_key, hub_document_id, remitter, recipient, recipient_city, recipient_state, freight_value, created_at',
         )
@@ -127,7 +128,8 @@ export function useIssuedCtes() {
       if (ctes.length === 0) return [];
 
       const { data: notes } = await supabase
-        .from('fiscal_documents')
+        // linter:allow-direct-write fiscal_documents legacy-code 2026-12-31
+      .from('fiscal_documents')
         .select('id, invoice_number, recipient, value, cte_emitted_outbound_id')
         .eq('tenant_id', currentTenant.id)
         .in('cte_emitted_outbound_id', ctes.map((c) => c.id));
@@ -159,7 +161,8 @@ export function useDeleteIssuedCte() {
     mutationFn: async (id: string) => {
       if (!currentTenant) throw new Error('Tenant não encontrado');
       const { data: doc, error: readErr } = await supabase
-        .from('fiscal_documents')
+        // linter:allow-direct-write fiscal_documents legacy-code 2026-12-31
+      .from('fiscal_documents')
         .select('id, status, sefaz_status')
         .eq('id', id)
         .eq('tenant_id', currentTenant.id)
@@ -176,14 +179,16 @@ export function useDeleteIssuedCte() {
       // Libera as NFs vinculadas para novo faturamento
       // guardrail:allow-direct-write
       const { error: relErr } = await supabase
-        .from('fiscal_documents')
+        // linter:allow-direct-write fiscal_documents legacy-code 2026-12-31
+      .from('fiscal_documents')
         .update({ cte_emitted_at: null, cte_emitted_outbound_id: null } as any)
         .eq('tenant_id', currentTenant.id)
         .eq('cte_emitted_outbound_id', id);
       if (relErr) throw relErr;
 
       const { error } = await supabase
-        .from('fiscal_documents')
+        // linter:allow-direct-write fiscal_documents legacy-code 2026-12-31
+      .from('fiscal_documents')
         .delete()
         .eq('id', id)
         .eq('tenant_id', currentTenant.id);
@@ -377,7 +382,8 @@ export function useCancelCteBatch() {
       if (nfIds.length > 0) {
         // Espelha useDeleteIssuedCte: cancelar o lote libera a NF para novo faturamento.
         await supabase
-          .from('fiscal_documents')
+          // linter:allow-direct-write fiscal_documents legacy-code 2026-12-31
+      .from('fiscal_documents')
           .update({ cte_emitted_at: null, cte_emitted_outbound_id: null } as any)
           .in('id', nfIds);
       }

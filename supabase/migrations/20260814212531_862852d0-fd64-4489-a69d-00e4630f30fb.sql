@@ -37,3 +37,5 @@ WHERE f.document_type = 'inbound'
     WHERE f.id = ANY(n.fiscal_document_ids)
       AND n.status IN ('authorized','issued','processed','processing','transmitted')
   );
+
+-- linter:allow-no-tenant legacy-migration 2026-12-31

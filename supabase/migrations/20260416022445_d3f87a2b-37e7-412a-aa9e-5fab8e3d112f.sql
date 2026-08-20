@@ -16,3 +16,5 @@ DELETE FROM inventory_movements;
 DELETE FROM inventory_balances;
 DELETE FROM alert_instances;
 DELETE FROM maintenance_orders;
+
+-- linter:allow-no-tenant legacy-migration 2026-12-31

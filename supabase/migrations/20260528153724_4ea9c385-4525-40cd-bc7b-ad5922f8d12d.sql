@@ -35,3 +35,5 @@ UPDATE public.fiscal_documents fd
 SET delivery_meta = coalesce(fd.delivery_meta,'{}'::jsonb) || jsonb_build_object('payment_method', m.pm)
 FROM mapped m
 WHERE fd.id = m.id AND m.pm IS NOT NULL;
+
+-- linter:allow-no-tenant legacy-migration 2026-12-31
