@@ -829,6 +829,7 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
             return Object.keys(merc).length ? merc : undefined;
           })()
         : undefined,
+      cbsIbs: input.cbsIbs || undefined,
       notasFiscais: (input.invoices || []).map((n) => ({
         chave: digits(n.access_key) || undefined,
         chaveNFe: digits(n.access_key) || undefined,

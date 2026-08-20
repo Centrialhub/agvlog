@@ -314,6 +314,7 @@ describe('cteBuilder — campos aceitos pela API v1 do Hub', () => {
   it('envia CFOP, dhEmi, inicio/fim, mercadoria e aliases de ICMS/valores', () => {
     const r = buildCtePayload(
       baseInput({
+        origin: { state: 'SP', city: 'SAO PAULO', city_ibge: '3550308' },
         cfop: '6352',
         issueDate: '2026-07-31',
         series: '1',
