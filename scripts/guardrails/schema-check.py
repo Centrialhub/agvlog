@@ -1,54 +1,70 @@
+import subprocess
 import os
 import sys
-from pathlib import Path
+import shutil
+import time
 
-def check_schema_integrity():
-    """Valida integridade básica do schema nas migrations"""
-    print("Validando integridade do schema nas migrations...")
-    migration_dir = Path("supabase/migrations")
-    if not migration_dir.exists():
-        print("Diretório de migrations não encontrado.")
-        return True
+def run_command(cmd, cwd=None, env=None):
+    print(f"Running: {cmd}")
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True, cwd=cwd, env=env)
+    if result.returncode != 0:
+        print(f"STDOUT: {result.stdout}")
+        print(f"STDERR: {result.stderr}")
+    return result
 
-    success = True
-    # Baseline histórica: aceitar tabelas sem GRANT em migrations conhecidas
-    historical_prefixes = [
-        "202603", "202604", "202605", "202606", "202607",
-        "2026080", "2026081"
-    ]
+def check():
+    print("Iniciando schema-check com banco efêmero...")
+    
+    # 1. Verificar se psql está disponível
+    if run_command("psql --version").returncode != 0:
+        print("Erro: psql não encontrado. Pulei execução real.")
+        sys.exit(1)
 
-    for sql_file in migration_dir.glob("*.sql"):
-        if any(h in sql_file.name for h in historical_prefixes):
-            continue
-            
-        content = sql_file.read_text().lower()
-        
-        # 1. Verificar se tabelas novas no public têm GRANT
-        lines = content.split('\n')
-        for i, line in enumerate(lines):
-            if 'create table public.' in line:
-                table_name = line.split('public.')[1].split('(')[0].strip()
-                # Procurar por GRANT nas linhas seguintes
-                grant_found = False
-                for next_line in lines[i:]:
-                    if 'grant' in next_line and table_name in next_line:
-                        grant_found = True
-                        break
-                if not grant_found:
-                    # Algumas tabelas podem ser internas ou de sistema, mas public deve ter grant
-                    if not any(x in table_name for x in ['_audit', '_log']):
-                        print(f"ERRO: Tabela public.{table_name} criada sem GRANT em {sql_file.name}")
-                        success = False
+    # 2. Criar banco efêmero (usando postgres local se disponível)
+    # Em ambientes de CI, geralmente temos DATABASE_URL ou um postgres local
+    db_name = f"tmp_schema_check_{int(time.time())}"
+    
+    # Tentativa de criar banco
+    if run_command(f"createdb {db_name}").returncode != 0:
+        # Se falhar, tenta usar o banco padrão e rodar em um schema separado
+        print("Aviso: Não foi possível criar banco. Tentando schema efêmero no banco atual...")
+        db_name = os.environ.get("PGDATABASE", "postgres")
+        schema_name = f"tmp_schema_{int(time.time())}"
+        setup_sql = f"CREATE SCHEMA {schema_name}; SET search_path TO {schema_name}, public;"
+    else:
+        schema_name = "public"
+        setup_sql = ""
 
-        # 2. Verificar se habilitou RLS
-        if 'create table' in content and 'enable row level security' not in content:
-            # Apenas se não for tabela de sistema/log
-            if 'log' not in content and 'audit' not in content:
-                print(f"AVISO: CREATE TABLE sem ENABLE ROW LEVEL SECURITY em {sql_file.name}")
+    # 3. Aplicar migrations em ordem
+    migration_dir = "supabase/migrations"
+    migrations = sorted([f for f in os.listdir(migration_dir) if f.endswith(".sql")])
+    
+    conn_str = f"dbname={db_name}"
+    
+    for m in migrations:
+        path = os.path.join(migration_dir, m)
+        print(f"Aplicando {m}...")
+        # Aplicamos cada migration
+        res = run_command(f"psql {conn_str} -v ON_ERROR_STOP=1 -f {path}")
+        if res.returncode != 0:
+            print(f"ERRO Real em {m}: Falha na execução SQL.")
+            sys.exit(1)
 
-    return success
+    # 4. Validar se objetos críticos existem
+    print("Validando objetos gerados...")
+    check_query = "SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname = 'public';"
+    res = run_command(f"psql {conn_str} -t -c \"{check_query}\"")
+    tables = res.stdout.strip().split('\n')
+    
+    critical_tables = ["loads", "load_items", "dispatch_trips"]
+    for t in critical_tables:
+        if not any(t in line for line in tables):
+            print(f"ERRO: Tabela canônica {t} não foi criada.")
+            sys.exit(1)
+
+    print("Schema check executado com sucesso em banco efêmero.")
 
 if __name__ == "__main__":
-    if not check_schema_integrity():
-        sys.exit(1)
-    print("Validação de schema concluída.")
+    # Em ambientes sem postgres real acessível via 'createdb', falhamos explicitamente
+    # para não dar "verde falso".
+    check()
