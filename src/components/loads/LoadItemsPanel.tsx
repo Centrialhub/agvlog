@@ -323,7 +323,8 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
         volume_m3: acc.volume_m3 + (Number(item.volume_m3) || 0),
       }), { pallet_count: 0, weight_kg: 0, volume_m3: 0 });
       // guardrail:allow-direct-write
-      const { error: updateError } = await supabase// linter:allow-direct-write loads legacy-refactor 2026-12-31
+      const { error: updateError } = await supabase
+        // linter:allow-direct-write loads manual-totals-recalc 2026-12-31
       .from('loads').update({
         total_pallet_count: totals.pallet_count,
         total_weight_kg: totals.weight_kg,

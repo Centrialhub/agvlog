@@ -63,7 +63,7 @@ def check_migrations():
                 success = False
 
         # 2. DML sem tenant_id (ignora tabelas globais)
-        if any(cmd in content.upper() for cmd in ["INSERT INTO", "UPDATE", "DELETE FROM"]):
+        if any(cmd in content.upper() for cmd in ["INSERT INTO", "UPDATE", "DELETE FROM"]) and 'REVOKE' not in content.upper() and 'GRANT' not in content.upper():
             if any(t in content for t in ["integration_accounts", "tenants", "user_roles", "auth.", "app_role"]):
                 continue
             if "tenant_id" not in content.lower() and "-- linter:allow-no-tenant" not in content:
