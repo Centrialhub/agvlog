@@ -21,7 +21,6 @@ async function verifyHmac(timestamp: string, body: string, signature: string) {
   const sigHex = sigArray.map(b => b.toString(16).padStart(2, '0')).join('');
 
   const expected = `sha256=${sigHex}`;
-  // Timing safe comparison
   if (signature.length !== expected.length) return false;
   let result = 0;
   for (let i = 0; i < signature.length; i++) {
@@ -39,41 +38,55 @@ Deno.serve(async (req) => {
   const deliveryId = req.headers.get('x-hubfiscal-delivery') || '';
   const eventType = req.headers.get('x-hubfiscal-event') || '';
 
-  // 1. Security Gates
-  if (!signature || !timestamp || !deliveryId) return new Response('Missing headers', { status: 401 });
+  if (!signature || !timestamp || !deliveryId) return new Response('Missing security headers', { status: 401 });
 
   const ts = parseInt(timestamp, 10);
-  const now = Math.floor(Date.now() / 1000);
-  if (Math.abs(now - ts) > 300) return new Response('Timestamp expired', { status: 401 });
+  if (Math.abs(Math.floor(Date.now() / 1000) - ts) > 300) return new Response('Timestamp expired', { status: 401 });
 
-  const isValid = await verifyHmac(timestamp, rawBody, signature);
-  if (!isValid) return new Response('Invalid signature', { status: 401 });
+  if (!(await verifyHmac(timestamp, rawBody, signature))) return new Response('Invalid signature', { status: 401 });
 
   const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
-  // 2. Inbox Idempotency
   const { data: existing } = await admin.from('fiscal_webhook_inbox')
     .select('status')
     .eq('delivery_id', deliveryId)
     .maybeSingle();
 
-  if (existing && existing.status === 'processed') {
-    return new Response('Already processed', { status: 200 });
-  }
+  if (existing && existing.status === 'processed') return new Response('OK', { status: 200 });
 
-  // 3. Record in Inbox
-  const { data: inbox, error: insErr } = await admin.from('fiscal_webhook_inbox').upsert({
+  const payload = JSON.parse(rawBody);
+  const { data: inbox, error } = await admin.from('fiscal_webhook_inbox').upsert({
     delivery_id: deliveryId,
     event_type: eventType,
     event_timestamp: new Date(ts * 1000).toISOString(),
-    raw_payload: JSON.parse(rawBody),
+    raw_payload: payload,
     status: 'received'
   }).select().single();
 
-  if (insErr) return new Response('Inbox failure', { status: 500 });
+  if (error) return new Response('Inbox persistence error', { status: 500 });
 
-  // 4. Trigger Processing (simplified)
-  // ... actual emission update logic here ...
+  // Reconcile logic (Requirement 3)
+  const doc = payload?.document || payload || {};
+  const hubId = doc.id || doc.hubDocumentId;
+  const idIntegracao = doc.idIntegracao;
+
+  const { data: emission } = await admin.from('hub_fiscal_emissions')
+    .select('id, tenant_id')
+    .or(`hub_document_id.eq.${hubId},id_integracao.eq.${idIntegracao}`)
+    .maybeSingle();
+
+  if (emission) {
+    await admin.from('fiscal_webhook_inbox').update({
+      tenant_id: emission.tenant_id,
+      emission_id: emission.id,
+      status: 'processing'
+    }).eq('id', inbox.id);
+    
+    // In a real implementation, a background worker or a direct call would finish the processing.
+    // Here we mark as processing to signal it was matched.
+  } else {
+    await admin.from('fiscal_webhook_inbox').update({ status: 'unmatched' }).eq('id', inbox.id);
+  }
 
   return new Response('OK', { status: 200 });
 });
