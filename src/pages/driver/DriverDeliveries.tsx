@@ -313,126 +313,37 @@ export default function DriverDeliveries() {
         signaturePath = path;
       }
 
-      // Caminho seguro: finalizador "ENTREGUE" passa por RPC transacional de transição de estado.
-      if (def.finalAction === 'delivered') {
-        try {
-          reportEvent.mutate({
-            tripId: effectiveTrip.id,
-            stopId: eventForm.stop.id,
-            eventType: 'delivery_complete',
-            payload: {
-              receiver_name: receiverName.trim(),
-              receiver_document: receiverDoc.trim() || null,
-              signature_path: signaturePath,
-              photo_paths: photoPaths,
-              reason: notes?.trim()
-            },
-            idempotencyKey: `finalize-${eventForm.stop.id}`
-          });
-          return true;
-        } catch (err: any) {
-          console.error('[DriverDeliveries] Finalize mutation error:', err);
-          throw err;
-        }
-      }
-
-      // Mapa de eventos → RPCs seguras. Nenhum write direto em tabela operacional.
-      const reason = notes?.trim() || null;
-
-      if (def.key === 'chegada_no_cliente') {
-        try {
-          reportEvent.mutate({
-            tripId: effectiveTrip.id,
-            stopId: eventForm.stop.id,
-            eventType: 'arrival',
-            idempotencyKey: `arrival-${eventForm.stop.id}`
-          });
-          return true;
-        } catch (err: any) {
-          console.error('[DriverDeliveries] Arrival mutation error:', err);
-          throw err;
-        }
-      }
-
-      // Status finalizadores via driver_update_stop_status
-      const STATUS_MAP: Record<string, string | undefined> = {
-        devolucao_parcial: 'partial_delivery',
-        devolucao_total: 'returned',
-        cliente_recusou: 'refused',
-        cliente_estava_fora: 'failed',
-      };
-      const mappedStatus = STATUS_MAP[def.key];
-      if (mappedStatus) {
-        try {
-          const eventType = def.key === 'cliente_recusou' ? 'delivery_refusal' : 'departure';
-          reportEvent.mutate({
-            tripId: effectiveTrip.id,
-            stopId: eventForm.stop.id,
-            eventType: eventType as any,
-            payload: {
-              reason: reason || 'Evento reportado via App',
-              receiver_name: receiverName.trim() || null,
-              receiver_document: receiverDoc.trim() || null,
-              photo_paths: photoPaths,
-            },
-            idempotencyKey: `event-${def.key}-${eventForm.stop.id}`
-          });
-          
-          return true;
-        } catch (err: any) {
-              photo_count: photoPaths.length,
-              signature_path: signaturePath,
-              returned_items: returnedItems,
-            },
-            _stop_id: eventForm.stop.id,
-            _notes: reason,
-          } as any);
-          
-          if (evtErr) {
-            console.error('[DriverDeliveries] Contextual event RPC error:', evtErr);
-            // Non-critical, but log it
-          }
-
-          setThreads((prev) => ({ ...prev, [threadKey]: [...(prev[threadKey] || []), buildDriverSummary()] }));
-          return;
-        } catch (err: any) {
-          console.error('[DriverDeliveries] Status update chain error:', err);
-          throw err;
-        }
-      }
-
-      // Eventos informativos (avaria, solicitar_desconto, atualizar_boleto, coleta_realizada, etc.)
+      // All events now use the idempotent reportEvent RPC
       try {
-        const { error: evtErr, data } = await supabase.rpc('driver_create_event', {
-          _trip_id: trip!.id,
-          _event_type: `info_${def.key}`,
-          _payload: {
-            event_subtype: def.key,
-            event_label: def.label,
+        let eventType: DriverEventType = 'departure';
+        if (def.finalAction === 'delivered') eventType = 'delivery_complete';
+        else if (def.key === 'chegada_no_cliente') eventType = 'arrival';
+        else if (def.key === 'cliente_recusou') eventType = 'delivery_refusal';
+
+        reportEvent.mutate({
+          tripId: effectiveTrip.id,
+          stopId: eventForm.stop.id,
+          eventType: eventType,
+          payload: {
+            reason: reason || 'Evento reportado via App',
             receiver_name: receiverName.trim() || null,
             receiver_document: receiverDoc.trim() || null,
             photo_paths: photoPaths,
-            photo_count: photoPaths.length,
             signature_path: signaturePath,
+            returned_items: returnedItems,
             discount_amount: discountAmount || null,
             discount_kind: discountKind,
             discount_reason: discountReason || null,
             boleto_due_date: boletoDueDate || null,
             boleto_note: boletoNote || null,
           },
-          _stop_id: eventForm.stop.id,
-          _notes: reason,
-        } as any);
-        
-        if (evtErr) {
-          console.error('[DriverDeliveries] Info event RPC error:', evtErr);
-          throw evtErr;
-        }
-        
+          idempotencyKey: `event-${def.key}-${eventForm.stop.id}`
+        });
+
         setThreads((prev) => ({ ...prev, [threadKey]: [...(prev[threadKey] || []), buildDriverSummary()] }));
-        return data;
+        return true;
       } catch (err: any) {
-        console.error('[DriverDeliveries] Info event mutation error:', err);
+        console.error('[DriverDeliveries] submitEvent error:', err);
         throw err;
       }
     },
