@@ -68,14 +68,14 @@ export function usePortalTracking() {
     queryFn: async (): Promise<any[]> => {
       if (!currentTenant || clientIds.length === 0) return [];
       
-      const { data, error } = await supabase.rpc('get_portal_tracking_v3', {
+      const { data, error } = await (supabase as any).rpc('get_portal_tracking_v3', {
         p_tenant_id: currentTenant.id,
         p_client_ids: clientIds,
         p_cnpjs: cnpjs.length > 0 ? cnpjs : null,
       });
 
       if (error) throw error;
-      return (data as any[]) || [];
+      return (data as unknown) as any[];
     },
     enabled: !!currentTenant && clientIds.length > 0,
     refetchInterval: 60_000,
