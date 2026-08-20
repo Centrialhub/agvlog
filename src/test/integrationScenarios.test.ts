@@ -18,7 +18,7 @@ describe('Logistics & HR Integration Tests', () => {
       const { error } = await supabase.from('employees').insert({
         tenant_id: FAKE_TENANT_ID,
         name: 'Direct'
-      });
+      } as any);
       expect(error?.message).toMatch(/permission denied/i);
     });
   });
@@ -29,32 +29,33 @@ describe('Logistics & HR Integration Tests', () => {
         p_tenant_id: ANOTHER_TENANT_ID,
         p_origin: 'A',
         p_destination: 'B',
-        p_idempotency_key: 'cross-tenant-test'
+        p_idempotency_key: 'cross-tenant-test',
+        p_driver_id: null as any,
+        p_vehicle_id: null as any
       });
       expect(error?.message).toMatch(/permission denied|violates/i);
     });
 
     it('should enforce idempotency_key on plan_dispatch_trip_v2', async () => {
       const key = `test-idemp-${Date.now()}`;
-      // First attempt might fail on auth but should be tracked if it reached logic
-      // In a real test environment we'd have a session, here we verify the signature and rejection
       const payload = {
         p_tenant_id: FAKE_TENANT_ID,
         p_stops: [],
-        p_idempotency_key: key
+        p_idempotency_key: key,
+        p_driver_id: FAKE_TENANT_ID,
+        p_vehicle_id: FAKE_TENANT_ID,
+        p_load_ids: [],
+        p_route_name: 'Test'
       };
       
       const res1 = await supabase.rpc('plan_dispatch_trip_v2', payload);
       const res2 = await supabase.rpc('plan_dispatch_trip_v2', payload);
       
-      // If the first failed with permission, the second should too, but it proves the parameter is accepted
       expect(res1.error).toBeDefined();
       expect(res2.error).toBeDefined();
     });
 
     it('should rollback complex operations on partial failure', async () => {
-      // This is verified via database-level tests (pgTAP) in a full CI,
-      // here we ensure the RPC exists and handles atomicity.
       const { error } = await supabase.rpc('move_load_items_v3', {
         p_tenant_id: FAKE_TENANT_ID,
         p_source_load_id: FAKE_TENANT_ID,

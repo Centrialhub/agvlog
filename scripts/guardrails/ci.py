@@ -50,7 +50,8 @@ def main():
     if build.returncode != 0: sys.exit(1)
 
     print("\n=== CI PIPELINE SUCCESSFUL ===")
-    print(f"Migrations applied: {len(os.listdir('supabase/migrations')) - 1}") # -1 for manifest
+    migrations_count = len([f for f in os.listdir('supabase/migrations') if f.endswith('.sql')])
+    print(f"Migrations applied: {migrations_count}")
     print("Functions created/hardened: ~70 RPCs")
     print(f"Final Direct Write Count (Unchecked): 0")
 
