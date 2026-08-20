@@ -15598,6 +15598,10 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_operational_financial_summary_v1: {
+        Args: { _date_from?: string; _date_to?: string; _tenant_id: string }
+        Returns: Json
+      }
       get_public_shipment_status: {
         Args: { _fiscal_document_id: string }
         Returns: string
