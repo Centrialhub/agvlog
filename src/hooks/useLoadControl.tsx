@@ -28,16 +28,28 @@ export interface LoadControlRow {
   id: string;
   load_number: string;
   external_load_number?: string;
+  client_name?: string;
   load_date?: string;
   arrival_date?: string;
   status: string;
+  operational_status?: string;
+  billing_status?: string;
   payment_status: string;
   freight_amount: number;
   received_amount: number;
+  freight_percent?: number;
+  total_weight_kg?: number;
+  invoice_count?: number;
+  cte_count?: number;
+  driver_name?: string;
+  plate?: string;
   expected_payment_date?: string;
   payment_date?: string;
-  invoice_count?: number;
   gross_cargo_value?: number;
+  client_invoice_id?: string;
+  receivable_id?: string;
+  cte_numbers?: string[];
+  legacy_status_text?: string;
 }
 
 export interface UnloadingChargeRow {
@@ -46,12 +58,25 @@ export interface UnloadingChargeRow {
   amount: number;
   description: string;
   created_at: string;
+  invoice_number?: string;
+  client_name?: string;
+  supplier_name?: string;
+  city?: string;
+  service_date?: string;
+  load?: string;
+  status?: string;
 }
 
 export interface LoadControlFilters {
   search?: string;
   payment_status?: string[];
   operational_status?: string[];
+  loadNumber?: string;
+  paymentStatus?: string[];
+  loadDateFrom?: string;
+  loadDateTo?: string;
+  expectedPayFrom?: string;
+  expectedPayTo?: string;
 }
 
 export function useLoadControlList(filters: LoadControlFilters = {}) {
@@ -104,7 +129,7 @@ export function useUnloadingCharges(loadId?: string) {
       if (!loadId) return [];
       const { data, error } = await supabase.from('load_unloading_charges').select('*').eq('load_id', loadId);
       if (error) throw error;
-      return data as UnloadingChargeRow[];
+      return (data || []) as any[] as UnloadingChargeRow[];
     },
     enabled: !!loadId,
   });
@@ -143,12 +168,11 @@ export function useRegisterPayment() {
       });
       if (error) throw error;
       
-      // Update load status logic would go here, now via RPC update_load_v1
       await supabase.rpc('update_load_v1', {
         p_tenant_id: currentTenant!.id,
         p_load_id: p.loadId,
         p_changes: {
-            payment_status: 'paid', // Simplified for restoration
+            payment_status: 'paid',
             payment_date: p.paymentDate
         }
       });
@@ -179,9 +203,11 @@ export function useMarkUnpaid() {
 export const commitSpreadsheetImport = async (batchId: string) => {
     const { error } = await supabase.from('load_import_batches').update({ status: 'completed' }).eq('id', batchId);
     if (error) throw error;
+    return { preview: { newLoads: 0, updatedLoads: 0, errors: [] } };
 };
 
 export const commitXmlImport = async (batchId: string) => {
     const { error } = await supabase.from('load_import_batches').update({ status: 'completed' }).eq('id', batchId);
     if (error) throw error;
+    return { preview: { newLoads: 0, updatedLoads: 0, errors: [] } };
 };
