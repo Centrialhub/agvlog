@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useTenant } from './useTenant';
 import { useCurrentDriver } from './useCurrentDriver';
+import { useDriverSync } from './useDriverSync';
 
 export interface DriverWorkspace {
   has_active_trip: boolean;
@@ -93,6 +94,7 @@ export function useDriverExecution() {
   const queryClient = useQueryClient();
   const { currentTenant } = useTenant();
   const { data: driver } = useCurrentDriver();
+  const { addToOutbox } = useDriverSync();
 
   const reportEvent = useMutation({
     mutationFn: async ({
@@ -110,6 +112,20 @@ export function useDriverExecution() {
     }) => {
       if (!driver || !currentTenant) throw new Error('Missing driver or tenant context');
 
+      const finalIdempotencyKey = idempotencyKey || `${driver.id}-${eventType}-${Date.now()}`;
+
+      // If offline, add to outbox and return early
+      if (!navigator.onLine) {
+        addToOutbox({
+          tripId,
+          stopId,
+          eventType,
+          payload,
+          idempotencyKey: finalIdempotencyKey
+        });
+        return { offline: true };
+      }
+
       const { data, error } = await supabase.rpc('driver_report_event_v1', {
         p_driver_id: driver.id,
         p_tenant_id: currentTenant.id,
@@ -117,7 +133,7 @@ export function useDriverExecution() {
         p_stop_id: stopId || null,
         p_event_type: eventType,
         p_payload: payload,
-        p_idempotency_key: idempotencyKey || `${driver.id}-${eventType}-${Date.now()}`
+        p_idempotency_key: finalIdempotencyKey
       });
 
       if (error) throw error;
