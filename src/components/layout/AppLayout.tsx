@@ -11,7 +11,7 @@ import {
   PackageCheck, AlertOctagon, Upload, TrendingUp, ChevronDown, Plug,
   Radio, Receipt, DollarSign, UserCog, Package, Wrench,
   Boxes, ClipboardCheck, ArrowRightLeft, Wallet, FileSearch, FileSpreadsheet,
-  PackageOpen, MonitorPlay, Sprout, Tag,
+  PackageOpen, MonitorPlay, Sprout, Tag, ShieldCheck,
 } from 'lucide-react';
 
 type NavLeaf = { label: string; href: string; icon: ReactNode };
@@ -40,7 +40,7 @@ const navSections: NavSection[] = [
           { label: 'Consulta CT-e', href: '/cte-search', icon: <FileSearch className="h-4 w-4" /> },
           { label: 'NFS-e (Serviços)', href: '/nfse', icon: <FileSpreadsheet className="h-4 w-4" /> },
           { label: 'ORT', href: '/ort-management', icon: <FileSearch className="h-4 w-4" /> },
-          { label: 'Consistência ICMS', href: '/cte-consistency', icon: <AlertOctagon className="h-4 w-4" /> },
+          { label: 'Auditoria ICMS', href: '/cte-consistency', icon: <ShieldCheck className="h-4 w-4" /> },
           { label: 'MDF (provisório)', href: '/mdfe-provisional', icon: <FileText className="h-4 w-4" /> },
         ],
       },
