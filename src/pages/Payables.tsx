@@ -330,7 +330,26 @@ export default function Payables() {
                   </TableCell>
                   <TableCell onClick={(e) => e.stopPropagation()}>
                     <div className="flex gap-1">
-                      {p.status !== 'paid' && p.status !== 'cancelled' && (
+                      {p.status === 'pending' && (
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-7 px-2 text-xs text-blue-600"
+                          onClick={() => {
+                            supabase.rpc('approve_financial_obligation_v1', { _obligation_id: p.id })
+                              .then(({ error }) => {
+                                if (error) toast.error(error.message);
+                                else {
+                                  toast.success('Aprovado e registrado no razão');
+                                  window.location.reload(); // Quick refresh
+                                }
+                              });
+                          }}
+                        >
+                          <CheckCircle className="h-3.5 w-3.5 mr-1" /> Aprovar
+                        </Button>
+                      )}
+                      {p.status !== 'paid' && p.status !== 'cancelled' && p.status !== 'pending' && (
                         <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-green-600" onClick={() => setPaymentPayable(p)}>
                           <DollarSign className="h-3.5 w-3.5 mr-1" /> Baixa
                         </Button>
