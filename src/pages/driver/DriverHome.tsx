@@ -1,7 +1,8 @@
 import { useQuery, useQueryClient as useTanstackQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
-import { useCurrentDriver, useActiveTrip } from '@/hooks/useCurrentDriver';
+import { useCurrentDriver } from '@/hooks/useCurrentDriver';
+import { useDriverWorkspace, useDriverExecution } from '@/hooks/useDriverWorkspace';
 import { useChecklistStatus } from '@/hooks/useChecklistStatus';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
