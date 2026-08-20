@@ -3388,6 +3388,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "dispatch_events_dispatch_trip_id_fkey"
+            columns: ["dispatch_trip_id"]
+            isOneToOne: false
+            referencedRelation: "vw_operational_workspace"
+            referencedColumns: ["trip_id"]
+          },
+          {
             foreignKeyName: "dispatch_events_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
@@ -3538,6 +3545,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "dispatch_stops_dispatch_trip_id_fkey"
+            columns: ["dispatch_trip_id"]
+            isOneToOne: false
+            referencedRelation: "vw_operational_workspace"
+            referencedColumns: ["trip_id"]
+          },
+          {
             foreignKeyName: "dispatch_stops_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
@@ -3575,6 +3589,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "dispatch_trips"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dispatch_trip_loads_dispatch_trip_id_fkey"
+            columns: ["dispatch_trip_id"]
+            isOneToOne: false
+            referencedRelation: "vw_operational_workspace"
+            referencedColumns: ["trip_id"]
           },
           {
             foreignKeyName: "dispatch_trip_loads_load_id_fkey"
@@ -3869,6 +3890,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "dispatch_trips"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_expenses_dispatch_trip_id_fkey"
+            columns: ["dispatch_trip_id"]
+            isOneToOne: false
+            referencedRelation: "vw_operational_workspace"
+            referencedColumns: ["trip_id"]
           },
           {
             foreignKeyName: "driver_expenses_driver_id_fkey"
@@ -4643,6 +4671,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "dispatch_trips"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_settlements_dispatch_trip_id_fkey"
+            columns: ["dispatch_trip_id"]
+            isOneToOne: false
+            referencedRelation: "vw_operational_workspace"
+            referencedColumns: ["trip_id"]
           },
           {
             foreignKeyName: "driver_settlements_driver_id_fkey"
@@ -8423,6 +8458,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "loads_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "vw_operational_workspace"
+            referencedColumns: ["trip_id"]
+          },
+          {
             foreignKeyName: "loads_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
@@ -10503,6 +10545,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "operational_events_dispatch_trip_id_fkey"
+            columns: ["dispatch_trip_id"]
+            isOneToOne: false
+            referencedRelation: "vw_operational_workspace"
+            referencedColumns: ["trip_id"]
+          },
+          {
             foreignKeyName: "operational_events_driver_id_fkey"
             columns: ["driver_id"]
             isOneToOne: false
@@ -11335,6 +11384,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "payables_dispatch_trip_id_fkey"
+            columns: ["dispatch_trip_id"]
+            isOneToOne: false
+            referencedRelation: "vw_operational_workspace"
+            referencedColumns: ["trip_id"]
+          },
+          {
             foreignKeyName: "payables_driver_id_fkey"
             columns: ["driver_id"]
             isOneToOne: false
@@ -12140,6 +12196,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "dispatch_trips"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proof_of_delivery_dispatch_trip_id_fkey"
+            columns: ["dispatch_trip_id"]
+            isOneToOne: false
+            referencedRelation: "vw_operational_workspace"
+            referencedColumns: ["trip_id"]
           },
           {
             foreignKeyName: "proof_of_delivery_fiscal_document_id_fkey"
@@ -13412,6 +13475,13 @@ export type Database = {
             referencedRelation: "dispatch_trips"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "trip_alerts_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "vw_operational_workspace"
+            referencedColumns: ["trip_id"]
+          },
         ]
       }
       trip_live_status: {
@@ -13480,6 +13550,13 @@ export type Database = {
             referencedRelation: "dispatch_trips"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "trip_live_status_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "vw_operational_workspace"
+            referencedColumns: ["trip_id"]
+          },
         ]
       }
       trip_routes: {
@@ -13544,6 +13621,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "dispatch_trips"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trip_routes_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "vw_operational_workspace"
+            referencedColumns: ["trip_id"]
           },
         ]
       }
@@ -13914,6 +13998,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "dispatch_trips"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_fueling_dispatch_trip_id_fkey"
+            columns: ["dispatch_trip_id"]
+            isOneToOne: false
+            referencedRelation: "vw_operational_workspace"
+            referencedColumns: ["trip_id"]
           },
           {
             foreignKeyName: "vehicle_fueling_driver_id_fkey"
@@ -14522,6 +14613,45 @@ export type Database = {
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vw_operational_workspace: {
+        Row: {
+          actual_start_at: string | null
+          driver_id: string | null
+          driver_name: string | null
+          loads: Json | null
+          planned_start_at: string | null
+          stops: Json | null
+          tenant_id: string | null
+          trip_id: string | null
+          trip_status: string | null
+          updated_at: string | null
+          vehicle_id: string | null
+          vehicle_plate: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dispatch_trips_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dispatch_trips_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dispatch_trips_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
             referencedColumns: ["id"]
           },
         ]
@@ -15552,6 +15682,19 @@ export type Database = {
       op_route_norm: { Args: { txt: string }; Returns: string }
       peek_next_load_number: { Args: { _tenant_id: string }; Returns: string }
       peek_next_pickup_number: { Args: { _tenant_id: string }; Returns: string }
+      plan_dispatch_start_trip_v1: {
+        Args: {
+          p_driver_id: string
+          p_load_ids: string[]
+          p_planned_start_at?: string
+          p_route_name?: string
+          p_start_now?: boolean
+          p_stops: Json
+          p_tenant_id: string
+          p_vehicle_id: string
+        }
+        Returns: string
+      }
       portal_user_can_access_fiscal_document: {
         Args: { _fiscal_document_id: string; _tenant_id: string }
         Returns: boolean

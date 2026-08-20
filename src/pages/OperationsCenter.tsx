@@ -278,21 +278,23 @@ export default function OperationsCenter() {
     enabled: !!currentTenant,
   });
 
-  // ── Dispatch Trips ──
-  const { data: activeTrips = [] } = useQuery({
-    queryKey: ['ops_trips', currentTenant?.id],
+  // ── Dispatch Trips (Operational Workspace Read Model) ──
+  const { data: operationalWorkspace = [] } = useQuery({
+    queryKey: ['operational_workspace', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data } = await supabase
-        .from('dispatch_trips')
-        .select('id, status, vehicle_id, driver_id, load_id, planned_start_at, actual_start_at')
-        .eq('tenant_id', currentTenant.id)
-        .in('status', ['planned', 'in_progress'])
+      const { data, error } = await supabase
+        .from('vw_operational_workspace')
+        .select('*')
+        .in('trip_status', ['planned', 'in_transit'])
         .limit(50);
+      if (error) throw error;
       return data || [];
     },
     enabled: !!currentTenant,
   });
+
+  const activeTrips = operationalWorkspace;
 
   // ── Fleet Map Data ──
   const stateMap = useMemo(() => {
