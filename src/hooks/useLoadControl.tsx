@@ -69,7 +69,7 @@ export function useLoadControlList(filters: LoadControlFilters = {}) {
     queryKey: ['load-control', currentTenant?.id, filters],
     enabled: !!currentTenant?.id,
     queryFn: async () => {
-      let q = (supabase// linter:allow-direct-write loads legacy-code 2026-12-31
+      let q = (supabase
       .from('loads') as any)
         .select(`id, tenant_id, load_number, external_load_number, load_date, arrival_date,
                  gross_cargo_value, freight_amount, freight_percent, total_weight_kg,
@@ -174,7 +174,7 @@ export function useRegisterPayment() {
       notes?: string | null;
     }) => {
       const tenantId = currentTenant!.id;
-      const { data: load, error: le } = await (supabase// linter:allow-direct-write loads legacy-code 2026-12-31
+      const { data: load, error: le } = await (supabase
       .from('loads') as any)
         .select('freight_amount, received_amount, operational_status, expected_payment_date, payment_status')
         .eq('id', p.loadId).single();
@@ -199,7 +199,7 @@ export function useRegisterPayment() {
         operational_status: load.operational_status,
       });
 
-      const { error: ue } = await (supabase// linter:allow-direct-write loads legacy-code 2026-12-31
+      const { error: ue } = await (supabase
       .from('loads') as any).update({
         received_amount: newReceived,
         payment_status: newStatus,
@@ -233,7 +233,7 @@ export function useMarkUnpaid() {
       if ((pays || []).length > 0) {
         throw new Error('Existem pagamentos registrados. Lance um estorno via ajuste para reabrir a carga.');
       }
-      const { error } = await (supabase// linter:allow-direct-write loads legacy-code 2026-12-31
+      const { error } = await (supabase
       .from('loads') as any)
         .update({ payment_status: 'unpaid', payment_date: null, received_amount: 0 })
         .eq('id', loadId);
@@ -277,12 +277,12 @@ export async function commitSpreadsheetImport(
     // summary rows -> loads
     for (const s of sheet.summary) {
       try {
-        const { data: existing } = await (supabase// linter:allow-direct-write loads legacy-code 2026-12-31
+        const { data: existing } = await (supabase
       .from('loads') as any)
           .select('id, load_number').eq('tenant_id', tenantId).eq('external_load_number', s.external_load_number).maybeSingle();
         if (existing) {
           preview.updatedLoads++;
-          await (supabase// linter:allow-direct-write loads legacy-code 2026-12-31
+          await (supabase
       .from('loads') as any).update({
             load_date: s.load_date, arrival_date: s.arrival_date,
             gross_cargo_value: s.gross_cargo_value, freight_amount: s.freight_amount,
@@ -297,7 +297,7 @@ export async function commitSpreadsheetImport(
           }).eq('id', existing.id);
         } else {
           preview.newLoads++;
-          await (supabase// linter:allow-direct-write loads legacy-code 2026-12-31
+          await (supabase
       .from('loads') as any).insert({
             tenant_id: tenantId, external_load_number: s.external_load_number,
             load_number: s.external_load_number, // reuse legacy number if we don't have a natural key yet
@@ -326,11 +326,11 @@ export async function commitSpreadsheetImport(
     }
     for (const [loadNum, rows] of grouped) {
       try {
-        let { data: load } = await (supabase// linter:allow-direct-write loads legacy-code 2026-12-31
+        let { data: load } = await (supabase
       .from('loads') as any)
           .select('id').eq('tenant_id', tenantId).eq('external_load_number', loadNum).maybeSingle();
         if (!load) {
-          const { data: created } = await (supabase// linter:allow-direct-write loads legacy-code 2026-12-31
+          const { data: created } = await (supabase
       .from('loads') as any).insert({
             tenant_id: tenantId, external_load_number: loadNum, load_number: loadNum,
             status: 'imported', source_origin: 'spreadsheet_import', last_import_batch_id: batchId,
@@ -359,7 +359,7 @@ export async function commitSpreadsheetImport(
           }
           totWeight += d.weight_kg; totCargo += d.cargo_value; totFreight += d.freight_value;
         }
-        await (supabase// linter:allow-direct-write loads legacy-code 2026-12-31
+        await (supabase
       .from('loads') as any).update({
           total_weight_kg: totWeight, gross_cargo_value: totCargo,
           freight_amount: totFreight, invoice_count: nfCount,

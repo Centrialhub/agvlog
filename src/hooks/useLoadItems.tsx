@@ -87,7 +87,7 @@ export function useCreateLoadItem() {
       }
       // guardrail:allow-direct-write
       // Itens manuais (sem NF) podem ser inseridos diretamente — não afetam composição fiscal.
-      const { data, error } = await (supabase as any)// linter:allow-direct-write load_items legacy-code 2026-12-31
+      const { data, error } = await (supabase as any)
       .from('load_items').insert({
         ...values,
         tenant_id: currentTenant!.id,
@@ -116,7 +116,7 @@ export function useUpdateLoadItem() {
         throw new Error('Mudança de fiscal_document_id não é permitida por update direto.');
       }
       // guardrail:allow-direct-write
-      const { data, error } = await (supabase as any)// linter:allow-direct-write load_items legacy-code 2026-12-31
+      const { data, error } = await (supabase as any)
       .from('load_items').update({
         ...values,
         updated_at: new Date().toISOString(),
@@ -137,7 +137,6 @@ export function useDeleteLoadItem() {
   return useMutation({
     mutationFn: async (id: string) => {
       const { data: item, error: fetchErr } = await (supabase as any)
-        // linter:allow-direct-write load_items legacy-code 2026-12-31
       .from('load_items')
         .select('id, load_id, fiscal_document_id')
         .eq('id', id)
@@ -155,7 +154,7 @@ export function useDeleteLoadItem() {
       }
       // guardrail:allow-direct-write
       // Sem documento vinculado — item manual; libera delete direto.
-      const { error } = await (supabase as any)// linter:allow-direct-write load_items legacy-code 2026-12-31
+      const { error } = await (supabase as any)
       .from('load_items').delete().eq('id', id);
       if (error) throw error;
     },
