@@ -77,7 +77,7 @@ const CteSearch = lazy(() => import("@/pages/CteSearch"));
 const NFSe = lazy(() => import("@/pages/NFSe"));
 const PickupOrders = lazy(() => import("@/pages/PickupOrders"));
 const OrtManagement = lazy(() => import("@/pages/OrtManagement"));
-const CteHub = lazy(() => import("@/pages/CteHub"));
+const CteHub = lazy(() => import("@/pages/CteHubPage"));
 const ProductTraceability = lazy(() => import("@/pages/ProductTraceability"));
 const ProductHistory = lazy(() => import("@/pages/ProductHistory"));
 const ImportedNotesSummary = lazy(() => import("@/pages/ImportedNotesSummary"));
