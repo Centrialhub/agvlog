@@ -342,6 +342,9 @@ export default function Financial() {
           <Button variant="outline" size="sm" onClick={() => navigate('/driver-settlements')}>
             <Wallet className="h-4 w-4 mr-1" /> Acerto de Motoristas
           </Button>
+          <Button variant="outline" size="sm" onClick={() => navigate('/ledger')}>
+            <FileText className="h-4 w-4 mr-1" /> Razão Operacional
+          </Button>
         </div>
       </div>
 
