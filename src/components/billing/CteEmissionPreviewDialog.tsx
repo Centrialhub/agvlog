@@ -800,6 +800,13 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
           try {
             const em = emitters.find((e: any) => e.id === it.emitterId) || defaultEmitter;
             
+            // Segurança final: impede transmissão se a regra de consistência for violada
+            const regime = (em as any)?.regime_tributario;
+            const isSimples = regime === 'simples' || regime === 'mei';
+            if (isSimples && (it.icmsAliquota !== 0 || it.icmsBase !== 0 || it.icmsValor !== 0)) {
+               throw new Error('Bloqueio de segurança: ICMS não zerado para Simples Nacional.');
+            }
+            
             // Resolve ambiente (cacheado)
             if (!credsCache[it.emitterId]) {
               const { data: itCreds } = await supabase
