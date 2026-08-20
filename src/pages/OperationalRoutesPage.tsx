@@ -23,7 +23,7 @@ const CLASSIFICATIONS = [
 
 export default function OperationalRoutesPage() {
   const [showInactive, setShowInactive] = useState(false);
-  const { data: routes = [], isLoading } = useOperationalRoutesArray({ includeInactive: true });
+  const { isLoading } = useOperationalRoutesArray({ includeInactive: true });
   const createRoute = useCreateOperationalRoute();
   const updateRoute = useUpdateOperationalRoute();
   const deleteRoute = useDeleteOperationalRoute();
