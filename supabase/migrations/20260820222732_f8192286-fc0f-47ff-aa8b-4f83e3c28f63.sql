@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS public.execute_data_repair_v1(uuid, uuid);
