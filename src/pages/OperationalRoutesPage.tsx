@@ -40,7 +40,8 @@ export default function OperationalRoutesPage() {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return routes.filter((r: any) => {
+    const items = Array.isArray(routes) ? routes : (routes as any).items || [];
+    return items.filter((r: any) => {
       if (!showInactive && !r.active) return false;
       if (!q) return true;
       return r.name.toLowerCase().includes(q) || (r.region_name || '').toLowerCase().includes(q);
