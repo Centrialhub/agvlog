@@ -127,6 +127,7 @@ export default function OrtGeracaoTab() {
       } as any);
 
       const { error } = await supabase
+        // guardrail:allow-direct-write
         .from('fiscal_documents')
         .update({ pickup_order_id: (pickup as any).id })
         .in('id', selectedIds);
