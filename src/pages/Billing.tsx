@@ -376,13 +376,6 @@ export default function Billing() {
     setOpTypes(new Set()); setAllOps(true);
   };
 
-  const matchesOp = (opType: string | null | undefined) => {
-    if (allOps || opTypes.size === 0) return true;
-    return opType ? opTypes.has(opType as OpType) : false;
-  };
-
-  const ciIncludes = (haystack: string | null | undefined, needle: string) =>
-    !needle || (haystack || '').toLowerCase().includes(needle.toLowerCase());
 
 
 
