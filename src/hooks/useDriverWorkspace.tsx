@@ -85,10 +85,23 @@ export function useDriverWorkspace() {
 export type DriverEventType = 
   | 'arrival' 
   | 'departure' 
-  | 'delivery_complete' 
+  | 'delivery_success' 
   | 'delivery_refusal' 
+  | 'delivery_partial'
   | 'trip_start' 
   | 'trip_end';
+
+export interface PodData {
+  receiver_name: string;
+  receiver_tax_id?: string;
+  signed_at?: string;
+  photo_url?: string;
+  signature_url?: string;
+  latitude?: number;
+  longitude?: number;
+  accuracy?: number;
+  [key: string]: any;
+}
 
 export function useDriverExecution() {
   const queryClient = useQueryClient();
@@ -102,12 +115,14 @@ export function useDriverExecution() {
       stopId,
       eventType,
       payload = {},
+      podData,
       idempotencyKey
     }: {
       tripId: string;
       stopId?: string;
       eventType: DriverEventType;
       payload?: any;
+      podData?: PodData;
       idempotencyKey?: string;
     }) => {
       if (!driver || !currentTenant) throw new Error('Missing driver or tenant context');
@@ -126,17 +141,29 @@ export function useDriverExecution() {
         return { offline: true };
       }
 
-      const { data, error } = await supabase.rpc('driver_report_event_v1', {
-        p_driver_id: driver.id,
+      // Use the new unified operational event RPC
+      const { data, error } = await supabase.rpc('log_operational_event_v2', {
         p_tenant_id: currentTenant.id,
-        p_trip_id: tripId,
-        p_stop_id: stopId || null,
         p_event_type: eventType,
-        p_payload: payload,
+        p_dispatch_stop_id: stopId || null,
+        p_payload: { ...payload, trip_id: tripId },
+        p_pod_data: podData || null,
         p_idempotency_key: finalIdempotencyKey
       });
 
       if (error) throw error;
+
+      // Also trigger the state transition RPC for compatibility
+      await supabase.rpc('driver_report_event_v1', {
+        p_driver_id: driver.id,
+        p_tenant_id: currentTenant.id,
+        p_trip_id: tripId,
+        p_stop_id: stopId || null,
+        p_event_type: eventType === 'delivery_success' ? 'delivery_complete' : eventType,
+        p_payload: payload,
+        p_idempotency_key: `${finalIdempotencyKey}-state`
+      });
+
       return data;
     },
     onSuccess: () => {

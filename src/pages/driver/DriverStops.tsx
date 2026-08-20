@@ -67,7 +67,7 @@ export default function DriverStops() {
       tripId: activeTrip.id,
       stopId,
       eventType: 'arrival',
-      idempotencyKey: `arrival-${stopId}`
+      idempotencyKey: `arrival-${stopId}-${Date.now()}`
     });
   };
 
@@ -77,7 +77,7 @@ export default function DriverStops() {
       tripId: activeTrip.id,
       stopId,
       eventType: 'departure',
-      idempotencyKey: `departure-${stopId}`
+      idempotencyKey: `departure-${stopId}-${Date.now()}`
     });
   };
 
