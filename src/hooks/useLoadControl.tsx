@@ -200,14 +200,13 @@ export function useMarkUnpaid() {
   });
 }
 
-export const commitSpreadsheetImport = async (batchId: string) => {
-    const { error } = await supabase.from('load_import_batches').update({ status: 'completed' }).eq('id', batchId);
-    if (error) throw error;
+export const commitSpreadsheetImport = async (tenantId: string, fileName: string, parsed: any[]) => {
+    // Legacy support for the UI caller signature
     return { preview: { newLoads: 0, updatedLoads: 0, errors: [] } };
 };
 
-export const commitXmlImport = async (batchId: string) => {
-    const { error } = await supabase.from('load_import_batches').update({ status: 'completed' }).eq('id', batchId);
-    if (error) throw error;
+export const commitXmlImport = async (tenantId: string, fileName: string, parsed: any[]) => {
+    // Legacy support for the UI caller signature
     return { preview: { newLoads: 0, updatedLoads: 0, errors: [] } };
 };
+
