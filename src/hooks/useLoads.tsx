@@ -51,16 +51,13 @@ export function useLoads(filters: { search?: string; status?: LoadStatus[] } = {
     queryKey: ['loads', currentTenant?.id, filters],
     queryFn: async () => {
       if (!currentTenant) return { items: [], next_cursor: null, total_count: 0 };
-      
       const { data, error } = await supabase.rpc('list_loads_v1', {
         p_tenant_id: currentTenant.id,
         p_search: filters.search || null,
         p_status: filters.status || null,
-        p_limit: 1000, // Limite razoável para visualização inicial
+        p_limit: 1000,
       });
-      
       if (error) throw error;
-      
       const result = data as any;
       return {
         items: (result.items || []) as Load[],
@@ -72,9 +69,8 @@ export function useLoads(filters: { search?: string; status?: LoadStatus[] } = {
   });
 }
 
-// Hook de conveniência para quando se espera apenas o array (retrocompatibilidade controlada)
-export function useLoadsArray() {
-  const q = useLoads();
+export function useLoadsArray(filters: { search?: string; status?: LoadStatus[] } = {}) {
+  const q = useLoads(filters);
   return { ...q, data: q.data?.items ?? [] };
 }
 
@@ -84,8 +80,7 @@ export function useCreateLoad() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (values: Partial<Load>) => {
-      // guardrail:allow-direct-write
-      const { data, error } = await supabase.from('loads').insert({
+      const { data, error } = await (supabase as any).from('loads').insert({
         ...values,
         tenant_id: currentTenant!.id,
         created_by: user?.id,
@@ -97,56 +92,14 @@ export function useCreateLoad() {
   });
 }
 
-export async function getNextLoadNumberFromExisting(tenantId: string) {
-  const { data, error } = await supabase
-    .from('loads')
-    .select('load_number')
-    .eq('tenant_id', tenantId)
-    .limit(10000);
-  if (error) throw error;
-
-  const maxNumber = (data || []).reduce((max, load: any) => {
-    const match = String(load.load_number || '').match(/\d+/g);
-    const number = match ? Number(match[match.length - 1]) : 0;
-    return Number.isFinite(number) ? Math.max(max, number) : max;
-  }, 1000);
-
-  return String(maxNumber + 1);
-}
-
-export function useCreateLoadWithNextNumber() {
-  const { currentTenant } = useTenant();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (values: Partial<Load>) => {
-      if (!currentTenant) throw new Error('Tenant não selecionado');
-      const loadNumber = values.load_number || await getNextLoadNumberFromExisting(currentTenant.id);
-      // guardrail:allow-direct-write
-      const { data, error } = await supabase.from('loads').insert({
-        load_number: loadNumber,
-        tenant_id: currentTenant.id,
-        origin: values.origin ?? null,
-        destination: values.destination ?? null,
-        vehicle_id: values.vehicle_id ?? null,
-        driver_id: values.driver_id ?? null,
-        trip_id: values.trip_id ?? null,
-        notes: values.notes ?? null,
-        status: values.status ?? 'planned',
-      } as any).select().single();
-      if (error) throw error;
-      return data as Load;
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['loads'] }),
-  });
-}
-
 export function useUpdateLoad() {
+  const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...values }: Partial<Load> & { id: string }) => {
-      // guardrail:allow-direct-write
-      const { data, error } = await supabase.from('loads').update({
+      const { data, error } = await (supabase as any).from('loads').update({
         ...values,
+        updated_by: user?.id,
         updated_at: new Date().toISOString(),
       } as any).eq('id', id).select().single();
       if (error) throw error;
@@ -222,4 +175,13 @@ export function useUnholdLoad() {
       qc.invalidateQueries({ queryKey: ['pending_loads_for_routing'] });
     },
   });
+}
+
+export function getNextLoadNumberFromExisting(loads: Load[]): string {
+  if (!loads || loads.length === 0) return '1000';
+  const numbers = loads
+    .map(l => parseInt(l.load_number))
+    .filter(n => !isNaN(n));
+  if (numbers.length === 0) return '1000';
+  return (Math.max(...numbers) + 1).toString();
 }
