@@ -84,12 +84,14 @@ export function useLoadsArray(filters: { search?: string; status?: LoadStatus[] 
 
 export function useCreateLoad() {
   const { currentTenant } = useTenant();
-  const { user } = useAuth();
   const qc = useQueryClient();
 
   return useMutation({
     mutationFn: async (load: Partial<Load>) => {
       if (!currentTenant) throw new Error('Tenant not found');
+      // Embora cargas manuais possam ser inseridas, encorajamos o uso de rpcs
+      // Para congruência, cargas de inbound (notas) vêm via link_fiscal_documents_to_load_v1
+      // guardrail:allow-direct-write - Mantido temporariamente para cargas avulsas até migração total
       const { data, error } = await supabase
         .from('loads')
         .insert([{ ...load, tenant_id: currentTenant.id }] as any)
