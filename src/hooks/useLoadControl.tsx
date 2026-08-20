@@ -159,6 +159,23 @@ export function useRegisterPayment() {
   });
 }
 
+export function useMarkUnpaid() {
+  const qc = useQueryClient();
+  const { currentTenant } = useTenant();
+  return useMutation({
+    mutationFn: async (loadId: string) => {
+      await supabase.rpc('update_load_v1', {
+        p_tenant_id: currentTenant!.id,
+        p_load_id: loadId,
+        p_changes: { payment_status: 'unpaid', payment_date: null, received_amount: 0 }
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['load-control'] });
+    },
+  });
+}
+
 export const commitSpreadsheetImport = async (batchId: string) => {
     const { error } = await supabase.from('load_import_batches').update({ status: 'completed' }).eq('id', batchId);
     if (error) throw error;
