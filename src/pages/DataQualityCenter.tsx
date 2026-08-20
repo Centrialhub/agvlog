@@ -394,11 +394,9 @@ export default function DataQualityCenter() {
       </Card>
       
       <div className="flex justify-end gap-2">
-         <Button variant="outline" className="text-xs">
-            <History className="h-3 w-3 mr-1" />
-            Histórico de Reparos
-         </Button>
+         {currentTenant && <RepairHistoryDialog tenantId={currentTenant.id} />}
       </div>
     </div>
   );
 }
+
