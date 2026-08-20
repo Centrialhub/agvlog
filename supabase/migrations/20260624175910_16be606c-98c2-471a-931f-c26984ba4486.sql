@@ -1,18 +1,21 @@
 -- Helpers
 CREATE OR REPLACE FUNCTION public.is_tenant_operator_or_admin(_tenant_id uuid)
-RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public AS $$
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER
+  SET search_path = public SET search_path=public AS $$
   SELECT public.is_user_internal_role(_tenant_id);
 $$;
 
 CREATE OR REPLACE FUNCTION public.current_driver_id(_tenant_id uuid)
-RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public AS $$
+RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER
+  SET search_path = public SET search_path=public AS $$
   SELECT id FROM public.drivers
   WHERE tenant_id = _tenant_id AND user_id = auth.uid() AND active = true
   LIMIT 1;
 $$;
 
 CREATE OR REPLACE FUNCTION public.driver_owns_trip(_trip_id uuid)
-RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public AS $$
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER
+  SET search_path = public SET search_path=public AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.dispatch_trips dt
     JOIN public.drivers d ON d.id = dt.driver_id
@@ -21,7 +24,8 @@ RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public AS $
 $$;
 
 CREATE OR REPLACE FUNCTION public.driver_can_access_vehicle(_vehicle_id uuid)
-RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public AS $$
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER
+  SET search_path = public SET search_path=public AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.dispatch_trips dt
     JOIN public.drivers d ON d.id = dt.driver_id
@@ -30,7 +34,8 @@ RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public AS $
 $$;
 
 CREATE OR REPLACE FUNCTION public.driver_owns_stop(_stop_id uuid)
-RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public AS $$
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER
+  SET search_path = public SET search_path=public AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.dispatch_stops ds
     JOIN public.dispatch_trips dt ON dt.id = ds.dispatch_trip_id
@@ -127,7 +132,8 @@ CREATE OR REPLACE FUNCTION public.driver_create_operational_occurrence(
   _severity text DEFAULT 'medium',
   _stop_id uuid DEFAULT NULL,
   _client_id uuid DEFAULT NULL
-) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = public SET search_path=public AS $$
 DECLARE
   v_driver uuid; v_tenant uuid; v_trip uuid := _trip_id; v_stop uuid := _stop_id;
   v_load uuid; v_vehicle uuid; v_client uuid := _client_id; v_fd uuid;
@@ -197,7 +203,8 @@ END $$;
 
 -- get_client_portal_shipment_detail: tri-fold occurrence filter
 CREATE OR REPLACE FUNCTION public.get_client_portal_shipment_detail(_fiscal_document_id uuid)
-RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=public AS $$
+RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER
+  SET search_path = public SET search_path=public AS $$
 DECLARE
   _fd public.fiscal_documents; _tenant uuid; _can_financial boolean := false;
   _trip_id uuid; _stop_id uuid;

@@ -231,6 +231,7 @@ CREATE OR REPLACE FUNCTION public.next_merchandise_shortage_number(_tenant_id uu
 RETURNS text
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -254,6 +255,7 @@ CREATE OR REPLACE FUNCTION public.create_merchandise_shortage_case(_tenant_id uu
 RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -346,6 +348,7 @@ CREATE OR REPLACE FUNCTION public.update_merchandise_shortage_status(_case_id uu
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -393,6 +396,7 @@ CREATE OR REPLACE FUNCTION public.recalc_shortage_case_total()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE

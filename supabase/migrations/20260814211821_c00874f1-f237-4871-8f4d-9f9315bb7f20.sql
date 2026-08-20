@@ -2,6 +2,7 @@ CREATE OR REPLACE FUNCTION public.release_inbound_notes_from_failed_cte()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE

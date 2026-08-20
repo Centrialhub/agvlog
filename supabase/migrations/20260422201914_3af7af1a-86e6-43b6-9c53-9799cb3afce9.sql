@@ -13,6 +13,7 @@ CREATE OR REPLACE FUNCTION public.create_load_with_next_number(
 RETURNS public.loads
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE

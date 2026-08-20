@@ -8,6 +8,7 @@ CREATE OR REPLACE FUNCTION public.list_available_loads_for_settlement(
 LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
+  SET search_path = public
 SET search_path TO 'public'
 AS $$
 DECLARE

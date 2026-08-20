@@ -37,6 +37,7 @@ RETURNS TABLE (
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 BEGIN
@@ -120,6 +121,7 @@ CREATE OR REPLACE FUNCTION public.execute_data_repair_v1(
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE

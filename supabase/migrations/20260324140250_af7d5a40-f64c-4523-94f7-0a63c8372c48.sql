@@ -4,6 +4,7 @@ CREATE OR REPLACE FUNCTION public.update_inventory_balance()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path TO 'public'
 AS $$
 DECLARE

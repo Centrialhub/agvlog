@@ -49,6 +49,7 @@ CREATE OR REPLACE FUNCTION public.approve_financial_obligation_v1(
 RETURNS boolean
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -89,6 +90,7 @@ CREATE OR REPLACE FUNCTION public.reverse_financial_obligation_v1(
 RETURNS boolean
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE

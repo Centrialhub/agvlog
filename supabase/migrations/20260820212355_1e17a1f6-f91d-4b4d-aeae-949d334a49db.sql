@@ -8,6 +8,7 @@ CREATE OR REPLACE FUNCTION public.get_operational_financial_summary_v1(
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE

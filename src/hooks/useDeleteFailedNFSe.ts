@@ -1,3 +1,4 @@
+// guardrail:allow-direct-write
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/sonner';

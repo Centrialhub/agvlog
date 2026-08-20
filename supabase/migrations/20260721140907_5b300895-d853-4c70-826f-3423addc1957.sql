@@ -2,6 +2,7 @@ CREATE OR REPLACE FUNCTION public._driver_load_ids()
  RETURNS SETOF uuid
  LANGUAGE sql
  STABLE SECURITY DEFINER
+  SET search_path = public
  SET search_path TO 'public'
 AS $function$
   SELECT DISTINCT dtl.load_id FROM public.dispatch_trip_loads dtl

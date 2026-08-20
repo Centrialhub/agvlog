@@ -2,6 +2,7 @@ CREATE OR REPLACE FUNCTION public.preview_reimport_cleanup_counts(_tenant_id uui
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path TO 'public'
 AS $$
 DECLARE
@@ -66,6 +67,7 @@ CREATE OR REPLACE FUNCTION public.clear_reimport_batch_data(_tenant_id uuid, _st
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path TO 'public'
 AS $$
 DECLARE

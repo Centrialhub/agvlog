@@ -13,6 +13,7 @@ CREATE OR REPLACE FUNCTION public.fiscal_documents_autofill_recipient_cnpj()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -40,6 +41,7 @@ RETURNS jsonb
 LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE

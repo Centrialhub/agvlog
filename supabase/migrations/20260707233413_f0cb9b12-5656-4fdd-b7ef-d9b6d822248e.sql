@@ -151,6 +151,7 @@ CREATE OR REPLACE FUNCTION public.register_doccob_export(
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -237,7 +238,8 @@ $$;
 
 -- ============ RPC: mark_doccob_sent ============
 CREATE OR REPLACE FUNCTION public.mark_doccob_sent(_tenant_id uuid, _export_id uuid, _channel text DEFAULT 'manual', _sent_to text DEFAULT NULL)
-RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = public SET search_path = public AS $$
 BEGIN
   IF NOT public.is_tenant_operator_or_admin(_tenant_id) THEN
     RAISE EXCEPTION 'Permissão negada';
@@ -255,7 +257,8 @@ $$;
 
 -- ============ RPC: mark_doccob_downloaded ============
 CREATE OR REPLACE FUNCTION public.mark_doccob_downloaded(_tenant_id uuid, _export_id uuid)
-RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = public SET search_path = public AS $$
 BEGIN
   IF NOT public.is_tenant_member(_tenant_id) THEN
     RAISE EXCEPTION 'Permissão negada';
@@ -269,7 +272,8 @@ $$;
 
 -- ============ RPC: cancel_doccob_export ============
 CREATE OR REPLACE FUNCTION public.cancel_doccob_export(_tenant_id uuid, _export_id uuid, _reason text)
-RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = public SET search_path = public AS $$
 BEGIN
   IF NOT public.is_tenant_operator_or_admin(_tenant_id) THEN
     RAISE EXCEPTION 'Permissão negada';

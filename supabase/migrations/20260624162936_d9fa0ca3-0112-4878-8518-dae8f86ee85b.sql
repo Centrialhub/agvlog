@@ -13,7 +13,8 @@ CREATE INDEX IF NOT EXISTS idx_drivers_user_id ON public.drivers(user_id);
 -- ---------- Helper: assert auth.uid() owns the trip ----------
 CREATE OR REPLACE FUNCTION public._assert_driver_owns_trip(_trip_id uuid)
 RETURNS TABLE (driver_id uuid, tenant_id uuid, status text)
-LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public
+LANGUAGE plpgsql STABLE SECURITY DEFINER
+  SET search_path = public SET search_path = public
 AS $$
 DECLARE
   v_uid uuid := auth.uid();
@@ -50,7 +51,8 @@ GRANT EXECUTE ON FUNCTION public._assert_driver_owns_trip(uuid) TO authenticated
 
 -- ---------- driver_mark_arrival ----------
 CREATE OR REPLACE FUNCTION public.driver_mark_arrival(_stop_id uuid)
-RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = public SET search_path = public AS $$
 DECLARE v_trip uuid; v_tenant uuid; v_event uuid;
 BEGIN
   SELECT dispatch_trip_id, tenant_id INTO v_trip, v_tenant
@@ -79,7 +81,8 @@ GRANT EXECUTE ON FUNCTION public.driver_mark_arrival(uuid) TO authenticated;
 CREATE OR REPLACE FUNCTION public.driver_create_event(
   _trip_id uuid, _event_type text, _payload jsonb DEFAULT '{}'::jsonb,
   _stop_id uuid DEFAULT NULL, _notes text DEFAULT NULL
-) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = public SET search_path = public AS $$
 DECLARE v_tenant uuid; v_id uuid;
 BEGIN
   SELECT tenant_id INTO v_tenant FROM public._assert_driver_owns_trip(_trip_id);
@@ -97,7 +100,8 @@ GRANT EXECUTE ON FUNCTION public.driver_create_event(uuid,text,jsonb,uuid,text) 
 -- ---------- driver_save_checklist ----------
 CREATE OR REPLACE FUNCTION public.driver_save_checklist(
   _trip_id uuid, _kind text, _payload jsonb
-) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = public SET search_path = public AS $$
 DECLARE v_tenant uuid; v_type text; v_id uuid;
 BEGIN
   IF _kind NOT IN ('pre','post') THEN RAISE EXCEPTION 'invalid_kind'; END IF;
@@ -115,7 +119,8 @@ CREATE OR REPLACE FUNCTION public.driver_create_expense(
   _trip_id uuid, _category text, _amount numeric,
   _notes text DEFAULT NULL, _receipt_path text DEFAULT NULL,
   _expense_at timestamptz DEFAULT now()
-) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = public SET search_path = public AS $$
 DECLARE v_tenant uuid; v_driver uuid; v_id uuid;
 BEGIN
   SELECT driver_id, tenant_id INTO v_driver, v_tenant FROM public._assert_driver_owns_trip(_trip_id);
@@ -144,7 +149,8 @@ CREATE OR REPLACE FUNCTION public.driver_finalize_delivery(
   _receiver_document text DEFAULT NULL,
   _receiver_role text DEFAULT NULL,
   _notes text DEFAULT NULL
-) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = public SET search_path = public AS $$
 DECLARE
   v_trip uuid; v_tenant uuid; v_load uuid; v_stop_status text;
   v_event uuid; v_pod_ids uuid[] := ARRAY[]::uuid[]; v_pod uuid;
@@ -255,7 +261,8 @@ CREATE OR REPLACE FUNCTION public.finalize_driver_delivery(
   _signature_path text DEFAULT NULL,
   _photo_paths text[] DEFAULT ARRAY[]::text[],
   _fiscal_document_id uuid DEFAULT NULL  -- IGNORED (compat only)
-) RETURNS jsonb LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
+) RETURNS jsonb LANGUAGE sql SECURITY DEFINER
+  SET search_path = public SET search_path = public AS $$
   SELECT public.driver_finalize_delivery(_stop_id, _receiver_name, _signature_path, _photo_paths);
 $$;
 GRANT EXECUTE ON FUNCTION public.finalize_driver_delivery(uuid,text,text,text[],uuid) TO authenticated;
@@ -264,7 +271,8 @@ GRANT EXECUTE ON FUNCTION public.finalize_driver_delivery(uuid,text,text,text[],
 -- RLS: driver SELECT scopes
 -- ============================================================
 CREATE OR REPLACE FUNCTION public._driver_trip_ids()
-RETURNS SETOF uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+RETURNS SETOF uuid LANGUAGE sql STABLE SECURITY DEFINER
+  SET search_path = public SET search_path = public AS $$
   SELECT t.id FROM public.dispatch_trips t
   JOIN public.drivers d ON d.id = t.driver_id
   WHERE d.user_id = auth.uid() AND d.active = true;

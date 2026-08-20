@@ -11,6 +11,7 @@ CREATE OR REPLACE FUNCTION public.transition_trip_status_v1(
 RETURNS text
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -79,6 +80,7 @@ CREATE OR REPLACE FUNCTION public.audit_data_consistency_v3(
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE

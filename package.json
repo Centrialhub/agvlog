@@ -9,7 +9,7 @@
     "install:ci": "bun install --frozen-lockfile",
     "build": "vite build",
     "build:dev": "vite build --mode development",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc -p tsconfig.app.json --noEmit",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",

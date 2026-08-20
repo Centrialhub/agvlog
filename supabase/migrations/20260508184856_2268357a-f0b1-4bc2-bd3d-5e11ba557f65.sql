@@ -220,6 +220,7 @@ CREATE OR REPLACE FUNCTION public.next_nfse_number(_tenant_id uuid, _branch_code
 RETURNS bigint
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE

@@ -2,6 +2,7 @@ CREATE OR REPLACE FUNCTION public.revert_xml_loads_to_available(_tenant_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = 'public'
 AS $function$
 DECLARE

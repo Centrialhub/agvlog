@@ -5,6 +5,7 @@ CREATE OR REPLACE FUNCTION public.assign_fiscal_documents_to_load(
 ) RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE

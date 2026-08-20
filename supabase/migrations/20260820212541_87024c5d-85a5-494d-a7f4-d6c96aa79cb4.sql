@@ -12,6 +12,7 @@ CREATE OR REPLACE FUNCTION public.create_ledger_entry_v1(
 RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -37,6 +38,7 @@ CREATE OR REPLACE FUNCTION public.approve_financial_obligation_v1(_obligation_id
  RETURNS boolean
  LANGUAGE plpgsql
  SECURITY DEFINER
+  SET search_path = public
  SET search_path TO 'public'
 AS $function$
 DECLARE

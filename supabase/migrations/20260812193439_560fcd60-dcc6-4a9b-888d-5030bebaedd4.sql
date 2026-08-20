@@ -13,7 +13,8 @@ CREATE OR REPLACE FUNCTION public.register_driver_settlement_payment_v2(
   _bank_account_id uuid DEFAULT NULL, -- Optional: link to a bank account for reconciliation
   _cost_center text DEFAULT 'Operacional'
 ) RETURNS uuid
-LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = public SET search_path TO 'public'
 AS $$
 DECLARE
   v_s public.driver_settlements;

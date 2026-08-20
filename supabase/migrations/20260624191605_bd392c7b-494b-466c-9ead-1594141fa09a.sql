@@ -8,6 +8,7 @@ CREATE OR REPLACE FUNCTION public.get_public_shipment_status(_fiscal_document_id
 RETURNS text
 LANGUAGE plpgsql
 STABLE SECURITY DEFINER
+  SET search_path = public
 SET search_path TO 'public'
 AS $$
 DECLARE
@@ -77,6 +78,7 @@ CREATE OR REPLACE FUNCTION public.search_client_portal_shipments(
 RETURNS jsonb
 LANGUAGE plpgsql
 STABLE SECURITY DEFINER
+  SET search_path = public
 SET search_path TO 'public'
 AS $$
 DECLARE _rows jsonb; _total int; _search_norm text;
@@ -158,6 +160,7 @@ RETURNS TABLE(id uuid, pickup_number text, remitter_name text, remitter_cnpj tex
               linked_docs_count bigint)
 LANGUAGE sql
 STABLE SECURITY DEFINER
+  SET search_path = public
 SET search_path TO 'public'
 AS $$
   SELECT
@@ -183,6 +186,7 @@ CREATE OR REPLACE FUNCTION public.record_operational_event_with_status(
 RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path TO 'public'
 AS $$
 DECLARE
@@ -266,6 +270,7 @@ CREATE OR REPLACE FUNCTION public.delete_load_safely(_tenant_id uuid, _load_id u
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path TO 'public'
 AS $$
 DECLARE v_pod int; v_terminal_doc int; v_dtl int; v_crit_occ int;
@@ -305,6 +310,7 @@ CREATE OR REPLACE FUNCTION public.delete_loads_safely(_tenant_id uuid, _load_ids
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path TO 'public'
 AS $$
 DECLARE v_id uuid; v_result jsonb := '[]'::jsonb;
@@ -327,6 +333,7 @@ CREATE OR REPLACE FUNCTION public.audit_data_consistency(_tenant_id uuid)
 RETURNS TABLE(severity text, category text, entity_type text, entity_id uuid, message text)
 LANGUAGE plpgsql
 STABLE SECURITY DEFINER
+  SET search_path = public
 SET search_path TO 'public'
 AS $$
 BEGIN
@@ -484,6 +491,7 @@ CREATE OR REPLACE FUNCTION public.log_pod_access(
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path TO 'public'
 AS $$
 DECLARE v_role text;

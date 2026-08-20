@@ -34,6 +34,7 @@ CREATE OR REPLACE FUNCTION public._build_manual_driver_settlement(_settlement_id
 RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path TO 'public'
 AS $$
 DECLARE
@@ -220,6 +221,7 @@ CREATE OR REPLACE FUNCTION public._build_manual_driver_settlement(_settlement_id
 RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path TO 'public'
 AS $$
 DECLARE
@@ -380,6 +382,7 @@ RETURNS boolean
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
+  SET search_path = public
 SET search_path TO 'public'
 AS $$
   SELECT NOT EXISTS (
@@ -411,6 +414,7 @@ CREATE OR REPLACE FUNCTION public.create_manual_driver_settlement(
 ) RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path TO 'public'
 AS $$
 DECLARE
@@ -468,6 +472,7 @@ CREATE OR REPLACE FUNCTION public.attach_loads_to_driver_settlement(
 ) RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path TO 'public'
 AS $$
 DECLARE
@@ -504,6 +509,7 @@ CREATE OR REPLACE FUNCTION public.detach_load_from_driver_settlement(
 ) RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path TO 'public'
 AS $$
 DECLARE
@@ -537,6 +543,7 @@ CREATE OR REPLACE FUNCTION public.list_available_loads_for_settlement(
 LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
+  SET search_path = public
 SET search_path TO 'public'
 AS $$
 DECLARE

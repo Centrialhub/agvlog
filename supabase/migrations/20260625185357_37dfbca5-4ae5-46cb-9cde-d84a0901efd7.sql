@@ -122,6 +122,7 @@ CREATE OR REPLACE FUNCTION public.generate_driver_settlement(_tenant_id uuid, _d
 RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -346,6 +347,7 @@ CREATE OR REPLACE FUNCTION public.generate_pending_driver_settlements(_tenant_id
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -386,6 +388,7 @@ CREATE OR REPLACE FUNCTION public.update_driver_settlement_status(_settlement_id
 RETURNS public.driver_settlements
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -438,6 +441,7 @@ CREATE OR REPLACE FUNCTION public.update_settlement_km_review(_settlement_id uui
 RETURNS public.driver_settlements
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE v_s public.driver_settlements;
@@ -464,7 +468,8 @@ GRANT EXECUTE ON FUNCTION public.update_settlement_km_review(uuid, numeric, text
 -- Trigger: when dispatch_trips is marked completed, create stub settlement
 -- =========================================================
 CREATE OR REPLACE FUNCTION public._on_dispatch_trip_completed_create_settlement()
-RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = public SET search_path = public AS $$
 BEGIN
   IF NEW.status = 'completed' AND (OLD.status IS DISTINCT FROM 'completed') THEN
     BEGIN

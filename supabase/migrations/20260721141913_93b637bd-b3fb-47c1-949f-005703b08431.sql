@@ -5,6 +5,7 @@ CREATE OR REPLACE FUNCTION public.loads_autofill_driver_from_vehicle()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE

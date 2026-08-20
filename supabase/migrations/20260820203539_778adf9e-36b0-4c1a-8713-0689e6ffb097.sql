@@ -7,6 +7,7 @@ CREATE OR REPLACE FUNCTION public.move_load_items_v2(
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE

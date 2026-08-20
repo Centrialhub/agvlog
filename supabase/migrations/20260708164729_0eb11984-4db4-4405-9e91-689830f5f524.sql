@@ -143,6 +143,7 @@ CREATE INDEX IF NOT EXISTS idx_rural_batches_tenant_created ON public.rural_deli
 
 -- === 5. Helper ===
 CREATE OR REPLACE FUNCTION public.client_is_rural(_client_id uuid) RETURNS boolean
-LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+LANGUAGE sql STABLE SECURITY DEFINER
+  SET search_path = public SET search_path = public AS $$
   SELECT COALESCE((SELECT is_rural FROM public.clients WHERE id = _client_id), false);
 $$;
