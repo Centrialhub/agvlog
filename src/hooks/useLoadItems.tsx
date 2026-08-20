@@ -77,7 +77,7 @@ export function useCreateLoadItem() {
       if (!values.load_id) throw new Error('load_id obrigatório');
       // Vínculo com NF é exclusivamente via RPC oficial (sincroniza fiscal_documents.load_id + auditoria).
       if (values.fiscal_document_id) {
-        const { data, error } = await (supabase as any).rpc('assign_fiscal_documents_to_load', {
+        const { data, error } = await (supabase as any).rpc('link_fiscal_documents_to_load_v1', {
           _tenant_id: currentTenant!.id,
           _load_id: values.load_id,
           _document_ids: [values.fiscal_document_id],
