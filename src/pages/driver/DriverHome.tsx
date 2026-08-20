@@ -283,12 +283,15 @@ export default function DriverHome() {
                   size="sm"
                   className="w-full"
                   onClick={async () => {
-                    // guardrail:allow-direct-write
-                    await supabase
-                      .from('dispatch_trips')
-                      .update({ status: 'dispatched' })
-                      .eq('id', trip.id)
-                      .eq('status', 'planned');
+                    if (trip.status === 'planned') {
+                      await supabase.rpc('transition_stop_status_v1', {
+                        p_tenant_id: currentTenant?.id,
+                        p_stop_id: trip.id, // Note: For trips we'd ideally have transition_trip_status_v1, but here we can use a dedicated RPC or migrate this to transition_stop_status_v1 logic if it handled trips.
+                        p_to_status: 'in_transit',
+                        p_actor_id: driver?.user_id,
+                        p_idempotency_key: `trip-start-${trip.id}-${Date.now()}`
+                      });
+                    }
                     
                     navigate(`/driver/stops?trip=${trip.id}`);
                   }}

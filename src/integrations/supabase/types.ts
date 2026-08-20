@@ -16007,6 +16007,18 @@ export type Database = {
         }
         Returns: string
       }
+      transition_trip_status_v1: {
+        Args: {
+          p_actor_id: string
+          p_idempotency_key?: string
+          p_metadata?: Json
+          p_reason?: string
+          p_tenant_id: string
+          p_to_status: string
+          p_trip_id: string
+        }
+        Returns: string
+      }
       unhold_load: { Args: { _load_id: string }; Returns: undefined }
       unlink_fiscal_documents_from_load_v1: {
         Args: { _document_ids: string[]; _load_id: string; _tenant_id: string }
