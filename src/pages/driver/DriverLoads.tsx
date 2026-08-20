@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCurrentDriver } from '@/hooks/useCurrentDriver';
+import { useDriverWorkspace, useDriverExecution } from '@/hooks/useDriverWorkspace';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -10,36 +11,12 @@ import { LOAD_STATUS_LABELS, LOAD_ACTIVE_STATUSES } from '@/lib/status';
 
 export default function DriverLoads() {
   const { data: driver, isLoading: driverLoading } = useCurrentDriver();
+  const { data: workspace, isLoading: workspaceLoading } = useDriverWorkspace();
+  const { reportEvent } = useDriverExecution();
   const navigate = useNavigate();
 
-  const { data: loads = [], isLoading: loadsLoading } = useQuery({
-    queryKey: ['driver_all_assigned_loads', driver?.id],
-    queryFn: async () => {
-      if (!driver) return [];
-      const { data, error } = await supabase
-        .from('loads')
-        .select(`
-          id, 
-          load_number, 
-          origin, 
-          destination, 
-          status, 
-          trip_id,
-          scheduled_load_at,
-          total_pallet_count, 
-          total_weight_kg,
-          vehicles(plate, nickname)
-        `)
-        .eq('driver_id', driver.id)
-        .order('created_at', { ascending: false });
-      
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!driver,
-  });
-
-  const loading = driverLoading || loadsLoading;
+  const loads = workspace?.loads || [];
+  const loading = driverLoading || workspaceLoading;
 
   return (
     <div className="space-y-4 pb-20">
@@ -114,20 +91,17 @@ export default function DriverLoads() {
                     </div>
                   </div>
 
-                  {load.status && (LOAD_ACTIVE_STATUSES as readonly string[]).includes(load.status) && load.trip_id && (
+                  {load.status && (LOAD_ACTIVE_STATUSES as readonly string[]).includes(load.status) && workspace?.trip?.id && (
                     <Button 
                       size="sm" 
                       className="w-full mt-2" 
-                      onClick={async () => {
-                        // guardrail:allow-direct-write
-                        const { error } = await supabase
-                          .from('dispatch_trips')
-                          .update({ status: 'dispatched' })
-                          .eq('id', load.trip_id)
-                          .eq('status', 'planned'); // Só muda se ainda estiver planejada
-                        
-                        // 2. Navegar para a página de paradas
-                        navigate(`/driver/stops?trip=${load.trip_id}`);
+                      onClick={() => {
+                        reportEvent.mutate({
+                          tripId: workspace.trip!.id,
+                          eventType: 'trip_start',
+                          idempotencyKey: `start-trip-${workspace.trip!.id}`
+                        });
+                        navigate(`/driver/stops`);
                       }}
                     >
                       Acessar Viagem
