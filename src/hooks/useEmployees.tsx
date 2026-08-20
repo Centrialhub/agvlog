@@ -32,6 +32,7 @@ export interface Employee {
   driver_id: string | null;
   user_id: string | null;
   notes: string | null;
+  version: number;
   created_at: string;
   updated_at: string;
 }
@@ -88,13 +89,13 @@ export function useEmployeesArray() {
 
 export function useCreateEmployee() {
   const { currentTenant } = useTenant();
-  const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (values: Partial<Employee>) => {
-      const { data, error } = await (supabase as any).from('employees').insert({
-        ...values, tenant_id: currentTenant!.id, created_by: user?.id,
-      }).select().single();
+      const { data, error } = await supabase.rpc('create_employee_v1', {
+        p_tenant_id: currentTenant!.id,
+        p_values: values,
+      });
       if (error) throw error;
       return data;
     },
@@ -103,24 +104,31 @@ export function useCreateEmployee() {
 }
 
 export function useUpdateEmployee() {
+  const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...values }: Partial<Employee> & { id: string }) => {
-      const { data, error } = await (supabase as any).from('employees')
-        .update({ ...values, updated_at: new Date().toISOString() })
-        .eq('id', id).select().single();
+    mutationFn: async ({ id, version, ...values }: Partial<Employee> & { id: string; version?: number }) => {
+      const { error } = await supabase.rpc('update_employee_v1', {
+        p_tenant_id: currentTenant!.id,
+        p_employee_id: id,
+        p_values: values,
+        p_expected_version: version,
+      });
       if (error) throw error;
-      return data;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['employees'] }),
   });
 }
 
 export function useDeleteEmployee() {
+  const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('employees').delete().eq('id', id);
+      const { error } = await supabase.rpc('delete_employee_v1', {
+        p_tenant_id: currentTenant!.id,
+        p_employee_id: id,
+      });
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['employees'] }),
