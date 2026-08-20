@@ -5,7 +5,7 @@ import { useTenant } from '@/hooks/useTenant';
 import { useAuth } from '@/hooks/useAuth';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useOperationalRoutes, useOperationalRoutesArray } from '@/hooks/useOperationalRoutes';
-import { useCreateLoad, getNextLoadNumberFromExisting } from '@/hooks/useLoads';
+import { useCreateLoad, getNextLoadNumberFromExisting, useLoadsArray } from '@/hooks/useLoads';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';

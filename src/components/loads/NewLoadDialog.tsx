@@ -128,7 +128,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     queryKey: ['next_load_number_preview', currentTenant?.id, open],
     queryFn: async () => {
       if (!currentTenant) return '';
-      return getNextLoadNumberFromExisting(currentTenant.id);
+      return await getNextLoadNumberFromExisting(currentTenant.id);
     },
     enabled: !!currentTenant && open,
   });

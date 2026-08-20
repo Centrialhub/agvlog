@@ -92,6 +92,28 @@ export function useCreateLoad() {
   });
 }
 
+export function useCreateLoadWithNextNumber() {
+  const { currentTenant } = useTenant();
+  const createLoad = useCreateLoad();
+  
+  return useMutation({
+    mutationFn: async (values: Omit<Partial<Load>, 'load_number'>) => {
+      if (!currentTenant) throw new Error('Tenant context missing');
+      
+      const { data: nextNum, error: numError } = await supabase.rpc('get_next_load_number_v1', {
+        p_tenant_id: currentTenant.id
+      });
+      
+      if (numError) throw numError;
+      
+      return createLoad.mutateAsync({
+        ...values,
+        load_number: String(nextNum)
+      });
+    }
+  });
+}
+
 export function useUpdateLoad() {
   const { user } = useAuth();
   const qc = useQueryClient();
@@ -177,11 +199,10 @@ export function useUnholdLoad() {
   });
 }
 
-export function getNextLoadNumberFromExisting(loads: Load[]): string {
-  if (!loads || loads.length === 0) return '1000';
-  const numbers = loads
-    .map(l => parseInt(l.load_number))
-    .filter(n => !isNaN(n));
-  if (numbers.length === 0) return '1000';
-  return (Math.max(...numbers) + 1).toString();
+export async function getNextLoadNumberFromExisting(tenantId: string): Promise<string> {
+  const { data, error } = await supabase.rpc('get_next_load_number_v1', {
+    p_tenant_id: tenantId
+  });
+  if (error) throw error;
+  return String(data || '1000');
 }
