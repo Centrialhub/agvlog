@@ -992,7 +992,16 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
 
           {/* Editor do CT-e ativo */}
           <div className="max-h-[540px] overflow-y-auto pr-1">
-            {!validation.ok && (
+            {validation.consistencyError && (
+              <Alert variant="destructive" className="mb-3">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>Erro de consistência (Regra Simples Nacional):</strong> O ICMS não está zerado para este emitente. 
+                  Clique em "Recalcular" na aba Fiscal ou corrija manualmente para prosseguir.
+                </AlertDescription>
+              </Alert>
+            )}
+            {!validation.ok && !validation.consistencyError && (
               <Alert variant="destructive" className="mb-3">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
