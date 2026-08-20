@@ -25,6 +25,13 @@ export function PortalClientScopeProvider({ children }: { children: ReactNode })
   const { data: clients = [], isLoading } = useClientPortalAccess();
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
 
+  // Auto-select if only one client is available
+  useEffect(() => {
+    if (!isLoading && clients.length === 1 && !selectedClientId) {
+      setSelectedClientId(clients[0].client_id);
+    }
+  }, [clients, isLoading, selectedClientId]);
+
   const value = useMemo<ScopeContextValue>(() => {
     const selectedClient = selectedClientId
       ? clients.find((c) => c.client_id === selectedClientId) ?? null
