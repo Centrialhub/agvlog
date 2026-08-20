@@ -85,10 +85,22 @@ export function useDriverWorkspace() {
 export type DriverEventType = 
   | 'arrival' 
   | 'departure' 
-  | 'delivery_complete' 
+  | 'delivery_success' 
   | 'delivery_refusal' 
+  | 'delivery_partial'
   | 'trip_start' 
   | 'trip_end';
+
+export interface PodData {
+  receiver_name: string;
+  receiver_tax_id?: string;
+  signed_at?: string;
+  photo_url?: string;
+  signature_url?: string;
+  latitude?: number;
+  longitude?: number;
+  accuracy?: number;
+}
 
 export function useDriverExecution() {
   const queryClient = useQueryClient();
@@ -102,12 +114,14 @@ export function useDriverExecution() {
       stopId,
       eventType,
       payload = {},
+      podData,
       idempotencyKey
     }: {
       tripId: string;
       stopId?: string;
       eventType: DriverEventType;
       payload?: any;
+      podData?: PodData;
       idempotencyKey?: string;
     }) => {
       if (!driver || !currentTenant) throw new Error('Missing driver or tenant context');
