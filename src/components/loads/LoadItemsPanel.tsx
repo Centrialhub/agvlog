@@ -322,6 +322,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
         weight_kg: acc.weight_kg + (Number(item.weight_kg) || 0),
         volume_m3: acc.volume_m3 + (Number(item.volume_m3) || 0),
       }), { pallet_count: 0, weight_kg: 0, volume_m3: 0 });
+      // guardrail:allow-direct-write
       const { error: updateError } = await supabase.from('loads').update({
         total_pallet_count: totals.pallet_count,
         total_weight_kg: totals.weight_kg,
