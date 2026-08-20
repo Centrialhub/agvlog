@@ -8,7 +8,7 @@ import {
   sanitizeIe,
 } from '@/lib/fiscal/partyRegistry';
 
-const clients = [
+const clients: any[] = [
   {
     id: 'c1',
     company_name: 'J. MACEDO S/A',

@@ -100,8 +100,8 @@ describe('cteBuilder — novos blocos', () => {
     expect(p.tipoCtrc).toBe('01');
     expect(p.veiculo.tipo).toBe('01');
     expect(p.veiculo.carretas).toEqual(['XYZ1A11', 'XYZ1A22']);
-    expect(p.seguradora.nome).toBe('AKAD SEGUROS');
-    expect(p.seguradora.apolice).toBe('2798202301065400079');
+    expect(p.seguro.seguradora).toBe('AKAD SEGUROS');
+    expect(p.seguro.nApol).toBe('2798202301065400079');
     expect(p.composicaoFrete.freight_weight).toBe(8.49);
     expect(p.icms.aliquota).toBe(18);
     expect(p.cbsIbs.cbs_aliquota).toBe(0.9);
@@ -179,7 +179,7 @@ describe('cteBuilder — ICMS embutido (por dentro)', () => {
     expect(p.valores.valorFreteBase).toBe(154.83);
     expect(p.valores.valorTotalServico).toBe(188.82);
     expect(p.valores.valorReceber).toBe(188.82);
-    expect(p.valorPrestacao.Comp).toEqual([
+    expect(p.vPrest.Comp).toEqual([
       { xNome: 'FRETE PESO', vComp: 154.83 },
       { xNome: 'ICMS', vComp: 33.99 },
     ]);
@@ -232,7 +232,7 @@ describe('cteBuilder — ICMS embutido (por dentro)', () => {
       { nome: 'ICMS', valor: 120, soma: false },
     ]);
     // e fora do grupo Comp para fechar com vTPrest
-    expect(p.valorPrestacao.Comp).toEqual([{ xNome: 'FRETE PESO', vComp: 1000 }]);
+    expect(p.vPrest.Comp).toEqual([{ xNome: 'FRETE PESO', vComp: 1000 }]);
   });
 });
 
@@ -283,8 +283,8 @@ describe('cteBuilder — componentes do valor da prestação', () => {
     expect(nomes).toContain('FRETE PESO');
     expect(nomes).toContain('SEGURO');
     expect(nomes).toContain('ICMS');
-    expect(p.seguradora.valorSeguro).toBe(33.99);
-    expect(p.seguradora.valorSegurado).toBe(1000);
+    expect(p.seguro.valorSeguro).toBe(33.99);
+    expect(p.seguro.valorSegurado).toBe(1000);
     expect(p.seguro.nApol).toBe('123456');
     expect(p.seguro.nAver).toEqual(['AV-9']);
     expect(p.seguros).toHaveLength(1);

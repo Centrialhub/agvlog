@@ -387,6 +387,7 @@ function buildIcmsBlock(
   const block: Record<string, unknown> = {
     CST: cst,
     cst,
+    cst_csosn: cst,
     regime: isSimples ? 'simples' : 'normal',
     // CRT / classificação tributária do serviço (DACTE): 1 = Simples Nacional, 3 = Regime normal.
     crt: isSimples ? 1 : 3,
@@ -601,7 +602,7 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
   // Regra fixa da operação: início da prestação = endereço da transportadora
   // (emitente do CT-e); fim = endereço de destino da carga (destinatário/recebedor).
   // O trajeto início→fim é o que define UFIni/UFFim e, portanto, o CFOP.
-  const inicio = buildLocation(input.origin) || buildLocation(input.emitter?.address);
+  const inicio = buildLocation(input.emitter?.address) || buildLocation(input.origin);
   const fim =
     buildLocation(input.destination) ||
     buildLocation(input.recebedor?.address) ||
