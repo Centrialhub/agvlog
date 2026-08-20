@@ -137,12 +137,15 @@ export function useUpdateLoad() {
 }
 
 export function useDeleteLoad() {
+  const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        // linter:allow-direct-write loads manual-load-delete 2026-12-31
-      .from('loads').delete().eq('id', id);
+      if (!currentTenant) throw new Error('Tenant not found');
+      const { error } = await supabase.rpc('delete_load_v1', {
+        p_tenant_id: currentTenant.id,
+        p_load_id: id,
+      });
       if (error) throw error;
     },
     onSuccess: () => {
