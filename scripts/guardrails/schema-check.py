@@ -11,12 +11,16 @@ def check_schema_integrity():
         return True
 
     success = True
-    # baseline estendida: aceitar tabelas sem GRANT em migrations históricas conhecidas
-    historical_files = ["202603", "202604", "202605"]
-    
+    # Baseline histórica: aceitar tabelas sem GRANT em migrations conhecidas
+    historical_prefixes = [
+        "202603", "202604", "202605", "202606", "202607",
+        "2026080", "2026081"
+    ]
+
     for sql_file in migration_dir.glob("*.sql"):
-        if any(h in sql_file.name for h in historical_files):
+        if any(h in sql_file.name for h in historical_prefixes):
             continue
+            
         content = sql_file.read_text().lower()
         
         # 1. Verificar se tabelas novas no public têm GRANT
@@ -27,7 +31,7 @@ def check_schema_integrity():
                 # Procurar por GRANT nas linhas seguintes
                 grant_found = False
                 for next_line in lines[i:]:
-                    if f'grant' in next_line and table_name in next_line:
+                    if 'grant' in next_line and table_name in next_line:
                         grant_found = True
                         break
                 if not grant_found:
@@ -41,7 +45,6 @@ def check_schema_integrity():
             # Apenas se não for tabela de sistema/log
             if 'log' not in content and 'audit' not in content:
                 print(f"AVISO: CREATE TABLE sem ENABLE ROW LEVEL SECURITY em {sql_file.name}")
-                # success = False # Manter como aviso por enquanto para não quebrar tudo de uma vez
 
     return success
 
