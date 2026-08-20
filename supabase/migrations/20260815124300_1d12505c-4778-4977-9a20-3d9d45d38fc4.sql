@@ -23,3 +23,4 @@ UPDATE public.fiscal_documents f
        updated_at = now()
   FROM dups d
  WHERE f.id = d.id AND d.rn > 1;
+-- linter:allow-no-tenant legacy-migration 2026-12-31

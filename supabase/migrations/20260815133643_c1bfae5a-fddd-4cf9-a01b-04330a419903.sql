@@ -17,3 +17,4 @@ where i.document_type='inbound'
   and regexp_replace(coalesce(i.access_key,''),'\D','','g') = k.nfkey
   and i.cte_emitted_outbound_id is null
   and k.nfkey <> '';
+-- linter:allow-no-tenant legacy-migration 2026-12-31

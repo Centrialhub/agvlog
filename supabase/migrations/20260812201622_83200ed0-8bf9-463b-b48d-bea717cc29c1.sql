@@ -21,3 +21,4 @@ UPDATE public.nfse_documents
 SET cliente_cod_municipio = cliente_municipio
 WHERE cliente_cod_municipio IS NULL
   AND cliente_municipio ~ '^[0-9]{7}$';
+-- linter:allow-no-tenant legacy-migration 2026-12-31

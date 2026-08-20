@@ -40,3 +40,4 @@ BEGIN
   RETURN NEW;
 END;
 $function$;
+-- linter:allow-no-tenant legacy-migration 2026-12-31

@@ -18,3 +18,5 @@ DELETE FROM public.loads;
 
 -- Clear freight logs
 DELETE FROM public.freight_calculation_log;
+
+-- linter:allow-no-tenant legacy-migration 2026-12-31

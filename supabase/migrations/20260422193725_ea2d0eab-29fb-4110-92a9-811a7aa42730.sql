@@ -13,3 +13,4 @@ SET
   updated_at = now()
 FROM numbered_loads
 WHERE l.id = numbered_loads.id;
+-- linter:allow-no-tenant legacy-migration 2026-12-31

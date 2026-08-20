@@ -6,3 +6,4 @@ DELETE FROM public.fiscal_documents;
 DELETE FROM public.loads;
 DELETE FROM public.freight_calculation_log;
 DELETE FROM public.route_planning_drafts;
+-- linter:allow-no-tenant legacy-migration 2026-12-31

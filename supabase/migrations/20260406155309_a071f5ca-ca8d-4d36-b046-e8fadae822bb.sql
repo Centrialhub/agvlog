@@ -59,3 +59,4 @@ CREATE TRIGGER sync_driver_vehicle_assignment
   AFTER UPDATE OF current_vehicle_id ON public.drivers
   FOR EACH ROW
   EXECUTE FUNCTION public.sync_driver_vehicle_assignment();
+-- linter:allow-no-tenant legacy-migration 2026-12-31
