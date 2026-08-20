@@ -627,6 +627,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     if ((active as any)._aliqManual || isSimples) {
       // Se for Simples Nacional e os valores não estiverem zerados, força o zeramento
       if (isSimples && (active.icmsAliquota !== 0 || active.icmsBase !== 0 || active.icmsValor !== 0)) {
+        console.log(`[CteEmissionPreviewDialog] Regra aplicada: zerando ICMS para emissor Simples Nacional (${(emitterForActive as any)?.razao_social})`);
         setItems(prev => prev.map((it, i) => {
           if (i === activeIdx || (bulkEdit && !it._aliqManual)) {
              return { ...it, icmsAliquota: 0, icmsBase: 0, icmsValor: 0, icmsIsento: true, icmsCst: '90' };
