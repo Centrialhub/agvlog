@@ -58,12 +58,12 @@ export function useLoadItems(loadId: string | undefined) {
     queryFn: async () => {
       if (!loadId) return [];
       const { data, error } = await (supabase as any)
-        .from('load_items')
-        .select('*, orders(order_number, clients(company_name)), fiscal_documents(invoice_number, value, remitter, remitter_cnpj, recipient, recipient_city, recipient_state)')
+        .from('vw_load_composition')
+        .select('*')
         .eq('load_id', loadId)
-        .order('created_at', { ascending: true });
+        .order('item_description', { ascending: true });
       if (error) throw error;
-      return (data || []) as LoadItem[];
+      return (data || []) as any[];
     },
     enabled: !!loadId,
   });
