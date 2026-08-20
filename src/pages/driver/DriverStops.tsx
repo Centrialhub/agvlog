@@ -34,6 +34,7 @@ export default function DriverStops() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const tripIdParam = searchParams.get('trip');
+  const { user } = useAuth();
   const { data: driver } = useCurrentDriver();
   const { data: autoTrip } = useActiveTrip(driver?.id);
 
@@ -89,7 +90,7 @@ export default function DriverStops() {
 
   const updateStop = useMutation({
     mutationFn: async ({ stopId, action, reason }: { stopId: string; action: 'arrival' | 'depart' | 'skipped' | 'refused' | 'damaged' | 'returned' | 'partial_delivery'; reason?: string }) => {
-      if (!activeTrip || !currentTenant || !driver) throw new Error('Dados incompletos para atualização.');
+      if (!activeTrip || !currentTenant || !user) throw new Error('Dados incompletos para atualização.');
       
       const newStatus = action === 'arrival' ? 'arrived' : 
                        action === 'depart' ? 'servicing' : 
@@ -99,7 +100,7 @@ export default function DriverStops() {
         p_tenant_id: currentTenant.id,
         p_stop_id: stopId,
         p_to_status: newStatus,
-        p_actor_id: driver.user_id,
+        p_actor_id: user.id,
         p_reason: reason || null,
         p_idempotency_key: `${stopId}-${newStatus}-${Date.now()}`,
       });
