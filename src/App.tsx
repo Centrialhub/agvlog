@@ -301,6 +301,7 @@ const App = () => (
             <Route path="/cost-centers" element={<ProtectedRoute><CostCenters /></ProtectedRoute>} />
             <Route path="/bank-reconciliation" element={<ProtectedRoute><BankReconciliation /></ProtectedRoute>} />
             <Route path="/payables" element={<ProtectedRoute><Payables /></ProtectedRoute>} />
+            <Route path="/ledger" element={<ProtectedRoute><Ledger /></ProtectedRoute>} />
             <Route path="/client-invoices" element={<ProtectedRoute><ClientInvoices /></ProtectedRoute>} />
             <Route path="/billing-edi" element={<ProtectedRoute><BillingEdi /></ProtectedRoute>} />
             <Route path="/operational-routes" element={<ProtectedRoute><OperationalRoutesPage /></ProtectedRoute>} />
