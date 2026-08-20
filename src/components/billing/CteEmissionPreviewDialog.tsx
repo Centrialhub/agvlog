@@ -714,7 +714,14 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
 
   const allValid = items.every((it) => {
     const em = emitters.find((e: any) => e.id === it.emitterId) || defaultEmitter;
-    return buildCtePayload(toBuildInput(it, em, 'sandbox', clients)).ok;
+    const input = toBuildInput(it, em, 'sandbox', clients);
+    const r = buildCtePayload(input);
+    
+    const regime = (em as any)?.regime_tributario;
+    const isSimples = regime === 'simples' || regime === 'mei';
+    const hasMismatch = isSimples && (it.icmsAliquota !== 0 || it.icmsBase !== 0 || it.icmsValor !== 0);
+    
+    return r.ok && !hasMismatch;
   });
 
   const insuranceErrors = useMemo(
