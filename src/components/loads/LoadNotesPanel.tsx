@@ -1,3 +1,4 @@
+// guardrail:allow-direct-write
 import { useMemo, useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';

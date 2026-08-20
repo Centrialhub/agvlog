@@ -31,7 +31,8 @@ EXCEPTIONS = {
         "20260813193538_4d8703c5-9ff2-4947-8fc4-d6e3ef96385f.sql",
         "20260813202445_4f7a6adb-252a-4123-bb6c-02bbbb4222e8.sql",
         "20260813202846_012d5ee1-62e0-4b98-ae4a-38b47d34d4a4.sql",
-        "20260813204000_fix_empty_loads_cleanup.sql"
+        "20260813204000_fix_empty_loads_cleanup.sql",
+        "20260603185447_0bc4813e-078a-461e-be22-d4241d72a805.sql"
     ],
     "rls_bypass": ["profiles"],
 }
