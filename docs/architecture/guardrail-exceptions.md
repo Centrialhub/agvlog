@@ -35,6 +35,7 @@ Toda entrada deve conter uma justificativa técnica clara.
 - `20260528153622...sql`: Migração legada de normalização de documentos fiscais.
 - `20260528153724...sql`: Migração legada de normalização de documentos fiscais (ajuste).
 - `20260603182257...sql`: Patch legado de congruência de motoristas e romaneios.
+- `20260603185447...sql`: Patch legado de limpeza e normalização de cargas.
 
 ## RLS Bypass
 - `profiles`: Necessário para consulta de metadados públicos do usuário durante o login.
