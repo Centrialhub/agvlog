@@ -71,7 +71,7 @@ const MaintenanceOrders = lazy(() => import("@/pages/MaintenanceOrders"));
 const StockPage = lazy(() => import("@/pages/Stock"));
 const Checklists = lazy(() => import("@/pages/Checklists"));
 const LoadReallocation = lazy(() => import("@/pages/LoadReallocation"));
-const Billing = lazy(() => import("@/pages/Billing"));
+const Billing = lazy(() => import("@/pages/BillingPage"));
 const CteMonitor = lazy(() => import("@/pages/CteMonitor"));
 const CteSearch = lazy(() => import("@/pages/CteSearch"));
 const NFSe = lazy(() => import("@/pages/NFSe"));

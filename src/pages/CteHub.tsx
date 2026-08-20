@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FileSpreadsheet, ShieldCheck, FileSearch } from 'lucide-react';
-import Billing from '@/pages/Billing';
+import Billing from '@/pages/BillingPage';
 import CteMonitor from '@/pages/CteMonitor';
 import CteSearch from '@/pages/CteSearch';
 
