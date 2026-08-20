@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   useFiscalDocuments,
+  useFiscalDocumentsArray,
   useCreateFiscalDocument,
   useUpdateFiscalDocument,
   DOC_TYPES,
@@ -12,7 +13,7 @@ import {
   DocType,
   DocStatus,
 } from '@/hooks/useFiscalDocuments';
-import { useClients } from '@/hooks/useClients';
+import { useClients, useClientsArray } from '@/hooks/useClients';
 import { useOrders } from '@/hooks/useOrders';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -281,8 +282,8 @@ function DocRow({ doc, onStatusChange }: { doc: FiscalDocument; onStatusChange: 
 
 /* ─── Main Page ─── */
 export default function FiscalDocuments() {
-  const { data: docs = [], isLoading } = useFiscalDocuments();
-  const { data: clients = [] } = useClients();
+  const { data: docs = [], isLoading } = useFiscalDocumentsArray();
+  const { data: clients = [] } = useClientsArray();
   const { data: orders = [] } = useOrders();
   const createDoc = useCreateFiscalDocument();
   const updateDoc = useUpdateFiscalDocument();

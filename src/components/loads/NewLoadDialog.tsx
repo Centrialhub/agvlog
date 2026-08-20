@@ -2,8 +2,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getNextLoadNumberFromExisting, useCreateLoadWithNextNumber } from '@/hooks/useLoads';
-import { useClients } from '@/hooks/useClients';
+import { getNextLoadNumberFromExisting, useCreateLoad } from '@/hooks/useLoads';
+import { useClients, useClientsArray } from '@/hooks/useClients';
 import { useTenant } from '@/hooks/useTenant';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserUiPreference } from '@/hooks/useUserUiPreference';
@@ -54,10 +54,10 @@ function useDebouncedValue<T>(value: T, delay: number) {
 }
 
 export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
-  const createLoad = useCreateLoadWithNextNumber();
+  const createLoad = useCreateLoad();
   const { currentTenant } = useTenant();
   const { user } = useAuth();
-  const { data: clients = [] } = useClients();
+  const { data: clients = [] } = useClientsArray();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [sessionOnlyPreference, setSessionOnlyPreference] = useState(loadSessionOnly);
@@ -128,7 +128,7 @@ export default function NewLoadDialog({ vehicles, drivers, onCreated }: Props) {
     queryKey: ['next_load_number_preview', currentTenant?.id, open],
     queryFn: async () => {
       if (!currentTenant) return '';
-      return getNextLoadNumberFromExisting(currentTenant.id);
+      return await getNextLoadNumberFromExisting(currentTenant.id);
     },
     enabled: !!currentTenant && open,
   });

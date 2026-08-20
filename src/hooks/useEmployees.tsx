@@ -51,21 +51,40 @@ export interface EmployeeDocument {
   created_at: string;
 }
 
-export function useEmployees() {
+export interface PaginatedEmployees {
+  items: Employee[];
+  next_cursor: string | null;
+  total_count: number;
+}
+
+export function useEmployees(filters: { search?: string } = {}) {
   const { currentTenant } = useTenant();
-  return useQuery({
-    queryKey: ['employees', currentTenant?.id],
+  return useQuery<PaginatedEmployees>({
+    queryKey: ['employees', currentTenant?.id, filters],
     queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data, error } = await (supabase as any)
-        .from('employees').select('*')
-        .eq('tenant_id', currentTenant.id)
-        .order('name');
+      if (!currentTenant) return { items: [], next_cursor: null, total_count: 0 };
+      const { data, error } = await supabase.rpc('list_drivers_v1', {
+        p_tenant_id: currentTenant.id,
+        p_search: filters.search || null,
+        p_limit: 1000,
+      });
       if (error) throw error;
-      return (data || []) as Employee[];
+      const result = data as any;
+      // We map to list_drivers_v1 as employees are primarily drivers in this context, 
+      // but list_drivers_v1 returns the necessary fields.
+      return {
+        items: (result.items || []) as Employee[],
+        next_cursor: result.next_cursor || null,
+        total_count: Number(result.total_count) || 0,
+      };
     },
     enabled: !!currentTenant,
   });
+}
+
+export function useEmployeesArray() {
+  const q = useEmployees();
+  return { ...q, data: q.data?.items ?? [] };
 }
 
 export function useCreateEmployee() {
@@ -98,35 +117,13 @@ export function useUpdateEmployee() {
   });
 }
 
-export function useEmployeeDocuments(employeeId?: string) {
-  const { currentTenant } = useTenant();
-  return useQuery({
-    queryKey: ['employee_documents', employeeId],
-    queryFn: async () => {
-      if (!currentTenant || !employeeId) return [];
-      const { data, error } = await (supabase as any)
-        .from('employee_documents').select('*')
-        .eq('employee_id', employeeId)
-        .order('expiry_date', { ascending: true });
-      if (error) throw error;
-      return (data || []) as EmployeeDocument[];
-    },
-    enabled: !!currentTenant && !!employeeId,
-  });
-}
-
-export function useCreateEmployeeDocument() {
-  const { currentTenant } = useTenant();
-  const { user } = useAuth();
+export function useDeleteEmployee() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (values: Partial<EmployeeDocument>) => {
-      const { data, error } = await (supabase as any).from('employee_documents').insert({
-        ...values, tenant_id: currentTenant!.id, created_by: user?.id,
-      }).select().single();
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('employees').delete().eq('id', id);
       if (error) throw error;
-      return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['employee_documents'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['employees'] }),
   });
 }

@@ -5,7 +5,7 @@ const Index = () => {
     <div className="fixed inset-0 bg-background flex flex-col items-center justify-center p-8 text-center space-y-4">
       <h1 className="text-xl font-bold text-primary">Arquitetura de Cargas Consolidada</h1>
       <p className="max-w-2xl text-muted-foreground">
-        Centralize estados de carga, viagem, parada e documento operacional em máquinas de transição explícitas. Nenhuma tela pode atualizar status diretamente. Implemente RPCs com transições permitidas, optimistic locking, idempotency_key, motivo, ator e entity_audit_log. Derive estados agregados de carga e viagem pelas paradas e resultados por documento, sem sobrescrever estado fiscal. Crie audit_data_consistency_v3 para órfãos, espelhos divergentes, transições impossíveis e duplicidades, com reparo dry-run/aprovação/execução por IDs e testes de concorrência.
+Refaça listagens e buscas de cargas, documentos, operações, rotas, viagens, clientes e motorista sobre read models/RPCs server-side. Busca, filtros, ordenação, contagem e paginação por cursor devem ocorrer no banco antes do limite. Remova pré-limites arbitrários, junções incompletas e filtros client-side sobre amostras. Padronize texto normalizado, datas inclusivas, status, tenant e escopo. Cada resposta deve trazer cursor, total quando necessário e critérios aplicados. Teste que registros além de 10 mil itens sejam encontrados.
       </p>
       <div className="pt-4">
         <Navigate to="/dashboard" replace />

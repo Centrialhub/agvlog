@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Boxes, Download, Upload, FileText, Plus, Trash2, CheckCircle2, XCircle, RefreshCw, Package, Pencil } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useTenant } from '@/hooks/useTenant';
-import { useClients } from '@/hooks/useClients';
+import { useClients, useClientsArray } from '@/hooks/useClients';
 import { useCompanyProfile } from '@/hooks/useCompanyProfile';
 import {
   usePalletTypes, usePalletProtocols, useCreatePalletProtocol,
@@ -63,7 +63,7 @@ export default function PalletReturns() {
   const { data: types = [] } = usePalletTypes(false);
   const { data: activeTypes = [] } = usePalletTypes(true);
   const { data: protocols = [], isLoading } = usePalletProtocols(filters);
-  const { data: clients = [] } = useClients();
+  const { data: clients = [] } = useClientsArray();
   const createMut = useCreatePalletProtocol();
   const statusMut = useUpdatePalletStatus();
   const cancelMut = useCancelPalletProtocol();

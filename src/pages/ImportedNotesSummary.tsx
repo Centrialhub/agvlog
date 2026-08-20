@@ -5,7 +5,7 @@ import {
   createSummaryReportSnapshot, NOTE_STATUS_LABELS,
   type ImportedNoteRow, type ImportedNoteFilters, type NoteOperationalStatus,
 } from '@/hooks/useImportedNotesSummary';
-import { useClients } from '@/hooks/useClients';
+import { useClients, useClientsArray } from '@/hooks/useClients';
 import { useTenant } from '@/hooks/useTenant';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -58,7 +58,7 @@ export default function ImportedNotesSummary() {
   const navigate = useNavigate();
   const { currentTenant } = useTenant();
   const { data: companyProfile } = useCompanyProfile();
-  const { data: clients = [] } = useClients();
+  const { data: clients = [] } = useClientsArray();
   const [filters, setFilters] = useState<ImportedNoteFilters>(emptyFilters);
   const [applied, setApplied] = useState<ImportedNoteFilters>(emptyFilters);
   const { data: rowsData = [], isLoading, refetch } = useImportedNotes(applied);

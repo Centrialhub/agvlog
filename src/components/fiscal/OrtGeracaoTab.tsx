@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
-import { useClients } from '@/hooks/useClients';
+import { useClients, useClientsArray } from '@/hooks/useClients';
 import { useCreatePickupOrder } from '@/hooks/usePickupOrders';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -23,7 +23,7 @@ const ROMANEIO_LABELS = ['Entrega/Coleta', 'Viagem Direta', 'Retira', 'Transfer√
 
 export default function OrtGeracaoTab() {
   const { currentTenant } = useTenant();
-  const { data: clients = [] } = useClients();
+  const { data: clients = [] } = useClientsArray();
   const createPickup = useCreatePickupOrder();
   const navigate = useNavigate();
   const { toast } = useToast();

@@ -16,24 +16,39 @@ export interface OperationalRoute {
   updated_at: string;
 }
 
-export function useOperationalRoutes(options: { includeInactive?: boolean } = {}) {
-  const { includeInactive = false } = options;
+export interface PaginatedOperationalRoutes {
+  items: OperationalRoute[];
+  next_cursor: string | null;
+  total_count: number;
+}
+
+export function useOperationalRoutes(filters: { search?: string; includeInactive?: boolean } = {}) {
   const { currentTenant } = useTenant();
-  return useQuery({
-    queryKey: ['operational_routes', currentTenant?.id, includeInactive],
+  return useQuery<PaginatedOperationalRoutes>({
+    queryKey: ['operational_routes', currentTenant?.id, filters],
     queryFn: async () => {
-      if (!currentTenant) return [];
-      let q = supabase
-        .from('operational_routes')
-        .select('*')
-        .eq('tenant_id', currentTenant.id);
-      if (!includeInactive) q = q.eq('active', true);
-      const { data, error } = await q.order('name');
+      if (!currentTenant) return { items: [], next_cursor: null, total_count: 0 };
+      const { data, error } = await supabase.rpc('list_operational_routes_v1', {
+        p_tenant_id: currentTenant.id,
+        p_search: filters.search || null,
+        p_include_inactive: filters.includeInactive || false,
+        p_limit: 1000,
+      });
       if (error) throw error;
-      return (data || []) as OperationalRoute[];
+      const result = data as any;
+      return {
+        items: (result.items || []) as OperationalRoute[],
+        next_cursor: result.next_cursor || null,
+        total_count: Number(result.total_count) || 0,
+      };
     },
     enabled: !!currentTenant,
   });
+}
+
+export function useOperationalRoutesArray(filters: { search?: string; includeInactive?: boolean } = {}) {
+  const q = useOperationalRoutes(filters);
+  return { ...q, data: q.data?.items ?? [] };
 }
 
 export function useCreateOperationalRoute() {

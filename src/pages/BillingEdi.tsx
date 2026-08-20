@@ -4,7 +4,7 @@ import {
   useMarkEdiSent, useMarkEdiDownloaded, useCancelEdiExport, useSaveEdiProfile,
   fetchInvoicesBundle, type EligibleInvoice, type EdiProfile, type EdiExport,
 } from '@/hooks/useBillingEdi';
-import { useClients } from '@/hooks/useClients';
+import { useClients, useClientsArray } from '@/hooks/useClients';
 import { useTenant } from '@/hooks/useTenant';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -36,7 +36,7 @@ function downloadText(fileName: string, content: string) {
 
 export default function BillingEdi() {
   const { currentTenant } = useTenant();
-  const { data: clients = [] } = useClients();
+  const { data: clients = [] } = useClientsArray();
   const { data: profiles = [] } = useEdiProfiles();
   const { data: exports_ = [], isLoading: loadingExports } = useEdiExports();
 

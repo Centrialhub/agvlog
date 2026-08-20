@@ -10,7 +10,7 @@ import { isUnknown, UNKNOWN } from '@/lib/ortFieldFallbacks';
 import ClientContactPicker from './ClientContactPicker';
 import { cn } from '@/lib/utils';
 import { contactKey as makeContactKey, addressKey as makeAddressKey, findContactByKey, findAddressByKey } from '@/lib/clientContactKeys';
-import { useClients } from '@/hooks/useClients';
+import { useClients, useClientsArray } from '@/hooks/useClients';
 
 export interface OrtReviewItem {
   description: string;
@@ -122,7 +122,7 @@ const currency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: '
 const number = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 });
 
 export default function ORTReviewStep({ docs, onBack, onUpdate, onConfirm, clientIds, onSelectClient }: ORTReviewStepProps) {
-  const { data: allClients = [] } = useClients();
+  const { data: allClients = [] } = useClientsArray();
 
   /**
    * For each document, compares the persisted linkedContactKey/linkedAddressKey

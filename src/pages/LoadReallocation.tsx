@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useLoads, Load } from '@/hooks/useLoads';
+import { useLoads, useLoadsArray, Load } from '@/hooks/useLoads';
 import { useLoadItems, LoadItem, useUpdateLoadItem } from '@/hooks/useLoadItems';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useUpdateLoad, useDeleteLoad } from '@/hooks/useLoads';
@@ -417,7 +417,8 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
 }
 
 export default function LoadReallocation() {
-  const { data: loads = [], isLoading } = useLoads();
+  const { data: loadsData, isLoading } = useLoadsArray();
+  const loads = (loadsData as any) || [];
   const { data: vehicles = [] } = useVehicles();
   const updateLoad = useUpdateLoad();
   const deleteLoad = useDeleteLoad();

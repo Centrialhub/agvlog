@@ -12,7 +12,7 @@ import {
   isUniqueViolation,
 } from '@/lib/fiscalDocuments/fiscalIdentity';
 import { cn } from '@/lib/utils';
-import { useClients } from '@/hooks/useClients';
+import { useClients, useClientsArray } from '@/hooks/useClients';
 import { useTenant } from '@/hooks/useTenant';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -96,7 +96,7 @@ const CLEANUP_TABLE_LABELS: Record<string, string> = {
 export default function BatchReimportDialog() {
   const { currentTenant } = useTenant();
   const { user } = useAuth();
-  const { data: clients = [] } = useClients();
+  const { data: clients = [] } = useClientsArray();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);

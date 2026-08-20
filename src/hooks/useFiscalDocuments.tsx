@@ -80,23 +80,39 @@ export interface FiscalDocument {
   orders?: { order_number: string } | null;
 }
 
-export function useFiscalDocuments() {
+export interface PaginatedFiscalDocuments {
+  items: FiscalDocument[];
+  next_cursor: string | null;
+  total_count: number;
+}
+
+export function useFiscalDocuments(filters: { search?: string; type?: DocType[] } = {}) {
   const { currentTenant } = useTenant();
-  return useQuery({
-    queryKey: ['fiscal_documents', currentTenant?.id],
+  return useQuery<PaginatedFiscalDocuments>({
+    queryKey: ['fiscal_documents', currentTenant?.id, filters],
     queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data, error } = await supabase
-        .from('fiscal_documents')
-        .select('*, clients!fiscal_documents_client_id_fkey(company_name), loads(load_number), orders(order_number)')
-        .eq('tenant_id', currentTenant.id)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false });
+      if (!currentTenant) return { items: [], next_cursor: null, total_count: 0 };
+      const { data, error } = await supabase.rpc('list_fiscal_documents_v1', {
+        p_tenant_id: currentTenant.id,
+        p_search: filters.search || null,
+        p_type: filters.type || null,
+        p_limit: 1000,
+      });
       if (error) throw error;
-      return (data || []) as FiscalDocument[];
+      const result = data as any;
+      return {
+        items: (result.items || []) as FiscalDocument[],
+        next_cursor: result.next_cursor || null,
+        total_count: Number(result.total_count) || 0,
+      };
     },
     enabled: !!currentTenant,
   });
+}
+
+export function useFiscalDocumentsArray() {
+  const q = useFiscalDocuments();
+  return { ...q, data: q.data?.items ?? [] };
 }
 
 export function useCreateFiscalDocument() {

@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useEmployees, useCreateEmployee, useUpdateEmployee, Employee, EMPLOYEE_STATUSES, EMPLOYEE_STATUS_LABELS } from '@/hooks/useEmployees';
+import { useEmployees, useEmployeesArray, useCreateEmployee, useUpdateEmployee, Employee, EMPLOYEE_STATUSES, EMPLOYEE_STATUS_LABELS } from '@/hooks/useEmployees';
 import {
   useEmployeeContracts, useCreateEmployeeContract, useUpdateEmployeeContract,
   useEmployeeAdvances, useEmployeeIncidentActions,
@@ -24,7 +24,7 @@ import { toast } from '@/components/ui/sonner';
 import { format, differenceInDays, parseISO } from 'date-fns';
 
 export default function Employees() {
-  const { data: employees = [], isLoading } = useEmployees();
+  const { data: employees = [], isLoading } = useEmployeesArray();
   const createEmployee = useCreateEmployee();
   const updateEmployee = useUpdateEmployee();
   const [search, setSearch] = useState('');

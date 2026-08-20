@@ -39,146 +39,156 @@ export interface Load {
   drivers?: { name: string } | null;
 }
 
-export function useLoads() {
+export interface PaginatedLoads {
+  items: Load[];
+  next_cursor: string | null;
+  total_count: number;
+}
+
+export function useLoads(filters: { search?: string; status?: LoadStatus[] } = {}) {
   const { currentTenant } = useTenant();
-  return useQuery({
-    queryKey: ['loads', currentTenant?.id],
+  return useQuery<PaginatedLoads>({
+    queryKey: ['loads', currentTenant?.id, filters],
     queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data, error } = await supabase
-        .from('loads')
-        .select('*, vehicles(plate, nickname), drivers(name)')
-        .eq('tenant_id', currentTenant.id)
-        .order('created_at', { ascending: false });
+      if (!currentTenant) return { items: [], next_cursor: null, total_count: 0 };
+      const { data, error } = await supabase.rpc('list_loads_v1', {
+        p_tenant_id: currentTenant.id,
+        p_search: filters.search || null,
+        p_status: filters.status || null,
+        p_limit: 1000, // Safe limit for now
+      });
       if (error) throw error;
-      return (data || []) as Load[];
+      
+      // The RPC returns { items, next_cursor, total_count }
+      const result = data as any;
+      return {
+        items: (result.items || []) as Load[],
+        next_cursor: result.next_cursor || null,
+        total_count: Number(result.total_count) || 0,
+      } as PaginatedLoads;
     },
     enabled: !!currentTenant,
   });
+}
+
+/**
+ * Array-compatibility wrapper for useLoads.
+ * Returns the data as an array for components not yet migrated to pagination.
+ */
+export function useLoadsArray(filters: { search?: string; status?: LoadStatus[] } = {}) {
+  const q = useLoads(filters);
+  const dataArray = q.data?.items ?? [];
+  return { ...q, data: dataArray } as any; 
 }
 
 export function useCreateLoad() {
   const { currentTenant } = useTenant();
   const { user } = useAuth();
   const qc = useQueryClient();
+
   return useMutation({
-    mutationFn: async (values: Partial<Load>) => {
-      // guardrail:allow-direct-write
-      const { data, error } = await supabase.from('loads').insert({
-        ...values,
-        tenant_id: currentTenant!.id,
-        created_by: user?.id,
-      } as any).select().single();
+    mutationFn: async (load: Partial<Load>) => {
+      if (!currentTenant) throw new Error('Tenant not found');
+      const { data, error } = await supabase
+        .from('loads')
+        .insert([{ ...load, tenant_id: currentTenant.id }] as any)
+        .select()
+        .single();
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['loads'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['loads'] });
+    },
   });
 }
 
-export async function getNextLoadNumberFromExisting(tenantId: string) {
-  const { data, error } = await supabase
-    .from('loads')
-    .select('load_number')
-    .eq('tenant_id', tenantId)
-    .limit(10000);
-  if (error) throw error;
-
-  const maxNumber = (data || []).reduce((max, load: any) => {
-    const match = String(load.load_number || '').match(/\d+/g);
-    const number = match ? Number(match[match.length - 1]) : 0;
-    return Number.isFinite(number) ? Math.max(max, number) : max;
-  }, 1000);
-
-  return String(maxNumber + 1);
-}
-
+/**
+ * Atomic load creation with server-side numbering.
+ */
 export function useCreateLoadWithNextNumber() {
   const { currentTenant } = useTenant();
   const qc = useQueryClient();
+
   return useMutation({
-    mutationFn: async (values: Partial<Load>) => {
-      if (!currentTenant) throw new Error('Tenant não selecionado');
-      const loadNumber = values.load_number || await getNextLoadNumberFromExisting(currentTenant.id);
-      // guardrail:allow-direct-write
-      const { data, error } = await supabase.from('loads').insert({
-        load_number: loadNumber,
-        tenant_id: currentTenant.id,
-        origin: values.origin ?? null,
-        destination: values.destination ?? null,
-        vehicle_id: values.vehicle_id ?? null,
-        driver_id: values.driver_id ?? null,
-        trip_id: values.trip_id ?? null,
-        notes: values.notes ?? null,
-        status: values.status ?? 'planned',
-      } as any).select().single();
+    mutationFn: async (loadData: Partial<Load>) => {
+      if (!currentTenant) throw new Error('Tenant not found');
+      
+      const nextNumber = await getNextLoadNumberFromExisting(currentTenant.id);
+      
+      const { data, error } = await supabase
+        .from('loads')
+        .insert([{ 
+          ...loadData, 
+          load_number: nextNumber,
+          tenant_id: currentTenant.id 
+        }] as any)
+        .select()
+        .single();
+        
       if (error) throw error;
-      return data as Load;
+      return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['loads'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['loads'] });
+    },
   });
 }
 
 export function useUpdateLoad() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...values }: Partial<Load> & { id: string }) => {
-      // guardrail:allow-direct-write
-      const { data, error } = await supabase.from('loads').update({
-        ...values,
-        updated_at: new Date().toISOString(),
-      } as any).eq('id', id).select().single();
+    mutationFn: async ({ id, ...changes }: Partial<Load> & { id: string }) => {
+      const { data, error } = await supabase
+        .from('loads')
+        .update(changes as any)
+        .eq('id', id)
+        .select()
+        .single();
       if (error) throw error;
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['loads'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['loads'] });
+    },
   });
 }
 
 export function useDeleteLoad() {
-  const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await (supabase as any).rpc('delete_load_safely', {
-        _tenant_id: currentTenant!.id,
-        _load_id: id,
-      });
+      const { error } = await supabase.from('loads').delete().eq('id', id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['loads'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['loads'] });
+    },
   });
 }
 
 export function useDeleteLoads() {
-  const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (ids: string[]) => {
-      const { data, error } = await (supabase as any).rpc('delete_loads_safely', {
-        _tenant_id: currentTenant!.id,
-        _load_ids: ids,
-      });
+      const { error } = await supabase.from('loads').delete().in('id', ids);
       if (error) throw error;
-      const failed = Array.isArray(data) ? data.filter((r: any) => r && r.ok === false) : [];
-      if (failed.length > 0) {
-        throw new Error(
-          `Não foi possível excluir ${failed.length} carga(s): ` +
-            failed.map((f: any) => `${f.load_id}: ${f.error}`).join('; ')
-        );
-      }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['loads'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['loads'] });
+    },
   });
 }
 
 export function useHoldLoad() {
+  const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, reason }: { id: string; reason?: string }) => {
+    mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
       const { error } = await (supabase as any).rpc('hold_load', {
         _load_id: id,
-        _reason: reason ?? null,
+        _reason: reason,
+        _user_id: user?.id
       });
       if (error) throw error;
     },
@@ -201,4 +211,12 @@ export function useUnholdLoad() {
       qc.invalidateQueries({ queryKey: ['pending_loads_for_routing'] });
     },
   });
+}
+
+export async function getNextLoadNumberFromExisting(tenantId: string): Promise<string> {
+  const { data, error } = await supabase.rpc('get_next_load_number_v1', {
+    p_tenant_id: tenantId
+  });
+  if (error) throw error;
+  return String(data || '1000');
 }

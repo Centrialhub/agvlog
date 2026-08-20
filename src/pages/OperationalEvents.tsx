@@ -4,8 +4,8 @@ import {
   useOperationalEventsFiltered,
   EVENT_TYPES, EVENT_TYPE_LABELS, SEVERITY_LABELS, OperationalEvent,
 } from '@/hooks/useOperationalEvents';
-import { useLoads } from '@/hooks/useLoads';
-import { useClients } from '@/hooks/useClients';
+import { useLoads, useLoadsArray } from '@/hooks/useLoads';
+import { useClients, useClientsArray } from '@/hooks/useClients';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -93,8 +93,9 @@ export default function OperationalEvents() {
     document.getElementById('detalhamento-ocorrencias')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     setTimeout(() => searchRef.current?.focus({ preventScroll: true }), 400);
   }, []);
-  const { data: loads = [] } = useLoads();
-  const { data: clients = [] } = useClients();
+  const { data: loadsData } = useLoadsArray();
+  const loads = Array.isArray(loadsData) ? loadsData : (loadsData as any)?.items || [];
+  const { data: clients = [] } = useClientsArray();
   const createEvent = useCreateOperationalEvent();
   const updateEvent = useUpdateOperationalEvent();
   const [search, setSearch] = useState('');
