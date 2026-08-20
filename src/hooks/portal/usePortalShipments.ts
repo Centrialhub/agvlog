@@ -48,28 +48,50 @@ export interface ShipmentFilters {
 
 export function usePortalShipments(filters: ShipmentFilters = {}) {
   const { currentTenant } = useTenant();
-  const { selectedClientId } = usePortalClientScope();
+  const scope = usePortalClientScope();
+
+  const cnpjs = useMemo(() => {
+    return scope.activeClients
+      .map(c => c.client_tax_id)
+      .filter((id): id is string => !!id);
+  }, [scope.activeClients]);
+
+  const clientIds = useMemo(() => {
+    return scope.activeClients.map(c => c.client_id);
+  }, [scope.activeClients]);
+
   return useQuery({
-    queryKey: ['portal_shipments', currentTenant?.id, selectedClientId, filters],
+    queryKey: ['portal_shipments_v3', currentTenant?.id, scope.selectedClientId, clientIds, cnpjs, filters],
     queryFn: async (): Promise<{ rows: ShipmentRow[]; total: number }> => {
-      if (!currentTenant) return { rows: [], total: 0 };
-      const { data, error } = await (supabase as any).rpc('search_client_portal_shipments_v2', {
-        _tenant_id: currentTenant.id,
-        _client_id: selectedClientId,
-        _search: filters.search ?? null,
-        _status: filters.status ?? null,
-        _start_date: filters.startDate ?? null,
-        _end_date: filters.endDate ?? null,
-        _city: filters.city ?? null,
-        _state: filters.state ?? null,
-        _has_pod: filters.hasPod ?? null,
-        _has_occurrence: filters.hasOccurrence ?? null,
-        _limit: filters.limit ?? 50,
-        _offset: filters.offset ?? 0,
+      if (!currentTenant || clientIds.length === 0) return { rows: [], total: 0 };
+      
+      const { data, error } = await (supabase as any).rpc('get_portal_tracking_v3', {
+        p_tenant_id: currentTenant.id,
+        p_client_ids: clientIds,
+        p_cnpjs: cnpjs.length > 0 ? cnpjs : null,
+        p_search: filters.search ?? null,
+        p_limit: filters.limit ?? 50,
+        p_offset: filters.offset ?? 0
       });
+
       if (error) throw error;
-      return data as unknown as { rows: ShipmentRow[]; total: number };
+      
+      const rows = (data as any[]) || [];
+      const total = rows.length > 0 ? Number(rows[0].total_count) : 0;
+      
+      return { 
+        rows: rows.map(r => ({
+          fiscal_document_id: r.id,
+          invoice_number: r.invoice_number,
+          client_name: r.client_name,
+          load_number: r.load_number,
+          public_status: r.current_status,
+          updated_at: r.last_event_at,
+          value: r.total_value,
+        })) as any[], 
+        total 
+      };
     },
-    enabled: !!currentTenant,
+    enabled: !!currentTenant && clientIds.length > 0,
   });
 }

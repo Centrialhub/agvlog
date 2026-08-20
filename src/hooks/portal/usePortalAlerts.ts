@@ -28,23 +28,24 @@ export interface PortalAlert {
   action_url: string;
 }
 
-export function usePortalAlerts(opts?: { clientId?: string | null; limit?: number }) {
+export function usePortalAlerts(opts?: { limit?: number }) {
   const { currentTenant } = useTenant();
-  const clientId = opts?.clientId ?? null;
+  const scope = usePortalClientScope();
   const limit = opts?.limit ?? 10;
+  
   return useQuery({
-    queryKey: ['portal_alerts', currentTenant?.id, clientId, limit],
+    queryKey: ['portal_alerts_v3', currentTenant?.id, scope.selectedClientId, limit],
     queryFn: async (): Promise<PortalAlert[]> => {
-      if (!currentTenant || !clientId) return [];
-      const { data, error } = await supabase.rpc('get_client_portal_alerts_v2' as any, {
+      if (!currentTenant || !scope.selectedClientId) return [];
+      const { data, error } = await (supabase as any).rpc('get_client_portal_alerts_v2', {
         _tenant_id: currentTenant.id,
-        _client_id: clientId,
+        _client_id: scope.selectedClientId,
         _limit: limit,
       });
       if (error) throw error;
       return (data as PortalAlert[]) ?? [];
     },
-    enabled: !!currentTenant && !!clientId,
+    enabled: !!currentTenant && !!scope.selectedClientId,
     staleTime: 60_000,
   });
 }
