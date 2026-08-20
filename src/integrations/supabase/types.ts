@@ -15505,6 +15505,15 @@ export type Database = {
         }
         Returns: Json
       }
+      move_load_items_v2: {
+        Args: {
+          _document_ids: string[]
+          _source_load_id: string
+          _target_load_id: string
+          _tenant_id: string
+        }
+        Returns: Json
+      }
       next_client_invoice_number: {
         Args: {
           _installment?: number
