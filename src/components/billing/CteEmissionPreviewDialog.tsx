@@ -624,7 +624,18 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     // Se a alíquota já foi alterada manualmente, ou se o emitente for Simples Nacional (trava em 0), não auto-sugere mais.
     const regime = (emitterForActive as any)?.regime_tributario;
     const isSimples = regime === 'simples' || regime === 'mei';
-    if ((active as any)._aliqManual || isSimples) return;
+    if ((active as any)._aliqManual || isSimples) {
+      // Se for Simples Nacional e os valores não estiverem zerados, força o zeramento
+      if (isSimples && (active.icmsAliquota !== 0 || active.icmsBase !== 0 || active.icmsValor !== 0)) {
+        setItems(prev => prev.map((it, i) => {
+          if (i === activeIdx || (bulkEdit && !it._aliqManual)) {
+             return { ...it, icmsAliquota: 0, icmsBase: 0, icmsValor: 0, icmsIsento: true, icmsCst: '90' };
+          }
+          return it;
+        }));
+      }
+      return;
+    }
 
     const originUf = (emitterForActive as any)?.endereco?.uf || null;
     const destUf = active.recipientState || null;

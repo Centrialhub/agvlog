@@ -362,8 +362,10 @@ function buildIcmsBlock(
   const isSimples = regimeRaw === 'simples' || regimeRaw === 'mei';
   // Para Simples Nacional, o CST/CSOSN mapeado para o DACTE/XML deve ser '90' (Outros).
   const cst = isSimples ? '90' : (cstRaw || '00');
+  // Se for Simples Nacional, forçamos isento a true para zerar alíquota, base e valor
+  // conforme solicitado ("garantir que essas informações sejam realmente zeradas").
   const isento = isSimples || icms.isento === true || cst === '40' || cst === '41' || cst === '51';
-  const aliq = isento || isSimples ? 0 : Number(icms.aliquota || 0);
+  const aliq = isento ? 0 : Number(icms.aliquota || 0);
   const embutido = icms.embutido === true;
   const { base, valor } = computeIcmsAmounts({
     freight: freightValue,
