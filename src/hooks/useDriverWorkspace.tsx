@@ -159,11 +159,12 @@ export function useDriverExecution() {
         p_driver_id: driver.id,
         p_tenant_id: currentTenant.id,
         p_trip_id: tripId,
-        p_stop_id: stopId || "", // RPC requires string, even if empty
+        p_stop_id: stopId || null, 
         p_event_type: eventType === 'delivery_success' ? 'delivery_complete' : eventType,
         p_payload: payload || {},
         p_idempotency_key: `${finalIdempotencyKey}-state`
       });
+
 
       return data;
     },

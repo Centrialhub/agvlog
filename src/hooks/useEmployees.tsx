@@ -63,15 +63,13 @@ export function useEmployees(filters: { search?: string } = {}) {
     queryKey: ['employees', currentTenant?.id, filters],
     queryFn: async () => {
       if (!currentTenant) return { items: [], next_cursor: null, total_count: 0 };
-      const { data, error } = await supabase.rpc('list_drivers_v1', {
+      const { data, error } = await supabase.rpc('list_employees_v1', {
         p_tenant_id: currentTenant.id,
         p_search: filters.search || null,
         p_limit: 1000,
       });
       if (error) throw error;
       const result = data as any;
-      // We map to list_drivers_v1 as employees are primarily drivers in this context, 
-      // but list_drivers_v1 returns the necessary fields.
       return {
         items: (result.items || []) as Employee[],
         next_cursor: result.next_cursor || null,
@@ -79,6 +77,7 @@ export function useEmployees(filters: { search?: string } = {}) {
       };
     },
     enabled: !!currentTenant,
+
   });
 }
 

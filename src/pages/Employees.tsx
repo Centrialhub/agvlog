@@ -1,5 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useEmployees, useEmployeesArray, useCreateEmployee, useUpdateEmployee, Employee, EMPLOYEE_STATUSES, EMPLOYEE_STATUS_LABELS } from '@/hooks/useEmployees';
+import { FeatureFlagGate } from '@/components/FeatureFlagGate';
+
 import {
   useEmployeeContracts, useCreateEmployeeContract, useUpdateEmployeeContract,
   useEmployeeAdvances, useEmployeeIncidentActions,
@@ -100,7 +102,9 @@ export default function Employees() {
   };
 
   return (
+    <FeatureFlagGate feature="LOGISTICS_CONSOLIDATION_V2">
     <div className="space-y-4">
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2"><Users className="h-5 w-5" /> Funcionários</h1>
@@ -236,6 +240,8 @@ export default function Employees() {
 
       <EmployeeDetailSheet employee={detailEmployee} onClose={() => setDetailEmployee(null)} />
     </div>
+    </FeatureFlagGate>
+
   );
 }
 
