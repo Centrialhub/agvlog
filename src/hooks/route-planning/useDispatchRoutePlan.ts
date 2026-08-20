@@ -37,24 +37,22 @@ export function useDispatchRoutePlan() {
           risk_level: s.risk_level,
           risk_reason: s.risk_reason,
           notes: s.notes,
-          fiscal_document_ids: s.fiscal_document_ids,
-          load_ids: s.load_ids,
+          document_ids: s.fiscal_document_ids, // Mapped to document_ids for new RPC
         }));
 
-    const { data, error } = await supabase.rpc('dispatch_planned_route' as any, {
-        _payload: {
-          tenant_id: currentTenant.id,
-          vehicle_id: payload.vehicle_id,
-          driver_id: payload.driver_id,
-          planned_start_at: payload.planned_start_at,
-          route_name: payload.route_name,
-          load_ids: payload.load_ids,
-          stops,
-          planning_draft_id: payload.planning_draft_id || null,
-        },
-      });
+    const { data, error } = await supabase.rpc('plan_dispatch_start_trip_v1', {
+      p_tenant_id: currentTenant.id,
+      p_driver_id: payload.driver_id,
+      p_vehicle_id: payload.vehicle_id,
+      p_load_ids: payload.load_ids,
+      p_stops: stops,
+      p_planned_start_at: payload.planned_start_at,
+      p_route_name: payload.route_name,
+      p_start_now: false, // Planning by default
+    });
+
     if (error) throw new Error(error.message || String(error));
-    return data as unknown as string;
+    return data as string;
   }, [currentTenant]);
 
   const invalidate = useCallback(() => {
