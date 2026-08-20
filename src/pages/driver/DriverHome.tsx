@@ -111,7 +111,7 @@ export default function DriverHome() {
         <NoLoadsHelp
           driverLinked={!!driver}
           driverActive={!!driver && (driver as any).status !== 'inactive'}
-          hasAssignedLoads={standaloneLoads.length > 0 || myLoads.length > 0}
+          hasAssignedLoads={standaloneLoads.length > 0}
           hasActiveTrip={workspace?.has_active_trip || false}
           driverName={driver?.name}
           driverId={driver?.id}
