@@ -142,7 +142,7 @@ export function useDeleteLoadItem() {
       if (fetchErr) throw fetchErr;
       if (!item) return;
       if (item.fiscal_document_id) {
-        const { error } = await (supabase as any).rpc('remove_fiscal_documents_from_load', {
+        const { error } = await (supabase as any).rpc('unlink_fiscal_documents_from_load_v1', {
           _tenant_id: currentTenant!.id,
           _load_id: item.load_id,
           _document_ids: [item.fiscal_document_id],
