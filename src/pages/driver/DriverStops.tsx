@@ -110,18 +110,6 @@ export default function DriverStops() {
       
       if (error) throw error;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['driver_stops'] });
-      toast({ title: 'Parada atualizada' });
-    },
-    onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
-  });
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['driver_stops'] });
-      toast({ title: 'Parada atualizada' });
-    },
-    onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
-  });
 
   const handleArrival = (stopId: string) => {
     updateStop.mutate({ stopId, action: 'arrival' });
