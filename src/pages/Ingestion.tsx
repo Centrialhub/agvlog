@@ -1606,7 +1606,7 @@ export default function Ingestion() {
               throw new Error(`Falha ao vincular ${docIds.length} NF(s): ${assignErr.message || assignErr}`);
             }
 
-            const updatedCount = Number((assignResult as any)?.updated ?? docIds.length);
+            const updatedCount = Number((assignResult as any)?.linked_count ?? docIds.length);
             if (updatedCount !== docIds.length) {
               try {
                 await (supabase as any).rpc('delete_load_safely', {
