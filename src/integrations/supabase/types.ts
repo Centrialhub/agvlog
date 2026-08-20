@@ -15210,6 +15210,19 @@ export type Database = {
         }
         Returns: string
       }
+      create_ledger_entry_v1: {
+        Args: {
+          _amount: number
+          _description: string
+          _entry_type: string
+          _metadata?: Json
+          _nature: string
+          _source_id: string
+          _source_table: string
+          _tenant_id: string
+        }
+        Returns: string
+      }
       create_load_with_next_number: {
         Args: {
           _destination?: string
