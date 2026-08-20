@@ -3126,6 +3126,51 @@ export type Database = {
           },
         ]
       }
+      data_repair_batches: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          compensations: Json | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          dry_run_report: Json | null
+          executed_at: string | null
+          execution_results: Json | null
+          id: string
+          status: string
+          tenant_id: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          compensations?: Json | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          dry_run_report?: Json | null
+          executed_at?: string | null
+          execution_results?: Json | null
+          id?: string
+          status?: string
+          tenant_id: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          compensations?: Json | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          dry_run_report?: Json | null
+          executed_at?: string | null
+          execution_results?: Json | null
+          id?: string
+          status?: string
+          tenant_id?: string
+        }
+        Relationships: []
+      }
       delivery_occurrence_items: {
         Row: {
           created_at: string
@@ -14020,6 +14065,24 @@ export type Database = {
           },
         ]
       }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_ui_preferences: {
         Row: {
           created_at: string
@@ -15138,6 +15201,18 @@ export type Database = {
         Args: { p_fix?: boolean; p_tenant_id: string }
         Returns: Json
       }
+      audit_data_consistency_v4: {
+        Args: { p_tenant_id: string }
+        Returns: {
+          domain: string
+          entity_id: string
+          entity_type: string
+          message: string
+          metadata: Json
+          severity: string
+          suggested_action: string
+        }[]
+      }
       build_fiscal_documents_deleted_recovery_dry_run: {
         Args: { _end_time: string; _start_time: string; _tenant_id?: string }
         Returns: {
@@ -15470,6 +15545,10 @@ export type Database = {
       }
       driver_update_stop_status: {
         Args: { _new_status: string; _reason?: string; _stop_id: string }
+        Returns: Json
+      }
+      execute_data_repair_v1: {
+        Args: { p_batch_id: string; p_tenant_id: string }
         Returns: Json
       }
       finalize_driver_delivery: {
