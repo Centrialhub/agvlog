@@ -7,7 +7,7 @@ import {
   INCIDENT_ACTION_TYPES, INCIDENT_ACTION_LABELS,
   useIncidentActions, useAddEmployeeIncidentAction,
 } from '@/hooks/useIncidents';
-import { useEmployees } from '@/hooks/useEmployees';
+import { useEmployees, useEmployeesArray } from '@/hooks/useEmployees';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useClients, useClientsArray } from '@/hooks/useClients';
 import { Card, CardContent } from '@/components/ui/card';
@@ -26,7 +26,7 @@ import { Separator } from '@/components/ui/separator';
 
 export default function Incidents() {
   const { data: incidents = [], isLoading } = useIncidents();
-  const { data: employees = [] } = useEmployees();
+  const { data: employees = [] } = useEmployeesArray();
   const { data: vehicles = [] } = useVehicles();
   const { data: clients = [] } = useClientsArray();
   const createIncident = useCreateIncident();

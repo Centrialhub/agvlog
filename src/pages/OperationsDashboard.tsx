@@ -4,7 +4,7 @@ import { useLoads, useLoadsArray, LOAD_STATUS_LABELS, LoadStatus } from '@/hooks
 import { useInventoryBalances } from '@/hooks/useInventory';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useIncidents, SEVERITY_LABELS, INCIDENT_STATUS_LABELS } from '@/hooks/useIncidents';
-import { useEmployees } from '@/hooks/useEmployees';
+import { useEmployees, useEmployeesArray } from '@/hooks/useEmployees';
 import { useMaintenanceOrders, MAINT_STATUS_LABELS } from '@/hooks/useMaintenanceOrders';
 import { useStockItems } from '@/hooks/useStock';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,7 +29,7 @@ export default function OperationsDashboard() {
   const { data: balances = [] } = useInventoryBalances();
   const { data: vehicles = [] } = useVehicles();
   const { data: incidents = [] } = useIncidents();
-  const { data: employees = [] } = useEmployees();
+  const { data: employees = [] } = useEmployeesArray();
   const { data: maintenanceOrders = [] } = useMaintenanceOrders();
   const { data: stockItems = [] } = useStockItems();
   const navigate = useNavigate();

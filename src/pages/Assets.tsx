@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useAssets, useCreateAsset, useUpdateAsset, Asset, ASSET_CATEGORIES, ASSET_CATEGORY_LABELS, ASSET_STATUSES, ASSET_STATUS_LABELS } from '@/hooks/useAssets';
-import { useEmployees } from '@/hooks/useEmployees';
+import { useEmployees, useEmployeesArray } from '@/hooks/useEmployees';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,7 +15,7 @@ import { toast } from '@/components/ui/sonner';
 
 export default function Assets() {
   const { data: assets = [], isLoading } = useAssets();
-  const { data: employees = [] } = useEmployees();
+  const { data: employees = [] } = useEmployeesArray();
   const createAsset = useCreateAsset();
   const updateAsset = useUpdateAsset();
   const [search, setSearch] = useState('');

@@ -8,7 +8,7 @@ import {
   PAYROLL_PERIOD_STATUS_LABELS, PAYROLL_PAYMENT_STATUS_LABELS, PAYROLL_ITEM_TYPE_LABELS,
   useEmployeeAdvances, useRegisterEmployeeAdvance, useUpdateAdvanceStatus, ADVANCE_STATUS_LABELS,
 } from '@/hooks/usePayroll';
-import { useEmployees } from '@/hooks/useEmployees';
+import { useEmployees, useEmployeesArray } from '@/hooks/useEmployees';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -407,7 +407,7 @@ function AdvancesTable() {
 }
 
 function RegisterAdvanceDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
-  const { data: employees = [] } = useEmployees();
+  const { data: employees = [] } = useEmployeesArray();
   const register = useRegisterEmployeeAdvance();
   const [employeeId, setEmployeeId] = useState('');
   const [amount, setAmount] = useState('');
