@@ -5,7 +5,7 @@ const Index = () => {
     <div className="fixed inset-0 bg-background flex flex-col items-center justify-center p-8 text-center space-y-4">
       <h1 className="text-xl font-bold text-primary">Arquitetura de Cargas Consolidada</h1>
       <p className="max-w-2xl text-muted-foreground">
-        Torne operational_events a fonte canônica de eventos logísticos. Incidents será gestão de caso vinculada; delivery_occurrences ficará como legado/projeção até migração. Unifique criação, classificação, resolução e anexos em RPCs idempotentes. POD deve ser imutável e versionado, com foto, assinatura, recebedor, geolocalização, hash e vínculo à parada/documentos; correções geram nova versão. Crie timeline única carga→viagem→parada→documento→evento→POD usada por operação, motorista e portal. Migre com dry-run e teste duplicidade.
+        Consolide clientes, remetentes, destinatários, motoristas, funcionários, veículos e unidades. Defina identificadores canônicos, normalização de CPF/CNPJ, placa, e-mail e telefone, regras de merge e aliases legados. Elimine correspondência por nome e relações ambíguas. Centralize vínculos usuário-cliente, motorista-usuário, veículo-motorista e unidade-tenant em RPCs auditadas. Crie diagnóstico de duplicados e merge seguro por lote aprovado, preservando referências. Adicione constraints e testes cross-tenant sem tocar na emissão fiscal.
       </p>
       <div className="pt-4">
         <Navigate to="/dashboard" replace />
