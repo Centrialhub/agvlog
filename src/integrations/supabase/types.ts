@@ -15776,6 +15776,10 @@ export type Database = {
         Args: { _document_ids: string[]; _load_id: string; _tenant_id: string }
         Returns: Json
       }
+      link_items_to_load_v2: {
+        Args: { p_item_ids: string[]; p_load_id: string; p_tenant_id: string }
+        Returns: Json
+      }
       list_available_loads_for_settlement: {
         Args: {
           _driver_id?: string
@@ -16153,6 +16157,15 @@ export type Database = {
         }
         Returns: Json
       }
+      move_load_items_v3: {
+        Args: {
+          p_item_ids: string[]
+          p_source_load_id: string
+          p_target_load_id: string
+          p_tenant_id: string
+        }
+        Returns: Json
+      }
       next_client_invoice_number: {
         Args: {
           _installment?: number
@@ -16198,6 +16211,17 @@ export type Database = {
           p_planned_start_at?: string
           p_route_name?: string
           p_start_now?: boolean
+          p_stops: Json
+          p_tenant_id: string
+          p_vehicle_id: string
+        }
+        Returns: string
+      }
+      plan_dispatch_trip_v2: {
+        Args: {
+          p_driver_id: string
+          p_load_ids: string[]
+          p_route_name: string
           p_stops: Json
           p_tenant_id: string
           p_vehicle_id: string
