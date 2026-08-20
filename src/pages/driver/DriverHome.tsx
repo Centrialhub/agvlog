@@ -284,9 +284,9 @@ export default function DriverHome() {
                   className="w-full"
                   onClick={async () => {
                     if (trip.status === 'planned') {
-                      await supabase.rpc('transition_stop_status_v1', {
+                      await supabase.rpc('transition_trip_status_v1', {
                         p_tenant_id: currentTenant?.id,
-                        p_stop_id: trip.id, // Note: For trips we'd ideally have transition_trip_status_v1, but here we can use a dedicated RPC or migrate this to transition_stop_status_v1 logic if it handled trips.
+                        p_trip_id: trip.id,
                         p_to_status: 'in_transit',
                         p_actor_id: driver?.user_id,
                         p_idempotency_key: `trip-start-${trip.id}-${Date.now()}`
