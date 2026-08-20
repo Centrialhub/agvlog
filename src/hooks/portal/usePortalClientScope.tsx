@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState, ReactNode } from 'react';
+import { createContext, useContext, useMemo, useState, ReactNode, useEffect } from 'react';
 import { useClientPortalAccess, type PortalAccess } from './useClientPortalAccess';
 
 type Permission =
