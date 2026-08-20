@@ -1588,7 +1588,7 @@ export default function Ingestion() {
 
           // Vincula documentos à carga via RPC oficial (cria load_items + atualiza fiscal_documents + auditoria)
           if (docIds.length > 0 && currentTenant) {
-            const { data: assignResult, error: assignErr } = await (supabase as any).rpc('assign_fiscal_documents_to_load', {
+            const { data: assignResult, error: assignErr } = await (supabase as any).rpc('link_fiscal_documents_to_load_v1', {
               _tenant_id: currentTenant.id,
               _load_id: loadId,
               _document_ids: docIds,
