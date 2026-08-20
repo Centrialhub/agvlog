@@ -337,16 +337,8 @@ export default function Payables() {
                           variant="ghost" 
                           size="sm" 
                           className="h-7 px-2 text-xs text-blue-600"
-                          onClick={() => {
-                            supabase.rpc('approve_financial_obligation_v1', { _obligation_id: p.id })
-                              .then(({ error }) => {
-                                if (error) toast.error(error.message);
-                                else {
-                                  toast.success('Aprovado e registrado no razão');
-                                  window.location.reload(); // Quick refresh
-                                }
-                              });
-                          }}
+                          disabled={approveMut.isPending}
+                          onClick={() => approveMut.mutate({ id: p.id })}
                         >
                           <CheckCircle className="h-3.5 w-3.5 mr-1" /> Aprovar
                         </Button>
