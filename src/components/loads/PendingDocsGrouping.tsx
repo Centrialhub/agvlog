@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useAuth } from '@/hooks/useAuth';
 import { useVehicles } from '@/hooks/useVehicles';
-import { useOperationalRoutes } from '@/hooks/useOperationalRoutes';
+import { useOperationalRoutes, useOperationalRoutesArray } from '@/hooks/useOperationalRoutes';
 import { useCreateLoad, getNextLoadNumberFromExisting } from '@/hooks/useLoads';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -52,7 +52,7 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
   const { currentTenant } = useTenant();
   const { user } = useAuth();
   const { data: vehicles = [] } = useVehicles();
-  const { data: operationalRoutes = [] } = useOperationalRoutes();
+  const { data: operationalRoutes = [] } = useOperationalRoutesArray();
   const createLoad = useCreateLoad();
   
   const queryClient = useQueryClient();

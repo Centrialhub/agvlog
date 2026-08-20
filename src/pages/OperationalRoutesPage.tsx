@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useOperationalRoutes, useCreateOperationalRoute, useUpdateOperationalRoute, useDeleteOperationalRoute } from '@/hooks/useOperationalRoutes';
+import { useOperationalRoutes, useOperationalRoutesArray, useCreateOperationalRoute, useUpdateOperationalRoute, useDeleteOperationalRoute } from '@/hooks/useOperationalRoutes';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,7 +23,7 @@ const CLASSIFICATIONS = [
 
 export default function OperationalRoutesPage() {
   const [showInactive, setShowInactive] = useState(false);
-  const { data: routes = [], isLoading } = useOperationalRoutes({ includeInactive: true });
+  const { data: routes = [], isLoading } = useOperationalRoutesArray({ includeInactive: true });
   const createRoute = useCreateOperationalRoute();
   const updateRoute = useUpdateOperationalRoute();
   const deleteRoute = useDeleteOperationalRoute();

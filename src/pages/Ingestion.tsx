@@ -12,7 +12,7 @@ import { useCreateLoad, useLoads, useLoadsArray } from '@/hooks/useLoads';
 import { getNextLoadNumberFromExisting } from '@/hooks/useLoads';
 import { useCreateLoadItem } from '@/hooks/useLoadItems';
 import { useVehicles } from '@/hooks/useVehicles';
-import { useOperationalRoutes, useUpdateOperationalRoute } from '@/hooks/useOperationalRoutes';
+import { useOperationalRoutes, useOperationalRoutesArray, useUpdateOperationalRoute } from '@/hooks/useOperationalRoutes';
 import { useToast } from '@/hooks/use-toast';
 import { Upload, FileText, FileStack } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
@@ -90,7 +90,7 @@ export default function Ingestion() {
   const { data: vehicles = [] } = useVehicles();
   const { data: drivers = [] } = useDrivers();
   const { data: loads = [] } = useLoadsArray();
-  const { data: operationalRoutes = [] } = useOperationalRoutes();
+  const { data: operationalRoutes = [] } = useOperationalRoutesArray();
   const { currentTenant } = useTenant();
   const { user } = useAuth();
   const createDoc = useCreateFiscalDocument();
