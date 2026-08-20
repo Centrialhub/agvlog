@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Package, MapPin, Truck, ArrowRight, Calendar, Info } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { LOAD_STATUS_LABELS, LOAD_ACTIVE_STATUSES } from '@/lib/status/loadStatus';
+import { LOAD_STATUS_LABELS, LOAD_ACTIVE_STATUSES } from '@/lib/status';
 
 export default function DriverLoads() {
   const { data: driver, isLoading: driverLoading } = useCurrentDriver();
