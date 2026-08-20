@@ -364,7 +364,9 @@ function buildIcmsBlock(
   const cst = isSimples ? '90' : (cstRaw || '00');
   // Se for Simples Nacional, forçamos isento a true para zerar alíquota, base e valor
   // conforme solicitado ("garantir que essas informações sejam realmente zeradas").
-  const isento = isSimples || icms.isento === true || cst === '40' || cst === '41' || cst === '51';
+  // REGRA APLICADA: Emissores Simples Nacional (CRT=1) não tributam ICMS destacado no CT-e.
+  const isSimplesForced = isSimples;
+  const isento = isSimplesForced || icms.isento === true || cst === '40' || cst === '41' || cst === '51';
   const aliq = isento ? 0 : Number(icms.aliquota || 0);
   const embutido = icms.embutido === true;
   const { base, valor } = computeIcmsAmounts({
