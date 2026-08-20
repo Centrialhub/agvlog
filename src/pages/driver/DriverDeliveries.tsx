@@ -385,11 +385,14 @@ export default function DriverDeliveries() {
       const mappedStatus = STATUS_MAP[def.key];
       if (mappedStatus) {
         try {
-          const { error: statusErr } = await supabase.rpc('driver_update_stop_status', {
-            _stop_id: eventForm.stop.id,
-            _new_status: mappedStatus,
-            _reason: reason,
-          } as any);
+          const { error: statusErr } = await supabase.rpc('transition_stop_status_v1', {
+            p_tenant_id: currentTenant!.id,
+            p_stop_id: eventForm.stop.id,
+            p_to_status: mappedStatus,
+            p_actor_id: driver?.user_id,
+            p_reason: reason || 'Evento reportado via App',
+            p_idempotency_key: `event-${def.key}-${eventForm.stop.id}-${Date.now()}`
+          });
           
           if (statusErr) {
             console.error('[DriverDeliveries] Status update RPC error:', statusErr);
