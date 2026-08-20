@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useCurrentDriver } from '@/hooks/useCurrentDriver';
-import { useDriverWorkspace, useDriverExecution } from '@/hooks/useDriverWorkspace';
+import { useDriverWorkspace, useDriverExecution, type DriverEventType } from '@/hooks/useDriverWorkspace';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -314,6 +314,7 @@ export default function DriverDeliveries() {
       }
 
       // All events now use the idempotent reportEvent RPC
+      const reason = notes?.trim() || null;
       try {
         let eventType: DriverEventType = 'departure';
         if (def.finalAction === 'delivered') eventType = 'delivery_complete';
