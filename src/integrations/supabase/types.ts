@@ -15372,6 +15372,20 @@ export type Database = {
         }
         Returns: string
       }
+      create_load_v1: {
+        Args: {
+          p_destination: string
+          p_driver_id: string
+          p_idempotency_key?: string
+          p_notes?: string
+          p_operation_type?: string
+          p_origin: string
+          p_scheduled_load_at?: string
+          p_tenant_id: string
+          p_vehicle_id: string
+        }
+        Returns: string
+      }
       create_load_with_next_number: {
         Args: {
           _destination?: string
@@ -15510,6 +15524,10 @@ export type Database = {
       delete_load_safely: {
         Args: { _load_id: string; _tenant_id: string }
         Returns: Json
+      }
+      delete_load_v1: {
+        Args: { p_load_id: string; p_tenant_id: string }
+        Returns: boolean
       }
       delete_loads_safely: {
         Args: { _load_ids: string[]; _tenant_id: string }
@@ -16305,30 +16323,18 @@ export type Database = {
         }
         Returns: string
       }
-      plan_dispatch_trip_v2:
-        | {
-            Args: {
-              p_driver_id: string
-              p_load_ids: string[]
-              p_route_name: string
-              p_stops: Json
-              p_tenant_id: string
-              p_vehicle_id: string
-            }
-            Returns: string
-          }
-        | {
-            Args: {
-              p_driver_id: string
-              p_idempotency_key?: string
-              p_load_ids: string[]
-              p_route_name: string
-              p_stops: Json
-              p_tenant_id: string
-              p_vehicle_id: string
-            }
-            Returns: string
-          }
+      plan_dispatch_trip_v2: {
+        Args: {
+          p_driver_id: string
+          p_idempotency_key?: string
+          p_load_ids: string[]
+          p_route_name: string
+          p_stops: Json
+          p_tenant_id: string
+          p_vehicle_id: string
+        }
+        Returns: string
+      }
       portal_user_can_access_fiscal_document: {
         Args: { _fiscal_document_id: string; _tenant_id: string }
         Returns: boolean
@@ -16782,6 +16788,15 @@ export type Database = {
         }
         Returns: undefined
       }
+      update_load_v1: {
+        Args: {
+          p_changes: Json
+          p_load_id: string
+          p_tenant_id: string
+          p_version?: number
+        }
+        Returns: Json
+      }
       update_merchandise_shortage_status: {
         Args: { _case_id: string; _payload?: Json; _status: string }
         Returns: undefined
@@ -16798,6 +16813,20 @@ export type Database = {
           _id: string
           _name: string
           _tenant_id: string
+        }
+        Returns: string
+      }
+      upsert_load_item_v1: {
+        Args: {
+          p_fiscal_document_id?: string
+          p_item_description: string
+          p_item_id?: string
+          p_load_id: string
+          p_pallet_count?: number
+          p_quantity: number
+          p_tenant_id: string
+          p_volume_m3?: number
+          p_weight_kg?: number
         }
         Returns: string
       }

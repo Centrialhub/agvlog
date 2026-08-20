@@ -1,4 +1,3 @@
-// guardrail:allow-direct-write
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
@@ -89,17 +88,20 @@ export function useCreateLoad() {
   return useMutation({
     mutationFn: async (load: Partial<Load>) => {
       if (!currentTenant) throw new Error('Tenant not found');
-      // Embora cargas manuais possam ser inseridas, encorajamos o uso de rpcs
-      // Para congruência, cargas de inbound (notas) vêm via link_fiscal_documents_to_load_v1
-      // guardrail:allow-direct-write
-      const { data, error } = await supabase
-        // linter:allow-direct-write loads manual-load-create 2026-12-31
-      .from('loads')
-        .insert([{ ...load, tenant_id: currentTenant.id }] as any)
-        .select()
-        .single();
+      
+      const { data, error } = await supabase.rpc('create_load_v1', {
+        p_tenant_id: currentTenant.id,
+        p_vehicle_id: load.vehicle_id || null,
+        p_driver_id: load.driver_id || null,
+        p_origin: load.origin || '',
+        p_destination: load.destination || '',
+        p_notes: load.notes || null,
+        p_operation_type: load.operation_type || null,
+        p_scheduled_load_at: load.scheduled_load_at || null,
+      });
+
       if (error) throw error;
-      return data;
+      return { id: data };
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['loads'] });
@@ -111,46 +113,20 @@ export function useCreateLoad() {
  * Atomic load creation with server-side numbering.
  */
 export function useCreateLoadWithNextNumber() {
-  const { currentTenant } = useTenant();
-  const qc = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (loadData: Partial<Load>) => {
-      if (!currentTenant) throw new Error('Tenant not found');
-      
-      const nextNumber = await getNextLoadNumberFromExisting(currentTenant.id);
-      
-      const { data, error } = await supabase
-        // linter:allow-direct-write loads manual-load-create-number 2026-12-31
-      .from('loads')
-        .insert([{ 
-          ...loadData, 
-          load_number: nextNumber,
-          tenant_id: currentTenant.id 
-        }] as any)
-        .select()
-        .single();
-        
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['loads'] });
-    },
-  });
+  return useCreateLoad();
 }
 
 export function useUpdateLoad() {
+  const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...changes }: Partial<Load> & { id: string }) => {
-      const { data, error } = await supabase
-        // linter:allow-direct-write loads manual-load-update 2026-12-31
-      .from('loads')
-        .update(changes as any)
-        .eq('id', id)
-        .select()
-        .single();
+      if (!currentTenant) throw new Error('Tenant not found');
+      const { data, error } = await supabase.rpc('update_load_v1', {
+        p_tenant_id: currentTenant.id,
+        p_load_id: id,
+        p_changes: changes as any,
+      });
       if (error) throw error;
       return data;
     },
@@ -161,12 +137,15 @@ export function useUpdateLoad() {
 }
 
 export function useDeleteLoad() {
+  const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        // linter:allow-direct-write loads manual-load-delete 2026-12-31
-      .from('loads').delete().eq('id', id);
+      if (!currentTenant) throw new Error('Tenant not found');
+      const { error } = await supabase.rpc('delete_load_v1', {
+        p_tenant_id: currentTenant.id,
+        p_load_id: id,
+      });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -176,13 +155,19 @@ export function useDeleteLoad() {
 }
 
 export function useDeleteLoads() {
+  const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (ids: string[]) => {
-      const { error } = await supabase
-        // linter:allow-direct-write loads manual-load-batch-delete 2026-12-31
-      .from('loads').delete().in('id', ids);
-      if (error) throw error;
+      if (!currentTenant) throw new Error('Tenant not found');
+      // Sequential RPC calls for batch deletion to ensure triggers and logic apply per-load
+      for (const id of ids) {
+        const { error } = await supabase.rpc('delete_load_v1', {
+          p_tenant_id: currentTenant.id,
+          p_load_id: id,
+        });
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['loads'] });
