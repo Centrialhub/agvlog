@@ -271,7 +271,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
       try {
         const previousLoadIds = Array.from(new Set(docs.map((doc: any) => doc.load_id).filter(Boolean)));
         const docIds = docs.map((doc: any) => doc.id);
-        const { error: assignError } = await (supabase as any).rpc('assign_fiscal_documents_to_load', {
+        const { error: assignError } = await (supabase as any).rpc('link_fiscal_documents_to_load_v1', {
           _tenant_id: currentTenant!.id,
           _load_id: loadId,
           _document_ids: docIds,
@@ -336,7 +336,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
   const handleDelete = async (item: LoadItem) => {
     try {
       if (item.fiscal_document_id) {
-        const { error: removeError } = await (supabase as any).rpc('remove_fiscal_documents_from_load', {
+        const { error: removeError } = await (supabase as any).rpc('unlink_fiscal_documents_from_load_v1', {
           _tenant_id: currentTenant!.id,
           _load_id: loadId,
           _document_ids: [item.fiscal_document_id],
