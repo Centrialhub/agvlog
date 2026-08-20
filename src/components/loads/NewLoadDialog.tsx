@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getNextLoadNumberFromExisting, useCreateLoadWithNextNumber } from '@/hooks/useLoads';
+import { getNextLoadNumberFromExisting, useCreateLoad } from '@/hooks/useLoads';
 import { useClients, useClientsArray } from '@/hooks/useClients';
 import { useTenant } from '@/hooks/useTenant';
 import { useAuth } from '@/hooks/useAuth';
