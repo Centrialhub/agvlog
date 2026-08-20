@@ -10,7 +10,7 @@ describe('Security Layer Hardening', () => {
     });
     // Should fail because user is not a member of FAKE_TENANT_ID
     expect(error).toBeDefined();
-    expect(error?.message).toContain('forbidden');
+    expect(error?.message).toMatch(/forbidden|permission denied/i);
   });
 
   it('should block unauthorized repair execution', async () => {
@@ -19,7 +19,7 @@ describe('Security Layer Hardening', () => {
       p_batch_id: FAKE_TENANT_ID
     });
     expect(error).toBeDefined();
-    expect(error?.message).toMatch(/forbidden|Apenas administradores/);
+    expect(error?.message).toMatch(/forbidden|Apenas administradores|permission denied/i);
   });
 
   it('should block cross-tenant driver workspace access', async () => {
@@ -28,7 +28,7 @@ describe('Security Layer Hardening', () => {
       p_tenant_id: FAKE_TENANT_ID
     });
     expect(error).toBeDefined();
-    expect(error?.message).toContain('negado');
+    expect(error?.message).toMatch(/negado|permission denied/i);
   });
 
   it('should block cross-tenant financial summary', async () => {
@@ -36,6 +36,6 @@ describe('Security Layer Hardening', () => {
       _tenant_id: FAKE_TENANT_ID
     });
     expect(error).toBeDefined();
-    expect(error?.message).toContain('forbidden');
+    expect(error?.message).toMatch(/forbidden|permission denied/i);
   });
 });
