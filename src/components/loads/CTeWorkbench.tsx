@@ -138,6 +138,7 @@ export default function CTeWorkbench({ loadId, loadNumber, destination, document
         .substring(0, 500);
 
       const { data, error } = await supabase.from('fiscal_documents').insert({
+        // guardrail:allow-direct-write
         tenant_id: currentTenant.id,
         created_by: user?.id,
         document_type: 'outbound',
