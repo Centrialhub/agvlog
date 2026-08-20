@@ -359,7 +359,7 @@ function buildIcmsBlock(
 ): Record<string, unknown> {
   const cstRaw = (icms.cst || '').toString().toUpperCase();
   const regimeRaw = (taxRegime || '').toString().toLowerCase();
-  const isSimples = regimeRaw === 'simples' || regimeRaw === 'mei';
+  const isSimples = regimeRaw === 'simples' || regimeRaw === 'mei' || taxRegime === 'simples' || taxRegime === 'mei';
   // Para Simples Nacional, o CST/CSOSN mapeado para o DACTE/XML deve ser '90' (Outros).
   const cst = isSimples ? '90' : (cstRaw || '00');
   // Se for Simples Nacional, forçamos isento a true para zerar alíquota, base e valor
@@ -617,7 +617,7 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
     .filter((c) => c.length === 14);
 
   const emitterRegimeRaw = (input.emitter?.taxRegime || '').toString().toLowerCase();
-  const emitterIsSimples = emitterRegimeRaw === 'simples' || emitterRegimeRaw === 'mei';
+  const emitterIsSimples = emitterRegimeRaw === 'simples' || emitterRegimeRaw === 'mei' || input.emitter?.taxRegime === 'simples' || input.emitter?.taxRegime === 'mei';
   const emitterRegimeCode = emitterIsSimples ? 1 : 3;
   const usoExclusivoEmitente = buildEmitterExclusiveUse({
     insurer: input.insurer,
@@ -792,7 +792,7 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
         vTPrest: totalServico,
         vRec: totalServico,
         Comp: componentes
-          .filter((component) => component.soma)
+          .filter((component) => component.soma && component.valor > 0)
           .map((component) => ({ xNome: component.nome, vComp: component.valor })),
       },
       imp: icmsBlock

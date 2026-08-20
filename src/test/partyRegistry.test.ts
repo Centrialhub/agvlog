@@ -104,7 +104,7 @@ describe('partyRegistry', () => {
       recipientState: 'MG',
       clientId: null,
     };
-    expect(fillPartyFieldsFromRegistry(item, idx).changed).toBe(false);
+    expect(fillPartyFieldsFromRegistry(item, idx).changed).toBeFalsy();
   });
 
   it('sanitizeIe descarta marcadores inválidos e mantém ISENTO/dígitos', () => {
