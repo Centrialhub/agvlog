@@ -34,6 +34,7 @@ export interface DriverWorkspace {
     departure_time: string | null;
     latitude: number | null;
     longitude: number | null;
+    accuracy: number | null;
     documents: Array<{
       id: string;
       number: string;
@@ -145,22 +146,22 @@ export function useDriverExecution() {
       const { data, error } = await supabase.rpc('log_operational_event_v2', {
         p_tenant_id: currentTenant.id,
         p_event_type: eventType,
-        p_dispatch_stop_id: stopId || null,
+        p_dispatch_stop_id: stopId || undefined,
         p_payload: { ...payload, trip_id: tripId },
-        p_pod_data: podData || null,
+        p_pod_data: podData || undefined,
         p_idempotency_key: finalIdempotencyKey
       });
 
       if (error) throw error;
 
-      // Also trigger the state transition RPC for compatibility
+      // Legacy state transition RPC
       await supabase.rpc('driver_report_event_v1', {
         p_driver_id: driver.id,
         p_tenant_id: currentTenant.id,
         p_trip_id: tripId,
-        p_stop_id: stopId || null,
+        p_stop_id: stopId || "", // RPC requires string, even if empty
         p_event_type: eventType === 'delivery_success' ? 'delivery_complete' : eventType,
-        p_payload: payload,
+        p_payload: payload || {},
         p_idempotency_key: `${finalIdempotencyKey}-state`
       });
 

@@ -71,9 +71,9 @@ export function useDriverSync() {
         p_driver_id: driver.id,
         p_tenant_id: currentTenant.id,
         p_trip_id: item.tripId,
-        p_stop_id: item.stopId || null,
+        p_stop_id: item.stopId || "",
         p_event_type: item.eventType,
-        p_payload: item.payload,
+        p_payload: item.payload || {},
         p_idempotency_key: item.idempotencyKey
       });
 
