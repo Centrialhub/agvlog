@@ -7,12 +7,11 @@ import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, Navigation, CheckCircle, Clock, ArrowRight, Package } from 'lucide-react';
+import { MapPin, Navigation, CheckCircle, Clock, ArrowRight } from 'lucide-react';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { isStopTerminal, STOP_STATUS_LABELS, LOAD_ACTIVE_STATUSES } from '@/lib/status';
-
+import { isStopTerminal, STOP_STATUS_LABELS } from '@/lib/status';
 
 const STATUS_LABELS: Record<string, string> = STOP_STATUS_LABELS as any;
 
@@ -38,7 +37,6 @@ export default function DriverStops() {
   const { data: driver } = useCurrentDriver();
   const { data: autoTrip } = useActiveTrip(driver?.id);
 
-  // If tripId is in URL use it, otherwise use auto-detected active trip
   const { data: trip } = useQuery({
     queryKey: ['driver_trip_specific', tripIdParam],
     queryFn: async () => {
@@ -72,7 +70,6 @@ export default function DriverStops() {
     enabled: !!activeTrip?.id,
   });
 
-  // Realtime: refresh stops when operator marks arrival/departure or updates status.
   useEffect(() => {
     if (!activeTrip?.id) return;
     const channel = supabase
@@ -96,9 +93,8 @@ export default function DriverStops() {
       
       const newStatus = action === 'arrival' ? 'arrived' : 
                        action === 'depart' ? 'servicing' : 
-                       action; // skipped, refused, etc.
+                       action;
 
-      // Transition using the new explicit state machine RPC
       const { error } = await supabase.rpc('transition_stop_status_v1', {
         p_tenant_id: currentTenant.id,
         p_stop_id: stopId,
@@ -110,6 +106,12 @@ export default function DriverStops() {
       
       if (error) throw error;
     },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['driver_stops'] });
+      toast({ title: 'Parada atualizada' });
+    },
+    onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
+  });
 
   const handleArrival = (stopId: string) => {
     updateStop.mutate({ stopId, action: 'arrival' });
@@ -134,7 +136,6 @@ export default function DriverStops() {
           Carga {effectiveTrip?.loads?.load_number || '—'} · {effectiveStops.length} parada(s)
         </p>
       </div>
-
 
       {!effectiveTrip?.id ? (
         <Card>
