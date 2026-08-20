@@ -92,26 +92,30 @@ export default function DriverStops() {
 
   const updateStop = useMutation({
     mutationFn: async ({ stopId, action, reason }: { stopId: string; action: 'arrival' | 'depart' | 'skipped' | 'refused' | 'damaged' | 'returned' | 'partial_delivery'; reason?: string }) => {
-      if (!activeTrip) throw new Error('Sem viagem ativa.');
-      if (action === 'arrival') {
-        const { error } = await supabase.rpc('driver_mark_arrival', { _stop_id: stopId });
-        if (error) throw error;
-        return;
-      }
-      if (action === 'depart') {
-        // "Registrar saída" — apenas marca actual_departure_at e gera evento de departure.
-        // A conclusão real da entrega acontece em DriverDeliveries via driver_finalize_delivery.
-        const { error } = await supabase.rpc('driver_register_departure', {
-          _stop_id: stopId, _notes: null,
-        } as any);
-        if (error) throw error;
-        return;
-      }
-      const { error } = await supabase.rpc('driver_update_stop_status', {
-        _stop_id: stopId, _new_status: action, _reason: reason || null,
+      if (!activeTrip || !currentTenant || !driver) throw new Error('Dados incompletos para atualização.');
+      
+      const newStatus = action === 'arrival' ? 'arrived' : 
+                       action === 'depart' ? 'servicing' : 
+                       action; // skipped, refused, etc.
+
+      // Transition using the new explicit state machine RPC
+      const { error } = await supabase.rpc('transition_stop_status_v1', {
+        p_tenant_id: currentTenant.id,
+        p_stop_id: stopId,
+        p_to_status: newStatus,
+        p_actor_id: driver.user_id,
+        p_reason: reason || null,
+        p_idempotency_key: `${stopId}-${newStatus}-${Date.now()}`,
       });
+      
       if (error) throw error;
     },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['driver_stops'] });
+      toast({ title: 'Parada atualizada' });
+    },
+    onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
+  });
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['driver_stops'] });
       toast({ title: 'Parada atualizada' });
