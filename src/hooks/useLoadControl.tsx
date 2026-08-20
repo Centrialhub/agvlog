@@ -63,7 +63,7 @@ export interface UnloadingChargeRow {
   supplier_name?: string;
   city?: string;
   service_date?: string;
-  load?: string;
+  load?: { external_load_number?: string; load_number?: string };
   status?: string;
 }
 
