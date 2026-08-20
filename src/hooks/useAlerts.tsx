@@ -14,13 +14,14 @@ export interface AlertRule {
 export interface AlertInstance {
   id: string;
   tenant_id: string;
-  vehicle_id: string;
-  rule_id: string;
-  severity: 'low' | 'medium' | 'high' | 'critical';
-  status: 'new' | 'ack' | 'closed';
-  details: any;
-  captured_at: string;
+  vehicle_id: string | null;
+  rule_id: string | null;
+  status: string;
+  opened_at: string;
   closed_at: string | null;
+  created_at: string;
+  source: string | null;
+  last_event_id: string | null;
   vehicles?: {
     plate: string;
     nickname: string | null;
@@ -44,7 +45,7 @@ export const useAlertRules = () => {
         .eq('tenant_id', currentTenant.id);
       
       if (error) throw error;
-      return data || [];
+      return (data || []) as AlertRule[];
     },
     enabled: !!currentTenant
   });
@@ -66,9 +67,9 @@ export const useAlertInstances = (filters: { status?: string[] } = {}) => {
         query = query.in('status', filters.status);
       }
 
-      const { data, error } = await query.order('captured_at', { ascending: false });
+      const { data, error } = await query.order('opened_at', { ascending: false });
       if (error) throw error;
-      return data || [];
+      return (data || []) as unknown as AlertInstance[];
     },
     enabled: !!currentTenant
   });

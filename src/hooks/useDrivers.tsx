@@ -10,6 +10,7 @@ export interface Driver {
   active: boolean;
   tenant_id: string;
   current_vehicle_id: string | null;
+  driver_type: string;
   created_at: string;
   vehicles?: {
     plate: string;
@@ -53,7 +54,7 @@ export const useDrivers = (filters: { search?: string; activeOnly?: boolean } = 
 
 export const useDriversArray = (filters: { search?: string; activeOnly?: boolean } = {}) => {
   const q = useDrivers(filters);
-  const items = q.data?.items ?? [];
+  const items = (q.data as any)?.items || [];
   return { ...q, data: items } as any;
 };
 
@@ -64,9 +65,18 @@ export const useCreateDriver = () => {
   return useMutation({
     mutationFn: async (payload: Partial<Driver>) => {
       if (!currentTenant) throw new Error('Tenant not found');
+      
+      // Remove virtual properties before insert
+      const { vehicles, ...rest } = payload;
+      
       const { data, error } = await supabase
         .from('drivers')
-        .insert({ ...payload, tenant_id: currentTenant.id })
+        .insert({ 
+          ...rest, 
+          tenant_id: currentTenant.id,
+          name: rest.name || '',
+          driver_type: rest.driver_type || 'fixed'
+        } as any)
         .select()
         .single();
 
@@ -84,9 +94,12 @@ export const useUpdateDriver = () => {
 
   return useMutation({
     mutationFn: async ({ id, ...payload }: Partial<Driver> & { id: string }) => {
+      // Remove virtual properties
+      const { vehicles, ...rest } = payload;
+      
       const { data, error } = await supabase
         .from('drivers')
-        .update(payload)
+        .update(rest as any)
         .eq('id', id)
         .select()
         .single();
