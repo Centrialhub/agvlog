@@ -56,7 +56,12 @@ export default function Payables() {
   const [paymentPayable, setPaymentPayable] = useState<Payable | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
   const [sourceFilter, setSourceFilter] = useState('all');
-  const approveMut: any = { isPending: false, mutate: () => {} };
+  const approveMut: any = { 
+    isPending: false, 
+    mutate: () => {
+      toast.info('Ação desativada temporariamente: aguardando restauração do fluxo operacional de aprovação.');
+    } 
+  };
   // const approveMut = useApproveFinancialObligation();
 
   const filtered = useMemo(() => {
