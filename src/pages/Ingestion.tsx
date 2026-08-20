@@ -5,10 +5,10 @@ import {
   validateNFe, validateOrderRows, generateLoadSuggestions, buildValidationIndexes,
   ValidatedDocument, ValidatedOrder, LoadSuggestion,
 } from '@/lib/ingestionValidator';
-import { useFiscalDocuments, useCreateFiscalDocument } from '@/hooks/useFiscalDocuments';
-import { useClients } from '@/hooks/useClients';
+import { useFiscalDocuments, useFiscalDocumentsArray, useCreateFiscalDocument } from '@/hooks/useFiscalDocuments';
+import { useClients, useClientsArray } from '@/hooks/useClients';
 import { useCreateOrder } from '@/hooks/useOrders';
-import { useCreateLoad, useLoads } from '@/hooks/useLoads';
+import { useCreateLoad, useLoads, useLoadsArray } from '@/hooks/useLoads';
 import { getNextLoadNumberFromExisting } from '@/hooks/useLoads';
 import { useCreateLoadItem } from '@/hooks/useLoadItems';
 import { useVehicles } from '@/hooks/useVehicles';
@@ -85,11 +85,11 @@ async function getEdgeFunctionErrorMessage(error: any): Promise<string> {
 }
 
 export default function Ingestion() {
-  const { data: existingDocs = [] } = useFiscalDocuments();
-  const { data: clients = [] } = useClients();
+  const { data: existingDocs = [] } = useFiscalDocumentsArray();
+  const { data: clients = [] } = useClientsArray();
   const { data: vehicles = [] } = useVehicles();
   const { data: drivers = [] } = useDrivers();
-  const { data: loads = [] } = useLoads();
+  const { data: loads = [] } = useLoadsArray();
   const { data: operationalRoutes = [] } = useOperationalRoutes();
   const { currentTenant } = useTenant();
   const { user } = useAuth();

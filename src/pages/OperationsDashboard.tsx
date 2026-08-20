@@ -25,7 +25,7 @@ const PIE_COLORS = ['hsl(var(--primary))', 'hsl(var(--destructive))', '#f59e0b',
 
 export default function OperationsDashboard() {
   const { data: orders = [] } = useOrders();
-  const { data: loads = [] } = useLoads();
+  const { data: loads = [] } = useLoadsArray();
   const { data: balances = [] } = useInventoryBalances();
   const { data: vehicles = [] } = useVehicles();
   const { data: incidents = [] } = useIncidents();

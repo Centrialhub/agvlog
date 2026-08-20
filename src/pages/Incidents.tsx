@@ -9,7 +9,7 @@ import {
 } from '@/hooks/useIncidents';
 import { useEmployees } from '@/hooks/useEmployees';
 import { useVehicles } from '@/hooks/useVehicles';
-import { useClients } from '@/hooks/useClients';
+import { useClients, useClientsArray } from '@/hooks/useClients';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,7 +28,7 @@ export default function Incidents() {
   const { data: incidents = [], isLoading } = useIncidents();
   const { data: employees = [] } = useEmployees();
   const { data: vehicles = [] } = useVehicles();
-  const { data: clients = [] } = useClients();
+  const { data: clients = [] } = useClientsArray();
   const createIncident = useCreateIncident();
   const updateIncident = useUpdateIncident();
   const [search, setSearch] = useState('');

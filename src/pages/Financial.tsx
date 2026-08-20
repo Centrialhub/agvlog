@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useReceivables } from '@/hooks/useReceivables';
-import { useClients } from '@/hooks/useClients';
+import { useClients, useClientsArray } from '@/hooks/useClients';
 import { useCostCenters } from '@/hooks/useCostCenters';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -126,7 +126,7 @@ export default function Financial() {
     enabled: !!currentTenant,
   });
 
-  const { data: clients = [] } = useClients();
+  const { data: clients = [] } = useClientsArray();
   const { data: costCenters = [] } = useCostCenters();
 
   // Documentos válidos (cancelados/rejeitados nunca entram em faturamento)

@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useClients, useCreateClient, useUpdateClient, Client } from '@/hooks/useClients';
+import { useClients, useClientsArray, useCreateClient, useUpdateClient, Client } from '@/hooks/useClients';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,7 +13,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 type KindFilter = 'all' | 'client' | 'supplier' | 'both';
 
 export default function Clients() {
-  const { data: clients = [], isLoading } = useClients();
+  const { data: clients = [], isLoading } = useClientsArray();
   const createClient = useCreateClient();
   const updateClient = useUpdateClient();
   const [search, setSearch] = useState('');

@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useLoads, LOAD_STATUS_LABELS } from '@/hooks/useLoads';
 import { useOperationalEvents } from '@/hooks/useOperationalEvents';
-import { useClients } from '@/hooks/useClients';
+import { useClients, useClientsArray } from '@/hooks/useClients';
 import { useVehicles } from '@/hooks/useVehicles';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -27,9 +27,9 @@ function useDriversAll() {
 }
 
 export default function ProductivityReports() {
-  const { data: loads = [] } = useLoads();
+  const { data: loads = [] } = useLoadsArray();
   const { data: events = [] } = useOperationalEvents();
-  const { data: clients = [] } = useClients();
+  const { data: clients = [] } = useClientsArray();
   const { data: vehicles = [] } = useVehicles();
   const { data: drivers = [] } = useDriversAll();
 

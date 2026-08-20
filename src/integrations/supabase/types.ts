@@ -15604,6 +15604,25 @@ export type Database = {
           validated_at: string
         }[]
       }
+      list_clients_v1: {
+        Args: {
+          p_cursor?: string
+          p_limit?: number
+          p_search?: string
+          p_tenant_id: string
+        }
+        Returns: Json
+      }
+      list_dispatch_trips_v1: {
+        Args: {
+          p_cursor?: string
+          p_limit?: number
+          p_search?: string
+          p_status?: string[]
+          p_tenant_id: string
+        }
+        Returns: Json
+      }
       list_driver_settlement_filter_options: {
         Args: { _tenant_id: string }
         Returns: Json
@@ -15623,6 +15642,44 @@ export type Database = {
           _status?: string
           _tenant_id: string
           _vehicle_id?: string
+        }
+        Returns: Json
+      }
+      list_drivers_v1: {
+        Args: {
+          p_cursor?: string
+          p_limit?: number
+          p_search?: string
+          p_tenant_id: string
+        }
+        Returns: Json
+      }
+      list_fiscal_documents_v1: {
+        Args: {
+          p_cursor?: string
+          p_limit?: number
+          p_search?: string
+          p_tenant_id: string
+          p_type?: string[]
+        }
+        Returns: Json
+      }
+      list_loads_v1: {
+        Args: {
+          p_cursor?: string
+          p_limit?: number
+          p_search?: string
+          p_status?: string[]
+          p_tenant_id: string
+        }
+        Returns: Json
+      }
+      list_operational_routes_v1: {
+        Args: {
+          p_cursor?: string
+          p_limit?: number
+          p_search?: string
+          p_tenant_id: string
         }
         Returns: Json
       }
@@ -16019,6 +16076,7 @@ export type Database = {
         }
         Returns: string
       }
+      unaccent: { Args: { "": string }; Returns: string }
       unhold_load: { Args: { _load_id: string }; Returns: undefined }
       unlink_fiscal_documents_from_load_v1: {
         Args: { _document_ids: string[]; _load_id: string; _tenant_id: string }

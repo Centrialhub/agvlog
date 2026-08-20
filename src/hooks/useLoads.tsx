@@ -39,22 +39,43 @@ export interface Load {
   drivers?: { name: string } | null;
 }
 
-export function useLoads() {
+export interface PaginatedLoads {
+  items: Load[];
+  next_cursor: string | null;
+  total_count: number;
+}
+
+export function useLoads(filters: { search?: string; status?: LoadStatus[] } = {}) {
   const { currentTenant } = useTenant();
-  return useQuery({
-    queryKey: ['loads', currentTenant?.id],
+  return useQuery<PaginatedLoads>({
+    queryKey: ['loads', currentTenant?.id, filters],
     queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data, error } = await supabase
-        .from('loads')
-        .select('*, vehicles(plate, nickname), drivers(name)')
-        .eq('tenant_id', currentTenant.id)
-        .order('created_at', { ascending: false });
+      if (!currentTenant) return { items: [], next_cursor: null, total_count: 0 };
+      
+      const { data, error } = await supabase.rpc('list_loads_v1', {
+        p_tenant_id: currentTenant.id,
+        p_search: filters.search || null,
+        p_status: filters.status || null,
+        p_limit: 1000, // Limite razoável para visualização inicial
+      });
+      
       if (error) throw error;
-      return (data || []) as Load[];
+      
+      const result = data as any;
+      return {
+        items: (result.items || []) as Load[],
+        next_cursor: result.next_cursor || null,
+        total_count: Number(result.total_count) || 0,
+      };
     },
     enabled: !!currentTenant,
   });
+}
+
+// Hook de conveniência para quando se espera apenas o array (retrocompatibilidade controlada)
+export function useLoadsArray() {
+  const q = useLoads();
+  return { ...q, data: q.data?.items ?? [] };
 }
 
 export function useCreateLoad() {

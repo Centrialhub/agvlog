@@ -60,22 +60,38 @@ export interface Client {
   address_city_ibge_code?: string | null;
 }
 
-export function useClients() {
+export interface PaginatedClients {
+  items: Client[];
+  next_cursor: string | null;
+  total_count: number;
+}
+
+export function useClients(filters: { search?: string } = {}) {
   const { currentTenant } = useTenant();
-  return useQuery({
-    queryKey: ['clients', currentTenant?.id],
+  return useQuery<PaginatedClients>({
+    queryKey: ['clients', currentTenant?.id, filters],
     queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data, error } = await supabase
-        .from('clients')
-        .select('*')
-        .eq('tenant_id', currentTenant.id)
-        .order('company_name');
+      if (!currentTenant) return { items: [], next_cursor: null, total_count: 0 };
+      const { data, error } = await supabase.rpc('list_clients_v1', {
+        p_tenant_id: currentTenant.id,
+        p_search: filters.search || null,
+        p_limit: 1000,
+      });
       if (error) throw error;
-      return (data || []) as Client[];
+      const result = data as any;
+      return {
+        items: (result.items || []) as Client[],
+        next_cursor: result.next_cursor || null,
+        total_count: Number(result.total_count) || 0,
+      };
     },
     enabled: !!currentTenant,
   });
+}
+
+export function useClientsArray() {
+  const q = useClients();
+  return { ...q, data: q.data?.items ?? [] };
 }
 
 export function useClient(id: string | null) {

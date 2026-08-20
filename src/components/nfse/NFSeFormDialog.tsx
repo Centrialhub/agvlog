@@ -11,11 +11,11 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Plus, Trash2, Search, Loader2, UserSearch, FileText, Calculator, CheckCircle } from 'lucide-react';
 import { useCreateNFSe, useUpdateNFSe, type NFSeDoc } from '@/hooks/useNFSe';
-import { useFiscalDocuments } from '@/hooks/useFiscalDocuments';
+import { useFiscalDocuments, useFiscalDocumentsArray } from '@/hooks/useFiscalDocuments';
 import { useEmitters } from '@/hooks/useEmitters';
 import { normalizeCep, normalizeUf, normalizeIbgeCity, normalizeCityName, normalizePhone } from '@/lib/fiscal/fiscalAddress';
 import { sanitizeIe } from '@/lib/fiscal/partyRegistry';
-import { useClients } from '@/hooks/useClients';
+import { useClients, useClientsArray } from '@/hooks/useClients';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '@/components/ui/command';
@@ -45,7 +45,7 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
   const update = useUpdateNFSe();
   const editing = !!initial?.id;
   const { data: emitters = [] } = useEmitters();
-  const { data: clients = [] } = useClients();
+  const { data: clients = [] } = useClientsArray();
 
   const [form, setForm] = useState<any>({
     regime_tributario: '3', // 3 = Normal, 1 = Simples Nacional
@@ -126,7 +126,7 @@ export default function NFSeFormDialog({ open, onOpenChange, initial, loadId, on
     }
   }, [selectedIds, loadDocuments]);
 
-  const { data: allDocs = [] } = useFiscalDocuments();
+  const { data: allDocs = [] } = useFiscalDocumentsArray();
 
   const clientOptions = useMemo(() => {
     return clients

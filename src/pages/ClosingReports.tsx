@@ -19,7 +19,7 @@ import {
   STATUS_LABELS, PAYMENT_LABELS, REPORT_TYPE_LABELS,
   type ClosingFilters, type ClosingReportRow,
 } from '@/hooks/useClosingReports';
-import { useClients } from '@/hooks/useClients';
+import { useClients, useClientsArray } from '@/hooks/useClients';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -47,7 +47,7 @@ export default function ClosingReports() {
   const { data: rows = [], isLoading } = useClosingReportsList(applied);
   const { currentTenant } = useTenant();
   const { data: companyProfile } = useCompanyProfile();
-  const { data: clients = [] } = useClients();
+  const { data: clients = [] } = useClientsArray();
   const { data: vehicles = [] } = useVehicles();
   const { data: drivers = [] } = useQuery({
     queryKey: ['drivers-min', currentTenant?.id],
