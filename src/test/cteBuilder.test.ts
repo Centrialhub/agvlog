@@ -104,7 +104,7 @@ describe('cteBuilder — novos blocos', () => {
     expect(p.seguro.nApol).toBe('2798202301065400079');
     expect(p.composicaoFrete.freight_weight).toBe(8.49);
     expect(p.icms.aliquota).toBe(18);
-    expect(p.cbsIbs.cbs_aliquota).toBe(0.9);
+    expect((p as any).cbsIbs.cbs_aliquota).toBe(0.9);
     expect(p.mercadoria.content).toBe('CONFORME NF');
   });
 
@@ -314,7 +314,7 @@ describe('cteBuilder — campos aceitos pela API v1 do Hub', () => {
   it('envia CFOP, dhEmi, inicio/fim, mercadoria e aliases de ICMS/valores', () => {
     const r = buildCtePayload(
       baseInput({
-        origin: { state: 'SP', city: 'SAO PAULO', city_ibge: '3550308' },
+        emitter: { id: 'em1', cnpj: '18666510000168', name: 'LIRA', environment: 'sandbox', address: { state: 'SP', city: 'SAO PAULO', city_ibge: '3550308' } },
         cfop: '6352',
         issueDate: '2026-07-31',
         series: '1',
