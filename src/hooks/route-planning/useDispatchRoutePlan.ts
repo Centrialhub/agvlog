@@ -40,15 +40,13 @@ export function useDispatchRoutePlan() {
           document_ids: s.fiscal_document_ids, // Mapped to document_ids for new RPC
         }));
 
-    const { data, error } = await supabase.rpc('plan_dispatch_start_trip_v1', {
+    const { data, error } = await supabase.rpc('plan_dispatch_trip_v2', {
       p_tenant_id: currentTenant.id,
       p_driver_id: payload.driver_id,
       p_vehicle_id: payload.vehicle_id,
       p_load_ids: payload.load_ids,
       p_stops: stops,
-      p_planned_start_at: payload.planned_start_at,
       p_route_name: payload.route_name,
-      p_start_now: false, // Planning by default
     });
 
     if (error) throw new Error(error.message || String(error));
