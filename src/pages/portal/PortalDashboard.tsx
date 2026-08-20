@@ -19,9 +19,9 @@ const fmtDateTime = (d?: string | null) => (d ? new Date(d).toLocaleString('pt-B
 
 export default function PortalDashboard() {
   const { selectedClientId, clients } = usePortalClientScope();
-  const { data: summary, isLoading } = usePortalSummary({ clientId: selectedClientId });
-  const { data: upcoming = [], isLoading: loadingUpcoming } = usePortalUpcomingDeliveries({ clientId: selectedClientId });
-  const { data: alerts = [], isLoading: loadingAlerts } = usePortalAlerts({ clientId: selectedClientId });
+  const { data: summary, isLoading } = usePortalSummary();
+  const { data: upcoming = [], isLoading: loadingUpcoming } = usePortalUpcomingDeliveries();
+  const { data: alerts = [], isLoading: loadingAlerts } = usePortalAlerts();
 
   const contextDescription = clients.length > 0
     ? 'Acompanhe suas mercadorias e documentos em tempo real.'
