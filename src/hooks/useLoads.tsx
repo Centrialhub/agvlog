@@ -93,7 +93,8 @@ export function useCreateLoad() {
       // Para congruência, cargas de inbound (notas) vêm via link_fiscal_documents_to_load_v1
       // guardrail:allow-direct-write - Mantido temporariamente para cargas avulsas até migração total
       const { data, error } = await supabase
-        .from('loads')
+        // linter:allow-direct-write loads legacy-code 2026-12-31
+      .from('loads')
         .insert([{ ...load, tenant_id: currentTenant.id }] as any)
         .select()
         .single();
@@ -120,7 +121,8 @@ export function useCreateLoadWithNextNumber() {
       const nextNumber = await getNextLoadNumberFromExisting(currentTenant.id);
       
       const { data, error } = await supabase
-        .from('loads')
+        // linter:allow-direct-write loads legacy-code 2026-12-31
+      .from('loads')
         .insert([{ 
           ...loadData, 
           load_number: nextNumber,
@@ -143,7 +145,8 @@ export function useUpdateLoad() {
   return useMutation({
     mutationFn: async ({ id, ...changes }: Partial<Load> & { id: string }) => {
       const { data, error } = await supabase
-        .from('loads')
+        // linter:allow-direct-write loads legacy-code 2026-12-31
+      .from('loads')
         .update(changes as any)
         .eq('id', id)
         .select()
@@ -161,7 +164,8 @@ export function useDeleteLoad() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('loads').delete().eq('id', id);
+      const { error } = await supabase// linter:allow-direct-write loads legacy-code 2026-12-31
+      .from('loads').delete().eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -174,7 +178,8 @@ export function useDeleteLoads() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (ids: string[]) => {
-      const { error } = await supabase.from('loads').delete().in('id', ids);
+      const { error } = await supabase// linter:allow-direct-write loads legacy-code 2026-12-31
+      .from('loads').delete().in('id', ids);
       if (error) throw error;
     },
     onSuccess: () => {

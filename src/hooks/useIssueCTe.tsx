@@ -73,7 +73,8 @@ export function useIssueCTe() {
 
       // guardrail:allow-direct-write
       const { data: inserted, error: insErr } = await supabase
-        .from('fiscal_documents')
+        // linter:allow-direct-write fiscal_documents legacy-code 2026-12-31
+      .from('fiscal_documents')
         .insert({
           tenant_id: currentTenant.id,
           created_by: user?.id,
@@ -136,7 +137,8 @@ export function useIssueCTe() {
         console.error(`[useIssueCTe] Erro na transmissão:`, err);
         // Erro de invocação — deixa como rejected para o operador ver
         await supabase
-          .from('fiscal_documents')
+          // linter:allow-direct-write fiscal_documents legacy-code 2026-12-31
+      .from('fiscal_documents')
           .update({
             status: 'rejected',
             sefaz_status: 'error',
@@ -164,7 +166,8 @@ export function useIssueCTe() {
       };
       for (const k of Object.keys(update)) if (update[k] == null) delete update[k];
 
-      await supabase.from('fiscal_documents').update(update as any).eq('id', inserted.id);
+      await supabase// linter:allow-direct-write fiscal_documents legacy-code 2026-12-31
+      .from('fiscal_documents').update(update as any).eq('id', inserted.id);
 
       // Marca as NFs de entrada agrupadas neste CT-e para que sumam da tela de
       // Faturamento (CT-e Hub) e evitem dupla emissão. Só marcamos se a
@@ -172,7 +175,8 @@ export function useIssueCTe() {
       if (success && input.fiscal_document_ids?.length) {
         try {
           await supabase
-            .from('fiscal_documents')
+            // linter:allow-direct-write fiscal_documents legacy-code 2026-12-31
+      .from('fiscal_documents')
             .update({
               cte_emitted_at: new Date().toISOString(),
               cte_emitted_outbound_id: inserted.id,
@@ -187,7 +191,8 @@ export function useIssueCTe() {
         // para que as notas voltem imediatamente ao pool de faturamento.
         try {
           await supabase
-            .from('fiscal_documents')
+            // linter:allow-direct-write fiscal_documents legacy-code 2026-12-31
+      .from('fiscal_documents')
             .update({
               cte_emitted_at: null,
               cte_emitted_outbound_id: null,
@@ -217,7 +222,8 @@ export function useSyncCTe() {
   return useMutation({
     mutationFn: async (fiscalDocumentId: string) => {
       const { data: doc } = await supabase
-        .from('fiscal_documents')
+        // linter:allow-direct-write fiscal_documents legacy-code 2026-12-31
+      .from('fiscal_documents')
         .select('id, hub_document_id, emission_id')
         .eq('id', fiscalDocumentId)
         .maybeSingle();
@@ -237,7 +243,8 @@ export function useSyncCTe() {
       };
       for (const k of Object.keys(update)) if (update[k] === undefined) delete update[k];
       if (Object.keys(update).length) {
-        await supabase.from('fiscal_documents').update(update as any).eq('id', fiscalDocumentId);
+        await supabase// linter:allow-direct-write fiscal_documents legacy-code 2026-12-31
+      .from('fiscal_documents').update(update as any).eq('id', fiscalDocumentId);
       }
       return { success, hub: res };
     },
@@ -256,7 +263,8 @@ export function useCancelCTe() {
         throw new Error('Justificativa deve ter no mínimo 15 caracteres.');
       }
       const { data: doc } = await supabase
-        .from('fiscal_documents')
+        // linter:allow-direct-write fiscal_documents legacy-code 2026-12-31
+      .from('fiscal_documents')
         .select('id, hub_document_id, emission_id')
         .eq('id', args.fiscalDocumentId)
         .maybeSingle();
@@ -280,7 +288,8 @@ export function useCancelCTe() {
         
         // Atualiza sefaz_message para que o usuário veja o motivo da rejeição no monitor
         await supabase
-          .from('fiscal_documents')
+          // linter:allow-direct-write fiscal_documents legacy-code 2026-12-31
+      .from('fiscal_documents')
           .update({
             sefaz_message: `Rejeição cancelamento: ${msg}`,
             sefaz_status: 'authorized' // Reverte para autorizado se o cancelamento falhar, permitindo nova tentativa
@@ -315,14 +324,16 @@ export function useResendCte() {
     mutationFn: async (id: string) => {
       // Tenta atualizar em fiscal_documents primeiro (documentos reais)
       const { data: realDoc } = await supabase
-        .from('fiscal_documents')
+        // linter:allow-direct-write fiscal_documents legacy-code 2026-12-31
+      .from('fiscal_documents')
         .select('id')
         .eq('id', id)
         .maybeSingle();
 
       if (realDoc) {
         const { error } = await supabase
-          .from('fiscal_documents')
+          // linter:allow-direct-write fiscal_documents legacy-code 2026-12-31
+      .from('fiscal_documents')
           .update({
             status: 'transmitting',
             sefaz_status: 'pending',
