@@ -41,7 +41,7 @@ const ProductivityReports = lazy(() => import("@/pages/ProductivityReports"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const ExpenseApproval = lazy(() => import("@/pages/ExpenseApproval"));
 const TeamManagement = lazy(() => import("@/pages/TeamManagement"));
-const DataAudit = lazy(() => import("@/pages/DataAudit"));
+const DataQualityCenter = lazy(() => import("@/pages/DataQualityCenter"));
 const FreightHub = lazy(() => import("@/pages/FreightHub"));
 const PortalLayout = lazy(() => import("@/components/portal/PortalLayout"));
 const PortalDashboard = lazy(() => import("@/pages/portal/PortalDashboard"));
