@@ -74,8 +74,6 @@ export default function DriverHome() {
   }, [driver?.id, currentTenant?.id, queryClient]);
 
   const loading = driverLoading || workspaceLoading;
-
-  const loading = driverLoading || tripsLoading || loadsLoading;
   
   const tripsToShow = activeTrips;
 
