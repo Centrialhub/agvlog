@@ -105,7 +105,7 @@ export default function DriverHome() {
               </span>
             </div>
             {!isSyncing && !isOffline && (
-              <Button size="xs" variant="ghost" onClick={() => syncAll()} className="text-amber-800 hover:bg-amber-100 h-7 text-[10px]">
+              <Button size="sm" variant="ghost" onClick={() => syncAll()} className="text-amber-800 hover:bg-amber-100 h-7 text-[10px]">
                 Sincronizar agora
               </Button>
             )}
