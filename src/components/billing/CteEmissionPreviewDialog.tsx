@@ -686,10 +686,31 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     (activeCteCred?.environment as any) === 'production' ? 'production' : 'sandbox';
 
   const validation = useMemo(() => {
-    if (!active) return { ok: false, missing: [] as string[], warnings: [] as string[] };
-    const r = buildCtePayload(toBuildInput(active, emitterForActive, activeEnvironment, clients));
-    return { ok: r.ok, missing: r.missing, warnings: r.warnings };
-  }, [active, emitterForActive, activeEnvironment, clients]);
+    if (!active) return { ok: false, missing: [] as string[], warnings: [] as string[], consistencyError: false };
+    const em = emitters.find((e: any) => e.id === active.emitterId) || defaultEmitter;
+    const input = toBuildInput(active, em, activeEnvironment, clients);
+    const r = buildCtePayload(input);
+    
+    // Verificação de consistência Builder vs UI (especialmente para Simples Nacional)
+    const payloadIcms = (r.payload as any)?.icms || {};
+    const regime = (em as any)?.regime_tributario;
+    const isSimples = regime === 'simples' || regime === 'mei';
+    
+    // Se for Simples Nacional, o builder sempre gera 0. A UI deve refletir isso.
+    const hasMismatch = isSimples && (
+      active.icmsAliquota !== 0 || 
+      active.icmsBase !== 0 || 
+      active.icmsValor !== 0 ||
+      (payloadIcms.vICMS !== 0 && payloadIcms.vICMS !== undefined)
+    );
+
+    return { 
+      ok: r.ok && !hasMismatch, 
+      missing: r.missing, 
+      warnings: r.warnings,
+      consistencyError: hasMismatch
+    };
+  }, [active, emitters, defaultEmitter, activeEnvironment, clients]);
 
   const allValid = items.every((it) => {
     const em = emitters.find((e: any) => e.id === it.emitterId) || defaultEmitter;
