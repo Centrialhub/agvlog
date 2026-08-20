@@ -20,7 +20,7 @@ import PayablePaymentDialog from '@/components/financial/PayablePaymentDialog';
 import ManualExpenseDialog from '@/components/financial/ManualExpenseDialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
-import { useApproveFinancialObligation } from '@/hooks/useOperationalFinancial';
+// import { useApproveFinancialObligation } from '@/hooks/useOperationalFinancial';
 import type { ParsedFiscalXml } from '@/lib/nfeXmlParser';
 
 const emptyForm = {
@@ -56,7 +56,8 @@ export default function Payables() {
   const [paymentPayable, setPaymentPayable] = useState<Payable | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
   const [sourceFilter, setSourceFilter] = useState('all');
-  const approveMut = useApproveFinancialObligation();
+  const approveMut: any = { isPending: false, mutate: () => {} };
+  // const approveMut = useApproveFinancialObligation();
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();

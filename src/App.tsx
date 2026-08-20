@@ -41,7 +41,7 @@ const ProductivityReports = lazy(() => import("@/pages/ProductivityReports"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const ExpenseApproval = lazy(() => import("@/pages/ExpenseApproval"));
 const TeamManagement = lazy(() => import("@/pages/TeamManagement"));
-const DataQualityCenter = lazy(() => import("@/pages/DataQualityCenter"));
+const DataAudit = lazy(() => import("@/pages/DataAudit"));
 const FreightHub = lazy(() => import("@/pages/FreightHub"));
 const PortalLayout = lazy(() => import("@/components/portal/PortalLayout"));
 const PortalDashboard = lazy(() => import("@/pages/portal/PortalDashboard"));
@@ -60,7 +60,7 @@ const Financial = lazy(() => import("@/pages/Financial"));
 const DriverSettlements = lazy(() => import("@/pages/DriverSettlements"));
 const BankReconciliation = lazy(() => import("@/pages/BankReconciliation"));
 const Payables = lazy(() => import("@/pages/Payables"));
-const Ledger = lazy(() => import("@/pages/financial/Ledger"));
+// const Ledger = lazy(() => import("@/pages/financial/Ledger"));
 const ClientInvoices = lazy(() => import("@/pages/ClientInvoices"));
 const BillingEdi = lazy(() => import("@/pages/BillingEdi"));
 const OperationalRoutesPage = lazy(() => import("@/pages/OperationalRoutesPage"));
@@ -92,7 +92,7 @@ const OccurrenceReturnSheet = lazy(() => import("@/pages/OccurrenceReturnSheet")
 const PalletReturns = lazy(() => import("@/pages/PalletReturns"));
 const MerchandiseShortages = lazy(() => import("@/pages/MerchandiseShortages"));
 const CostCenters = lazy(() => import("@/pages/CostCenters"));
-const MdfeProvisional = lazy(() => import("@/pages/MdfeProvisional"));
+// const MdfeProvisional = lazy(() => import("@/pages/MdfeProvisional"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
 // Driver pages
@@ -291,7 +291,7 @@ const App = () => (
             <Route path="/expense-approval" element={<ProtectedRoute><ExpenseApproval /></ProtectedRoute>} />
             <Route path="/integration-health" element={<ProtectedRoute><IntegrationHealth /></ProtectedRoute>} />
             <Route path="/team" element={<ProtectedRoute><TeamManagement /></ProtectedRoute>} />
-            <Route path="/data-quality" element={<ProtectedRoute><DataQualityCenter /></ProtectedRoute>} />
+            <Route path="/data-quality" element={<ProtectedRoute><DataAudit /></ProtectedRoute>} />
             <Route path="/regions" element={<ProtectedRoute><FreightHub /></ProtectedRoute>} />
             <Route path="/freight" element={<ProtectedRoute><FreightHub /></ProtectedRoute>} />
             <Route path="/route-planning" element={<ProtectedRoute><RoutePlanning /></ProtectedRoute>} />
@@ -301,7 +301,7 @@ const App = () => (
             <Route path="/cost-centers" element={<ProtectedRoute><CostCenters /></ProtectedRoute>} />
             <Route path="/bank-reconciliation" element={<ProtectedRoute><BankReconciliation /></ProtectedRoute>} />
             <Route path="/payables" element={<ProtectedRoute><Payables /></ProtectedRoute>} />
-            <Route path="/ledger" element={<ProtectedRoute><Ledger /></ProtectedRoute>} />
+            {/* <Route path="/ledger" element={<ProtectedRoute><Ledger /></ProtectedRoute>} /> */}
             <Route path="/client-invoices" element={<ProtectedRoute><ClientInvoices /></ProtectedRoute>} />
             <Route path="/billing-edi" element={<ProtectedRoute><BillingEdi /></ProtectedRoute>} />
             <Route path="/operational-routes" element={<ProtectedRoute><OperationalRoutesPage /></ProtectedRoute>} />
@@ -323,7 +323,7 @@ const App = () => (
             <Route path="/ort-management" element={<ProtectedRoute><OrtManagement /></ProtectedRoute>} />
             <Route path="/product-traceability" element={<ProtectedRoute><ProductTraceability /></ProtectedRoute>} />
             <Route path="/product-history" element={<ProtectedRoute><ProductHistory /></ProtectedRoute>} />
-            <Route path="/mdfe-provisional" element={<ProtectedRoute><MdfeProvisional /></ProtectedRoute>} />
+            {/* <Route path="/mdfe-provisional" element={<ProtectedRoute><MdfeProvisional /></ProtectedRoute>} /> */}
             <Route path="/imported-notes-summary" element={<ProtectedRoute><ImportedNotesSummary /></ProtectedRoute>} />
             <Route path="/load-control" element={<ProtectedRoute><LoadControl /></ProtectedRoute>} />
             <Route path="/closing-reports" element={<ProtectedRoute><ClosingReports /></ProtectedRoute>} />
