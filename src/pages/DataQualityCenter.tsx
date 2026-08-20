@@ -99,11 +99,12 @@ function RepairHistoryDialog({ tenantId }: { tenantId: string }) {
                   onClick={() => setSelectedBatch(b)}
                 >
                   <div className="flex justify-between items-start mb-1">
-                    <Badge variant={b.status === 'executed' ? 'success' : b.status === 'approved' ? 'default' : 'outline'}>
+                    <Badge variant={b.status === 'executed' ? 'secondary' : b.status === 'approved' ? 'default' : 'outline'}>
                       {b.status}
                     </Badge>
                     <span className="text-[10px] text-muted-foreground">{format(new Date(b.created_at), 'dd/MM HH:mm')}</span>
                   </div>
+
                   <div className="text-sm font-medium truncate">{b.description}</div>
                   <div className="text-[10px] text-muted-foreground font-mono">{b.id.substring(0, 8)}</div>
                 </div>
