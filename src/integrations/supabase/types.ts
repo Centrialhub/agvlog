@@ -14620,6 +14620,7 @@ export type Database = {
       vw_operational_workspace: {
         Row: {
           actual_start_at: string | null
+          driver_id: string | null
           driver_name: string | null
           loads: Json | null
           planned_start_at: string | null
@@ -14628,14 +14629,29 @@ export type Database = {
           trip_id: string | null
           trip_status: string | null
           updated_at: string | null
+          vehicle_id: string | null
           vehicle_plate: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "dispatch_trips_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "dispatch_trips_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dispatch_trips_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
             referencedColumns: ["id"]
           },
         ]
