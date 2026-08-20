@@ -367,6 +367,12 @@ function buildIcmsBlock(
   // REGRA APLICADA: Emissores Simples Nacional (CRT=1) não tributam ICMS destacado no CT-e.
   const isSimplesForced = isSimples;
   const isento = isSimplesForced || icms.isento === true || cst === '40' || cst === '41' || cst === '51';
+  
+  // VERIFICAÇÃO DE INTEGRIDADE: Garante que nada escape do builder com ICMS > 0 para Simples Nacional
+  if (isSimples && (icms.aliquota !== 0 || icms.base !== 0 || icms.valor !== 0)) {
+    // Registramos que a regra foi aplicada sobre dados inconsistentes vindos da UI
+    console.warn(`[cteBuilder] Consistência: Zerando ICMS forçadamente para Simples Nacional (CST ${cst})`);
+  }
   const aliq = isento ? 0 : Number(icms.aliquota || 0);
   const embutido = icms.embutido === true;
   const { base, valor } = computeIcmsAmounts({

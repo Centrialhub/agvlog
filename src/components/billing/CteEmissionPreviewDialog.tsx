@@ -696,13 +696,21 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     const regime = (em as any)?.regime_tributario;
     const isSimples = regime === 'simples' || regime === 'mei';
     
-    // Se for Simples Nacional, o builder sempre gera 0. A UI deve refletir isso.
+    // Builder logic check: se for Simples Nacional, o builder DEVE ter gerado 0.
+    // UI logic check: a UI também deve estar exibindo 0.
     const hasMismatch = isSimples && (
       active.icmsAliquota !== 0 || 
       active.icmsBase !== 0 || 
       active.icmsValor !== 0 ||
       (payloadIcms.vICMS !== 0 && payloadIcms.vICMS !== undefined)
     );
+
+    if (hasMismatch) {
+      console.error(`[CteConsistencyCheck] Mismatch detectado para ${active.remitterName}:`, {
+        ui: { aliq: active.icmsAliquota, base: active.icmsBase, valor: active.icmsValor },
+        builder: { vICMS: payloadIcms.vICMS }
+      });
+    }
 
     return { 
       ok: r.ok && !hasMismatch, 
