@@ -686,14 +686,50 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     (activeCteCred?.environment as any) === 'production' ? 'production' : 'sandbox';
 
   const validation = useMemo(() => {
-    if (!active) return { ok: false, missing: [] as string[], warnings: [] as string[] };
-    const r = buildCtePayload(toBuildInput(active, emitterForActive, activeEnvironment, clients));
-    return { ok: r.ok, missing: r.missing, warnings: r.warnings };
-  }, [active, emitterForActive, activeEnvironment, clients]);
+    if (!active) return { ok: false, missing: [] as string[], warnings: [] as string[], consistencyError: false };
+    const em = emitters.find((e: any) => e.id === active.emitterId) || defaultEmitter;
+    const input = toBuildInput(active, em, activeEnvironment, clients);
+    const r = buildCtePayload(input);
+    
+    // Verificação de consistência Builder vs UI (especialmente para Simples Nacional)
+    const payloadIcms = (r.payload as any)?.icms || {};
+    const regime = (em as any)?.regime_tributario;
+    const isSimples = regime === 'simples' || regime === 'mei';
+    
+    // Builder logic check: se for Simples Nacional, o builder DEVE ter gerado 0.
+    // UI logic check: a UI também deve estar exibindo 0.
+    const hasMismatch = isSimples && (
+      active.icmsAliquota !== 0 || 
+      active.icmsBase !== 0 || 
+      active.icmsValor !== 0 ||
+      (payloadIcms.vICMS !== 0 && payloadIcms.vICMS !== undefined)
+    );
+
+    if (hasMismatch) {
+      console.error(`[CteConsistencyCheck] Mismatch detectado para ${active.remitterName}:`, {
+        ui: { aliq: active.icmsAliquota, base: active.icmsBase, valor: active.icmsValor },
+        builder: { vICMS: payloadIcms.vICMS }
+      });
+    }
+
+    return { 
+      ok: r.ok && !hasMismatch, 
+      missing: r.missing, 
+      warnings: r.warnings,
+      consistencyError: hasMismatch
+    };
+  }, [active, emitters, defaultEmitter, activeEnvironment, clients]);
 
   const allValid = items.every((it) => {
     const em = emitters.find((e: any) => e.id === it.emitterId) || defaultEmitter;
-    return buildCtePayload(toBuildInput(it, em, 'sandbox', clients)).ok;
+    const input = toBuildInput(it, em, 'sandbox', clients);
+    const r = buildCtePayload(input);
+    
+    const regime = (em as any)?.regime_tributario;
+    const isSimples = regime === 'simples' || regime === 'mei';
+    const hasMismatch = isSimples && (it.icmsAliquota !== 0 || it.icmsBase !== 0 || it.icmsValor !== 0);
+    
+    return r.ok && !hasMismatch;
   });
 
   const insuranceErrors = useMemo(
@@ -771,6 +807,13 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
         const task = (async () => {
           try {
             const em = emitters.find((e: any) => e.id === it.emitterId) || defaultEmitter;
+            
+            // Segurança final: impede transmissão se a regra de consistência for violada
+            const regime = (em as any)?.regime_tributario;
+            const isSimples = regime === 'simples' || regime === 'mei';
+            if (isSimples && (it.icmsAliquota !== 0 || it.icmsBase !== 0 || it.icmsValor !== 0)) {
+               throw new Error('Bloqueio de segurança: ICMS não zerado para Simples Nacional.');
+            }
             
             // Resolve ambiente (cacheado)
             if (!credsCache[it.emitterId]) {
@@ -925,7 +968,10 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
             <div className="space-y-1">
               {items.map((it, i) => {
                 const em = emitters.find((e: any) => e.id === it.emitterId) || defaultEmitter;
-                const ok = buildCtePayload(toBuildInput(it, em, 'sandbox', clients)).ok;
+                const regime = (em as any)?.regime_tributario;
+                const isSimples = regime === 'simples' || regime === 'mei';
+                const hasMismatch = isSimples && (it.icmsAliquota !== 0 || it.icmsBase !== 0 || it.icmsValor !== 0);
+                const ok = buildCtePayload(toBuildInput(it, em, 'sandbox', clients)).ok && !hasMismatch;
                 return (
                   <button
                     key={it.key}
@@ -964,7 +1010,16 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
 
           {/* Editor do CT-e ativo */}
           <div className="max-h-[540px] overflow-y-auto pr-1">
-            {!validation.ok && (
+            {validation.consistencyError && (
+              <Alert variant="destructive" className="mb-3">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>Erro de consistência (Regra Simples Nacional):</strong> O ICMS não está zerado para este emitente. 
+                  Clique em "Recalcular" na aba Fiscal ou corrija manualmente para prosseguir.
+                </AlertDescription>
+              </Alert>
+            )}
+            {!validation.ok && !validation.consistencyError && (
               <Alert variant="destructive" className="mb-3">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
