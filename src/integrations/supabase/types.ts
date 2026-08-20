@@ -5493,6 +5493,7 @@ export type Database = {
           updated_at: string
           updated_by: string | null
           user_id: string | null
+          version: number
         }
         Insert: {
           address?: Json | null
@@ -5523,6 +5524,7 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
           user_id?: string | null
+          version?: number
         }
         Update: {
           address?: Json | null
@@ -5553,6 +5555,7 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
           user_id?: string | null
+          version?: number
         }
         Relationships: [
           {
@@ -15352,6 +15355,10 @@ export type Database = {
         }
         Returns: string
       }
+      create_employee_v1: {
+        Args: { p_tenant_id: string; p_values: Json }
+        Returns: string
+      }
       create_ledger_entry_v1: {
         Args: {
           _amount: number
@@ -15493,6 +15500,10 @@ export type Database = {
       current_driver_id: { Args: { _tenant_id: string }; Returns: string }
       delete_driver_settlement: {
         Args: { _reason: string; _settlement_id: string }
+        Returns: undefined
+      }
+      delete_employee_v1: {
+        Args: { p_employee_id: string; p_tenant_id: string }
         Returns: undefined
       }
       delete_load_if_empty: { Args: { v_load_id: string }; Returns: undefined }
@@ -16761,6 +16772,15 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      update_employee_v1: {
+        Args: {
+          p_employee_id: string
+          p_expected_version?: number
+          p_tenant_id: string
+          p_values: Json
+        }
+        Returns: undefined
       }
       update_merchandise_shortage_status: {
         Args: { _case_id: string; _payload?: Json; _status: string }

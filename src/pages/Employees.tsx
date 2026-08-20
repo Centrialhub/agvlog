@@ -87,7 +87,7 @@ export default function Employees() {
     payload.name = form.name;
     payload.status = form.status;
     try {
-      if (editing) await updateEmployee.mutateAsync({ id: editing.id, ...payload });
+      if (editing) await updateEmployee.mutateAsync({ id: editing.id, version: editing.version, ...payload });
       else await createEmployee.mutateAsync(payload);
       setDialogOpen(false);
       toast.success(editing ? 'Funcionário atualizado' : 'Funcionário cadastrado');
@@ -102,7 +102,7 @@ export default function Employees() {
   };
 
   return (
-    <FeatureFlagGate feature="LOGISTICS_CONSOLIDATION_V2">
+    <FeatureFlagGate feature="HR_CORE">
     <div className="space-y-4">
 
       <div className="flex items-center justify-between">
