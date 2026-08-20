@@ -60,6 +60,7 @@ const Financial = lazy(() => import("@/pages/Financial"));
 const DriverSettlements = lazy(() => import("@/pages/DriverSettlements"));
 const BankReconciliation = lazy(() => import("@/pages/BankReconciliation"));
 const Payables = lazy(() => import("@/pages/Payables"));
+const Ledger = lazy(() => import("@/pages/financial/Ledger"));
 const ClientInvoices = lazy(() => import("@/pages/ClientInvoices"));
 const BillingEdi = lazy(() => import("@/pages/BillingEdi"));
 const OperationalRoutesPage = lazy(() => import("@/pages/OperationalRoutesPage"));
