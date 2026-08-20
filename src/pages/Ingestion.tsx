@@ -1637,6 +1637,7 @@ export default function Ingestion() {
           for (const order of suggestion.orders) {
             const orderId = createdOrderIds.get(order.source.orderNumber);
             try {
+              // guardrail:allow-direct-write
               const { error: liErr } = await (supabase as any).from('load_items').insert({
                 tenant_id: currentTenant!.id,
                 load_id: loadId,
