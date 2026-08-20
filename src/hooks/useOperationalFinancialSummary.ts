@@ -29,7 +29,7 @@ export function useOperationalFinancialSummary(periodStart: string, periodEnd: s
       });
       
       if (error) throw error;
-      return data as FinancialKPIs;
+      return data as unknown as FinancialKPIs;
     }
   });
 }
