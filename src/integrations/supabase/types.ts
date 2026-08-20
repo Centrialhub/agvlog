@@ -15280,6 +15280,10 @@ export type Database = {
         Args: { _client_id: string; _limit?: number; _tenant_id: string }
         Returns: Json
       }
+      get_next_load_number_v1: {
+        Args: { p_tenant_id: string }
+        Returns: string
+      }
       get_open_trip_alerts: {
         Args: { _tenant_id: string }
         Returns: {
