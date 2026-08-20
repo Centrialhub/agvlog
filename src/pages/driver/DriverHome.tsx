@@ -3,22 +3,20 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useCurrentDriver } from '@/hooks/useCurrentDriver';
 import { useDriverWorkspace, useDriverExecution } from '@/hooks/useDriverWorkspace';
+import { useDriverSync } from '@/hooks/useDriverSync';
 import { useChecklistStatus } from '@/hooks/useChecklistStatus';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Truck, MapPin, Package, Clock, ArrowRight, ClipboardCheck, AlertTriangle, Receipt, FileText, Map } from 'lucide-react';
+import { Truck, MapPin, Package, Clock, ArrowRight, ClipboardCheck, AlertTriangle, Receipt, FileText, Map, RefreshCcw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 import NoLoadsHelp from '@/components/driver/NoLoadsHelp';
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import DriverDeliveryMap, { DeliveryPoint } from '@/components/driver/DriverDeliveryMap';
 import DriverLoadNotes from '@/components/driver/DriverLoadNotes';
-import { TRIP_ACTIVE_STATUSES, tripStatusLabel, LOAD_ACTIVE_STATUSES } from '@/lib/status';
-import { LOAD_STATUS_LABELS, TERMINAL_LOAD_STATUSES } from '@/lib/status/loadStatus';
-
-
-
+import { tripStatusLabel } from '@/lib/status';
+import { LOAD_STATUS_LABELS } from '@/lib/status/loadStatus';
 
 export default function DriverHome() {
   const { currentTenant } = useTenant();
@@ -34,10 +32,8 @@ export default function DriverHome() {
 
   const activeTrips = workspace?.has_active_trip ? [workspace.trip] : [];
   const tripsLoading = workspaceLoading;
-  const loadsLoading = workspaceLoading;
   const standaloneLoads = workspace?.has_active_trip ? [] : (workspace?.loads || []);
 
-  // Paradas + posição do veículo para o mapa quando houver viagem real.
   const primaryTrip: any = activeTrips[0];
   const realStops = workspace?.stops || [];
 
@@ -55,8 +51,6 @@ export default function DriverHome() {
     enabled: !!primaryTrip?.vehicle_id,
   });
 
-  // Realtime subscription moved to useDriverWorkspace for simplified UI logic
-  // but keeping a manual invalidation trigger for UI consistency if needed
   useEffect(() => {
     if (!driver?.id) return;
     const channel = supabase
@@ -78,7 +72,6 @@ export default function DriverHome() {
   
   const tripsToShow = activeTrips;
 
-  // Constrói pontos reais do mapa a partir das paradas com lat/lng.
   const TERMINAL_STOP_STATUSES = new Set(['completed', 'delivered', 'refused', 'returned', 'failed', 'partial_delivery']);
   const realMapStops: DeliveryPoint[] = (realStops as any[])
     .filter((s) => s.latitude != null && s.longitude != null)
@@ -101,12 +94,29 @@ export default function DriverHome() {
   const showRealMap = realMapStops.length > 0;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-20">
+      {outbox.length > 0 && (navigator.onLine || outbox.some(i => i.attempts > 0)) && (
+        <Card className="bg-amber-50 border-amber-200">
+          <CardContent className="p-3 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-amber-800">
+              <RefreshCcw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+              <span className="text-xs font-medium">
+                {outbox.length} evento(s) aguardando sincronização
+              </span>
+            </div>
+            {!isSyncing && !isOffline && (
+              <Button size="xs" variant="ghost" onClick={() => syncAll()} className="text-amber-800 hover:bg-amber-100 h-7 text-[10px]">
+                Sincronizar agora
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       <div>
         <h1 className="text-lg font-bold">Olá, {driver?.name || 'Motorista'}</h1>
         <p className="text-sm text-muted-foreground">Comunicação com a Operação</p>
       </div>
-
 
       {!loading && (!driver || (!workspace?.has_active_trip && standaloneLoads.length === 0)) && (
         <NoLoadsHelp
@@ -209,12 +219,13 @@ export default function DriverHome() {
                 <Button
                   size="sm"
                   className="w-full"
+                  disabled={reportEvent.isPending}
                   onClick={async () => {
                     if (trip.status === 'planned') {
                       reportEvent.mutate({
                         tripId: trip.id,
                         eventType: 'trip_start',
-                        payload: { odometer: 0 }, // Should ideally prompt for this
+                        payload: { odometer: 0 },
                         idempotencyKey: `trip-start-${trip.id}`
                       });
                     }
@@ -238,8 +249,6 @@ export default function DriverHome() {
         </div>
       )}
 
-
-      {/* Delivery map com dados reais — só quando há paradas geolocalizadas na viagem. */}
       {showRealMap && (
         <Card>
           <CardContent className="p-3 space-y-3">
@@ -268,7 +277,6 @@ export default function DriverHome() {
         </Card>
       )}
 
-      {/* Checklist status banner */}
       {trip && !checklist.isLoading && (!checklist.preCompleted || !checklist.postCompleted) && (
         <Card
           className="border-warning/50 bg-warning/5 cursor-pointer hover:bg-warning/10 transition-colors"
@@ -289,7 +297,6 @@ export default function DriverHome() {
         </Card>
       )}
 
-      {/* Quick actions */}
       <div className="grid grid-cols-2 gap-3">
         <Card className="cursor-pointer hover:bg-accent/50 transition-colors" onClick={() => navigate('/driver/journey')}>
           <CardContent className="p-3 flex flex-col items-center gap-1.5">
