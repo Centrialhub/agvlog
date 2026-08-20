@@ -199,6 +199,11 @@ export default function Financial() {
   };
 
   // ── Computed KPIs ──
+  const { data: summaryKpis, isLoading: isSummaryLoading } = useOperationalFinancialSummary(
+    dateFrom || (period === 'all' ? '' : format(subDays(new Date(), period === '7d' ? 7 : period === '30d' ? 30 : 90), 'yyyy-MM-dd')),
+    dateTo || format(new Date(), 'yyyy-MM-dd')
+  );
+
   const kpis = useMemo(() => {
     let filteredDocs = billableDocs.filter((d: any) => filterByPeriod(d.issue_date || d.created_at));
     if (selectedClient !== 'all') filteredDocs = filteredDocs.filter((d: any) => d.client_id === selectedClient);
