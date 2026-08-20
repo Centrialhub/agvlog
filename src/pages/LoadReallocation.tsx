@@ -417,7 +417,8 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
 }
 
 export default function LoadReallocation() {
-  const { data: loads = [], isLoading } = useLoadsArray();
+  const { data: loadsData, isLoading } = useLoadsArray();
+  const loads = (loadsData as any) || [];
   const { data: vehicles = [] } = useVehicles();
   const updateLoad = useUpdateLoad();
   const deleteLoad = useDeleteLoad();
