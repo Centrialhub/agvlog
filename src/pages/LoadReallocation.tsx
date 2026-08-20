@@ -568,11 +568,11 @@ export default function LoadReallocation() {
     try {
       const tenantId = (sourceLoad as any)?.tenant_id || (targetLoad as any)?.tenant_id;
       if (!tenantId) throw new Error('Tenant ID não encontrado');
-      const { data, error } = await (supabase as any).rpc('move_load_items_between_loads', {
+      const { data, error } = await (supabase as any).rpc('move_load_items_v2', {
         _tenant_id: tenantId,
         _source_load_id: sourceLoadId,
         _target_load_id: targetLoadId,
-        _item_ids: itemIds,
+        _document_ids: itemIds.map(id => sourceItems.find(i => i.id === id)?.fiscal_document_id).filter(Boolean),
       });
       if (error) throw error;
       moved = (data && (data as any).moved) ?? itemIds.length;

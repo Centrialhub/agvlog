@@ -58,12 +58,12 @@ export function useLoadItems(loadId: string | undefined) {
     queryFn: async () => {
       if (!loadId) return [];
       const { data, error } = await (supabase as any)
-        .from('load_items')
-        .select('*, orders(order_number, clients(company_name)), fiscal_documents(invoice_number, value, remitter, remitter_cnpj, recipient, recipient_city, recipient_state)')
+        .from('vw_load_composition')
+        .select('*')
         .eq('load_id', loadId)
-        .order('created_at', { ascending: true });
+        .order('item_description', { ascending: true });
       if (error) throw error;
-      return (data || []) as LoadItem[];
+      return (data || []) as any[];
     },
     enabled: !!loadId,
   });
@@ -77,7 +77,7 @@ export function useCreateLoadItem() {
       if (!values.load_id) throw new Error('load_id obrigatório');
       // Vínculo com NF é exclusivamente via RPC oficial (sincroniza fiscal_documents.load_id + auditoria).
       if (values.fiscal_document_id) {
-        const { data, error } = await (supabase as any).rpc('assign_fiscal_documents_to_load', {
+        const { data, error } = await (supabase as any).rpc('link_fiscal_documents_to_load_v1', {
           _tenant_id: currentTenant!.id,
           _load_id: values.load_id,
           _document_ids: [values.fiscal_document_id],
@@ -142,7 +142,7 @@ export function useDeleteLoadItem() {
       if (fetchErr) throw fetchErr;
       if (!item) return;
       if (item.fiscal_document_id) {
-        const { error } = await (supabase as any).rpc('remove_fiscal_documents_from_load', {
+        const { error } = await (supabase as any).rpc('unlink_fiscal_documents_from_load_v1', {
           _tenant_id: currentTenant!.id,
           _load_id: item.load_id,
           _document_ids: [item.fiscal_document_id],
