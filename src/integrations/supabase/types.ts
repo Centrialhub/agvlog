@@ -3014,6 +3014,104 @@ export type Database = {
           },
         ]
       }
+      data_recovery_batches: {
+        Row: {
+          approved_by: string | null
+          created_at: string | null
+          created_by: string
+          dry_run_summary: Json | null
+          id: string
+          reason: string | null
+          recovery_type: string
+          status: Database["public"]["Enums"]["data_recovery_status"]
+          tenant_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          approved_by?: string | null
+          created_at?: string | null
+          created_by: string
+          dry_run_summary?: Json | null
+          id?: string
+          reason?: string | null
+          recovery_type: string
+          status?: Database["public"]["Enums"]["data_recovery_status"]
+          tenant_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          approved_by?: string | null
+          created_at?: string | null
+          created_by?: string
+          dry_run_summary?: Json | null
+          id?: string
+          reason?: string | null
+          recovery_type?: string
+          status?: Database["public"]["Enums"]["data_recovery_status"]
+          tenant_id?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      data_recovery_items: {
+        Row: {
+          batch_id: string
+          created_at: string | null
+          entity_id: string
+          entity_type: string
+          error_log: string | null
+          evidence_details: string | null
+          evidence_source: string | null
+          executed_at: string | null
+          id: string
+          proposed_action: string
+          result: string | null
+          snapshot_current: Json | null
+          snapshot_previous: Json | null
+          tenant_id: string
+        }
+        Insert: {
+          batch_id: string
+          created_at?: string | null
+          entity_id: string
+          entity_type: string
+          error_log?: string | null
+          evidence_details?: string | null
+          evidence_source?: string | null
+          executed_at?: string | null
+          id?: string
+          proposed_action: string
+          result?: string | null
+          snapshot_current?: Json | null
+          snapshot_previous?: Json | null
+          tenant_id: string
+        }
+        Update: {
+          batch_id?: string
+          created_at?: string | null
+          entity_id?: string
+          entity_type?: string
+          error_log?: string | null
+          evidence_details?: string | null
+          evidence_source?: string | null
+          executed_at?: string | null
+          id?: string
+          proposed_action?: string
+          result?: string | null
+          snapshot_current?: Json | null
+          snapshot_previous?: Json | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "data_recovery_items_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "data_recovery_batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       delivery_occurrence_items: {
         Row: {
           created_at: string
@@ -5879,6 +5977,57 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      fiscal_webhook_inbox: {
+        Row: {
+          attempt_count: number | null
+          created_at: string | null
+          delivery_id: string
+          emission_id: string | null
+          event_timestamp: string
+          event_type: string
+          id: string
+          last_error: string | null
+          next_retry_at: string | null
+          payload_hash: string | null
+          raw_payload: Json
+          status: string
+          tenant_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          attempt_count?: number | null
+          created_at?: string | null
+          delivery_id: string
+          emission_id?: string | null
+          event_timestamp: string
+          event_type: string
+          id?: string
+          last_error?: string | null
+          next_retry_at?: string | null
+          payload_hash?: string | null
+          raw_payload: Json
+          status?: string
+          tenant_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          attempt_count?: number | null
+          created_at?: string | null
+          delivery_id?: string
+          emission_id?: string | null
+          event_timestamp?: string
+          event_type?: string
+          id?: string
+          last_error?: string | null
+          next_retry_at?: string | null
+          payload_hash?: string | null
+          raw_payload?: Json
+          status?: string
+          tenant_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       freight_auto_rules: {
         Row: {
@@ -14481,6 +14630,14 @@ export type Database = {
           suggested_action: string
         }[]
       }
+      build_fiscal_documents_deleted_recovery_dry_run: {
+        Args: { _end_time: string; _start_time: string; _tenant_id?: string }
+        Returns: {
+          deleted_count: number
+          sample_ids: string[]
+          tenant_id: string
+        }[]
+      }
       cancel_client_invoice: {
         Args: { _invoice_id: string; _reason: string }
         Returns: undefined
@@ -15243,18 +15400,29 @@ export type Database = {
         Args: { _dispatch_trip_id: string; _reason: string; _tenant_id: string }
         Returns: undefined
       }
-      monitor_simples_nacional_icms_violations: {
-        Args: never
-        Returns: {
-          created_at: string
-          cte_number: string
-          emitter_name: string
-          fiscal_document_id: string
-          icms_aliquota: number
-          icms_base: number
-          icms_valor: number
-        }[]
-      }
+      monitor_simples_nacional_icms_violations:
+        | {
+            Args: never
+            Returns: {
+              created_at: string
+              cte_number: string
+              emitter_name: string
+              fiscal_document_id: string
+              icms_aliquota: number
+              icms_base: number
+              icms_valor: number
+            }[]
+          }
+        | {
+            Args: { _tenant_id: string }
+            Returns: {
+              cst: string
+              cte_number: string
+              document_id: string
+              emitter_name: string
+              icms_value: number
+            }[]
+          }
       move_load_items_between_loads: {
         Args: {
           _item_ids: string[]
@@ -15732,6 +15900,14 @@ export type Database = {
     }
     Enums: {
       app_role: "owner" | "admin" | "operator" | "client" | "driver"
+      data_recovery_status:
+        | "draft"
+        | "reviewed"
+        | "approved"
+        | "executing"
+        | "completed"
+        | "failed"
+        | "cancelled"
       operation_type:
         | "filial"
         | "armazenagem"
@@ -15878,6 +16054,15 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["owner", "admin", "operator", "client", "driver"],
+      data_recovery_status: [
+        "draft",
+        "reviewed",
+        "approved",
+        "executing",
+        "completed",
+        "failed",
+        "cancelled",
+      ],
       operation_type: [
         "filial",
         "armazenagem",
