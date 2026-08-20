@@ -20,6 +20,7 @@ import PayablePaymentDialog from '@/components/financial/PayablePaymentDialog';
 import ManualExpenseDialog from '@/components/financial/ManualExpenseDialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
+import { useApproveFinancialObligation } from '@/hooks/useOperationalFinancial';
 import type { ParsedFiscalXml } from '@/lib/nfeXmlParser';
 
 const emptyForm = {
@@ -55,6 +56,7 @@ export default function Payables() {
   const [paymentPayable, setPaymentPayable] = useState<Payable | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
   const [sourceFilter, setSourceFilter] = useState('all');
+  const approveMut = useApproveFinancialObligation();
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -330,7 +332,18 @@ export default function Payables() {
                   </TableCell>
                   <TableCell onClick={(e) => e.stopPropagation()}>
                     <div className="flex gap-1">
-                      {p.status !== 'paid' && p.status !== 'cancelled' && (
+                      {p.status === 'pending' && (
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-7 px-2 text-xs text-blue-600"
+                          disabled={approveMut.isPending}
+                          onClick={() => approveMut.mutate({ id: p.id })}
+                        >
+                          <CheckCircle className="h-3.5 w-3.5 mr-1" /> Aprovar
+                        </Button>
+                      )}
+                      {p.status !== 'paid' && p.status !== 'cancelled' && p.status !== 'pending' && (
                         <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-green-600" onClick={() => setPaymentPayable(p)}>
                           <DollarSign className="h-3.5 w-3.5 mr-1" /> Baixa
                         </Button>

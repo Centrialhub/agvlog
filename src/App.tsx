@@ -60,6 +60,7 @@ const Financial = lazy(() => import("@/pages/Financial"));
 const DriverSettlements = lazy(() => import("@/pages/DriverSettlements"));
 const BankReconciliation = lazy(() => import("@/pages/BankReconciliation"));
 const Payables = lazy(() => import("@/pages/Payables"));
+const Ledger = lazy(() => import("@/pages/financial/Ledger"));
 const ClientInvoices = lazy(() => import("@/pages/ClientInvoices"));
 const BillingEdi = lazy(() => import("@/pages/BillingEdi"));
 const OperationalRoutesPage = lazy(() => import("@/pages/OperationalRoutesPage"));
@@ -300,6 +301,7 @@ const App = () => (
             <Route path="/cost-centers" element={<ProtectedRoute><CostCenters /></ProtectedRoute>} />
             <Route path="/bank-reconciliation" element={<ProtectedRoute><BankReconciliation /></ProtectedRoute>} />
             <Route path="/payables" element={<ProtectedRoute><Payables /></ProtectedRoute>} />
+            <Route path="/ledger" element={<ProtectedRoute><Ledger /></ProtectedRoute>} />
             <Route path="/client-invoices" element={<ProtectedRoute><ClientInvoices /></ProtectedRoute>} />
             <Route path="/billing-edi" element={<ProtectedRoute><BillingEdi /></ProtectedRoute>} />
             <Route path="/operational-routes" element={<ProtectedRoute><OperationalRoutesPage /></ProtectedRoute>} />

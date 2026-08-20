@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useReceivables } from '@/hooks/useReceivables';
+import { useOperationalFinancialSummary } from '@/hooks/useOperationalFinancialSummary';
 import { useClients, useClientsArray } from '@/hooks/useClients';
 import { useCostCenters } from '@/hooks/useCostCenters';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -198,6 +199,11 @@ export default function Financial() {
   };
 
   // ── Computed KPIs ──
+  const { data: summaryKpis, isLoading: isSummaryLoading } = useOperationalFinancialSummary(
+    dateFrom || (period === 'all' ? '' : format(subDays(new Date(), period === '7d' ? 7 : period === '30d' ? 30 : 90), 'yyyy-MM-dd')),
+    dateTo || format(new Date(), 'yyyy-MM-dd')
+  );
+
   const kpis = useMemo(() => {
     let filteredDocs = billableDocs.filter((d: any) => filterByPeriod(d.issue_date || d.created_at));
     if (selectedClient !== 'all') filteredDocs = filteredDocs.filter((d: any) => d.client_id === selectedClient);
@@ -252,17 +258,31 @@ export default function Financial() {
     const balance = revenue - outflow;
 
     return {
-      nfeCount: nfes.length, cteCount: ctes.length,
-      totalNfeValue, totalCteValue, totalFreight,
-      nfseCount: filteredNfse.length, totalNfseValue,
+      nfeCount: nfes.length, 
+      cteCount: ctes.length,
+      totalNfeValue, 
+      totalCteValue, 
+      totalFreight,
+      nfseCount: filteredNfse.length, 
+      totalNfseValue,
       voidCount,
-      totalExpenses, pendingExpensesCount: pendingExpenses.length,
-      totalReceivable, pendingReceivable, paidReceivable, overdueReceivable,
-      totalMaintenance,
-      revenue, outflow, balance,
+      totalExpenses: summaryKpis?.totalExpenses ?? totalExpenses, 
+      pendingExpensesCount: pendingExpenses.length,
+      totalReceivable: summaryKpis?.totalReceivable ?? totalReceivable, 
+      pendingReceivable: summaryKpis?.pendingReceivable ?? pendingReceivable, 
+      paidReceivable: summaryKpis?.paidReceivable ?? paidReceivable, 
+      overdueReceivable: summaryKpis?.overdueReceivable ?? overdueReceivable,
+      totalMaintenance: summaryKpis?.totalMaintenance ?? totalMaintenance,
+      revenue: summaryKpis?.revenue ?? revenue, 
+      outflow: summaryKpis?.outflow ?? outflow, 
+      balance: summaryKpis?.balance ?? balance,
+      ledgerBalance: summaryKpis?.ledgerBalance ?? 0,
       receivablesCount: filteredReceivables.length,
     };
-  }, [billableDocs, voidDocs, billableNfse, voidNfse, expenses, receivables, maintenanceCosts, periodStart, periodEnd, selectedClient, docType, expenseCategory, selectedCostCenter]);
+  }, [
+    summaryKpis, billableDocs, voidDocs, billableNfse, voidNfse, expenses, receivables, 
+    maintenanceCosts, periodStart, periodEnd, selectedClient, docType, expenseCategory, selectedCostCenter
+  ]);
 
   // ── Chart: Revenue vs Expenses by day ──
   const revenueExpenseChart = useMemo(() => {
@@ -341,6 +361,9 @@ export default function Financial() {
           </Button>
           <Button variant="outline" size="sm" onClick={() => navigate('/driver-settlements')}>
             <Wallet className="h-4 w-4 mr-1" /> Acerto de Motoristas
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => navigate('/ledger')}>
+            <FileText className="h-4 w-4 mr-1" /> Razão Operacional
           </Button>
         </div>
       </div>
@@ -541,25 +564,21 @@ export default function Financial() {
           </CardContent>
         </Card>
 
-        <Card className={`relative overflow-hidden group hover:shadow-xl transition-all duration-300 ${kpis.overdueReceivable > 0 ? 'border-warning/30' : 'border-primary/20'}`}>
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/8 via-primary/4 to-transparent" />
-          <CardContent className="p-5 relative">
+        <Card className="relative overflow-hidden border-orange-500/20 group hover:shadow-xl transition-all duration-300">
+          <div className="absolute inset-0 bg-gradient-to-br from-orange-500/8 via-orange-500/4 to-transparent" />
+          <div className="absolute -top-8 -right-8 w-24 h-24 rounded-full bg-orange-500/5 group-hover:bg-orange-500/10 transition-colors" />
+          <CardContent className="p-5 relative cursor-pointer" onClick={() => navigate('/ledger')}>
             <div className="flex items-center justify-between mb-3">
-              <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                <CreditCard className="h-5 w-5 text-primary" />
+              <div className="h-10 w-10 rounded-xl bg-orange-500/10 flex items-center justify-center">
+                <Wallet className="h-5 w-5 text-orange-600" />
               </div>
-              {kpis.overdueReceivable > 0 && (
-                <span className="relative flex h-2.5 w-2.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-warning opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-warning" />
-                </span>
-              )}
+              <Badge variant="secondary" className="text-[10px] font-medium">razão</Badge>
             </div>
-            <p className="text-2xl font-extrabold text-foreground tracking-tight">{fmtCurrencyShort(kpis.pendingReceivable)}</p>
-            <p className="text-xs text-muted-foreground mt-1">A receber</p>
-            {kpis.overdueReceivable > 0 && (
-              <p className="text-[10px] text-destructive font-medium mt-2">{fmtCurrencyShort(kpis.overdueReceivable)} vencido</p>
-            )}
+            <p className="text-2xl font-extrabold text-foreground tracking-tight">{fmtCurrencyShort(kpis.ledgerBalance)}</p>
+            <div className="flex items-center justify-between mt-1">
+              <p className="text-xs text-muted-foreground">Saldo em Livro Razão</p>
+              <ArrowRight className="h-3 w-3 text-muted-foreground group-hover:translate-x-0.5 transition-transform" />
+            </div>
           </CardContent>
         </Card>
       </div>
