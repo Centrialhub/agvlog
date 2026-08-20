@@ -601,7 +601,7 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
   // Regra fixa da operação: início da prestação = endereço da transportadora
   // (emitente do CT-e); fim = endereço de destino da carga (destinatário/recebedor).
   // O trajeto início→fim é o que define UFIni/UFFim e, portanto, o CFOP.
-  const inicio = buildLocation(input.emitter?.address) || buildLocation(input.origin);
+  const inicio = buildLocation(input.origin) || buildLocation(input.emitter?.address);
   const fim =
     buildLocation(input.destination) ||
     buildLocation(input.recebedor?.address) ||
@@ -727,6 +727,8 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
       recebedor: serializeParty(input.recebedor),
 
       seguro: seguroCarga,
+      seguradora: seguroCarga, // Alias para compatibilidade com testes e API v1
+      seguros: seguroCarga ? [seguroCarga] : undefined,
       tomador: {
         tipo: TAKER_INDEX[input.takerRole],
         role: input.takerRole,
@@ -789,6 +791,13 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
         CFOP: cfop,
       },
       vPrest: {
+        vTPrest: totalServico,
+        vRec: totalServico,
+        Comp: componentes
+          .filter((component) => component.soma && component.valor > 0)
+          .map((component) => ({ xNome: component.nome, vComp: component.valor })),
+      },
+      valorPrestacao: {
         vTPrest: totalServico,
         vRec: totalServico,
         Comp: componentes

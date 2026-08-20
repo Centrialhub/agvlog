@@ -100,7 +100,7 @@ describe('partyRegistry', () => {
       recipientName: 'Supermercado Janaúba Ltda',
       recipientCnpj: '99888777000166',
       recipientIe: '7654321',
-      recipientCity: 'Janauba',
+      recipientCity: 'Janaúba',
       recipientState: 'MG',
       clientId: null,
     };
