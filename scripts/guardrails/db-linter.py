@@ -41,7 +41,7 @@ def check_security_definer():
         if any(ex in sql_file.name for ex in historical_exceptions):
             continue
         content = sql_file.read_text()
-        if "SECURITY DEFINER" in content.upper() and "SET search_path" not in content.upper():
+        if "SECURITY DEFINER" in content.upper() and "SET SEARCH_PATH" not in content.upper():
             if "-- linter:allow-no-search-path" not in content:
                 print(f"ERRO: Função SECURITY DEFINER sem search_path em {sql_file.name}")
                 success = False
