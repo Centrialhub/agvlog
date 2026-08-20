@@ -5,10 +5,14 @@ import { useTenant } from '@/hooks/useTenant';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { RefreshCw, AlertTriangle, AlertCircle, CheckCircle2, ShieldCheck, Database, Hammer, History } from 'lucide-react';
+import { RefreshCw, AlertTriangle, AlertCircle, CheckCircle2, ShieldCheck, Database, Hammer, History, XCircle, PlayCircle, Eye } from 'lucide-react';
 import { useAlertStore } from '@/hooks/useAlertStore';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { format } from 'date-fns';
+
 
 type Row = {
   severity: 'critical' | 'warning' | 'info' | 'success';
