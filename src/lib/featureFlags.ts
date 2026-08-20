@@ -4,7 +4,7 @@ export const FEATURE_FLAGS = {
   OPERATIONAL_LEDGER: false,
   DATA_QUALITY_CENTER: false,
   LOGISTICS_CONSOLIDATION_V2: true, // Nucleus is active
-  HR_CORE: false, // Core HR CRUD operations via RPC
+  HR_CORE: true, // Core HR CRUD operations via RPC
 };
 
 export type FeatureKey = keyof typeof FEATURE_FLAGS;
