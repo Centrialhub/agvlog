@@ -65,7 +65,7 @@ export function usePortalTracking() {
 
   return useQuery({
     queryKey: ['portal_tracking_v3', currentTenant?.id, scope.selectedClientId, clientIds, cnpjs],
-    queryFn: async (): Promise<any[]> => {
+    queryFn: async (): Promise<PortalTrackingItem[]> => {
       if (!currentTenant || clientIds.length === 0) return [];
       
       const { data, error } = await (supabase as any).rpc('get_portal_tracking_v3', {
@@ -75,7 +75,7 @@ export function usePortalTracking() {
       });
 
       if (error) throw error;
-      return (data as unknown) as any[];
+      return (data as unknown) as PortalTrackingItem[];
     },
     enabled: !!currentTenant && clientIds.length > 0,
     refetchInterval: 60_000,
