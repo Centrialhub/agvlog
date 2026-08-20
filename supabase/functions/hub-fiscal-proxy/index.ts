@@ -26,7 +26,24 @@ async function decryptAesGcm(encrypted: string, keyHex: string): Promise<string>
 }
 
 interface ProxyRequest {
-  action: 'emit' | 'get' | 'sync' | 'cancel' | 'cce' | 'query' | 'preview' | 'ping' | 'discard';
+  action:
+    | 'emit'
+    | 'get'
+    | 'sync'
+    | 'cancel'
+    | 'cancel-nfse'
+    | 'cce'
+    | 'email'
+    | 'file'
+    | 'query'
+    | 'preview'
+    | 'ping'
+    | 'desacordo'
+    | 'cent'
+    | 'discard'
+    | 'import'
+    | 'deliver'
+    | 'links';
   tenantId: string;
   type?: string;
   id?: string;
@@ -61,11 +78,21 @@ async function validateAccess(supabase: any, userId: string, tenantId: string, a
   const capabilityMap: Record<string, string[]> = {
     'get': ['fiscal.read', 'fiscal.admin'],
     'query': ['fiscal.read', 'fiscal.admin'],
+    'links': ['fiscal.read', 'fiscal.admin'],
+    'ping': ['fiscal.read', 'fiscal.admin'],
     'emit': ['fiscal.emit', 'fiscal.admin'],
     'sync': ['fiscal.emit', 'fiscal.admin'],
+    'import': ['fiscal.emit', 'fiscal.admin'],
+    'preview': ['fiscal.emit', 'fiscal.admin'],
     'cancel': ['fiscal.cancel', 'fiscal.admin'],
+    'cancel-nfse': ['fiscal.cancel', 'fiscal.admin'],
     'cce': ['fiscal.cancel', 'fiscal.admin'],
     'discard': ['fiscal.cancel', 'fiscal.admin'],
+    'desacordo': ['fiscal.cancel', 'fiscal.admin'],
+    'email': ['fiscal.admin'],
+    'file': ['fiscal.read', 'fiscal.admin'],
+    'cent': ['fiscal.admin'],
+    'deliver': ['fiscal.admin'],
   };
 
   const required = capabilityMap[action] || [];
@@ -139,10 +166,116 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Call Hub Implementation (Refactored to include tenant scoping in every step)
-    // ... logic remains consistent with original but strictly scoped ...
+    // Hub API Key Retrieval & Decryption
+    let hubKey = DEFAULT_HUB_KEY;
+    if (payload.emitterId) {
+      const { data: emitter } = await admin
+        .from('tenant_emitters')
+        .select('credential_id')
+        .eq('id', payload.emitterId)
+        .eq('tenant_id', payload.tenantId)
+        .maybeSingle();
+      
+      if (emitter?.credential_id) {
+        const { data: cred } = await admin
+          .from('hub_fiscal_credentials')
+          .select('api_key_encrypted')
+          .eq('id', emitter.credential_id)
+          .maybeSingle();
+        
+        if (cred?.api_key_encrypted && ENC_KEY) {
+          try {
+            hubKey = await decryptAesGcm(cred.api_key_encrypted, ENC_KEY);
+          } catch (e) {
+            console.error('Decryption failed:', e);
+          }
+        }
+      }
+    }
 
-    return json(202, { success: true, correlationId, status: 'processing' });
+    const { action, type, id, body } = payload;
+    const typePath = type ? `?type=${type}` : '';
+    
+    let result: { status: number; data: any };
+
+    switch (action) {
+      case 'emit':
+        result = await callHub('POST', `/hub_documents_emit${typePath}`, {}, body, hubKey);
+        break;
+      case 'get':
+        result = await callHub('GET', `/hub_documents_get/${id}`, {}, undefined, hubKey);
+        break;
+      case 'sync':
+        result = await callHub('GET', `/hub_documents_sync/${id}`, {}, undefined, hubKey);
+        break;
+      case 'cancel':
+        result = await callHub('POST', `/hub_documents_cancel/${id}`, {}, body, hubKey);
+        break;
+      case 'cancel-nfse':
+        result = await callHub('POST', `/hub_documents_cancel_nfse/${id}`, {}, body, hubKey);
+        break;
+      case 'cce':
+        result = await callHub('POST', `/hub_documents_cce/${id}`, {}, body, hubKey);
+        break;
+      case 'query':
+        result = await callHub('POST', '/hub_documents_query', {}, body, hubKey);
+        break;
+      case 'preview':
+        result = await callHub('POST', `/hub_documents_preview${typePath}`, {}, body, hubKey);
+        break;
+      case 'ping':
+        result = await callHub('GET', '/ping', {}, undefined, hubKey);
+        break;
+      case 'discard':
+        result = await callHub('POST', `/hub_documents_discard/${id}`, {}, body, hubKey);
+        break;
+      case 'import':
+        result = await callHub('POST', `/hub_documents_import${typePath}`, {}, body, hubKey);
+        break;
+      case 'email':
+        result = await callHub('POST', `/hub_documents_email/${id}`, {}, body, hubKey);
+        break;
+      case 'file':
+        result = await callHub('GET', `/hub_documents_file/${id}`, body || {}, undefined, hubKey);
+        break;
+      case 'desacordo':
+        result = await callHub('POST', `/hub_documents_desacordo/${id}`, {}, body, hubKey);
+        break;
+      case 'cent':
+        result = await callHub('POST', '/hub_documents_cent', {}, body, hubKey);
+        break;
+      case 'deliver':
+        result = await callHub('POST', `/hub_documents_deliver/${id}`, {}, body, hubKey);
+        break;
+      case 'links':
+        result = await callHub('GET', `/hub_documents_links/${id}`, {}, undefined, hubKey);
+        break;
+      default:
+        return json(400, { error: 'UNSUPPORTED_ACTION' });
+    }
+
+    // Persistence Update
+    if (payload.action === 'emit' && result.status < 300) {
+      const hubData = result.data;
+      const hubDocId = hubData?.document?.id || hubData?.id;
+      const idIntegracao = hubData?.document?.idIntegracao || hubData?.idIntegracao;
+
+      if (hubDocId || idIntegracao) {
+        await admin.from('hub_fiscal_emissions').update({
+          hub_document_id: hubDocId,
+          id_integracao: idIntegracao,
+          status: result.status === 202 ? 'processing' : 'authorized',
+          last_response: hubData,
+          updated_at: new Date().toISOString()
+        }).eq('correlation_id', correlationId);
+      }
+    }
+
+    return json(result.status, { 
+      success: result.status < 300, 
+      hub: result.data, 
+      correlationId 
+    });
   } catch (err) {
     return json(500, { error: 'INTERNAL_ERROR', message: err.message });
   }
