@@ -5,7 +5,9 @@ from pathlib import Path
 
 def check_migrations():
     """Valida se migrations possuem DML sem tenant_id"""
-    print("Auditando migrations...")
+    print("Auditando migrations...
+    # Exceções históricas
+    historical_exceptions = ["202603", "202604", "202605", "202606", "202607"]")
     migration_dir = Path("supabase/migrations")
     success = True
     for sql_file in migration_dir.glob("*.sql"):

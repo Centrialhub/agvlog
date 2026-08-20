@@ -14,6 +14,7 @@ BEGIN
     status = 'deleted'
   WHERE id = doc_id;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = public;
 
 GRANT EXECUTE ON FUNCTION public.soft_delete_fiscal_document TO authenticated;

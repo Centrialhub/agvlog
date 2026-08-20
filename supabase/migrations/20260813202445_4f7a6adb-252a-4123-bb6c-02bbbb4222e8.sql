@@ -22,6 +22,7 @@ BEGIN
     -- If no documents are linked, attempt to delete the load safely
     IF v_doc_count = 0 THEN
         -- Get tenant_id for the log/auth check if needed, though we use SECURITY DEFINER
+  SET search_path = public
         SELECT tenant_id INTO v_tenant_id FROM public.loads WHERE id = v_load_id;
         
         IF v_tenant_id IS NOT NULL THEN
