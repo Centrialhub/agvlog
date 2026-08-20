@@ -172,6 +172,14 @@ export default function Billing() {
   const [opTypes, setOpTypes] = useState<Set<OpType>>(new Set());
   const [allOps, setAllOps] = useState(true);
 
+  const matchesOp = (opType: string | null | undefined) => {
+    if (allOps || opTypes.size === 0) return true;
+    return opType ? opTypes.has(opType as OpType) : false;
+  };
+
+  const ciIncludes = (haystack: string | null | undefined, needle: string) =>
+    !needle || (haystack || '').toLowerCase().includes(needle.toLowerCase());
+
   // ===== Pré-filtragem server-side (usa índices criados) =====
   const [onlySpecific, setOnlySpecific] = useState<boolean>(false);
   const problematicInvoices = ['444798', '444797', '444796', '446083', '446072', '446071', '446070', '446069', '446068', '446067', '446066', '446065', '446064'];
@@ -197,13 +205,6 @@ export default function Billing() {
     return m;
   }, [loads]);
 
-  const matchesOp = (opType: string | null | undefined) => {
-    if (allOps || opTypes.size === 0) return true;
-    return opType ? opTypes.has(opType as OpType) : false;
-  };
-
-  const ciIncludes = (haystack: string | null | undefined, needle: string) =>
-    !needle || (haystack || '').toLowerCase().includes(needle.toLowerCase());
 
   const { sortedItems: filteredDocs, requestSort, sortConfig } = useSortableData(
     useMemo(() => {
