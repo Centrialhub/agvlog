@@ -74,29 +74,24 @@ export function useCreateLoadItem() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (values: Partial<LoadItem>) => {
+      if (!currentTenant) throw new Error('Tenant not found');
       if (!values.load_id) throw new Error('load_id obrigatório');
-      // Vínculo com NF é exclusivamente via RPC oficial (sincroniza fiscal_documents.load_id + auditoria).
-      if (values.fiscal_document_id) {
-        const { data, error } = await (supabase as any).rpc('link_fiscal_documents_to_load_v1', {
-          _tenant_id: currentTenant!.id,
-          _load_id: values.load_id,
-          _document_ids: [values.fiscal_document_id],
-        });
-        if (error) throw error;
-        return data;
-      }
-      // guardrail:allow-direct-write
-      // Itens manuais (sem NF) podem ser inseridos diretamente — não afetam composição fiscal.
-      const { data, error } = await (supabase as any)
-        // linter:allow-direct-write load_items manual-item-insert 2026-12-31
-      .from('load_items').insert({
-        ...values,
-        tenant_id: currentTenant!.id,
-      }).select().single();
+      
+      const { data, error } = await supabase.rpc('upsert_load_item_v1', {
+        p_tenant_id: currentTenant.id,
+        p_load_id: values.load_id,
+        p_item_description: values.item_description || '',
+        p_quantity: values.quantity || 0,
+        p_pallet_count: values.pallet_count || 0,
+        p_weight_kg: values.weight_kg || 0,
+        p_volume_m3: values.volume_m3 || 0,
+        p_fiscal_document_id: values.fiscal_document_id || null,
+      });
+
       if (error) throw error;
-      return data;
+      return { id: data };
     },
-    onSuccess: (_, variables) => {
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['load_items'] });
       qc.invalidateQueries({ queryKey: ['loads'] });
       qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
