@@ -56,6 +56,7 @@ export default function Payables() {
   const [paymentPayable, setPaymentPayable] = useState<Payable | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
   const [sourceFilter, setSourceFilter] = useState('all');
+  const approveMut = useApproveFinancialObligation();
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
