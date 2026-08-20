@@ -15670,6 +15670,8 @@ export type Database = {
         Args: {
           p_driver_id: string
           p_load_ids: string[]
+          p_planned_start_at?: string
+          p_route_name?: string
           p_start_now?: boolean
           p_stops: Json
           p_tenant_id: string
