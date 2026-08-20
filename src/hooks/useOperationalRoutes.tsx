@@ -22,7 +22,7 @@ export interface PaginatedOperationalRoutes {
   total_count: number;
 }
 
-export function useOperationalRoutesArray(filters: { search?: string; includeInactive?: boolean } = {}) {
+export function useOperationalRoutes(filters: { search?: string; includeInactive?: boolean } = {}) {
   const { currentTenant } = useTenant();
   return useQuery<PaginatedOperationalRoutes>({
     queryKey: ['operational_routes', currentTenant?.id, filters],
