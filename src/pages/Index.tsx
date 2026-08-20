@@ -5,7 +5,7 @@ const Index = () => {
     <div className="fixed inset-0 bg-background flex flex-col items-center justify-center p-8 text-center space-y-4">
       <h1 className="text-xl font-bold text-primary">Arquitetura de Cargas Consolidada</h1>
       <p className="max-w-2xl text-muted-foreground">
-Reconstrua o app do motorista sobre um driver_workspace canônico retornado por RPC: viagem ativa, cargas, paradas ordenadas, documentos, permissões, progresso e próxima ação. Remova fallbacks e escritas diretas em dispatch_trips e loads. Início, chegada, saída, entrega, recusa, parcial, retorno e finalização usarão RPCs idempotentes, validando motorista, tenant e estado e retornando resultado por item. Implemente outbox offline com retry seguro, bloqueio de duplo toque e retenção de evidências até confirmação. Cubra o fluxo em testes E2E.
+Refaça o portal sobre um único escopo autorizado. Se houver um cliente, selecione-o automaticamente; com vários, ofereça seleção e modo Todos. Resumo, busca, documentos, entregas, alertas e rastreamento devem usar o mesmo conjunto efetivo por client_id, remetente ou destinatário, sem retornar vazio por clientId nulo. Crie portal_shipment_read_model e timeline única, aplique RLS/ownership e elimine consultas paralelas. Teste usuário com 1 cliente, vários, remetente, destinatário e tentativa cross-tenant.
       </p>
       <div className="pt-4">
         <Navigate to="/dashboard" replace />
