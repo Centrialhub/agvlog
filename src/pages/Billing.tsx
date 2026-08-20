@@ -197,6 +197,14 @@ export default function Billing() {
     return m;
   }, [loads]);
 
+  const matchesOp = (opType: string | null | undefined) => {
+    if (allOps || opTypes.size === 0) return true;
+    return opType ? opTypes.has(opType as OpType) : false;
+  };
+
+  const ciIncludes = (haystack: string | null | undefined, needle: string) =>
+    !needle || (haystack || '').toLowerCase().includes(needle.toLowerCase());
+
   const { sortedItems: filteredDocs, requestSort, sortConfig } = useSortableData(
     useMemo(() => {
       return docs.filter(d => {
@@ -368,13 +376,6 @@ export default function Billing() {
     setOpTypes(new Set()); setAllOps(true);
   };
 
-  const matchesOp = (opType: string | null | undefined) => {
-    if (allOps || opTypes.size === 0) return true;
-    return opType ? opTypes.has(opType as OpType) : false;
-  };
-
-  const ciIncludes = (haystack: string | null | undefined, needle: string) =>
-    !needle || (haystack || '').toLowerCase().includes(needle.toLowerCase());
 
 
 
