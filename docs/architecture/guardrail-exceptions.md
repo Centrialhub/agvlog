@@ -29,6 +29,7 @@ Toda entrada deve conter uma justificativa técnica clara.
 - `20260416203001...sql`: Reset operacional profundo (ajuste).
 - `20260416203803...sql`: Reset operacional profundo (final).
 - `20260422181812...sql`: Reset operacional profundo (post-ingestion).
+- `20260422193725...sql`: Reset operacional profundo (ajuste final).
 
 ## RLS Bypass
 - `profiles`: Necessário para consulta de metadados públicos do usuário durante o login.
