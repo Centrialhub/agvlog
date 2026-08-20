@@ -4,6 +4,7 @@ import { useLoads, useLoadsArray, Load } from '@/hooks/useLoads';
 import { useLoadItems, LoadItem, useUpdateLoadItem } from '@/hooks/useLoadItems';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useUpdateLoad, useDeleteLoad } from '@/hooks/useLoads';
+import { useTenant } from '@/hooks/useTenant';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
