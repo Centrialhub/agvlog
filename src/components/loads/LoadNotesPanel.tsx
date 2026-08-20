@@ -431,7 +431,7 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
           .eq('id', docId)
           .maybeSingle();
         if (fd?.tenant_id && fd.load_id) {
-          const { error: rmErr } = await (supabase as any).rpc('remove_fiscal_documents_from_load', {
+          const { error: rmErr } = await (supabase as any).rpc('unlink_fiscal_documents_from_load_v1', {
             _tenant_id: fd.tenant_id,
             _load_id: fd.load_id,
             _document_ids: [docId],
