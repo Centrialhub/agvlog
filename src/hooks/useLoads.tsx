@@ -60,7 +60,12 @@ export function useLoads(filters: { search?: string; status?: LoadStatus[] } = {
       if (error) throw error;
       
       // The RPC returns { items, next_cursor, total_count }
-      return data as unknown as PaginatedLoads;
+      const result = data as any;
+      return {
+        items: (result.items || []) as Load[],
+        next_cursor: result.next_cursor || null,
+        total_count: Number(result.total_count) || 0,
+      } as PaginatedLoads;
     },
     enabled: !!currentTenant,
   });
