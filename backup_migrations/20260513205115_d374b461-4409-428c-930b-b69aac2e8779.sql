@@ -1,0 +1,22 @@
+
+ALTER TABLE public.drivers
+  ADD COLUMN IF NOT EXISTS rg text,
+  ADD COLUMN IF NOT EXISTS rg_issuer text,
+  ADD COLUMN IF NOT EXISTS rg_uf text,
+  ADD COLUMN IF NOT EXISTS cnh_uf text,
+  ADD COLUMN IF NOT EXISTS cnh_security_code text,
+  ADD COLUMN IF NOT EXISTS renach text,
+  ADD COLUMN IF NOT EXISTS cnh_issued_at date,
+  ADD COLUMN IF NOT EXISTS first_license_date date,
+  ADD COLUMN IF NOT EXISTS mope_expiry date,
+  ADD COLUMN IF NOT EXISTS ctps text,
+  ADD COLUMN IF NOT EXISTS ctps_series text,
+  ADD COLUMN IF NOT EXISTS inps text,
+  ADD COLUMN IF NOT EXISTS insc text,
+  ADD COLUMN IF NOT EXISTS pis text,
+  ADD COLUMN IF NOT EXISTS inss text,
+  ADD COLUMN IF NOT EXISTS card_number text,
+  ADD COLUMN IF NOT EXISTS pamcary_number text,
+  ADD COLUMN IF NOT EXISTS pamcary_expiry date,
+  ADD COLUMN IF NOT EXISTS served_region text,
+  ADD COLUMN IF NOT EXISTS coop_number text;
