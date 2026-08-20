@@ -356,7 +356,14 @@ export default function DriverDeliveries() {
 
       if (def.key === 'chegada_no_cliente') {
         try {
-          const { error, data } = await supabase.rpc('driver_mark_arrival', { _stop_id: eventForm.stop.id } as any);
+          const { error, data } = await supabase.rpc('transition_stop_status_v1', {
+            p_tenant_id: currentTenant!.id,
+            p_stop_id: eventForm.stop.id,
+            p_to_status: 'arrived',
+            p_actor_id: driver?.user_id,
+            p_reason: 'Chegada no cliente via App',
+            p_idempotency_key: `arrival-${eventForm.stop.id}-${Date.now()}`
+          });
           if (error) {
             console.error('[DriverDeliveries] Arrival RPC error:', error);
             throw error;
