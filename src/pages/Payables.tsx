@@ -20,6 +20,7 @@ import PayablePaymentDialog from '@/components/financial/PayablePaymentDialog';
 import ManualExpenseDialog from '@/components/financial/ManualExpenseDialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
+import { useApproveFinancialObligation } from '@/hooks/useOperationalFinancial';
 import type { ParsedFiscalXml } from '@/lib/nfeXmlParser';
 
 const emptyForm = {
