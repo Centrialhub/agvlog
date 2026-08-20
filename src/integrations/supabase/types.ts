@@ -14471,7 +14471,61 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      vw_load_composition: {
+        Row: {
+          access_key: string | null
+          document_value: number | null
+          fiscal_document_id: string | null
+          invoice_number: string | null
+          item_description: string | null
+          item_id: string | null
+          item_status: string | null
+          load_id: string | null
+          load_number: string | null
+          load_status: string | null
+          order_id: string | null
+          order_number: string | null
+          pallet_count: number | null
+          quantity: number | null
+          recipient: string | null
+          recipient_city: string | null
+          recipient_state: string | null
+          remitter: string | null
+          tenant_id: string | null
+          volume_m3: number | null
+          weight_kg: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "load_items_fiscal_document_id_fkey"
+            columns: ["fiscal_document_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "load_items_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "load_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "load_items_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       _apply_match_amounts: {
@@ -14547,6 +14601,10 @@ export type Database = {
       _portal_user_has_perm: {
         Args: { _client_id: string; _perm: string; _tenant_id: string }
         Returns: boolean
+      }
+      _recalculate_load_totals: {
+        Args: { _load_id: string }
+        Returns: undefined
       }
       accept_financial_match: {
         Args: { _match_id: string }
@@ -14850,6 +14908,17 @@ export type Database = {
         Returns: undefined
       }
       detect_payment_method: { Args: { p_text: string }; Returns: string }
+      diagnose_load_composition: {
+        Args: { _load_ids?: string[]; _tenant_id: string }
+        Returns: {
+          entity_id: string
+          entity_type: string
+          issue: string
+          load_id: string
+          load_number: string
+          severity: string
+        }[]
+      }
       dispatch_planned_route: { Args: { _payload: Json }; Returns: string }
       driver_can_access_vehicle: {
         Args: { _vehicle_id: string }
@@ -15133,6 +15202,10 @@ export type Database = {
         Returns: boolean
       }
       is_user_internal_role: { Args: { _tenant_id: string }; Returns: boolean }
+      link_fiscal_documents_to_load_v1: {
+        Args: { _document_ids: string[]; _load_id: string; _tenant_id: string }
+        Returns: Json
+      }
       list_available_loads_for_settlement: {
         Args: {
           _driver_id?: string
@@ -15629,6 +15702,10 @@ export type Database = {
         Args: { _reason: string; _session_id: string }
         Returns: undefined
       }
+      repair_load_composition: {
+        Args: { _dry_run?: boolean; _load_ids: string[]; _tenant_id: string }
+        Returns: Json
+      }
       reply_client_occurrence: {
         Args: { _message: string; _occurrence_id: string; _tenant_id: string }
         Returns: string
@@ -15717,6 +15794,10 @@ export type Database = {
         Returns: Json
       }
       unhold_load: { Args: { _load_id: string }; Returns: undefined }
+      unlink_fiscal_documents_from_load_v1: {
+        Args: { _document_ids: string[]; _load_id: string; _tenant_id: string }
+        Returns: Json
+      }
       update_driver_settlement_km_review: {
         Args: {
           _audited_end_location?: string
