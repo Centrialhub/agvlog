@@ -22,7 +22,7 @@ type Row = {
 
 export default function DataQualityCenter() {
   const { currentTenant } = useTenant();
-  const { alert } = useAlert();
+  const showAlert = useAlertStore(state => state.showAlert);
   const queryClient = useQueryClient();
   const [stamp, setStamp] = useState(0);
   const [domainFilter, setDomainFilter] = useState<string>('all');
