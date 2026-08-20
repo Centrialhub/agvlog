@@ -62,7 +62,7 @@ export default function DataQualityCenter() {
       return batch;
     },
     onSuccess: () => {
-      alert('Lote de reparo criado em rascunho. Vá para Histórico para aprovar e executar.', 'success');
+      showAlert('Lote Criado', 'Lote de reparo criado em rascunho. Vá para Histórico para aprovar e executar.', 'success');
       setSelectedIds([]);
       queryClient.invalidateQueries({ queryKey: ['data_repair_batches'] });
     }
