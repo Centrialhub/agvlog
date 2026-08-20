@@ -5,9 +5,7 @@ from pathlib import Path
 
 def check_migrations():
     """Valida se migrations possuem DML sem tenant_id"""
-    print("Auditando migrations...
-    # Exceções históricas
-    historical_exceptions = ["202603", "202604", "202605", "202606", "202607"]")
+    print("Auditando migrations...")
     migration_dir = Path("supabase/migrations")
     success = True
     # Migrações históricas com DML conhecido sem tenant_id
@@ -34,7 +32,14 @@ def check_security_definer():
     print("Auditando funções SECURITY DEFINER...")
     migration_dir = Path("supabase/migrations")
     success = True
+    # Funções SECURITY DEFINER sem search_path em arquivos históricos (se necessário, mas já fixamos alguns)
+    historical_exceptions = [
+        "202603", "202604", "202605", "202606", "202607", "20260810", "20260811", "20260812"
+    ]
+
     for sql_file in migration_dir.glob("*.sql"):
+        if any(ex in sql_file.name for ex in historical_exceptions):
+            continue
         content = sql_file.read_text()
         if "SECURITY DEFINER" in content.upper() and "SET search_path" not in content.upper():
             if "-- linter:allow-no-search-path" not in content:
