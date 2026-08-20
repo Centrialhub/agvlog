@@ -24,6 +24,161 @@ type Row = {
   metadata: any;
 };
 
+function RepairHistoryDialog({ tenantId }: { tenantId: string }) {
+  const queryClient = useQueryClient();
+  const showAlert = useAlertStore(state => state.showAlert);
+  const [selectedBatch, setSelectedBatch] = useState<any>(null);
+
+  const { data: batches = [], isLoading } = useQuery({
+    queryKey: ['data_repair_batches', tenantId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('data_repair_batches')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!tenantId
+  });
+
+  const updateStatus = useMutation({
+    mutationFn: async ({ id, status }: { id: string, status: string }) => {
+      const { error } = await supabase
+        .from('data_repair_batches')
+        .update({ status })
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['data_repair_batches'] });
+      showAlert('Status Atualizado', 'Status do lote alterado com sucesso.', 'success');
+    }
+  });
+
+  const executeRepair = useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await (supabase as any).rpc('execute_data_repair_v1', {
+        p_tenant_id: tenantId,
+        p_batch_id: id
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['data_repair_batches'] });
+      queryClient.invalidateQueries({ queryKey: ['data_quality_audit'] });
+      showAlert('Reparo Executado', `Resultado: ${JSON.stringify(res)}`, 'success');
+      setSelectedBatch(null);
+    },
+    onError: (err: any) => {
+      showAlert('Erro na Execução', err.message, 'error');
+    }
+  });
+
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button variant="outline" className="text-xs">
+          <History className="h-3 w-3 mr-1" />
+          Histórico de Reparos
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-4xl max-h-[80vh]">
+        <DialogHeader>
+          <DialogTitle>Histórico de Reparos Logísticos</DialogTitle>
+        </DialogHeader>
+        <div className="grid grid-cols-3 gap-4 h-full overflow-hidden">
+          <div className="col-span-1 border-r pr-4">
+            <ScrollArea className="h-[60vh]">
+              {isLoading ? <div>Carregando...</div> : batches.map((b: any) => (
+                <div 
+                  key={b.id} 
+                  className={`p-3 mb-2 rounded border cursor-pointer hover:bg-muted ${selectedBatch?.id === b.id ? 'bg-muted border-primary' : ''}`}
+                  onClick={() => setSelectedBatch(b)}
+                >
+                  <div className="flex justify-between items-start mb-1">
+                    <Badge variant={b.status === 'executed' ? 'success' : b.status === 'approved' ? 'default' : 'outline'}>
+                      {b.status}
+                    </Badge>
+                    <span className="text-[10px] text-muted-foreground">{format(new Date(b.created_at), 'dd/MM HH:mm')}</span>
+                  </div>
+                  <div className="text-sm font-medium truncate">{b.description}</div>
+                  <div className="text-[10px] text-muted-foreground font-mono">{b.id.substring(0, 8)}</div>
+                </div>
+              ))}
+            </ScrollArea>
+          </div>
+          <div className="col-span-2 pl-4 overflow-y-auto">
+            {selectedBatch ? (
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="font-bold">Detalhes do Lote</h3>
+                  <div className="flex gap-2">
+                    {selectedBatch.status === 'draft' && (
+                      <Button size="sm" onClick={() => updateStatus.mutate({ id: selectedBatch.id, status: 'approved' })}>Aprovar</Button>
+                    )}
+                    {selectedBatch.status === 'approved' && (
+                      <Button size="sm" onClick={() => executeRepair.mutate(selectedBatch.id)} disabled={executeRepair.isPending}>
+                        <PlayCircle className="h-4 w-4 mr-2" />
+                        Executar
+                      </Button>
+                    )}
+                    {['draft', 'approved'].includes(selectedBatch.status) && (
+                      <Button variant="ghost" size="sm" className="text-destructive" onClick={() => updateStatus.mutate({ id: selectedBatch.id, status: 'cancelled' })}>
+                        <XCircle className="h-4 w-4 mr-2" />
+                        Cancelar
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="p-2 bg-muted rounded">
+                    <span className="text-muted-foreground block">Data de Criação</span>
+                    {format(new Date(selectedBatch.created_at), 'Pp')}
+                  </div>
+                  <div className="p-2 bg-muted rounded">
+                    <span className="text-muted-foreground block">Status Atual</span>
+                    <Badge variant="outline">{selectedBatch.status}</Badge>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold flex items-center gap-1">
+                    <Eye className="h-4 w-4" />
+                    Itens Identificados (Dry-run)
+                  </h4>
+                  <div className="border rounded-md bg-zinc-950 p-2 font-mono text-[10px] text-zinc-400 max-h-[30vh] overflow-y-auto">
+                    <pre>{JSON.stringify(selectedBatch.dry_run_report, null, 2)}</pre>
+                  </div>
+                </div>
+
+                {selectedBatch.execution_result && (
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-semibold flex items-center gap-1 text-success">
+                      <CheckCircle2 className="h-4 w-4" />
+                      Resultado da Execução
+                    </h4>
+                    <div className="border rounded-md bg-zinc-950 p-2 font-mono text-[10px] text-zinc-400 max-h-[20vh] overflow-y-auto">
+                      <pre>{JSON.stringify(selectedBatch.execution_result, null, 2)}</pre>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="h-full flex items-center justify-center text-muted-foreground">
+                Selecione um lote para ver detalhes
+              </div>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function DataQualityCenter() {
   const { currentTenant } = useTenant();
   const showAlert = useAlertStore(state => state.showAlert);
@@ -56,7 +211,7 @@ export default function DataQualityCenter() {
         .insert({
           tenant_id: currentTenant.id,
           status: 'draft',
-          description: `Reparo manual de ${selectedIds.length} itens`,
+          description: `Reparo manual de ${selectedIds.length} itens detectados no domínio ${domainFilter !== 'all' ? domainFilter : 'Geral'}`,
           dry_run_report: { items: selectedItems }
         })
         .select()
@@ -71,6 +226,7 @@ export default function DataQualityCenter() {
       queryClient.invalidateQueries({ queryKey: ['data_repair_batches'] });
     }
   });
+
 
   const critical = data.filter(d => d.severity === 'critical');
   const warnings = data.filter(d => d.severity === 'warning');
