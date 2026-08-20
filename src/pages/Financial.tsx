@@ -564,25 +564,21 @@ export default function Financial() {
           </CardContent>
         </Card>
 
-        <Card className={`relative overflow-hidden group hover:shadow-xl transition-all duration-300 ${kpis.overdueReceivable > 0 ? 'border-warning/30' : 'border-primary/20'}`}>
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/8 via-primary/4 to-transparent" />
-          <CardContent className="p-5 relative">
+        <Card className="relative overflow-hidden border-orange-500/20 group hover:shadow-xl transition-all duration-300">
+          <div className="absolute inset-0 bg-gradient-to-br from-orange-500/8 via-orange-500/4 to-transparent" />
+          <div className="absolute -top-8 -right-8 w-24 h-24 rounded-full bg-orange-500/5 group-hover:bg-orange-500/10 transition-colors" />
+          <CardContent className="p-5 relative cursor-pointer" onClick={() => navigate('/ledger')}>
             <div className="flex items-center justify-between mb-3">
-              <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                <CreditCard className="h-5 w-5 text-primary" />
+              <div className="h-10 w-10 rounded-xl bg-orange-500/10 flex items-center justify-center">
+                <Wallet className="h-5 w-5 text-orange-600" />
               </div>
-              {kpis.overdueReceivable > 0 && (
-                <span className="relative flex h-2.5 w-2.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-warning opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-warning" />
-                </span>
-              )}
+              <Badge variant="secondary" className="text-[10px] font-medium">razão</Badge>
             </div>
-            <p className="text-2xl font-extrabold text-foreground tracking-tight">{fmtCurrencyShort(kpis.pendingReceivable)}</p>
-            <p className="text-xs text-muted-foreground mt-1">A receber</p>
-            {kpis.overdueReceivable > 0 && (
-              <p className="text-[10px] text-destructive font-medium mt-2">{fmtCurrencyShort(kpis.overdueReceivable)} vencido</p>
-            )}
+            <p className="text-2xl font-extrabold text-foreground tracking-tight">{fmtCurrencyShort(kpis.ledgerBalance)}</p>
+            <div className="flex items-center justify-between mt-1">
+              <p className="text-xs text-muted-foreground">Saldo em Livro Razão</p>
+              <ArrowRight className="h-3 w-3 text-muted-foreground group-hover:translate-x-0.5 transition-transform" />
+            </div>
           </CardContent>
         </Card>
       </div>
