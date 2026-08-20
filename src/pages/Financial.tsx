@@ -258,17 +258,31 @@ export default function Financial() {
     const balance = revenue - outflow;
 
     return {
-      nfeCount: nfes.length, cteCount: ctes.length,
-      totalNfeValue, totalCteValue, totalFreight,
-      nfseCount: filteredNfse.length, totalNfseValue,
+      nfeCount: nfes.length, 
+      cteCount: ctes.length,
+      totalNfeValue, 
+      totalCteValue, 
+      totalFreight,
+      nfseCount: filteredNfse.length, 
+      totalNfseValue,
       voidCount,
-      totalExpenses, pendingExpensesCount: pendingExpenses.length,
-      totalReceivable, pendingReceivable, paidReceivable, overdueReceivable,
-      totalMaintenance,
-      revenue, outflow, balance,
+      totalExpenses: summaryKpis?.totalExpenses ?? totalExpenses, 
+      pendingExpensesCount: pendingExpenses.length,
+      totalReceivable: summaryKpis?.totalReceivable ?? totalReceivable, 
+      pendingReceivable: summaryKpis?.pendingReceivable ?? pendingReceivable, 
+      paidReceivable: summaryKpis?.paidReceivable ?? paidReceivable, 
+      overdueReceivable: summaryKpis?.overdueReceivable ?? overdueReceivable,
+      totalMaintenance: summaryKpis?.totalMaintenance ?? totalMaintenance,
+      revenue: summaryKpis?.revenue ?? revenue, 
+      outflow: summaryKpis?.outflow ?? outflow, 
+      balance: summaryKpis?.balance ?? balance,
+      ledgerBalance: summaryKpis?.ledgerBalance ?? 0,
       receivablesCount: filteredReceivables.length,
     };
-  }, [billableDocs, voidDocs, billableNfse, voidNfse, expenses, receivables, maintenanceCosts, periodStart, periodEnd, selectedClient, docType, expenseCategory, selectedCostCenter]);
+  }, [
+    summaryKpis, billableDocs, voidDocs, billableNfse, voidNfse, expenses, receivables, 
+    maintenanceCosts, periodStart, periodEnd, selectedClient, docType, expenseCategory, selectedCostCenter
+  ]);
 
   // ── Chart: Revenue vs Expenses by day ──
   const revenueExpenseChart = useMemo(() => {
