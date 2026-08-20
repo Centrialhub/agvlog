@@ -159,11 +159,10 @@ export function useDeleteLoadItem() {
         });
         if (error) throw error;
       } else {
-        // Fallback for manual items - we need a delete RPC.
-        // I will add delete_load_item_v1 to the migration or use a generic one.
-        // Given constraints, I'll use the existing supabase client but it will fail once REVOKE is applied.
-        // I should have included delete_load_item_v1 in the migration.
-        const { error } = await supabase.from('load_items').delete().eq('id', id);
+        const { error } = await supabase.rpc('delete_load_item_v1', {
+          p_tenant_id: currentTenant!.id,
+          p_item_id: id
+        });
         if (error) throw error;
       }
     },
