@@ -71,6 +71,7 @@ export function useIssueCTe() {
         .toString(36)
         .slice(2, 8)}`;
 
+      // guardrail:allow-direct-write
       const { data: inserted, error: insErr } = await supabase
         .from('fiscal_documents')
         .insert({

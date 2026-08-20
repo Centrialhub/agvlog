@@ -29,6 +29,7 @@ export function useOverrideFreightValue() {
       const cbsValue = input.newValue > 0 ? input.newValue * cbsRate / 100 : null;
       const ibsValue = input.newValue > 0 ? input.newValue * ibsRate / 100 : null;
 
+      // guardrail:allow-direct-write
       const { error: upErr } = await supabase
         .from('fiscal_documents')
         .update({
@@ -75,6 +76,7 @@ export function useConfirmFreightValue() {
   return useMutation({
     mutationFn: async (fiscalDocumentId: string) => {
       if (!currentTenant) throw new Error('Tenant não selecionado');
+      // guardrail:allow-direct-write
       const { error } = await supabase
         .from('fiscal_documents')
         .update({

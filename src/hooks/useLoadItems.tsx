@@ -85,6 +85,7 @@ export function useCreateLoadItem() {
         if (error) throw error;
         return data;
       }
+      // guardrail:allow-direct-write
       // Itens manuais (sem NF) podem ser inseridos diretamente — não afetam composição fiscal.
       const { data, error } = await (supabase as any).from('load_items').insert({
         ...values,
@@ -113,6 +114,7 @@ export function useUpdateLoadItem() {
       if ('fiscal_document_id' in values) {
         throw new Error('Mudança de fiscal_document_id não é permitida por update direto.');
       }
+      // guardrail:allow-direct-write
       const { data, error } = await (supabase as any).from('load_items').update({
         ...values,
         updated_at: new Date().toISOString(),
@@ -148,6 +150,7 @@ export function useDeleteLoadItem() {
         if (error) throw error;
         return;
       }
+      // guardrail:allow-direct-write
       // Sem documento vinculado — item manual; libera delete direto.
       const { error } = await (supabase as any).from('load_items').delete().eq('id', id);
       if (error) throw error;

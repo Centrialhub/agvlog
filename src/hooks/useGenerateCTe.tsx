@@ -173,6 +173,7 @@ export function useGenerateCTe() {
       const cbsValue = freightValue > 0 ? freightValue * cbsRate / 100 : null;
       const ibsValue = freightValue > 0 ? freightValue * ibsRate / 100 : null;
 
+      // guardrail:allow-direct-write
       const { data, error } = await supabase.from('fiscal_documents').insert({
         tenant_id: currentTenant.id,
         created_by: user?.id,

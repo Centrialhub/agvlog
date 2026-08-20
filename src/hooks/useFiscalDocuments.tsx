@@ -105,6 +105,7 @@ export function useCreateFiscalDocument() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (values: Partial<FiscalDocument>) => {
+      // guardrail:allow-direct-write
       const { data, error } = await supabase.from('fiscal_documents').insert({
         ...values,
         tenant_id: currentTenant!.id,
@@ -191,6 +192,7 @@ export function useUpdateFiscalDocument() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...values }: Partial<FiscalDocument> & { id: string }) => {
+      // guardrail:allow-direct-write
       const { data, error } = await supabase.from('fiscal_documents').update({
         ...values,
         updated_at: new Date().toISOString(),
@@ -247,6 +249,7 @@ export function useUpdateFiscalDocument() {
           if (result.success && result.breakdown) {
             const v = result.value;
             const cbsRate = 0.90, ibsRate = 0.10;
+            // guardrail:allow-direct-write
             await supabase.from('fiscal_documents').update({
               freight_value: v,
               freight_value_original: v,

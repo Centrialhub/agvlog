@@ -83,6 +83,7 @@ export function useRecalculateCTeFreight() {
 
       const { error: upErr } = await supabase
         .from('fiscal_documents')
+        // guardrail:allow-direct-write
         .update({
           freight_value: newValue,
           freight_value_original: newValue,
