@@ -130,7 +130,7 @@ export default function LoadControl() {
             <CardContent className="p-3 grid gap-2 md:grid-cols-6">
               <div><Label className="text-xs">Nº carga</Label><Input value={filters.loadNumber || ''} onChange={e => set('loadNumber', e.target.value)} /></div>
               <div><Label className="text-xs">Status financeiro</Label>
-                <Select value={filters.paymentStatus || 'all'} onValueChange={v => set('paymentStatus', v === 'all' ? null : v)}>
+                <Select value={(filters.paymentStatus as string) || 'all'} onValueChange={v => set('paymentStatus', v === 'all' ? null : v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todos</SelectItem>
