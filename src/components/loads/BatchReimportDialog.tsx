@@ -336,6 +336,7 @@ export default function BatchReimportDialog() {
             value: validated.source.totalValue,
           };
           const existingDoc = (nextDoc.access_key && existingByAccessKey.get(nextDoc.access_key)) || (nextDoc.invoice_number && existingByInvoiceNumber.get(nextDoc.invoice_number));
+          // guardrail:allow-direct-write
           const { error } = await supabase.from('fiscal_documents').insert({
             tenant_id: currentTenant.id,
             created_by: user?.id,

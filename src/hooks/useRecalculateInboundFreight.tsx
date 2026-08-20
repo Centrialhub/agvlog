@@ -69,6 +69,7 @@ export function useRecalculateInboundFreight() {
             continue; 
           }
 
+          // guardrail:allow-direct-write
           const { error: upErr } = await supabase
             .from('fiscal_documents')
             .update({

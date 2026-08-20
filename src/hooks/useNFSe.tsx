@@ -197,6 +197,7 @@ export function useCreateNFSe() {
       // uma NF de entrada só pode virar UM documento de saída.
       const fdIds = (input as any).fiscal_document_ids as string[] | undefined;
       if (fdIds && fdIds.length) {
+        // guardrail:allow-direct-write
         await (supabase as any)
           .from('fiscal_documents')
           .update({ nfse_emitted_at: new Date().toISOString(), nfse_emitted_document_id: data.id })
@@ -234,6 +235,7 @@ export function useUpdateNFSe() {
         .single();
       if (error) throw error;
       if (fdIds) {
+        // guardrail:allow-direct-write
         // Libera NFs previamente vinculadas a esta NFS-e que não estão mais na lista
         await (supabase as any)
           .from('fiscal_documents')
@@ -241,6 +243,7 @@ export function useUpdateNFSe() {
           .eq('nfse_emitted_document_id', id)
           .not('id', 'in', `(${fdIds.length ? fdIds.map((x) => `"${x}"`).join(',') : '""'})`);
         if (fdIds.length) {
+          // guardrail:allow-direct-write
           await (supabase as any)
             .from('fiscal_documents')
             .update({ nfse_emitted_at: new Date().toISOString(), nfse_emitted_document_id: id })

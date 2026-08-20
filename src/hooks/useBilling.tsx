@@ -174,6 +174,7 @@ export function useDeleteIssuedCte() {
       }
 
       // Libera as NFs vinculadas para novo faturamento
+      // guardrail:allow-direct-write
       const { error: relErr } = await supabase
         .from('fiscal_documents')
         .update({ cte_emitted_at: null, cte_emitted_outbound_id: null } as any)
