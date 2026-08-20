@@ -27,7 +27,7 @@ function useDriversAll() {
 }
 
 export default function ProductivityReports() {
-  const { data: loads = [] } = useLoadsArray();
+  const { data: loadsData } = useLoadsArray(); const loads = (loadsData as any) || [];
   const { data: events = [] } = useOperationalEvents();
   const { data: clients = [] } = useClientsArray();
   const { data: vehicles = [] } = useVehicles();

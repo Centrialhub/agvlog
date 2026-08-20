@@ -73,7 +73,7 @@ export function useLoads(filters: { search?: string; status?: LoadStatus[] } = {
 export function useLoadsArray(filters: { search?: string; status?: LoadStatus[] } = {}) {
   const q = useLoads(filters);
   const dataArray = q.data?.items ?? [];
-  return { ...q, data: dataArray } as any; // Cast to any to satisfy legacy array expectations
+  return { ...q, data: dataArray } as any; 
 }
 
 export function useCreateLoad() {

@@ -134,7 +134,7 @@ const DEFAULT_BILLING_PREFS: BillingPreferences = {
 
 export default function Billing() {
   const { data: clients = [] } = useClientsArray();
-  const { data: loads = [] } = useLoadsArray();
+  const { data: loadsData } = useLoadsArray(); const loads = (loadsData as any) || [];
   const { data: batches = [] } = useCteBatches();
   const cancelBatch = useCancelCteBatch();
   const { currentTenant } = useTenant();

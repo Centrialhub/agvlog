@@ -93,7 +93,7 @@ export default function OperationalEvents() {
     document.getElementById('detalhamento-ocorrencias')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     setTimeout(() => searchRef.current?.focus({ preventScroll: true }), 400);
   }, []);
-  const { data: loads = [] } = useLoadsArray();
+  const { data: loadsData } = useLoadsArray(); const loads = (loadsData as any) || [];
   const { data: clients = [] } = useClientsArray();
   const createEvent = useCreateOperationalEvent();
   const updateEvent = useUpdateOperationalEvent();

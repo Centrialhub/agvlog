@@ -89,7 +89,7 @@ export default function Ingestion() {
   const { data: clients = [] } = useClientsArray();
   const { data: vehicles = [] } = useVehicles();
   const { data: drivers = [] } = useDrivers();
-  const { data: loads = [] } = useLoadsArray();
+  const { data: loadsData } = useLoadsArray(); const loads = (loadsData as any) || [];
   const { data: operationalRoutes = [] } = useOperationalRoutesArray();
   const { currentTenant } = useTenant();
   const { user } = useAuth();
