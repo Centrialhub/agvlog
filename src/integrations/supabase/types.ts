@@ -15165,6 +15165,18 @@ export type Database = {
         Args: { _notes?: string; _stop_id: string }
         Returns: string
       }
+      driver_report_event_v1: {
+        Args: {
+          p_driver_id: string
+          p_event_type: string
+          p_idempotency_key?: string
+          p_payload?: Json
+          p_stop_id: string
+          p_tenant_id: string
+          p_trip_id: string
+        }
+        Returns: Json
+      }
       driver_save_checklist: {
         Args: { _kind: string; _payload: Json; _trip_id: string }
         Returns: string
@@ -15278,6 +15290,10 @@ export type Database = {
       }
       get_client_portal_upcoming_deliveries_v2: {
         Args: { _client_id: string; _limit?: number; _tenant_id: string }
+        Returns: Json
+      }
+      get_driver_workspace_v1: {
+        Args: { p_driver_id: string; p_tenant_id: string }
         Returns: Json
       }
       get_next_load_number_v1: {

@@ -3,7 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useAuth } from '@/hooks/useAuth';
-import { useCurrentDriver, useActiveTrip } from '@/hooks/useCurrentDriver';
+import { useCurrentDriver } from '@/hooks/useCurrentDriver';
+import { useDriverWorkspace, useDriverExecution } from '@/hooks/useDriverWorkspace';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -37,40 +38,11 @@ export default function DriverStops() {
   const tripIdParam = searchParams.get('trip');
   const { user } = useAuth();
   const { data: driver } = useCurrentDriver();
-  const { data: autoTrip } = useActiveTrip(driver?.id);
+  const { data: workspace } = useDriverWorkspace();
+  const { reportEvent } = useDriverExecution();
 
-  const { data: trip } = useQuery({
-    queryKey: ['driver_trip_specific', tripIdParam],
-    queryFn: async () => {
-      if (!tripIdParam || !currentTenant) return null;
-      const { data, error } = await supabase
-        .from('dispatch_trips')
-        .select('*, loads(load_number, origin, destination)')
-        .eq('id', tripIdParam)
-        .eq('tenant_id', currentTenant.id)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!tripIdParam && !!currentTenant,
-  });
-
-  const activeTrip = tripIdParam ? trip : autoTrip;
-
-  const { data: stops = [] } = useQuery({
-    queryKey: ['driver_stops', activeTrip?.id],
-    queryFn: async () => {
-      if (!activeTrip) return [];
-      const { data, error } = await supabase
-        .from('dispatch_stops')
-        .select('*, clients(company_name)')
-        .eq('dispatch_trip_id', activeTrip.id)
-        .order('stop_order', { ascending: true });
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!activeTrip?.id,
-  });
+  const activeTrip = workspace?.has_active_trip ? workspace.trip : null;
+  const stops = workspace?.stops || [];
 
   useEffect(() => {
     if (!activeTrip?.id) return;
@@ -78,9 +50,9 @@ export default function DriverStops() {
       .channel(`driver_stops_${activeTrip.id}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'dispatch_stops', filter: `dispatch_trip_id=eq.${activeTrip.id}` },
+        { event: '*', schema: 'public', table: 'dispatch_events', filter: `dispatch_trip_id=eq.${activeTrip.id}` },
         () => {
-          qc.invalidateQueries({ queryKey: ['driver_stops'] });
+          qc.invalidateQueries({ queryKey: ['driver_workspace'] });
         },
       )
       .subscribe();
@@ -89,38 +61,24 @@ export default function DriverStops() {
     };
   }, [activeTrip?.id, qc]);
 
-  const updateStop = useMutation({
-    mutationFn: async ({ stopId, action, reason }: { stopId: string; action: 'arrival' | 'depart' | 'skipped' | 'refused' | 'damaged' | 'returned' | 'partial_delivery'; reason?: string }) => {
-      if (!activeTrip || !currentTenant || !user) throw new Error('Dados incompletos para atualização.');
-      
-      const newStatus = action === 'arrival' ? 'arrived' : 
-                       action === 'depart' ? 'servicing' : 
-                       action;
-
-      const { error } = await supabase.rpc('transition_stop_status_v1', {
-        p_tenant_id: currentTenant.id,
-        p_stop_id: stopId,
-        p_to_status: newStatus,
-        p_actor_id: user.id,
-        p_reason: reason || null,
-        p_idempotency_key: `${stopId}-${newStatus}-${Date.now()}`,
-      });
-      
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['driver_stops'] });
-      toast({ title: 'Parada atualizada' });
-    },
-    onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
-  });
-
   const handleArrival = (stopId: string) => {
-    updateStop.mutate({ stopId, action: 'arrival' });
+    if (!activeTrip) return;
+    reportEvent.mutate({
+      tripId: activeTrip.id,
+      stopId,
+      eventType: 'arrival',
+      idempotencyKey: `arrival-${stopId}`
+    });
   };
 
   const handleDeparture = (stopId: string) => {
-    updateStop.mutate({ stopId, action: 'depart' });
+    if (!activeTrip) return;
+    reportEvent.mutate({
+      tripId: activeTrip.id,
+      stopId,
+      eventType: 'departure',
+      idempotencyKey: `departure-${stopId}`
+    });
   };
 
   const openNavigation = (destination: string) => {
@@ -206,12 +164,12 @@ export default function DriverStops() {
                     </Button>
                   )}
                   {stop.status === 'pending' && !isStopTerminal(stop.status) && (
-                    <Button size="sm" className="text-xs" onClick={() => handleArrival(stop.id)} disabled={updateStop.isPending}>
+                    <Button size="sm" className="text-xs" onClick={() => handleArrival(stop.id)} disabled={reportEvent.isPending}>
                       <ArrowRight className="h-3 w-3 mr-1" /> Cheguei
                     </Button>
                   )}
                   {stop.status === 'arrived' && !isStopTerminal(stop.status) && (
-                    <Button size="sm" variant="outline" className="text-xs" onClick={() => handleDeparture(stop.id)} disabled={updateStop.isPending}>
+                    <Button size="sm" variant="outline" className="text-xs" onClick={() => handleDeparture(stop.id)} disabled={reportEvent.isPending}>
                       <CheckCircle className="h-3 w-3 mr-1" /> Registrar saída
                     </Button>
                   )}

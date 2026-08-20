@@ -3,7 +3,8 @@ import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
-import { useCurrentDriver, useActiveTrip } from '@/hooks/useCurrentDriver';
+import { useCurrentDriver } from '@/hooks/useCurrentDriver';
+import { useDriverWorkspace, useDriverExecution, type DriverEventType } from '@/hooks/useDriverWorkspace';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -81,9 +82,10 @@ export default function DriverDeliveries() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const { data: driver } = useCurrentDriver();
-  const { data: trip } = useActiveTrip(driver?.id);
+  const { data: workspace, isLoading: workspaceLoading } = useDriverWorkspace();
+  const { reportEvent } = useDriverExecution();
 
-  const effectiveTrip: any = trip || {};
+  const effectiveTrip: any = workspace?.trip || {};
 
   const [tab, setTab] = useState<'em_rota' | 'concluidas'>('em_rota');
   const [search, setSearch] = useState('');
@@ -134,13 +136,13 @@ export default function DriverDeliveries() {
 
   // Itens reais da parada: fiscal_documents da carga (por client_id da parada) → load_items.
   const { data: realStopProducts = [] } = useQuery({
-    queryKey: ['driver_stop_products', trip?.load_id, eventForm?.stop?.client_id],
+    queryKey: ['driver_stop_products', effectiveTrip?.id, eventForm?.stop?.client_id],
     queryFn: async () => {
-      if (!trip?.load_id || !eventForm?.stop?.client_id) return [] as any[];
+      if (!effectiveTrip?.id || !eventForm?.stop?.client_id) return [] as any[];
       const { data: docs, error: docsErr } = await supabase
         .from('fiscal_documents')
         .select('id, invoice_number')
-        .eq('load_id', trip.load_id)
+        .eq('load_id', workspace?.loads?.[0]?.id)
         .eq('client_id', eventForm.stop.client_id);
       if (docsErr) throw docsErr;
       const docIds = (docs || []).map((d: any) => d.id);
@@ -159,7 +161,7 @@ export default function DriverDeliveries() {
         price: 0,
       })) as any[];
     },
-    enabled: !!eventForm?.stop && !!trip?.load_id && !!eventForm?.stop?.client_id,
+    enabled: !!eventForm?.stop && !!effectiveTrip?.id && !!eventForm?.stop?.client_id,
   });
 
   const stopProducts: any[] = realStopProducts;
@@ -169,20 +171,8 @@ export default function DriverDeliveries() {
     return sum + q * p.price;
   }, 0);
 
-  const { data: stops = [], isLoading: stopsLoading } = useQuery({
-    queryKey: ['driver_delivery_stops', effectiveTrip?.id],
-    queryFn: async () => {
-      if (!effectiveTrip?.id) return [];
-      const { data, error } = await supabase
-        .from('dispatch_stops')
-        .select('*, clients(company_name)')
-        .eq('dispatch_trip_id', effectiveTrip.id)
-        .order('stop_order', { ascending: true });
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!effectiveTrip?.id,
-  });
+  const stops = workspace?.stops || [];
+  const stopsLoading = workspaceLoading;
 
   const effectiveStops: any[] = (stops as any[]) || [];
 
@@ -290,7 +280,7 @@ export default function DriverDeliveries() {
         const results = await Promise.allSettled(
           photos.map(async (photo) => {
             const ext = (photo.name.split('.').pop() || 'jpg').toLowerCase();
-            const path = `${currentTenant!.id}/deliveries/${trip!.id}/${eventForm.stop.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+            const path = `${currentTenant!.id}/deliveries/${effectiveTrip.id}/${eventForm.stop.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
             const { error } = await supabase.storage.from('receipts').upload(path, photo, { contentType: photo.type });
             if (error) throw error;
             return path;
@@ -312,7 +302,7 @@ export default function DriverDeliveries() {
       let signaturePath: string | null = null;
       if (signatureDataUrl) {
         const blob = await (await fetch(signatureDataUrl)).blob();
-        const path = `${currentTenant!.id}/deliveries/${trip!.id}/${eventForm.stop.id}/signature_${Date.now()}.png`;
+        const path = `${currentTenant!.id}/deliveries/${effectiveTrip.id}/${eventForm.stop.id}/signature_${Date.now()}.png`;
         const { error } = await supabase.storage.from('receipts').upload(path, blob, { contentType: 'image/png' });
         if (error) {
           if (photoPaths.length > 0) {
@@ -323,145 +313,38 @@ export default function DriverDeliveries() {
         signaturePath = path;
       }
 
-      // Caminho seguro: finalizador "ENTREGUE" passa por RPC transacional de transição de estado.
-      if (def.finalAction === 'delivered') {
-        try {
-          const { error: rpcErr, data } = await supabase.rpc('transition_stop_status_v1', {
-            p_tenant_id: currentTenant!.id,
-            p_stop_id: eventForm.stop.id,
-            p_to_status: 'delivered',
-            p_actor_id: driver?.user_id,
-            p_reason: notes?.trim() || 'Entrega realizada via App',
-            p_idempotency_key: `finalize-${eventForm.stop.id}-${Date.now()}`,
-            p_metadata: {
-              receiver_name: receiverName.trim(),
-              receiver_document: receiverDoc.trim() || null,
-              signature_path: signaturePath,
-              photo_paths: photoPaths,
-            }
-          });
-          if (rpcErr) {
-            console.error('[DriverDeliveries] Finalize RPC error:', rpcErr);
-            throw rpcErr;
-          }
-          return data;
-        } catch (err: any) {
-          console.error('[DriverDeliveries] Finalize mutation error:', err);
-          throw err;
-        }
-      }
-
-      // Mapa de eventos → RPCs seguras. Nenhum write direto em tabela operacional.
+      // All events now use the idempotent reportEvent RPC
       const reason = notes?.trim() || null;
-
-      if (def.key === 'chegada_no_cliente') {
-        try {
-          const { error, data } = await supabase.rpc('transition_stop_status_v1', {
-            p_tenant_id: currentTenant!.id,
-            p_stop_id: eventForm.stop.id,
-            p_to_status: 'arrived',
-            p_actor_id: driver?.user_id,
-            p_reason: 'Chegada no cliente via App',
-            p_idempotency_key: `arrival-${eventForm.stop.id}-${Date.now()}`
-          });
-          if (error) {
-            console.error('[DriverDeliveries] Arrival RPC error:', error);
-            throw error;
-          }
-          return data;
-        } catch (err: any) {
-          console.error('[DriverDeliveries] Arrival mutation error:', err);
-          throw err;
-        }
-      }
-
-      // Status finalizadores via driver_update_stop_status
-      const STATUS_MAP: Record<string, string | undefined> = {
-        devolucao_parcial: 'partial_delivery',
-        devolucao_total: 'returned',
-        cliente_recusou: 'refused',
-        cliente_estava_fora: 'failed',
-      };
-      const mappedStatus = STATUS_MAP[def.key];
-      if (mappedStatus) {
-        try {
-          const { error: statusErr } = await supabase.rpc('transition_stop_status_v1', {
-            p_tenant_id: currentTenant!.id,
-            p_stop_id: eventForm.stop.id,
-            p_to_status: mappedStatus,
-            p_actor_id: driver?.user_id,
-            p_reason: reason || 'Evento reportado via App',
-            p_idempotency_key: `event-${def.key}-${eventForm.stop.id}-${Date.now()}`
-          });
-          
-          if (statusErr) {
-            console.error('[DriverDeliveries] Status update RPC error:', statusErr);
-            throw statusErr;
-          }
-
-          // anexa evento contextual (fotos, recebedor, itens) sem alterar status
-          const { error: evtErr } = await supabase.rpc('driver_create_event', {
-            _trip_id: trip!.id,
-            _event_type: `info_${def.key}`,
-            _payload: {
-              event_subtype: def.key,
-              event_label: def.label,
-              receiver_name: receiverName.trim() || null,
-              receiver_document: receiverDoc.trim() || null,
-              photo_paths: photoPaths,
-              photo_count: photoPaths.length,
-              signature_path: signaturePath,
-              returned_items: returnedItems,
-            },
-            _stop_id: eventForm.stop.id,
-            _notes: reason,
-          } as any);
-          
-          if (evtErr) {
-            console.error('[DriverDeliveries] Contextual event RPC error:', evtErr);
-            // Non-critical, but log it
-          }
-
-          setThreads((prev) => ({ ...prev, [threadKey]: [...(prev[threadKey] || []), buildDriverSummary()] }));
-          return;
-        } catch (err: any) {
-          console.error('[DriverDeliveries] Status update chain error:', err);
-          throw err;
-        }
-      }
-
-      // Eventos informativos (avaria, solicitar_desconto, atualizar_boleto, coleta_realizada, etc.)
       try {
-        const { error: evtErr, data } = await supabase.rpc('driver_create_event', {
-          _trip_id: trip!.id,
-          _event_type: `info_${def.key}`,
-          _payload: {
-            event_subtype: def.key,
-            event_label: def.label,
+        let eventType: DriverEventType = 'departure';
+        if (def.finalAction === 'delivered') eventType = 'delivery_complete';
+        else if (def.key === 'chegada_no_cliente') eventType = 'arrival';
+        else if (def.key === 'cliente_recusou') eventType = 'delivery_refusal';
+
+        reportEvent.mutate({
+          tripId: effectiveTrip.id,
+          stopId: eventForm.stop.id,
+          eventType: eventType,
+          payload: {
+            reason: reason || 'Evento reportado via App',
             receiver_name: receiverName.trim() || null,
             receiver_document: receiverDoc.trim() || null,
             photo_paths: photoPaths,
-            photo_count: photoPaths.length,
             signature_path: signaturePath,
+            returned_items: returnedItems,
             discount_amount: discountAmount || null,
             discount_kind: discountKind,
             discount_reason: discountReason || null,
             boleto_due_date: boletoDueDate || null,
             boleto_note: boletoNote || null,
           },
-          _stop_id: eventForm.stop.id,
-          _notes: reason,
-        } as any);
-        
-        if (evtErr) {
-          console.error('[DriverDeliveries] Info event RPC error:', evtErr);
-          throw evtErr;
-        }
-        
+          idempotencyKey: `event-${def.key}-${eventForm.stop.id}`
+        });
+
         setThreads((prev) => ({ ...prev, [threadKey]: [...(prev[threadKey] || []), buildDriverSummary()] }));
-        return data;
+        return true;
       } catch (err: any) {
-        console.error('[DriverDeliveries] Info event mutation error:', err);
+        console.error('[DriverDeliveries] submitEvent error:', err);
         throw err;
       }
     },
