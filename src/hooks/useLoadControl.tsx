@@ -122,7 +122,8 @@ export function useLoadDocuments(loadId?: string) {
   });
 }
 
-export function useUnloadingCharges(loadId?: string) {
+export function useUnloadingCharges(arg: string | { loadId?: string }) {
+  const loadId = typeof arg === 'string' ? arg : arg.loadId;
   return useQuery({
     queryKey: ['unloading-charges', loadId],
     queryFn: async () => {
