@@ -5678,6 +5678,8 @@ export type Database = {
         Row: {
           amount_expected: number
           amount_matched: number
+          audited_at: string | null
+          auditor_id: string | null
           bank_account_id: string | null
           competence_date: string | null
           counterparty_id: string | null
@@ -5690,6 +5692,8 @@ export type Database = {
           due_date: string | null
           expected_payment_date: string | null
           id: string
+          idempotency_key: string | null
+          ledger_entry_id: string | null
           matching_status: string
           metadata: Json
           obligation_type: string
@@ -5704,6 +5708,8 @@ export type Database = {
         Insert: {
           amount_expected?: number
           amount_matched?: number
+          audited_at?: string | null
+          auditor_id?: string | null
           bank_account_id?: string | null
           competence_date?: string | null
           counterparty_id?: string | null
@@ -5716,6 +5722,8 @@ export type Database = {
           due_date?: string | null
           expected_payment_date?: string | null
           id?: string
+          idempotency_key?: string | null
+          ledger_entry_id?: string | null
           matching_status?: string
           metadata?: Json
           obligation_type: string
@@ -5730,6 +5738,8 @@ export type Database = {
         Update: {
           amount_expected?: number
           amount_matched?: number
+          audited_at?: string | null
+          auditor_id?: string | null
           bank_account_id?: string | null
           competence_date?: string | null
           counterparty_id?: string | null
@@ -5742,6 +5752,8 @@ export type Database = {
           due_date?: string | null
           expected_payment_date?: string | null
           id?: string
+          idempotency_key?: string | null
+          ledger_entry_id?: string | null
           matching_status?: string
           metadata?: Json
           obligation_type?: string
@@ -5759,6 +5771,13 @@ export type Database = {
             columns: ["bank_account_id"]
             isOneToOne: false
             referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financial_obligations_ledger_entry_id_fkey"
+            columns: ["ledger_entry_id"]
+            isOneToOne: false
+            referencedRelation: "operational_ledger"
             referencedColumns: ["id"]
           },
           {
@@ -10747,6 +10766,62 @@ export type Database = {
           },
         ]
       }
+      operational_ledger: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          entry_type: string
+          id: string
+          idempotency_key: string | null
+          metadata: Json
+          nature: string
+          source_id: string
+          source_table: string
+          status: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          created_by?: string | null
+          entry_type: string
+          id?: string
+          idempotency_key?: string | null
+          metadata?: Json
+          nature: string
+          source_id: string
+          source_table: string
+          status?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          entry_type?: string
+          id?: string
+          idempotency_key?: string | null
+          metadata?: Json
+          nature?: string
+          source_id?: string
+          source_table?: string
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "operational_ledger_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       operational_routes: {
         Row: {
           active: boolean | null
@@ -15022,6 +15097,10 @@ export type Database = {
         }
         Returns: string
       }
+      approve_financial_obligation_v1: {
+        Args: { _notes?: string; _obligation_id: string }
+        Returns: boolean
+      }
       approve_payroll_period: {
         Args: { _period_id: string }
         Returns: undefined
@@ -16209,6 +16288,10 @@ export type Database = {
       reverse_financial_match: {
         Args: { _match_id: string; _reason: string }
         Returns: undefined
+      }
+      reverse_financial_obligation_v1: {
+        Args: { _obligation_id: string; _reason: string }
+        Returns: boolean
       }
       reverse_payable_payment: {
         Args: { _payment_id: string }
