@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useOrders, ORDER_STATUS_LABELS, OrderStatus } from '@/hooks/useOrders';
-import { useLoads, useLoadsArray, LOAD_STATUS_LABELS, LoadStatus } from '@/hooks/useLoads';
+import { useLoads, useLoadsArray, useLoadsArray, LOAD_STATUS_LABELS, LoadStatus } from '@/hooks/useLoads';
 import { useInventoryBalances } from '@/hooks/useInventory';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useIncidents, SEVERITY_LABELS, INCIDENT_STATUS_LABELS } from '@/hooks/useIncidents';

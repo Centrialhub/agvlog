@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useLoads, useLoadsArray, LOAD_STATUS_LABELS } from '@/hooks/useLoads';
+import { useLoads, useLoadsArray, useLoadsArray, LOAD_STATUS_LABELS } from '@/hooks/useLoads';
 import { useOperationalEvents } from '@/hooks/useOperationalEvents';
 import { useClients, useClientsArray } from '@/hooks/useClients';
 import { useVehicles } from '@/hooks/useVehicles';

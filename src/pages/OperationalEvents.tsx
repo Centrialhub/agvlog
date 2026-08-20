@@ -4,7 +4,7 @@ import {
   useOperationalEventsFiltered,
   EVENT_TYPES, EVENT_TYPE_LABELS, SEVERITY_LABELS, OperationalEvent,
 } from '@/hooks/useOperationalEvents';
-import { useLoads, useLoadsArray } from '@/hooks/useLoads';
+import { useLoads, useLoadsArray, useLoadsArray } from '@/hooks/useLoads';
 import { useClients, useClientsArray } from '@/hooks/useClients';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';

@@ -72,7 +72,7 @@ export default function Loads() {
   const [customEnd, setCustomEnd] = useState('');
   const [advFilters, setAdvFilters] = useState<LoadAdvancedFiltersValue>(EMPTY_LOAD_ADVANCED_FILTERS);
 
-  const { data: loadsData, isLoading, refetch } = useLoads({ 
+  const { data: loadsData, isLoading, refetch } = useLoadsArray({ 
     search, 
     status: statusFilter === 'all' ? undefined : [statusFilter as any] 
   });
