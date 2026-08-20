@@ -113,33 +113,7 @@ export function useCreateLoad() {
  * Atomic load creation with server-side numbering.
  */
 export function useCreateLoadWithNextNumber() {
-  const { currentTenant } = useTenant();
-  const qc = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (loadData: Partial<Load>) => {
-      if (!currentTenant) throw new Error('Tenant not found');
-      
-      const nextNumber = await getNextLoadNumberFromExisting(currentTenant.id);
-      
-      const { data, error } = await supabase
-        // linter:allow-direct-write loads manual-load-create-number 2026-12-31
-      .from('loads')
-        .insert([{ 
-          ...loadData, 
-          load_number: nextNumber,
-          tenant_id: currentTenant.id 
-        }] as any)
-        .select()
-        .single();
-        
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['loads'] });
-    },
-  });
+  return useCreateLoad();
 }
 
 export function useUpdateLoad() {
