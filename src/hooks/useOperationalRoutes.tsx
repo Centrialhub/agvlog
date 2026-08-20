@@ -47,7 +47,7 @@ export function useOperationalRoutesArray(filters: { search?: string; includeIna
 }
 
 export function useOperationalRoutesArray(filters: { search?: string; includeInactive?: boolean } = {}) {
-  const q = useOperationalRoutesArray(filters);
+  const q = useOperationalRoutes(filters);
   return { ...q, data: q.data?.items ?? [] };
 }
 
