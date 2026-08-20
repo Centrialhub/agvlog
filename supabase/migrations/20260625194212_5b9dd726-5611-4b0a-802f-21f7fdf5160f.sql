@@ -13,7 +13,8 @@ CREATE OR REPLACE FUNCTION public.list_driver_settlements(
   _only_needs_recalculation boolean DEFAULT false,
   _page integer DEFAULT 1,
   _page_size integer DEFAULT 50
-) RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
+) RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER
+  SET search_path = public SET search_path = public AS $$
 DECLARE
   v_offset int;
   v_q text;
@@ -94,7 +95,8 @@ END; $$;
 CREATE OR REPLACE FUNCTION public.update_driver_settlement_status(
   _settlement_id uuid, _new_status text, _reason text DEFAULT NULL, _allow_exceptions boolean DEFAULT false
 ) RETURNS public.driver_settlements
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = public SET search_path = public AS $$
 DECLARE
   v_user uuid := auth.uid();
   v_s public.driver_settlements;
@@ -170,7 +172,8 @@ CREATE OR REPLACE FUNCTION public.register_driver_settlement_payment(
   _payment_account text DEFAULT NULL, _payment_reference text DEFAULT NULL,
   _receipt_url text DEFAULT NULL, _notes text DEFAULT NULL,
   _allow_overpayment boolean DEFAULT false, _overpayment_reason text DEFAULT NULL
-) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = public SET search_path = public AS $$
 DECLARE
   v_s public.driver_settlements; v_id uuid; v_total numeric;
   v_balance numeric; v_is_admin boolean; v_prev_status text;

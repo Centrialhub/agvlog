@@ -283,6 +283,7 @@ CREATE OR REPLACE FUNCTION public.recompute_payroll_entry_totals(_entry_id uuid)
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -334,6 +335,7 @@ CREATE OR REPLACE FUNCTION public.generate_payroll_period(
 ) RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -524,6 +526,7 @@ CREATE OR REPLACE FUNCTION public.recalculate_payroll_entry(_entry_id uuid)
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -554,6 +557,7 @@ CREATE OR REPLACE FUNCTION public.approve_payroll_period(_period_id uuid)
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -618,6 +622,7 @@ CREATE OR REPLACE FUNCTION public.close_payroll_period(_period_id uuid, _reason 
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -659,6 +664,7 @@ CREATE OR REPLACE FUNCTION public.register_employee_advance(
 ) RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE

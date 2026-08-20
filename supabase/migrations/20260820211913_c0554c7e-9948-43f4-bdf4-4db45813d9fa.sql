@@ -69,6 +69,7 @@ CREATE OR REPLACE FUNCTION public.log_operational_event_v2(
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE

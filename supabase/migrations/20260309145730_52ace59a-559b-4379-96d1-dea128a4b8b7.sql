@@ -96,6 +96,7 @@ CREATE OR REPLACE FUNCTION public.count_points_in_geofence(
 LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
+  SET search_path = public
 SET search_path TO 'public','extensions'
 AS $$
 DECLARE

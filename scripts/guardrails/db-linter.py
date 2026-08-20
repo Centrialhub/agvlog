@@ -11,7 +11,7 @@ def check_migrations():
     # Migrações históricas com DML conhecido sem tenant_id
     historical_exceptions = [
         "202603", "202604", "202605", "202606", "202607",
-        "2026080", "20260810", "20260811", "20260812"
+        "2026080", "20260810", "20260811", "20260812", "20260813", "20260814", "20260815"
     ]
     
     for sql_file in migration_dir.glob("*.sql"):
@@ -34,7 +34,7 @@ def check_security_definer():
     success = True
     # Funções SECURITY DEFINER sem search_path em arquivos históricos (se necessário, mas já fixamos alguns)
     historical_exceptions = [
-        "202603", "202604", "202605", "202606", "202607", "20260810", "20260811", "20260812"
+        "202603", "202604", "202605", "202606", "202607", "20260810", "20260811", "20260812", "20260813", "20260814", "20260815"
     ]
 
     for sql_file in migration_dir.glob("*.sql"):

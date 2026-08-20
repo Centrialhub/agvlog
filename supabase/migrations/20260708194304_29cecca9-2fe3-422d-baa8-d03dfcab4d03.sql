@@ -4,7 +4,8 @@
 -- =====================================================================
 CREATE OR REPLACE FUNCTION public._portal_assert_client_access(_tenant_id uuid, _client_id uuid)
 RETURNS void
-LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path TO 'public'
+LANGUAGE plpgsql STABLE SECURITY DEFINER
+  SET search_path = public SET search_path TO 'public'
 AS $$
 BEGIN
   IF _client_id IS NULL THEN RETURN; END IF;
@@ -29,7 +30,8 @@ CREATE OR REPLACE FUNCTION public.list_client_documents_v2(
 RETURNS TABLE(id uuid, document_type text, invoice_number text, access_key text,
   issue_date date, remitter text, recipient text, recipient_city text, recipient_state text,
   value numeric, weight_kg numeric, status text, load_id uuid, client_id uuid, has_pod boolean)
-LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path TO 'public'
+LANGUAGE plpgsql STABLE SECURITY DEFINER
+  SET search_path = public SET search_path TO 'public'
 AS $$
 BEGIN
   PERFORM public._portal_assert_client_access(_tenant_id, _client_id);
@@ -65,7 +67,8 @@ CREATE OR REPLACE FUNCTION public.list_client_pods_v2(
 RETURNS TABLE(id uuid, fiscal_document_id uuid, load_id uuid, invoice_number text,
   proof_type text, status text, has_file boolean, receiver_name text,
   receiver_document text, receiver_role text, received_at timestamptz, validated_at timestamptz)
-LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path TO 'public'
+LANGUAGE plpgsql STABLE SECURITY DEFINER
+  SET search_path = public SET search_path TO 'public'
 AS $$
 BEGIN
   PERFORM public._portal_assert_client_access(_tenant_id, _client_id);
@@ -94,7 +97,8 @@ CREATE OR REPLACE FUNCTION public.list_client_pickups_v2(
 )
 RETURNS TABLE(id uuid, pickup_number text, remitter_name text, remitter_cnpj text,
   recipient_name text, pickup_at timestamptz, status text, notes text, linked_docs_count bigint)
-LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path TO 'public'
+LANGUAGE plpgsql STABLE SECURITY DEFINER
+  SET search_path = public SET search_path TO 'public'
 AS $$
 BEGIN
   PERFORM public._portal_assert_client_access(_tenant_id, _client_id);
@@ -121,7 +125,8 @@ CREATE OR REPLACE FUNCTION public.list_client_occurrences_v2(
 RETURNS TABLE(id uuid, load_id uuid, order_id uuid, event_type text, severity text,
   description text, public_status text, client_action_required boolean, client_opened boolean,
   client_resolution_note text, resolution text, resolved_at timestamptz, created_at timestamptz)
-LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path TO 'public'
+LANGUAGE plpgsql STABLE SECURITY DEFINER
+  SET search_path = public SET search_path TO 'public'
 AS $$
 BEGIN
   PERFORM public._portal_assert_client_access(_tenant_id, _client_id);
@@ -149,7 +154,8 @@ CREATE OR REPLACE FUNCTION public.search_client_portal_shipments_v2(
   _has_pod boolean DEFAULT NULL, _has_occurrence boolean DEFAULT NULL,
   _limit integer DEFAULT 50, _offset integer DEFAULT 0
 ) RETURNS jsonb
-LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path TO 'public'
+LANGUAGE plpgsql STABLE SECURITY DEFINER
+  SET search_path = public SET search_path TO 'public'
 AS $$
 DECLARE _rows jsonb; _total int; _search_norm text;
 BEGIN
@@ -224,7 +230,8 @@ CREATE OR REPLACE FUNCTION public.get_client_portal_reports_summary_v2(
   _tenant_id uuid, _client_id uuid DEFAULT NULL,
   _start_date date DEFAULT NULL, _end_date date DEFAULT NULL
 ) RETURNS jsonb
-LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path TO 'public'
+LANGUAGE plpgsql STABLE SECURITY DEFINER
+  SET search_path = public SET search_path TO 'public'
 AS $$
 DECLARE v_result jsonb;
   v_start date := COALESCE(_start_date, (now() - interval '90 days')::date);
@@ -306,7 +313,8 @@ END; $$;
 CREATE OR REPLACE FUNCTION public.get_client_portal_tracking(
   _tenant_id uuid, _client_id uuid DEFAULT NULL
 ) RETURNS jsonb
-LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path TO 'public'
+LANGUAGE plpgsql STABLE SECURITY DEFINER
+  SET search_path = public SET search_path TO 'public'
 AS $$
 DECLARE v_result jsonb;
 BEGIN
@@ -406,7 +414,8 @@ CREATE OR REPLACE FUNCTION public.register_employee_advance(
   _payment_method text DEFAULT NULL, _payment_reference text DEFAULT NULL,
   _create_payable boolean DEFAULT false, _mark_paid boolean DEFAULT false
 ) RETURNS uuid
-LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = public SET search_path TO 'public'
 AS $$
 DECLARE
   _advance_id uuid; _driver uuid; _employee_name text;
@@ -469,7 +478,8 @@ CREATE OR REPLACE FUNCTION public.register_driver_settlement_payment(
   _notes text DEFAULT NULL, _allow_overpayment boolean DEFAULT false,
   _overpayment_reason text DEFAULT NULL
 ) RETURNS uuid
-LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = public SET search_path TO 'public'
 AS $$
 DECLARE
   v_s public.driver_settlements; v_id uuid; v_total numeric;

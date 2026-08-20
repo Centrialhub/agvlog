@@ -2,6 +2,7 @@ create or replace function public.fiscal_documents_enforce_single_outbound()
 returns trigger
 language plpgsql
 security definer
+  SET search_path = public
 set search_path = public
 as $$
 begin

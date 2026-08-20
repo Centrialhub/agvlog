@@ -13,6 +13,7 @@ CREATE OR REPLACE FUNCTION public.plan_dispatch_start_trip_v1(
 RETURNS UUID
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE

@@ -7,6 +7,7 @@ CREATE OR REPLACE FUNCTION public.get_driver_workspace_v1(
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -133,6 +134,7 @@ CREATE OR REPLACE FUNCTION public.driver_report_event_v1(
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE

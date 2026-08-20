@@ -3,7 +3,8 @@ CREATE OR REPLACE FUNCTION public.register_driver_settlement_payment(
   _payment_account text DEFAULT NULL, _payment_reference text DEFAULT NULL,
   _receipt_url text DEFAULT NULL, _notes text DEFAULT NULL,
   _allow_overpayment boolean DEFAULT false, _overpayment_reason text DEFAULT NULL
-) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = public SET search_path = public AS $$
 DECLARE
   v_s public.driver_settlements; v_id uuid; v_total numeric;
   v_balance numeric; v_is_admin boolean; v_prev_status text; v_new_status text;

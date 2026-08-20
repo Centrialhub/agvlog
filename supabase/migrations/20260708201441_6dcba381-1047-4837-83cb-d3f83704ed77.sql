@@ -3,6 +3,7 @@ CREATE OR REPLACE FUNCTION public.approve_payroll_period(_period_id uuid)
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $function$
 DECLARE
@@ -83,7 +84,8 @@ CREATE OR REPLACE FUNCTION public.register_employee_advance(
   _payment_method text DEFAULT NULL, _payment_reference text DEFAULT NULL,
   _create_payable boolean DEFAULT false, _mark_paid boolean DEFAULT false
 ) RETURNS uuid
-LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = public SET search_path TO 'public'
 AS $$
 DECLARE
   _advance_id uuid; _driver uuid; _employee_name text;
@@ -145,7 +147,8 @@ CREATE OR REPLACE FUNCTION public.register_driver_settlement_payment(
   _notes text DEFAULT NULL, _allow_overpayment boolean DEFAULT false,
   _overpayment_reason text DEFAULT NULL
 ) RETURNS uuid
-LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public'
+LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = public SET search_path TO 'public'
 AS $$
 DECLARE
   v_s public.driver_settlements; v_id uuid; v_total numeric;

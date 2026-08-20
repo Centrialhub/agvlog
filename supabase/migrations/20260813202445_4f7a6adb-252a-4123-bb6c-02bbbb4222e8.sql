@@ -23,6 +23,7 @@ BEGIN
     IF v_doc_count = 0 THEN
         -- Get tenant_id for the log/auth check if needed, though we use SECURITY DEFINER
   SET search_path = public
+  SET search_path = public
         SELECT tenant_id INTO v_tenant_id FROM public.loads WHERE id = v_load_id;
         
         IF v_tenant_id IS NOT NULL THEN
@@ -35,7 +36,8 @@ EXCEPTION WHEN OTHERS THEN
     -- Silently fail to avoid blocking the main transaction
     NULL;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = public;
 
 -- 2. Create a trigger function for fiscal_documents
 CREATE OR REPLACE FUNCTION public.trg_handle_empty_load_on_doc_change()

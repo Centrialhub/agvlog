@@ -162,6 +162,7 @@ CREATE OR REPLACE FUNCTION public.next_pallet_return_protocol_number(_tenant_id 
 RETURNS text
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -186,6 +187,7 @@ CREATE OR REPLACE FUNCTION public.create_pallet_return_protocol(_tenant_id uuid,
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -267,6 +269,7 @@ CREATE OR REPLACE FUNCTION public.update_pallet_return_status(_protocol_id uuid,
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -329,6 +332,7 @@ CREATE OR REPLACE FUNCTION public.cancel_pallet_return_protocol(_protocol_id uui
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE

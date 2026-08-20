@@ -13,6 +13,7 @@ returns table (
 )
 language plpgsql
 security definer
+  SET search_path = public
 set search_path = public
 as $$
 begin

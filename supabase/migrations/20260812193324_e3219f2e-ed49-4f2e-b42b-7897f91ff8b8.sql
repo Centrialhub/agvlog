@@ -14,6 +14,7 @@ CREATE OR REPLACE FUNCTION public.add_driver_settlement_manual_expense(
 RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE

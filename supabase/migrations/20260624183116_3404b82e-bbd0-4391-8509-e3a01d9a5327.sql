@@ -33,7 +33,8 @@ CREATE POLICY "audit_log_admin_read" ON public.entity_audit_log
 CREATE OR REPLACE FUNCTION public._log_entity_audit(
   _tenant_id uuid, _entity_type text, _entity_id uuid, _action text,
   _old jsonb DEFAULT NULL, _new jsonb DEFAULT NULL, _source text DEFAULT NULL
-) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+) RETURNS void LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = public SET search_path = public AS $$
 DECLARE v_role text;
 BEGIN
   SELECT role::text INTO v_role FROM public.tenant_memberships
@@ -55,7 +56,8 @@ END $$;
 CREATE OR REPLACE FUNCTION public.request_client_pickup(
   _tenant_id uuid, _client_id uuid, _pickup_at timestamptz,
   _recipient_name text DEFAULT NULL, _notes text DEFAULT NULL
-) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = public SET search_path = public AS $$
 DECLARE
   v_id uuid; v_num text;
   v_requester_name text; v_requester_doc text;
@@ -96,7 +98,8 @@ END $$;
 CREATE OR REPLACE FUNCTION public.create_client_occurrence(
   _tenant_id uuid, _client_id uuid, _event_type text, _description text,
   _severity text DEFAULT 'medium', _load_id uuid DEFAULT NULL, _order_id uuid DEFAULT NULL
-) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = public SET search_path = public AS $$
 DECLARE v_id uuid; v_ok boolean;
 BEGIN
   IF NOT public._portal_user_has_perm(_tenant_id, _client_id, 'can_open_occurrences') THEN
@@ -153,7 +156,8 @@ DROP FUNCTION IF EXISTS public.driver_update_stop_status(uuid, text, text);
 
 CREATE OR REPLACE FUNCTION public.driver_update_stop_status(
   _stop_id uuid, _new_status text, _reason text DEFAULT NULL
-) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = public SET search_path = public AS $$
 DECLARE
   v_trip uuid; v_tenant uuid; v_event_type text; v_event uuid; v_current text;
   v_terminal text[] := public.stop_terminal_statuses();
@@ -285,7 +289,8 @@ END $$;
 -- 5. COMPOSIÇÃO DE CARGA
 -- ============================================================
 CREATE OR REPLACE FUNCTION public._load_is_locked(_load_id uuid)
-RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER
+  SET search_path = public SET search_path = public AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.loads l
     WHERE l.id = _load_id
@@ -300,7 +305,8 @@ $$;
 
 CREATE OR REPLACE FUNCTION public.assign_fiscal_documents_to_load(
   _tenant_id uuid, _load_id uuid, _document_ids uuid[]
-) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = public SET search_path = public AS $$
 DECLARE v_count int;
 BEGIN
   IF NOT public.is_tenant_operator_or_admin(_tenant_id) THEN RAISE EXCEPTION 'not_authorized'; END IF;
@@ -331,7 +337,8 @@ END $$;
 
 CREATE OR REPLACE FUNCTION public.remove_fiscal_documents_from_load(
   _tenant_id uuid, _load_id uuid, _document_ids uuid[]
-) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = public SET search_path = public AS $$
 DECLARE v_count int;
 BEGIN
   IF NOT public.is_tenant_operator_or_admin(_tenant_id) THEN RAISE EXCEPTION 'not_authorized'; END IF;
@@ -353,7 +360,8 @@ END $$;
 
 CREATE OR REPLACE FUNCTION public.move_load_items_between_loads(
   _tenant_id uuid, _source_load_id uuid, _target_load_id uuid, _item_ids uuid[]
-) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = public SET search_path = public AS $$
 DECLARE v_moved int; v_doc_ids uuid[];
 BEGIN
   IF NOT public.is_tenant_operator_or_admin(_tenant_id) THEN RAISE EXCEPTION 'not_authorized'; END IF;
@@ -389,7 +397,8 @@ BEGIN
 END $$;
 
 CREATE OR REPLACE FUNCTION public.delete_load_safely(_tenant_id uuid, _load_id uuid)
-RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = public SET search_path = public AS $$
 DECLARE v_pod_count int;
 BEGIN
   IF NOT public.is_tenant_operator_or_admin(_tenant_id) THEN RAISE EXCEPTION 'not_authorized'; END IF;
@@ -412,7 +421,8 @@ END $$;
 -- 6. STATUS PÚBLICO CENTRAL
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.get_public_shipment_status(_fiscal_document_id uuid)
-RETURNS text LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
+RETURNS text LANGUAGE plpgsql STABLE SECURITY DEFINER
+  SET search_path = public SET search_path = public AS $$
 DECLARE
   v_fd_status text; v_load_status text; v_stop_status text;
   v_has_pod boolean; v_has_critical_occ boolean;
@@ -465,7 +475,8 @@ CREATE OR REPLACE FUNCTION public.record_operational_event_with_status(
   _tenant_id uuid, _entity_type text, _entity_id uuid,
   _event_type text, _description text, _severity text DEFAULT 'medium',
   _new_status text DEFAULT NULL, _visible_to_client boolean DEFAULT false
-) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = public SET search_path = public AS $$
 DECLARE v_id uuid; v_load uuid; v_fd uuid; v_stop uuid; v_client uuid;
 BEGIN
   IF NOT public.is_tenant_operator_or_admin(_tenant_id) THEN RAISE EXCEPTION 'not_authorized'; END IF;
@@ -512,7 +523,8 @@ END $$;
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.audit_data_consistency(_tenant_id uuid)
 RETURNS TABLE(severity text, category text, entity_type text, entity_id uuid, message text)
-LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
+LANGUAGE plpgsql STABLE SECURITY DEFINER
+  SET search_path = public SET search_path = public AS $$
 BEGIN
   IF NOT public.is_tenant_admin(_tenant_id) THEN RAISE EXCEPTION 'not_authorized'; END IF;
 

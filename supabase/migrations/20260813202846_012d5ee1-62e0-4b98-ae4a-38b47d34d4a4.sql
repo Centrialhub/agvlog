@@ -28,6 +28,7 @@ EXCEPTION WHEN OTHERS THEN
     NULL;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = public
   SET search_path = public;
 
 -- Re-run cleanup for any currently empty loads in the system

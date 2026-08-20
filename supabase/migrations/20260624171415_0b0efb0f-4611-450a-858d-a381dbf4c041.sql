@@ -5,7 +5,8 @@
 CREATE OR REPLACE FUNCTION public.portal_user_can_download_fiscal_document(
   _tenant_id uuid, _fiscal_document_id uuid
 ) RETURNS boolean
-LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public' AS $$
+LANGUAGE sql STABLE SECURITY DEFINER
+  SET search_path = public SET search_path TO 'public' AS $$
   SELECT EXISTS (
     SELECT 1
     FROM public.fiscal_documents fd
@@ -35,7 +36,8 @@ GRANT EXECUTE ON FUNCTION public.portal_user_can_download_fiscal_document(uuid,u
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.stop_terminal_statuses()
 RETURNS text[]
-LANGUAGE sql IMMUTABLE SECURITY DEFINER SET search_path TO 'public' AS $$
+LANGUAGE sql IMMUTABLE SECURITY DEFINER
+  SET search_path = public SET search_path TO 'public' AS $$
   SELECT ARRAY[
     'completed','delivered','cancelled','skipped',
     'refused','returned','partial_delivery','failed'
@@ -52,7 +54,8 @@ CREATE OR REPLACE FUNCTION public.driver_finalize_delivery(
   _receiver_document text DEFAULT NULL::text, _receiver_role text DEFAULT NULL::text,
   _notes text DEFAULT NULL::text
 ) RETURNS jsonb
-LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $$
+LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = public SET search_path TO 'public' AS $$
 DECLARE
   v_trip uuid; v_tenant uuid; v_stop_status text;
   v_event uuid; v_pod_ids uuid[] := ARRAY[]::uuid[]; v_pod uuid;
@@ -164,7 +167,8 @@ END; $$;
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.driver_mark_arrival(_stop_id uuid)
 RETURNS uuid
-LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $$
+LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = public SET search_path TO 'public' AS $$
 DECLARE v_trip uuid; v_tenant uuid; v_event uuid; v_was_active boolean; v_status text;
 BEGIN
   SELECT dispatch_trip_id, tenant_id, status INTO v_trip, v_tenant, v_status
@@ -212,7 +216,8 @@ END; $$;
 CREATE OR REPLACE FUNCTION public.driver_update_stop_status(
   _stop_id uuid, _new_status text, _reason text DEFAULT NULL::text
 ) RETURNS uuid
-LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $$
+LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = public SET search_path TO 'public' AS $$
 DECLARE
   v_trip uuid; v_tenant uuid; v_event_type text; v_event uuid; v_current text;
   v_terminal text[] := public.stop_terminal_statuses();
@@ -275,7 +280,8 @@ END; $$;
 CREATE OR REPLACE FUNCTION public.driver_register_departure(
   _stop_id uuid, _notes text DEFAULT NULL
 ) RETURNS uuid
-LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $$
+LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = public SET search_path TO 'public' AS $$
 DECLARE v_trip uuid; v_tenant uuid; v_event uuid;
 BEGIN
   SELECT dispatch_trip_id, tenant_id INTO v_trip, v_tenant
@@ -302,7 +308,8 @@ GRANT EXECUTE ON FUNCTION public.driver_register_departure(uuid,text) TO authent
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.get_client_portal_shipment_detail(_fiscal_document_id uuid)
 RETURNS jsonb
-LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path TO 'public' AS $$
+LANGUAGE plpgsql STABLE SECURITY DEFINER
+  SET search_path = public SET search_path TO 'public' AS $$
 DECLARE
   _fd public.fiscal_documents;
   _tenant uuid;
@@ -391,7 +398,8 @@ CREATE OR REPLACE FUNCTION public.list_client_documents(
   id uuid, document_type text, invoice_number text, access_key text, issue_date date,
   remitter text, recipient text, recipient_city text, recipient_state text,
   value numeric, weight_kg numeric, status text, load_id uuid, client_id uuid, has_pod boolean
-) LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public' AS $$
+) LANGUAGE sql STABLE SECURITY DEFINER
+  SET search_path = public SET search_path TO 'public' AS $$
   SELECT fd.id, fd.document_type, fd.invoice_number, fd.access_key, fd.issue_date,
     fd.remitter, fd.recipient, fd.recipient_city, fd.recipient_state,
     CASE WHEN public.portal_user_can_view_financial(_tenant_id, fd.id) THEN fd.value END,
@@ -421,7 +429,8 @@ CREATE OR REPLACE FUNCTION public.list_client_pods(
   id uuid, fiscal_document_id uuid, load_id uuid, invoice_number text, proof_type text,
   status text, has_file boolean, receiver_name text, receiver_document text,
   receiver_role text, received_at timestamptz, validated_at timestamptz
-) LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public' AS $$
+) LANGUAGE sql STABLE SECURITY DEFINER
+  SET search_path = public SET search_path TO 'public' AS $$
   SELECT pod.id, pod.fiscal_document_id, pod.load_id, fd.invoice_number,
     pod.proof_type, pod.status, (pod.storage_path IS NOT NULL) AS has_file,
     pod.receiver_name, pod.receiver_document, pod.receiver_role,
@@ -439,7 +448,8 @@ $$;
 
 CREATE OR REPLACE FUNCTION public.get_client_pod_metadata(_tenant_id uuid, _pod_id uuid)
 RETURNS TABLE(storage_bucket text, storage_path text)
-LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public' AS $$
+LANGUAGE sql STABLE SECURITY DEFINER
+  SET search_path = public SET search_path TO 'public' AS $$
   SELECT pod.storage_bucket, pod.storage_path
   FROM public.proof_of_delivery pod
   WHERE pod.id = _pod_id
@@ -450,7 +460,8 @@ $$;
 CREATE OR REPLACE FUNCTION public.get_client_portal_summary(
   _tenant_id uuid, _start_date date DEFAULT NULL, _end_date date DEFAULT NULL
 ) RETURNS jsonb
-LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path TO 'public' AS $$
+LANGUAGE plpgsql STABLE SECURITY DEFINER
+  SET search_path = public SET search_path TO 'public' AS $$
 DECLARE _result jsonb;
 BEGIN
   IF NOT EXISTS(SELECT 1 FROM public.client_portal_access
@@ -501,7 +512,8 @@ END; $$;
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.get_active_trips_live(_tenant_id uuid)
 RETURNS jsonb
-LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path TO 'public' AS $$
+LANGUAGE plpgsql STABLE SECURITY DEFINER
+  SET search_path = public SET search_path TO 'public' AS $$
 DECLARE _result jsonb;
 BEGIN
   IF NOT (public.is_tenant_admin(_tenant_id) OR public.has_tenant_role(_tenant_id,'operator')) THEN
@@ -568,7 +580,8 @@ END; $$;
 
 CREATE OR REPLACE FUNCTION public.get_open_trip_alerts(_tenant_id uuid)
 RETURNS SETOF public.trip_alerts
-LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public' AS $$
+LANGUAGE sql STABLE SECURITY DEFINER
+  SET search_path = public SET search_path TO 'public' AS $$
   SELECT * FROM public.trip_alerts
   WHERE tenant_id = _tenant_id AND status = 'open'
     AND (public.is_tenant_admin(_tenant_id) OR public.has_tenant_role(_tenant_id,'operator'))

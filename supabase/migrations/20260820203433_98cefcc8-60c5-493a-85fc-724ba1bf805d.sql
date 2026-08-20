@@ -38,6 +38,7 @@ CREATE OR REPLACE FUNCTION public._recalculate_load_totals(_load_id uuid)
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 BEGIN
@@ -60,6 +61,7 @@ CREATE OR REPLACE FUNCTION public.link_fiscal_documents_to_load_v1(
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -152,6 +154,7 @@ CREATE OR REPLACE FUNCTION public.unlink_fiscal_documents_from_load_v1(
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -213,6 +216,7 @@ RETURNS TABLE (
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 BEGIN
@@ -272,6 +276,7 @@ CREATE OR REPLACE FUNCTION public.repair_load_composition(
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
+  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
