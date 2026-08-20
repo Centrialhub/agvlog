@@ -88,6 +88,7 @@ export function useCreateLoadItem() {
       // guardrail:allow-direct-write
       // Itens manuais (sem NF) podem ser inseridos diretamente — não afetam composição fiscal.
       const { data, error } = await (supabase as any)
+        // linter:allow-direct-write load_items manual-item-insert 2026-12-31
       .from('load_items').insert({
         ...values,
         tenant_id: currentTenant!.id,
@@ -117,6 +118,7 @@ export function useUpdateLoadItem() {
       }
       // guardrail:allow-direct-write
       const { data, error } = await (supabase as any)
+        // linter:allow-direct-write load_items manual-item-update 2026-12-31
       .from('load_items').update({
         ...values,
         updated_at: new Date().toISOString(),
@@ -155,6 +157,7 @@ export function useDeleteLoadItem() {
       // guardrail:allow-direct-write
       // Sem documento vinculado — item manual; libera delete direto.
       const { error } = await (supabase as any)
+        // linter:allow-direct-write load_items manual-item-delete 2026-12-31
       .from('load_items').delete().eq('id', id);
       if (error) throw error;
     },
