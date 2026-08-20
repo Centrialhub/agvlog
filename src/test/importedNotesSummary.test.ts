@@ -76,6 +76,6 @@ describe('exportImportedNotesCsv', () => {
     const lines = csv.split('\r\n');
     expect(lines[0]).toContain('Nº Nota');
     expect(lines).toHaveLength(2);
-    expect(lines[1].split(';').length).toBe(20);
+    expect(lines[1].split(';').length).toBe(22);
   });
 });

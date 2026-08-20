@@ -40,8 +40,17 @@ Deno.serve(async (req) => {
 
   if (!signature || !timestamp || !deliveryId) return new Response('Missing security headers', { status: 401 });
 
-  const ts = parseInt(timestamp, 10);
-  if (Math.abs(Math.floor(Date.now() / 1000) - ts) > 300) return new Response('Timestamp expired', { status: 401 });
+  // Validate timestamp (accepts both Unix seconds and ISO-8601)
+  let ts: number;
+  if (timestamp.includes('T') || timestamp.includes('-')) {
+    ts = Math.floor(new Date(timestamp).getTime() / 1000);
+  } else {
+    ts = parseInt(timestamp, 10);
+  }
+
+  if (isNaN(ts) || Math.abs(Math.floor(Date.now() / 1000) - ts) > 300) {
+    return new Response('Timestamp expired or invalid', { status: 401 });
+  }
 
   if (!(await verifyHmac(timestamp, rawBody, signature))) return new Response('Invalid signature', { status: 401 });
 
