@@ -11,7 +11,7 @@ import {
   PackageCheck, AlertOctagon, Upload, TrendingUp, ChevronDown, Plug,
   Radio, Receipt, DollarSign, UserCog, Package, Wrench,
   Boxes, ClipboardCheck, ArrowRightLeft, Wallet, FileSearch, FileSpreadsheet,
-  PackageOpen, MonitorPlay, Sprout, Tag,
+  PackageOpen, MonitorPlay, Sprout, Tag, ShieldCheck,
 } from 'lucide-react';
 
 type NavLeaf = { label: string; href: string; icon: ReactNode };
