@@ -60,7 +60,7 @@ export function useLoads(filters: { search?: string; status?: LoadStatus[] } = {
       if (error) throw error;
       
       // The RPC returns { items, next_cursor, total_count }
-      return data as PaginatedLoads;
+      return data as unknown as PaginatedLoads;
     },
     enabled: !!currentTenant,
   });
@@ -86,7 +86,7 @@ export function useCreateLoad() {
       if (!currentTenant) throw new Error('Tenant not found');
       const { data, error } = await supabase
         .from('loads')
-        .insert([{ ...load, tenant_id: currentTenant.id }])
+        .insert([{ ...load, tenant_id: currentTenant.id }] as any)
         .select()
         .single();
       if (error) throw error;
@@ -117,7 +117,7 @@ export function useCreateLoadWithNextNumber() {
           ...loadData, 
           load_number: nextNumber,
           tenant_id: currentTenant.id 
-        }])
+        }] as any)
         .select()
         .single();
         
@@ -136,7 +136,7 @@ export function useUpdateLoad() {
     mutationFn: async ({ id, ...changes }: Partial<Load> & { id: string }) => {
       const { data, error } = await supabase
         .from('loads')
-        .update(changes)
+        .update(changes as any)
         .eq('id', id)
         .select()
         .single();
