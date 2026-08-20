@@ -88,17 +88,20 @@ export function useCreateLoad() {
   return useMutation({
     mutationFn: async (load: Partial<Load>) => {
       if (!currentTenant) throw new Error('Tenant not found');
-      // Embora cargas manuais possam ser inseridas, encorajamos o uso de rpcs
-      // Para congruência, cargas de inbound (notas) vêm via link_fiscal_documents_to_load_v1
-      // guardrail:allow-direct-write
-      const { data, error } = await supabase
-        // linter:allow-direct-write loads manual-load-create 2026-12-31
-      .from('loads')
-        .insert([{ ...load, tenant_id: currentTenant.id }] as any)
-        .select()
-        .single();
+      
+      const { data, error } = await supabase.rpc('create_load_v1', {
+        p_tenant_id: currentTenant.id,
+        p_vehicle_id: load.vehicle_id || null,
+        p_driver_id: load.driver_id || null,
+        p_origin: load.origin || '',
+        p_destination: load.destination || '',
+        p_notes: load.notes || null,
+        p_operation_type: load.operation_type || null,
+        p_scheduled_load_at: load.scheduled_load_at || null,
+      });
+
       if (error) throw error;
-      return data;
+      return { id: data };
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['loads'] });
