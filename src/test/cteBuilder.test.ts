@@ -314,7 +314,8 @@ describe('cteBuilder — campos aceitos pela API v1 do Hub', () => {
   it('envia CFOP, dhEmi, inicio/fim, mercadoria e aliases de ICMS/valores', () => {
     const r = buildCtePayload(
       baseInput({
-        emitter: { id: 'em1', cnpj: '18666510000168', name: 'LIRA', environment: 'sandbox', address: { state: 'SP', city: 'SAO PAULO', city_ibge: '3550308' } },
+        emitter: { id: 'em1', cnpj: '18666510000168', name: 'LIRA', environment: 'sandbox', address: { state: 'SP' } },
+        destination: { state: 'MG' },
         cfop: '6352',
         issueDate: '2026-07-31',
         series: '1',
