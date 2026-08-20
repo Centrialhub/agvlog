@@ -83,12 +83,21 @@ export function usePortalShipments(filters: ShipmentFilters = {}) {
         rows: rows.map(r => ({
           fiscal_document_id: r.id,
           invoice_number: r.invoice_number,
-          client_name: r.client_name,
+          client_load_number: r.client_load_number,
           load_number: r.load_number,
           public_status: r.current_status,
           updated_at: r.last_event_at,
           value: r.total_value,
-        })) as any[], 
+          remitter: r.remitter_name,
+          recipient: r.recipient_name,
+          recipient_city: r.recipient_city,
+          recipient_state: r.recipient_state,
+          issue_date: r.issue_date,
+          planned_arrival_at: r.planned_arrival_at,
+          pallet_count: r.pallet_count,
+          has_pod: r.has_pod,
+          has_open_occurrence: r.has_open_occurrence,
+        })) as ShipmentRow[], 
         total 
       };
     },
