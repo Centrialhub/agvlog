@@ -2140,6 +2140,13 @@ export type Database = {
             referencedRelation: "loads"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "closing_report_items_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
+            referencedColumns: ["id"]
+          },
         ]
       }
       closing_report_payments: {
@@ -3449,6 +3456,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "delivery_occurrences_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "delivery_occurrences_supplier_id_fkey"
             columns: ["supplier_id"]
             isOneToOne: false
@@ -3584,6 +3598,13 @@ export type Database = {
             columns: ["load_id"]
             isOneToOne: false
             referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dispatch_stop_documents_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
             referencedColumns: ["id"]
           },
           {
@@ -3741,6 +3762,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "dispatch_trip_loads_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "dispatch_trip_loads_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
@@ -3811,6 +3839,13 @@ export type Database = {
             columns: ["load_id"]
             isOneToOne: false
             referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dispatch_trips_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
             referencedColumns: ["id"]
           },
           {
@@ -4276,6 +4311,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "driver_route_monitors_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "driver_route_monitors_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
@@ -4373,6 +4415,13 @@ export type Database = {
             columns: ["load_id"]
             isOneToOne: false
             referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_route_progress_updates_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
             referencedColumns: ["id"]
           },
           {
@@ -4529,6 +4578,13 @@ export type Database = {
             columns: ["load_id"]
             isOneToOne: true
             referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_settlement_loads_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: true
+            referencedRelation: "vw_load_control"
             referencedColumns: ["id"]
           },
           {
@@ -6188,6 +6244,13 @@ export type Database = {
             columns: ["load_id"]
             isOneToOne: false
             referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fiscal_documents_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
             referencedColumns: ["id"]
           },
           {
@@ -7969,6 +8032,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "load_documents_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "load_documents_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
@@ -8090,6 +8160,13 @@ export type Database = {
             columns: ["load_id"]
             isOneToOne: false
             referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "load_items_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
             referencedColumns: ["id"]
           },
           {
@@ -8248,10 +8325,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "load_note_audit_events_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "load_note_audit_events_previous_load_id_fkey"
             columns: ["previous_load_id"]
             isOneToOne: false
             referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "load_note_audit_events_previous_load_id_fkey"
+            columns: ["previous_load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
             referencedColumns: ["id"]
           },
         ]
@@ -8284,6 +8375,13 @@ export type Database = {
             columns: ["load_id"]
             isOneToOne: false
             referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "load_orders_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
             referencedColumns: ["id"]
           },
           {
@@ -8351,6 +8449,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "load_payments_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "load_payments_receivable_id_fkey"
             columns: ["receivable_id"]
             isOneToOne: false
@@ -8399,6 +8504,13 @@ export type Database = {
             columns: ["load_id"]
             isOneToOne: false
             referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "load_status_history_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
             referencedColumns: ["id"]
           },
         ]
@@ -8475,6 +8587,13 @@ export type Database = {
             columns: ["load_id"]
             isOneToOne: false
             referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "load_unloading_charges_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
             referencedColumns: ["id"]
           },
         ]
@@ -9220,6 +9339,13 @@ export type Database = {
             columns: ["load_id"]
             isOneToOne: false
             referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "merchandise_shortage_cases_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
             referencedColumns: ["id"]
           },
           {
@@ -10870,6 +10996,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "operational_events_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "operational_events_order_id_fkey"
             columns: ["order_id"]
             isOneToOne: false
@@ -11557,6 +11690,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "pallet_return_protocols_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "pallet_return_protocols_supplier_id_fkey"
             columns: ["supplier_id"]
             isOneToOne: false
@@ -11769,6 +11909,13 @@ export type Database = {
             columns: ["load_id"]
             isOneToOne: false
             referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payables_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
             referencedColumns: ["id"]
           },
           {
@@ -12614,6 +12761,13 @@ export type Database = {
             columns: ["load_id"]
             isOneToOne: false
             referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proof_of_delivery_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
             referencedColumns: ["id"]
           },
           {
@@ -15032,6 +15186,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "load_items_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "load_items_order_id_fkey"
             columns: ["order_id"]
             isOneToOne: false
@@ -15044,6 +15205,63 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "tenants"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      vw_load_control: {
+        Row: {
+          arrival_date: string | null
+          billing_status: string | null
+          client_invoice_id: string | null
+          created_at: string | null
+          cte_count: number | null
+          driver_name: string | null
+          expected_payment_date: string | null
+          external_load_number: string | null
+          freight_amount: number | null
+          freight_percent: number | null
+          gross_cargo_value: number | null
+          id: string | null
+          invoice_count: number | null
+          legacy_status_text: string | null
+          load_date: string | null
+          load_number: string | null
+          notes: string | null
+          operational_status: string | null
+          payment_date: string | null
+          payment_status: string | null
+          receivable_id: string | null
+          received_amount: number | null
+          status: string | null
+          tenant_id: string | null
+          total_pallet_count: number | null
+          total_volume_m3: number | null
+          total_weight_kg: number | null
+          trip_id: string | null
+          updated_at: string | null
+          vehicle_plate: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loads_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loads_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "dispatch_trips"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loads_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "vw_operational_workspace"
+            referencedColumns: ["trip_id"]
           },
         ]
       }
@@ -16210,6 +16428,18 @@ export type Database = {
           p_type?: string[]
         }
         Returns: Json
+      }
+      list_load_control_v1: {
+        Args: {
+          p_filters?: Json
+          p_limit?: number
+          p_offset?: number
+          p_tenant_id: string
+        }
+        Returns: {
+          items: Json
+          total_count: number
+        }[]
       }
       list_loads_v1: {
         Args: {
