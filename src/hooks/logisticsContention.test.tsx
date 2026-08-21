@@ -19,6 +19,14 @@ vi.mock('@/lib/featureFlags', () => ({
   })
 }));
 
+// Mock useTenant
+vi.mock('@/hooks/useTenant', () => ({
+  useTenant: () => ({
+    currentTenant: { id: 'test-tenant-id' },
+    isLoading: false
+  })
+}));
+
 // Mock supabase.rpc
 const mockRpc = vi.spyOn(supabase, 'rpc').mockResolvedValue({ 
   data: { id: 'mock-id' }, 
