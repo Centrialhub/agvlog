@@ -15230,6 +15230,7 @@ export type Database = {
           operational_status: string | null
           payment_date: string | null
           payment_status: string | null
+          plate: string | null
           receivable_id: string | null
           received_amount: number | null
           status: string | null
@@ -15239,7 +15240,6 @@ export type Database = {
           total_weight_kg: number | null
           trip_id: string | null
           updated_at: string | null
-          vehicle_plate: string | null
         }
         Relationships: [
           {
