@@ -146,9 +146,7 @@ export function useUpdateLoadItem() {
           })
           .eq('id', p.id)
           .eq('tenant_id', currentTenant!.id);
-        if (error) throw error;
       }
-    },
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['load_items'] });
