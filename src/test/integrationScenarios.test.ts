@@ -36,20 +36,20 @@ describe('Logistics & HR Integration Tests', () => {
       expect(error?.message || 'fetch failed').toMatch(/Acesso negado|permission denied|violates|fetch failed/i);
     });
 
-    it('should enforce idempotency_key on plan_dispatch_trip_v2', async () => {
+    it('should enforce idempotency_key on plan_dispatch_trip_v3', async () => {
       const key = `test-idemp-${Date.now()}`;
       const payload = {
         p_tenant_id: FAKE_TENANT_ID,
-        p_stops: [],
         p_idempotency_key: key,
         p_driver_id: FAKE_TENANT_ID,
         p_vehicle_id: FAKE_TENANT_ID,
+        p_route_name: 'Test',
         p_load_ids: [],
-        p_route_name: 'Test'
+        p_stops: []
       };
       
-      const res1 = await supabase.rpc('plan_dispatch_trip_v2', payload);
-      const res2 = await supabase.rpc('plan_dispatch_trip_v2', payload);
+      const res1 = await (supabase.rpc as any)('plan_dispatch_trip_v3', payload);
+      const res2 = await (supabase.rpc as any)('plan_dispatch_trip_v3', payload);
       
       expect(res1.error).toBeDefined();
       expect(res2.error).toBeDefined();
