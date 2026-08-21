@@ -22,12 +22,9 @@ describe('Security Matrix Hardening', () => {
     const { error } = await supabase.rpc('list_loads_v1', {
       p_tenant_id: '00000000-0000-0000-0000-000000000000',
       p_search: '',
-      p_status: '',
-      p_view: 'all',
-      p_date_from: null,
-      p_date_to: null,
-      p_page: 1,
-      p_page_size: 1
+      p_status: [],
+      p_cursor: null,
+      p_limit: 1
     });
 
     // If it's a permission error, it would be 'permission denied for function list_loads_v1'
@@ -39,11 +36,11 @@ describe('Security Matrix Hardening', () => {
   it('should enforce tenant isolation in RPCs', async () => {
     // Testing list_employees_v1 as a proxy for tenant isolation
     const { data, error } = await supabase.rpc('list_employees_v1', {
-      _tenant_id: '00000000-0000-0000-0000-000000000000',
-      _search: '',
-      _category: null,
-      _page: 1,
-      _page_size: 1
+      p_tenant_id: '00000000-0000-0000-0000-000000000000',
+      p_search: '',
+      p_status: null,
+      p_limit: 1,
+      p_offset: 0
     });
 
     // Valid users should get empty data if the tenant doesn't exist or they don't have access,
