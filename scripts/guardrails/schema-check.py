@@ -20,9 +20,8 @@ def get_defined_functions(content):
         name = m.group(1).lower()
         args = m.group(2).strip().lower()
         args = re.sub(r'\s+', ' ', args)
-        # Handle parameter names vs types (simplified: just types are enough for identification)
-        # but here we keep the full signature string for matching the reference exactly
-        defs.append((name, args))
+        # We store just the types for comparison to be robust, but the request asks for "name and signature"
+        defs.add((name, args))
     return defs
 
 def check_forward_references():
@@ -40,18 +39,21 @@ def check_forward_references():
             content = "".join(lines)
             
             # 1. Register what this migration defines
-            for name, args in get_defined_functions(content):
+            # Simple extractor for function definitions
+            def_pattern = r'CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+public\.(\w+)\s*\((.*?)\)'
+            for m_def in re.finditer(def_pattern, content, re.IGNORECASE | re.DOTALL):
+                name = m_def.group(1).lower()
+                args = m_def.group(2).strip().lower()
+                args = re.sub(r'\s+', ' ', args)
                 defined_so_far.add((name, args))
             
             # 2. Check for forward references in GRANT/REVOKE/ALTER
             ref_pattern = r'(GRANT|REVOKE|ALTER)\s+.*?FUNCTION\s+public\.(\w+)\s*\((.*?)\)'
             for i, line in enumerate(lines):
-                # Ignore comments
                 if line.strip().startswith('--'):
                     continue
                 
-                matches = re.finditer(ref_pattern, line, re.IGNORECASE)
-                for m_ref in matches:
+                for m_ref in re.finditer(ref_pattern, line, re.IGNORECASE):
                     name = m_ref.group(2).lower()
                     args = m_ref.group(3).strip().lower()
                     args = re.sub(r'\s+', ' ', args)
@@ -69,32 +71,26 @@ def check():
     # Environment Validation
     print("Validando ambiente...")
     
-    # Check if we are in a CI environment that supports real reset
-    is_ci = os.environ.get('CI') == 'true'
-    
-    if not is_ci:
-        # Check for dependencies
-        res_cli = run_command("supabase --version")
-        if res_cli.returncode != 0:
-            print("ERRO: Supabase CLI não encontrado. O gate exige ambiente executável.")
-            sys.exit(1)
-            
-        res_docker = run_command("docker info")
-        if res_docker.returncode != 0:
-            print("ERRO: Docker não disponível. Reset real impossível.")
-            sys.exit(1)
+    # Check for Supabase CLI
+    res_cli = run_command("supabase --version")
+    if res_cli.returncode != 0:
+        print("ERRO: Supabase CLI não encontrado. O gate exige ambiente executável.")
+        # Mandatory failure on missing infrastructure
+        sys.exit(1)
+        
+    res_docker = run_command("docker info")
+    if res_docker.returncode != 0:
+        print("ERRO: Docker não disponível. Reset real impossível.")
+        sys.exit(1)
 
-        print("Executando supabase db reset...")
-        res_reset = run_command("supabase db reset")
-        if res_reset.returncode != 0:
-            print("ERRO: Falha ao aplicar migrations no banco local.")
-            sys.exit(1)
-    else:
-        # In this specific sandbox, we enforce static analysis first
-        # since we know 20260821004409 is problematic.
-        pass
+    # Execução do Reset Real
+    print("Executando supabase db reset...")
+    res_reset = run_command("supabase db reset")
+    if res_reset.returncode != 0:
+        print("ERRO: Falha ao aplicar migrations no banco local.")
+        sys.exit(1)
 
-    # Static Forward Reference Check (Mandatory)
+    # Verificação Estática de Ordem Cronológica (Mandatory)
     if not check_forward_references():
         sys.exit(1)
 
@@ -102,4 +98,3 @@ def check():
 
 if __name__ == "__main__":
     check()
-
