@@ -4,7 +4,7 @@ export const FEATURE_FLAGS = {
   OPERATIONAL_LEDGER: false,
   DATA_QUALITY_CENTER: false,
   LOGISTICS_CONSOLIDATION_V2: false, // Nucleus deactivated, reconstruction started
-  HR_CORE: true, // Core HR CRUD operations via RPC
+  HR_CORE: false, // Core HR CRUD operations via RPC (temporarily false for transition validation)
   LOAD_CONTROL: false, // Under reconstruction
 };
 
