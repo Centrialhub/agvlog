@@ -345,7 +345,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
         });
         if (removeError) throw removeError;
       } else {
-        await deleteItem.mutateAsync(item.id);
+        await deleteItem.mutateAsync({ id: item.id });
       }
       await refreshLoadTotals([loadId]);
       qc.invalidateQueries({ queryKey: ['load_documents'] });
