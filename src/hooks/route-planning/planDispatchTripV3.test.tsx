@@ -51,6 +51,7 @@ describe('plan_dispatch_trip_v3 Integration', () => {
         vehicle_id: 'vehicle-1',
         route_name: 'Route A',
         load_ids: ['load-1'],
+        planned_start_at: new Date().toISOString(),
         stops: [
             { destination: 'Stop 1', client_id: 'client-1', original_order: 1, fiscal_document_ids: ['doc-1'] }
         ] as any,
