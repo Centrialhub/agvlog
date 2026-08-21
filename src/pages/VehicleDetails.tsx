@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useVehicleHistory, PositionRaw } from '@/hooks/usePositions';
 import { useVehicleState, stateLabel, stateBadgeClasses, formatStoppedDuration } from '@/hooks/useVehiclesState';
-import { MapContainer, TileLayer, Marker, Polyline, Popup, CircleMarker } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Polyline, Popup, CircleMarker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -334,7 +334,9 @@ export default function VehicleDetails() {
           </TabsTrigger>
           <TabsTrigger value="alerts">Alertas ({alerts.length})</TabsTrigger>
           <TabsTrigger value="geofences">Geofences ({geoEvents.length})</TabsTrigger>
-          <TabsTrigger value="telemetry">Telemetria</TabsTrigger>
+          <TabsTrigger value="history">Histórico de Posições</TabsTrigger>
+          <TabsTrigger value="telemetry">Telemetria & Sensores</TabsTrigger>
+
         </TabsList>
 
         {/* Overview with KPIs */}
@@ -741,25 +743,86 @@ export default function VehicleDetails() {
           </CardContent></Card>
         </TabsContent>
 
-        {/* Telemetry */}
-        <TabsContent value="telemetry" className="space-y-4">
-          <Card><CardHeader><CardTitle className="text-sm flex items-center gap-2"><Activity className="h-4 w-4 text-primary" />Snapshot de Telemetria</CardTitle></CardHeader>
-            <CardContent>
-              {telemetry && Object.keys(telemetry).length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {Object.entries(telemetry).map(([key, val]) => (
-                    <div key={key} className="rounded-lg border border-border p-3">
-                      <p className="text-xs text-muted-foreground font-mono">{key}</p>
-                      <p className="text-sm font-medium text-foreground mt-1">{String(val)}</p>
-                    </div>
+        {/* History Table */}
+        <TabsContent value="history" className="space-y-4">
+          <div className="flex items-center gap-4">
+            <Input type="date" value={historyDate} onChange={e => setHistoryDate(e.target.value)} className="w-48" />
+            <span className="text-sm text-muted-foreground">{historyLoading ? 'Carregando...' : `${history.length} posições capturadas`}</span>
+          </div>
+          <Card>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Horário</TableHead>
+                    <TableHead>Velocidade</TableHead>
+                    <TableHead>Direção</TableHead>
+                    <TableHead>Coordenadas</TableHead>
+                    <TableHead>Fonte</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {history.length === 0 ? (
+                    <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Nenhuma posição registrada neste dia</TableCell></TableRow>
+                  ) : [...history].reverse().slice(0, 1000).map((p: PositionRaw) => (
+                    <TableRow key={p.id}>
+                      <TableCell className="text-xs">{format(new Date(p.captured_at), 'HH:mm:ss')}</TableCell>
+                      <TableCell className="text-xs font-mono">{p.speed != null ? `${Math.round(p.speed)} km/h` : '—'}</TableCell>
+                      <TableCell className="text-xs font-mono">{p.heading != null ? `${Math.round(p.heading)}°` : '—'}</TableCell>
+                      <TableCell className="text-xs font-mono text-muted-foreground">{p.lat.toFixed(5)}, {p.lng.toFixed(5)}</TableCell>
+                      <TableCell className="text-[10px] text-muted-foreground uppercase">{p.telemetry?.provider || 'SSX'}</TableCell>
+                    </TableRow>
                   ))}
+                </TableBody>
+              </Table>
+              {history.length > 1000 && (
+                <div className="p-4 text-center text-xs text-muted-foreground border-t">
+                  Mostrando as 1000 posições mais recentes de {history.length}.
                 </div>
-              ) : (
-                <p className="text-sm text-muted-foreground flex items-center gap-2"><AlertTriangle className="h-4 w-4" />Nenhuma telemetria adicional disponível.</p>
               )}
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Telemetry & Sensors */}
+        <TabsContent value="telemetry" className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card>
+              <CardHeader><CardTitle className="text-sm flex items-center gap-2"><Zap className="h-4 w-4 text-primary" />Sensores Detectados</CardTitle></CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-3">
+                  <SensorItem label="Ignição" active={telemetry?.ignition === true || telemetry?.ign === '1' || telemetry?.ign === 1} />
+                  <SensorItem label="Porta Baú" active={telemetry?.door === true || telemetry?.door === '1'} />
+                  <SensorItem label="Bloqueio" active={telemetry?.blocked === true} variant="destructive" />
+                  <SensorItem label="GPS" active={telemetry?.gps_valid !== false} />
+                  <SensorItem label="Bateria Principal" active={telemetry?.power !== false} />
+                  <SensorItem label="Movimento" active={isMoving} />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader><CardTitle className="text-sm flex items-center gap-2"><Activity className="h-4 w-4 text-primary" />Sinais Adaptativos</CardTitle></CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {telemetry && Object.keys(telemetry).length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {Object.entries(telemetry).map(([key, val]) => (
+                        <div key={key} className="rounded-lg border border-border p-2 bg-muted/30">
+                          <p className="text-[10px] text-muted-foreground font-mono uppercase truncate">{key}</p>
+                          <p className="text-xs font-medium text-foreground mt-0.5 truncate">{String(val)}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground flex items-center gap-2"><AlertTriangle className="h-4 w-4" />Nenhum sinal adicional disponível.</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
       </Tabs>
     </div>
   );
@@ -775,3 +838,22 @@ function MiniKPI({ icon, label, value, variant }: { icon: React.ReactNode; label
     </Card>
   );
 }
+
+function SensorItem({ label, active, variant = 'default' }: { label: string; active: boolean; variant?: 'default' | 'destructive' }) {
+  return (
+    <div className={cn(
+      "flex items-center justify-between rounded-md border p-2 text-xs",
+      active 
+        ? (variant === 'destructive' ? "bg-destructive/10 border-destructive/30 text-destructive" : "bg-success/10 border-success/30 text-success")
+        : "bg-muted/50 border-border text-muted-foreground"
+    )}>
+      <span className="font-medium">{label}</span>
+      {active ? (
+        <Badge variant={variant === 'destructive' ? 'destructive' : 'default'} className="h-4 px-1 text-[8px] uppercase">Ativo</Badge>
+      ) : (
+        <span className="text-[10px] opacity-70">Inativo</span>
+      )}
+    </div>
+  );
+}
+
