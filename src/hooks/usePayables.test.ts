@@ -1,28 +1,27 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { useCreatePayable, useUpdatePayable } from './usePayables';
 import { supabase } from '@/integrations/supabase/client';
 
-// Mocks
+// Mock setup
+const mockSingle = vi.fn(() => Promise.resolve({ data: { id: '1' }, error: null }));
+const mockSelect = vi.fn(() => ({ single: mockSingle }));
+const mockEq = vi.fn().mockReturnThis();
+const mockUpdate = vi.fn(() => ({ eq: mockEq, select: mockSelect }));
+const mockInsert = vi.fn(() => ({ select: mockSelect }));
+
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
-    from: vi.fn(() => ({
-      insert: vi.fn(() => ({
-        select: vi.fn(() => ({
-          single: vi.fn(() => Promise.resolve({ data: { id: '1', status: 'pending' }, error: null }))
-        }))
-      })),
-      update: vi.fn(() => ({
-        eq: vi.fn(() => ({
-          eq: vi.fn(() => ({
-            select: vi.fn(() => ({
-              single: vi.fn(() => Promise.resolve({ data: { id: '1', supplier_name: 'Updated' }, error: null }))
-            }))
-          }))
-        }))
-      }))
-    }))
-  }
+    from: vi.fn((table) => {
+      if (table === 'payables') {
+        return {
+          insert: mockInsert,
+          update: mockUpdate,
+        };
+      }
+      return {};
+    }),
+  },
 }));
 
 vi.mock('./useTenant', () => ({
@@ -43,26 +42,29 @@ vi.mock('@tanstack/react-query', () => ({
 }));
 
 describe('usePayables Hooks Hardening', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('creation should always force status pending and ignore protected fields', async () => {
     const { result } = renderHook(() => useCreatePayable());
     
     await result.current.mutateAsync({
       supplier_name: 'Test Supplier',
       amount: 100,
-      status: 'paid', // Should be ignored
+      status: 'paid', // Should be ignored/overridden
       tenant_id: 'wrong-tenant', // Should be ignored
       created_by: 'hacker', // Should be ignored
       paid_amount: 999 // Should be ignored
     } as any);
 
-    const insertMock = (supabase.from as any)().insert;
-    expect(insertMock).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mockInsert).toHaveBeenCalledWith(expect.objectContaining({
       supplier_name: 'Test Supplier',
       amount: 100,
       status: 'pending'
     }));
     
-    const payload = insertMock.mock.calls[0][0];
+    const payload = mockInsert.mock.calls[0][0];
     expect(payload.tenant_id).toBeUndefined();
     expect(payload.created_by).toBeUndefined();
     expect(payload.paid_amount).toBeUndefined();
@@ -78,19 +80,16 @@ describe('usePayables Hooks Hardening', () => {
       paid_at: '2026-01-01' // Should be ignored
     } as any);
 
-    const fromMock = (supabase.from as any);
-    const updateMock = fromMock().update;
-    const eqMock = fromMock().update().eq;
-
-    expect(updateMock).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({
       supplier_name: 'Updated Supplier'
     }));
     
-    const patch = updateMock.mock.calls[0][0];
+    const patch = mockUpdate.mock.calls[0][0];
     expect(patch.status).toBeUndefined();
     expect(patch.paid_at).toBeUndefined();
 
-    // Verify tenant_id in filter
-    expect(eqMock).toHaveBeenCalledWith('tenant_id', 'tenant-1');
+    // Verify filters
+    expect(mockEq).toHaveBeenCalledWith('id', 'payable-1');
+    expect(mockEq).toHaveBeenCalledWith('tenant_id', 'tenant-1');
   });
 });
