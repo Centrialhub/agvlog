@@ -88,7 +88,6 @@ export function useEligibleCtes(clientId: string | null) {
         .eq('client_id', clientId!)
         .is('cancelled_at', null)
         .neq('status', 'cancelled')
-        .is('deleted_at', null)
         .order('issued_at', { ascending: false })
         .limit(500);
       if (error) throw error;
