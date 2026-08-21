@@ -489,22 +489,6 @@ export default function Financial() {
                     </SelectContent>
                     </Select>
                 </div>
-
-                {/* Cost Center */}
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Centro de Custo</label>
-                  <Select value={selectedCostCenter} onValueChange={setSelectedCostCenter}>
-                    <SelectTrigger className="h-8 text-xs">
-                      <SelectValue placeholder="Todos" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos</SelectItem>
-                      {costCenters.map((cc: string) => (
-                        <SelectItem key={cc} value={cc}>{cc}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
               </div>
             </CardContent>
           </Card>
