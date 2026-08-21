@@ -56,13 +56,6 @@ export default function Payables() {
   const [paymentPayable, setPaymentPayable] = useState<Payable | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
   const [sourceFilter, setSourceFilter] = useState('all');
-  const approveMut: any = { 
-    isPending: false, 
-    mutate: () => {
-      toast.info('Funcionalidade de aprovação sob manutenção.');
-    } 
-  };
-  // const approveMut = useApproveFinancialObligation();
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -180,14 +173,6 @@ export default function Payables() {
     }
   };
 
-  const quickUpdate = async (p: Payable, status: string) => {
-    try {
-      await updateMut.mutateAsync({ id: p.id, status });
-      toast.success('Conta atualizada');
-    } catch (e: any) {
-      toast.error(e.message);
-    }
-  };
 
   const exportCsv = () => {
     const rows = [
@@ -338,7 +323,7 @@ export default function Payables() {
                   </TableCell>
                   <TableCell onClick={(e) => e.stopPropagation()}>
                     <div className="flex gap-1">
-                      {p.status === 'pending' && (
+                      {(p.status === 'pending' || p.status === 'approved') && (
                         <div className="relative group">
                           <Button 
                             variant="ghost" 
@@ -349,7 +334,7 @@ export default function Payables() {
                             <CheckCircle className="h-3.5 w-3.5 mr-1" /> Aprovar
                           </Button>
                           <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-48 p-2 bg-popover text-popover-foreground text-[10px] rounded shadow-md border z-50">
-                            Ação desativada temporariamente: aguardando restauração do fluxo operacional de aprovação.
+                            Aprovação desativada: utilize o fluxo de pagamento para liquidar obrigações.
                           </div>
                         </div>
                       )}
@@ -364,9 +349,19 @@ export default function Payables() {
                         </Button>
                       )}
                       {p.status !== 'cancelled' && p.status !== 'paid' && (
-                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-destructive" onClick={() => quickUpdate(p, 'cancelled')}>
-                          <XCircle className="h-3.5 w-3.5" />
-                        </Button>
+                        <div className="relative group">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-7 px-2 text-xs text-destructive opacity-50 cursor-not-allowed"
+                            disabled={true}
+                          >
+                            <XCircle className="h-3.5 w-3.5" />
+                          </Button>
+                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-48 p-2 bg-popover text-popover-foreground text-[10px] rounded shadow-md border z-50">
+                            Cancelamento desativado temporariamente.
+                          </div>
+                        </div>
                       )}
                     </div>
                   </TableCell>
@@ -421,15 +416,6 @@ export default function Payables() {
               <div>
                 <Label>Nº documento</Label>
                 <Input value={form.document_number} onChange={e => setForm({ ...form, document_number: e.target.value })} />
-              </div>
-              <div>
-                <Label>Status</Label>
-                <Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {PAYABLE_STATUSES.map(s => <SelectItem key={s} value={s}>{PAYABLE_STATUS_LABELS[s]}</SelectItem>)}
-                  </SelectContent>
-                </Select>
               </div>
             </div>
             <div>
