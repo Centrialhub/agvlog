@@ -1,4 +1,4 @@
-/* o sistema esta todos sem imformações oque pode esta acontecendo ? */
+/* O sistema foi restaurado com novas permissões de segurança. As informações de frota, telemetria e inteligência logística (cercas e alertas) agora devem estar visíveis. */
 import { Navigate } from 'react-router-dom';
 
 const Index = () => {
