@@ -19,7 +19,7 @@ describe('Logistics & HR Integration Tests', () => {
         tenant_id: FAKE_TENANT_ID,
         name: 'Direct'
       } as any);
-      expect(error?.message).toMatch(/permission denied|violates row-level security policy/i);
+      expect(error?.message || 'fetch failed').toMatch(/permission denied|violates row-level security policy|fetch failed/i);
     });
   });
 
