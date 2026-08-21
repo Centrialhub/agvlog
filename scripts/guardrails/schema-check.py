@@ -56,32 +56,108 @@ TYPE_HEAD_WORDS = {
 MODES = {"in", "out", "inout", "variadic"}
 
 
+def _dollar_tag(text, i):
+    """Se text[i] inicia uma dollar-quote, retorna a tag completa ($$ ou $tag$)."""
+    if text[i] != "$":
+        return None
+    j = i + 1
+    while j < len(text) and (text[j].isalnum() or text[j] == "_"):
+        j += 1
+    if j < len(text) and text[j] == "$":
+        return text[i : j + 1]
+    return None
+
+
 def strip_comments(text):
-    """Remove comentários -- e /* */ preservando a contagem de linhas."""
+    """Remove comentários -- e /* */ preservando offsets, linhas e literais SQL."""
     out = []
     i = 0
     n = len(text)
     while i < n:
         ch = text[i]
+        tag = _dollar_tag(text, i)
+        if tag:
+            end = text.find(tag, i + len(tag))
+            end = n if end == -1 else end + len(tag)
+            out.append(text[i:end])
+            i = end
+            continue
+        if ch in ("'", '"'):
+            j = i + 1
+            while j < n:
+                if text[j] == ch:
+                    if j + 1 < n and text[j + 1] == ch:
+                        j += 2
+                        continue
+                    j += 1
+                    break
+                j += 1
+            out.append(text[i:j])
+            i = j
+            continue
         if ch == "-" and text.startswith("--", i):
             j = text.find("\n", i)
             if j == -1:
-                break
+                j = n
             out.append(" " * (j - i))
             i = j
             continue
         if ch == "/" and text.startswith("/*", i):
             j = text.find("*/", i + 2)
-            if j == -1:
-                j = n
-            else:
-                j += 2
+            j = n if j == -1 else j + 2
             out.append("".join("\n" if c == "\n" else " " for c in text[i:j]))
             i = j
             continue
         out.append(ch)
         i += 1
     return "".join(out)
+
+
+def split_statements(content, base=0):
+    """Divide SQL em instruções de nível superior.
+
+    Respeita strings, identificadores citados, dollar-quotes e parênteses. Não
+    divide dentro de corpos dollar-quoted (funções e blocos DO). Retorna
+    [(offset_absoluto, texto_da_instrucao)].
+    """
+    statements = []
+    start = 0
+    depth = 0
+    i = 0
+    n = len(content)
+    while i < n:
+        ch = content[i]
+        tag = _dollar_tag(content, i)
+        if tag:
+            end = content.find(tag, i + len(tag))
+            i = n if end == -1 else end + len(tag)
+            continue
+        if ch in ("'", '"'):
+            j = i + 1
+            while j < n:
+                if content[j] == ch:
+                    if j + 1 < n and content[j + 1] == ch:
+                        j += 2
+                        continue
+                    j += 1
+                    break
+                j += 1
+            i = j
+            continue
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth = max(0, depth - 1)
+        elif ch == ";" and depth == 0:
+            stmt = content[start:i]
+            if stmt.strip():
+                statements.append((base + start, stmt))
+            start = i + 1
+        i += 1
+    if content[start:].strip():
+        statements.append((base + start, content[start:]))
+    return statements
+
 
 
 def split_top_level(args):
@@ -181,37 +257,129 @@ def read_balanced_args(content, open_idx):
 
 
 DEF_RE = re.compile(
-    r"CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:(\w+)\.)?(\w+)\s*\(",
+    r"\bCREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:(\w+)\.)?(\w+)\s*\(",
     re.IGNORECASE,
 )
-REF_RE = re.compile(
-    r"\b(GRANT|REVOKE|ALTER)\b[\s\S]{0,400}?\bFUNCTION\s+(?:(\w+)\.)?(\w+)\s*\(",
+ALTER_FUNC_RE = re.compile(
+    r"\bALTER\s+FUNCTION\s+(?:(\w+)\.)?(\w+)\s*\(",
     re.IGNORECASE,
 )
+GRANT_HEAD_RE = re.compile(r"^\s*(GRANT|REVOKE)\b", re.IGNORECASE)
+ON_FUNCTION_RE = re.compile(r"\bON\s+(?:ALL\s+FUNCTIONS|FUNCTION)\b", re.IGNORECASE)
+DO_RE = re.compile(r"^\s*DO\b", re.IGNORECASE)
+FUNC_REF_RE = re.compile(r"^\s*(?:(\w+)\.)?(\w+)\s*\(", re.IGNORECASE)
 
 
-def collect(content, pattern, with_action):
-    """Retorna [(offset, action, qualified_name, args_raw)]."""
-    found = []
-    for m in pattern.finditer(content):
-        open_idx = m.end() - 1
-        args_raw, _ = read_balanced_args(content, open_idx)
+def mask_dollar_bodies(text):
+    """Substitui corpos dollar-quoted por espaços (preservando linhas).
+
+    Usado para impedir que 'CREATE FUNCTION'/strings dentro de corpos de
+    funções e blocos DO sejam lidos como definições de nível superior.
+    """
+    out = []
+    i = 0
+    n = len(text)
+    while i < n:
+        tag = _dollar_tag(text, i)
+        if tag:
+            end = text.find(tag, i + len(tag))
+            end = n if end == -1 else end + len(tag)
+            out.append("".join("\n" if c == "\n" else " " for c in text[i:end]))
+            i = end
+            continue
+        out.append(text[i])
+        i += 1
+    return "".join(out)
+
+
+
+def read_balanced_args_from(text, open_idx):
+    """Alias legado de read_balanced_args."""
+    return read_balanced_args(text, open_idx)
+
+
+def _grant_function_targets(stmt):
+    """Extrai os alvos de `GRANT/REVOKE ... ON FUNCTION a(...), b(...)`."""
+    m = ON_FUNCTION_RE.search(stmt)
+    if not m or m.group(0).upper().endswith("FUNCTIONS"):
+        return []
+    rest = stmt[m.end() :]
+    # corta em TO/FROM de nível superior (fora de parênteses)
+    depth = 0
+    cut = len(rest)
+    i = 0
+    while i < len(rest):
+        ch = rest[i]
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth = max(0, depth - 1)
+        elif depth == 0:
+            mk = re.match(r"\s(?:TO|FROM)\s", rest[i : i + 6], re.IGNORECASE)
+            if mk:
+                cut = i
+                break
+        i += 1
+    targets = []
+    for part in split_top_level(rest[:cut]):
+        pm = FUNC_REF_RE.match(part)
+        if not pm:
+            continue
+        args_raw, _ = read_balanced_args(part, pm.end() - 1)
         if args_raw is None:
             continue
-        if with_action:
-            action = m.group(1).upper()
-            schema = (m.group(2) or "public").lower()
-            fname = m.group(3).lower()
-        else:
-            action = "CREATE FUNCTION"
-            schema = (m.group(1) or "public").lower()
-            fname = m.group(2).lower()
-        found.append((m.start(), action, f"{schema}.{fname}", args_raw))
-    return found
+        schema = (pm.group(1) or "public").lower()
+        targets.append((f"{schema}.{pm.group(2).lower()}", args_raw))
+    return targets
 
 
 def line_of(content, offset):
     return content.count("\n", 0, offset) + 1
+
+
+def collect_events(content, base=0):
+    """Retorna [(offset, kind, action, qualified_name, args_raw)] em ordem.
+
+    Analisa apenas instruções de nível superior: reconhece CREATE FUNCTION,
+    ALTER FUNCTION e GRANT/REVOKE ... ON FUNCTION dentro da MESMA instrução.
+    Blocos DO são analisados recursivamente em seu corpo dollar-quoted.
+    """
+    events = []
+    for offset, stmt in split_statements(content, base):
+        m = DEF_RE.match(stmt)
+        if m:
+            args_raw, _ = read_balanced_args(stmt, m.end() - 1)
+            if args_raw is not None:
+                schema = (m.group(1) or "public").lower()
+                events.append(
+                    (offset, "def", "CREATE FUNCTION", f"{schema}.{m.group(2).lower()}", args_raw)
+                )
+            continue
+        m = ALTER_FUNC_RE.match(stmt)
+        if m:
+            args_raw, _ = read_balanced_args(stmt, m.end() - 1)
+            if args_raw is not None:
+                schema = (m.group(1) or "public").lower()
+                events.append(
+                    (offset, "ref", "ALTER", f"{schema}.{m.group(2).lower()}", args_raw)
+                )
+            continue
+        m = GRANT_HEAD_RE.match(stmt)
+        if m:
+            action = m.group(1).upper()
+            for qname, args_raw in _grant_function_targets(stmt):
+                events.append((offset, "ref", action, qname, args_raw))
+            continue
+        if DO_RE.match(stmt):
+            dollar = re.search(r"\$(\w*)\$", stmt)
+            if dollar:
+                tag = dollar.group(0)
+                body_start = dollar.end()
+                end = stmt.find(tag, body_start)
+                body = stmt[body_start : end if end != -1 else len(stmt)]
+                events.extend(collect_events(body, base=offset + body_start))
+    events.sort(key=lambda e: e[0])
+    return events
 
 
 def check_forward_references():
@@ -228,12 +396,7 @@ def check_forward_references():
         with open(os.path.join(MIGRATIONS_DIR, filename), "r", encoding="utf-8") as fh:
             content = strip_comments(fh.read())
 
-        defs = collect(content, DEF_RE, with_action=False)
-        refs = collect(content, REF_RE, with_action=True)
-
-        events = [(off, "def", action, qname, args) for off, action, qname, args in defs]
-        events += [(off, "ref", action, qname, args) for off, action, qname, args in refs]
-        events.sort(key=lambda e: e[0])
+        events = collect_events(content)
 
         for offset, kind, action, qname, args_raw in events:
             schema, _, bare = qname.partition(".")
@@ -253,6 +416,7 @@ def check_forward_references():
         return False
     print(f"Análise de assinaturas OK ({len(migrations)} migrations).")
     return True
+
 
 
 def run_command(cmd):
