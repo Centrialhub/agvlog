@@ -434,21 +434,33 @@ def check():
     print("Iniciando prova executável de schema...")
     static_ok = check_forward_references()
 
-    print("Validando ambiente (Supabase CLI e Docker são obrigatórios)...")
-    if subprocess.run(["which", "supabase"], capture_output=True).returncode != 0:
-        print("ERRO: Supabase CLI não encontrada. `supabase db reset` é obrigatório.")
-        sys.exit(1)
-    if run_command("supabase --version").returncode != 0:
-        print("ERRO: Supabase CLI inoperante.")
-        sys.exit(1)
-    if run_command("docker info").returncode != 0:
-        print("ERRO: Docker indisponível. `supabase db reset` é obrigatório.")
+    print("Validando ambiente de reset (Supabase CLI + Docker, ou cluster local descartável)...")
+    has_cli = (
+        subprocess.run(["which", "supabase"], capture_output=True).returncode == 0
+        and run_command("supabase --version").returncode == 0
+    )
+    has_docker = run_command("docker info").returncode == 0
+
+    if has_cli and has_docker:
+        print("Executando supabase db reset...")
+        if run_command("supabase db reset").returncode != 0:
+            print("ERRO: supabase db reset falhou.")
+            sys.exit(1)
+    elif os.environ.get("PGDIST") and os.path.exists(LOCAL_RESET):
+        # Equivalente probatório: aplica todas as migrations desde schema vazio
+        # em um cluster PostgreSQL local descartável (nunca no banco vinculado).
+        print("Supabase CLI/Docker ausentes: executando reset local descartável...")
+        port = os.environ.get("LOCAL_RESET_PORT", "55432")
+        if run_command(f"bash {LOCAL_RESET} {port}").returncode != 0:
+            print("ERRO: reset local desde schema vazio falhou.")
+            sys.exit(1)
+    else:
+        print(
+            "ERRO: nenhum reset executável disponível. Instale Supabase CLI + Docker "
+            "ou provisione o cluster local (PGDIST + scripts/guardrails/local-db-reset.sh)."
+        )
         sys.exit(1)
 
-    print("Executando supabase db reset...")
-    if run_command("supabase db reset").returncode != 0:
-        print("ERRO: supabase db reset falhou.")
-        sys.exit(1)
 
     if not static_ok:
         sys.exit(1)
