@@ -65,9 +65,11 @@ export default function DataAudit() {
       const key = (f.severity ?? 'info').toLowerCase();
       map.set(key, (map.get(key) ?? 0) + 1);
     });
-    return Array.from(map.entries()).sort(
-      (a, b) => (SEVERITY_ORDER.indexOf(a[0]) + 99) % 100 - ((SEVERITY_ORDER.indexOf(b[0]) + 99) % 100),
-    );
+    const rank = (k: string) => {
+      const i = SEVERITY_ORDER.indexOf(k);
+      return i === -1 ? SEVERITY_ORDER.length : i;
+    };
+    return Array.from(map.entries()).sort((a, b) => rank(a[0]) - rank(b[0]));
   }, [findings]);
 
   const byDomain = useMemo(() => {
