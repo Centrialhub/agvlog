@@ -35,7 +35,7 @@ def check_direct_writes():
                 exception_found = False
                 context_lines = lines[max(0, line_no-2):line_no]
                 for context_line in context_lines:
-                    if f"linter:allow-direct-write {table}" in context_line:
+                    if f"linter:allow-direct-write {table}" in context_line or f"linter:allow-direct-write {table}" in lines[line_no-1]:
                         exception_found = True
                         break
                 
