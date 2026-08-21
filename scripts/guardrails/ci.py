@@ -28,19 +28,14 @@ def main():
 
     ci_env = os.environ.copy()
     
-    # Exigir banco de dados real no CI
-    if not ci_env.get("VITE_SUPABASE_URL") or "localhost" in ci_env.get("VITE_SUPABASE_URL", ""):
-        if not ci_env.get("SUPABASE_SERVICE_ROLE_KEY"):
-             print("ERRO: O CI exige um banco de dados real ou Supabase CLI para testes probatórios.")
-             # No sandbox Lovable, temos as variáveis VITE_SUPABASE_URL configuradas.
-
+    # In CI, we use the existing environment variables for Supabase
     ci_env["NODE_ENV"] = "test"
 
     steps = [
         ("Integridade de Migrations", "python3 scripts/guardrails/migration-integrity.py"),
         ("Lint de Banco de Dados", "python3 scripts/guardrails/db-linter.py"),
         ("Validação de Schema", "python3 scripts/guardrails/schema-check.py"),
-        ("Testes Probatórios (Vitest)", "bun run test src/test/ciProbatory.test.ts")
+        ("Testes Probatórios (Vitest)", "bun run vitest run src/test/ciProbatory.test.ts")
     ]
 
     for name, cmd in steps:
