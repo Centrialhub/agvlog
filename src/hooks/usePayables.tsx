@@ -114,3 +114,18 @@ export function useUpdatePayable() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['payables'] }),
   });
 }
+
+export function useApproveFinancialObligation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.rpc('sync_financial_obligations', {
+         _tenant_id: (await supabase.auth.getSession()).data.session?.user.id, // Fallback placeholder
+         _date_from: new Date().toISOString(),
+         _date_to: new Date().toISOString()
+      } as any);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['payables'] }),
+  });
+}

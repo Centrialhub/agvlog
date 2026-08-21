@@ -17084,7 +17084,7 @@ export type Database = {
       update_employee_v1: {
         Args: {
           p_employee_id: string
-          p_expected_version?: number
+          p_expected_version: number
           p_tenant_id: string
           p_values: Json
         }

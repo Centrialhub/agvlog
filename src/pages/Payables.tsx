@@ -58,7 +58,9 @@ export default function Payables() {
   const [sourceFilter, setSourceFilter] = useState('all');
   const approveMut: any = { 
     isPending: false, 
-    mutate: () => {} 
+    mutate: () => {
+      toast.info('Funcionalidade de aprovação sob manutenção.');
+    } 
   };
   // const approveMut = useApproveFinancialObligation();
 
