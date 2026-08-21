@@ -218,11 +218,14 @@ export function useMarkUnpaid() {
 }
 
 export const commitSpreadsheetImport = async (tenantId: string, fileName: string, parsed: any[]) => {
+    // Flatten all rows from all detected sheets
+    const rows = parsed.flatMap(p => [...p.summary, ...p.detail, ...p.unloading]);
+    
     const { data, error } = await supabase.rpc('commit_load_import_v1', {
         p_tenant_id: tenantId,
         p_file_name: fileName,
         p_source_type: 'spreadsheet',
-        p_rows: parsed
+        p_rows: rows
     });
 
     if (error) throw error;
