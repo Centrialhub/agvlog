@@ -343,11 +343,12 @@ export default function FleetMap() {
                   key={gf.id} 
                   positions={positions} 
                   pathOptions={{ 
-                    color: gf.color || '#3b82f6', 
-                    fillColor: gf.color || '#3b82f6', 
+                    color: '#3b82f6', 
+                    fillColor: '#3b82f6', 
                     fillOpacity: 0.2 
                   }}
                 >
+
                   <Popup><strong>{gf.name}</strong></Popup>
                 </Polygon>
               );
