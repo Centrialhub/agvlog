@@ -5,6 +5,7 @@ export const FEATURE_FLAGS = {
   DATA_QUALITY_CENTER: false,
   LOGISTICS_CONSOLIDATION_V2: false, // Nucleus deactivated, reconstruction started
   HR_CORE: true, // Core HR CRUD operations via RPC
+  LOAD_CONTROL: false, // Under reconstruction
 };
 
 export type FeatureKey = keyof typeof FEATURE_FLAGS;
