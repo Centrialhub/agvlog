@@ -95,7 +95,7 @@ const SEVERITY_COLORS: Record<string, string> = {
 };
 
 export default function OperationsCenter() {
-  const { currentTenant } = useTenant();
+  const { currentTenant, memberships } = useTenant();
   const { user } = useAuth();
   const navigate = useNavigate();
 
