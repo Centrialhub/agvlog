@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../integrations/supabase/client';
 
 // Helper to simulate a session (this is a conceptual test, in a real environment we'd use service_role to verify RLS or mocked tokens)
 // Since we are in a Vitest environment that might not have a real Supabase session, 
