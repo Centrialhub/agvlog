@@ -156,7 +156,7 @@ export default function VehicleDetails() {
       if (!currentTenant || !vehicleId) return [];
       const { data, error } = await supabase.from('events').select('*')
         .eq('tenant_id', currentTenant.id).eq('vehicle_id', vehicleId)
-        .eq('event_type', 'overspeed').eq('source', 'engine')
+        .eq('event_type', 'overspeed')
         .gte('event_at', `${historyDate}T00:00:00Z`).lte('event_at', `${historyDate}T23:59:59Z`)
         .order('event_at');
       if (error) throw error;

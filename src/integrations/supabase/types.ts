@@ -15534,6 +15534,10 @@ export type Database = {
           tenant_id: string
         }[]
       }
+      calculate_vehicle_trips_v1: {
+        Args: { _end_at: string; _start_at: string; _vehicle_id: string }
+        Returns: Json
+      }
       cancel_client_invoice: {
         Args: { _invoice_id: string; _reason: string }
         Returns: undefined
@@ -16672,6 +16676,25 @@ export type Database = {
       preview_reimport_cleanup_counts: {
         Args: { _end_date?: string; _start_date?: string; _tenant_id: string }
         Returns: Json
+      }
+      process_geofence_alerts: {
+        Args: {
+          _captured_at: string
+          _lat: number
+          _lng: number
+          _tenant_id: string
+          _vehicle_id: string
+        }
+        Returns: undefined
+      }
+      process_overspeed_alerts: {
+        Args: {
+          _captured_at: string
+          _speed: number
+          _tenant_id: string
+          _vehicle_id: string
+        }
+        Returns: undefined
       }
       recalculate_load_totals: {
         Args: { p_load_id: string; p_tenant_id: string }

@@ -322,6 +322,7 @@ export default function FleetMap() {
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           <FitBounds positions={withPosition as any} />
+          
           {withPosition.map(e => (
             <Marker
               key={e.vehicle.id}
