@@ -258,9 +258,18 @@ function DriverRoute({ children }: { children: React.ReactNode }) {
 function RoleRouter() {
   const { currentRole, loading } = useTenant();
   if (loading) return <div className="flex h-screen items-center justify-center text-muted-foreground">Carregando...</div>;
-  if (currentRole === 'driver') return <Navigate to="/driver" replace />;
-  if (currentRole === 'client') return <Navigate to="/portal" replace />;
+  if (currentRole === 'driver') {
+    return isFeatureEnabled('DRIVER_WORKSPACE')
+      ? <Navigate to="/driver" replace />
+      : <ModuleUnavailable role="driver" module="Área do Motorista" />;
+  }
+  if (currentRole === 'client') {
+    return isFeatureEnabled('CLIENT_PORTAL')
+      ? <Navigate to="/portal" replace />
+      : <ModuleUnavailable role="client" module="Portal do Cliente" />;
+  }
   return <OperationsCenter />;
+
 }
 
 function ClientRoute({ children }: { children: React.ReactNode }) {
