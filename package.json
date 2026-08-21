@@ -15,7 +15,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "guardrails": "python3 scripts/guardrails/migration-integrity.py && python3 scripts/guardrails/db-linter.py && python3 scripts/guardrails/schema-check.py",
-    "ci": "bun run guardrails && bun run typecheck && bun run test && bun run build"
+    "ci": "python3 scripts/guardrails/ci.py"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
