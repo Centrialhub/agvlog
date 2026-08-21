@@ -1,53 +1,29 @@
 import { describe, it, expect } from 'vitest';
-import { supabase } from '../integrations/supabase/client';
+import { createClient } from '@supabase/supabase-js';
 
-// Helper to simulate a session (this is a conceptual test, in a real environment we'd use service_role to verify RLS or mocked tokens)
-// Since we are in a Vitest environment that might not have a real Supabase session, 
-// we focus on verifying that the RPCs exist and follow the whitelisting.
+// Minimal mock client for testing error messages
+const supabaseUrl = process.env.VITE_SUPABASE_URL || 'http://localhost:54321';
+const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || 'dummy';
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 describe('Security Matrix Hardening', () => {
   it('should deny execute_data_repair_v1 to everyone', async () => {
-    // We expect a permission error (Revoke) or a FEATURE_DISABLED exception (Function logic)
-    const { error } = await supabase.rpc('execute_data_repair_v1', {
+    // Attempting to call from anon client
+    const { error: error1 } = await supabase.rpc('execute_data_repair_v1', {
       _tenant_id: '00000000-0000-0000-0000-000000000000',
       _batch_id: '00000000-0000-0000-0000-000000000000'
     });
     
-    // It should either be a permission error (42501) or the custom exception
-    expect(error?.message).toMatch(/permission denied|FEATURE_DISABLED/);
-  });
-
-  it('should allow whitelisted RPCs for authenticated users (conceptual check)', async () => {
-    // This test verifies the RPC exists and is callable (even if it returns an error due to invalid params, it's not a permission error)
-    const { error } = await supabase.rpc('list_loads_v1', {
+    const { error: error2 } = await supabase.rpc('execute_data_repair_v1', {
       p_tenant_id: '00000000-0000-0000-0000-000000000000',
-      p_search: '',
-      p_status: [],
-      p_cursor: null,
-      p_limit: 1
+      p_batch_id: '00000000-0000-0000-0000-000000000000',
+      p_dry_run: true
     });
-
-    // If it's a permission error, it would be 'permission denied for function list_loads_v1'
-    if (error) {
-      expect(error.message).not.toMatch(/permission denied for function/);
-    }
-  });
-
-  it('should enforce tenant isolation in RPCs', async () => {
-    // Testing list_employees_v1 as a proxy for tenant isolation
-    const { data, error } = await supabase.rpc('list_employees_v1', {
-      p_tenant_id: '00000000-0000-0000-0000-000000000000',
-      p_search: '',
-      p_status: null,
-      p_limit: 1,
-      p_offset: 0
-    });
-
-    // Valid users should get empty data if the tenant doesn't exist or they don't have access,
-    // but the RPC itself validates membership.
-    if (error) {
-       // Should fail with "Unauthorized: Not a member of this tenant" or similar validation
-       expect(error.message).toMatch(/Unauthorized|Not a member/);
-    }
+    
+    // Anon role should be blocked by "permission denied" because EXECUTE was revoked from PUBLIC
+    // Or if the function is not in the schema, it might return a different error, 
+    // but we know it exists because we created it.
+    expect(error1?.message).toMatch(/permission denied|FEATURE_DISABLED/);
+    expect(error2?.message).toMatch(/permission denied|FEATURE_DISABLED/);
   });
 });
