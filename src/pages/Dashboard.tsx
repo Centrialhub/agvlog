@@ -12,7 +12,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 export default function Dashboard() {
-  const { currentTenant } = useTenant();
+  const { currentTenant, memberships } = useTenant();
   const navigate = useNavigate();
   const { data: fleetState = [] } = useFleetState();
 
