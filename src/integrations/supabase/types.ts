@@ -999,6 +999,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "checklist_executions_generated_incident_id_fkey"
+            columns: ["generated_incident_id"]
+            isOneToOne: false
+            referencedRelation: "vw_unified_logistics_timeline"
+            referencedColumns: ["incident_id"]
+          },
+          {
             foreignKeyName: "checklist_executions_generated_maintenance_id_fkey"
             columns: ["generated_maintenance_id"]
             isOneToOne: false
@@ -1331,6 +1338,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "operational_events"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_occurrence_messages_occurrence_id_fkey"
+            columns: ["occurrence_id"]
+            isOneToOne: false
+            referencedRelation: "vw_unified_logistics_timeline"
+            referencedColumns: ["event_id"]
           },
           {
             foreignKeyName: "client_occurrence_messages_tenant_id_fkey"
@@ -2124,6 +2138,13 @@ export type Database = {
             columns: ["load_id"]
             isOneToOne: false
             referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "closing_report_items_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
             referencedColumns: ["id"]
           },
         ]
@@ -3014,6 +3035,212 @@ export type Database = {
           },
         ]
       }
+      data_recovery_batches: {
+        Row: {
+          approved_by: string | null
+          created_at: string | null
+          created_by: string
+          dry_run_summary: Json | null
+          id: string
+          reason: string | null
+          recovery_type: string
+          status: Database["public"]["Enums"]["data_recovery_status"]
+          tenant_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          approved_by?: string | null
+          created_at?: string | null
+          created_by: string
+          dry_run_summary?: Json | null
+          id?: string
+          reason?: string | null
+          recovery_type: string
+          status?: Database["public"]["Enums"]["data_recovery_status"]
+          tenant_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          approved_by?: string | null
+          created_at?: string | null
+          created_by?: string
+          dry_run_summary?: Json | null
+          id?: string
+          reason?: string | null
+          recovery_type?: string
+          status?: Database["public"]["Enums"]["data_recovery_status"]
+          tenant_id?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      data_recovery_items: {
+        Row: {
+          batch_id: string
+          created_at: string | null
+          entity_id: string
+          entity_type: string
+          error_log: string | null
+          evidence_details: string | null
+          evidence_source: string | null
+          executed_at: string | null
+          id: string
+          proposed_action: string
+          result: string | null
+          snapshot_current: Json | null
+          snapshot_previous: Json | null
+          tenant_id: string
+        }
+        Insert: {
+          batch_id: string
+          created_at?: string | null
+          entity_id: string
+          entity_type: string
+          error_log?: string | null
+          evidence_details?: string | null
+          evidence_source?: string | null
+          executed_at?: string | null
+          id?: string
+          proposed_action: string
+          result?: string | null
+          snapshot_current?: Json | null
+          snapshot_previous?: Json | null
+          tenant_id: string
+        }
+        Update: {
+          batch_id?: string
+          created_at?: string | null
+          entity_id?: string
+          entity_type?: string
+          error_log?: string | null
+          evidence_details?: string | null
+          evidence_source?: string | null
+          executed_at?: string | null
+          id?: string
+          proposed_action?: string
+          result?: string | null
+          snapshot_current?: Json | null
+          snapshot_previous?: Json | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "data_recovery_items_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "data_recovery_batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      data_repair_batch_items: {
+        Row: {
+          action_type: string
+          after_state: Json | null
+          batch_id: string
+          before_state: Json | null
+          created_at: string | null
+          entity_id: string
+          entity_type: string
+          error_message: string | null
+          executed_at: string | null
+          id: string
+          payload: Json | null
+          status: string | null
+          tenant_id: string
+        }
+        Insert: {
+          action_type: string
+          after_state?: Json | null
+          batch_id: string
+          before_state?: Json | null
+          created_at?: string | null
+          entity_id: string
+          entity_type: string
+          error_message?: string | null
+          executed_at?: string | null
+          id?: string
+          payload?: Json | null
+          status?: string | null
+          tenant_id: string
+        }
+        Update: {
+          action_type?: string
+          after_state?: Json | null
+          batch_id?: string
+          before_state?: Json | null
+          created_at?: string | null
+          entity_id?: string
+          entity_type?: string
+          error_message?: string | null
+          executed_at?: string | null
+          id?: string
+          payload?: Json | null
+          status?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "data_repair_batch_items_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "data_repair_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "data_repair_batch_items_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      data_repair_batches: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          compensations: Json | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          dry_run_report: Json | null
+          executed_at: string | null
+          execution_results: Json | null
+          id: string
+          status: string
+          tenant_id: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          compensations?: Json | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          dry_run_report?: Json | null
+          executed_at?: string | null
+          execution_results?: Json | null
+          id?: string
+          status?: string
+          tenant_id: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          compensations?: Json | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          dry_run_report?: Json | null
+          executed_at?: string | null
+          execution_results?: Json | null
+          id?: string
+          status?: string
+          tenant_id?: string
+        }
+        Relationships: []
+      }
       delivery_occurrence_items: {
         Row: {
           created_at: string
@@ -3229,6 +3456,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "delivery_occurrences_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "delivery_occurrences_supplier_id_fkey"
             columns: ["supplier_id"]
             isOneToOne: false
@@ -3283,11 +3517,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "dispatch_events_dispatch_stop_id_fkey"
+            columns: ["dispatch_stop_id"]
+            isOneToOne: false
+            referencedRelation: "vw_unified_logistics_timeline"
+            referencedColumns: ["stop_id"]
+          },
+          {
             foreignKeyName: "dispatch_events_dispatch_trip_id_fkey"
             columns: ["dispatch_trip_id"]
             isOneToOne: false
             referencedRelation: "dispatch_trips"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dispatch_events_dispatch_trip_id_fkey"
+            columns: ["dispatch_trip_id"]
+            isOneToOne: false
+            referencedRelation: "vw_operational_workspace"
+            referencedColumns: ["trip_id"]
           },
           {
             foreignKeyName: "dispatch_events_tenant_id_fkey"
@@ -3332,6 +3580,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "dispatch_stop_documents_dispatch_stop_id_fkey"
+            columns: ["dispatch_stop_id"]
+            isOneToOne: false
+            referencedRelation: "vw_unified_logistics_timeline"
+            referencedColumns: ["stop_id"]
+          },
+          {
             foreignKeyName: "dispatch_stop_documents_fiscal_document_id_fkey"
             columns: ["fiscal_document_id"]
             isOneToOne: false
@@ -3343,6 +3598,13 @@ export type Database = {
             columns: ["load_id"]
             isOneToOne: false
             referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dispatch_stop_documents_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
             referencedColumns: ["id"]
           },
           {
@@ -3440,6 +3702,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "dispatch_stops_dispatch_trip_id_fkey"
+            columns: ["dispatch_trip_id"]
+            isOneToOne: false
+            referencedRelation: "vw_operational_workspace"
+            referencedColumns: ["trip_id"]
+          },
+          {
             foreignKeyName: "dispatch_stops_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
@@ -3479,10 +3748,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "dispatch_trip_loads_dispatch_trip_id_fkey"
+            columns: ["dispatch_trip_id"]
+            isOneToOne: false
+            referencedRelation: "vw_operational_workspace"
+            referencedColumns: ["trip_id"]
+          },
+          {
             foreignKeyName: "dispatch_trip_loads_load_id_fkey"
             columns: ["load_id"]
             isOneToOne: false
             referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dispatch_trip_loads_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
             referencedColumns: ["id"]
           },
           {
@@ -3556,6 +3839,13 @@ export type Database = {
             columns: ["load_id"]
             isOneToOne: false
             referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dispatch_trips_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
             referencedColumns: ["id"]
           },
           {
@@ -3771,6 +4061,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "dispatch_trips"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_expenses_dispatch_trip_id_fkey"
+            columns: ["dispatch_trip_id"]
+            isOneToOne: false
+            referencedRelation: "vw_operational_workspace"
+            referencedColumns: ["trip_id"]
           },
           {
             foreignKeyName: "driver_expenses_driver_id_fkey"
@@ -4014,6 +4311,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "driver_route_monitors_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "driver_route_monitors_vehicle_id_fkey"
             columns: ["vehicle_id"]
             isOneToOne: false
@@ -4111,6 +4415,13 @@ export type Database = {
             columns: ["load_id"]
             isOneToOne: false
             referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_route_progress_updates_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
             referencedColumns: ["id"]
           },
           {
@@ -4267,6 +4578,13 @@ export type Database = {
             columns: ["load_id"]
             isOneToOne: true
             referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_settlement_loads_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: true
+            referencedRelation: "vw_load_control"
             referencedColumns: ["id"]
           },
           {
@@ -4545,6 +4863,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "dispatch_trips"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_settlements_dispatch_trip_id_fkey"
+            columns: ["dispatch_trip_id"]
+            isOneToOne: false
+            referencedRelation: "vw_operational_workspace"
+            referencedColumns: ["trip_id"]
           },
           {
             foreignKeyName: "driver_settlements_driver_id_fkey"
@@ -5179,6 +5504,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "employee_incident_actions_incident_id_fkey"
+            columns: ["incident_id"]
+            isOneToOne: false
+            referencedRelation: "vw_unified_logistics_timeline"
+            referencedColumns: ["incident_id"]
+          },
+          {
             foreignKeyName: "employee_incident_actions_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
@@ -5217,6 +5549,7 @@ export type Database = {
           updated_at: string
           updated_by: string | null
           user_id: string | null
+          version: number
         }
         Insert: {
           address?: Json | null
@@ -5247,6 +5580,7 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
           user_id?: string | null
+          version?: number
         }
         Update: {
           address?: Json | null
@@ -5277,6 +5611,7 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
           user_id?: string | null
+          version?: number
         }
         Relationships: [
           {
@@ -5337,6 +5672,48 @@ export type Database = {
           request_id?: string | null
           source?: string | null
           tenant_id?: string
+        }
+        Relationships: []
+      }
+      entity_state_audit_log: {
+        Row: {
+          actor_id: string | null
+          created_at: string | null
+          entity_id: string
+          entity_type: string
+          from_status: string | null
+          id: string
+          idempotency_key: string | null
+          metadata: Json | null
+          reason: string | null
+          tenant_id: string
+          to_status: string
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string | null
+          entity_id: string
+          entity_type: string
+          from_status?: string | null
+          id?: string
+          idempotency_key?: string | null
+          metadata?: Json | null
+          reason?: string | null
+          tenant_id: string
+          to_status: string
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string | null
+          entity_id?: string
+          entity_type?: string
+          from_status?: string | null
+          id?: string
+          idempotency_key?: string | null
+          metadata?: Json | null
+          reason?: string | null
+          tenant_id?: string
+          to_status?: string
         }
         Relationships: []
       }
@@ -5468,6 +5845,8 @@ export type Database = {
         Row: {
           amount_expected: number
           amount_matched: number
+          audited_at: string | null
+          auditor_id: string | null
           bank_account_id: string | null
           competence_date: string | null
           counterparty_id: string | null
@@ -5480,6 +5859,8 @@ export type Database = {
           due_date: string | null
           expected_payment_date: string | null
           id: string
+          idempotency_key: string | null
+          ledger_entry_id: string | null
           matching_status: string
           metadata: Json
           obligation_type: string
@@ -5494,6 +5875,8 @@ export type Database = {
         Insert: {
           amount_expected?: number
           amount_matched?: number
+          audited_at?: string | null
+          auditor_id?: string | null
           bank_account_id?: string | null
           competence_date?: string | null
           counterparty_id?: string | null
@@ -5506,6 +5889,8 @@ export type Database = {
           due_date?: string | null
           expected_payment_date?: string | null
           id?: string
+          idempotency_key?: string | null
+          ledger_entry_id?: string | null
           matching_status?: string
           metadata?: Json
           obligation_type: string
@@ -5520,6 +5905,8 @@ export type Database = {
         Update: {
           amount_expected?: number
           amount_matched?: number
+          audited_at?: string | null
+          auditor_id?: string | null
           bank_account_id?: string | null
           competence_date?: string | null
           counterparty_id?: string | null
@@ -5532,6 +5919,8 @@ export type Database = {
           due_date?: string | null
           expected_payment_date?: string | null
           id?: string
+          idempotency_key?: string | null
+          ledger_entry_id?: string | null
           matching_status?: string
           metadata?: Json
           obligation_type?: string
@@ -5549,6 +5938,13 @@ export type Database = {
             columns: ["bank_account_id"]
             isOneToOne: false
             referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financial_obligations_ledger_entry_id_fkey"
+            columns: ["ledger_entry_id"]
+            isOneToOne: false
+            referencedRelation: "operational_ledger"
             referencedColumns: ["id"]
           },
           {
@@ -5851,6 +6247,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "fiscal_documents_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "fiscal_documents_order_id_fkey"
             columns: ["order_id"]
             isOneToOne: false
@@ -5879,6 +6282,57 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      fiscal_webhook_inbox: {
+        Row: {
+          attempt_count: number | null
+          created_at: string | null
+          delivery_id: string
+          emission_id: string | null
+          event_timestamp: string
+          event_type: string
+          id: string
+          last_error: string | null
+          next_retry_at: string | null
+          payload_hash: string | null
+          raw_payload: Json
+          status: string
+          tenant_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          attempt_count?: number | null
+          created_at?: string | null
+          delivery_id: string
+          emission_id?: string | null
+          event_timestamp: string
+          event_type: string
+          id?: string
+          last_error?: string | null
+          next_retry_at?: string | null
+          payload_hash?: string | null
+          raw_payload: Json
+          status?: string
+          tenant_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          attempt_count?: number | null
+          created_at?: string | null
+          delivery_id?: string
+          emission_id?: string | null
+          event_timestamp?: string
+          event_type?: string
+          id?: string
+          last_error?: string | null
+          next_retry_at?: string | null
+          payload_hash?: string | null
+          raw_payload?: Json
+          status?: string
+          tenant_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       freight_auto_rules: {
         Row: {
@@ -6694,6 +7148,35 @@ export type Database = {
           },
         ]
       }
+      idempotency_keys: {
+        Row: {
+          created_at: string | null
+          id: string
+          key_value: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          key_value: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          key_value?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "idempotency_keys_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       imported_note_summary_reports: {
         Row: {
           created_at: string
@@ -6784,6 +7267,13 @@ export type Database = {
             referencedRelation: "incidents"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "incident_attachments_incident_id_fkey"
+            columns: ["incident_id"]
+            isOneToOne: false
+            referencedRelation: "vw_unified_logistics_timeline"
+            referencedColumns: ["incident_id"]
+          },
         ]
       }
       incident_responsible: {
@@ -6844,6 +7334,13 @@ export type Database = {
             referencedRelation: "incidents"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "incident_responsible_incident_id_fkey"
+            columns: ["incident_id"]
+            isOneToOne: false
+            referencedRelation: "vw_unified_logistics_timeline"
+            referencedColumns: ["incident_id"]
+          },
         ]
       }
       incidents: {
@@ -6872,6 +7369,7 @@ export type Database = {
           load_id: string | null
           occurred_at: string
           opened_by: string | null
+          operational_event_id: string | null
           order_id: string | null
           origin_type: string | null
           probable_cause: string | null
@@ -6915,6 +7413,7 @@ export type Database = {
           load_id?: string | null
           occurred_at?: string
           opened_by?: string | null
+          operational_event_id?: string | null
           order_id?: string | null
           origin_type?: string | null
           probable_cause?: string | null
@@ -6958,6 +7457,7 @@ export type Database = {
           load_id?: string | null
           occurred_at?: string
           opened_by?: string | null
+          operational_event_id?: string | null
           order_id?: string | null
           origin_type?: string | null
           probable_cause?: string | null
@@ -6990,6 +7490,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "employees"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "incidents_operational_event_id_fkey"
+            columns: ["operational_event_id"]
+            isOneToOne: false
+            referencedRelation: "operational_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "incidents_operational_event_id_fkey"
+            columns: ["operational_event_id"]
+            isOneToOne: false
+            referencedRelation: "vw_unified_logistics_timeline"
+            referencedColumns: ["event_id"]
           },
         ]
       }
@@ -7518,6 +8032,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "load_documents_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "load_documents_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
@@ -7639,6 +8160,13 @@ export type Database = {
             columns: ["load_id"]
             isOneToOne: false
             referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "load_items_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
             referencedColumns: ["id"]
           },
           {
@@ -7797,10 +8325,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "load_note_audit_events_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "load_note_audit_events_previous_load_id_fkey"
             columns: ["previous_load_id"]
             isOneToOne: false
             referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "load_note_audit_events_previous_load_id_fkey"
+            columns: ["previous_load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
             referencedColumns: ["id"]
           },
         ]
@@ -7833,6 +8375,13 @@ export type Database = {
             columns: ["load_id"]
             isOneToOne: false
             referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "load_orders_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
             referencedColumns: ["id"]
           },
           {
@@ -7900,6 +8449,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "load_payments_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "load_payments_receivable_id_fkey"
             columns: ["receivable_id"]
             isOneToOne: false
@@ -7948,6 +8504,13 @@ export type Database = {
             columns: ["load_id"]
             isOneToOne: false
             referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "load_status_history_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
             referencedColumns: ["id"]
           },
         ]
@@ -8026,6 +8589,13 @@ export type Database = {
             referencedRelation: "loads"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "load_unloading_charges_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
+            referencedColumns: ["id"]
+          },
         ]
       }
       loads: {
@@ -8102,6 +8672,7 @@ export type Database = {
           trip_id: string | null
           updated_at: string
           vehicle_id: string | null
+          version: number
         }
         Insert: {
           actual_load_at?: string | null
@@ -8176,6 +8747,7 @@ export type Database = {
           trip_id?: string | null
           updated_at?: string
           vehicle_id?: string | null
+          version?: number
         }
         Update: {
           actual_load_at?: string | null
@@ -8250,6 +8822,7 @@ export type Database = {
           trip_id?: string | null
           updated_at?: string
           vehicle_id?: string | null
+          version?: number
         }
         Relationships: [
           {
@@ -8272,6 +8845,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "dispatch_trips"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loads_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "vw_operational_workspace"
+            referencedColumns: ["trip_id"]
           },
           {
             foreignKeyName: "loads_vehicle_id_fkey"
@@ -8405,6 +8985,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "incidents"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maintenance_orders_incident_id_fkey"
+            columns: ["incident_id"]
+            isOneToOne: false
+            referencedRelation: "vw_unified_logistics_timeline"
+            referencedColumns: ["incident_id"]
           },
           {
             foreignKeyName: "maintenance_orders_responsible_employee_id_fkey"
@@ -8755,6 +9342,13 @@ export type Database = {
             columns: ["load_id"]
             isOneToOne: false
             referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "merchandise_shortage_cases_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
             referencedColumns: ["id"]
           },
           {
@@ -10247,6 +10841,13 @@ export type Database = {
             referencedRelation: "operational_events"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "operational_event_messages_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "vw_unified_logistics_timeline"
+            referencedColumns: ["event_id"]
+          },
         ]
       }
       operational_events: {
@@ -10265,8 +10866,11 @@ export type Database = {
           financial_impact: number | null
           fiscal_document_id: string | null
           id: string
+          idempotency_key: string | null
           load_id: string | null
           order_id: string | null
+          payload: Json | null
+          proof_of_delivery_id: string | null
           public_status: string | null
           report_details: Json | null
           resolution: string | null
@@ -10292,8 +10896,11 @@ export type Database = {
           financial_impact?: number | null
           fiscal_document_id?: string | null
           id?: string
+          idempotency_key?: string | null
           load_id?: string | null
           order_id?: string | null
+          payload?: Json | null
+          proof_of_delivery_id?: string | null
           public_status?: string | null
           report_details?: Json | null
           resolution?: string | null
@@ -10319,8 +10926,11 @@ export type Database = {
           financial_impact?: number | null
           fiscal_document_id?: string | null
           id?: string
+          idempotency_key?: string | null
           load_id?: string | null
           order_id?: string | null
+          payload?: Json | null
+          proof_of_delivery_id?: string | null
           public_status?: string | null
           report_details?: Json | null
           resolution?: string | null
@@ -10347,11 +10957,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "operational_events_dispatch_stop_id_fkey"
+            columns: ["dispatch_stop_id"]
+            isOneToOne: false
+            referencedRelation: "vw_unified_logistics_timeline"
+            referencedColumns: ["stop_id"]
+          },
+          {
             foreignKeyName: "operational_events_dispatch_trip_id_fkey"
             columns: ["dispatch_trip_id"]
             isOneToOne: false
             referencedRelation: "dispatch_trips"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "operational_events_dispatch_trip_id_fkey"
+            columns: ["dispatch_trip_id"]
+            isOneToOne: false
+            referencedRelation: "vw_operational_workspace"
+            referencedColumns: ["trip_id"]
           },
           {
             foreignKeyName: "operational_events_driver_id_fkey"
@@ -10375,11 +10999,32 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "operational_events_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "operational_events_order_id_fkey"
             columns: ["order_id"]
             isOneToOne: false
             referencedRelation: "orders"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "operational_events_proof_of_delivery_id_fkey"
+            columns: ["proof_of_delivery_id"]
+            isOneToOne: false
+            referencedRelation: "proof_of_delivery"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "operational_events_proof_of_delivery_id_fkey"
+            columns: ["proof_of_delivery_id"]
+            isOneToOne: false
+            referencedRelation: "vw_unified_logistics_timeline"
+            referencedColumns: ["pod_id"]
           },
           {
             foreignKeyName: "operational_events_tenant_id_fkey"
@@ -10393,6 +11038,62 @@ export type Database = {
             columns: ["vehicle_id"]
             isOneToOne: false
             referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      operational_ledger: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          entry_type: string
+          id: string
+          idempotency_key: string | null
+          metadata: Json
+          nature: string
+          source_id: string
+          source_table: string
+          status: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          created_by?: string | null
+          entry_type: string
+          id?: string
+          idempotency_key?: string | null
+          metadata?: Json
+          nature: string
+          source_id: string
+          source_table: string
+          status?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          entry_type?: string
+          id?: string
+          idempotency_key?: string | null
+          metadata?: Json
+          nature?: string
+          source_id?: string
+          source_table?: string
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "operational_ledger_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -10992,6 +11693,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "pallet_return_protocols_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "pallet_return_protocols_supplier_id_fkey"
             columns: ["supplier_id"]
             isOneToOne: false
@@ -11186,6 +11894,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "payables_dispatch_trip_id_fkey"
+            columns: ["dispatch_trip_id"]
+            isOneToOne: false
+            referencedRelation: "vw_operational_workspace"
+            referencedColumns: ["trip_id"]
+          },
+          {
             foreignKeyName: "payables_driver_id_fkey"
             columns: ["driver_id"]
             isOneToOne: false
@@ -11197,6 +11912,13 @@ export type Database = {
             columns: ["load_id"]
             isOneToOne: false
             referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payables_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
             referencedColumns: ["id"]
           },
           {
@@ -11909,20 +12631,27 @@ export type Database = {
       }
       proof_of_delivery: {
         Row: {
+          accuracy: number | null
+          content_hash: string | null
           created_at: string
           created_by: string | null
           dispatch_stop_id: string | null
           dispatch_trip_id: string | null
           fiscal_document_id: string
           id: string
+          is_active: boolean
+          latitude: number | null
           load_id: string | null
+          longitude: number | null
           metadata: Json
+          photo_url: string | null
           proof_type: string
           received_at: string | null
           receiver_document: string | null
           receiver_name: string | null
           receiver_role: string | null
           rejection_reason: string | null
+          signature_url: string | null
           status: string
           storage_bucket: string | null
           storage_path: string | null
@@ -11930,22 +12659,30 @@ export type Database = {
           updated_at: string
           validated_at: string | null
           validated_by: string | null
+          version: number
         }
         Insert: {
+          accuracy?: number | null
+          content_hash?: string | null
           created_at?: string
           created_by?: string | null
           dispatch_stop_id?: string | null
           dispatch_trip_id?: string | null
           fiscal_document_id: string
           id?: string
+          is_active?: boolean
+          latitude?: number | null
           load_id?: string | null
+          longitude?: number | null
           metadata?: Json
+          photo_url?: string | null
           proof_type: string
           received_at?: string | null
           receiver_document?: string | null
           receiver_name?: string | null
           receiver_role?: string | null
           rejection_reason?: string | null
+          signature_url?: string | null
           status?: string
           storage_bucket?: string | null
           storage_path?: string | null
@@ -11953,22 +12690,30 @@ export type Database = {
           updated_at?: string
           validated_at?: string | null
           validated_by?: string | null
+          version?: number
         }
         Update: {
+          accuracy?: number | null
+          content_hash?: string | null
           created_at?: string
           created_by?: string | null
           dispatch_stop_id?: string | null
           dispatch_trip_id?: string | null
           fiscal_document_id?: string
           id?: string
+          is_active?: boolean
+          latitude?: number | null
           load_id?: string | null
+          longitude?: number | null
           metadata?: Json
+          photo_url?: string | null
           proof_type?: string
           received_at?: string | null
           receiver_document?: string | null
           receiver_name?: string | null
           receiver_role?: string | null
           rejection_reason?: string | null
+          signature_url?: string | null
           status?: string
           storage_bucket?: string | null
           storage_path?: string | null
@@ -11976,6 +12721,7 @@ export type Database = {
           updated_at?: string
           validated_at?: string | null
           validated_by?: string | null
+          version?: number
         }
         Relationships: [
           {
@@ -11986,11 +12732,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "proof_of_delivery_dispatch_stop_id_fkey"
+            columns: ["dispatch_stop_id"]
+            isOneToOne: false
+            referencedRelation: "vw_unified_logistics_timeline"
+            referencedColumns: ["stop_id"]
+          },
+          {
             foreignKeyName: "proof_of_delivery_dispatch_trip_id_fkey"
             columns: ["dispatch_trip_id"]
             isOneToOne: false
             referencedRelation: "dispatch_trips"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proof_of_delivery_dispatch_trip_id_fkey"
+            columns: ["dispatch_trip_id"]
+            isOneToOne: false
+            referencedRelation: "vw_operational_workspace"
+            referencedColumns: ["trip_id"]
           },
           {
             foreignKeyName: "proof_of_delivery_fiscal_document_id_fkey"
@@ -12004,6 +12764,13 @@ export type Database = {
             columns: ["load_id"]
             isOneToOne: false
             referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proof_of_delivery_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
             referencedColumns: ["id"]
           },
           {
@@ -12894,6 +13661,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "stock_movements_incident_id_fkey"
+            columns: ["incident_id"]
+            isOneToOne: false
+            referencedRelation: "vw_unified_logistics_timeline"
+            referencedColumns: ["incident_id"]
+          },
+          {
             foreignKeyName: "stock_movements_maintenance_order_id_fkey"
             columns: ["maintenance_order_id"]
             isOneToOne: false
@@ -13263,6 +14037,13 @@ export type Database = {
             referencedRelation: "dispatch_trips"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "trip_alerts_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "vw_operational_workspace"
+            referencedColumns: ["trip_id"]
+          },
         ]
       }
       trip_live_status: {
@@ -13331,6 +14112,13 @@ export type Database = {
             referencedRelation: "dispatch_trips"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "trip_live_status_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "vw_operational_workspace"
+            referencedColumns: ["trip_id"]
+          },
         ]
       }
       trip_routes: {
@@ -13395,6 +14183,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "dispatch_trips"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trip_routes_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "vw_operational_workspace"
+            referencedColumns: ["trip_id"]
           },
         ]
       }
@@ -13521,6 +14316,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
       }
       user_ui_preferences: {
         Row: {
@@ -13767,6 +14580,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "vehicle_fueling_dispatch_trip_id_fkey"
+            columns: ["dispatch_trip_id"]
+            isOneToOne: false
+            referencedRelation: "vw_operational_workspace"
+            referencedColumns: ["trip_id"]
+          },
+          {
             foreignKeyName: "vehicle_fueling_driver_id_fkey"
             columns: ["driver_id"]
             isOneToOne: false
@@ -13899,6 +14719,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "incidents"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_maintenance_incident_id_fkey"
+            columns: ["incident_id"]
+            isOneToOne: false
+            referencedRelation: "vw_unified_logistics_timeline"
+            referencedColumns: ["incident_id"]
           },
           {
             foreignKeyName: "vehicle_maintenance_tenant_id_fkey"
@@ -14322,7 +15149,204 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      vw_load_composition: {
+        Row: {
+          access_key: string | null
+          document_value: number | null
+          fiscal_document_id: string | null
+          invoice_number: string | null
+          item_description: string | null
+          item_id: string | null
+          item_status: string | null
+          load_id: string | null
+          load_number: string | null
+          load_status: string | null
+          order_id: string | null
+          order_number: string | null
+          pallet_count: number | null
+          quantity: number | null
+          recipient: string | null
+          recipient_city: string | null
+          recipient_state: string | null
+          remitter: string | null
+          tenant_id: string | null
+          volume_m3: number | null
+          weight_kg: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "load_items_fiscal_document_id_fkey"
+            columns: ["fiscal_document_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "load_items_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "loads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "load_items_load_id_fkey"
+            columns: ["load_id"]
+            isOneToOne: false
+            referencedRelation: "vw_load_control"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "load_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "load_items_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vw_load_control: {
+        Row: {
+          arrival_date: string | null
+          billing_status: string | null
+          client_invoice_id: string | null
+          created_at: string | null
+          cte_count: number | null
+          driver_name: string | null
+          expected_payment_date: string | null
+          external_load_number: string | null
+          freight_amount: number | null
+          freight_percent: number | null
+          gross_cargo_value: number | null
+          id: string | null
+          invoice_count: number | null
+          legacy_status_text: string | null
+          load_date: string | null
+          load_number: string | null
+          notes: string | null
+          operational_status: string | null
+          payment_date: string | null
+          payment_status: string | null
+          plate: string | null
+          receivable_id: string | null
+          received_amount: number | null
+          status: string | null
+          tenant_id: string | null
+          total_pallet_count: number | null
+          total_volume_m3: number | null
+          total_weight_kg: number | null
+          trip_id: string | null
+          updated_at: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loads_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loads_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "dispatch_trips"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loads_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "vw_operational_workspace"
+            referencedColumns: ["trip_id"]
+          },
+        ]
+      }
+      vw_operational_workspace: {
+        Row: {
+          actual_start_at: string | null
+          driver_id: string | null
+          driver_name: string | null
+          loads: Json | null
+          planned_start_at: string | null
+          stops: Json | null
+          tenant_id: string | null
+          trip_id: string | null
+          trip_status: string | null
+          updated_at: string | null
+          vehicle_id: string | null
+          vehicle_plate: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dispatch_trips_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dispatch_trips_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dispatch_trips_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vw_unified_logistics_timeline: {
+        Row: {
+          event_id: string | null
+          event_type: string | null
+          incident_id: string | null
+          incident_status: string | null
+          occurred_at: string | null
+          payload: Json | null
+          pod_id: string | null
+          pod_signed_at: string | null
+          receiver_name: string | null
+          stop_id: string | null
+          stop_location: string | null
+          tenant_id: string | null
+          trip_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dispatch_stops_dispatch_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "dispatch_trips"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dispatch_stops_dispatch_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "vw_operational_workspace"
+            referencedColumns: ["trip_id"]
+          },
+          {
+            foreignKeyName: "operational_events_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       _apply_match_amounts: {
@@ -14399,6 +15423,10 @@ export type Database = {
         Args: { _client_id: string; _perm: string; _tenant_id: string }
         Returns: boolean
       }
+      _recalculate_load_totals: {
+        Args: { _load_id: string }
+        Returns: undefined
+      }
       accept_financial_match: {
         Args: { _match_id: string }
         Returns: undefined
@@ -14448,6 +15476,10 @@ export type Database = {
         }
         Returns: string
       }
+      approve_financial_obligation_v1: {
+        Args: { _notes?: string; _obligation_id: string }
+        Returns: boolean
+      }
       approve_payroll_period: {
         Args: { _period_id: string }
         Returns: undefined
@@ -14481,6 +15513,45 @@ export type Database = {
           suggested_action: string
         }[]
       }
+      audit_data_consistency_v3: {
+        Args: { p_fix?: boolean; p_tenant_id: string }
+        Returns: Json
+      }
+      audit_data_consistency_v4: {
+        Args: { p_tenant_id: string }
+        Returns: {
+          domain: string
+          entity_id: string
+          entity_type: string
+          message: string
+          metadata: Json
+          severity: string
+          suggested_action: string
+        }[]
+      }
+      audit_operational_congruence_v1: {
+        Args: { p_tenant_id: string }
+        Returns: {
+          domain: string
+          entity_id: string
+          entity_type: string
+          message: string
+          metadata: Json
+          severity: string
+        }[]
+      }
+      build_fiscal_documents_deleted_recovery_dry_run: {
+        Args: { _end_time: string; _start_time: string; _tenant_id?: string }
+        Returns: {
+          deleted_count: number
+          sample_ids: string[]
+          tenant_id: string
+        }[]
+      }
+      calculate_vehicle_trips_v1: {
+        Args: { _end_at: string; _start_at: string; _vehicle_id: string }
+        Returns: Json
+      }
       cancel_client_invoice: {
         Args: { _invoice_id: string; _reason: string }
         Returns: undefined
@@ -14503,6 +15574,18 @@ export type Database = {
       }
       cancel_pallet_return_protocol: {
         Args: { _protocol_id: string; _reason: string }
+        Returns: undefined
+      }
+      check_resource_ownership: {
+        Args: {
+          p_resource_id: string
+          p_table_name: string
+          p_tenant_id: string
+        }
+        Returns: boolean
+      }
+      check_tenant_membership: {
+        Args: { p_tenant_id: string }
         Returns: undefined
       }
       clear_reimport_batch_data:
@@ -14528,6 +15611,15 @@ export type Database = {
         Args: { _session_id: string }
         Returns: undefined
       }
+      commit_load_import_v1: {
+        Args: {
+          p_file_name: string
+          p_rows: Json
+          p_source_type: string
+          p_tenant_id: string
+        }
+        Returns: Json
+      }
       count_points_in_geofence: {
         Args: { _geofence_id: string; _points: Json }
         Returns: Json
@@ -14542,6 +15634,37 @@ export type Database = {
           _order_id?: string
           _severity?: string
           _tenant_id: string
+        }
+        Returns: string
+      }
+      create_employee_v1: {
+        Args: { p_tenant_id: string; p_values: Json }
+        Returns: string
+      }
+      create_ledger_entry_v1: {
+        Args: {
+          _amount: number
+          _description: string
+          _entry_type: string
+          _metadata?: Json
+          _nature: string
+          _source_id: string
+          _source_table: string
+          _tenant_id: string
+        }
+        Returns: string
+      }
+      create_load_v1: {
+        Args: {
+          p_destination?: string
+          p_driver_id?: string
+          p_idempotency_key?: string
+          p_notes?: string
+          p_operation_type?: string
+          p_origin?: string
+          p_scheduled_load_at?: string
+          p_tenant_id: string
+          p_vehicle_id?: string
         }
         Returns: string
       }
@@ -14628,6 +15751,7 @@ export type Database = {
           trip_id: string | null
           updated_at: string
           vehicle_id: string | null
+          version: number
         }
         SetofOptions: {
           from: "*"
@@ -14675,9 +15799,25 @@ export type Database = {
         Args: { _reason: string; _settlement_id: string }
         Returns: undefined
       }
+      delete_employee_v1: {
+        Args: { p_employee_id: string; p_tenant_id: string }
+        Returns: undefined
+      }
       delete_load_if_empty: { Args: { v_load_id: string }; Returns: undefined }
+      delete_load_item_v1: {
+        Args: { p_item_id: string; p_tenant_id: string }
+        Returns: undefined
+      }
+      delete_load_item_v2: {
+        Args: { p_item_id: string; p_tenant_id: string }
+        Returns: boolean
+      }
       delete_load_safely: {
         Args: { _load_id: string; _tenant_id: string }
+        Returns: Json
+      }
+      delete_load_v1: {
+        Args: { p_load_id: string; p_tenant_id: string }
         Returns: Json
       }
       delete_loads_safely: {
@@ -14688,11 +15828,26 @@ export type Database = {
         Args: { _item_id: string; _reason: string }
         Returns: undefined
       }
+      derive_trip_and_load_status_v1: {
+        Args: { p_tenant_id: string; p_trip_id: string }
+        Returns: undefined
+      }
       detach_load_from_driver_settlement: {
         Args: { _load_id: string; _settlement_id: string }
         Returns: undefined
       }
       detect_payment_method: { Args: { p_text: string }; Returns: string }
+      diagnose_load_composition: {
+        Args: { _load_ids?: string[]; _tenant_id: string }
+        Returns: {
+          entity_id: string
+          entity_type: string
+          issue: string
+          load_id: string
+          load_number: string
+          severity: string
+        }[]
+      }
       dispatch_planned_route: { Args: { _payload: Json }; Returns: string }
       driver_can_access_vehicle: {
         Args: { _vehicle_id: string }
@@ -14759,6 +15914,18 @@ export type Database = {
         Args: { _notes?: string; _stop_id: string }
         Returns: string
       }
+      driver_report_event_v1: {
+        Args: {
+          p_driver_id: string
+          p_event_type: string
+          p_idempotency_key?: string
+          p_payload?: Json
+          p_stop_id: string
+          p_tenant_id: string
+          p_trip_id: string
+        }
+        Returns: Json
+      }
       driver_save_checklist: {
         Args: { _kind: string; _payload: Json; _trip_id: string }
         Returns: string
@@ -14767,6 +15934,16 @@ export type Database = {
         Args: { _new_status: string; _reason?: string; _stop_id: string }
         Returns: Json
       }
+      execute_data_repair_v1:
+        | { Args: { _batch_id: string; _tenant_id: string }; Returns: Json }
+        | {
+            Args: {
+              p_batch_id: string
+              p_dry_run?: boolean
+              p_tenant_id: string
+            }
+            Returns: Json
+          }
       finalize_driver_delivery: {
         Args: {
           _fiscal_document_id?: string
@@ -14874,6 +16051,14 @@ export type Database = {
         Args: { _client_id: string; _limit?: number; _tenant_id: string }
         Returns: Json
       }
+      get_driver_workspace_v1: {
+        Args: { p_driver_id: string; p_tenant_id: string }
+        Returns: Json
+      }
+      get_next_load_number_v1: {
+        Args: { p_tenant_id: string }
+        Returns: string
+      }
       get_open_trip_alerts: {
         Args: { _tenant_id: string }
         Returns: {
@@ -14897,6 +16082,10 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      get_operational_financial_summary_v1: {
+        Args: { _date_from?: string; _date_to?: string; _tenant_id: string }
+        Returns: Json
       }
       get_public_shipment_status: {
         Args: { _fiscal_document_id: string }
@@ -14976,6 +16165,14 @@ export type Database = {
         Returns: boolean
       }
       is_user_internal_role: { Args: { _tenant_id: string }; Returns: boolean }
+      link_fiscal_documents_to_load_v1: {
+        Args: { _document_ids: string[]; _load_id: string; _tenant_id: string }
+        Returns: Json
+      }
+      link_items_to_load_v2: {
+        Args: { p_item_ids: string[]; p_load_id: string; p_tenant_id: string }
+        Returns: Json
+      }
       list_available_loads_for_settlement: {
         Args: {
           _driver_id?: string
@@ -15194,6 +16391,25 @@ export type Database = {
           validated_at: string
         }[]
       }
+      list_clients_v1: {
+        Args: {
+          p_cursor?: string
+          p_limit?: number
+          p_search?: string
+          p_tenant_id: string
+        }
+        Returns: Json
+      }
+      list_dispatch_trips_v1: {
+        Args: {
+          p_cursor?: string
+          p_limit?: number
+          p_search?: string
+          p_status?: string[]
+          p_tenant_id: string
+        }
+        Returns: Json
+      }
       list_driver_settlement_filter_options: {
         Args: { _tenant_id: string }
         Returns: Json
@@ -15213,6 +16429,78 @@ export type Database = {
           _status?: string
           _tenant_id: string
           _vehicle_id?: string
+        }
+        Returns: Json
+      }
+      list_drivers_v1: {
+        Args: {
+          p_cursor?: string
+          p_limit?: number
+          p_search?: string
+          p_tenant_id: string
+        }
+        Returns: Json
+      }
+      list_employees_v1: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_status?: string
+          p_tenant_id: string
+        }
+        Returns: Json
+      }
+      list_fiscal_documents_v1: {
+        Args: {
+          p_cursor?: string
+          p_limit?: number
+          p_search?: string
+          p_tenant_id: string
+          p_type?: string[]
+        }
+        Returns: Json
+      }
+      list_load_control_v1: {
+        Args: {
+          p_filters?: Json
+          p_limit?: number
+          p_offset?: number
+          p_tenant_id: string
+        }
+        Returns: {
+          items: Json
+          total_count: number
+        }[]
+      }
+      list_loads_v1: {
+        Args: {
+          p_cursor?: string
+          p_limit?: number
+          p_search?: string
+          p_status?: string[]
+          p_tenant_id: string
+        }
+        Returns: Json
+      }
+      list_operational_routes_v1: {
+        Args: {
+          p_cursor?: string
+          p_limit?: number
+          p_search?: string
+          p_tenant_id: string
+        }
+        Returns: Json
+      }
+      log_operational_event_v2: {
+        Args: {
+          p_dispatch_stop_id?: string
+          p_event_type: string
+          p_fiscal_document_id?: string
+          p_idempotency_key?: string
+          p_payload?: Json
+          p_pod_data?: Json
+          p_tenant_id: string
         }
         Returns: Json
       }
@@ -15243,24 +16531,53 @@ export type Database = {
         Args: { _dispatch_trip_id: string; _reason: string; _tenant_id: string }
         Returns: undefined
       }
-      monitor_simples_nacional_icms_violations: {
-        Args: never
-        Returns: {
-          created_at: string
-          cte_number: string
-          emitter_name: string
-          fiscal_document_id: string
-          icms_aliquota: number
-          icms_base: number
-          icms_valor: number
-        }[]
-      }
+      monitor_simples_nacional_icms_violations:
+        | {
+            Args: never
+            Returns: {
+              created_at: string
+              cte_number: string
+              emitter_name: string
+              fiscal_document_id: string
+              icms_aliquota: number
+              icms_base: number
+              icms_valor: number
+            }[]
+          }
+        | {
+            Args: { _tenant_id: string }
+            Returns: {
+              cst: string
+              cte_number: string
+              document_id: string
+              emitter_name: string
+              icms_value: number
+            }[]
+          }
       move_load_items_between_loads: {
         Args: {
           _item_ids: string[]
           _source_load_id: string
           _target_load_id: string
           _tenant_id: string
+        }
+        Returns: Json
+      }
+      move_load_items_v2: {
+        Args: {
+          _document_ids: string[]
+          _source_load_id: string
+          _target_load_id: string
+          _tenant_id: string
+        }
+        Returns: Json
+      }
+      move_load_items_v3: {
+        Args: {
+          p_item_ids: string[]
+          p_source_load_id: string
+          p_target_load_id: string
+          p_tenant_id: string
         }
         Returns: Json
       }
@@ -15302,6 +16619,55 @@ export type Database = {
       op_route_norm: { Args: { txt: string }; Returns: string }
       peek_next_load_number: { Args: { _tenant_id: string }; Returns: string }
       peek_next_pickup_number: { Args: { _tenant_id: string }; Returns: string }
+      plan_dispatch_start_trip_v1: {
+        Args: {
+          p_driver_id: string
+          p_load_ids: string[]
+          p_planned_start_at?: string
+          p_route_name?: string
+          p_start_now?: boolean
+          p_stops: Json
+          p_tenant_id: string
+          p_vehicle_id: string
+        }
+        Returns: string
+      }
+      plan_dispatch_trip_v2:
+        | {
+            Args: {
+              p_driver_id: string
+              p_idempotency_key?: string
+              p_load_ids: string[]
+              p_route_name: string
+              p_stops: Json
+              p_tenant_id: string
+              p_vehicle_id: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_driver_id: string
+              p_idempotency_key?: string
+              p_load_ids: string[]
+              p_scheduled_start?: string
+              p_tenant_id: string
+              p_vehicle_id: string
+            }
+            Returns: string
+          }
+      plan_dispatch_trip_v3: {
+        Args: {
+          p_driver_id: string
+          p_idempotency_key: string
+          p_load_ids: string[]
+          p_route_name: string
+          p_stops: Json
+          p_tenant_id: string
+          p_vehicle_id: string
+        }
+        Returns: string
+      }
       portal_user_can_access_fiscal_document: {
         Args: { _fiscal_document_id: string; _tenant_id: string }
         Returns: boolean
@@ -15325,6 +16691,29 @@ export type Database = {
       preview_reimport_cleanup_counts: {
         Args: { _end_date?: string; _start_date?: string; _tenant_id: string }
         Returns: Json
+      }
+      process_geofence_alerts: {
+        Args: {
+          _captured_at: string
+          _lat: number
+          _lng: number
+          _tenant_id: string
+          _vehicle_id: string
+        }
+        Returns: undefined
+      }
+      process_overspeed_alerts: {
+        Args: {
+          _captured_at: string
+          _speed: number
+          _tenant_id: string
+          _vehicle_id: string
+        }
+        Returns: undefined
+      }
+      recalculate_load_totals: {
+        Args: { p_load_id: string; p_tenant_id: string }
+        Returns: undefined
       }
       recalculate_payroll_entry: {
         Args: { _entry_id: string }
@@ -15461,6 +16850,10 @@ export type Database = {
         Args: { _reason: string; _session_id: string }
         Returns: undefined
       }
+      repair_load_composition: {
+        Args: { _dry_run?: boolean; _load_ids: string[]; _tenant_id: string }
+        Returns: Json
+      }
       reply_client_occurrence: {
         Args: { _message: string; _occurrence_id: string; _tenant_id: string }
         Returns: string
@@ -15478,6 +16871,10 @@ export type Database = {
       reverse_financial_match: {
         Args: { _match_id: string; _reason: string }
         Returns: undefined
+      }
+      reverse_financial_obligation_v1: {
+        Args: { _obligation_id: string; _reason: string }
+        Returns: boolean
       }
       reverse_payable_payment: {
         Args: { _payment_id: string }
@@ -15548,7 +16945,36 @@ export type Database = {
         Args: { _date_from?: string; _date_to?: string; _tenant_id: string }
         Returns: Json
       }
+      transition_stop_status_v1: {
+        Args: {
+          p_actor_id: string
+          p_idempotency_key?: string
+          p_metadata?: Json
+          p_reason?: string
+          p_stop_id: string
+          p_tenant_id: string
+          p_to_status: string
+        }
+        Returns: string
+      }
+      transition_trip_status_v1: {
+        Args: {
+          p_actor_id: string
+          p_idempotency_key?: string
+          p_metadata?: Json
+          p_reason?: string
+          p_tenant_id: string
+          p_to_status: string
+          p_trip_id: string
+        }
+        Returns: string
+      }
+      unaccent: { Args: { "": string }; Returns: string }
       unhold_load: { Args: { _load_id: string }; Returns: undefined }
+      unlink_fiscal_documents_from_load_v1: {
+        Args: { _document_ids: string[]; _load_id: string; _tenant_id: string }
+        Returns: Json
+      }
       update_driver_settlement_km_review: {
         Args: {
           _audited_end_location?: string
@@ -15709,6 +17135,24 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      update_employee_v1: {
+        Args: {
+          p_employee_id: string
+          p_expected_version: number
+          p_tenant_id: string
+          p_values: Json
+        }
+        Returns: undefined
+      }
+      update_load_v1: {
+        Args: {
+          p_changes: Json
+          p_expected_version?: number
+          p_load_id: string
+          p_tenant_id: string
+        }
+        Returns: Json
+      }
       update_merchandise_shortage_status: {
         Args: { _case_id: string; _payload?: Json; _status: string }
         Returns: undefined
@@ -15728,10 +17172,61 @@ export type Database = {
         }
         Returns: string
       }
+      upsert_load_item_v1:
+        | {
+            Args: {
+              p_fiscal_document_id?: string
+              p_item_description: string
+              p_item_id?: string
+              p_load_id: string
+              p_pallet_count?: number
+              p_quantity: number
+              p_tenant_id: string
+              p_volume_m3?: number
+              p_weight_kg?: number
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_fiscal_document_id?: string
+              p_item_description?: string
+              p_item_id?: string
+              p_load_id: string
+              p_pallet_count?: number
+              p_quantity?: number
+              p_tenant_id: string
+              p_volume_m3?: number
+              p_weight_kg?: number
+            }
+            Returns: string
+          }
+      upsert_load_item_v2: {
+        Args: {
+          p_fiscal_document_id?: string
+          p_item_description?: string
+          p_item_id?: string
+          p_load_id: string
+          p_pallet_count?: number
+          p_quantity?: number
+          p_tenant_id: string
+          p_volume_m3?: number
+          p_weight_kg?: number
+        }
+        Returns: string
+      }
       user_has_client_access: { Args: { _client_id: string }; Returns: boolean }
     }
     Enums: {
       app_role: "owner" | "admin" | "operator" | "client" | "driver"
+      data_recovery_status:
+        | "draft"
+        | "reviewed"
+        | "approved"
+        | "executing"
+        | "completed"
+        | "failed"
+        | "cancelled"
       operation_type:
         | "filial"
         | "armazenagem"
@@ -15878,6 +17373,15 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["owner", "admin", "operator", "client", "driver"],
+      data_recovery_status: [
+        "draft",
+        "reviewed",
+        "approved",
+        "executing",
+        "completed",
+        "failed",
+        "cancelled",
+      ],
       operation_type: [
         "filial",
         "armazenagem",
