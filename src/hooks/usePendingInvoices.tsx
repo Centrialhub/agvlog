@@ -46,7 +46,6 @@ export function usePendingInvoices() {
         .from('cte_documents')
         .select('fiscal_document_ids, status')
         .eq('tenant_id', currentTenant.id)
-        .is('deleted_at', null)
         .not('status', 'in', '("cancelled","rejected","error","failed","sefaz_error")');
       if (e2) throw e2;
 
