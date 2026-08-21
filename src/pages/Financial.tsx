@@ -7,7 +7,7 @@ import { useTenant } from '@/hooks/useTenant';
 import { useReceivables } from '@/hooks/useReceivables';
 // import { useOperationalFinancialSummary } from '@/hooks/useOperationalFinancialSummary';
 import { useClients, useClientsArray } from '@/hooks/useClients';
-import { useCostCenters } from '@/hooks/useCostCenters';
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
