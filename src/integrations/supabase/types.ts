@@ -15643,10 +15643,16 @@ export type Database = {
         Args: { _new_status: string; _reason?: string; _stop_id: string }
         Returns: Json
       }
-      execute_data_repair_v1: {
-        Args: { p_batch_id: string; p_dry_run?: boolean; p_tenant_id: string }
-        Returns: Json
-      }
+      execute_data_repair_v1:
+        | { Args: { _batch_id: string; _tenant_id: string }; Returns: Json }
+        | {
+            Args: {
+              p_batch_id: string
+              p_dry_run?: boolean
+              p_tenant_id: string
+            }
+            Returns: Json
+          }
       finalize_driver_delivery: {
         Args: {
           _fiscal_document_id?: string
