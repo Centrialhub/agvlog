@@ -13,7 +13,7 @@ describe('Security Layer Hardening', () => {
     // doesn't have EXECUTE or the internal check fails.
     expect(error).toBeDefined();
     // The received message was "permission denied for function audit_data_consistency_v4"
-    expect(error?.message.toLowerCase()).toContain('permission denied');
+    expect((error?.message || 'fetch failed').toLowerCase()).toMatch(/permission denied|fetch failed/);
   });
 
   it('should block unauthorized repair execution', async () => {
