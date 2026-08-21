@@ -26,7 +26,7 @@ describe('CI Probatório: Integridade e Segurança de Banco', () => {
 
   describe('Segurança de Acesso e RLS', () => {
     it('deve negar DML direto na tabela loads para authenticated/anon', async () => {
-      const { error } = await supabase.from('loads').insert({
+      const { error } = await supabase.from('loads').insert({ // linter:allow-direct-write loads [Teste de negação DML] [2026-12-31]
         tenant_id: uuidv4(),
         load_number: '9999',
         status: 'planned' as any
