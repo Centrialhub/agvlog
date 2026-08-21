@@ -24,7 +24,7 @@ export interface PaginatedDrivers {
   total_count: number;
 }
 
-export const useDrivers = (filters: { search?: string; activeOnly?: boolean } = {}) => {
+export const useDrivers = (filters: { search?: string } = {}) => {
   const { currentTenant } = useTenant();
 
   return useQuery<PaginatedDrivers>({
@@ -35,16 +35,16 @@ export const useDrivers = (filters: { search?: string; activeOnly?: boolean } = 
       const { data, error } = await supabase.rpc('list_drivers_v1', {
         p_tenant_id: currentTenant.id,
         p_search: filters.search || null,
-        p_active_only: filters.activeOnly ?? false,
+        p_cursor: null,
         p_limit: 1000
       });
 
       if (error) throw error;
-      
-      const result = data as any;
+
+      const result = (data ?? {}) as { items?: Driver[]; next_cursor?: string | null; total_count?: number };
       return {
-        items: (result.items || []) as Driver[],
-        next_cursor: result.next_cursor || null,
+        items: result.items || [],
+        next_cursor: result.next_cursor ?? null,
         total_count: Number(result.total_count) || 0
       };
     },
@@ -52,10 +52,10 @@ export const useDrivers = (filters: { search?: string; activeOnly?: boolean } = 
   });
 };
 
-export const useDriversArray = (filters: { search?: string; activeOnly?: boolean } = {}) => {
+export const useDriversArray = (filters: { search?: string } = {}) => {
   const q = useDrivers(filters);
-  const items = (q.data as any)?.items || [];
-  return { ...q, data: items } as any;
+  const items = q.data?.items || [];
+  return { ...q, data: items };
 };
 
 export const useCreateDriver = () => {
