@@ -15593,6 +15593,15 @@ export type Database = {
         Args: { _session_id: string }
         Returns: undefined
       }
+      commit_load_import_v1: {
+        Args: {
+          p_file_name: string
+          p_rows: Json
+          p_source_type: string
+          p_tenant_id: string
+        }
+        Returns: Json
+      }
       count_points_in_geofence: {
         Args: { _geofence_id: string; _points: Json }
         Returns: Json
