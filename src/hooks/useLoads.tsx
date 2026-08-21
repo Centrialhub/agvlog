@@ -151,7 +151,7 @@ export function useUpdateLoad() {
         // Strip relations and restricted fields for V1 update
         const { vehicles, drivers, tenant_id, load_number, ...cleanChanges } = changes as any;
         const { data, error } = await supabase
-          .from('loads')
+          .from('loads') // linter:allow-direct-write loads [V1 backward compatibility] [2026-12-31]
           .update(cleanChanges)
           .eq('id', id)
           .eq('tenant_id', currentTenant.id)

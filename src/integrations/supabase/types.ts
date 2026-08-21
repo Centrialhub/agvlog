@@ -16633,6 +16633,18 @@ export type Database = {
             }
             Returns: string
           }
+      plan_dispatch_trip_v3: {
+        Args: {
+          p_driver_id: string
+          p_idempotency_key: string
+          p_load_ids: string[]
+          p_route_name: string
+          p_stops: Json
+          p_tenant_id: string
+          p_vehicle_id: string
+        }
+        Returns: string
+      }
       portal_user_can_access_fiscal_document: {
         Args: { _fiscal_document_id: string; _tenant_id: string }
         Returns: boolean

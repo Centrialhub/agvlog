@@ -53,7 +53,7 @@ describe('Garantias Probatórias: RH, Cargas e Despacho', () => {
 
     it('deve provar rollback em falha intermediária', async () => {
       // Tenta criar despacho com carga inexistente para forçar erro no meio da transação
-      const { error } = await supabase.rpc('plan_dispatch_trip_v2', {
+      const { error } = await (supabase.rpc as any)('plan_dispatch_trip_v3', {
         p_tenant_id: TENANT_A,
         p_stops: [{ city: 'Erro', type: 'delivery' }],
         p_idempotency_key: `rollback-test-${Date.now()}`,

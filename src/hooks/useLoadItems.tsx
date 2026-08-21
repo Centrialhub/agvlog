@@ -88,7 +88,7 @@ export function useCreateLoadItem() {
           if (error) throw error;
         } else {
           // Fallback to direct insert if no doc (manual items)
-          const { error } = await supabase.from('load_items').insert({
+          const { error } = await supabase.from('load_items').insert({ // linter:allow-direct-write load_items [V1 fallback for manual items] [2026-12-31]
             tenant_id: currentTenant!.id,
             load_id: p.load_id,
             item_description: p.item_description,
@@ -135,7 +135,7 @@ export function useUpdateLoadItem() {
       } else {
         // Direct update for canonical fallback
         const { error } = await supabase
-          .from('load_items')
+          .from('load_items') // linter:allow-direct-write load_items [V1 fallback] [2026-12-31]
           .update({
             item_description: p.item_description ?? item?.item_description,
             quantity: p.quantity ?? item?.quantity,
@@ -186,7 +186,7 @@ export function useDeleteLoadItem() {
         } else {
           // Direct delete for canonical manual items
           const { error } = await supabase
-            .from('load_items')
+            .from('load_items') // linter:allow-direct-write load_items [V1 fallback] [2026-12-31]
             .delete()
             .eq('id', id)
             .eq('tenant_id', currentTenant!.id);
