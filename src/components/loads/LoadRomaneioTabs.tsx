@@ -509,8 +509,8 @@ export default function LoadRomaneioTabs({ load, documents, items, onSaved }: Pr
                     <TableCell className="text-xs">{s.destination}</TableCell>
                     <TableCell className="text-xs">{s.clients?.name || '—'}</TableCell>
                     <TableCell className="text-xs"><Badge variant="outline" className="text-[10px]">{s.status}</Badge></TableCell>
-                    <TableCell className="text-xs">{s.planned_at ? new Date(s.planned_at).toLocaleString('pt-BR') : '—'}</TableCell>
-                    <TableCell className="text-xs">{s.arrival_at ? new Date(s.arrival_at).toLocaleString('pt-BR') : '—'}</TableCell>
+                    <TableCell className="text-xs">{s.planned_arrival_at ? new Date(s.planned_arrival_at).toLocaleString('pt-BR') : '—'}</TableCell>
+                    <TableCell className="text-xs">{s.actual_arrival_at ? new Date(s.actual_arrival_at).toLocaleString('pt-BR') : '—'}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
