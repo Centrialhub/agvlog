@@ -107,14 +107,24 @@ export function useUpdateEmployee() {
   const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, version, ...values }: Partial<Employee> & { id: string; version?: number }) => {
+    mutationFn: async ({ id, version, ...values }: Partial<Employee> & { id: string; version: number }) => {
+      if (version === undefined || version === null) {
+        throw new Error('Versão do registro é obrigatória para atualização.');
+      }
+
       const { error } = await supabase.rpc('update_employee_v1', {
         p_tenant_id: currentTenant!.id,
         p_employee_id: id,
         p_values: values,
         p_expected_version: version,
       });
-      if (error) throw error;
+
+      if (error) {
+        if (error.code === 'P0001') {
+          throw new Error('Conflito de edição: O registro foi alterado por outro usuário. Por favor, atualize a página e tente novamente.');
+        }
+        throw error;
+      }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['employees'] }),
   });
