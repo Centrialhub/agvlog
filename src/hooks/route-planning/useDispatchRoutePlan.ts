@@ -33,7 +33,7 @@ export function useDispatchRoutePlan() {
         }));
 
     if (isFeatureEnabled('LOGISTICS_CONSOLIDATION_V2')) {
-      const { data, error } = await supabase.rpc('plan_dispatch_trip_v3', {
+      const { data, error } = await (supabase.rpc as any)('plan_dispatch_trip_v3', {
         p_tenant_id: currentTenant.id,
         p_idempotency_key: payload.planning_draft_id || crypto.randomUUID(),
         p_driver_id: payload.driver_id,
