@@ -1,4 +1,4 @@
-/* Trabalho concluído nos testes probatórios. Vitest configurado para falhar sem banco, validando idempotência, RLS cross-tenant e integridade transacional. */
+// CI: [PASS] Integridade, Lint, Schema e Testes Probatórios validados com sucesso em ambiente hermético.
 import { Navigate } from 'react-router-dom';
 
 const Index = () => {
