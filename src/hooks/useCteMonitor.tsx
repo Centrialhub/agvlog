@@ -262,7 +262,7 @@ export function useCteMonitor(filters: CteMonitorFilters) {
           source: 'hub',
           hub_document_id: d.hub_document_id ?? null,
           emission_id: d.emission_id ?? null,
-          invoice_numbers: d.invoice_numbers ?? null,
+          invoice_numbers: d.invoice_number ?? null,
         }));
 
 
