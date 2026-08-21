@@ -235,7 +235,7 @@ export function useUnholdLoad() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await (supabase as any).rpc('unhold_load', { _load_id: id });
+      const { error } = await supabase.rpc('unhold_load', { _load_id: id });
       if (error) throw error;
     },
     onSuccess: () => {
