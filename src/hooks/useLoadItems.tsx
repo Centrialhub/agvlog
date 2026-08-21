@@ -67,7 +67,7 @@ export function useCreateLoadItem() {
   return useMutation({
     mutationFn: async (p: Omit<LoadItem, 'id'>) => {
       if (isFeatureEnabled('LOGISTICS_CONSOLIDATION_V2')) {
-        const { error } = await supabase.rpc('upsert_load_item_v1', {
+        const { error } = await supabase.rpc('upsert_load_item_v2', {
           p_tenant_id: currentTenant!.id,
           p_load_id: p.load_id,
           p_item_description: p.item_description,
