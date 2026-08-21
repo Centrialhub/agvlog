@@ -110,6 +110,8 @@ export default function OperationsCenter() {
   const brasiliaDate = now.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const brasiliaHour = parseInt(now.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', hour12: false }));
 
+  const isEmpty = stats?.nfeCount === 0 && stats?.activeLoads === 0 && fleetStats?.total === 0;
+
   const getGreeting = () => {
     if (brasiliaHour >= 5 && brasiliaHour < 12) return 'Bom dia';
     if (brasiliaHour >= 12 && brasiliaHour < 18) return 'Boa tarde';
