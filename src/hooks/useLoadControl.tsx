@@ -44,7 +44,7 @@ export interface LoadControlRow {
   invoice_count?: number;
   cte_count?: number;
   driver_name?: string;
-  vehicle_plate?: string;
+  plate?: string;
   expected_payment_date?: string;
   payment_date?: string;
   gross_cargo_value?: number;
