@@ -157,13 +157,37 @@ $$;
 
 -- Revoke all execute on v2 overloads from PUBLIC and anon (explicit signatures)
 -- Signature 1: p_tenant_id uuid, p_vehicle_id uuid, p_driver_id uuid, p_load_ids uuid[], p_scheduled_start timestamp with time zone, p_idempotency_key text
-REVOKE EXECUTE ON FUNCTION public.plan_dispatch_trip_v2(uuid, uuid, uuid, uuid[], timestamptz, text) FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION public.plan_dispatch_trip_v2(uuid, uuid, uuid, uuid[], timestamptz, text) FROM anon;
+DO $cond$ BEGIN
+  IF to_regprocedure('public.plan_dispatch_trip_v2(uuid, uuid, uuid, uuid[], timestamptz, text)') IS NOT NULL THEN
+    EXECUTE 'REVOKE EXECUTE ON FUNCTION public.plan_dispatch_trip_v2(uuid, uuid, uuid, uuid[], timestamptz, text) FROM PUBLIC';
+  END IF;
+END $cond$;
+DO $cond$ BEGIN
+  IF to_regprocedure('public.plan_dispatch_trip_v2(uuid, uuid, uuid, uuid[], timestamptz, text)') IS NOT NULL THEN
+    EXECUTE 'REVOKE EXECUTE ON FUNCTION public.plan_dispatch_trip_v2(uuid, uuid, uuid, uuid[], timestamptz, text) FROM anon';
+  END IF;
+END $cond$;
 
 -- Signature 2: p_tenant_id uuid, p_driver_id uuid, p_vehicle_id uuid, p_route_name text, p_load_ids uuid[], p_stops jsonb, p_idempotency_key text
-REVOKE EXECUTE ON FUNCTION public.plan_dispatch_trip_v2(uuid, uuid, uuid, text, uuid[], jsonb, text) FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION public.plan_dispatch_trip_v2(uuid, uuid, uuid, text, uuid[], jsonb, text) FROM anon;
+DO $cond$ BEGIN
+  IF to_regprocedure('public.plan_dispatch_trip_v2(uuid, uuid, uuid, text, uuid[], jsonb, text)') IS NOT NULL THEN
+    EXECUTE 'REVOKE EXECUTE ON FUNCTION public.plan_dispatch_trip_v2(uuid, uuid, uuid, text, uuid[], jsonb, text) FROM PUBLIC';
+  END IF;
+END $cond$;
+DO $cond$ BEGIN
+  IF to_regprocedure('public.plan_dispatch_trip_v2(uuid, uuid, uuid, text, uuid[], jsonb, text)') IS NOT NULL THEN
+    EXECUTE 'REVOKE EXECUTE ON FUNCTION public.plan_dispatch_trip_v2(uuid, uuid, uuid, text, uuid[], jsonb, text) FROM anon';
+  END IF;
+END $cond$;
 
 -- Grant execute on v3
-GRANT EXECUTE ON FUNCTION public.plan_dispatch_trip_v3 TO authenticated;
-GRANT EXECUTE ON FUNCTION public.plan_dispatch_trip_v3 TO service_role;
+DO $cond$ BEGIN
+  IF to_regprocedure('public.plan_dispatch_trip_v3') IS NOT NULL THEN
+    EXECUTE 'GRANT EXECUTE ON FUNCTION public.plan_dispatch_trip_v3 TO authenticated';
+  END IF;
+END $cond$;
+DO $cond$ BEGIN
+  IF to_regprocedure('public.plan_dispatch_trip_v3') IS NOT NULL THEN
+    EXECUTE 'GRANT EXECUTE ON FUNCTION public.plan_dispatch_trip_v3 TO service_role';
+  END IF;
+END $cond$;
