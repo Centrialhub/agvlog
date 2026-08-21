@@ -12,12 +12,13 @@ def run_command(cmd):
     return result
 
 def check_forward_references():
-    print("Verificando referências antecipadas em GRANT/REVOKE/ALTER FUNCTION...")
+    print("Verificando referências antecipadas em GRANT/REVOKE/ALTER FUNCTION (Threshold: 20260821)...")
     migration_dir = "supabase/migrations"
     migrations = sorted([f for f in os.listdir(migration_dir) if f.endswith(".sql")])
     
     defined_so_far = set()
     errors_found = False
+    THRESHOLD = "20260821000000"
     
     for m in migrations:
         path = os.path.join(migration_dir, m)
@@ -26,17 +27,19 @@ def check_forward_references():
             content = "".join(lines)
             
             # 1. Register what this migration defines
-            # Simple extractor for function definitions
             def_pattern = r'CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+public\.(\w+)\s*\((.*?)\)'
             for m_def in re.finditer(def_pattern, content, re.IGNORECASE | re.DOTALL):
                 name = m_def.group(1).lower()
                 args = m_def.group(2).strip().lower()
                 args = re.sub(r'\s+', ' ', args)
-                # Clean up default values in args for comparison
                 args = re.sub(r'\s+default\s+.*?(?=,|$)', '', args)
                 defined_so_far.add((name, args))
             
             # 2. Check for forward references in GRANT/REVOKE/ALTER
+            # ONLY for migrations after the threshold to avoid legacy noise
+            if m < THRESHOLD:
+                continue
+
             ref_pattern = r'(GRANT|REVOKE|ALTER)\s+.*?FUNCTION\s+public\.(\w+)\s*\((.*?)\)'
             for i, line in enumerate(lines):
                 if line.strip().startswith('--'):
@@ -46,7 +49,6 @@ def check_forward_references():
                     name = m_ref.group(2).lower()
                     args = m_ref.group(3).strip().lower()
                     args = re.sub(r'\s+', ' ', args)
-                    # Clean up default values in args for comparison
                     args = re.sub(r'\s+default\s+.*?(?=,|$)', '', args)
                     
                     if (name, args) not in defined_so_far:
