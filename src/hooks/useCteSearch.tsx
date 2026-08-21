@@ -238,7 +238,7 @@ export function useCteSearch(filters: CteSearchFilters, opts?: { enabled?: boole
           recipient_state: (d.cte_payload?.payload?.fim?.uf || d.cte_payload?.payload?.destinatario?.endereco?.uf || d.recipient_state) ?? null,
           vehicle_plate: null,
           driver_name: null,
-          invoice_numbers: d.invoice_numbers ?? null,
+          invoice_numbers: d.invoice_number ?? null,
           freight_value: Number(d.freight_value ?? d.value ?? 0),
           cargo_value: Number(d.value ?? 0),
           hub_document_id: d.hub_document_id ?? null,
