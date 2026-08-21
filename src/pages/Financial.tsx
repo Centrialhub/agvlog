@@ -214,7 +214,6 @@ export default function Financial() {
     let filteredDocs = billableDocs.filter((d: any) => filterByPeriod(d.issue_date || d.created_at));
     if (selectedClient !== 'all') filteredDocs = filteredDocs.filter((d: any) => d.client_id === selectedClient);
     if (docType !== 'all') filteredDocs = filteredDocs.filter((d: any) => d.document_type === docType);
-    if (selectedCostCenter !== 'all') filteredDocs = filteredDocs.filter((d: any) => d.cost_center === selectedCostCenter);
 
     const nfes = filteredDocs.filter((d: any) => d.document_type === 'inbound');
     // Receita só de CT-e confirmado: rascunho/transmitindo ainda pode rejeitar.
