@@ -8,13 +8,21 @@ import { supabase } from '../integrations/supabase/client';
 describe('Security Matrix Hardening', () => {
   it('should deny execute_data_repair_v1 to everyone', async () => {
     // We expect a permission error (Revoke) or a FEATURE_DISABLED exception (Function logic)
-    const { error } = await supabase.rpc('execute_data_repair_v1', {
+    // signature 1: (uuid, uuid)
+    const { error: error1 } = await supabase.rpc('execute_data_repair_v1', {
       _tenant_id: '00000000-0000-0000-0000-000000000000',
       _batch_id: '00000000-0000-0000-0000-000000000000'
     });
     
-    // It should either be a permission error (42501) or the custom exception
-    expect(error?.message).toMatch(/permission denied|FEATURE_DISABLED/);
+    // signature 2: (uuid, uuid, boolean)
+    const { error: error2 } = await supabase.rpc('execute_data_repair_v1', {
+      p_tenant_id: '00000000-0000-0000-0000-000000000000',
+      p_batch_id: '00000000-0000-0000-0000-000000000000',
+      p_dry_run: true
+    });
+    
+    expect(error1?.message).toMatch(/permission denied|FEATURE_DISABLED/);
+    expect(error2?.message).toMatch(/permission denied|FEATURE_DISABLED/);
   });
 
   it('should allow whitelisted RPCs for authenticated users (conceptual check)', async () => {
