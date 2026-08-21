@@ -323,7 +323,7 @@ const App = () => (
             <Route path="/product-traceability" element={<ProtectedRoute><ProductTraceability /></ProtectedRoute>} />
             <Route path="/product-history" element={<ProtectedRoute><ProductHistory /></ProtectedRoute>} />
             <Route path="/imported-notes-summary" element={<ProtectedRoute><ImportedNotesSummary /></ProtectedRoute>} />
-            <Route path="/load-control" element={<ProtectedRoute><LoadControl /></ProtectedRoute>} />
+            <Route path="/load-control" element={<ProtectedRoute><FeatureFlagGate feature="LOAD_CONTROL"><LoadControl /></FeatureFlagGate></ProtectedRoute>} />
             <Route path="/closing-reports" element={<ProtectedRoute><ClosingReports /></ProtectedRoute>} />
             <Route path="/rural-clients" element={<ProtectedRoute><RuralClients /></ProtectedRoute>} />
             <Route path="/driver-monitoring" element={<ProtectedRoute><DriverMonitoring /></ProtectedRoute>} />
