@@ -15789,6 +15789,10 @@ export type Database = {
         Args: { p_item_id: string; p_tenant_id: string }
         Returns: undefined
       }
+      delete_load_item_v2: {
+        Args: { p_item_id: string; p_tenant_id: string }
+        Returns: boolean
+      }
       delete_load_safely: {
         Args: { _load_id: string; _tenant_id: string }
         Returns: Json
@@ -17159,6 +17163,20 @@ export type Database = {
             }
             Returns: string
           }
+      upsert_load_item_v2: {
+        Args: {
+          p_fiscal_document_id?: string
+          p_item_description?: string
+          p_item_id?: string
+          p_load_id: string
+          p_pallet_count?: number
+          p_quantity?: number
+          p_tenant_id: string
+          p_volume_m3?: number
+          p_weight_kg?: number
+        }
+        Returns: string
+      }
       user_has_client_access: { Args: { _client_id: string }; Returns: boolean }
     }
     Enums: {

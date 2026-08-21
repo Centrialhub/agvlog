@@ -67,7 +67,7 @@ export function useCreateLoadItem() {
   return useMutation({
     mutationFn: async (p: Omit<LoadItem, 'id'>) => {
       if (isFeatureEnabled('LOGISTICS_CONSOLIDATION_V2')) {
-        const { error } = await supabase.rpc('upsert_load_item_v1', {
+        const { error } = await supabase.rpc('upsert_load_item_v2', {
           p_tenant_id: currentTenant!.id,
           p_load_id: p.load_id,
           p_item_description: p.item_description,
@@ -120,7 +120,7 @@ export function useUpdateLoadItem() {
         .single();
       
       if (isFeatureEnabled('LOGISTICS_CONSOLIDATION_V2')) {
-        const { error } = await supabase.rpc('upsert_load_item_v1', {
+        const { error } = await supabase.rpc('upsert_load_item_v2', {
           p_tenant_id: currentTenant!.id,
           p_load_id: p.load_id,
           p_item_id: p.id,
@@ -160,27 +160,18 @@ export function useDeleteLoadItem() {
   const { currentTenant } = useTenant();
   return useMutation({
     mutationFn: async ({ id, fiscalDocumentId }: { id: string; fiscalDocumentId?: string }) => {
-      if (fiscalDocumentId) {
-        if (isFeatureEnabled('LOGISTICS_CONSOLIDATION_V2')) {
-          const { error } = await (supabase as any).rpc('unlink_fiscal_documents_from_load_v1', {
-            _tenant_id: currentTenant!.id,
-            _load_id: null as any,
-            _document_ids: [fiscalDocumentId]
-          });
-          if (error) throw error;
-        } else {
+      if (isFeatureEnabled('LOGISTICS_CONSOLIDATION_V2')) {
+        const { error } = await supabase.rpc('delete_load_item_v2', {
+          p_tenant_id: currentTenant!.id,
+          p_item_id: id
+        });
+        if (error) throw error;
+      } else {
+        if (fiscalDocumentId) {
           const { error } = await supabase.rpc('remove_fiscal_documents_from_load', {
             _tenant_id: currentTenant!.id,
             _load_id: null as any,
             _document_ids: [fiscalDocumentId]
-          });
-          if (error) throw error;
-        }
-      } else {
-        if (isFeatureEnabled('LOGISTICS_CONSOLIDATION_V2')) {
-          const { error } = await (supabase as any).rpc('delete_load_item_v1', {
-            p_tenant_id: currentTenant!.id,
-            p_item_id: id
           });
           if (error) throw error;
         } else {

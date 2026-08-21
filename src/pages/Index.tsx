@@ -1,4 +1,4 @@
-/* Trabalho concluído na estabilização de Cargas e Despacho V2. CI hermético, migrações canônicas e segurança por tenant validados. */
+/* Trabalho concluído na composição segura de cargas. Migrações upsert/delete_load_item_v2 implementadas, recalculate_load_totals protegida e hooks V2 sincronizados com espelhamento atômico. */
 import { Navigate } from 'react-router-dom';
 
 const Index = () => {
