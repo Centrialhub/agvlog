@@ -447,6 +447,11 @@ export default function OperationsCenter() {
                 <h1 className="text-xl font-bold text-foreground">
                   {getGreeting()}, <span className="text-primary">{userName}</span>
                 </h1>
+                {isEmpty && memberships.length > 1 && (
+                  <Badge variant="outline" className="text-[10px] animate-pulse bg-warning/10 text-warning border-warning/20 border">
+                    Empresa vazia? Verifique o seletor lateral
+                  </Badge>
+                )}
               </div>
               <p className="text-sm text-muted-foreground mt-0.5 capitalize">
                 {brasiliaDate}
