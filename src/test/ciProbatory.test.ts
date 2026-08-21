@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { supabase } from '@/integrations/supabase/client';
-import { v4 as uuidv4 } from 'uuid';
+const uuidv4 = () => crypto.randomUUID();
 
 // Simulação de ambiente hermético: 
 // Em um ambiente de CI real, estas chamadas atingiriam um Postgres efêmero
