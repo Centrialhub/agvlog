@@ -45,7 +45,6 @@ const navSections: NavSection[] = [
           { label: 'NFS-e (Serviços)', href: '/nfse', icon: <FileSpreadsheet className="h-4 w-4" /> },
           { label: 'ORT', href: '/ort-management', icon: <FileSearch className="h-4 w-4" /> },
           { label: 'Auditoria ICMS', href: '/cte-consistency', icon: <ShieldCheck className="h-4 w-4" /> },
-          { label: 'MDF (provisório)', href: '/mdfe-provisional', icon: <FileText className="h-4 w-4" />, feature: 'DRIVER_WORKSPACE' },
         ],
       },
       {
@@ -68,7 +67,8 @@ const navSections: NavSection[] = [
           { label: 'Resumo NF Importadas', href: '/imported-notes-summary', icon: <FileSpreadsheet className="h-4 w-4" /> },
         ],
       },
-      { label: 'Controle de Cargas', href: '/load-control', icon: <PackageCheck className="h-4 w-4" /> },
+      { label: 'Controle de Cargas', href: '/load-control', icon: <PackageCheck className="h-4 w-4" />, feature: 'LOAD_CONTROL' },
+
       { label: 'Monitoramento de Motoristas', href: '/driver-monitoring', icon: <Users className="h-4 w-4" />, feature: 'DRIVER_WORKSPACE' },
       { label: 'Devolução de Paletes', href: '/pallet-returns', icon: <Boxes className="h-4 w-4" /> },
       { label: 'Falta de Mercadoria', href: '/merchandise-shortages', icon: <AlertOctagon className="h-4 w-4" /> },
@@ -103,7 +103,8 @@ const navSections: NavSection[] = [
     label: 'Cadastros',
     items: [
       { label: 'Clientes e Fornecedores', href: '/clients', icon: <Building2 className="h-4 w-4" /> },
-      { label: 'Funcionários', href: '/employees', icon: <UserCog className="h-4 w-4" /> },
+      { label: 'Funcionários', href: '/employees', icon: <UserCog className="h-4 w-4" />, feature: 'HR_CORE' },
+
       { label: 'Veículos', href: '/vehicles', icon: <Truck className="h-4 w-4" /> },
       { label: 'Motoristas', href: '/drivers', icon: <Users className="h-4 w-4" /> },
       { label: 'Ativos / Patrimônio', href: '/assets', icon: <Package className="h-4 w-4" /> },
