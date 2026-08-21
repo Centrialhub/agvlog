@@ -320,7 +320,7 @@ ALTER TABLE public.bank_reconciliation_audit ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "bank_recon_audit_select" ON public.bank_reconciliation_audit
   FOR SELECT TO authenticated USING (is_tenant_member(tenant_id));
 -- writes only via SECURITY DEFINER
-  SET search_path = public RPCs (no insert policy for authenticated)
+-- SET search_path = public RPCs (no insert policy for authenticated)
 CREATE INDEX idx_recon_audit_tenant_time
   ON public.bank_reconciliation_audit(tenant_id, created_at DESC);
 CREATE INDEX idx_recon_audit_entity

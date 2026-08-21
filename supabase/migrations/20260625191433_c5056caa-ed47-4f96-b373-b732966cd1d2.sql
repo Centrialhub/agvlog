@@ -24,7 +24,7 @@ ALTER TABLE public.driver_settlement_items
   ADD COLUMN IF NOT EXISTS nature text;
 
 -- 2) Tighten RLS: revoke direct writes; reads via SELECT policy; mutations via SECURITY DEFINER
-  SET search_path = public RPCs.
+-- SET search_path = public RPCs.
 REVOKE INSERT, UPDATE, DELETE ON public.driver_settlements FROM authenticated;
 REVOKE INSERT, UPDATE, DELETE ON public.driver_settlement_items FROM authenticated;
 DROP POLICY IF EXISTS "settlements_manage" ON public.driver_settlements;
