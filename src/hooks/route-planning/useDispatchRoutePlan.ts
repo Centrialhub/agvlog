@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import type { RouteStopDraft } from '@/lib/route-planning/routePlanningTypes';
 import { useCallback } from 'react';
+import { isFeatureEnabled } from '@/lib/featureFlags';
 
 export interface DispatchRoutePayload {
   vehicle_id: string;
@@ -31,18 +32,35 @@ export function useDispatchRoutePlan() {
           document_ids: s.fiscal_document_ids || [],
         }));
 
-    const { data, error } = await supabase.rpc('plan_dispatch_trip_v2', {
-      p_tenant_id: currentTenant.id,
-      p_driver_id: payload.driver_id,
-      p_vehicle_id: payload.vehicle_id,
-      p_route_name: payload.route_name,
-      p_load_ids: payload.load_ids,
-      p_stops: stops,
-      p_idempotency_key: payload.planning_draft_id || null,
-    });
+    if (isFeatureEnabled('LOGISTICS_CONSOLIDATION_V2')) {
+      const { data, error } = await supabase.rpc('plan_dispatch_trip_v2', {
+        p_tenant_id: currentTenant.id,
+        p_driver_id: payload.driver_id,
+        p_vehicle_id: payload.vehicle_id,
+        p_route_name: payload.route_name,
+        p_load_ids: payload.load_ids,
+        p_stops: stops,
+        p_idempotency_key: payload.planning_draft_id || null,
+      });
 
-    if (error) throw new Error(error.message || String(error));
-    return data as string;
+      if (error) throw new Error(error.message || String(error));
+      return data as string;
+    } else {
+      const { data, error } = await supabase.rpc('dispatch_planned_route', {
+        _payload: {
+          tenant_id: currentTenant.id,
+          driver_id: payload.driver_id,
+          vehicle_id: payload.vehicle_id,
+          route_name: payload.route_name,
+          load_ids: payload.load_ids,
+          stops: stops,
+          idempotency_key: payload.planning_draft_id || null,
+        }
+      });
+
+      if (error) throw new Error(error.message || String(error));
+      return (data as any)?.id || data;
+    }
   }, [currentTenant]);
 
   const invalidate = useCallback(() => {

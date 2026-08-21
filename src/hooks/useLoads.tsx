@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
+import { isFeatureEnabled } from '@/lib/featureFlags';
 
 import type { LoadStatus } from '@/lib/status/loadStatus';
 export { LOAD_STATUSES, LOAD_STATUS_LABELS } from '@/lib/status/loadStatus';
@@ -89,19 +90,34 @@ export function useCreateLoad() {
     mutationFn: async (load: Partial<Load>) => {
       if (!currentTenant) throw new Error('Tenant not found');
       
-      const { data, error } = await supabase.rpc('create_load_v1', {
-        p_tenant_id: currentTenant.id,
-        p_vehicle_id: load.vehicle_id || null,
-        p_driver_id: load.driver_id || null,
-        p_origin: load.origin || '',
-        p_destination: load.destination || '',
-        p_notes: load.notes || null,
-        p_operation_type: load.operation_type || null,
-        p_scheduled_load_at: load.scheduled_load_at || null,
-      });
+      if (isFeatureEnabled('LOGISTICS_CONSOLIDATION_V2')) {
+        const { data, error } = await supabase.rpc('create_load_v1', {
+          p_tenant_id: currentTenant.id,
+          p_vehicle_id: load.vehicle_id || null,
+          p_driver_id: load.driver_id || null,
+          p_origin: load.origin || '',
+          p_destination: load.destination || '',
+          p_notes: load.notes || null,
+          p_operation_type: load.operation_type || null,
+          p_scheduled_load_at: load.scheduled_load_at || null,
+        });
 
-      if (error) throw error;
-      return { id: data };
+        if (error) throw error;
+        return { id: data };
+      } else {
+        const { data, error } = await supabase.rpc('create_load_with_next_number', {
+          _tenant_id: currentTenant.id,
+          _vehicle_id: load.vehicle_id || null,
+          _driver_id: load.driver_id || null,
+          _origin: load.origin || '',
+          _destination: load.destination || '',
+          _operation_type: load.operation_type || null,
+          _notes: load.notes || null
+        });
+
+        if (error) throw error;
+        return { id: data };
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['loads'] });
@@ -122,13 +138,27 @@ export function useUpdateLoad() {
   return useMutation({
     mutationFn: async ({ id, ...changes }: Partial<Load> & { id: string }) => {
       if (!currentTenant) throw new Error('Tenant not found');
-      const { data, error } = await supabase.rpc('update_load_v1', {
-        p_tenant_id: currentTenant.id,
-        p_load_id: id,
-        p_changes: changes as any,
-      });
-      if (error) throw error;
-      return data;
+      
+      if (isFeatureEnabled('LOGISTICS_CONSOLIDATION_V2')) {
+        const { data, error } = await supabase.rpc('update_load_v1', {
+          p_tenant_id: currentTenant.id,
+          p_load_id: id,
+          p_changes: changes as any,
+        });
+        if (error) throw error;
+        return data;
+      } else {
+        // Fallback for V1/Canonical - generic update if no specific canonical RPC exists for this
+        const { data, error } = await supabase
+          .from('loads')
+          .update(changes)
+          .eq('id', id)
+          .eq('tenant_id', currentTenant.id)
+          .select()
+          .single();
+        if (error) throw error;
+        return data;
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['loads'] });
@@ -142,11 +172,20 @@ export function useDeleteLoad() {
   return useMutation({
     mutationFn: async (id: string) => {
       if (!currentTenant) throw new Error('Tenant not found');
-      const { error } = await supabase.rpc('delete_load_v1', {
-        p_tenant_id: currentTenant.id,
-        p_load_id: id,
-      });
-      if (error) throw error;
+      
+      if (isFeatureEnabled('LOGISTICS_CONSOLIDATION_V2')) {
+        const { error } = await supabase.rpc('delete_load_v1', {
+          p_tenant_id: currentTenant.id,
+          p_load_id: id,
+        });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.rpc('delete_load_safely', {
+          _tenant_id: currentTenant.id,
+          _load_id: id,
+        });
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['loads'] });
