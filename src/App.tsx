@@ -132,17 +132,43 @@ function PageLoader() {
   );
 }
 
+function ModuleUnavailable({ role, module }: { role: string; module: string }) {
+  const { signOut } = useAuth();
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-6 text-center">
+      <h1 className="text-xl font-semibold">Módulo indisponível</h1>
+      <p className="max-w-md text-sm text-muted-foreground">
+        O módulo <span className="font-medium">{module}</span> está desativado nesta instalação.
+        Perfil detectado: <span className="font-medium">{role}</span>.
+      </p>
+      <div className="w-full max-w-xs">
+        <TenantSwitcher />
+      </div>
+      <Button variant="outline" onClick={() => signOut()}>Sair</Button>
+    </div>
+  );
+}
+
 function RequireInternalRole({ children }: { children: React.ReactNode }) {
   const { currentRole, loading } = useTenant();
   if (loading) return <PageLoader />;
   if (!currentRole) return <div className="p-6 text-sm text-muted-foreground">Sem acesso a este tenant.</div>;
   if (!['owner', 'admin', 'operator'].includes(currentRole)) {
-    if (currentRole === 'driver') return <Navigate to="/driver" replace />;
-    if (currentRole === 'client') return <Navigate to="/portal" replace />;
-    return <Navigate to="/" replace />;
+    if (currentRole === 'driver') {
+      return isFeatureEnabled('DRIVER_WORKSPACE')
+        ? <Navigate to="/driver" replace />
+        : <ModuleUnavailable role="driver" module="Área do Motorista" />;
+    }
+    if (currentRole === 'client') {
+      return isFeatureEnabled('CLIENT_PORTAL')
+        ? <Navigate to="/portal" replace />
+        : <ModuleUnavailable role="client" module="Portal do Cliente" />;
+    }
+    return <ModuleUnavailable role={currentRole} module="Operacional" />;
   }
   return <>{children}</>;
 }
+
 
 function RequireDriverRole({ children }: { children: React.ReactNode }) {
   const { currentRole, loading } = useTenant();
