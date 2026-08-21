@@ -1,4 +1,4 @@
-/* Sistema restaurado. Dados populados via tenant 6e874e6e-5bca-486d-9928-bef0646989c4. */
+/* me fale quantas tabelas e migrations tem atualmente */
 import { Navigate } from 'react-router-dom';
 
 const Index = () => {
