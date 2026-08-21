@@ -8672,6 +8672,7 @@ export type Database = {
           trip_id: string | null
           updated_at: string
           vehicle_id: string | null
+          version: number
         }
         Insert: {
           actual_load_at?: string | null
@@ -8746,6 +8747,7 @@ export type Database = {
           trip_id?: string | null
           updated_at?: string
           vehicle_id?: string | null
+          version?: number
         }
         Update: {
           actual_load_at?: string | null
@@ -8820,6 +8822,7 @@ export type Database = {
           trip_id?: string | null
           updated_at?: string
           vehicle_id?: string | null
+          version?: number
         }
         Relationships: [
           {
@@ -15737,6 +15740,7 @@ export type Database = {
           trip_id: string | null
           updated_at: string
           vehicle_id: string | null
+          version: number
         }
         SetofOptions: {
           from: "*"
@@ -15803,7 +15807,7 @@ export type Database = {
       }
       delete_load_v1: {
         Args: { p_load_id: string; p_tenant_id: string }
-        Returns: boolean
+        Returns: Json
       }
       delete_loads_safely: {
         Args: { _load_ids: string[]; _tenant_id: string }
@@ -17132,9 +17136,9 @@ export type Database = {
       update_load_v1: {
         Args: {
           p_changes: Json
+          p_expected_version?: number
           p_load_id: string
           p_tenant_id: string
-          p_version?: number
         }
         Returns: Json
       }
