@@ -95,7 +95,7 @@ const SEVERITY_COLORS: Record<string, string> = {
 };
 
 export default function OperationsCenter() {
-  const { currentTenant } = useTenant();
+  const { currentTenant, memberships } = useTenant();
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -381,6 +381,8 @@ export default function OperationsCenter() {
     };
   }, [loads, fiscalDocs, drivers, incidents, activeTrips]);
 
+  const isEmpty = stats?.nfeCount === 0 && stats?.activeLoads === 0 && fleetStats?.total === 0;
+
   // ── Chart Data ──
   const destChart = useMemo(() => {
     const activeLoads = loads.filter((l: any) => !['delivered'].includes(l.status));
@@ -445,6 +447,11 @@ export default function OperationsCenter() {
                 <h1 className="text-xl font-bold text-foreground">
                   {getGreeting()}, <span className="text-primary">{userName}</span>
                 </h1>
+                {isEmpty && memberships.length > 1 && (
+                  <Badge variant="outline" className="text-[10px] animate-pulse bg-warning/10 text-warning border-warning/20 border">
+                    Empresa vazia? Verifique o seletor lateral
+                  </Badge>
+                )}
               </div>
               <p className="text-sm text-muted-foreground mt-0.5 capitalize">
                 {brasiliaDate}
