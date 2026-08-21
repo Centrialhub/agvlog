@@ -7085,6 +7085,35 @@ export type Database = {
           },
         ]
       }
+      idempotency_keys: {
+        Row: {
+          created_at: string | null
+          id: string
+          key_value: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          key_value: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          key_value?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "idempotency_keys_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       imported_note_summary_reports: {
         Row: {
           created_at: string
@@ -15311,6 +15340,14 @@ export type Database = {
         Args: { _protocol_id: string; _reason: string }
         Returns: undefined
       }
+      check_resource_ownership: {
+        Args: {
+          p_resource_id: string
+          p_table_name: string
+          p_tenant_id: string
+        }
+        Returns: boolean
+      }
       check_tenant_membership: {
         Args: { p_tenant_id: string }
         Returns: undefined
@@ -15374,15 +15411,15 @@ export type Database = {
       }
       create_load_v1: {
         Args: {
-          p_destination: string
-          p_driver_id: string
+          p_destination?: string
+          p_driver_id?: string
           p_idempotency_key?: string
           p_notes?: string
           p_operation_type?: string
-          p_origin: string
+          p_origin?: string
           p_scheduled_load_at?: string
           p_tenant_id: string
-          p_vehicle_id: string
+          p_vehicle_id?: string
         }
         Returns: string
       }
@@ -15521,6 +15558,10 @@ export type Database = {
         Returns: undefined
       }
       delete_load_if_empty: { Args: { v_load_id: string }; Returns: undefined }
+      delete_load_item_v1: {
+        Args: { p_item_id: string; p_tenant_id: string }
+        Returns: undefined
+      }
       delete_load_safely: {
         Args: { _load_id: string; _tenant_id: string }
         Returns: Json
@@ -16329,18 +16370,30 @@ export type Database = {
         }
         Returns: string
       }
-      plan_dispatch_trip_v2: {
-        Args: {
-          p_driver_id: string
-          p_idempotency_key?: string
-          p_load_ids: string[]
-          p_route_name: string
-          p_stops: Json
-          p_tenant_id: string
-          p_vehicle_id: string
-        }
-        Returns: string
-      }
+      plan_dispatch_trip_v2:
+        | {
+            Args: {
+              p_driver_id: string
+              p_idempotency_key?: string
+              p_load_ids: string[]
+              p_route_name: string
+              p_stops: Json
+              p_tenant_id: string
+              p_vehicle_id: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_driver_id: string
+              p_idempotency_key?: string
+              p_load_ids: string[]
+              p_scheduled_start?: string
+              p_tenant_id: string
+              p_vehicle_id: string
+            }
+            Returns: string
+          }
       portal_user_can_access_fiscal_document: {
         Args: { _fiscal_document_id: string; _tenant_id: string }
         Returns: boolean
@@ -16364,6 +16417,10 @@ export type Database = {
       preview_reimport_cleanup_counts: {
         Args: { _end_date?: string; _start_date?: string; _tenant_id: string }
         Returns: Json
+      }
+      recalculate_load_totals: {
+        Args: { p_load_id: string; p_tenant_id: string }
+        Returns: undefined
       }
       recalculate_payroll_entry: {
         Args: { _entry_id: string }
@@ -16822,20 +16879,35 @@ export type Database = {
         }
         Returns: string
       }
-      upsert_load_item_v1: {
-        Args: {
-          p_fiscal_document_id?: string
-          p_item_description: string
-          p_item_id?: string
-          p_load_id: string
-          p_pallet_count?: number
-          p_quantity: number
-          p_tenant_id: string
-          p_volume_m3?: number
-          p_weight_kg?: number
-        }
-        Returns: string
-      }
+      upsert_load_item_v1:
+        | {
+            Args: {
+              p_fiscal_document_id?: string
+              p_item_description: string
+              p_item_id?: string
+              p_load_id: string
+              p_pallet_count?: number
+              p_quantity: number
+              p_tenant_id: string
+              p_volume_m3?: number
+              p_weight_kg?: number
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_fiscal_document_id?: string
+              p_item_description?: string
+              p_item_id?: string
+              p_load_id: string
+              p_pallet_count?: number
+              p_quantity?: number
+              p_tenant_id: string
+              p_volume_m3?: number
+              p_weight_kg?: number
+            }
+            Returns: string
+          }
       user_has_client_access: { Args: { _client_id: string }; Returns: boolean }
     }
     Enums: {
