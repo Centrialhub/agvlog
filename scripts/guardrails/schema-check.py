@@ -196,15 +196,16 @@ def normalize_type(raw):
     t = re.sub(r"\s+", " ", t)
     if "." in t:
         schema, _, bare = t.rpartition(".")
+        # public./pg_catalog. são resolvidos pelo search_path padrão:
+        # public.app_role e app_role são a mesma assinatura.
         if schema in ("public", "pg_catalog"):
             t = TYPE_ALIASES.get(bare, bare)
-            if schema == "public":
-                t = f"public.{t}"
         else:
             t = f"{schema}.{bare}"
     else:
         t = TYPE_ALIASES.get(t, t)
     return t + array_suffix
+
 
 
 def normalize_arg(raw):
