@@ -1,4 +1,4 @@
-/* O sistema foi restaurado com novas permissões de segurança. As informações de frota, telemetria e inteligência logística (cercas e alertas) agora devem estar visíveis. */
+/* Refazer os pipeline e religar o frontend as tabelas corretas */
 import { Navigate } from 'react-router-dom';
 
 const Index = () => {
