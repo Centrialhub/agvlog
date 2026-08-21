@@ -130,7 +130,6 @@ export default function Financial() {
   });
 
   const { data: clients = [] } = useClientsArray();
-  const { data: costCenters = [] } = useCostCenters();
 
   // Documentos válidos (cancelados/rejeitados nunca entram em faturamento)
   const billableDocs = useMemo(() => fiscalDocs.filter((d: any) => isBillableFiscalDoc(d)), [fiscalDocs]);
