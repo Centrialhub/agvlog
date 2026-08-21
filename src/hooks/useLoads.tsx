@@ -215,14 +215,12 @@ export function useDeleteLoads() {
 }
 
 export function useHoldLoad() {
-  const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
-      const { error } = await (supabase as any).rpc('hold_load', {
+      const { error } = await supabase.rpc('hold_load', {
         _load_id: id,
         _reason: reason,
-        _user_id: user?.id
       });
       if (error) throw error;
     },
