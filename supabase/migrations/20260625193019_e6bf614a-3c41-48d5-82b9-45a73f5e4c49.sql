@@ -306,7 +306,7 @@ END;
 $fn$;
 
 -- 4) Revoke PUBLIC on internal SECURITY DEFINER
-  SET search_path = public helpers/triggers
+-- SET search_path = public helpers/triggers
 REVOKE ALL ON FUNCTION public._build_driver_settlement(uuid, uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public._log_settlement_event(uuid, text, text, text, text, jsonb) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.mark_driver_settlement_outdated(uuid, uuid, text) FROM PUBLIC;

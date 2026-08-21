@@ -137,10 +137,27 @@ class TestStatementSplitting(unittest.TestCase):
         )
 
 
+    def test_public_schema_qualified_types_are_equivalent(self):
+        """public.app_role e app_role são a mesma assinatura (search_path padrão)."""
+        self.assertEqual(
+            sc.normalize_signature("has_tenant_role", "uuid, public.app_role"),
+            sc.normalize_signature("has_tenant_role", "_tenant_id uuid, _role app_role"),
+        )
+        self.assertEqual(
+            sc.normalize_signature("f", "public.app_role[]"),
+            sc.normalize_signature("f", "app_role[]"),
+        )
+        self.assertNotEqual(
+            sc.normalize_signature("f", "outro.app_role"),
+            sc.normalize_signature("f", "app_role"),
+        )
+
+
 class TestResetRequirement(unittest.TestCase):
     def test_db_reset_is_still_mandatory(self):
         src = open(os.path.join(os.path.dirname(__file__), "schema-check.py"), encoding="utf-8").read()
         self.assertIn("supabase db reset", src)
+        self.assertIn("reset local desde schema vazio falhou", src)
         self.assertIn("sys.exit(1)", src)
 
 

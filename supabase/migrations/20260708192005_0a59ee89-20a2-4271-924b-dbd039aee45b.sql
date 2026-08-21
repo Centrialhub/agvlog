@@ -389,7 +389,7 @@ FOR EACH ROW EXECUTE FUNCTION public.enforce_payroll_items_locked();
 -- 6) RPCs de ajuste manual controlado (bypass do lock só via RPC)
 -- ============================================================
 -- Manter simples: apenas expostas; a inserção real desabilita o trigger via SECURITY DEFINER
-  SET search_path = public + session_replication_role
+-- SET search_path = public + session_replication_role
 CREATE OR REPLACE FUNCTION public.add_payroll_manual_item(
   _entry_id uuid, _nature text, _description text, _amount numeric, _reason text
 ) RETURNS uuid

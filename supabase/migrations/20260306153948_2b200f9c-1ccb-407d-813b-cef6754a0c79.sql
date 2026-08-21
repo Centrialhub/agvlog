@@ -1,6 +1,5 @@
 
--- Phase 0: Onboarding RPC (SECURITY DEFINER
-  SET search_path = public to bypass RLS)
+-- Phase 0: Onboarding RPC (SECURITY DEFINER + SET search_path = public to bypass RLS)
 CREATE OR REPLACE FUNCTION public.create_tenant_with_owner(_tenant_name text)
 RETURNS uuid
 LANGUAGE plpgsql
