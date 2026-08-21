@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
-import { FeatureFlagGate, isFeatureEnabled } from '@/components/FeatureFlagGate';
+import { FeatureFlagGate } from '@/components/FeatureFlagGate';
+import { isFeatureEnabled } from '@/lib/featureFlags';
 import { Button } from "@/components/ui/button";
 import { TenantSwitcher } from "@/components/layout/TenantSwitcher";
 import { Toaster } from "@/components/ui/toaster";
