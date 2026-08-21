@@ -258,14 +258,15 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                           </Link>
                         );
                       }
+                      const visibleItems = entry.items.filter(item => !item.feature || isFeatureEnabled(item.feature));
+                      if (visibleItems.length === 0) return null;
                       const groupCollapsed = collapsedGroups.has(entry.label);
-                      const hasActive = entry.items.some(i => isActive(i.href));
+                      const hasActive = visibleItems.some(i => isActive(i.href));
                       if (collapsed) {
                         // Mini mode: render children flat with icons only
                         return (
                           <div key={entry.label} className="space-y-0.5">
-                            {entry.items.filter(item => !item.feature || isFeatureEnabled(item.feature)).map(item => {
-
+                            {visibleItems.map(item => {
                               const active = isActive(item.href);
                               return (
                                 <Link
@@ -303,7 +304,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                           </button>
                           {!groupCollapsed && (
                             <div className="ml-3 mt-0.5 space-y-0.5 border-l border-sidebar-border/60 pl-2">
-                              {entry.items.filter(item => !item.feature || isFeatureEnabled(item.feature)).map(item => {
+                              {visibleItems.map(item => {
                                 const active = isActive(item.href);
                                 return (
                                   <Link
@@ -325,6 +326,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                           )}
                         </div>
                       );
+
                     })}
                   </div>
                 )}
