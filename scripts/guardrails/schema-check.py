@@ -12,31 +12,36 @@ def run_command(cmd):
     return result
 
 def check_forward_references():
-    print("Verificando referências antecipadas em GRANT/REVOKE/ALTER FUNCTION (Threshold: 20260821)...")
+    print("Verificando referências antecipadas em GRANT/REVOKE/ALTER FUNCTION...")
     migration_dir = "supabase/migrations"
     migrations = sorted([f for f in os.listdir(migration_dir) if f.endswith(".sql")])
     
     defined_so_far = set()
     errors_found = False
+    
+    # Threshold to ignore legacy forward-reference noise in early 202606* migrations
     THRESHOLD = "20260821000000"
     
     for m in migrations:
         path = os.path.join(migration_dir, m)
         with open(path, 'r') as f:
-            lines = f.readlines()
-            content = "".join(lines)
+            content = f.read()
+            lines = content.splitlines()
             
             # 1. Register what this migration defines
+            # Matches: CREATE [OR REPLACE] FUNCTION public.name (args)
             def_pattern = r'CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+public\.(\w+)\s*\((.*?)\)'
             for m_def in re.finditer(def_pattern, content, re.IGNORECASE | re.DOTALL):
                 name = m_def.group(1).lower()
                 args = m_def.group(2).strip().lower()
+                # Normalize whitespace
                 args = re.sub(r'\s+', ' ', args)
+                # Strip default values for signature comparison
                 args = re.sub(r'\s+default\s+.*?(?=,|$)', '', args)
                 defined_so_far.add((name, args))
             
             # 2. Check for forward references in GRANT/REVOKE/ALTER
-            # ONLY for migrations after the threshold to avoid legacy noise
+            # ONLY for migrations starting from the 21/08 stabilization window
             if m < THRESHOLD:
                 continue
 
@@ -68,7 +73,7 @@ def check():
     res_cli_exists = subprocess.run(["which", "supabase"], capture_output=True)
     if res_cli_exists.returncode != 0:
         print("Aviso: Supabase CLI não encontrado. Ignorando prova executável no sandbox.")
-        # Verificação Estática de Ordem Cronológica still applies
+        # Verificação Estática still applies to new migrations
         if not check_forward_references():
             sys.exit(1)
         return
@@ -90,7 +95,7 @@ def check():
         print("ERRO: Falha ao aplicar migrations no banco local.")
         sys.exit(1)
 
-    # Verificação Estática de Ordem Cronológica (Mandatory)
+    # Verificação Estática (Mandatory)
     if not check_forward_references():
         sys.exit(1)
 
