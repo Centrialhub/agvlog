@@ -216,10 +216,18 @@ function ProtectedContent({ children, gate }: { children: React.ReactNode; gate:
   if (tenantLoading) return <div className="flex h-screen items-center justify-center text-muted-foreground">Carregando...</div>;
 
   const isDriver = currentRole === 'driver';
-  
+  const driverEnabled = isFeatureEnabled('DRIVER_WORKSPACE');
+
   if (isDriver && gate === 'internal') {
-    return <Navigate to="/driver" replace />;
+    return driverEnabled
+      ? <Navigate to="/driver" replace />
+      : <ModuleUnavailable role="driver" module="Área do Motorista" />;
   }
+
+  if (isDriver && !driverEnabled) {
+    return <ModuleUnavailable role="driver" module="Área do Motorista" />;
+  }
+
 
   const Layout = isDriver ? DriverLayout : AppLayout;
 
