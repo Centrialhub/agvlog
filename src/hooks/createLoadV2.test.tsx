@@ -79,8 +79,8 @@ describe('create_load_v2 Integration', () => {
       await result.current.mutateAsync({ origin: 'A' } as any);
     });
 
-    const call = mockRpc.mock.calls.find(c => c[0] === 'create_load_v2');
+    const call = (mockRpc.mock.calls as any[]).find(c => c[0] === 'create_load_v2');
     expect(call).toBeDefined();
-    expect(call![1].p_idempotency_key).toMatch(/^[0-9a-f-]{36}$/);
+    expect(call[1].p_idempotency_key).toMatch(/^[0-9a-f-]{36}$/);
   });
 });
