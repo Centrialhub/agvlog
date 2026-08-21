@@ -176,7 +176,6 @@ export default function Financial() {
     setSelectedClient('all');
     setDocType('all');
     setExpenseCategory('all');
-    setSelectedCostCenter('all');
   };
 
   // ── Period filter ──
