@@ -1,59 +1,70 @@
 import subprocess
 import os
 import sys
-import hashlib
-from pathlib import Path
+import time
 
-def run(cmd):
-    print(f"Executing: {cmd}")
-    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-    if result.returncode != 0:
-        print(f"STDOUT: {result.stdout}")
-        print(f"STDERR: {result.stderr}")
-    return result
+def run(cmd, env=None):
+    print(f"Executando: {cmd}")
+    # Usamos shell=True para compatibilidade com pipes e redirecionamentos se necessário
+    # Mas passamos env explicitamente para garantir hermeticidade
+    process = subprocess.Popen(
+        cmd, 
+        shell=True, 
+        stdout=subprocess.PIPE, 
+        stderr=subprocess.STDOUT, 
+        text=True,
+        env=env
+    )
+    
+    for line in process.stdout:
+        print(line, end='')
+    
+    process.wait()
+    return process.returncode
 
 def main():
-    print("=== STARTING FULL CI PIPELINE ===\n")
+    start_time = time.time()
+    print("=== INICIANDO PIPELINE CI HERMÉTICO E PROBATÓRIO ===\n")
 
-    # 1. Migration Integrity
-    print("Step 1: Checking Migration Integrity...")
-    integrity = run("python3 scripts/guardrails/migration-integrity.py")
-    if integrity.returncode != 0: sys.exit(1)
-
-    # 2. Schema Validation (Syntactic)
-    print("Step 2: Validating Schema History...")
-    schema = run("python3 scripts/guardrails/schema-check.py")
-    if schema.returncode != 0: sys.exit(1)
-
-    # 3. DB Linter (Direct Writes & Security)
-    print("Step 3: Auditing Database Access Patterns...")
-    linter = run("python3 scripts/guardrails/db-linter.py")
-    if linter.returncode != 0: sys.exit(1)
+    # Ambiente hermético: Não usa .env da aplicação
+    ci_env = os.environ.copy()
+    # Remove variáveis do Supabase se existirem no ambiente atual
+    for key in list(ci_env.keys()):
+        if "SUPABASE" in key:
+            del ci_env[key]
     
-    # Summary of direct writes
-    dw_count = run("rg -c 'linter:allow-direct-write' src/").stdout.strip()
-    print(f"Direct write baseline exceptions: {dw_count}")
+    # Define variáveis para o banco efêmero (PGBOUNCER/POSTGRES LOCAL se disponível, 
+    # ou simulação via Vitest + Mock/Database efêmero)
+    ci_env["NODE_ENV"] = "test"
+    ci_env["VITE_SUPABASE_URL"] = "http://localhost:54321" # Mock/Local
+    ci_env["VITE_SUPABASE_PUBLISHABLE_KEY"] = "ci-test-key"
 
-    # 4. Typecheck
-    print("Step 4: Running TypeScript Typecheck...")
-    tsc = run("bunx tsc -p tsconfig.app.json --noEmit")
-    if tsc.returncode != 0: sys.exit(1)
+    steps = [
+        ("Integridade de Migrations", "python3 scripts/guardrails/migration-integrity.py"),
+        ("Lint de Banco de Dados", "python3 scripts/guardrails/db-linter.py"),
+        ("Validação de Schema", "python3 scripts/guardrails/schema-check.py"),
+        ("ESLint", "bun run lint"),
+        ("TypeScript Check", "bun run typecheck"),
+        ("Testes de Unidade e Integração (Vitest)", "bun run test"),
+        ("Build de Produção", "bun run build")
+    ]
 
-    # 5. Tests
-    print("Step 5: Running Integration & Security Tests...")
-    tests = run("bunx vitest run src/test/integrationScenarios.test.ts src/test/securityLayerHardening.test.ts src/test/hrSecurity.test.ts")
-    if tests.returncode != 0: sys.exit(1)
+    failed = False
+    for name, cmd in steps:
+        print(f"\n--- Passo: {name} ---")
+        code = run(cmd, env=ci_env)
+        if code != 0:
+            print(f"\n[FALHA] Passo '{name}' retornou código {code}")
+            failed = True
+            break
 
-    # 6. Build
-    print("Step 6: Executing Production Build...")
-    build = run("bun run build")
-    if build.returncode != 0: sys.exit(1)
-
-    print("\n=== CI PIPELINE SUCCESSFUL ===")
-    migrations_count = len([f for f in os.listdir('supabase/migrations') if f.endswith('.sql')])
-    print(f"Migrations applied: {migrations_count}")
-    print("Functions created/hardened: ~70 RPCs")
-    print(f"Final Direct Write Count (Unchecked): 0")
+    duration = time.time() - start_time
+    if failed:
+        print(f"\n=== CI FALHOU (Duração: {duration:.2f}s) ===")
+        sys.exit(1)
+    else:
+        print(f"\n=== CI SUCESSO (Duração: {duration:.2f}s) ===")
+        sys.exit(0)
 
 if __name__ == "__main__":
     main()
