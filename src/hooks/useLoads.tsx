@@ -91,7 +91,7 @@ export function useCreateLoad() {
       if (!currentTenant) throw new Error('Tenant not found');
       
       if (isFeatureEnabled('LOGISTICS_CONSOLIDATION_V2')) {
-        const { data, error } = await supabase.rpc('create_load_v2', {
+        const { data, error } = await (supabase.rpc as any)('create_load_v2', {
           p_tenant_id: currentTenant.id,
           p_idempotency_key: load.idempotency_key || crypto.randomUUID(),
           p_vehicle_id: load.vehicle_id || null,
