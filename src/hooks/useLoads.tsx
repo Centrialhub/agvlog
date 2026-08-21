@@ -107,16 +107,15 @@ export function useCreateLoad() {
       } else {
         const { data, error } = await supabase.rpc('create_load_with_next_number', {
           _tenant_id: currentTenant.id,
+          _origin: load.origin || null,
+          _destination: load.destination || null,
           _vehicle_id: load.vehicle_id || null,
           _driver_id: load.driver_id || null,
-          _origin: load.origin || '',
-          _destination: load.destination || '',
-          _operation_type: load.operation_type || null,
           _notes: load.notes || null
         });
 
         if (error) throw error;
-        return { id: data };
+        return { id: (data as any).id };
       }
     },
     onSuccess: () => {

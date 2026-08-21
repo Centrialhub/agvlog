@@ -20,7 +20,7 @@ vi.mock('@/lib/featureFlags', () => ({
 }));
 
 // Mock supabase.rpc
-const mockRpc = vi.spyOn(supabase, 'rpc').mockResolvedValue({ data: 'mock-id', error: null });
+const mockRpc = vi.spyOn(supabase, 'rpc').mockResolvedValue({ data: { id: 'mock-id' }, error: null, status: 200, statusText: 'OK', count: null } as any);
 
 const queryClient = new QueryClient();
 const wrapper = ({ children }: { children: React.ReactNode }) => (
@@ -99,7 +99,7 @@ describe('Logistics V2 Contention', () => {
         planned_start_at: new Date().toISOString(),
         route_name: 'Test',
         load_ids: ['L1'],
-        stops: [{ destination: 'B', client_id: 'C1', fiscal_document_ids: ['FD1'] }]
+        stops: [{ destination: 'B', client_id: 'C1', fiscal_document_ids: ['FD1'] } as any]
       });
       expect(mockRpc).toHaveBeenCalledWith('plan_dispatch_trip_v2', expect.any(Object));
     });
