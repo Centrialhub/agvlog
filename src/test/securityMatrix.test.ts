@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { supabase } from '../lib/supabase';
+import { createClient } from '@supabase/supabase-js';
+
+// Minimal mock client for testing error messages
+const supabaseUrl = process.env.VITE_SUPABASE_URL || 'http://localhost:54321';
+const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || 'dummy';
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 describe('Security Matrix Hardening', () => {
   it('should deny execute_data_repair_v1 to everyone', async () => {
@@ -16,17 +21,9 @@ describe('Security Matrix Hardening', () => {
     });
     
     // Anon role should be blocked by "permission denied" because EXECUTE was revoked from PUBLIC
+    // Or if the function is not in the schema, it might return a different error, 
+    // but we know it exists because we created it.
     expect(error1?.message).toMatch(/permission denied|FEATURE_DISABLED/);
     expect(error2?.message).toMatch(/permission denied|FEATURE_DISABLED/);
-  });
-
-  it('should verify explicit EXECUTE grants are correctly applied', async () => {
-    // This test confirms that we have revoked PUBLIC access and granted AUTHENTICATED access.
-    // We use service_role to check privileges via SQL.
-    
-    // (Actual verification performed via supabase--read_query in the agent process)
-    // Verification:
-    // SELECT has_function_privilege('authenticated', 'list_loads_v1(uuid,text,text[],timestamptz,int)', 'EXECUTE') -> true
-    // SELECT has_function_privilege('anon', 'list_loads_v1(uuid,text,text[],timestamptz,int)', 'EXECUTE') -> false
   });
 });
