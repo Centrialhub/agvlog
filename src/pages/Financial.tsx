@@ -7,7 +7,7 @@ import { useTenant } from '@/hooks/useTenant';
 import { useReceivables } from '@/hooks/useReceivables';
 // import { useOperationalFinancialSummary } from '@/hooks/useOperationalFinancialSummary';
 import { useClients, useClientsArray } from '@/hooks/useClients';
-import { useCostCenters } from '@/hooks/useCostCenters';
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -57,7 +57,7 @@ export default function Financial() {
       if (!currentTenant) return [];
       const { data } = await supabase
         .from('fiscal_documents')
-        .select('id, document_type, value, weight_kg, freight_value, status, created_at, issue_date, client_id, invoice_number, cost_center')
+        .select('id, document_type, value, weight_kg, freight_value, status, created_at, issue_date, client_id, invoice_number')
         .eq('tenant_id', currentTenant.id)
         .order('created_at', { ascending: false })
         .limit(1000);
@@ -130,7 +130,6 @@ export default function Financial() {
   });
 
   const { data: clients = [] } = useClientsArray();
-  const { data: costCenters = [] } = useCostCenters();
 
   // Documentos válidos (cancelados/rejeitados nunca entram em faturamento)
   const billableDocs = useMemo(() => fiscalDocs.filter((d: any) => isBillableFiscalDoc(d)), [fiscalDocs]);
@@ -167,9 +166,8 @@ export default function Financial() {
     if (selectedClient !== 'all') count++;
     if (docType !== 'all') count++;
     if (expenseCategory !== 'all') count++;
-    if (selectedCostCenter !== 'all') count++;
     return count;
-  }, [dateFrom, dateTo, selectedClient, docType, expenseCategory, selectedCostCenter]);
+  }, [dateFrom, dateTo, selectedClient, docType, expenseCategory]);
 
   const clearFilters = () => {
     setDateFrom('');
@@ -177,7 +175,6 @@ export default function Financial() {
     setSelectedClient('all');
     setDocType('all');
     setExpenseCategory('all');
-    setSelectedCostCenter('all');
   };
 
   // ── Period filter ──
@@ -214,7 +211,6 @@ export default function Financial() {
     let filteredDocs = billableDocs.filter((d: any) => filterByPeriod(d.issue_date || d.created_at));
     if (selectedClient !== 'all') filteredDocs = filteredDocs.filter((d: any) => d.client_id === selectedClient);
     if (docType !== 'all') filteredDocs = filteredDocs.filter((d: any) => d.document_type === docType);
-    if (selectedCostCenter !== 'all') filteredDocs = filteredDocs.filter((d: any) => d.cost_center === selectedCostCenter);
 
     const nfes = filteredDocs.filter((d: any) => d.document_type === 'inbound');
     // Receita só de CT-e confirmado: rascunho/transmitindo ainda pode rejeitar.
@@ -491,22 +487,6 @@ export default function Financial() {
                       ))}
                     </SelectContent>
                     </Select>
-                </div>
-
-                {/* Cost Center */}
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Centro de Custo</label>
-                  <Select value={selectedCostCenter} onValueChange={setSelectedCostCenter}>
-                    <SelectTrigger className="h-8 text-xs">
-                      <SelectValue placeholder="Todos" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos</SelectItem>
-                      {costCenters.map((cc: string) => (
-                        <SelectItem key={cc} value={cc}>{cc}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
                 </div>
               </div>
             </CardContent>
