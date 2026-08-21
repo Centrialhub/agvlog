@@ -5,9 +5,11 @@ import { useTenant } from './useTenant';
 
 export const PAYMENT_STATUS_LABELS = {
   unpaid: 'Não Pago',
-  partial: 'Parcial',
+  partially_paid: 'Parcial',
   paid: 'Pago',
-  overpaid: 'Pago a Maior',
+  overdue: 'Vencido',
+  disputed: 'Contestado',
+  cancelled: 'Cancelado',
 };
 
 export const OPERATIONAL_STATUS_LABELS = {
@@ -42,7 +44,7 @@ export interface LoadControlRow {
   invoice_count?: number;
   cte_count?: number;
   driver_name?: string;
-  plate?: string;
+  vehicle_plate?: string;
   expected_payment_date?: string;
   payment_date?: string;
   gross_cargo_value?: number;
@@ -85,25 +87,16 @@ export function useLoadControlList(filters: LoadControlFilters = {}) {
     queryKey: ['load-control', currentTenant?.id, filters],
     queryFn: async () => {
       if (!currentTenant) return [];
-      let query = supabase
-        .from('loads')
-        .select('*')
-        .eq('tenant_id', currentTenant.id)
-        .order('created_at', { ascending: false });
-
-      if (filters.search) {
-        query = query.or(`load_number.ilike.%${filters.search}%,external_load_number.ilike.%${filters.search}%`);
-      }
-      if (filters.payment_status?.length) {
-        query = query.in('payment_status', filters.payment_status);
-      }
-      if (filters.operational_status?.length) {
-        query = query.in('status', filters.operational_status);
-      }
-
-      const { data, error } = await query;
+      
+      const { data, error } = await supabase.rpc('list_load_control_v1', {
+        p_tenant_id: currentTenant.id,
+        p_filters: filters as any,
+        p_limit: 1000,
+        p_offset: 0
+      });
+      
       if (error) throw error;
-      return data as LoadControlRow[];
+      return (data as any).items || [] as LoadControlRow[];
     },
     enabled: !!currentTenant,
   });
@@ -124,15 +117,21 @@ export function useLoadDocuments(loadId?: string) {
 
 export function useUnloadingCharges(arg: string | { loadId?: string }) {
   const loadId = typeof arg === 'string' ? arg : arg.loadId;
+  const { currentTenant } = useTenant();
+  
   return useQuery({
-    queryKey: ['unloading-charges', loadId],
+    queryKey: ['unloading-charges', currentTenant?.id, loadId],
     queryFn: async () => {
-      if (!loadId) return [];
-      const { data, error } = await supabase.from('load_unloading_charges').select('*').eq('load_id', loadId);
+      if (!currentTenant) return [];
+      let query = supabase.from('load_unloading_charges').select('*').eq('tenant_id', currentTenant.id);
+      if (loadId) {
+        query = query.eq('load_id', loadId);
+      }
+      const { data, error } = await query;
       if (error) throw error;
       return (data || []) as any[] as UnloadingChargeRow[];
     },
-    enabled: !!loadId,
+    enabled: !!currentTenant,
   });
 }
 
@@ -159,24 +158,34 @@ export function useRegisterPayment() {
   const { currentTenant } = useTenant();
   return useMutation({
     mutationFn: async (p: { loadId: string; amount: number; paymentDate: string; method?: string; notes?: string }) => {
-      const { error } = await supabase.from('load_payments').insert({
-        tenant_id: currentTenant!.id,
+      if (!currentTenant) throw new Error('Tenant not found');
+
+      // Use a RPC to ensure transactional updates
+      const { error } = await supabase.rpc('update_load_v1', {
+        p_tenant_id: currentTenant.id,
+        p_load_id: p.loadId,
+        p_changes: {
+          payment_status: 'paid',
+          payment_date: p.paymentDate,
+          received_amount: p.amount,
+          payment_method: p.method,
+          notes: p.notes
+        }
+      });
+      
+      if (error) throw error;
+
+      // Also insert into payments table
+      const { error: pError } = await supabase.from('load_payments').insert({
+        tenant_id: currentTenant.id,
         load_id: p.loadId,
         amount: p.amount,
         payment_date: p.paymentDate,
         payment_method: p.method,
         notes: p.notes,
       });
-      if (error) throw error;
-      
-      await supabase.rpc('update_load_v1', {
-        p_tenant_id: currentTenant!.id,
-        p_load_id: p.loadId,
-        p_changes: {
-            payment_status: 'paid',
-            payment_date: p.paymentDate
-        }
-      });
+
+      if (pError) throw pError;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['load-control'] });
@@ -189,11 +198,18 @@ export function useMarkUnpaid() {
   const { currentTenant } = useTenant();
   return useMutation({
     mutationFn: async (loadId: string) => {
-      await supabase.rpc('update_load_v1', {
-        p_tenant_id: currentTenant!.id,
+      if (!currentTenant) throw new Error('Tenant not found');
+
+      const { error } = await supabase.rpc('update_load_v1', {
+        p_tenant_id: currentTenant.id,
         p_load_id: loadId,
         p_changes: { payment_status: 'unpaid', payment_date: null, received_amount: 0 }
       });
+
+      if (error) throw error;
+
+      // Optionally delete related payments? Usually we keep history, so maybe just mark as reversed.
+      // For now, following user request for transactional consistency.
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['load-control'] });
@@ -202,12 +218,25 @@ export function useMarkUnpaid() {
 }
 
 export const commitSpreadsheetImport = async (tenantId: string, fileName: string, parsed: any[]) => {
-    // Legacy support for the UI caller signature
-    return { preview: { newLoads: 0, updatedLoads: 0, errors: [] } };
+    const { data, error } = await supabase.rpc('commit_load_import_v1', {
+        p_tenant_id: tenantId,
+        p_file_name: fileName,
+        p_source_type: 'spreadsheet',
+        p_rows: parsed
+    });
+
+    if (error) throw error;
+    return { preview: data as any };
 };
 
 export const commitXmlImport = async (tenantId: string, fileName: string, parsed: any[]) => {
-    // Legacy support for the UI caller signature
-    return { preview: { newLoads: 0, updatedLoads: 0, errors: [] } };
-};
+    const { data, error } = await supabase.rpc('commit_load_import_v1', {
+        p_tenant_id: tenantId,
+        p_file_name: fileName,
+        p_source_type: 'xml',
+        p_rows: parsed
+    });
 
+    if (error) throw error;
+    return { preview: data as any };
+};
