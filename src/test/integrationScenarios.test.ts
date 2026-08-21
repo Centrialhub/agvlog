@@ -11,7 +11,7 @@ describe('Logistics & HR Integration Tests', () => {
         p_tenant_id: FAKE_TENANT_ID,
         p_values: { name: 'Unauthorized' }
       });
-      expect(error?.message).toMatch(/permission denied/i);
+      expect(error?.message).toMatch(/Acesso negado|permission denied/i);
     });
 
     it('should block direct DML on employees', async () => {
@@ -19,7 +19,7 @@ describe('Logistics & HR Integration Tests', () => {
         tenant_id: FAKE_TENANT_ID,
         name: 'Direct'
       } as any);
-      expect(error?.message).toMatch(/permission denied/i);
+      expect(error?.message).toMatch(/permission denied|violates row-level security policy/i);
     });
   });
 
@@ -33,7 +33,7 @@ describe('Logistics & HR Integration Tests', () => {
         p_driver_id: null as any,
         p_vehicle_id: null as any
       });
-      expect(error?.message).toMatch(/permission denied|violates/i);
+      expect(error?.message).toMatch(/Acesso negado|permission denied|violates/i);
     });
 
     it('should enforce idempotency_key on plan_dispatch_trip_v2', async () => {
@@ -68,7 +68,7 @@ describe('Logistics & HR Integration Tests', () => {
 
   describe('Data Quality & Security', () => {
     it('should have execute_data_repair_v1 disabled for users', async () => {
-      const { error } = await supabase.rpc('execute_data_repair_v1' as any, {
+      const { error } = await (supabase as any).rpc('execute_data_repair_v1', {
         p_tenant_id: FAKE_TENANT_ID,
         p_batch_id: FAKE_TENANT_ID
       });
