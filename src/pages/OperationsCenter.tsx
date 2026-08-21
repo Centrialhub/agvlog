@@ -381,6 +381,8 @@ export default function OperationsCenter() {
     };
   }, [loads, fiscalDocs, drivers, incidents, activeTrips]);
 
+  const isEmpty = stats?.nfeCount === 0 && stats?.activeLoads === 0 && fleetStats?.total === 0;
+
   // ── Chart Data ──
   const destChart = useMemo(() => {
     const activeLoads = loads.filter((l: any) => !['delivered'].includes(l.status));
