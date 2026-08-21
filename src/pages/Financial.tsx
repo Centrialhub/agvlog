@@ -57,7 +57,7 @@ export default function Financial() {
       if (!currentTenant) return [];
       const { data } = await supabase
         .from('fiscal_documents')
-        .select('id, document_type, value, weight_kg, freight_value, status, created_at, issue_date, client_id, invoice_number, cost_center')
+        .select('id, document_type, value, weight_kg, freight_value, status, created_at, issue_date, client_id, invoice_number')
         .eq('tenant_id', currentTenant.id)
         .order('created_at', { ascending: false })
         .limit(1000);
