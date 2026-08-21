@@ -1,4 +1,4 @@
-/* reorganiza o db e religa o pipelines para as informações voltarem a aparecer */
+/* onde vc parou ? */
 import { Navigate } from 'react-router-dom';
 
 const Index = () => {
