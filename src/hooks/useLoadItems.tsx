@@ -186,7 +186,7 @@ export function useDeleteLoadItem() {
         } else {
           // Direct delete for canonical manual items
           const { error } = await supabase
-            .from('load_items')
+            .from('load_items') // linter:allow-direct-write load_items [V1 fallback] [2026-12-31]
             .delete()
             .eq('id', id)
             .eq('tenant_id', currentTenant!.id);
