@@ -147,10 +147,11 @@ export function useUpdateLoad() {
         if (error) throw error;
         return data;
       } else {
-        // Fallback for V1/Canonical - generic update if no specific canonical RPC exists for this
+        // Strip relations and restricted fields for V1 update
+        const { vehicles, drivers, tenant_id, load_number, ...cleanChanges } = changes as any;
         const { data, error } = await supabase
           .from('loads')
-          .update(changes)
+          .update(cleanChanges)
           .eq('id', id)
           .eq('tenant_id', currentTenant.id)
           .select()

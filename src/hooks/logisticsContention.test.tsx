@@ -1,6 +1,6 @@
 import { renderHook } from '@testing-library/react';
-import { useCreateLoad, useCreateLoadWithNextNumber, useUpdateLoad, useDeleteLoad } from './useLoads';
-import { useCreateLoadItem, useUpdateLoadItem, useDeleteLoadItem } from './useLoadItems';
+import { useCreateLoad, useUpdateLoad, useDeleteLoad } from './useLoads';
+import { useCreateLoadItem, useDeleteLoadItem } from './useLoadItems';
 import { useDispatchRoutePlan } from './route-planning/useDispatchRoutePlan';
 import { supabase } from '@/integrations/supabase/client';
 import { FEATURE_FLAGS } from '@/lib/featureFlags';
@@ -20,7 +20,13 @@ vi.mock('@/lib/featureFlags', () => ({
 }));
 
 // Mock supabase.rpc
-const mockRpc = vi.spyOn(supabase, 'rpc').mockResolvedValue({ data: { id: 'mock-id' }, error: null, status: 200, statusText: 'OK', count: null } as any);
+const mockRpc = vi.spyOn(supabase, 'rpc').mockResolvedValue({ 
+  data: { id: 'mock-id' }, 
+  error: null,
+  status: 200,
+  statusText: 'OK',
+  count: null
+} as any);
 
 const queryClient = new QueryClient();
 const wrapper = ({ children }: { children: React.ReactNode }) => (
@@ -35,7 +41,7 @@ describe('Logistics V2 Contention', () => {
 
   describe('When LOGISTICS_CONSOLIDATION_V2 is false', () => {
     beforeEach(() => {
-      FEATURE_FLAGS.LOGISTICS_CONSOLIDATION_V2 = false;
+      (FEATURE_FLAGS as any).LOGISTICS_CONSOLIDATION_V2 = false;
     });
 
     it('useCreateLoad calls create_load_with_next_number', async () => {
@@ -47,7 +53,13 @@ describe('Logistics V2 Contention', () => {
 
     it('useCreateLoadItem calls assign_fiscal_documents_to_load if fiscal_document_id is present', async () => {
       const { result } = renderHook(() => useCreateLoadItem(), { wrapper });
-      await result.current.mutateAsync({ load_id: 'L1', fiscal_document_id: 'FD1', item_description: 'Test', quantity: 1, pallet_count: 1 });
+      await result.current.mutateAsync({ 
+        load_id: 'L1', 
+        fiscal_document_id: 'FD1', 
+        item_description: 'Test', 
+        quantity: 1, 
+        pallet_count: 1 
+      });
       expect(mockRpc).toHaveBeenCalledWith('assign_fiscal_documents_to_load', expect.any(Object));
       expect(mockRpc).not.toHaveBeenCalledWith('upsert_load_item_v1', expect.any(Object));
     });
@@ -67,7 +79,7 @@ describe('Logistics V2 Contention', () => {
         planned_start_at: new Date().toISOString(),
         route_name: 'Test',
         load_ids: ['L1'],
-        stops: [{ destination: 'B', client_id: 'C1', fiscal_document_ids: ['FD1'] }]
+        stops: [{ destination: 'B', client_id: 'C1', fiscal_document_ids: ['FD1'] } as any]
       });
       expect(mockRpc).toHaveBeenCalledWith('dispatch_planned_route', expect.any(Object));
       expect(mockRpc).not.toHaveBeenCalledWith('plan_dispatch_trip_v2', expect.any(Object));
@@ -76,7 +88,7 @@ describe('Logistics V2 Contention', () => {
 
   describe('When LOGISTICS_CONSOLIDATION_V2 is true', () => {
     beforeEach(() => {
-      FEATURE_FLAGS.LOGISTICS_CONSOLIDATION_V2 = true;
+      (FEATURE_FLAGS as any).LOGISTICS_CONSOLIDATION_V2 = true;
     });
 
     it('useCreateLoad calls create_load_v1', async () => {
@@ -87,7 +99,13 @@ describe('Logistics V2 Contention', () => {
 
     it('useCreateLoadItem calls upsert_load_item_v1', async () => {
       const { result } = renderHook(() => useCreateLoadItem(), { wrapper });
-      await result.current.mutateAsync({ load_id: 'L1', fiscal_document_id: 'FD1', item_description: 'Test', quantity: 1, pallet_count: 1 });
+      await result.current.mutateAsync({ 
+        load_id: 'L1', 
+        fiscal_document_id: 'FD1', 
+        item_description: 'Test', 
+        quantity: 1, 
+        pallet_count: 1 
+      });
       expect(mockRpc).toHaveBeenCalledWith('upsert_load_item_v1', expect.any(Object));
     });
 
