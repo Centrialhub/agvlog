@@ -40,7 +40,7 @@ def main():
         ("Integridade de Migrations", "python3 scripts/guardrails/migration-integrity.py"),
         ("Lint de Banco de Dados", "python3 scripts/guardrails/db-linter.py"),
         ("Validação de Schema", "python3 scripts/guardrails/schema-check.py"),
-        ("Testes Probatórios (Vitest)", "bun run vitest run src/test/ciProbatory.test.ts --no-env-vars")
+        ("Testes Probatórios (Vitest)", "bun run test src/test/ciProbatory.test.ts")
     ]
 
     for name, cmd in steps:
