@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useOperationalRoutes, useOperationalRoutesArray, useCreateOperationalRoute, useUpdateOperationalRoute, useDeleteOperationalRoute } from '@/hooks/useOperationalRoutes';
+import { useOperationalRoutes, useCreateOperationalRoute, useUpdateOperationalRoute, useDeleteOperationalRoute } from '@/hooks/useOperationalRoutes';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,7 +23,7 @@ const CLASSIFICATIONS = [
 
 export default function OperationalRoutesPage() {
   const [showInactive, setShowInactive] = useState(false);
-  const { isLoading } = useOperationalRoutesArray({ includeInactive: true });
+  const { data: routes = [], isLoading } = useOperationalRoutes({ includeInactive: true });
   const createRoute = useCreateOperationalRoute();
   const updateRoute = useUpdateOperationalRoute();
   const deleteRoute = useDeleteOperationalRoute();
@@ -35,13 +35,9 @@ export default function OperationalRoutesPage() {
   });
   const [newDest, setNewDest] = useState('');
 
-  const { data: routesData } = useOperationalRoutesArray({ includeInactive: true });
-  const routes = (routesData as any) || [];
-
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    const items = Array.isArray(routes) ? routes : (routes as any).items || [];
-    return items.filter((r: any) => {
+    return routes.filter(r => {
       if (!showInactive && !r.active) return false;
       if (!q) return true;
       return r.name.toLowerCase().includes(q) || (r.region_name || '').toLowerCase().includes(q);

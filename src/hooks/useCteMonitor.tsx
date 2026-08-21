@@ -188,7 +188,7 @@ export function useCteMonitor(filters: CteMonitorFilters) {
       const { data: outboundData, error: outErr } = await supabase
         .from('fiscal_documents')
         .select(
-          'id, invoice_number, access_key, sefaz_protocol, sefaz_status, sefaz_status_code, sefaz_message, status, remitter, recipient, recipient_city, recipient_state, freight_value, value, issue_date, created_at, hub_document_id, emission_id, cte_payload',
+          'id, invoice_number, invoice_numbers, access_key, sefaz_protocol, sefaz_status, sefaz_status_code, sefaz_message, status, remitter, recipient, recipient_city, recipient_state, freight_value, value, issue_date, created_at, hub_document_id, emission_id, cte_payload',
         )
         .eq('tenant_id', currentTenant.id)
         .is('deleted_at', null)
@@ -212,7 +212,7 @@ export function useCteMonitor(filters: CteMonitorFilters) {
           source: (match ? 'hub' : 'draft') as any,
           hub_document_id: match?.hub_document_id ?? r.hub_document_id,
           emission_id: match?.emission_id ?? r.emission_id,
-          invoice_numbers: match?.invoice_number ?? r.invoice_numbers,
+          invoice_numbers: match?.invoice_numbers ?? r.invoice_numbers,
           sefaz_status: match ? mapOutboundStatus(match.status, match.sefaz_status, match.hub_document_id) : r.sefaz_status,
           sefaz_status_reason: match?.sefaz_message ?? r.sefaz_status_reason,
         } as CteMonitorRow;
@@ -262,7 +262,7 @@ export function useCteMonitor(filters: CteMonitorFilters) {
           source: 'hub',
           hub_document_id: d.hub_document_id ?? null,
           emission_id: d.emission_id ?? null,
-          invoice_numbers: d.invoice_number ?? null,
+          invoice_numbers: d.invoice_numbers ?? null,
         }));
 
 

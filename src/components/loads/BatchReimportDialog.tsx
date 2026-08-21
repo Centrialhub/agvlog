@@ -12,7 +12,7 @@ import {
   isUniqueViolation,
 } from '@/lib/fiscalDocuments/fiscalIdentity';
 import { cn } from '@/lib/utils';
-import { useClients, useClientsArray } from '@/hooks/useClients';
+import { useClients } from '@/hooks/useClients';
 import { useTenant } from '@/hooks/useTenant';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -96,7 +96,7 @@ const CLEANUP_TABLE_LABELS: Record<string, string> = {
 export default function BatchReimportDialog() {
   const { currentTenant } = useTenant();
   const { user } = useAuth();
-  const { data: clients = [] } = useClientsArray();
+  const { data: clients = [] } = useClients();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -253,8 +253,7 @@ export default function BatchReimportDialog() {
 
     try {
       const { data: existingDocs, error: existingError } = await supabase
-        // linter:allow-direct-write fiscal_documents legacy-refactor 2026-12-31
-      .from('fiscal_documents')
+        .from('fiscal_documents')
         .select('invoice_number, access_key, remitter, recipient, recipient_city, recipient_state, recipient_neighborhood, issue_date, client_id, product_summary, pallet_count, weight_kg, value')
         .is('deleted_at', null)
         .eq('tenant_id', currentTenant.id)
@@ -337,9 +336,7 @@ export default function BatchReimportDialog() {
             value: validated.source.totalValue,
           };
           const existingDoc = (nextDoc.access_key && existingByAccessKey.get(nextDoc.access_key)) || (nextDoc.invoice_number && existingByInvoiceNumber.get(nextDoc.invoice_number));
-          // guardrail:allow-direct-write
-          const { error } = await supabase// linter:allow-direct-write fiscal_documents legacy-refactor 2026-12-31
-      .from('fiscal_documents').insert({
+          const { error } = await supabase.from('fiscal_documents').insert({
             tenant_id: currentTenant.id,
             created_by: user?.id,
             document_type: 'inbound',

@@ -12,7 +12,6 @@ CREATE OR REPLACE FUNCTION public._apply_match_amounts(
 RETURNS VOID
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -75,7 +74,6 @@ CREATE OR REPLACE FUNCTION public.run_bank_reconciliation(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -267,7 +265,6 @@ CREATE OR REPLACE FUNCTION public.accept_financial_match(_match_id UUID)
 RETURNS VOID
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -302,7 +299,6 @@ CREATE OR REPLACE FUNCTION public.reject_financial_match(_match_id UUID, _reason
 RETURNS VOID
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -362,7 +358,6 @@ CREATE OR REPLACE FUNCTION public.create_manual_financial_match(
 RETURNS UUID
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -431,7 +426,6 @@ CREATE OR REPLACE FUNCTION public.reverse_financial_match(_match_id UUID, _reaso
 RETURNS VOID
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -467,7 +461,6 @@ CREATE OR REPLACE FUNCTION public.close_reconciliation_session(_session_id UUID)
 RETURNS VOID
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -513,7 +506,6 @@ CREATE OR REPLACE FUNCTION public.reopen_reconciliation_session(_session_id UUID
 RETURNS VOID
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE

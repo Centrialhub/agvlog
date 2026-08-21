@@ -2,7 +2,6 @@ CREATE OR REPLACE FUNCTION public.clear_reimport_batch_data(_tenant_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path TO 'public'
 AS $$
 DECLARE

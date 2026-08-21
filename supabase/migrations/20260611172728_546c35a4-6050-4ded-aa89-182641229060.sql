@@ -16,8 +16,7 @@ CREATE OR REPLACE FUNCTION public.search_client_portal_shipments(
   _offset int DEFAULT 0
 )
 RETURNS jsonb
-LANGUAGE plpgsql STABLE SECURITY DEFINER
-  SET search_path = public SET search_path = public
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public
 AS $$
 DECLARE
   _client_ids uuid[];
@@ -144,8 +143,7 @@ $$;
 -- =========================================
 CREATE OR REPLACE FUNCTION public.get_client_portal_shipment_detail(_fiscal_document_id uuid)
 RETURNS jsonb
-LANGUAGE plpgsql STABLE SECURITY DEFINER
-  SET search_path = public SET search_path = public
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public
 AS $$
 DECLARE
   _fd public.fiscal_documents;
@@ -235,8 +233,7 @@ $$;
 -- =========================================
 CREATE OR REPLACE FUNCTION public.get_client_document_download_url(_proof_id uuid)
 RETURNS jsonb
-LANGUAGE plpgsql STABLE SECURITY DEFINER
-  SET search_path = public SET search_path = public
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public
 AS $$
 DECLARE
   _proof public.proof_of_delivery;

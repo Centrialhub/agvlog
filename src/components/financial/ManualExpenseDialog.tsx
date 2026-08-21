@@ -12,7 +12,7 @@ import {
   PAYMENT_METHODS, PAYMENT_METHOD_LABELS,
 } from '@/hooks/useFinancialPayments';
 import { PAYABLE_CATEGORIES, PAYABLE_CATEGORY_LABELS } from '@/hooks/usePayables';
-import { useClients, useClientsArray } from '@/hooks/useClients';
+import { useClients } from '@/hooks/useClients';
 import { useTenant } from '@/hooks/useTenant';
 
 interface Props {
@@ -25,7 +25,7 @@ const NONE = '__none__';
 export default function ManualExpenseDialog({ open, onOpenChange }: Props) {
   const { currentTenant } = useTenant();
   const { data: accounts = [] } = useBankAccounts();
-  const { data: clients = [] } = useClientsArray();
+  const { data: clients = [] } = useClients();
   const create = useCreateManualExpense();
 
   const [description, setDescription] = useState('');

@@ -23,5 +23,3 @@ UPDATE public.ingestion_cursors SET
 -- Delete ALL contaminated positions (they have cross-unit data)
 DELETE FROM public.positions_raw;
 DELETE FROM public.positions_last;
-
--- linter:allow-no-tenant legacy-migration 2026-12-31

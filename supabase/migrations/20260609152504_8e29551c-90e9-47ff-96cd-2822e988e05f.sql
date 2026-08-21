@@ -4,7 +4,6 @@ CREATE OR REPLACE FUNCTION public.dispatch_planned_route(_payload jsonb)
  RETURNS uuid
  LANGUAGE plpgsql
  SECURITY DEFINER
-  SET search_path = public
  SET search_path TO 'public'
 AS $function$
 DECLARE

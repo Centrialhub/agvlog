@@ -1,8 +1,4 @@
 import { lazy, Suspense } from 'react';
-import { FeatureFlagGate } from '@/components/FeatureFlagGate';
-import { isFeatureEnabled } from '@/lib/featureFlags';
-import { Button } from "@/components/ui/button";
-import { TenantSwitcher } from "@/components/layout/TenantSwitcher";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -64,9 +60,6 @@ const Financial = lazy(() => import("@/pages/Financial"));
 const DriverSettlements = lazy(() => import("@/pages/DriverSettlements"));
 const BankReconciliation = lazy(() => import("@/pages/BankReconciliation"));
 const Payables = lazy(() => import("@/pages/Payables"));
-const Ledger = lazy(() => import("@/pages/financial/Ledger"));
-
-
 const ClientInvoices = lazy(() => import("@/pages/ClientInvoices"));
 const BillingEdi = lazy(() => import("@/pages/BillingEdi"));
 const OperationalRoutesPage = lazy(() => import("@/pages/OperationalRoutesPage"));
@@ -98,6 +91,7 @@ const OccurrenceReturnSheet = lazy(() => import("@/pages/OccurrenceReturnSheet")
 const PalletReturns = lazy(() => import("@/pages/PalletReturns"));
 const MerchandiseShortages = lazy(() => import("@/pages/MerchandiseShortages"));
 const CostCenters = lazy(() => import("@/pages/CostCenters"));
+const MdfeProvisional = lazy(() => import("@/pages/MdfeProvisional"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
 // Driver pages
@@ -116,9 +110,9 @@ const DriverLoads = lazy(() => import("@/pages/driver/DriverLoads"));
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 2,      // 2 min
-      gcTime: 1000 * 60 * 10,         // 10 min
-      refetchOnWindowFocus: false,
+      staleTime: 1000 * 60 * 2,      // 2 min — evita refetch ao navegar entre páginas
+      gcTime: 1000 * 60 * 10,         // 10 min — mantém cache em memória
+      refetchOnWindowFocus: false,     // não refaz ao voltar à aba
       retry: 1,
     },
   },
@@ -135,43 +129,17 @@ function PageLoader() {
   );
 }
 
-function ModuleUnavailable({ role, module }: { role: string; module: string }) {
-  const { signOut } = useAuth();
-  return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-6 text-center">
-      <h1 className="text-xl font-semibold">Módulo indisponível</h1>
-      <p className="max-w-md text-sm text-muted-foreground">
-        O módulo <span className="font-medium">{module}</span> está desativado nesta instalação.
-        Perfil detectado: <span className="font-medium">{role}</span>.
-      </p>
-      <div className="w-full max-w-xs">
-        <TenantSwitcher />
-      </div>
-      <Button variant="outline" onClick={() => signOut()}>Sair</Button>
-    </div>
-  );
-}
-
 function RequireInternalRole({ children }: { children: React.ReactNode }) {
   const { currentRole, loading } = useTenant();
   if (loading) return <PageLoader />;
   if (!currentRole) return <div className="p-6 text-sm text-muted-foreground">Sem acesso a este tenant.</div>;
   if (!['owner', 'admin', 'operator'].includes(currentRole)) {
-    if (currentRole === 'driver') {
-      return isFeatureEnabled('DRIVER_WORKSPACE')
-        ? <Navigate to="/driver" replace />
-        : <ModuleUnavailable role="driver" module="Área do Motorista" />;
-    }
-    if (currentRole === 'client') {
-      return isFeatureEnabled('CLIENT_PORTAL')
-        ? <Navigate to="/portal" replace />
-        : <ModuleUnavailable role="client" module="Portal do Cliente" />;
-    }
-    return <ModuleUnavailable role={currentRole} module="Operacional" />;
+    if (currentRole === 'driver') return <Navigate to="/driver" replace />;
+    if (currentRole === 'client') return <Navigate to="/portal" replace />;
+    return <Navigate to="/" replace />;
   }
   return <>{children}</>;
 }
-
 
 function RequireDriverRole({ children }: { children: React.ReactNode }) {
   const { currentRole, loading } = useTenant();
@@ -183,6 +151,7 @@ function RequireDriverRole({ children }: { children: React.ReactNode }) {
 function RequireClientPortalAccess({ children }: { children: React.ReactNode }) {
   const { currentRole, loading } = useTenant();
   if (loading) return <PageLoader />;
+  // Internal roles can preview the portal; clients/driver-of-portal-tenant get filtered by RPCs.
   const allowed = ['client', 'owner', 'admin', 'operator'];
   if (!currentRole || !allowed.includes(currentRole)) {
     return (
@@ -190,7 +159,7 @@ function RequireClientPortalAccess({ children }: { children: React.ReactNode }) 
         <h1 className="text-xl font-semibold">Sem acesso ao portal</h1>
         <p className="text-sm text-muted-foreground max-w-md">
           Sua conta não possui permissão de portal de cliente. Solicite ao administrador do tenant a
-          criação de um acesso em Equipe → Acessos do Portal.
+          criação de um acesso em <strong>Equipe → Acessos do Portal</strong>.
         </p>
       </div>
     );
@@ -218,19 +187,13 @@ function ProtectedContent({ children, gate }: { children: React.ReactNode; gate:
   
   if (tenantLoading) return <div className="flex h-screen items-center justify-center text-muted-foreground">Carregando...</div>;
 
+  // If we are on a driver route but currentRole is internal, RoleRouter usually handles the redirect.
+  // However, the issue is that internal Layout (AppLayout) might be showing for a driver.
   const isDriver = currentRole === 'driver';
-  const driverEnabled = isFeatureEnabled('DRIVER_WORKSPACE');
-
+  
   if (isDriver && gate === 'internal') {
-    return driverEnabled
-      ? <Navigate to="/driver" replace />
-      : <ModuleUnavailable role="driver" module="Área do Motorista" />;
+    return <Navigate to="/driver" replace />;
   }
-
-  if (isDriver && !driverEnabled) {
-    return <ModuleUnavailable role="driver" module="Área do Motorista" />;
-  }
-
 
   const Layout = isDriver ? DriverLayout : AppLayout;
 
@@ -261,18 +224,9 @@ function DriverRoute({ children }: { children: React.ReactNode }) {
 function RoleRouter() {
   const { currentRole, loading } = useTenant();
   if (loading) return <div className="flex h-screen items-center justify-center text-muted-foreground">Carregando...</div>;
-  if (currentRole === 'driver') {
-    return isFeatureEnabled('DRIVER_WORKSPACE')
-      ? <Navigate to="/driver" replace />
-      : <ModuleUnavailable role="driver" module="Área do Motorista" />;
-  }
-  if (currentRole === 'client') {
-    return isFeatureEnabled('CLIENT_PORTAL')
-      ? <Navigate to="/portal" replace />
-      : <ModuleUnavailable role="client" module="Portal do Cliente" />;
-  }
+  if (currentRole === 'driver') return <Navigate to="/driver" replace />;
+  if (currentRole === 'client') return <Navigate to="/portal" replace />;
   return <OperationsCenter />;
-
 }
 
 function ClientRoute({ children }: { children: React.ReactNode }) {
@@ -336,7 +290,7 @@ const App = () => (
             <Route path="/expense-approval" element={<ProtectedRoute><ExpenseApproval /></ProtectedRoute>} />
             <Route path="/integration-health" element={<ProtectedRoute><IntegrationHealth /></ProtectedRoute>} />
             <Route path="/team" element={<ProtectedRoute><TeamManagement /></ProtectedRoute>} />
-            <Route path="/data-quality" element={<ProtectedRoute><FeatureFlagGate feature="DATA_QUALITY_CENTER"><DataAudit /></FeatureFlagGate></ProtectedRoute>} />
+            <Route path="/data-audit" element={<ProtectedRoute><DataAudit /></ProtectedRoute>} />
             <Route path="/regions" element={<ProtectedRoute><FreightHub /></ProtectedRoute>} />
             <Route path="/freight" element={<ProtectedRoute><FreightHub /></ProtectedRoute>} />
             <Route path="/route-planning" element={<ProtectedRoute><RoutePlanning /></ProtectedRoute>} />
@@ -346,7 +300,6 @@ const App = () => (
             <Route path="/cost-centers" element={<ProtectedRoute><CostCenters /></ProtectedRoute>} />
             <Route path="/bank-reconciliation" element={<ProtectedRoute><BankReconciliation /></ProtectedRoute>} />
             <Route path="/payables" element={<ProtectedRoute><Payables /></ProtectedRoute>} />
-            <Route path="/ledger" element={<ProtectedRoute><FeatureFlagGate feature="OPERATIONAL_LEDGER"><Ledger /></FeatureFlagGate></ProtectedRoute>} />
             <Route path="/client-invoices" element={<ProtectedRoute><ClientInvoices /></ProtectedRoute>} />
             <Route path="/billing-edi" element={<ProtectedRoute><BillingEdi /></ProtectedRoute>} />
             <Route path="/operational-routes" element={<ProtectedRoute><OperationalRoutesPage /></ProtectedRoute>} />
@@ -368,8 +321,9 @@ const App = () => (
             <Route path="/ort-management" element={<ProtectedRoute><OrtManagement /></ProtectedRoute>} />
             <Route path="/product-traceability" element={<ProtectedRoute><ProductTraceability /></ProtectedRoute>} />
             <Route path="/product-history" element={<ProtectedRoute><ProductHistory /></ProtectedRoute>} />
+            <Route path="/mdfe-provisional" element={<ProtectedRoute><MdfeProvisional /></ProtectedRoute>} />
             <Route path="/imported-notes-summary" element={<ProtectedRoute><ImportedNotesSummary /></ProtectedRoute>} />
-            <Route path="/load-control" element={<ProtectedRoute><FeatureFlagGate feature="LOAD_CONTROL"><LoadControl /></FeatureFlagGate></ProtectedRoute>} />
+            <Route path="/load-control" element={<ProtectedRoute><LoadControl /></ProtectedRoute>} />
             <Route path="/closing-reports" element={<ProtectedRoute><ClosingReports /></ProtectedRoute>} />
             <Route path="/rural-clients" element={<ProtectedRoute><RuralClients /></ProtectedRoute>} />
             <Route path="/driver-monitoring" element={<ProtectedRoute><DriverMonitoring /></ProtectedRoute>} />
@@ -379,23 +333,23 @@ const App = () => (
             <Route path="/merchandise-shortages" element={<ProtectedRoute><MerchandiseShortages /></ProtectedRoute>} />
 
             {/* Driver routes */}
-            <Route path="/driver" element={<DriverRoute><FeatureFlagGate feature="DRIVER_WORKSPACE"><DriverHome /></FeatureFlagGate></DriverRoute>} />
-            <Route path="/driver/loads" element={<DriverRoute><FeatureFlagGate feature="DRIVER_WORKSPACE"><DriverLoads /></FeatureFlagGate></DriverRoute>} />
-            <Route path="/driver/stops" element={<DriverRoute><FeatureFlagGate feature="DRIVER_WORKSPACE"><DriverStops /></FeatureFlagGate></DriverRoute>} />
-            <Route path="/driver/deliveries" element={<DriverRoute><FeatureFlagGate feature="DRIVER_WORKSPACE"><DriverDeliveries /></FeatureFlagGate></DriverRoute>} />
-            <Route path="/driver/issues" element={<DriverRoute><FeatureFlagGate feature="DRIVER_WORKSPACE"><DriverIssues /></FeatureFlagGate></DriverRoute>} />
-            <Route path="/driver/journey" element={<DriverRoute><FeatureFlagGate feature="DRIVER_WORKSPACE"><DriverJourney /></FeatureFlagGate></DriverRoute>} />
-            <Route path="/driver/expenses" element={<DriverRoute><FeatureFlagGate feature="DRIVER_WORKSPACE"><DriverExpenses /></FeatureFlagGate></DriverRoute>} />
-            <Route path="/driver/checklist" element={<DriverRoute><FeatureFlagGate feature="DRIVER_WORKSPACE"><DriverChecklist /></FeatureFlagGate></DriverRoute>} />
-            <Route path="/driver/events" element={<DriverRoute><FeatureFlagGate feature="DRIVER_WORKSPACE"><DriverEvents /></FeatureFlagGate></DriverRoute>} />
-            <Route path="/driver/events/:id" element={<DriverRoute><FeatureFlagGate feature="DRIVER_WORKSPACE"><DriverEventDetail /></FeatureFlagGate></DriverRoute>} />
-            <Route path="/driver/chat" element={<DriverRoute><FeatureFlagGate feature="DRIVER_WORKSPACE"><DriverChat /></FeatureFlagGate></DriverRoute>} />
+          <Route path="/driver" element={<DriverRoute><DriverHome /></DriverRoute>} />
+          <Route path="/driver/loads" element={<DriverRoute><DriverLoads /></DriverRoute>} />
+          <Route path="/driver/stops" element={<DriverRoute><DriverStops /></DriverRoute>} />
+            <Route path="/driver/deliveries" element={<DriverRoute><DriverDeliveries /></DriverRoute>} />
+            <Route path="/driver/issues" element={<DriverRoute><DriverIssues /></DriverRoute>} />
+            <Route path="/driver/journey" element={<DriverRoute><DriverJourney /></DriverRoute>} />
+            <Route path="/driver/expenses" element={<DriverRoute><DriverExpenses /></DriverRoute>} />
+            <Route path="/driver/checklist" element={<DriverRoute><DriverChecklist /></DriverRoute>} />
+            <Route path="/driver/events" element={<DriverRoute><DriverEvents /></DriverRoute>} />
+            <Route path="/driver/events/:id" element={<DriverRoute><DriverEventDetail /></DriverRoute>} />
+            <Route path="/driver/chat" element={<DriverRoute><DriverChat /></DriverRoute>} />
 
             {/* Legacy redirect */}
             <Route path="/routes" element={<Navigate to="/corridors" replace />} />
 
             {/* Client portal */}
-            <Route path="/portal" element={<ClientRoute><RequireClientPortalAccess><FeatureFlagGate feature="CLIENT_PORTAL"><PortalLayout /></FeatureFlagGate></RequireClientPortalAccess></ClientRoute>}>
+            <Route path="/portal" element={<ClientRoute><RequireClientPortalAccess><PortalLayout /></RequireClientPortalAccess></ClientRoute>}>
               <Route index element={<PortalDashboard />} />
               <Route path="shipments" element={<PortalShipments />} />
               <Route path="shipments/:documentId" element={<PortalShipmentDetail />} />

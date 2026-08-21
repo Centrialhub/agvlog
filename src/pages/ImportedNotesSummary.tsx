@@ -5,7 +5,7 @@ import {
   createSummaryReportSnapshot, NOTE_STATUS_LABELS,
   type ImportedNoteRow, type ImportedNoteFilters, type NoteOperationalStatus,
 } from '@/hooks/useImportedNotesSummary';
-import { useClients, useClientsArray } from '@/hooks/useClients';
+import { useClients } from '@/hooks/useClients';
 import { useTenant } from '@/hooks/useTenant';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -58,7 +58,7 @@ export default function ImportedNotesSummary() {
   const navigate = useNavigate();
   const { currentTenant } = useTenant();
   const { data: companyProfile } = useCompanyProfile();
-  const { data: clients = [] } = useClientsArray();
+  const { data: clients = [] } = useClients();
   const [filters, setFilters] = useState<ImportedNoteFilters>(emptyFilters);
   const [applied, setApplied] = useState<ImportedNoteFilters>(emptyFilters);
   const { data: rowsData = [], isLoading, refetch } = useImportedNotes(applied);
@@ -80,10 +80,8 @@ export default function ImportedNotesSummary() {
 
   const handleAudit = async (row: ImportedNoteRow) => {
     try {
-      // guardrail:allow-direct-write
       const { error } = await supabase
-        // linter:allow-direct-write fiscal_documents legacy-refactor 2026-12-31
-      .from('fiscal_documents')
+        .from('fiscal_documents')
         .update({ imported_note_status: 'processed' })
         .eq('id', row.id);
       
@@ -140,10 +138,8 @@ export default function ImportedNotesSummary() {
   const handleBulkAudit = async () => {
     if (selectedIds.size === 0) return;
     try {
-      // guardrail:allow-direct-write
       const { error } = await supabase
-        // linter:allow-direct-write fiscal_documents legacy-refactor 2026-12-31
-      .from('fiscal_documents')
+        .from('fiscal_documents')
         .update({ imported_note_status: 'processed' })
         .in('id', Array.from(selectedIds));
       

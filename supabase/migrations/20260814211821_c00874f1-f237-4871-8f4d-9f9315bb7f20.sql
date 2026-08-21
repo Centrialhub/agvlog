@@ -2,7 +2,6 @@ CREATE OR REPLACE FUNCTION public.release_inbound_notes_from_failed_cte()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -49,4 +48,3 @@ WHERE src.cte_emitted_outbound_id = outbound.id
     lower(trim(COALESCE(outbound.status, ''))) IN ('rejected', 'rejeitada', 'rejeitado', 'error', 'erro', 'failed', 'denied', 'denegada', 'denegado')
     OR lower(trim(COALESCE(outbound.sefaz_status, ''))) IN ('rejected', 'rejeitada', 'rejeitado', 'error', 'erro', 'failed', 'processed_error', 'sent_error', 'sefaz_error', 'denied', 'denegada', 'denegado')
   );
--- linter:allow-no-tenant legacy-migration 2026-12-31

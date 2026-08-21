@@ -16,50 +16,24 @@ export interface OperationalRoute {
   updated_at: string;
 }
 
-export interface PaginatedOperationalRoutes {
-  items: OperationalRoute[];
-  next_cursor: string | null;
-  total_count: number;
-}
-
-export function useOperationalRoutes(filters: { search?: string; includeInactive?: boolean } = {}) {
+export function useOperationalRoutes(options: { includeInactive?: boolean } = {}) {
+  const { includeInactive = false } = options;
   const { currentTenant } = useTenant();
-  return useQuery<PaginatedOperationalRoutes>({
-    queryKey: ['operational_routes', currentTenant?.id, filters],
+  return useQuery({
+    queryKey: ['operational_routes', currentTenant?.id, includeInactive],
     queryFn: async () => {
-      if (!currentTenant) return { items: [], next_cursor: null, total_count: 0 };
-
+      if (!currentTenant) return [];
       let q = supabase
         .from('operational_routes')
-        .select('*', { count: 'exact' })
-        .eq('tenant_id', currentTenant.id)
-        .order('name', { ascending: true })
-        .limit(1000);
-
-      if (filters.search) {
-        q = q.ilike('name', `%${filters.search}%`);
-      }
-
-      if (!filters.includeInactive) {
-        q = q.eq('active', true);
-      }
-
-      const { data, error, count } = await q;
+        .select('*')
+        .eq('tenant_id', currentTenant.id);
+      if (!includeInactive) q = q.eq('active', true);
+      const { data, error } = await q.order('name');
       if (error) throw error;
-
-      return {
-        items: (data || []) as OperationalRoute[],
-        next_cursor: null,
-        total_count: Number(count) || (data || []).length,
-      };
+      return (data || []) as OperationalRoute[];
     },
     enabled: !!currentTenant,
   });
-}
-
-export function useOperationalRoutesArray(filters: { search?: string; includeInactive?: boolean } = {}) {
-  const q = useOperationalRoutes(filters);
-  return { ...q, data: q.data?.items ?? [] };
 }
 
 export function useCreateOperationalRoute() {

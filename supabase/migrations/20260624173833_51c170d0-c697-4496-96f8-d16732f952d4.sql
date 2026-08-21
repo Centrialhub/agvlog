@@ -25,16 +25,14 @@ UPDATE public.tenant_memberships SET active = false, updated_at = now()
 -- 2) Helpers
 -- =========================================================================
 CREATE OR REPLACE FUNCTION public.is_user_internal_role(_tenant_id uuid)
-RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   SELECT EXISTS (SELECT 1 FROM public.tenant_memberships
     WHERE tenant_id = _tenant_id AND user_id = auth.uid() AND active = true
       AND role IN ('owner','admin','operator'));
 $$;
 
 CREATE OR REPLACE FUNCTION public._driver_load_ids()
-RETURNS SETOF uuid LANGUAGE sql STABLE SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+RETURNS SETOF uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   SELECT DISTINCT dtl.load_id FROM public.dispatch_trip_loads dtl
   JOIN public.dispatch_trips dt ON dt.id = dtl.dispatch_trip_id
   JOIN public.drivers d ON d.id = dt.driver_id
@@ -47,21 +45,18 @@ RETURNS SETOF uuid LANGUAGE sql STABLE SECURITY DEFINER
 $$;
 
 CREATE OR REPLACE FUNCTION public._driver_fiscal_document_ids()
-RETURNS SETOF uuid LANGUAGE sql STABLE SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+RETURNS SETOF uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   SELECT id FROM public.fiscal_documents WHERE load_id IN (SELECT public._driver_load_ids());
 $$;
 
 CREATE OR REPLACE FUNCTION public._driver_order_ids()
-RETURNS SETOF uuid LANGUAGE sql STABLE SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+RETURNS SETOF uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   SELECT DISTINCT lo.order_id FROM public.load_orders lo
   WHERE lo.load_id IN (SELECT public._driver_load_ids());
 $$;
 
 CREATE OR REPLACE FUNCTION public._driver_client_ids()
-RETURNS SETOF uuid LANGUAGE sql STABLE SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+RETURNS SETOF uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   SELECT DISTINCT client_id FROM public.fiscal_documents
    WHERE load_id IN (SELECT public._driver_load_ids()) AND client_id IS NOT NULL
   UNION
@@ -70,8 +65,7 @@ RETURNS SETOF uuid LANGUAGE sql STABLE SECURITY DEFINER
 $$;
 
 CREATE OR REPLACE FUNCTION public._driver_pickup_order_ids()
-RETURNS SETOF uuid LANGUAGE sql STABLE SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+RETURNS SETOF uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   SELECT DISTINCT pickup_order_id FROM public.fiscal_documents
    WHERE load_id IN (SELECT public._driver_load_ids()) AND pickup_order_id IS NOT NULL;
 $$;
@@ -165,8 +159,7 @@ CREATE POLICY "receipts_tenant_delete" ON storage.objects FOR DELETE TO authenti
 -- 5) portal_user_can_view_financial
 -- =========================================================================
 CREATE OR REPLACE FUNCTION public.portal_user_can_view_financial(_tenant_id uuid, _fiscal_document_id uuid)
-RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.fiscal_documents fd
     JOIN public.client_portal_access cpa
@@ -190,8 +183,7 @@ $$;
 -- 6) Helpers de portal (pickup_orders / operational_events)
 -- =========================================================================
 CREATE OR REPLACE FUNCTION public.portal_user_can_access_pickup_order(_tenant_id uuid, _pickup_order_id uuid)
-RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.pickup_orders po
     JOIN public.client_portal_access cpa
@@ -207,8 +199,7 @@ RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER
 $$;
 
 CREATE OR REPLACE FUNCTION public.portal_user_can_access_operational_event(_tenant_id uuid, _event_id uuid)
-RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.operational_events oe
     WHERE oe.id = _event_id AND oe.tenant_id = _tenant_id AND oe.visible_to_client = true
@@ -232,8 +223,7 @@ CREATE OR REPLACE FUNCTION public.search_client_portal_shipments(
   _city text DEFAULT NULL, _state text DEFAULT NULL,
   _has_pod boolean DEFAULT NULL, _has_occurrence boolean DEFAULT NULL,
   _limit int DEFAULT 50, _offset int DEFAULT 0
-) RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+) RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
 DECLARE _rows jsonb; _total int; _search_norm text;
 BEGIN
   IF NOT EXISTS(SELECT 1 FROM public.client_portal_access
@@ -299,8 +289,7 @@ END; $$;
 -- 8) get_client_portal_summary
 -- =========================================================================
 CREATE OR REPLACE FUNCTION public.get_client_portal_summary(_tenant_id uuid, _start_date date DEFAULT NULL, _end_date date DEFAULT NULL)
-RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
 DECLARE _result jsonb;
 BEGIN
   IF NOT EXISTS(SELECT 1 FROM public.client_portal_access
@@ -351,8 +340,7 @@ END; $$;
 -- =========================================================================
 CREATE OR REPLACE FUNCTION public.driver_update_stop_status(
   _stop_id uuid, _new_status text, _reason text DEFAULT NULL
-) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   v_trip uuid; v_tenant uuid; v_event_type text; v_event uuid; v_current text;
   v_terminal text[] := public.stop_terminal_statuses();

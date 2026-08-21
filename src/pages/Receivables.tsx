@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useReceivables, useCreateReceivable, useUpdateReceivable, RECEIVABLE_STATUS_LABELS, RECEIVABLE_STATUSES } from '@/hooks/useReceivables';
-import { useClients, useClientsArray } from '@/hooks/useClients';
+import { useClients } from '@/hooks/useClients';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,7 +19,7 @@ import type { ParsedFiscalXml } from '@/lib/nfeXmlParser';
 
 export default function Receivables() {
   const { data: receivables = [], isLoading } = useReceivables();
-  const { data: clients = [] } = useClientsArray();
+  const { data: clients = [] } = useClients();
   const createReceivable = useCreateReceivable();
   const updateReceivable = useUpdateReceivable();
   const [search, setSearch] = useState('');

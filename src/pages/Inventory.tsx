@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useInventoryBalances, useInventoryMovements, useInventoryLocations, useCreateMovement, useCreateLocation, MOVEMENT_TYPES, MOVEMENT_TYPE_LABELS } from '@/hooks/useInventory';
-import { useClients, useClientsArray } from '@/hooks/useClients';
+import { useClients } from '@/hooks/useClients';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -96,7 +96,7 @@ export default function Inventory() {
   const { data: balances = [], isLoading: balLoading } = useInventoryBalances();
   const { data: movements = [], isLoading: movLoading } = useInventoryMovements();
   const { data: locations = [] } = useInventoryLocations();
-  const { data: clients = [] } = useClientsArray();
+  const { data: clients = [] } = useClients();
   const createMovement = useCreateMovement();
   const createLocation = useCreateLocation();
   const [search, setSearch] = useState('');

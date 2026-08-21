@@ -16,7 +16,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useEmitters } from '@/hooks/useEmitters';
 import { useHubCredentials } from '@/hooks/useEmitters';
 import { useVehicles } from '@/hooks/useVehicles';
-import { useClients, useClientsArray } from '@/hooks/useClients';
+import { useClients } from '@/hooks/useClients';
 import { useTenant } from '@/hooks/useTenant';
 import { useIssueCTe } from '@/hooks/useIssueCTe';
 import { useInsuranceProfile, useUpdateInsuranceProfile } from '@/hooks/useInsuranceProfile';
@@ -443,7 +443,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
   const { currentTenant } = useTenant();
   const { data: emitters = [] } = useEmitters();
   const { data: vehicles = [] } = useVehicles();
-  const { data: clients = [] } = useClientsArray();
+  const { data: clients = [] } = useClients();
   const issueCte = useIssueCTe();
   const { data: insuranceProfile } = useInsuranceProfile();
   const saveInsuranceProfile = useUpdateInsuranceProfile();

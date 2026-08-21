@@ -2,8 +2,7 @@
 -- 1) settle_zero_driver_settlement: quita acerto aprovado sem valor a pagar
 CREATE OR REPLACE FUNCTION public.settle_zero_driver_settlement(
   _settlement_id uuid, _reason text
-) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   v_s public.driver_settlements;
   v_payable numeric; v_paid numeric; v_balance numeric;
@@ -49,8 +48,7 @@ GRANT EXECUTE ON FUNCTION public.settle_zero_driver_settlement(uuid, text) TO au
 CREATE OR REPLACE FUNCTION public.update_driver_settlement_status(
   _settlement_id uuid, _new_status text, _reason text DEFAULT NULL, _allow_exceptions boolean DEFAULT false
 ) RETURNS public.driver_settlements
-LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   v_user uuid := auth.uid();
   v_s public.driver_settlements;
@@ -155,8 +153,7 @@ CREATE OR REPLACE FUNCTION public.list_driver_settlements(
   _only_needs_recalculation boolean DEFAULT false,
   _page integer DEFAULT 1,
   _page_size integer DEFAULT 50
-) RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+) RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   v_page_size int := LEAST(GREATEST(COALESCE(_page_size, 50), 1), 100);
   v_page int := GREATEST(COALESCE(_page, 1), 1);

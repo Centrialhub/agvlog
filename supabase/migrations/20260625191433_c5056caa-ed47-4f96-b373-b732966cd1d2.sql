@@ -23,8 +23,7 @@ ALTER TABLE public.driver_settlements
 ALTER TABLE public.driver_settlement_items
   ADD COLUMN IF NOT EXISTS nature text;
 
--- 2) Tighten RLS: revoke direct writes; reads via SELECT policy; mutations via SECURITY DEFINER
--- SET search_path = public RPCs.
+-- 2) Tighten RLS: revoke direct writes; reads via SELECT policy; mutations via SECURITY DEFINER RPCs.
 REVOKE INSERT, UPDATE, DELETE ON public.driver_settlements FROM authenticated;
 REVOKE INSERT, UPDATE, DELETE ON public.driver_settlement_items FROM authenticated;
 DROP POLICY IF EXISTS "settlements_manage" ON public.driver_settlements;
@@ -87,8 +86,7 @@ CREATE OR REPLACE FUNCTION public._log_settlement_event(
   _settlement_id uuid, _event_type text,
   _from_status text DEFAULT NULL, _to_status text DEFAULT NULL,
   _reason text DEFAULT NULL, _payload jsonb DEFAULT '{}'::jsonb
-) RETURNS void LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE v_t uuid;
 BEGIN
   SELECT tenant_id INTO v_t FROM public.driver_settlements WHERE id = _settlement_id;
@@ -102,7 +100,6 @@ CREATE OR REPLACE FUNCTION public._build_driver_settlement(_tenant_id uuid, _dis
 RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $fn$
 DECLARE
@@ -335,8 +332,7 @@ $fn$;
 
 -- 7) Public RPC wrapper: generate_driver_settlement (permission-checked)
 CREATE OR REPLACE FUNCTION public.generate_driver_settlement(_tenant_id uuid, _dispatch_trip_id uuid)
-RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE v_trip_status text;
 BEGIN
   IF auth.uid() IS NULL THEN RAISE EXCEPTION 'auth_required'; END IF;
@@ -351,8 +347,7 @@ GRANT EXECUTE ON FUNCTION public.generate_driver_settlement(uuid, uuid) TO authe
 
 -- 8) generate_pending_driver_settlements: now also recalcs incomplete/outdated
 CREATE OR REPLACE FUNCTION public.generate_pending_driver_settlements(_tenant_id uuid)
-RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   v_trip_id uuid; v_existing uuid; v_status text;
   v_generated int := 0; v_recalculated int := 0; v_skipped int := 0;
@@ -400,8 +395,7 @@ DROP FUNCTION IF EXISTS public.update_driver_settlement_status(uuid, text);
 CREATE OR REPLACE FUNCTION public.update_driver_settlement_status(
   _settlement_id uuid, _new_status text, _reason text DEFAULT NULL, _allow_exceptions boolean DEFAULT false
 ) RETURNS public.driver_settlements
-LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   v_user uuid := auth.uid();
   v_s public.driver_settlements;
@@ -478,8 +472,7 @@ GRANT EXECUTE ON FUNCTION public.update_driver_settlement_status(uuid, text, tex
 
 -- 10) KM review
 CREATE OR REPLACE FUNCTION public.update_driver_settlement_km_review(_settlement_id uuid, _audited_km numeric, _km_status text, _notes text)
-RETURNS public.driver_settlements LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+RETURNS public.driver_settlements LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE v_s public.driver_settlements;
 BEGIN
   SELECT * INTO v_s FROM public.driver_settlements WHERE id = _settlement_id;
@@ -499,8 +492,7 @@ GRANT EXECUTE ON FUNCTION public.update_driver_settlement_km_review(uuid, numeri
 -- 11) Adjustments
 CREATE OR REPLACE FUNCTION public.add_driver_settlement_adjustment(
   _settlement_id uuid, _nature text, _amount numeric, _description text, _reason text
-) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE v_s public.driver_settlements; v_id uuid;
 BEGIN
   SELECT * INTO v_s FROM public.driver_settlements WHERE id = _settlement_id;
@@ -523,8 +515,7 @@ REVOKE ALL ON FUNCTION public.add_driver_settlement_adjustment(uuid, text, numer
 GRANT EXECUTE ON FUNCTION public.add_driver_settlement_adjustment(uuid, text, numeric, text, text) TO authenticated;
 
 CREATE OR REPLACE FUNCTION public.remove_driver_settlement_adjustment(_settlement_id uuid, _item_id uuid, _reason text)
-RETURNS void LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE v_s public.driver_settlements;
 BEGIN
   SELECT * INTO v_s FROM public.driver_settlements WHERE id = _settlement_id;
@@ -544,8 +535,7 @@ CREATE OR REPLACE FUNCTION public.register_driver_settlement_payment(
   _settlement_id uuid, _amount numeric, _payment_method text DEFAULT NULL,
   _payment_account text DEFAULT NULL, _payment_reference text DEFAULT NULL,
   _receipt_url text DEFAULT NULL, _notes text DEFAULT NULL
-) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE v_s public.driver_settlements; v_id uuid; v_total numeric;
 BEGIN
   SELECT * INTO v_s FROM public.driver_settlements WHERE id = _settlement_id;
@@ -578,8 +568,7 @@ GRANT EXECUTE ON FUNCTION public.register_driver_settlement_payment(uuid, numeri
 
 -- 13) mark outdated + triggers on source tables
 CREATE OR REPLACE FUNCTION public.mark_driver_settlement_outdated(_tenant_id uuid, _dispatch_trip_id uuid, _reason text)
-RETURNS void LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE v_s public.driver_settlements;
 BEGIN
   SELECT * INTO v_s FROM public.driver_settlements
@@ -595,8 +584,7 @@ BEGIN
   PERFORM public._log_settlement_event(v_s.id, 'marked_outdated', v_s.status, v_s.status, _reason, '{}'::jsonb);
 END; $$;
 
-CREATE OR REPLACE FUNCTION public._tg_mark_outdated_expense() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+CREATE OR REPLACE FUNCTION public._tg_mark_outdated_expense() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE v_tid uuid; v_trip uuid;
 BEGIN
   v_tid := COALESCE(NEW.tenant_id, OLD.tenant_id);
@@ -608,8 +596,7 @@ DROP TRIGGER IF EXISTS trg_driver_expenses_outdate ON public.driver_expenses;
 CREATE TRIGGER trg_driver_expenses_outdate AFTER INSERT OR UPDATE OR DELETE ON public.driver_expenses
 FOR EACH ROW EXECUTE FUNCTION public._tg_mark_outdated_expense();
 
-CREATE OR REPLACE FUNCTION public._tg_mark_outdated_trip_loads() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+CREATE OR REPLACE FUNCTION public._tg_mark_outdated_trip_loads() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE v_trip uuid; v_tid uuid;
 BEGIN
   v_trip := COALESCE(NEW.dispatch_trip_id, OLD.dispatch_trip_id);
@@ -621,8 +608,7 @@ DROP TRIGGER IF EXISTS trg_dispatch_trip_loads_outdate ON public.dispatch_trip_l
 CREATE TRIGGER trg_dispatch_trip_loads_outdate AFTER INSERT OR UPDATE OR DELETE ON public.dispatch_trip_loads
 FOR EACH ROW EXECUTE FUNCTION public._tg_mark_outdated_trip_loads();
 
-CREATE OR REPLACE FUNCTION public._tg_mark_outdated_trip_routes() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+CREATE OR REPLACE FUNCTION public._tg_mark_outdated_trip_routes() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE v_trip uuid; v_tid uuid;
 BEGIN
   v_trip := COALESCE(NEW.trip_id, OLD.trip_id);
@@ -636,8 +622,7 @@ FOR EACH ROW EXECUTE FUNCTION public._tg_mark_outdated_trip_routes();
 
 -- 14) Replace trip-completed trigger to build full settlement
 CREATE OR REPLACE FUNCTION public._on_dispatch_trip_completed_create_settlement()
-RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 BEGIN
   IF NEW.status = 'completed' AND (OLD.status IS DISTINCT FROM 'completed') THEN
     BEGIN
@@ -666,8 +651,7 @@ CREATE OR REPLACE FUNCTION public.list_driver_settlements(
   _only_needs_recalculation boolean DEFAULT false,
   _page integer DEFAULT 1,
   _page_size integer DEFAULT 50
-) RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+) RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   v_offset int; v_total int; v_items jsonb;
   v_q text;

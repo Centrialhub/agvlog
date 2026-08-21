@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState, ReactNode, useEffect } from 'react';
+import { createContext, useContext, useMemo, useState, ReactNode } from 'react';
 import { useClientPortalAccess, type PortalAccess } from './useClientPortalAccess';
 
 type Permission =
@@ -24,13 +24,6 @@ const Ctx = createContext<ScopeContextValue | undefined>(undefined);
 export function PortalClientScopeProvider({ children }: { children: ReactNode }) {
   const { data: clients = [], isLoading } = useClientPortalAccess();
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
-
-  // Auto-select if only one client is available
-  useEffect(() => {
-    if (!isLoading && clients.length === 1 && !selectedClientId) {
-      setSelectedClientId(clients[0].client_id);
-    }
-  }, [clients, isLoading, selectedClientId]);
 
   const value = useMemo<ScopeContextValue>(() => {
     const selectedClient = selectedClientId

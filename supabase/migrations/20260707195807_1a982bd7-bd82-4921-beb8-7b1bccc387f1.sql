@@ -173,7 +173,6 @@ CREATE OR REPLACE FUNCTION public.next_client_invoice_number(
 RETURNS text
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -204,7 +203,6 @@ CREATE OR REPLACE FUNCTION public.cancel_client_invoice(
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -263,7 +261,6 @@ CREATE OR REPLACE FUNCTION public.create_client_invoice(payload jsonb)
 RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE

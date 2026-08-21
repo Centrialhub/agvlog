@@ -172,8 +172,7 @@ export function useCreateNFSe() {
       );
       if (!hasManualInsurance && linkedIds?.length) {
         const { data: srcs } = await (supabase as any)
-          // linter:allow-direct-write fiscal_documents legacy-code 2026-12-31
-      .from('fiscal_documents')
+          .from('fiscal_documents')
           .select('insurer_name, insurer_cnpj, insurer_policy, insurer_endorsement, insured_amount, insurance_premium')
           .in('id', linkedIds)
           .eq('tenant_id', currentTenant.id);
@@ -198,10 +197,8 @@ export function useCreateNFSe() {
       // uma NF de entrada só pode virar UM documento de saída.
       const fdIds = (input as any).fiscal_document_ids as string[] | undefined;
       if (fdIds && fdIds.length) {
-        // guardrail:allow-direct-write
         await (supabase as any)
-          // linter:allow-direct-write fiscal_documents legacy-code 2026-12-31
-      .from('fiscal_documents')
+          .from('fiscal_documents')
           .update({ nfse_emitted_at: new Date().toISOString(), nfse_emitted_document_id: data.id })
           .in('id', fdIds)
           .eq('tenant_id', currentTenant.id);
@@ -237,19 +234,15 @@ export function useUpdateNFSe() {
         .single();
       if (error) throw error;
       if (fdIds) {
-        // guardrail:allow-direct-write
         // Libera NFs previamente vinculadas a esta NFS-e que não estão mais na lista
         await (supabase as any)
-          // linter:allow-direct-write fiscal_documents legacy-code 2026-12-31
-      .from('fiscal_documents')
+          .from('fiscal_documents')
           .update({ nfse_emitted_at: null, nfse_emitted_document_id: null })
           .eq('nfse_emitted_document_id', id)
           .not('id', 'in', `(${fdIds.length ? fdIds.map((x) => `"${x}"`).join(',') : '""'})`);
         if (fdIds.length) {
-          // guardrail:allow-direct-write
           await (supabase as any)
-            // linter:allow-direct-write fiscal_documents legacy-code 2026-12-31
-      .from('fiscal_documents')
+            .from('fiscal_documents')
             .update({ nfse_emitted_at: new Date().toISOString(), nfse_emitted_document_id: id })
             .in('id', fdIds);
         }
@@ -486,8 +479,7 @@ export function useCancelNFSe() {
           cancellation_reason: reason ?? null,
         }).eq('id', id);
         await (supabase as any)
-          // linter:allow-direct-write fiscal_documents legacy-code 2026-12-31
-      .from('fiscal_documents')
+          .from('fiscal_documents')
           .update({ nfse_emitted_at: null, nfse_emitted_document_id: null })
           .eq('nfse_emitted_document_id', id);
         if (doc?.tenant_id) {
@@ -506,8 +498,7 @@ export function useCancelNFSe() {
       if (error) throw error;
       // Fallback legado: também libera NFs vinculadas
       await (supabase as any)
-        // linter:allow-direct-write fiscal_documents legacy-code 2026-12-31
-      .from('fiscal_documents')
+        .from('fiscal_documents')
         .update({ nfse_emitted_at: null, nfse_emitted_document_id: null })
         .eq('nfse_emitted_document_id', id);
       return data;
@@ -537,8 +528,7 @@ export function useDeleteNFSe() {
       }
       // Libera NFs vinculadas antes de remover o documento
       await (supabase as any)
-        // linter:allow-direct-write fiscal_documents legacy-code 2026-12-31
-      .from('fiscal_documents')
+        .from('fiscal_documents')
         .update({ nfse_emitted_at: null, nfse_emitted_document_id: null })
         .eq('nfse_emitted_document_id', id);
       await (supabase as any).from('nfse_events').delete().eq('nfse_id', id);

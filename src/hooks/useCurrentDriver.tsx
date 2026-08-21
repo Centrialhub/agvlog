@@ -8,7 +8,6 @@ export interface CurrentDriver {
   id: string;
   name: string;
   tenant_id: string;
-  user_id?: string;
 }
 
 export function useCurrentDriver() {
@@ -22,7 +21,7 @@ export function useCurrentDriver() {
         if (!user || !currentTenant) return null;
         const { data, error } = await (supabase
           .from('drivers')
-          .select('id, name, tenant_id, user_id') as any)
+          .select('id, name, tenant_id') as any)
           .eq('user_id', user.id)
           .eq('tenant_id', currentTenant.id)
           .eq('active', true)
@@ -50,18 +49,10 @@ export function useActiveTrip(driverId: string | undefined) {
       try {
         if (!driverId) return null;
         
-        // 1. First, look for trips linked to this driver in an active status
-        // We use the canonical relationship via dispatch_trip_loads if needed,
-        // but dispatch_trips itself has driver_id.
-        const { data: trips, error: tripsError } = await supabase
+        // 1. First, look for trips that are explicitly in an active status
+        const { data: activeStatusTrips, error: tripsError } = await supabase
           .from('dispatch_trips')
-          .select(`
-            *,
-            vehicle:vehicles(plate, nickname),
-            trip_loads:dispatch_trip_loads(
-              load:loads(id, load_number, origin, destination, status)
-            )
-          `)
+          .select('*, loads(id, load_number, origin, destination, status), vehicles(plate, nickname)')
           .eq('driver_id', driverId)
           .in('status', TRIP_ACTIVE_STATUSES)
           .order('created_at', { ascending: false });
@@ -71,15 +62,38 @@ export function useActiveTrip(driverId: string | undefined) {
           return null;
         }
 
-        if (trips && trips.length > 0) {
-          // Normalize the structure to match expectations (picking the first load for compatibility)
-          const trip = trips[0] as any;
-          const firstLoad = trip.trip_loads?.[0]?.load;
-          return {
-            ...trip,
-            vehicles: trip.vehicle, // Compatibility
-            loads: firstLoad // Compatibility for single-load UI parts
-          };
+        if (activeStatusTrips && activeStatusTrips.length > 0) {
+          return activeStatusTrips[0];
+        }
+
+        // 2. If no trip is explicitly active, look for LOADS assigned to the driver
+        // that are in a "ready to act" status, and find their associated trip.
+        const { data: transitLoads, error: loadsError } = await supabase
+          .from('loads')
+          .select('trip_id')
+          .eq('driver_id', driverId)
+          .in('status', LOAD_ACTIVE_STATUSES)
+          .not('trip_id', 'is', null)
+          .order('updated_at', { ascending: false })
+          .limit(1);
+
+        if (loadsError) {
+          console.error('[useActiveTrip] Loads query error:', loadsError);
+          return null;
+        }
+
+        if (transitLoads && transitLoads.length > 0 && transitLoads[0].trip_id) {
+          const { data: tripFromLoad, error: tripError } = await supabase
+            .from('dispatch_trips')
+            .select('*, loads(id, load_number, origin, destination, status), vehicles(plate, nickname)')
+            .eq('id', transitLoads[0].trip_id)
+            .maybeSingle();
+          
+          if (tripError) {
+            console.error('[useActiveTrip] Trip detail query error:', tripError);
+            return null;
+          }
+          if (tripFromLoad) return tripFromLoad;
         }
 
         return null;

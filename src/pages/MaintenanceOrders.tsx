@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useMaintenanceOrders, useCreateMaintenanceOrder, useUpdateMaintenanceOrder, MaintenanceOrder, MAINT_TYPES, MAINT_TYPE_LABELS, MAINT_STATUSES, MAINT_STATUS_LABELS } from '@/hooks/useMaintenanceOrders';
 import { useVehicles } from '@/hooks/useVehicles';
-import { useEmployees, useEmployeesArray } from '@/hooks/useEmployees';
+import { useEmployees } from '@/hooks/useEmployees';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,7 +17,7 @@ import { toast } from '@/components/ui/sonner';
 export default function MaintenanceOrdersPage() {
   const { data: orders = [], isLoading } = useMaintenanceOrders();
   const { data: vehicles = [] } = useVehicles();
-  const { data: employees = [] } = useEmployeesArray();
+  const { data: employees = [] } = useEmployees();
   const createOrder = useCreateMaintenanceOrder();
   const updateOrder = useUpdateMaintenanceOrder();
   const [search, setSearch] = useState('');

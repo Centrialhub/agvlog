@@ -5,7 +5,6 @@ RETURNS jsonb
 LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -144,7 +143,6 @@ RETURNS TABLE (
 LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -185,7 +183,6 @@ CREATE OR REPLACE FUNCTION public.reply_client_occurrence(
 RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -231,7 +228,6 @@ CREATE OR REPLACE FUNCTION public.cancel_client_pickup(
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE

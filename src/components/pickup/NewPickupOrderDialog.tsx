@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { useClients, useClientsArray } from '@/hooks/useClients';
+import { useClients } from '@/hooks/useClients';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useTenant } from '@/hooks/useTenant';
 import { supabase } from '@/integrations/supabase/client';
@@ -24,7 +24,7 @@ const NONE = '__none__';
 
 export default function NewPickupOrderDialog({ open, onOpenChange, onCreated, pickup }: Props) {
   const { currentTenant } = useTenant();
-  const { data: clients = [] } = useClientsArray();
+  const { data: clients = [] } = useClients();
   const { data: vehicles = [] } = useVehicles();
   const { toast } = useToast();
   const createMut = useCreatePickupOrder();

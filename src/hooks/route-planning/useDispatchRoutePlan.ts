@@ -3,7 +3,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import type { RouteStopDraft } from '@/lib/route-planning/routePlanningTypes';
 import { useCallback } from 'react';
-import { isFeatureEnabled } from '@/lib/featureFlags';
 
 export interface DispatchRoutePayload {
   vehicle_id: string;
@@ -25,42 +24,37 @@ export function useDispatchRoutePlan() {
       s.manual_order ?? s.optimized_order ?? s.original_order ?? 9999;
     const stops = [...payload.stops]
         .sort((a, b) => orderOf(a) - orderOf(b))
-        .map((s, idx) => ({
-          destination: s.destination,
+        .map((s) => ({
           client_id: s.client_id,
-          stop_order: idx + 1,
-          document_ids: s.fiscal_document_ids || [],
+          destination: s.destination,
+          latitude: s.latitude ?? null,
+          longitude: s.longitude ?? null,
+          planned_arrival_at: s.planned_arrival_at,
+          estimated_departure_at: s.estimated_departure_at,
+          service_time_minutes: s.service_time_minutes,
+          delivery_window_start: s.delivery_window_start,
+          delivery_window_end: s.delivery_window_end,
+          risk_level: s.risk_level,
+          risk_reason: s.risk_reason,
+          notes: s.notes,
+          fiscal_document_ids: s.fiscal_document_ids,
+          load_ids: s.load_ids,
         }));
 
-    if (isFeatureEnabled('LOGISTICS_CONSOLIDATION_V2')) {
-      const { data, error } = await supabase.rpc('plan_dispatch_trip_v3', {
-        p_tenant_id: currentTenant.id,
-        p_idempotency_key: payload.planning_draft_id || crypto.randomUUID(),
-        p_driver_id: payload.driver_id,
-        p_vehicle_id: payload.vehicle_id,
-        p_route_name: payload.route_name,
-        p_load_ids: payload.load_ids,
-        p_stops: stops,
-      });
-
-      if (error) throw new Error(error.message || String(error));
-      return data as string;
-    } else {
-      const { data, error } = await supabase.rpc('dispatch_planned_route', {
+    const { data, error } = await supabase.rpc('dispatch_planned_route' as any, {
         _payload: {
           tenant_id: currentTenant.id,
-          driver_id: payload.driver_id,
           vehicle_id: payload.vehicle_id,
+          driver_id: payload.driver_id,
+          planned_start_at: payload.planned_start_at,
           route_name: payload.route_name,
           load_ids: payload.load_ids,
-          stops: stops,
-          idempotency_key: payload.planning_draft_id || null,
-        }
+          stops,
+          planning_draft_id: payload.planning_draft_id || null,
+        },
       });
-
-      if (error) throw new Error(error.message || String(error));
-      return (data as any)?.id || data;
-    }
+    if (error) throw new Error(error.message || String(error));
+    return data as unknown as string;
   }, [currentTenant]);
 
   const invalidate = useCallback(() => {

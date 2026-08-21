@@ -1,12 +1,19 @@
-// guardrail:allow-direct-write
-import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
-import { isFeatureEnabled } from '@/lib/featureFlags';
 
-export const ITEM_STATUSES = ['picking', 'ready_for_load', 'in_loading', 'loaded', 'in_transit', 'delivered', 'divergence', 'return'] as const;
+export const ITEM_STATUSES = [
+  'pending', 'waiting_conference', 'in_stock', 'picking',
+  'ready_for_load', 'in_loading', 'loaded', 'in_transit',
+  'delivered', 'divergence', 'return', 'redelivery',
+] as const;
 
-export const ITEM_STATUS_LABELS: Record<string, string> = {
+export type ItemStatus = typeof ITEM_STATUSES[number];
+
+export const ITEM_STATUS_LABELS: Record<ItemStatus, string> = {
+  pending: 'Pendente',
+  waiting_conference: 'Aguardando Conferência',
+  in_stock: 'Em Estoque',
   picking: 'Separação',
   ready_for_load: 'Pronto p/ Carga',
   in_loading: 'Carregando',
@@ -14,139 +21,104 @@ export const ITEM_STATUS_LABELS: Record<string, string> = {
   in_transit: 'Em Trânsito',
   delivered: 'Entregue',
   divergence: 'Divergência',
-  return: 'Devolução'
+  return: 'Devolução',
+  redelivery: 'Reentrega',
 };
 
 export interface LoadItem {
   id: string;
+  tenant_id: string;
   load_id: string;
+  order_id: string | null;
+  fiscal_document_id: string | null;
   item_description: string;
   quantity: number;
   pallet_count: number;
-  weight_kg?: number;
-  volume_m3?: number;
-  fiscal_document_id?: string;
-  status?: string;
-  orders?: {
-    order_number?: string;
-    clients?: {
-      company_name?: string;
-    };
-  };
+  weight_kg: number;
+  volume_m3: number;
+  status: ItemStatus;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  orders?: { order_number: string; clients?: { company_name: string } | null } | null;
   fiscal_documents?: {
-    recipient?: string;
-    recipient_city?: string;
-    recipient_state?: string;
-    remitter?: string;
-    value?: number;
-    invoice_number?: string;
-  };
+    invoice_number: string | null;
+    value: number | null;
+    remitter: string | null;
+    remitter_cnpj: string | null;
+    recipient: string | null;
+    recipient_city: string | null;
+    recipient_state: string | null;
+  } | null;
 }
 
-export function useLoadItems(loadId?: string) {
-  const { currentTenant } = useTenant();
+export function useLoadItems(loadId: string | undefined) {
   return useQuery({
     queryKey: ['load_items', loadId],
     queryFn: async () => {
       if (!loadId) return [];
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('load_items')
-        .select('*, orders(order_number, clients(company_name)), fiscal_documents(recipient, recipient_city, recipient_state, remitter, value, invoice_number)')
+        .select('*, orders(order_number, clients(company_name)), fiscal_documents(invoice_number, value, remitter, remitter_cnpj, recipient, recipient_city, recipient_state)')
         .eq('load_id', loadId)
-        .eq('tenant_id', currentTenant!.id);
+        .order('created_at', { ascending: true });
       if (error) throw error;
-      return data as LoadItem[];
+      return (data || []) as LoadItem[];
     },
-    enabled: !!loadId && !!currentTenant,
+    enabled: !!loadId,
   });
 }
 
 export function useCreateLoadItem() {
-  const qc = useQueryClient();
   const { currentTenant } = useTenant();
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (p: Omit<LoadItem, 'id'>) => {
-      if (isFeatureEnabled('LOGISTICS_CONSOLIDATION_V2')) {
-        const { error } = await supabase.rpc('upsert_load_item_v2', {
-          p_tenant_id: currentTenant!.id,
-          p_load_id: p.load_id,
-          p_item_description: p.item_description,
-          p_quantity: p.quantity,
-          p_pallet_count: p.pallet_count || 0,
-          p_weight_kg: p.weight_kg || 0,
-          p_volume_m3: p.volume_m3 || 0,
-          p_fiscal_document_id: p.fiscal_document_id
+    mutationFn: async (values: Partial<LoadItem>) => {
+      if (!values.load_id) throw new Error('load_id obrigatório');
+      // Vínculo com NF é exclusivamente via RPC oficial (sincroniza fiscal_documents.load_id + auditoria).
+      if (values.fiscal_document_id) {
+        const { data, error } = await (supabase as any).rpc('assign_fiscal_documents_to_load', {
+          _tenant_id: currentTenant!.id,
+          _load_id: values.load_id,
+          _document_ids: [values.fiscal_document_id],
         });
         if (error) throw error;
-      } else {
-        if (p.fiscal_document_id) {
-          const { error } = await supabase.rpc('assign_fiscal_documents_to_load', {
-            _tenant_id: currentTenant!.id,
-            _load_id: p.load_id,
-            _document_ids: [p.fiscal_document_id]
-          });
-          if (error) throw error;
-        } else {
-          // Fallback to direct insert if no doc (manual items)
-          const { error } = await supabase.from('load_items').insert({ // linter:allow-direct-write load_items [V1 fallback for manual items] [2026-12-31]
-            tenant_id: currentTenant!.id,
-            load_id: p.load_id,
-            item_description: p.item_description,
-            quantity: p.quantity,
-            pallet_count: p.pallet_count || 0,
-            weight_kg: p.weight_kg || 0,
-            volume_m3: p.volume_m3 || 0
-          });
-          if (error) throw error;
-        }
+        return data;
       }
+      // Itens manuais (sem NF) podem ser inseridos diretamente — não afetam composição fiscal.
+      const { data, error } = await (supabase as any).from('load_items').insert({
+        ...values,
+        tenant_id: currentTenant!.id,
+      }).select().single();
+      if (error) throw error;
+      return data;
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       qc.invalidateQueries({ queryKey: ['load_items'] });
       qc.invalidateQueries({ queryKey: ['loads'] });
+      qc.invalidateQueries({ queryKey: ['fiscal_documents'] });
     },
   });
 }
 
 export function useUpdateLoadItem() {
   const qc = useQueryClient();
-  const { currentTenant } = useTenant();
   return useMutation({
-    mutationFn: async (p: Partial<LoadItem> & { id: string; load_id: string }) => {
-      const { data: item } = await supabase
-        .from('load_items')
-        .select('*')
-        .eq('id', p.id)
-        .single();
-      
-      if (isFeatureEnabled('LOGISTICS_CONSOLIDATION_V2')) {
-        const { error } = await supabase.rpc('upsert_load_item_v2', {
-          p_tenant_id: currentTenant!.id,
-          p_load_id: p.load_id,
-          p_item_id: p.id,
-          p_item_description: p.item_description ?? item?.item_description,
-          p_quantity: p.quantity ?? item?.quantity,
-          p_pallet_count: p.pallet_count ?? item?.pallet_count,
-          p_weight_kg: p.weight_kg ?? item?.weight_kg,
-          p_volume_m3: p.volume_m3 ?? item?.volume_m3,
-          p_fiscal_document_id: p.fiscal_document_id ?? item?.fiscal_document_id
-        });
-        if (error) throw error;
-      } else {
-        // Direct update for canonical fallback
-        const { error } = await supabase
-          .from('load_items') // linter:allow-direct-write load_items [V1 fallback] [2026-12-31]
-          .update({
-            item_description: p.item_description ?? item?.item_description,
-            quantity: p.quantity ?? item?.quantity,
-            pallet_count: p.pallet_count ?? item?.pallet_count,
-            weight_kg: p.weight_kg ?? item?.weight_kg,
-            volume_m3: p.volume_m3 ?? item?.volume_m3,
-            fiscal_document_id: p.fiscal_document_id ?? item?.fiscal_document_id
-          })
-          .eq('id', p.id)
-          .eq('tenant_id', currentTenant!.id);
+    mutationFn: async ({ id, ...values }: Partial<LoadItem> & { id: string }) => {
+      // Bloqueia mudança de load_id por write direto — use move_load_items_between_loads.
+      if ('load_id' in values) {
+        throw new Error('Mudança de load_id deve passar por move_load_items_between_loads.');
       }
+      // Mudança de fiscal_document_id pelo write direto também é bloqueada — invalida composição.
+      if ('fiscal_document_id' in values) {
+        throw new Error('Mudança de fiscal_document_id não é permitida por update direto.');
+      }
+      const { data, error } = await (supabase as any).from('load_items').update({
+        ...values,
+        updated_at: new Date().toISOString(),
+      }).eq('id', id).select().single();
+      if (error) throw error;
+      return data;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['load_items'] });
@@ -156,34 +128,29 @@ export function useUpdateLoadItem() {
 }
 
 export function useDeleteLoadItem() {
-  const qc = useQueryClient();
   const { currentTenant } = useTenant();
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, fiscalDocumentId }: { id: string; fiscalDocumentId?: string }) => {
-      if (isFeatureEnabled('LOGISTICS_CONSOLIDATION_V2')) {
-        const { error } = await supabase.rpc('delete_load_item_v2', {
-          p_tenant_id: currentTenant!.id,
-          p_item_id: id
+    mutationFn: async (id: string) => {
+      const { data: item, error: fetchErr } = await (supabase as any)
+        .from('load_items')
+        .select('id, load_id, fiscal_document_id')
+        .eq('id', id)
+        .maybeSingle();
+      if (fetchErr) throw fetchErr;
+      if (!item) return;
+      if (item.fiscal_document_id) {
+        const { error } = await (supabase as any).rpc('remove_fiscal_documents_from_load', {
+          _tenant_id: currentTenant!.id,
+          _load_id: item.load_id,
+          _document_ids: [item.fiscal_document_id],
         });
         if (error) throw error;
-      } else {
-        if (fiscalDocumentId) {
-          const { error } = await supabase.rpc('remove_fiscal_documents_from_load', {
-            _tenant_id: currentTenant!.id,
-            _load_id: null as any,
-            _document_ids: [fiscalDocumentId]
-          });
-          if (error) throw error;
-        } else {
-          // Direct delete for canonical manual items
-          const { error } = await supabase
-            .from('load_items') // linter:allow-direct-write load_items [V1 fallback] [2026-12-31]
-            .delete()
-            .eq('id', id)
-            .eq('tenant_id', currentTenant!.id);
-          if (error) throw error;
-        }
+        return;
       }
+      // Sem documento vinculado — item manual; libera delete direto.
+      const { error } = await (supabase as any).from('load_items').delete().eq('id', id);
+      if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['load_items'] });

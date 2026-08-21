@@ -99,8 +99,7 @@ ALTER TABLE public.operational_events
 -- =========================================
 CREATE OR REPLACE FUNCTION public.user_has_client_access(_client_id uuid)
 RETURNS boolean
-LANGUAGE sql STABLE SECURITY DEFINER
-  SET search_path = public SET search_path = public
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
 AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.client_portal_access
@@ -121,8 +120,7 @@ RETURNS TABLE (
   can_view_vehicle_live boolean,
   can_view_driver_contact boolean
 )
-LANGUAGE sql STABLE SECURITY DEFINER
-  SET search_path = public SET search_path = public
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
 AS $$
   SELECT cpa.client_id, cpa.access_type, cpa.can_view_financial, cpa.can_download_documents,
          cpa.can_open_occurrences, cpa.can_request_pickup, cpa.can_view_vehicle_live, cpa.can_view_driver_contact
@@ -159,8 +157,7 @@ CREATE OR REPLACE FUNCTION public.get_client_portal_summary(
   _end_date date DEFAULT NULL
 )
 RETURNS jsonb
-LANGUAGE plpgsql STABLE SECURITY DEFINER
-  SET search_path = public SET search_path = public
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public
 AS $$
 DECLARE
   _client_ids uuid[];

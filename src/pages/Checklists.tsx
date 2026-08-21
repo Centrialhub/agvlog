@@ -7,7 +7,7 @@ import {
   EXECUTION_STATUS_LABELS,
 } from '@/hooks/useOperationalChecklists';
 import { useVehicles } from '@/hooks/useVehicles';
-import { useEmployees, useEmployeesArray } from '@/hooks/useEmployees';
+import { useEmployees } from '@/hooks/useEmployees';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -47,7 +47,7 @@ export default function Checklists() {
   const { data: checklists = [], isLoading: loadingChecklists } = useOperationalChecklists();
   const { data: executions = [] } = useChecklistExecutions();
   const { data: vehicles = [] } = useVehicles();
-  const { data: employees = [] } = useEmployeesArray();
+  const { data: employees = [] } = useEmployees();
   const createChecklist = useCreateChecklist();
   const createExecution = useCreateChecklistExecution();
 

@@ -60,7 +60,6 @@ CREATE OR REPLACE FUNCTION public.generate_payroll_period(
 RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $function$
 DECLARE
@@ -269,7 +268,6 @@ CREATE OR REPLACE FUNCTION public.approve_payroll_period(_period_id uuid)
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $function$
 DECLARE
@@ -351,7 +349,6 @@ CREATE OR REPLACE FUNCTION public.enforce_payroll_items_locked()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -388,14 +385,12 @@ FOR EACH ROW EXECUTE FUNCTION public.enforce_payroll_items_locked();
 -- ============================================================
 -- 6) RPCs de ajuste manual controlado (bypass do lock só via RPC)
 -- ============================================================
--- Manter simples: apenas expostas; a inserção real desabilita o trigger via SECURITY DEFINER
--- SET search_path = public + session_replication_role
+-- Manter simples: apenas expostas; a inserção real desabilita o trigger via SECURITY DEFINER + session_replication_role
 CREATE OR REPLACE FUNCTION public.add_payroll_manual_item(
   _entry_id uuid, _nature text, _description text, _amount numeric, _reason text
 ) RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -435,7 +430,6 @@ CREATE OR REPLACE FUNCTION public.delete_payroll_entry_item(_item_id uuid, _reas
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -468,7 +462,6 @@ CREATE OR REPLACE FUNCTION public.sync_employee_advance_from_payable()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
 BEGIN
@@ -502,7 +495,6 @@ CREATE OR REPLACE FUNCTION public.get_client_portal_tracking(
 RETURNS jsonb
 LANGUAGE plpgsql
 STABLE SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $function$
 DECLARE
@@ -606,7 +598,6 @@ RETURNS TABLE(
 )
 LANGUAGE plpgsql
 STABLE SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $function$
 BEGIN

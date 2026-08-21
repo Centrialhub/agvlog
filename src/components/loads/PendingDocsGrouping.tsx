@@ -4,8 +4,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useAuth } from '@/hooks/useAuth';
 import { useVehicles } from '@/hooks/useVehicles';
-import { useOperationalRoutes, useOperationalRoutesArray } from '@/hooks/useOperationalRoutes';
-import { useCreateLoad, getNextLoadNumberFromExisting, useLoadsArray } from '@/hooks/useLoads';
+import { useOperationalRoutes } from '@/hooks/useOperationalRoutes';
+import { useCreateLoad, getNextLoadNumberFromExisting } from '@/hooks/useLoads';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -52,7 +52,7 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
   const { currentTenant } = useTenant();
   const { user } = useAuth();
   const { data: vehicles = [] } = useVehicles();
-  const { data: operationalRoutes = [] } = useOperationalRoutesArray();
+  const { data: operationalRoutes = [] } = useOperationalRoutes();
   const createLoad = useCreateLoad();
   
   const queryClient = useQueryClient();
@@ -99,8 +99,7 @@ export default function PendingDocsGrouping({ open, onOpenChange, onCreated }: P
 
   // Group docs by operational route
   const groups = useMemo(() => {
-    const routes = (operationalRoutes as any) || [];
-    const routeRefs = routes.map((r: any) => ({
+    const routeRefs = operationalRoutes.map(r => ({
       id: r.id,
       name: r.name,
       destinations: Array.isArray(r.destinations)

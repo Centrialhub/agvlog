@@ -16,7 +16,6 @@ CREATE OR REPLACE FUNCTION public._build_driver_settlement(_tenant_id uuid, _dis
 RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $fn$
 DECLARE
@@ -305,8 +304,7 @@ BEGIN
 END;
 $fn$;
 
--- 4) Revoke PUBLIC on internal SECURITY DEFINER
--- SET search_path = public helpers/triggers
+-- 4) Revoke PUBLIC on internal SECURITY DEFINER helpers/triggers
 REVOKE ALL ON FUNCTION public._build_driver_settlement(uuid, uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public._log_settlement_event(uuid, text, text, text, text, jsonb) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.mark_driver_settlement_outdated(uuid, uuid, text) FROM PUBLIC;
@@ -317,8 +315,7 @@ REVOKE ALL ON FUNCTION public._on_dispatch_trip_completed_create_settlement() FR
 
 -- 5) remove_driver_settlement_adjustment: enforce reason + existence
 CREATE OR REPLACE FUNCTION public.remove_driver_settlement_adjustment(_settlement_id uuid, _item_id uuid, _reason text)
-RETURNS void LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE v_s public.driver_settlements; v_rows int;
 BEGIN
   IF length(trim(COALESCE(_reason,''))) = 0 THEN RAISE EXCEPTION 'reason_required'; END IF;
@@ -344,8 +341,7 @@ CREATE OR REPLACE FUNCTION public.register_driver_settlement_payment(
   _payment_account text DEFAULT NULL, _payment_reference text DEFAULT NULL,
   _receipt_url text DEFAULT NULL, _notes text DEFAULT NULL,
   _allow_overpayment boolean DEFAULT false, _overpayment_reason text DEFAULT NULL
-) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   v_s public.driver_settlements; v_id uuid; v_total numeric;
   v_balance numeric; v_is_admin boolean;
@@ -408,8 +404,7 @@ CREATE OR REPLACE FUNCTION public.list_driver_settlements(
   _only_needs_recalculation boolean DEFAULT false,
   _page integer DEFAULT 1,
   _page_size integer DEFAULT 50
-) RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+) RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   v_offset int; v_q text;
   v_total int; v_items jsonb; v_summary jsonb;
@@ -489,8 +484,7 @@ GRANT EXECUTE ON FUNCTION public.list_driver_settlements(uuid,text,uuid,uuid,tex
 
 -- 8) Filter options RPC (drivers + vehicles with at least one settlement in tenant)
 CREATE OR REPLACE FUNCTION public.list_driver_settlement_filter_options(_tenant_id uuid)
-RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
 DECLARE v_drivers jsonb; v_vehicles jsonb;
 BEGIN
   IF NOT public.is_tenant_operator_or_admin(_tenant_id) THEN RAISE EXCEPTION 'forbidden'; END IF;

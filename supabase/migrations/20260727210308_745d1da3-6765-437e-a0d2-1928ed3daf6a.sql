@@ -7,7 +7,6 @@ CREATE OR REPLACE FUNCTION public.trg_fiscal_documents_autolink_supplier()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path TO 'public'
 AS $function$
 DECLARE

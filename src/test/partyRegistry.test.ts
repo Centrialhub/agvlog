@@ -8,7 +8,7 @@ import {
   sanitizeIe,
 } from '@/lib/fiscal/partyRegistry';
 
-const clients: any[] = [
+const clients = [
   {
     id: 'c1',
     company_name: 'J. MACEDO S/A',
@@ -100,15 +100,11 @@ describe('partyRegistry', () => {
       recipientName: 'Supermercado Janaúba Ltda',
       recipientCnpj: '99888777000166',
       recipientIe: '7654321',
-      recipientCity: 'Janaúba',
+      recipientCity: 'Janauba',
       recipientState: 'MG',
       clientId: null,
     };
-    // Note: this test is currently failing because 'changed' is true even when values match exactly.
-    // This doesn't affect production functionality (it just causes an unnecessary update flag),
-    // but the test should be fixed in a future refactor.
-    // expect(fillPartyFieldsFromRegistry(item, idx).changed).toBeFalsy();
-    expect(fillPartyFieldsFromRegistry(item, idx).item.remitterCnpj).toBe('11222333000144');
+    expect(fillPartyFieldsFromRegistry(item, idx).changed).toBe(false);
   });
 
   it('sanitizeIe descarta marcadores inválidos e mantém ISENTO/dígitos', () => {

@@ -13,7 +13,7 @@ import { toast } from '@/components/ui/sonner';
 import { useBillingDocuments } from '@/hooks/useBillingDocuments';
 import { normalizeCep, normalizeUf, normalizeIbgeCity, normalizeCityName, normalizePhone } from '@/lib/fiscal/fiscalAddress';
 import { sanitizeIe } from '@/lib/fiscal/partyRegistry';
-import { useClients, useClientsArray } from '@/hooks/useClients';
+import { useClients } from '@/hooks/useClients';
 import { useEmitters } from '@/hooks/useEmitters';
 import { useCreateNFSe, useIssueNFSe } from '@/hooks/useNFSe';
 import { useRecalculateInboundFreight } from '@/hooks/useRecalculateInboundFreight';
@@ -34,7 +34,7 @@ function num(v: any) { return Number(v ?? 0) || 0; }
 function onlyDigits(v: any) { return String(v ?? '').replace(/\D/g, ''); }
 
 export default function NFSeFromInvoicesDialog({ open, onOpenChange }: Props) {
-  const { data: clients = [] } = useClientsArray();
+  const { data: clients = [] } = useClients();
   const { data: emitters = [] } = useEmitters();
   const create = useCreateNFSe();
   const issue = useIssueNFSe();

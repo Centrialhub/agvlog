@@ -53,8 +53,7 @@ CREATE POLICY "Members can view operational_events" ON public.operational_events
 
 -- Trigger to auto-recalculate load totals when items change
 CREATE OR REPLACE FUNCTION public.recalc_load_totals()
-RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path TO 'public' AS $$
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $$
 BEGIN
   UPDATE public.loads SET
     total_pallet_count = COALESCE((SELECT SUM(pallet_count) FROM public.load_items WHERE load_id = COALESCE(NEW.load_id, OLD.load_id)), 0),

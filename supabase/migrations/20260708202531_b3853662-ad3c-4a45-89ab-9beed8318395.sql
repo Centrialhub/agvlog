@@ -7,7 +7,6 @@ CREATE OR REPLACE FUNCTION public.audit_data_consistency_v2(_tenant_id uuid)
 RETURNS TABLE(severity text, domain text, entity_type text, entity_id uuid, message text, suggested_action text)
 LANGUAGE plpgsql
 STABLE SECURITY DEFINER
-  SET search_path = public
 SET search_path TO 'public'
 AS $function$
 BEGIN
@@ -127,7 +126,6 @@ CREATE OR REPLACE FUNCTION public.add_employee_incident_action(
 RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path TO 'public'
 AS $function$
 DECLARE

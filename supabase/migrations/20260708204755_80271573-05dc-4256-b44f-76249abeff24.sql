@@ -9,7 +9,6 @@ CREATE OR REPLACE FUNCTION public.add_employee_incident_action(
 RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path TO 'public'
 AS $function$
 DECLARE

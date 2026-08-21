@@ -6,7 +6,6 @@ CREATE OR REPLACE FUNCTION public.cte_defaults_for_group(
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE

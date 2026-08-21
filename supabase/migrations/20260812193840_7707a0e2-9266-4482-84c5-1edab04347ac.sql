@@ -17,8 +17,7 @@ CREATE OR REPLACE FUNCTION public.update_driver_settlement_km_review(
 )
 RETURNS public.driver_settlements 
 LANGUAGE plpgsql 
-SECURITY DEFINER
-  SET search_path = public 
+SECURITY DEFINER 
 SET search_path = public 
 AS $$
 DECLARE 

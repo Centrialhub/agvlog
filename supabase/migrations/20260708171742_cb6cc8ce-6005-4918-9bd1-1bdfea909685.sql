@@ -22,5 +22,3 @@ USING (
   bucket_id = 'pallet-return-proofs'
   AND public.is_tenant_admin((split_part(name, '/', 1))::uuid)
 );
-
--- linter:allow-no-tenant legacy-migration 2026-12-31

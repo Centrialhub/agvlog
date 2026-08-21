@@ -1,4 +1,5 @@
--- Migration originalmente composta apenas de DML (dados de um tenant específico).
--- O conteúdo foi movido para scripts/ops/seeds/20260815022256_c10e8982-cbea-41e1-80f9-63b72d5114ca.sql
--- para manter o histórico de migrations reprodutível desde schema vazio.
--- Nenhuma mudança de schema: intencionalmente sem instruções.
+
+UPDATE public.fiscal_documents
+SET nfse_emitted_at = NULL, cte_emitted_at = NULL
+WHERE invoice_number IN ('446064', '446067', '446065')
+  AND tenant_id = '6e874e6e-5bca-486d-9928-bef0646989c4';

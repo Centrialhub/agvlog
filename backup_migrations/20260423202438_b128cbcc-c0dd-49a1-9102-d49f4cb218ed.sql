@@ -1,3 +1,0 @@
-ALTER TABLE public.fiscal_documents ADD COLUMN IF NOT EXISTS client_load_number text;
-COMMENT ON COLUMN public.fiscal_documents.client_load_number IS 'Número da carga do cliente, extraído da NF-e (xPed ou observação infCpl). Diferente do load_number interno da empresa.';
-CREATE INDEX IF NOT EXISTS idx_fiscal_documents_client_load_number ON public.fiscal_documents (tenant_id, client_load_number) WHERE client_load_number IS NOT NULL;

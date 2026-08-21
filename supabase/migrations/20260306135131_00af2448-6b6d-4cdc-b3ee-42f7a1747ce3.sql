@@ -105,7 +105,6 @@ CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
 BEGIN
@@ -125,7 +124,6 @@ RETURNS SETOF UUID
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
   SELECT tenant_id FROM public.tenant_memberships
@@ -138,7 +136,6 @@ RETURNS BOOLEAN
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
   SELECT EXISTS (
@@ -156,7 +153,6 @@ RETURNS BOOLEAN
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
   SELECT EXISTS (
@@ -173,7 +169,6 @@ RETURNS BOOLEAN
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
   SELECT EXISTS (

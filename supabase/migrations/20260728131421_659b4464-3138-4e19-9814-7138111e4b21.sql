@@ -70,8 +70,7 @@ CREATE INDEX IF NOT EXISTS idx_receivables_payments_tenant ON public.receivables
 
 -- 4. Triggers para recalcular status/paid_amount em payables
 CREATE OR REPLACE FUNCTION public._recalc_payable_paid()
-RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   v_payable_id UUID;
   v_total NUMERIC;
@@ -105,8 +104,7 @@ FOR EACH ROW EXECUTE FUNCTION public._recalc_payable_paid();
 
 -- 5. Triggers para recalcular status/received_amount em receivables
 CREATE OR REPLACE FUNCTION public._recalc_receivable_received()
-RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   v_receivable_id UUID;
   v_total NUMERIC;
@@ -147,8 +145,7 @@ CREATE OR REPLACE FUNCTION public.register_payable_payment(
   _method TEXT DEFAULT 'other',
   _notes TEXT DEFAULT NULL,
   _attachment_url TEXT DEFAULT NULL
-) RETURNS UUID LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+) RETURNS UUID LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   v_payable public.payables%ROWTYPE;
   v_remaining NUMERIC;
@@ -196,8 +193,7 @@ END $$;
 GRANT EXECUTE ON FUNCTION public.register_payable_payment(UUID, NUMERIC, TIMESTAMPTZ, UUID, TEXT, TEXT, TEXT) TO authenticated;
 
 CREATE OR REPLACE FUNCTION public.reverse_payable_payment(_payment_id UUID)
-RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   v_payment public.payables_payments%ROWTYPE;
   v_uid UUID := auth.uid();
@@ -224,8 +220,7 @@ CREATE OR REPLACE FUNCTION public.register_receivable_payment(
   _method TEXT DEFAULT 'other',
   _notes TEXT DEFAULT NULL,
   _attachment_url TEXT DEFAULT NULL
-) RETURNS UUID LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+) RETURNS UUID LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   v_rcv public.receivables%ROWTYPE;
   v_remaining NUMERIC;
@@ -274,8 +269,7 @@ END $$;
 GRANT EXECUTE ON FUNCTION public.register_receivable_payment(UUID, NUMERIC, TIMESTAMPTZ, UUID, TEXT, TEXT, TEXT) TO authenticated;
 
 CREATE OR REPLACE FUNCTION public.reverse_receivable_payment(_payment_id UUID)
-RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   v_payment public.receivables_payments%ROWTYPE;
   v_uid UUID := auth.uid();
@@ -296,8 +290,7 @@ GRANT EXECUTE ON FUNCTION public.reverse_receivable_payment(UUID) TO authenticat
 
 -- 7. Despesa avulsa (payable manual) + opção de já pagar
 CREATE OR REPLACE FUNCTION public.create_manual_expense(_payload JSONB)
-RETURNS UUID LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+RETURNS UUID LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   v_tenant UUID;
   v_payable_id UUID;

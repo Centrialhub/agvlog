@@ -1,5 +1,4 @@
 import { useQuery } from '@tanstack/react-query';
-import { useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { usePortalClientScope } from '@/hooks/portal/usePortalClientScope';
@@ -51,33 +50,19 @@ export interface PortalTrackingItem {
 export function usePortalTracking() {
   const { currentTenant } = useTenant();
   const scope = usePortalClientScope();
-  
-  // Collect all CNPJs from active clients to ensure broad scope
-  const cnpjs = useMemo(() => {
-    return scope.activeClients
-      .map(c => c.client_tax_id)
-      .filter((id): id is string => !!id);
-  }, [scope.activeClients]);
-
-  const clientIds = useMemo(() => {
-    return scope.activeClients.map(c => c.client_id);
-  }, [scope.activeClients]);
-
   return useQuery({
-    queryKey: ['portal_tracking_v3', currentTenant?.id, scope.selectedClientId, clientIds, cnpjs],
+    queryKey: ['portal_tracking', currentTenant?.id, scope.selectedClientId ?? null],
     queryFn: async (): Promise<PortalTrackingItem[]> => {
-      if (!currentTenant || clientIds.length === 0) return [];
-      
-      const { data, error } = await (supabase as any).rpc('get_portal_tracking_v3', {
-        p_tenant_id: currentTenant.id,
-        p_client_ids: clientIds,
-        p_cnpjs: cnpjs.length > 0 ? cnpjs : null,
+      if (!currentTenant || !scope.selectedClientId) return [];
+      const { data, error } = await supabase.rpc('get_client_portal_tracking_v2' as any, {
+        _tenant_id: currentTenant.id,
+        _client_id: scope.selectedClientId,
       });
-
       if (error) throw error;
-      return (data as unknown) as PortalTrackingItem[];
+      const payload = (data as any) || {};
+      return (payload.items as PortalTrackingItem[]) || [];
     },
-    enabled: !!currentTenant && clientIds.length > 0,
+    enabled: !!currentTenant && !!scope.selectedClientId,
     refetchInterval: 60_000,
   });
 }

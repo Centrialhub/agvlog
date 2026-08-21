@@ -6,8 +6,7 @@
 -- 1.1 Helper central de acesso do portal a fiscal_document
 CREATE OR REPLACE FUNCTION public.portal_user_can_access_fiscal_document(_tenant_id uuid, _fiscal_document_id uuid)
 RETURNS boolean
-LANGUAGE sql STABLE SECURITY DEFINER
-  SET search_path = public SET search_path = public
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
 AS $$
   SELECT EXISTS (
     SELECT 1
@@ -35,8 +34,7 @@ GRANT EXECUTE ON FUNCTION public.portal_user_can_access_fiscal_document(uuid,uui
 -- Helper financeiro
 CREATE OR REPLACE FUNCTION public.portal_user_can_view_financial(_tenant_id uuid, _fiscal_document_id uuid)
 RETURNS boolean
-LANGUAGE sql STABLE SECURITY DEFINER
-  SET search_path = public SET search_path = public
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
 AS $$
   SELECT EXISTS (
     SELECT 1
@@ -60,8 +58,7 @@ GRANT EXECUTE ON FUNCTION public.portal_user_can_view_financial(uuid,uuid) TO au
 -- 1.2 Recriar get_client_portal_shipment_detail usando helpers
 CREATE OR REPLACE FUNCTION public.get_client_portal_shipment_detail(_fiscal_document_id uuid)
 RETURNS jsonb
-LANGUAGE plpgsql STABLE SECURITY DEFINER
-  SET search_path = public SET search_path = public
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public
 AS $$
 DECLARE
   _fd public.fiscal_documents;
@@ -137,8 +134,7 @@ $$;
 -- 1.3 Recriar get_active_trips_live explicitamente (com 'arrived' já incluído e ORDER BY correto)
 CREATE OR REPLACE FUNCTION public.get_active_trips_live(_tenant_id uuid)
 RETURNS jsonb
-LANGUAGE plpgsql STABLE SECURITY DEFINER
-  SET search_path = public SET search_path = public
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public
 AS $$
 DECLARE _result jsonb;
 BEGIN
@@ -277,8 +273,7 @@ CREATE POLICY "Operators manage POD" ON public.proof_of_delivery
 CREATE OR REPLACE FUNCTION public.driver_update_stop_status(
   _stop_id uuid, _new_status text, _reason text DEFAULT NULL
 ) RETURNS uuid
-LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path = public
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
 AS $$
 DECLARE v_trip uuid; v_tenant uuid; v_event_type text; v_event uuid;
 BEGIN
@@ -315,8 +310,7 @@ CREATE OR REPLACE FUNCTION public.driver_create_operational_occurrence(
   _stop_id uuid DEFAULT NULL,
   _client_id uuid DEFAULT NULL
 ) RETURNS uuid
-LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path = public
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
 AS $$
 DECLARE v_tenant uuid; v_load uuid; v_id uuid;
 BEGIN
@@ -346,8 +340,7 @@ GRANT EXECUTE ON FUNCTION public.driver_create_operational_occurrence(uuid,text,
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.driver_mark_arrival(_stop_id uuid)
 RETURNS uuid
-LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path = public
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
 AS $$
 DECLARE v_trip uuid; v_tenant uuid; v_event uuid; v_was_active boolean;
 BEGIN
@@ -397,8 +390,7 @@ CREATE OR REPLACE FUNCTION public.driver_finalize_delivery(
   _receiver_document text DEFAULT NULL, _receiver_role text DEFAULT NULL,
   _notes text DEFAULT NULL
 ) RETURNS jsonb
-LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path = public
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
 AS $$
 DECLARE
   v_trip uuid; v_tenant uuid; v_stop_status text;

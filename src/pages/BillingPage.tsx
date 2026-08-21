@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useBillingDocuments } from '@/hooks/useBillingDocuments';
-import { useClients, useClientsArray } from '@/hooks/useClients';
-import { useLoads, useLoadsArray, LOAD_STATUSES, LOAD_STATUS_LABELS } from '@/hooks/useLoads';
+import { useClients } from '@/hooks/useClients';
+import { useLoads, LOAD_STATUSES, LOAD_STATUS_LABELS } from '@/hooks/useLoads';
 import { useCteBatches, useCancelCteBatch, useIssuedCtes, useDeleteIssuedCte } from '@/hooks/useBilling';
 import { GROUPING_MODES, buildGroups, getGroupingMode, type CteGroupPreview } from '@/lib/cteGroupingModes';
 import { useUserUiPreference } from '@/hooks/useUserUiPreference';
@@ -133,8 +133,8 @@ const DEFAULT_BILLING_PREFS: BillingPreferences = {
 };
 
 export default function Billing() {
-  const { data: clients = [] } = useClientsArray();
-  const { data: loadsData } = useLoadsArray(); const loads = (loadsData as any) || [];
+  const { data: clients = [] } = useClients();
+  const { data: loads = [] } = useLoads();
   const { data: batches = [] } = useCteBatches();
   const cancelBatch = useCancelCteBatch();
   const { currentTenant } = useTenant();

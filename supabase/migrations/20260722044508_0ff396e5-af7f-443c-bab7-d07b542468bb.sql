@@ -14,7 +14,6 @@ CREATE OR REPLACE FUNCTION public.hold_load(_load_id uuid, _reason text DEFAULT 
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -56,7 +55,6 @@ CREATE OR REPLACE FUNCTION public.unhold_load(_load_id uuid)
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -101,7 +99,6 @@ CREATE OR REPLACE FUNCTION public._driver_load_ids()
  RETURNS SETOF uuid
  LANGUAGE sql
  STABLE SECURITY DEFINER
-  SET search_path = public
  SET search_path TO 'public'
 AS $function$
   SELECT DISTINCT dtl.load_id FROM public.dispatch_trip_loads dtl

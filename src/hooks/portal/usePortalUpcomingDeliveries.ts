@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
-import { usePortalClientScope } from '@/hooks/portal/usePortalClientScope';
 import type { PublicShipmentStatus } from '@/lib/portal/portalStatus';
 
 export interface UpcomingDelivery {
@@ -19,23 +18,23 @@ export interface UpcomingDelivery {
   vehicle_plate: string | null;
 }
 
-export function usePortalUpcomingDeliveries(opts?: { limit?: number }) {
+export function usePortalUpcomingDeliveries(opts?: { clientId?: string | null; limit?: number }) {
   const { currentTenant } = useTenant();
-  const scope = usePortalClientScope();
+  const clientId = opts?.clientId ?? null;
   const limit = opts?.limit ?? 8;
   return useQuery({
-    queryKey: ['portal_upcoming_v3', currentTenant?.id, scope.selectedClientId, limit],
+    queryKey: ['portal_upcoming', currentTenant?.id, clientId, limit],
     queryFn: async (): Promise<UpcomingDelivery[]> => {
-      if (!currentTenant || !scope.selectedClientId) return [];
-      const { data, error } = await (supabase as any).rpc('get_client_portal_upcoming_deliveries_v2', {
+      if (!currentTenant || !clientId) return [];
+      const { data, error } = await supabase.rpc('get_client_portal_upcoming_deliveries_v2' as any, {
         _tenant_id: currentTenant.id,
-        _client_id: scope.selectedClientId,
+        _client_id: clientId,
         _limit: limit,
       });
       if (error) throw error;
       return (data as UpcomingDelivery[]) ?? [];
     },
-    enabled: !!currentTenant && !!scope.selectedClientId,
+    enabled: !!currentTenant && !!clientId,
     staleTime: 60_000,
   });
 }

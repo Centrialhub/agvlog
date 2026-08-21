@@ -16,7 +16,6 @@ CREATE OR REPLACE FUNCTION public.get_client_portal_alerts_v2(_tenant_id uuid, _
 RETURNS jsonb
 LANGUAGE plpgsql
 STABLE SECURITY DEFINER
-  SET search_path = public
 SET search_path TO 'public'
 AS $function$
 BEGIN
@@ -32,7 +31,6 @@ CREATE OR REPLACE FUNCTION public.get_client_portal_upcoming_deliveries_v2(_tena
 RETURNS jsonb
 LANGUAGE plpgsql
 STABLE SECURITY DEFINER
-  SET search_path = public
 SET search_path TO 'public'
 AS $function$
 BEGIN
@@ -48,7 +46,6 @@ CREATE OR REPLACE FUNCTION public.get_client_portal_tracking_v2(_tenant_id uuid,
 RETURNS jsonb
 LANGUAGE plpgsql
 STABLE SECURITY DEFINER
-  SET search_path = public
 SET search_path TO 'public'
 AS $function$
 BEGIN

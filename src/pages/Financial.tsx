@@ -1,13 +1,10 @@
 import { useState, useMemo } from 'react';
-
-
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useReceivables } from '@/hooks/useReceivables';
-// import { useOperationalFinancialSummary } from '@/hooks/useOperationalFinancialSummary';
-import { useClients, useClientsArray } from '@/hooks/useClients';
-
+import { useClients } from '@/hooks/useClients';
+import { useCostCenters } from '@/hooks/useCostCenters';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -57,7 +54,7 @@ export default function Financial() {
       if (!currentTenant) return [];
       const { data } = await supabase
         .from('fiscal_documents')
-        .select('id, document_type, value, weight_kg, freight_value, status, created_at, issue_date, client_id, invoice_number')
+        .select('id, document_type, value, weight_kg, freight_value, status, created_at, issue_date, client_id, invoice_number, cost_center')
         .eq('tenant_id', currentTenant.id)
         .order('created_at', { ascending: false })
         .limit(1000);
@@ -129,7 +126,8 @@ export default function Financial() {
     enabled: !!currentTenant,
   });
 
-  const { data: clients = [] } = useClientsArray();
+  const { data: clients = [] } = useClients();
+  const { data: costCenters = [] } = useCostCenters();
 
   // Documentos válidos (cancelados/rejeitados nunca entram em faturamento)
   const billableDocs = useMemo(() => fiscalDocs.filter((d: any) => isBillableFiscalDoc(d)), [fiscalDocs]);
@@ -166,8 +164,9 @@ export default function Financial() {
     if (selectedClient !== 'all') count++;
     if (docType !== 'all') count++;
     if (expenseCategory !== 'all') count++;
+    if (selectedCostCenter !== 'all') count++;
     return count;
-  }, [dateFrom, dateTo, selectedClient, docType, expenseCategory]);
+  }, [dateFrom, dateTo, selectedClient, docType, expenseCategory, selectedCostCenter]);
 
   const clearFilters = () => {
     setDateFrom('');
@@ -175,6 +174,7 @@ export default function Financial() {
     setSelectedClient('all');
     setDocType('all');
     setExpenseCategory('all');
+    setSelectedCostCenter('all');
   };
 
   // ── Period filter ──
@@ -198,19 +198,11 @@ export default function Financial() {
   };
 
   // ── Computed KPIs ──
-  const summaryKpis: any = null;
-  const isSummaryLoading = false;
-  /*
-  const { data: summaryKpis, isLoading: isSummaryLoading } = useOperationalFinancialSummary(
-    dateFrom || (period === 'all' ? '' : format(subDays(new Date(), period === '7d' ? 7 : period === '30d' ? 30 : 90), 'yyyy-MM-dd')),
-    dateTo || format(new Date(), 'yyyy-MM-dd')
-  );
-  */
-
   const kpis = useMemo(() => {
     let filteredDocs = billableDocs.filter((d: any) => filterByPeriod(d.issue_date || d.created_at));
     if (selectedClient !== 'all') filteredDocs = filteredDocs.filter((d: any) => d.client_id === selectedClient);
     if (docType !== 'all') filteredDocs = filteredDocs.filter((d: any) => d.document_type === docType);
+    if (selectedCostCenter !== 'all') filteredDocs = filteredDocs.filter((d: any) => d.cost_center === selectedCostCenter);
 
     const nfes = filteredDocs.filter((d: any) => d.document_type === 'inbound');
     // Receita só de CT-e confirmado: rascunho/transmitindo ainda pode rejeitar.
@@ -260,31 +252,17 @@ export default function Financial() {
     const balance = revenue - outflow;
 
     return {
-      nfeCount: nfes.length, 
-      cteCount: ctes.length,
-      totalNfeValue, 
-      totalCteValue, 
-      totalFreight,
-      nfseCount: filteredNfse.length, 
-      totalNfseValue,
+      nfeCount: nfes.length, cteCount: ctes.length,
+      totalNfeValue, totalCteValue, totalFreight,
+      nfseCount: filteredNfse.length, totalNfseValue,
       voidCount,
-      totalExpenses: summaryKpis?.totalExpenses ?? totalExpenses, 
-      pendingExpensesCount: pendingExpenses.length,
-      totalReceivable: summaryKpis?.totalReceivable ?? totalReceivable, 
-      pendingReceivable: summaryKpis?.pendingReceivable ?? pendingReceivable, 
-      paidReceivable: summaryKpis?.paidReceivable ?? paidReceivable, 
-      overdueReceivable: summaryKpis?.overdueReceivable ?? overdueReceivable,
-      totalMaintenance: summaryKpis?.totalMaintenance ?? totalMaintenance,
-      revenue: summaryKpis?.revenue ?? revenue, 
-      outflow: summaryKpis?.outflow ?? outflow, 
-      balance: summaryKpis?.balance ?? balance,
-      ledgerBalance: summaryKpis?.ledgerBalance ?? 0,
+      totalExpenses, pendingExpensesCount: pendingExpenses.length,
+      totalReceivable, pendingReceivable, paidReceivable, overdueReceivable,
+      totalMaintenance,
+      revenue, outflow, balance,
       receivablesCount: filteredReceivables.length,
     };
-  }, [
-    summaryKpis, billableDocs, voidDocs, billableNfse, voidNfse, expenses, receivables, 
-    maintenanceCosts, periodStart, periodEnd, selectedClient, docType, expenseCategory, selectedCostCenter
-  ]);
+  }, [billableDocs, voidDocs, billableNfse, voidNfse, expenses, receivables, maintenanceCosts, periodStart, periodEnd, selectedClient, docType, expenseCategory, selectedCostCenter]);
 
   // ── Chart: Revenue vs Expenses by day ──
   const revenueExpenseChart = useMemo(() => {
@@ -344,8 +322,6 @@ export default function Financial() {
 
   return (
     <div className="animate-fade-in space-y-5">
-
-
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -366,16 +342,11 @@ export default function Financial() {
           <Button variant="outline" size="sm" onClick={() => navigate('/driver-settlements')}>
             <Wallet className="h-4 w-4 mr-1" /> Acerto de Motoristas
           </Button>
-          <Button variant="outline" size="sm" onClick={() => navigate('/ledger')}>
-            <FileText className="h-4 w-4 mr-1" /> Razão Operacional
-          </Button>
         </div>
       </div>
 
-
       {/* ── Collapsible Filter Bar ── */}
       <Collapsible open={filtersOpen} onOpenChange={setFiltersOpen}>
-
         <div className="flex items-center gap-2">
           <CollapsibleTrigger asChild>
             <Button
@@ -488,6 +459,22 @@ export default function Financial() {
                     </SelectContent>
                     </Select>
                 </div>
+
+                {/* Cost Center */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Centro de Custo</label>
+                  <Select value={selectedCostCenter} onValueChange={setSelectedCostCenter}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="Todos" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      {costCenters.map((cc: string) => (
+                        <SelectItem key={cc} value={cc}>{cc}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -554,21 +541,25 @@ export default function Financial() {
           </CardContent>
         </Card>
 
-        <Card className="relative overflow-hidden border-orange-500/20 group hover:shadow-xl transition-all duration-300">
-          <div className="absolute inset-0 bg-gradient-to-br from-orange-500/8 via-orange-500/4 to-transparent" />
-          <div className="absolute -top-8 -right-8 w-24 h-24 rounded-full bg-orange-500/5 group-hover:bg-orange-500/10 transition-colors" />
-          <CardContent className="p-5 relative cursor-pointer" onClick={() => navigate('/ledger')}>
+        <Card className={`relative overflow-hidden group hover:shadow-xl transition-all duration-300 ${kpis.overdueReceivable > 0 ? 'border-warning/30' : 'border-primary/20'}`}>
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/8 via-primary/4 to-transparent" />
+          <CardContent className="p-5 relative">
             <div className="flex items-center justify-between mb-3">
-              <div className="h-10 w-10 rounded-xl bg-orange-500/10 flex items-center justify-center">
-                <Wallet className="h-5 w-5 text-orange-600" />
+              <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                <CreditCard className="h-5 w-5 text-primary" />
               </div>
-              <Badge variant="secondary" className="text-[10px] font-medium">razão</Badge>
+              {kpis.overdueReceivable > 0 && (
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-warning opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-warning" />
+                </span>
+              )}
             </div>
-            <p className="text-2xl font-extrabold text-foreground tracking-tight">{fmtCurrencyShort(kpis.ledgerBalance)}</p>
-            <div className="flex items-center justify-between mt-1">
-              <p className="text-xs text-muted-foreground">Saldo em Livro Razão</p>
-              <ArrowRight className="h-3 w-3 text-muted-foreground group-hover:translate-x-0.5 transition-transform" />
-            </div>
+            <p className="text-2xl font-extrabold text-foreground tracking-tight">{fmtCurrencyShort(kpis.pendingReceivable)}</p>
+            <p className="text-xs text-muted-foreground mt-1">A receber</p>
+            {kpis.overdueReceivable > 0 && (
+              <p className="text-[10px] text-destructive font-medium mt-2">{fmtCurrencyShort(kpis.overdueReceivable)} vencido</p>
+            )}
           </CardContent>
         </Card>
       </div>

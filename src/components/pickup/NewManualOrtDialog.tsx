@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useClients, useClientsArray } from '@/hooks/useClients';
+import { useClients } from '@/hooks/useClients';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useTenant } from '@/hooks/useTenant';
 import { supabase } from '@/integrations/supabase/client';
@@ -90,7 +90,7 @@ type FormState = ReturnType<typeof empty>;
 
 export default function NewManualOrtDialog({ open, onOpenChange, onCreated }: Props) {
   const { currentTenant } = useTenant();
-  const { data: clients = [] } = useClientsArray();
+  const { data: clients = [] } = useClients();
   const { data: vehicles = [] } = useVehicles();
   const { toast } = useToast();
   const createMut = useCreatePickupOrder();

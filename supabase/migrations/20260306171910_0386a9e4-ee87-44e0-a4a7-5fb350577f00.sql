@@ -193,7 +193,6 @@ CREATE OR REPLACE FUNCTION public.upsert_geofence(
 ) RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE

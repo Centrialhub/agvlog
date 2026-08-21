@@ -359,7 +359,7 @@ function buildIcmsBlock(
 ): Record<string, unknown> {
   const cstRaw = (icms.cst || '').toString().toUpperCase();
   const regimeRaw = (taxRegime || '').toString().toLowerCase();
-  const isSimples = regimeRaw === 'simples' || regimeRaw === 'mei' || taxRegime === 'simples' || taxRegime === 'mei';
+  const isSimples = regimeRaw === 'simples' || regimeRaw === 'mei';
   // Para Simples Nacional, o CST/CSOSN mapeado para o DACTE/XML deve ser '90' (Outros).
   const cst = isSimples ? '90' : (cstRaw || '00');
   // Se for Simples Nacional, forçamos isento a true para zerar alíquota, base e valor
@@ -387,7 +387,6 @@ function buildIcmsBlock(
   const block: Record<string, unknown> = {
     CST: cst,
     cst,
-    cst_csosn: cst,
     regime: isSimples ? 'simples' : 'normal',
     // CRT / classificação tributária do serviço (DACTE): 1 = Simples Nacional, 3 = Regime normal.
     crt: isSimples ? 1 : 3,
@@ -618,7 +617,7 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
     .filter((c) => c.length === 14);
 
   const emitterRegimeRaw = (input.emitter?.taxRegime || '').toString().toLowerCase();
-  const emitterIsSimples = emitterRegimeRaw === 'simples' || emitterRegimeRaw === 'mei' || input.emitter?.taxRegime === 'simples' || input.emitter?.taxRegime === 'mei';
+  const emitterIsSimples = emitterRegimeRaw === 'simples' || emitterRegimeRaw === 'mei';
   const emitterRegimeCode = emitterIsSimples ? 1 : 3;
   const usoExclusivoEmitente = buildEmitterExclusiveUse({
     insurer: input.insurer,
@@ -728,8 +727,6 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
       recebedor: serializeParty(input.recebedor),
 
       seguro: seguroCarga,
-      seguradora: seguroCarga, // Alias para compatibilidade com testes e API v1
-      seguros: seguroCarga ? [seguroCarga] : undefined,
       tomador: {
         tipo: TAKER_INDEX[input.takerRole],
         role: input.takerRole,
@@ -795,14 +792,7 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
         vTPrest: totalServico,
         vRec: totalServico,
         Comp: componentes
-          .filter((component) => component.soma && component.valor > 0)
-          .map((component) => ({ xNome: component.nome, vComp: component.valor })),
-      },
-      valorPrestacao: {
-        vTPrest: totalServico,
-        vRec: totalServico,
-        Comp: componentes
-          .filter((component) => component.soma && component.valor > 0)
+          .filter((component) => component.soma)
           .map((component) => ({ xNome: component.nome, vComp: component.valor })),
       },
       imp: icmsBlock
@@ -829,7 +819,6 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
             return Object.keys(merc).length ? merc : undefined;
           })()
         : undefined,
-      cbsIbs: input.cbsIbs || undefined,
       notasFiscais: (input.invoices || []).map((n) => ({
         chave: digits(n.access_key) || undefined,
         chaveNFe: digits(n.access_key) || undefined,

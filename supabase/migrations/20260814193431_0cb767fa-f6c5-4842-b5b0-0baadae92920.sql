@@ -44,4 +44,3 @@ BEGIN
     GET DIAGNOSTICS v_count = ROW_COUNT;
     RAISE NOTICE 'Updated % inbound documents based on active cte_documents.', v_count;
 END $$;
--- linter:allow-no-tenant legacy-migration 2026-12-31

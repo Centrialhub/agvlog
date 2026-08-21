@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useOrders, useCreateOrder, useUpdateOrder, ORDER_STATUSES, ORDER_STATUS_LABELS, Order } from '@/hooks/useOrders';
-import { useClients, useClientsArray } from '@/hooks/useClients';
+import { useClients } from '@/hooks/useClients';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -287,7 +287,7 @@ function OrderForm({ order, clients, onSave, onCancel }: { order?: Order; client
 
 export default function Orders() {
   const { data: orders = [], isLoading } = useOrders();
-  const { data: clients = [] } = useClientsArray();
+  const { data: clients = [] } = useClients();
   const createOrder = useCreateOrder();
   const updateOrder = useUpdateOrder();
   const [search, setSearch] = useState('');

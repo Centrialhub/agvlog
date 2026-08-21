@@ -1,41 +1,93 @@
 import { useQuery, useQueryClient as useTanstackQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
-import { useCurrentDriver } from '@/hooks/useCurrentDriver';
-import { useDriverWorkspace, useDriverExecution } from '@/hooks/useDriverWorkspace';
-import { useDriverSync } from '@/hooks/useDriverSync';
+import { useCurrentDriver, useActiveTrip } from '@/hooks/useCurrentDriver';
 import { useChecklistStatus } from '@/hooks/useChecklistStatus';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Truck, MapPin, Package, Clock, ArrowRight, ClipboardCheck, AlertTriangle, Receipt, FileText, Map, RefreshCcw } from 'lucide-react';
+import { Truck, MapPin, Package, Clock, ArrowRight, ClipboardCheck, AlertTriangle, Receipt, FileText, Map } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 import NoLoadsHelp from '@/components/driver/NoLoadsHelp';
-import { useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import DriverDeliveryMap, { DeliveryPoint } from '@/components/driver/DriverDeliveryMap';
 import DriverLoadNotes from '@/components/driver/DriverLoadNotes';
-import { tripStatusLabel } from '@/lib/status';
-import { LOAD_STATUS_LABELS } from '@/lib/status/loadStatus';
+import { TRIP_ACTIVE_STATUSES, tripStatusLabel, LOAD_ACTIVE_STATUSES } from '@/lib/status';
+import { LOAD_STATUS_LABELS, TERMINAL_LOAD_STATUSES } from '@/lib/status/loadStatus';
+
+
+
 
 export default function DriverHome() {
   const { currentTenant } = useTenant();
   const { data: driver, isLoading: driverLoading } = useCurrentDriver();
   const navigate = useNavigate();
   const queryClient = useTanstackQueryClient();
-  const { data: workspace, isLoading: workspaceLoading } = useDriverWorkspace();
-  const { reportEvent } = useDriverExecution();
-  const { outbox, syncAll, isSyncing, isOffline } = useDriverSync();
-  
-  const trip = workspace?.trip;
-  const checklist = useChecklistStatus(trip?.id);
+  const { data: autoTrip } = useActiveTrip(driver?.id);
+  const checklist = useChecklistStatus(autoTrip?.id);
 
-  const activeTrips = workspace?.has_active_trip ? [workspace.trip] : [];
-  const tripsLoading = workspaceLoading;
-  const standaloneLoads = workspace?.has_active_trip ? [] : (workspace?.loads || []);
+  const { data: activeTrips = [], isLoading: tripsLoading } = useQuery({
+    queryKey: ['driver_my_trips', driver?.id, autoTrip?.id],
+    queryFn: async () => {
+      if (!driver) return [];
+      
+      // If we already have an autoTrip from the hook, use it as the primary
+      if (autoTrip) {
+        return [autoTrip];
+      }
 
+      const { data, error } = await supabase
+        .from('dispatch_trips')
+        .select('*, loads(id, load_number, origin, destination, status), vehicles(plate, nickname)')
+        .eq('driver_id', driver.id)
+        .order('created_at', { ascending: false })
+        .limit(10);
+        
+      if (error) throw error;
+      if (!data) return [];
+
+      return data.filter(trip => 
+        (trip.status && (TRIP_ACTIVE_STATUSES as readonly string[]).includes(trip.status)) ||
+        (trip.loads?.status && (LOAD_ACTIVE_STATUSES as readonly string[]).includes(trip.loads.status))
+      ).slice(0, 5);
+    },
+    enabled: !!driver,
+  });
+
+  const { data: myLoads = [], isLoading: loadsLoading } = useQuery({
+    queryKey: ['driver_my_loads', driver?.id],
+    queryFn: async () => {
+      if (!driver) return [];
+      const { data, error } = await supabase
+        .from('loads')
+        .select('id, load_number, origin, destination, status, trip_id, total_pallet_count, total_weight_kg, scheduled_load_at, vehicles(plate, nickname)')
+        .eq('driver_id', driver.id)
+        .not('status', 'in', `(${TERMINAL_LOAD_STATUSES.join(',')})`)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!driver,
+  });
+
+  // Paradas + posição do veículo para o mapa quando houver viagem real.
   const primaryTrip: any = activeTrips[0];
-  const realStops = workspace?.stops || [];
+  const { data: realStops = [] } = useQuery({
+    queryKey: ['driver_home_stops', primaryTrip?.id],
+    queryFn: async () => {
+      if (!primaryTrip?.id) return [];
+      const { data, error } = await supabase
+        .from('dispatch_stops')
+        .select('id, stop_order, destination, status, latitude, longitude, clients(company_name)')
+        .eq('dispatch_trip_id', primaryTrip.id)
+        .order('stop_order', { ascending: true });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!primaryTrip?.id,
+  });
 
   const { data: vehiclePos } = useQuery({
     queryKey: ['driver_home_vehicle_pos', primaryTrip?.vehicle_id],
@@ -51,27 +103,55 @@ export default function DriverHome() {
     enabled: !!primaryTrip?.vehicle_id,
   });
 
+  // Realtime: refresh assigned loads/trips whenever the driver assignment or status changes.
   useEffect(() => {
     if (!driver?.id) return;
     const channel = supabase
-      .channel(`driver_workspace_events_${driver.id}`)
+      .channel(`driver_home_${driver.id}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'dispatch_events', filter: `tenant_id=eq.${currentTenant?.id}` },
+        { event: '*', schema: 'public', table: 'loads', filter: `driver_id=eq.${driver.id}` },
         () => {
-          queryClient.invalidateQueries({ queryKey: ['driver_workspace'] });
+          queryClient.invalidateQueries({ queryKey: ['driver_my_loads', driver.id] });
+          queryClient.invalidateQueries({ queryKey: ['driver_my_trips', driver.id] });
         },
       )
-      .subscribe();
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'dispatch_trips', filter: `driver_id=eq.${driver.id}` },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['driver_my_trips', driver.id] });
+          queryClient.invalidateQueries({ queryKey: ['driver_my_loads', driver.id] });
+        },
+      )
+      .subscribe((status) => {
+        console.log(`[DriverHome] Realtime subscription for driver ${driver.id}: ${status}`);
+        if (status === 'SUBSCRIBED') {
+          queryClient.invalidateQueries({ queryKey: ['driver_my_loads', driver.id] });
+          queryClient.invalidateQueries({ queryKey: ['driver_my_trips', driver.id] });
+        }
+      });
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [driver?.id, currentTenant?.id, queryClient]);
+  }, [driver?.id, queryClient]);
 
-  const loading = driverLoading || workspaceLoading;
+  // Loads without an associated trip (driver assigned directly but no dispatch yet).
+  const tripLoadIds = new Set(activeTrips.map((t: any) => t.loads?.id || t.load_id).filter(Boolean));
+  // Filtra cargas que não estão em uma viagem ativa mas estão atribuídas ao motorista
+  const standaloneLoads = myLoads.filter((l: any) => 
+    !l.trip_id && !tripLoadIds.has(l.id)
+  );
+
+  const loading = driverLoading || tripsLoading || loadsLoading;
   
-  const tripsToShow = activeTrips;
+  // Inclui também viagens onde a carga associada está em estados operacionais
+  const tripsToShow: any[] = activeTrips.filter(t => 
+    TRIP_ACTIVE_STATUSES.includes(t.status as any) || 
+    (t.loads?.status && (LOAD_ACTIVE_STATUSES as readonly string[]).includes(t.loads.status))
+  );
 
+  // Constrói pontos reais do mapa a partir das paradas com lat/lng.
   const TERMINAL_STOP_STATUSES = new Set(['completed', 'delivered', 'refused', 'returned', 'failed', 'partial_delivery']);
   const realMapStops: DeliveryPoint[] = (realStops as any[])
     .filter((s) => s.latitude != null && s.longitude != null)
@@ -94,36 +174,19 @@ export default function DriverHome() {
   const showRealMap = realMapStops.length > 0;
 
   return (
-    <div className="space-y-4 pb-20">
-      {outbox.length > 0 && (navigator.onLine || outbox.some(i => i.attempts > 0)) && (
-        <Card className="bg-amber-50 border-amber-200">
-          <CardContent className="p-3 flex items-center justify-between">
-            <div className="flex items-center gap-2 text-amber-800">
-              <RefreshCcw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
-              <span className="text-xs font-medium">
-                {outbox.length} evento(s) aguardando sincronização
-              </span>
-            </div>
-            {!isSyncing && !isOffline && (
-              <Button size="sm" variant="ghost" onClick={() => syncAll()} className="text-amber-800 hover:bg-amber-100 h-7 text-[10px]">
-                Sincronizar agora
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
+    <div className="space-y-4">
       <div>
         <h1 className="text-lg font-bold">Olá, {driver?.name || 'Motorista'}</h1>
         <p className="text-sm text-muted-foreground">Comunicação com a Operação</p>
       </div>
 
-      {!loading && (!driver || (!workspace?.has_active_trip && standaloneLoads.length === 0)) && (
+
+      {!loading && (!driver || ((activeTrips.length === 0 && !autoTrip) && standaloneLoads.length === 0)) && (
         <NoLoadsHelp
           driverLinked={!!driver}
           driverActive={!!driver && (driver as any).status !== 'inactive'}
-          hasAssignedLoads={standaloneLoads.length > 0}
-          hasActiveTrip={workspace?.has_active_trip || false}
+          hasAssignedLoads={standaloneLoads.length > 0 || myLoads.length > 0}
+          hasActiveTrip={activeTrips.length > 0 || !!autoTrip}
           driverName={driver?.name}
           driverId={driver?.id}
           onNavigateToLoads={() => navigate('/driver/loads')}
@@ -219,16 +282,13 @@ export default function DriverHome() {
                 <Button
                   size="sm"
                   className="w-full"
-                  disabled={reportEvent.isPending}
                   onClick={async () => {
-                    if (trip.status === 'planned') {
-                      reportEvent.mutate({
-                        tripId: trip.id,
-                        eventType: 'trip_start',
-                        payload: { odometer: 0 },
-                        idempotencyKey: `trip-start-${trip.id}`
-                      });
-                    }
+                    // Marcar viagem como ativa se necessário
+                    await supabase
+                      .from('dispatch_trips')
+                      .update({ status: 'dispatched' })
+                      .eq('id', trip.id)
+                      .eq('status', 'planned');
                     
                     navigate(`/driver/stops?trip=${trip.id}`);
                   }}
@@ -249,6 +309,8 @@ export default function DriverHome() {
         </div>
       )}
 
+
+      {/* Delivery map com dados reais — só quando há paradas geolocalizadas na viagem. */}
       {showRealMap && (
         <Card>
           <CardContent className="p-3 space-y-3">
@@ -277,7 +339,8 @@ export default function DriverHome() {
         </Card>
       )}
 
-      {trip && !checklist.isLoading && (!checklist.preCompleted || !checklist.postCompleted) && (
+      {/* Checklist status banner */}
+      {autoTrip && !checklist.isLoading && (!checklist.preCompleted || !checklist.postCompleted) && (
         <Card
           className="border-warning/50 bg-warning/5 cursor-pointer hover:bg-warning/10 transition-colors"
           onClick={() => navigate('/driver/checklist')}
@@ -297,6 +360,7 @@ export default function DriverHome() {
         </Card>
       )}
 
+      {/* Quick actions */}
       <div className="grid grid-cols-2 gap-3">
         <Card className="cursor-pointer hover:bg-accent/50 transition-colors" onClick={() => navigate('/driver/journey')}>
           <CardContent className="p-3 flex flex-col items-center gap-1.5">

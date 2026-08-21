@@ -7,7 +7,6 @@ RETURNS uuid[]
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
   SELECT COALESCE(array_agg(DISTINCT client_id), ARRAY[]::uuid[])
@@ -22,7 +21,6 @@ RETURNS boolean
 LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -62,7 +60,6 @@ RETURNS TABLE (
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
   WITH allowed AS (SELECT unnest(public._portal_user_client_ids(_tenant_id)) AS client_id)
@@ -99,7 +96,6 @@ CREATE OR REPLACE FUNCTION public.request_client_pickup(
 RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -166,7 +162,6 @@ RETURNS TABLE (
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
   WITH allowed AS (SELECT unnest(public._portal_user_client_ids(_tenant_id)) AS client_id)
@@ -220,7 +215,6 @@ RETURNS TABLE (
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
   WITH allowed AS (SELECT unnest(public._portal_user_client_ids(_tenant_id)) AS client_id)
@@ -269,7 +263,6 @@ RETURNS TABLE (
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
   WITH allowed AS (SELECT unnest(public._portal_user_client_ids(_tenant_id)) AS client_id)
@@ -302,7 +295,6 @@ CREATE OR REPLACE FUNCTION public.create_client_occurrence(
 RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -335,7 +327,6 @@ RETURNS TABLE (storage_bucket text, storage_path text)
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
   WITH allowed AS (SELECT unnest(public._portal_user_client_ids(_tenant_id)) AS client_id)

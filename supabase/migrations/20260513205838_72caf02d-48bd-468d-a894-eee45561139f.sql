@@ -2,7 +2,6 @@ CREATE OR REPLACE FUNCTION public.sync_driver_vehicle_assignment()
  RETURNS trigger
  LANGUAGE plpgsql
  SECURITY DEFINER
-  SET search_path = public
  SET search_path TO 'public'
 AS $function$
 BEGIN
@@ -40,4 +39,3 @@ BEGIN
   RETURN NEW;
 END;
 $function$;
--- linter:allow-no-tenant legacy-migration 2026-12-31

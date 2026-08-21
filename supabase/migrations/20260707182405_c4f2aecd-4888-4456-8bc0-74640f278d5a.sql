@@ -14,7 +14,6 @@ CREATE OR REPLACE FUNCTION public.sync_financial_obligations(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -304,7 +303,6 @@ CREATE OR REPLACE FUNCTION public.import_bank_statement(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE

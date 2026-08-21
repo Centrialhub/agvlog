@@ -5,14 +5,14 @@ import {
   validateNFe, validateOrderRows, generateLoadSuggestions, buildValidationIndexes,
   ValidatedDocument, ValidatedOrder, LoadSuggestion,
 } from '@/lib/ingestionValidator';
-import { useFiscalDocuments, useFiscalDocumentsArray, useCreateFiscalDocument } from '@/hooks/useFiscalDocuments';
-import { useClients, useClientsArray } from '@/hooks/useClients';
+import { useFiscalDocuments, useCreateFiscalDocument } from '@/hooks/useFiscalDocuments';
+import { useClients } from '@/hooks/useClients';
 import { useCreateOrder } from '@/hooks/useOrders';
-import { useCreateLoad, useLoads, useLoadsArray } from '@/hooks/useLoads';
+import { useCreateLoad, useLoads } from '@/hooks/useLoads';
 import { getNextLoadNumberFromExisting } from '@/hooks/useLoads';
 import { useCreateLoadItem } from '@/hooks/useLoadItems';
 import { useVehicles } from '@/hooks/useVehicles';
-import { useOperationalRoutes, useOperationalRoutesArray, useUpdateOperationalRoute } from '@/hooks/useOperationalRoutes';
+import { useOperationalRoutes, useUpdateOperationalRoute } from '@/hooks/useOperationalRoutes';
 import { useToast } from '@/hooks/use-toast';
 import { Upload, FileText, FileStack } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
@@ -85,12 +85,12 @@ async function getEdgeFunctionErrorMessage(error: any): Promise<string> {
 }
 
 export default function Ingestion() {
-  const { data: existingDocs = [] } = useFiscalDocumentsArray();
-  const { data: clients = [] } = useClientsArray();
+  const { data: existingDocs = [] } = useFiscalDocuments();
+  const { data: clients = [] } = useClients();
   const { data: vehicles = [] } = useVehicles();
   const { data: drivers = [] } = useDrivers();
-  const { data: loadsData } = useLoadsArray(); const loads = (loadsData as any) || [];
-  const { data: routesData } = useOperationalRoutesArray(); const operationalRoutes = (routesData as any) || [];
+  const { data: loads = [] } = useLoads();
+  const { data: operationalRoutes = [] } = useOperationalRoutes();
   const { currentTenant } = useTenant();
   const { user } = useAuth();
   const createDoc = useCreateFiscalDocument();
@@ -1588,7 +1588,7 @@ export default function Ingestion() {
 
           // Vincula documentos à carga via RPC oficial (cria load_items + atualiza fiscal_documents + auditoria)
           if (docIds.length > 0 && currentTenant) {
-            const { data: assignResult, error: assignErr } = await (supabase as any).rpc('link_fiscal_documents_to_load_v1', {
+            const { data: assignResult, error: assignErr } = await (supabase as any).rpc('assign_fiscal_documents_to_load', {
               _tenant_id: currentTenant.id,
               _load_id: loadId,
               _document_ids: docIds,
@@ -1606,7 +1606,7 @@ export default function Ingestion() {
               throw new Error(`Falha ao vincular ${docIds.length} NF(s): ${assignErr.message || assignErr}`);
             }
 
-            const updatedCount = Number((assignResult as any)?.linked_count ?? docIds.length);
+            const updatedCount = Number((assignResult as any)?.updated ?? docIds.length);
             if (updatedCount !== docIds.length) {
               try {
                 await (supabase as any).rpc('delete_load_safely', {
@@ -1637,9 +1637,7 @@ export default function Ingestion() {
           for (const order of suggestion.orders) {
             const orderId = createdOrderIds.get(order.source.orderNumber);
             try {
-              // guardrail:allow-direct-write
-              const { error: liErr } = await (supabase as any)// linter:allow-direct-write load_items legacy-refactor 2026-12-31
-      .from('load_items').insert({
+              const { error: liErr } = await (supabase as any).from('load_items').insert({
                 tenant_id: currentTenant!.id,
                 load_id: loadId,
                 order_id: orderId || null,

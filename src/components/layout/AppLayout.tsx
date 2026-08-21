@@ -3,8 +3,6 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useTenant } from '@/hooks/useTenant';
 import { useCompanyProfile } from '@/hooks/useCompanyProfile';
-import { isFeatureEnabled, FeatureKey } from '@/lib/featureFlags';
-
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
@@ -13,14 +11,12 @@ import {
   PackageCheck, AlertOctagon, Upload, TrendingUp, ChevronDown, Plug,
   Radio, Receipt, DollarSign, UserCog, Package, Wrench,
   Boxes, ClipboardCheck, ArrowRightLeft, Wallet, FileSearch, FileSpreadsheet,
-  PackageOpen, MonitorPlay, Sprout, Tag, ShieldCheck, Check
+  PackageOpen, MonitorPlay, Sprout, Tag, ShieldCheck,
 } from 'lucide-react';
-import { TenantSwitcher } from './TenantSwitcher';
 
-type NavLeaf = { label: string; href: string; icon: ReactNode; feature?: FeatureKey };
-type NavGroup = { label: string; icon: ReactNode; items: NavLeaf[]; feature?: FeatureKey };
+type NavLeaf = { label: string; href: string; icon: ReactNode };
+type NavGroup = { label: string; icon: ReactNode; items: NavLeaf[] };
 type NavEntry = NavLeaf | NavGroup;
-
 
 interface NavSection {
   label: string;
@@ -45,6 +41,7 @@ const navSections: NavSection[] = [
           { label: 'NFS-e (Serviços)', href: '/nfse', icon: <FileSpreadsheet className="h-4 w-4" /> },
           { label: 'ORT', href: '/ort-management', icon: <FileSearch className="h-4 w-4" /> },
           { label: 'Auditoria ICMS', href: '/cte-consistency', icon: <ShieldCheck className="h-4 w-4" /> },
+          { label: 'MDF (provisório)', href: '/mdfe-provisional', icon: <FileText className="h-4 w-4" /> },
         ],
       },
       {
@@ -67,14 +64,12 @@ const navSections: NavSection[] = [
           { label: 'Resumo NF Importadas', href: '/imported-notes-summary', icon: <FileSpreadsheet className="h-4 w-4" /> },
         ],
       },
-      { label: 'Controle de Cargas', href: '/load-control', icon: <PackageCheck className="h-4 w-4" />, feature: 'LOAD_CONTROL' },
-
-      { label: 'Monitoramento de Motoristas', href: '/driver-monitoring', icon: <Users className="h-4 w-4" />, feature: 'DRIVER_WORKSPACE' },
+      { label: 'Controle de Cargas', href: '/load-control', icon: <PackageCheck className="h-4 w-4" /> },
+      { label: 'Monitoramento de Motoristas', href: '/driver-monitoring', icon: <Users className="h-4 w-4" /> },
       { label: 'Devolução de Paletes', href: '/pallet-returns', icon: <Boxes className="h-4 w-4" /> },
       { label: 'Falta de Mercadoria', href: '/merchandise-shortages', icon: <AlertOctagon className="h-4 w-4" /> },
       { label: 'Eventos Operacionais', href: '/events', icon: <AlertOctagon className="h-4 w-4" /> },
       { label: 'Ocorrências Formais (RH/Auditoria)', href: '/incidents', icon: <AlertOctagon className="h-4 w-4" /> },
-
       { label: 'Relatórios de Ocorrências', href: '/occurrence-reports', icon: <FileSpreadsheet className="h-4 w-4" /> },
       { label: 'Checklists', href: '/checklists', icon: <ClipboardCheck className="h-4 w-4" /> },
       { label: 'Produtividade', href: '/productivity', icon: <TrendingUp className="h-4 w-4" /> },
@@ -84,7 +79,6 @@ const navSections: NavSection[] = [
     label: 'Financeiro',
     items: [
       { label: 'Painel Financeiro', href: '/financial', icon: <Wallet className="h-4 w-4" /> },
-
       { label: 'Contas a Receber', href: '/receivables', icon: <DollarSign className="h-4 w-4" /> },
       { label: 'Contas a Pagar', href: '/payables', icon: <DollarSign className="h-4 w-4" /> },
       { label: 'Faturas por Cliente', href: '/client-invoices', icon: <FileText className="h-4 w-4" /> },
@@ -94,17 +88,14 @@ const navSections: NavSection[] = [
       { label: 'Acerto de Motoristas', href: '/driver-settlements', icon: <Receipt className="h-4 w-4" /> },
       { label: 'Conciliação Bancária', href: '/bank-reconciliation', icon: <Wallet className="h-4 w-4" /> },
       { label: 'Folha de Pagamento', href: '/payroll', icon: <Wallet className="h-4 w-4" /> },
-      { label: 'Razão Operacional', href: '/ledger', icon: <FileText className="h-4 w-4" />, feature: 'OPERATIONAL_LEDGER' },
       { label: 'Centros de Custo', href: '/cost-centers', icon: <Tag className="h-4 w-4" /> },
-
     ],
   },
   {
     label: 'Cadastros',
     items: [
       { label: 'Clientes e Fornecedores', href: '/clients', icon: <Building2 className="h-4 w-4" /> },
-      { label: 'Funcionários', href: '/employees', icon: <UserCog className="h-4 w-4" />, feature: 'HR_CORE' },
-
+      { label: 'Funcionários', href: '/employees', icon: <UserCog className="h-4 w-4" /> },
       { label: 'Veículos', href: '/vehicles', icon: <Truck className="h-4 w-4" /> },
       { label: 'Motoristas', href: '/drivers', icon: <Users className="h-4 w-4" /> },
       { label: 'Ativos / Patrimônio', href: '/assets', icon: <Package className="h-4 w-4" /> },
@@ -137,8 +128,6 @@ const navSections: NavSection[] = [
     label: 'Sistema',
     items: [
       { label: 'Equipe & Acessos', href: '/team', icon: <Users className="h-4 w-4" /> },
-      { label: 'Auditoria de Dados', href: '/data-quality', icon: <ShieldCheck className="h-4 w-4" />, feature: 'DATA_QUALITY_CENTER' },
-
       { label: 'Integrações', href: '/integration-health', icon: <Plug className="h-4 w-4" /> },
       { label: 'Configurações', href: '/settings', icon: <Settings className="h-4 w-4" /> },
     ],
@@ -215,10 +204,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             <span className="font-bold text-sm text-sidebar-primary-foreground tracking-tight truncate">{brandName}</span>
           )}
         </div>
-        {/* Tenant Switcher */}
-        <div className="px-3 py-2">
-          <TenantSwitcher collapsed={collapsed} />
-        </div>
 
         {/* Nav sections */}
         <nav className="flex-1 overflow-y-auto py-2 space-y-1">
@@ -238,7 +223,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 )}
                 {(!sectionCollapsed || collapsed) && (
                   <div className="space-y-0.5 px-1.5">
-                    {section.items.filter(entry => !entry.feature || isFeatureEnabled(entry.feature)).map(entry => {
+                    {section.items.map(entry => {
                       if (!isGroup(entry)) {
                         const active = isActive(entry.href);
                         return (
@@ -258,15 +243,13 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                           </Link>
                         );
                       }
-                      const visibleItems = entry.items.filter(item => !item.feature || isFeatureEnabled(item.feature));
-                      if (visibleItems.length === 0) return null;
                       const groupCollapsed = collapsedGroups.has(entry.label);
-                      const hasActive = visibleItems.some(i => isActive(i.href));
+                      const hasActive = entry.items.some(i => isActive(i.href));
                       if (collapsed) {
                         // Mini mode: render children flat with icons only
                         return (
                           <div key={entry.label} className="space-y-0.5">
-                            {visibleItems.map(item => {
+                            {entry.items.map(item => {
                               const active = isActive(item.href);
                               return (
                                 <Link
@@ -304,7 +287,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                           </button>
                           {!groupCollapsed && (
                             <div className="ml-3 mt-0.5 space-y-0.5 border-l border-sidebar-border/60 pl-2">
-                              {visibleItems.map(item => {
+                              {entry.items.map(item => {
                                 const active = isActive(item.href);
                                 return (
                                   <Link
@@ -326,7 +309,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                           )}
                         </div>
                       );
-
                     })}
                   </div>
                 )}

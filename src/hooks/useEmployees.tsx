@@ -32,7 +32,6 @@ export interface Employee {
   driver_id: string | null;
   user_id: string | null;
   notes: string | null;
-  version: number;
   created_at: string;
   updated_at: string;
 }
@@ -52,50 +51,32 @@ export interface EmployeeDocument {
   created_at: string;
 }
 
-export interface PaginatedEmployees {
-  items: Employee[];
-  next_cursor: string | null;
-  total_count: number;
-}
-
-export function useEmployees(filters: { search?: string } = {}) {
+export function useEmployees() {
   const { currentTenant } = useTenant();
-  return useQuery<PaginatedEmployees>({
-    queryKey: ['employees', currentTenant?.id, filters],
+  return useQuery({
+    queryKey: ['employees', currentTenant?.id],
     queryFn: async () => {
-      if (!currentTenant) return { items: [], next_cursor: null, total_count: 0 };
-      const { data, error } = await supabase.rpc('list_employees_v1', {
-        p_tenant_id: currentTenant.id,
-        p_search: filters.search || null,
-        p_limit: 1000,
-      });
+      if (!currentTenant) return [];
+      const { data, error } = await (supabase as any)
+        .from('employees').select('*')
+        .eq('tenant_id', currentTenant.id)
+        .order('name');
       if (error) throw error;
-      const result = data as any;
-      return {
-        items: (result.items || []) as Employee[],
-        next_cursor: result.next_cursor || null,
-        total_count: Number(result.total_count) || 0,
-      };
+      return (data || []) as Employee[];
     },
     enabled: !!currentTenant,
-
   });
-}
-
-export function useEmployeesArray() {
-  const q = useEmployees();
-  return { ...q, data: q.data?.items ?? [] };
 }
 
 export function useCreateEmployee() {
   const { currentTenant } = useTenant();
+  const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (values: Partial<Employee>) => {
-      const { data, error } = await supabase.rpc('create_employee_v1', {
-        p_tenant_id: currentTenant!.id,
-        p_values: values,
-      });
+      const { data, error } = await (supabase as any).from('employees').insert({
+        ...values, tenant_id: currentTenant!.id, created_by: user?.id,
+      }).select().single();
       if (error) throw error;
       return data;
     },
@@ -104,43 +85,48 @@ export function useCreateEmployee() {
 }
 
 export function useUpdateEmployee() {
-  const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, version, ...values }: Partial<Employee> & { id: string; version: number }) => {
-      if (version === undefined || version === null) {
-        throw new Error('Versão do registro é obrigatória para atualização.');
-      }
-
-      const { error } = await supabase.rpc('update_employee_v1', {
-        p_tenant_id: currentTenant!.id,
-        p_employee_id: id,
-        p_values: values,
-        p_expected_version: version,
-      });
-
-      if (error) {
-        if (error.code === 'P0001') {
-          throw new Error('Conflito de edição: O registro foi alterado por outro usuário. Por favor, atualize a página e tente novamente.');
-        }
-        throw error;
-      }
+    mutationFn: async ({ id, ...values }: Partial<Employee> & { id: string }) => {
+      const { data, error } = await (supabase as any).from('employees')
+        .update({ ...values, updated_at: new Date().toISOString() })
+        .eq('id', id).select().single();
+      if (error) throw error;
+      return data;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['employees'] }),
   });
 }
 
-export function useDeleteEmployee() {
+export function useEmployeeDocuments(employeeId?: string) {
   const { currentTenant } = useTenant();
+  return useQuery({
+    queryKey: ['employee_documents', employeeId],
+    queryFn: async () => {
+      if (!currentTenant || !employeeId) return [];
+      const { data, error } = await (supabase as any)
+        .from('employee_documents').select('*')
+        .eq('employee_id', employeeId)
+        .order('expiry_date', { ascending: true });
+      if (error) throw error;
+      return (data || []) as EmployeeDocument[];
+    },
+    enabled: !!currentTenant && !!employeeId,
+  });
+}
+
+export function useCreateEmployeeDocument() {
+  const { currentTenant } = useTenant();
+  const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.rpc('delete_employee_v1', {
-        p_tenant_id: currentTenant!.id,
-        p_employee_id: id,
-      });
+    mutationFn: async (values: Partial<EmployeeDocument>) => {
+      const { data, error } = await (supabase as any).from('employee_documents').insert({
+        ...values, tenant_id: currentTenant!.id, created_by: user?.id,
+      }).select().single();
       if (error) throw error;
+      return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['employees'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['employee_documents'] }),
   });
 }

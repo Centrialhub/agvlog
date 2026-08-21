@@ -1,4 +1,3 @@
-// guardrail:allow-direct-write
 import { useMemo, useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -136,8 +135,7 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
         try {
           await Promise.all(
             toPersist.map(({ id, meta }) =>
-              supabase// linter:allow-direct-write fiscal_documents legacy-refactor 2026-12-31
-      .from('fiscal_documents').update({ delivery_meta: meta } as any).eq('id', id),
+              supabase.from('fiscal_documents').update({ delivery_meta: meta } as any).eq('id', id),
             ),
           );
           qc.invalidateQueries({ queryKey: ['load_documents'] });
@@ -211,10 +209,8 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
       if ((load.payment_method || null) === nextLoadPaymentMethod) return;
 
       try {
-        // guardrail:allow-direct-write
         const { error } = await supabase
-          // linter:allow-direct-write loads legacy-refactor 2026-12-31
-      .from('loads')
+          .from('loads')
           .update({ payment_method: nextLoadPaymentMethod } as any)
           .eq('id', load.id);
         if (error) throw error;
@@ -231,10 +227,8 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
   const saveTotals = async () => {
     setSavingTotals(true);
     try {
-      // guardrail:allow-direct-write
       const { error } = await supabase
-        // linter:allow-direct-write loads legacy-refactor 2026-12-31
-      .from('loads')
+        .from('loads')
         .update({
           cash_to_receive: Number(cashToReceive || 0),
           pix_to_receive: Number(pixToReceive || 0),
@@ -292,16 +286,13 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
       setMeta(nextMeta);
       await Promise.all(
         updates.map(({ id, meta }) =>
-          supabase// linter:allow-direct-write fiscal_documents legacy-refactor 2026-12-31
-      .from('fiscal_documents').update({ delivery_meta: meta } as any).eq('id', id),
+          supabase.from('fiscal_documents').update({ delivery_meta: meta } as any).eq('id', id),
         ),
       );
       // sincroniza carga com a primeira forma detectada se ainda estiver vazia
       if (!load.payment_method && updates[0]?.detected) {
-        // guardrail:allow-direct-write
         await supabase
-          // linter:allow-direct-write loads legacy-refactor 2026-12-31
-      .from('loads')
+          .from('loads')
           .update({ payment_method: updates[0].detected } as any)
           .eq('id', load.id);
       }
@@ -330,8 +321,7 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
     setMeta(prev => ({ ...prev, [docId]: next }));
     try {
       const { error } = await supabase
-        // linter:allow-direct-write fiscal_documents legacy-refactor 2026-12-31
-      .from('fiscal_documents')
+        .from('fiscal_documents')
         .update({ status: 'delivered', delivery_meta: next } as any)
         .eq('id', docId);
       if (error) throw error;
@@ -357,8 +347,7 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
     setMeta(prev => ({ ...prev, [docId]: next }));
     try {
       const { error } = await supabase
-        // linter:allow-direct-write fiscal_documents legacy-refactor 2026-12-31
-      .from('fiscal_documents')
+        .from('fiscal_documents')
         .update({ status: 'confirmed', delivery_meta: next } as any)
         .eq('id', docId);
       if (error) throw error;
@@ -396,8 +385,7 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
     setMeta(prev => ({ ...prev, [docId]: next }));
     try {
       const { error } = await supabase
-        // linter:allow-direct-write fiscal_documents legacy-refactor 2026-12-31
-      .from('fiscal_documents')
+        .from('fiscal_documents')
         .update({ status: 'not_delivered', delivery_meta: next } as any)
         .eq('id', docId);
       if (error) throw error;
@@ -432,20 +420,18 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
       // status volta para 'confirmed' e load_id é liberado via RPC oficial
       const currentLoadId = (reModal as any).loadId || (reModal as any).load_id || null;
       const { error: metaErr } = await supabase
-        // linter:allow-direct-write fiscal_documents legacy-refactor 2026-12-31
-      .from('fiscal_documents')
+        .from('fiscal_documents')
         .update({ status: 'confirmed', delivery_meta: next } as any)
         .eq('id', docId);
       if (metaErr) throw metaErr;
       if (currentLoadId) {
         const { data: fd } = await supabase
-          // linter:allow-direct-write fiscal_documents legacy-refactor 2026-12-31
-      .from('fiscal_documents')
+          .from('fiscal_documents')
           .select('tenant_id, load_id')
           .eq('id', docId)
           .maybeSingle();
         if (fd?.tenant_id && fd.load_id) {
-          const { error: rmErr } = await (supabase as any).rpc('unlink_fiscal_documents_from_load_v1', {
+          const { error: rmErr } = await (supabase as any).rpc('remove_fiscal_documents_from_load', {
             _tenant_id: fd.tenant_id,
             _load_id: fd.load_id,
             _document_ids: [docId],
@@ -470,8 +456,7 @@ export default function LoadNotesPanel({ load, documents, onSaved }: Props) {
       const ids = Array.from(dirty);
       for (const id of ids) {
         const { error } = await supabase
-          // linter:allow-direct-write fiscal_documents legacy-refactor 2026-12-31
-      .from('fiscal_documents')
+          .from('fiscal_documents')
           .update({ delivery_meta: meta[id] || {} } as any)
           .eq('id', id);
         if (error) throw error;

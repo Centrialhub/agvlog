@@ -1,10 +1,9 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useLoads, useLoadsArray, Load } from '@/hooks/useLoads';
+import { useLoads, Load } from '@/hooks/useLoads';
 import { useLoadItems, LoadItem, useUpdateLoadItem } from '@/hooks/useLoadItems';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useUpdateLoad, useDeleteLoad } from '@/hooks/useLoads';
-import { useTenant } from '@/hooks/useTenant';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -418,9 +417,7 @@ function LoadColumn({ load, items, isLoading, vehicles, selectedItems, onToggleI
 }
 
 export default function LoadReallocation() {
-  const { currentTenant } = useTenant();
-  const { data: loadsData, isLoading } = useLoadsArray();
-  const loads = (loadsData as any) || [];
+  const { data: loads = [], isLoading } = useLoads();
   const { data: vehicles = [] } = useVehicles();
   const updateLoad = useUpdateLoad();
   const deleteLoad = useDeleteLoad();
@@ -564,18 +561,21 @@ export default function LoadReallocation() {
     const movedItems: Array<{ desc: string; pallets: number; weight: number }> = [];
 
     const itemIds = Array.from(selectedItems);
+    for (const id of itemIds) {
+      const item = sourceItems.find(i => i.id === id);
+      if (item) movedItems.push({ desc: item.item_description, pallets: item.pallet_count || 0, weight: item.weight_kg || 0 });
+    }
     try {
-      const tenantId = currentTenant?.id || (sourceLoad as any)?.tenant_id || (targetLoad as any)?.tenant_id;
+      const tenantId = (sourceLoad as any)?.tenant_id || (targetLoad as any)?.tenant_id;
       if (!tenantId) throw new Error('Tenant ID não encontrado');
-      
-      const { data, error } = await (supabase as any).rpc('move_load_items_v3', {
-        p_tenant_id: tenantId,
-        p_source_load_id: sourceLoadId,
-        p_target_load_id: targetLoadId,
-        p_item_ids: itemIds,
+      const { data, error } = await (supabase as any).rpc('move_load_items_between_loads', {
+        _tenant_id: tenantId,
+        _source_load_id: sourceLoadId,
+        _target_load_id: targetLoadId,
+        _item_ids: itemIds,
       });
       if (error) throw error;
-      moved = itemIds.length;
+      moved = (data && (data as any).moved) ?? itemIds.length;
     } catch (e: any) {
       errors = itemIds.length;
       toast.error(e?.message || 'Falha ao mover itens');

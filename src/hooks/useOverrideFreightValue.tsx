@@ -29,10 +29,8 @@ export function useOverrideFreightValue() {
       const cbsValue = input.newValue > 0 ? input.newValue * cbsRate / 100 : null;
       const ibsValue = input.newValue > 0 ? input.newValue * ibsRate / 100 : null;
 
-      // guardrail:allow-direct-write
       const { error: upErr } = await supabase
-        // linter:allow-direct-write fiscal_documents legacy-refactor 2026-12-31
-      .from('fiscal_documents')
+        .from('fiscal_documents')
         .update({
           freight_value: input.newValue,
           value: input.newValue,
@@ -77,10 +75,8 @@ export function useConfirmFreightValue() {
   return useMutation({
     mutationFn: async (fiscalDocumentId: string) => {
       if (!currentTenant) throw new Error('Tenant não selecionado');
-      // guardrail:allow-direct-write
       const { error } = await supabase
-        // linter:allow-direct-write fiscal_documents legacy-refactor 2026-12-31
-      .from('fiscal_documents')
+        .from('fiscal_documents')
         .update({
           freight_confirmed_by: user?.id || null,
           freight_confirmed_at: new Date().toISOString(),

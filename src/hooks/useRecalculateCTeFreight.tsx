@@ -21,8 +21,7 @@ export function useRecalculateCTeFreight() {
 
       // Load current CT-e
       const { data: cte, error: cteErr } = await supabase
-        // linter:allow-direct-write fiscal_documents legacy-refactor 2026-12-31
-      .from('fiscal_documents')
+        .from('fiscal_documents')
         .select('*')
         .eq('id', cteId)
         .eq('tenant_id', currentTenant.id)
@@ -40,8 +39,7 @@ export function useRecalculateCTeFreight() {
       let nfeTotalValue = 0;
       if ((cte as any).load_id) {
         const { data: nfeDocs } = await supabase
-          // linter:allow-direct-write fiscal_documents legacy-refactor 2026-12-31
-      .from('fiscal_documents')
+          .from('fiscal_documents')
           .select('client_id, value')
           .eq('load_id', (cte as any).load_id)
           .eq('tenant_id', currentTenant.id)
@@ -84,9 +82,7 @@ export function useRecalculateCTeFreight() {
       const ibsRate = 0.10;
 
       const { error: upErr } = await supabase
-        // linter:allow-direct-write fiscal_documents legacy-refactor 2026-12-31
-      .from('fiscal_documents')
-        // guardrail:allow-direct-write
+        .from('fiscal_documents')
         .update({
           freight_value: newValue,
           freight_value_original: newValue,

@@ -80,39 +80,23 @@ export interface FiscalDocument {
   orders?: { order_number: string } | null;
 }
 
-export interface PaginatedFiscalDocuments {
-  items: FiscalDocument[];
-  next_cursor: string | null;
-  total_count: number;
-}
-
-export function useFiscalDocuments(filters: { search?: string; type?: DocType[] } = {}) {
+export function useFiscalDocuments() {
   const { currentTenant } = useTenant();
-  return useQuery<PaginatedFiscalDocuments>({
-    queryKey: ['fiscal_documents', currentTenant?.id, filters],
+  return useQuery({
+    queryKey: ['fiscal_documents', currentTenant?.id],
     queryFn: async () => {
-      if (!currentTenant) return { items: [], next_cursor: null, total_count: 0 };
-      const { data, error } = await supabase.rpc('list_fiscal_documents_v1', {
-        p_tenant_id: currentTenant.id,
-        p_search: filters.search || null,
-        p_type: filters.type || null,
-        p_limit: 1000,
-      });
+      if (!currentTenant) return [];
+      const { data, error } = await supabase
+        .from('fiscal_documents')
+        .select('*, clients!fiscal_documents_client_id_fkey(company_name), loads(load_number), orders(order_number)')
+        .eq('tenant_id', currentTenant.id)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false });
       if (error) throw error;
-      const result = data as any;
-      return {
-        items: (result.items || []) as FiscalDocument[],
-        next_cursor: result.next_cursor || null,
-        total_count: Number(result.total_count) || 0,
-      };
+      return (data || []) as FiscalDocument[];
     },
     enabled: !!currentTenant,
   });
-}
-
-export function useFiscalDocumentsArray() {
-  const q = useFiscalDocuments();
-  return { ...q, data: q.data?.items ?? [] };
 }
 
 export function useCreateFiscalDocument() {
@@ -121,9 +105,7 @@ export function useCreateFiscalDocument() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (values: Partial<FiscalDocument>) => {
-      // guardrail:allow-direct-write
-      const { data, error } = await supabase// linter:allow-direct-write fiscal_documents legacy-code 2026-12-31
-      .from('fiscal_documents').insert({
+      const { data, error } = await supabase.from('fiscal_documents').insert({
         ...values,
         tenant_id: currentTenant!.id,
         created_by: user?.id,
@@ -163,7 +145,6 @@ export async function findExistingFiscalDocument(input: {
   const accessKey = normalizeTaxId(input.accessKey);
   if (accessKey) {
     const { data } = await supabase
-      // linter:allow-direct-write fiscal_documents legacy-code 2026-12-31
       .from('fiscal_documents')
       .select('*')
       .eq('tenant_id', input.tenantId)
@@ -178,7 +159,6 @@ export async function findExistingFiscalDocument(input: {
     const series = normalizeFiscalNumber(input.invoiceSeries) || '0';
     const model = normalizeFiscalNumber(input.fiscalModel) || '55';
     const { data } = await supabase
-      // linter:allow-direct-write fiscal_documents legacy-code 2026-12-31
       .from('fiscal_documents')
       .select('*')
       .eq('tenant_id', input.tenantId)
@@ -189,7 +169,6 @@ export async function findExistingFiscalDocument(input: {
     if (data) return data as FiscalDocument;
     // Fallback: broader search, since stored values may differ in formatting
     const { data: broad } = await supabase
-      // linter:allow-direct-write fiscal_documents legacy-code 2026-12-31
       .from('fiscal_documents')
       .select('*')
       .eq('tenant_id', input.tenantId)
@@ -212,9 +191,7 @@ export function useUpdateFiscalDocument() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...values }: Partial<FiscalDocument> & { id: string }) => {
-      // guardrail:allow-direct-write
-      const { data, error } = await supabase// linter:allow-direct-write fiscal_documents legacy-code 2026-12-31
-      .from('fiscal_documents').update({
+      const { data, error } = await supabase.from('fiscal_documents').update({
         ...values,
         updated_at: new Date().toISOString(),
       } as any).eq('id', id).select().single();
@@ -237,8 +214,7 @@ export function useUpdateFiscalDocument() {
           let nfeTotalValue = 0;
           if (doc.load_id) {
             const { data: nfeDocs } = await supabase
-              // linter:allow-direct-write fiscal_documents legacy-code 2026-12-31
-      .from('fiscal_documents')
+              .from('fiscal_documents')
               .select('client_id, value')
               .eq('load_id', doc.load_id)
               .eq('tenant_id', currentTenant.id)
@@ -271,9 +247,7 @@ export function useUpdateFiscalDocument() {
           if (result.success && result.breakdown) {
             const v = result.value;
             const cbsRate = 0.90, ibsRate = 0.10;
-            // guardrail:allow-direct-write
-            await supabase// linter:allow-direct-write fiscal_documents legacy-code 2026-12-31
-      .from('fiscal_documents').update({
+            await supabase.from('fiscal_documents').update({
               freight_value: v,
               freight_value_original: v,
               value: v,

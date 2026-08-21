@@ -12,7 +12,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 export default function Dashboard() {
-  const { currentTenant, memberships } = useTenant();
+  const { currentTenant } = useTenant();
   const navigate = useNavigate();
   const { data: fleetState = [] } = useFleetState();
 
@@ -186,14 +186,7 @@ export default function Dashboard() {
     <div className="animate-fade-in space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">
-          {currentTenant?.name} — Visão geral da frota
-          {vehicleCount === 0 && memberships.length > 1 && (
-            <span className="ml-2 text-warning animate-pulse">
-              (Esta empresa parece estar vazia. Verifique o seletor de empresa na barra lateral.)
-            </span>
-          )}
-        </p>
+        <p className="text-sm text-muted-foreground">{currentTenant?.name} — Visão geral da frota</p>
       </div>
 
       {/* KPI Cards */}

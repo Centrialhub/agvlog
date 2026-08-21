@@ -231,7 +231,6 @@ CREATE OR REPLACE FUNCTION public.next_closing_report_number(_tenant_id uuid, _d
 RETURNS text
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -255,7 +254,6 @@ CREATE OR REPLACE FUNCTION public.close_closing_report(_closing_report_id uuid)
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE _r public.closing_reports;
@@ -279,7 +277,6 @@ CREATE OR REPLACE FUNCTION public.cancel_closing_report(_closing_report_id uuid,
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE _r public.closing_reports;
@@ -300,7 +297,6 @@ CREATE OR REPLACE FUNCTION public.reopen_closing_report(_closing_report_id uuid,
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE _r public.closing_reports;
@@ -323,7 +319,6 @@ CREATE OR REPLACE FUNCTION public.register_closing_report_payment(_closing_repor
 RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -382,7 +377,6 @@ CREATE OR REPLACE FUNCTION public.refresh_closing_report_overdue(_tenant_id uuid
 RETURNS integer
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE _n int;

@@ -151,8 +151,7 @@ WHERE d.tenant_id = e.tenant_id AND e.is_default AND d.emitter_id IS NULL;
 CREATE OR REPLACE FUNCTION public.next_nfse_number_by_emitter(
   _tenant_id uuid, _emitter_id uuid, _series text
 ) RETURNS bigint
-LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path = public
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
 AS $$
 DECLARE
   v_branch text;

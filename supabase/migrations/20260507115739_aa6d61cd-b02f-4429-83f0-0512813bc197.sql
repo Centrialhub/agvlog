@@ -56,8 +56,7 @@ CREATE INDEX idx_fiscal_documents_pickup ON public.fiscal_documents(pickup_order
 -- Sequential pickup number per tenant
 CREATE OR REPLACE FUNCTION public.peek_next_pickup_number(_tenant_id uuid)
 RETURNS text
-LANGUAGE plpgsql STABLE SECURITY DEFINER
-  SET search_path = public SET search_path = 'public'
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = 'public'
 AS $$
 DECLARE _next integer;
 BEGIN

@@ -137,9 +137,7 @@ export default function CTeWorkbench({ loadId, loadNumber, destination, document
         .join(', ')
         .substring(0, 500);
 
-      const { data, error } = await supabase// linter:allow-direct-write fiscal_documents legacy-refactor 2026-12-31
-      .from('fiscal_documents').insert({
-        // guardrail:allow-direct-write
+      const { data, error } = await supabase.from('fiscal_documents').insert({
         tenant_id: currentTenant.id,
         created_by: user?.id,
         document_type: 'outbound',

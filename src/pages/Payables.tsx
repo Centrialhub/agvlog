@@ -20,7 +20,6 @@ import PayablePaymentDialog from '@/components/financial/PayablePaymentDialog';
 import ManualExpenseDialog from '@/components/financial/ManualExpenseDialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
-// import { useApproveFinancialObligation } from '@/hooks/useOperationalFinancial';
 import type { ParsedFiscalXml } from '@/lib/nfeXmlParser';
 
 const emptyForm = {
@@ -173,6 +172,14 @@ export default function Payables() {
     }
   };
 
+  const quickUpdate = async (p: Payable, status: string) => {
+    try {
+      await updateMut.mutateAsync({ id: p.id, status });
+      toast.success('Conta atualizada');
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  };
 
   const exportCsv = () => {
     const rows = [
@@ -323,22 +330,7 @@ export default function Payables() {
                   </TableCell>
                   <TableCell onClick={(e) => e.stopPropagation()}>
                     <div className="flex gap-1">
-                      {(p.status === 'pending' || p.status === 'approved') && (
-                        <div className="relative group">
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            className="h-7 px-2 text-xs text-blue-600 opacity-50 cursor-not-allowed"
-                            disabled={true}
-                          >
-                            <CheckCircle className="h-3.5 w-3.5 mr-1" /> Aprovar
-                          </Button>
-                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-48 p-2 bg-popover text-popover-foreground text-[10px] rounded shadow-md border z-50">
-                            Aprovação desativada: utilize o fluxo de pagamento para liquidar obrigações.
-                          </div>
-                        </div>
-                      )}
-                      {p.status !== 'paid' && p.status !== 'cancelled' && p.status !== 'pending' && (
+                      {p.status !== 'paid' && p.status !== 'cancelled' && (
                         <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-green-600" onClick={() => setPaymentPayable(p)}>
                           <DollarSign className="h-3.5 w-3.5 mr-1" /> Baixa
                         </Button>
@@ -349,19 +341,9 @@ export default function Payables() {
                         </Button>
                       )}
                       {p.status !== 'cancelled' && p.status !== 'paid' && (
-                        <div className="relative group">
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            className="h-7 px-2 text-xs text-destructive opacity-50 cursor-not-allowed"
-                            disabled={true}
-                          >
-                            <XCircle className="h-3.5 w-3.5" />
-                          </Button>
-                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-48 p-2 bg-popover text-popover-foreground text-[10px] rounded shadow-md border z-50">
-                            Cancelamento desativado temporariamente.
-                          </div>
-                        </div>
+                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-destructive" onClick={() => quickUpdate(p, 'cancelled')}>
+                          <XCircle className="h-3.5 w-3.5" />
+                        </Button>
                       )}
                     </div>
                   </TableCell>
@@ -416,6 +398,15 @@ export default function Payables() {
               <div>
                 <Label>Nº documento</Label>
                 <Input value={form.document_number} onChange={e => setForm({ ...form, document_number: e.target.value })} />
+              </div>
+              <div>
+                <Label>Status</Label>
+                <Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {PAYABLE_STATUSES.map(s => <SelectItem key={s} value={s}>{PAYABLE_STATUS_LABELS[s]}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div>

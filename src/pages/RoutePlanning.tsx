@@ -31,7 +31,7 @@ import { applySmartSequence, applyOriginalOrder, autoSequenceStops } from '@/lib
 import { simulateStopTimeline } from '@/lib/route-planning/timelineSimulation';
 import { regenerateStopsPreservingEdits } from '@/lib/route-planning/regenerateStops';
 import { generateAutomaticRoutePlans, defaultPlannedStartAt } from '@/lib/route-planning/autoRoutePlanner';
-import { useOperationalRoutes, useOperationalRoutesArray } from '@/hooks/useOperationalRoutes';
+import { useOperationalRoutes } from '@/hooks/useOperationalRoutes';
 import { useCustomerDeliveryWindowsForRouting } from '@/hooks/route-planning/useCustomerDeliveryWindowsForRouting';
 import { useDispatchRoutePlan } from '@/hooks/route-planning/useDispatchRoutePlan';
 import { validateRouteConsistency } from '@/lib/route-planning/routeConsistency';
@@ -133,7 +133,7 @@ export default function RoutePlanning() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const dispatchPlan = useDispatchRoutePlan();
-  const { data: routesData } = useOperationalRoutesArray(); const operationalRoutes = (routesData as any) || [];
+  const { data: operationalRoutes = [] } = useOperationalRoutes();
 
   const { data: drivers = [] } = useQuery({
     queryKey: ['drivers_for_routing', currentTenant?.id],

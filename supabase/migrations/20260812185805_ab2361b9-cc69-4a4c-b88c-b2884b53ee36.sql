@@ -2,7 +2,6 @@ CREATE OR REPLACE FUNCTION public._build_manual_driver_settlement(_settlement_id
 RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path TO 'public'
 AS $$
 DECLARE

@@ -205,9 +205,8 @@ export function useAddEmployeeIncidentAction() {
         _action_type: values.action_type,
         _description: values.description ?? null,
         _amount: values.amount ?? 0,
-        _effective_date: values.effective_date ? values.effective_date.slice(0, 10) : null,
+        _effective_date: values.effective_date ?? null,
       });
-
       if (error) throw error;
       return data;
     },

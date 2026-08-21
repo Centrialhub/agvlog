@@ -177,7 +177,7 @@ export default function LoadRomaneioTabs({ load, documents, items, onSaved }: Pr
     queryFn: async () => {
       const { data } = await supabase
         .from('dispatch_stops')
-        .select('id, stop_order, destination, status, planned_arrival_at, actual_arrival_at, clients(name)')
+        .select('id, stop_order, destination, status, planned_at, arrival_at, clients(name)')
         .in('dispatch_trip_id', tripIds)
         .order('stop_order');
       return data || [];
@@ -509,8 +509,8 @@ export default function LoadRomaneioTabs({ load, documents, items, onSaved }: Pr
                     <TableCell className="text-xs">{s.destination}</TableCell>
                     <TableCell className="text-xs">{s.clients?.name || '—'}</TableCell>
                     <TableCell className="text-xs"><Badge variant="outline" className="text-[10px]">{s.status}</Badge></TableCell>
-                    <TableCell className="text-xs">{s.planned_arrival_at ? new Date(s.planned_arrival_at).toLocaleString('pt-BR') : '—'}</TableCell>
-                    <TableCell className="text-xs">{s.actual_arrival_at ? new Date(s.actual_arrival_at).toLocaleString('pt-BR') : '—'}</TableCell>
+                    <TableCell className="text-xs">{s.planned_at ? new Date(s.planned_at).toLocaleString('pt-BR') : '—'}</TableCell>
+                    <TableCell className="text-xs">{s.arrival_at ? new Date(s.arrival_at).toLocaleString('pt-BR') : '—'}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

@@ -1,8 +1,7 @@
 
 CREATE OR REPLACE FUNCTION public.get_client_portal_shipment_detail_v2(_fiscal_document_id uuid)
 RETURNS jsonb
-LANGUAGE plpgsql STABLE SECURITY DEFINER
-  SET search_path = public SET search_path TO 'public'
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path TO 'public'
 AS $$
 DECLARE
   _fd public.fiscal_documents;

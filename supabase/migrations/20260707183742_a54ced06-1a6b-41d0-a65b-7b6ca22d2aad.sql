@@ -1,7 +1,6 @@
 
 CREATE OR REPLACE FUNCTION public._tg_sync_obligations_from_payable()
-RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE v_from date; v_to date; v_row public.payables;
 BEGIN
   v_row := COALESCE(NEW, OLD);

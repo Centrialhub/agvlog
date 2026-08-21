@@ -14,8 +14,7 @@ RETURNS TABLE (
   can_view_driver_contact boolean,
   active boolean
 )
-LANGUAGE sql STABLE SECURITY DEFINER
-  SET search_path = public SET search_path = public
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
 AS $$
   SELECT cpa.client_id,
          COALESCE(c.trade_name, c.company_name, 'Cliente') AS client_name,
@@ -43,8 +42,7 @@ CREATE OR REPLACE FUNCTION public.get_client_portal_summary_v2(
   _end_date date DEFAULT NULL
 )
 RETURNS jsonb
-LANGUAGE plpgsql STABLE SECURITY DEFINER
-  SET search_path = public SET search_path = public
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public
 AS $function$
 DECLARE
   _client_ids uuid[];
@@ -129,8 +127,7 @@ CREATE OR REPLACE FUNCTION public.get_client_portal_upcoming_deliveries(
   _limit integer DEFAULT 8
 )
 RETURNS jsonb
-LANGUAGE plpgsql STABLE SECURITY DEFINER
-  SET search_path = public SET search_path = public
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public
 AS $function$
 DECLARE
   _client_ids uuid[];
@@ -204,8 +201,7 @@ CREATE OR REPLACE FUNCTION public.get_client_portal_alerts(
   _limit integer DEFAULT 10
 )
 RETURNS jsonb
-LANGUAGE plpgsql STABLE SECURITY DEFINER
-  SET search_path = public SET search_path = public
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public
 AS $function$
 DECLARE
   _client_ids uuid[];

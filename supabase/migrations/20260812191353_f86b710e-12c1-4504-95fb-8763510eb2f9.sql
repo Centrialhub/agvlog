@@ -1,11 +1,4 @@
--- Job criado fora do histórico de migrations: remoção condicional para ser reprodutível
-DO $unschedule$
-BEGIN
-  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'nfse-status-poll-every-5min') THEN
-    PERFORM cron.unschedule('nfse-status-poll-every-5min');
-  END IF;
-END
-$unschedule$;
+SELECT cron.unschedule('nfse-status-poll-every-5min');
 
 -- Re-scheduling with 1min frequency
 SELECT cron.schedule('nfse-status-poll-every-1min', '* * * * *', 

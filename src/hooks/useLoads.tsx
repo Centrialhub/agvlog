@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
-import { isFeatureEnabled } from '@/lib/featureFlags';
+import { useAuth } from './useAuth';
 
 import type { LoadStatus } from '@/lib/status/loadStatus';
 export { LOAD_STATUSES, LOAD_STATUS_LABELS } from '@/lib/status/loadStatus';
@@ -39,130 +39,96 @@ export interface Load {
   drivers?: { name: string } | null;
 }
 
-export interface PaginatedLoads {
-  items: Load[];
-  next_cursor: string | null;
-  total_count: number;
-}
-
-export function useLoads(filters: { search?: string; status?: LoadStatus[] } = {}) {
+export function useLoads() {
   const { currentTenant } = useTenant();
-  return useQuery<PaginatedLoads>({
-    queryKey: ['loads', currentTenant?.id, filters],
+  return useQuery({
+    queryKey: ['loads', currentTenant?.id],
     queryFn: async () => {
-      if (!currentTenant) return { items: [], next_cursor: null, total_count: 0 };
-      const { data, error } = await supabase.rpc('list_loads_v1', {
-        p_tenant_id: currentTenant.id,
-        p_search: filters.search || null,
-        p_status: filters.status || null,
-        p_limit: 1000, // Safe limit for now
-      });
+      if (!currentTenant) return [];
+      const { data, error } = await supabase
+        .from('loads')
+        .select('*, vehicles(plate, nickname), drivers(name)')
+        .eq('tenant_id', currentTenant.id)
+        .order('created_at', { ascending: false });
       if (error) throw error;
-      
-      // The RPC returns { items, next_cursor, total_count }
-      const result = data as any;
-      return {
-        items: (result.items || []) as Load[],
-        next_cursor: result.next_cursor || null,
-        total_count: Number(result.total_count) || 0,
-      } as PaginatedLoads;
+      return (data || []) as Load[];
     },
     enabled: !!currentTenant,
   });
 }
 
-/**
- * Array-compatibility wrapper for useLoads.
- * Returns the data as an array for components not yet migrated to pagination.
- */
-export function useLoadsArray(filters: { search?: string; status?: LoadStatus[] } = {}) {
-  const q = useLoads(filters);
-  const dataArray = q.data?.items ?? [];
-  return { ...q, data: dataArray } as any; 
-}
-
 export function useCreateLoad() {
   const { currentTenant } = useTenant();
+  const { user } = useAuth();
   const qc = useQueryClient();
-
   return useMutation({
-    mutationFn: async (load: Partial<Load> & { idempotency_key?: string }) => {
-      if (!currentTenant) throw new Error('Tenant not found');
-      
-      if (isFeatureEnabled('LOGISTICS_CONSOLIDATION_V2')) {
-        const { data, error } = await (supabase.rpc as any)('create_load_v2', {
-          p_tenant_id: currentTenant.id,
-          p_idempotency_key: load.idempotency_key || crypto.randomUUID(),
-          p_vehicle_id: load.vehicle_id || null,
-          p_driver_id: load.driver_id || null,
-          p_origin: load.origin || '',
-          p_destination: load.destination || '',
-          p_notes: load.notes || null,
-          p_operation_type: load.operation_type || null,
-          p_scheduled_load_at: load.scheduled_load_at || null,
-        });
-
-        if (error) throw error;
-        return { id: data as string };
-      } else {
-        const { data, error } = await supabase.rpc('create_load_with_next_number', {
-          _tenant_id: currentTenant.id,
-          _origin: load.origin || null,
-          _destination: load.destination || null,
-          _vehicle_id: load.vehicle_id || null,
-          _driver_id: load.driver_id || null,
-          _notes: load.notes || null
-        });
-
-        if (error) throw error;
-        return { id: (data as any).id };
-      }
+    mutationFn: async (values: Partial<Load>) => {
+      const { data, error } = await supabase.from('loads').insert({
+        ...values,
+        tenant_id: currentTenant!.id,
+        created_by: user?.id,
+      } as any).select().single();
+      if (error) throw error;
+      return data;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['loads'] });
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['loads'] }),
   });
 }
 
-/**
- * Atomic load creation with server-side numbering.
- */
-export function useCreateLoadWithNextNumber() {
-  return useCreateLoad();
+export async function getNextLoadNumberFromExisting(tenantId: string) {
+  const { data, error } = await supabase
+    .from('loads')
+    .select('load_number')
+    .eq('tenant_id', tenantId)
+    .limit(10000);
+  if (error) throw error;
+
+  const maxNumber = (data || []).reduce((max, load: any) => {
+    const match = String(load.load_number || '').match(/\d+/g);
+    const number = match ? Number(match[match.length - 1]) : 0;
+    return Number.isFinite(number) ? Math.max(max, number) : max;
+  }, 1000);
+
+  return String(maxNumber + 1);
 }
 
-export function useUpdateLoad() {
+export function useCreateLoadWithNextNumber() {
   const { currentTenant } = useTenant();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...changes }: Partial<Load> & { id: string }) => {
-      if (!currentTenant) throw new Error('Tenant not found');
-      
-      if (isFeatureEnabled('LOGISTICS_CONSOLIDATION_V2')) {
-        const { data, error } = await supabase.rpc('update_load_v1', {
-          p_tenant_id: currentTenant.id,
-          p_load_id: id,
-          p_changes: changes as any,
-        });
-        if (error) throw error;
-        return data;
-      } else {
-        // Strip relations and restricted fields for V1 update
-        const { vehicles, drivers, tenant_id, load_number, ...cleanChanges } = changes as any;
-        const { data, error } = await supabase
-          .from('loads') // linter:allow-direct-write loads [V1 backward compatibility] [2026-12-31]
-          .update(cleanChanges)
-          .eq('id', id)
-          .eq('tenant_id', currentTenant.id)
-          .select()
-          .single();
-        if (error) throw error;
-        return data;
-      }
+    mutationFn: async (values: Partial<Load>) => {
+      if (!currentTenant) throw new Error('Tenant não selecionado');
+      const loadNumber = values.load_number || await getNextLoadNumberFromExisting(currentTenant.id);
+      const { data, error } = await supabase.from('loads').insert({
+        load_number: loadNumber,
+        tenant_id: currentTenant.id,
+        origin: values.origin ?? null,
+        destination: values.destination ?? null,
+        vehicle_id: values.vehicle_id ?? null,
+        driver_id: values.driver_id ?? null,
+        trip_id: values.trip_id ?? null,
+        notes: values.notes ?? null,
+        status: values.status ?? 'planned',
+      } as any).select().single();
+      if (error) throw error;
+      return data as Load;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['loads'] });
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['loads'] }),
+  });
+}
+
+export function useUpdateLoad() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...values }: Partial<Load> & { id: string }) => {
+      const { data, error } = await supabase.from('loads').update({
+        ...values,
+        updated_at: new Date().toISOString(),
+      } as any).eq('id', id).select().single();
+      if (error) throw error;
+      return data;
     },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['loads'] }),
   });
 }
 
@@ -171,25 +137,13 @@ export function useDeleteLoad() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      if (!currentTenant) throw new Error('Tenant not found');
-      
-      if (isFeatureEnabled('LOGISTICS_CONSOLIDATION_V2')) {
-        const { error } = await supabase.rpc('delete_load_v1', {
-          p_tenant_id: currentTenant.id,
-          p_load_id: id,
-        });
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.rpc('delete_load_safely', {
-          _tenant_id: currentTenant.id,
-          _load_id: id,
-        });
-        if (error) throw error;
-      }
+      const { error } = await (supabase as any).rpc('delete_load_safely', {
+        _tenant_id: currentTenant!.id,
+        _load_id: id,
+      });
+      if (error) throw error;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['loads'] });
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['loads'] }),
   });
 }
 
@@ -198,29 +152,30 @@ export function useDeleteLoads() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (ids: string[]) => {
-      if (!currentTenant) throw new Error('Tenant not found');
-      // Sequential RPC calls for batch deletion to ensure triggers and logic apply per-load
-      for (const id of ids) {
-        const { error } = await supabase.rpc('delete_load_v1', {
-          p_tenant_id: currentTenant.id,
-          p_load_id: id,
-        });
-        if (error) throw error;
+      const { data, error } = await (supabase as any).rpc('delete_loads_safely', {
+        _tenant_id: currentTenant!.id,
+        _load_ids: ids,
+      });
+      if (error) throw error;
+      const failed = Array.isArray(data) ? data.filter((r: any) => r && r.ok === false) : [];
+      if (failed.length > 0) {
+        throw new Error(
+          `Não foi possível excluir ${failed.length} carga(s): ` +
+            failed.map((f: any) => `${f.load_id}: ${f.error}`).join('; ')
+        );
       }
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['loads'] });
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['loads'] }),
   });
 }
 
 export function useHoldLoad() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
-      const { error } = await supabase.rpc('hold_load', {
+    mutationFn: async ({ id, reason }: { id: string; reason?: string }) => {
+      const { error } = await (supabase as any).rpc('hold_load', {
         _load_id: id,
-        _reason: reason,
+        _reason: reason ?? null,
       });
       if (error) throw error;
     },
@@ -235,7 +190,7 @@ export function useUnholdLoad() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.rpc('unhold_load', { _load_id: id });
+      const { error } = await (supabase as any).rpc('unhold_load', { _load_id: id });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -243,12 +198,4 @@ export function useUnholdLoad() {
       qc.invalidateQueries({ queryKey: ['pending_loads_for_routing'] });
     },
   });
-}
-
-export async function getNextLoadNumberFromExisting(tenantId: string): Promise<string> {
-  const { data, error } = await supabase.rpc('get_next_load_number_v1', {
-    p_tenant_id: tenantId
-  });
-  if (error) throw error;
-  return String(data || '1000');
 }

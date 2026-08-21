@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
-import { useClients, useClientsArray } from '@/hooks/useClients';
+import { useClients } from '@/hooks/useClients';
 import { useCreatePickupOrder } from '@/hooks/usePickupOrders';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -23,7 +23,7 @@ const ROMANEIO_LABELS = ['Entrega/Coleta', 'Viagem Direta', 'Retira', 'TransferÃ
 
 export default function OrtGeracaoTab() {
   const { currentTenant } = useTenant();
-  const { data: clients = [] } = useClientsArray();
+  const { data: clients = [] } = useClients();
   const createPickup = useCreatePickupOrder();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -67,8 +67,7 @@ export default function OrtGeracaoTab() {
     enabled: false,
     queryFn: async () => {
       let q = supabase
-        // linter:allow-direct-write fiscal_documents legacy-refactor 2026-12-31
-      .from('fiscal_documents')
+        .from('fiscal_documents')
         .select('id, invoice_number, issue_date, value, pallet_count, weight_kg, remitter, recipient, client_id, clients!fiscal_documents_client_id_fkey(company_name), load_id')
         .eq('tenant_id', currentTenant!.id)
         .eq('document_type', 'inbound')
@@ -128,9 +127,7 @@ export default function OrtGeracaoTab() {
       } as any);
 
       const { error } = await supabase
-        // guardrail:allow-direct-write
-        // linter:allow-direct-write fiscal_documents legacy-refactor 2026-12-31
-      .from('fiscal_documents')
+        .from('fiscal_documents')
         .update({ pickup_order_id: (pickup as any).id })
         .in('id', selectedIds);
       if (error) throw error;

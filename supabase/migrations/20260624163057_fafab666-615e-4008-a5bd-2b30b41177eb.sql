@@ -24,8 +24,7 @@ END $do$;
 -- ---------- get_user_portal_tenants ----------
 CREATE OR REPLACE FUNCTION public.get_user_portal_tenants()
 RETURNS TABLE (id uuid, name text, plan_key text, timezone text)
-LANGUAGE sql STABLE SECURITY DEFINER
-  SET search_path = public SET search_path = public
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
 AS $$
   SELECT DISTINCT t.id, t.name, t.plan_key, t.timezone
   FROM public.tenants t
@@ -72,8 +71,7 @@ END $do$;
 -- dispatch_planned_route: harden FD ownership + persist lat/lng
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.dispatch_planned_route(_payload jsonb)
-RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   _tenant_id uuid := (_payload->>'tenant_id')::uuid;
   _vehicle_id uuid := NULLIF(_payload->>'vehicle_id','')::uuid;

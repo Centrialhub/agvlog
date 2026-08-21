@@ -127,7 +127,6 @@ RETURNS jsonb
 LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE
@@ -236,7 +235,6 @@ RETURNS SETOF public.trip_alerts
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
   SELECT *

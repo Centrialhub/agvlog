@@ -271,7 +271,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
       try {
         const previousLoadIds = Array.from(new Set(docs.map((doc: any) => doc.load_id).filter(Boolean)));
         const docIds = docs.map((doc: any) => doc.id);
-        const { error: assignError } = await (supabase as any).rpc('link_fiscal_documents_to_load_v1', {
+        const { error: assignError } = await (supabase as any).rpc('assign_fiscal_documents_to_load', {
           _tenant_id: currentTenant!.id,
           _load_id: loadId,
           _document_ids: docIds,
@@ -322,10 +322,7 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
         weight_kg: acc.weight_kg + (Number(item.weight_kg) || 0),
         volume_m3: acc.volume_m3 + (Number(item.volume_m3) || 0),
       }), { pallet_count: 0, weight_kg: 0, volume_m3: 0 });
-      // guardrail:allow-direct-write
-      const { error: updateError } = await supabase
-        // linter:allow-direct-write loads manual-totals-recalc 2026-12-31
-      .from('loads').update({
+      const { error: updateError } = await supabase.from('loads').update({
         total_pallet_count: totals.pallet_count,
         total_weight_kg: totals.weight_kg,
         total_volume_m3: totals.volume_m3,
@@ -338,14 +335,14 @@ export default function LoadItemsPanel({ loadId, vehicleMaxPallets, vehicleMaxWe
   const handleDelete = async (item: LoadItem) => {
     try {
       if (item.fiscal_document_id) {
-        const { error: removeError } = await (supabase as any).rpc('unlink_fiscal_documents_from_load_v1', {
+        const { error: removeError } = await (supabase as any).rpc('remove_fiscal_documents_from_load', {
           _tenant_id: currentTenant!.id,
           _load_id: loadId,
           _document_ids: [item.fiscal_document_id],
         });
         if (removeError) throw removeError;
       } else {
-        await deleteItem.mutateAsync({ id: item.id });
+        await deleteItem.mutateAsync(item.id);
       }
       await refreshLoadTotals([loadId]);
       qc.invalidateQueries({ queryKey: ['load_documents'] });

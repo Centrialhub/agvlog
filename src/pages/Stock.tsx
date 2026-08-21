@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useStockItems, useCreateStockItem, useUpdateStockItem, useStockMovements, useCreateStockMovement, StockItem, STOCK_CATEGORIES, STOCK_CATEGORY_LABELS, MOVEMENT_TYPES, MOVEMENT_TYPE_LABELS } from '@/hooks/useStock';
-import { useEmployees, useEmployeesArray } from '@/hooks/useEmployees';
+import { useEmployees } from '@/hooks/useEmployees';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,7 +18,7 @@ import { format, parseISO } from 'date-fns';
 export default function Stock() {
   const { data: items = [], isLoading } = useStockItems();
   const { data: movements = [] } = useStockMovements();
-  const { data: employees = [] } = useEmployeesArray();
+  const { data: employees = [] } = useEmployees();
   const createItem = useCreateStockItem();
   const updateItem = useUpdateStockItem();
   const createMovement = useCreateStockMovement();

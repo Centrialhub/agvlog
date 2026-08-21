@@ -6,7 +6,6 @@ CREATE OR REPLACE FUNCTION public.delete_driver_settlement(
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = public
 AS $$
 DECLARE

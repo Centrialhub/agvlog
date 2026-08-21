@@ -1,4 +1,3 @@
-// guardrail:allow-direct-write
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/sonner';
@@ -14,8 +13,7 @@ export function useDeleteFailedCTe() {
     mutationFn: async (fiscalDocumentId: string) => {
       // 1. Tenta buscar em fiscal_documents (emissões reais/tentativas no Hub)
       const { data: realDoc, error: realErr } = await supabase
-        // linter:allow-direct-write fiscal_documents legacy-code 2026-12-31
-      .from('fiscal_documents')
+        .from('fiscal_documents')
         .select('id, sefaz_status, hub_document_id')
         .eq('id', fiscalDocumentId)
         .maybeSingle();
@@ -29,8 +27,7 @@ export function useDeleteFailedCTe() {
 
         // Libera as NFs vinculadas a este outbound_id
         const { error: releaseErr } = await supabase
-          // linter:allow-direct-write fiscal_documents legacy-code 2026-12-31
-      .from('fiscal_documents')
+          .from('fiscal_documents')
           .update({ cte_emitted_at: null, cte_emitted_outbound_id: null } as any)
           .eq('cte_emitted_outbound_id', fiscalDocumentId)
           .is('deleted_at', null);
@@ -38,8 +35,7 @@ export function useDeleteFailedCTe() {
         if (releaseErr) console.error('Erro ao liberar NFs vinculadas ao CT-e (real):', releaseErr);
 
         const { error: delErr } = await supabase
-          // linter:allow-direct-write fiscal_documents legacy-code 2026-12-31
-      .from('fiscal_documents')
+          .from('fiscal_documents')
           .delete()
           .eq('id', fiscalDocumentId);
 
@@ -60,8 +56,7 @@ export function useDeleteFailedCTe() {
           const ids = draftDoc.fiscal_document_ids.filter(Boolean);
           if (ids.length > 0) {
             const { error: releaseErr } = await supabase
-              // linter:allow-direct-write fiscal_documents legacy-code 2026-12-31
-      .from('fiscal_documents')
+              .from('fiscal_documents')
             .update({ cte_emitted_at: null, cte_emitted_outbound_id: null } as any)
             .in('id', ids)
             .is('deleted_at', null);

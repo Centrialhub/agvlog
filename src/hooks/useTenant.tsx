@@ -118,7 +118,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('agvlog_tenant_id', id);
   };
 
-  const currentMembership = memberships.find(m => m.tenant_id === currentTenantId) || memberships[0];
+  const currentMembership = memberships.find(m => m.tenant_id === currentTenantId);
 
   return (
     <TenantContext.Provider value={{

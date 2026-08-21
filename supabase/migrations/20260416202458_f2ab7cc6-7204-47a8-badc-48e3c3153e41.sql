@@ -24,4 +24,3 @@ DELETE FROM public.freight_calculation_log;
 
 -- 8. Rascunhos de planejamento de rota
 DELETE FROM public.route_planning_drafts;
--- linter:allow-no-tenant legacy-migration 2026-12-31

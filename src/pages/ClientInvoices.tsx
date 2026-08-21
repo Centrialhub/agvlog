@@ -5,7 +5,7 @@ import {
   useClientInvoiceDetail, fetchCteFiscalDocs,
   INVOICE_STATUS_LABELS, type ClientInvoice, type InvoiceStatus,
 } from '@/hooks/useClientInvoices';
-import { useClients, useClientsArray } from '@/hooks/useClients';
+import { useClients } from '@/hooks/useClients';
 import { useTenant } from '@/hooks/useTenant';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -37,7 +37,7 @@ export default function ClientInvoices() {
   const { currentTenant } = useTenant();
   const { data: companyProfile } = useCompanyProfile();
   const { data: invoices = [], isLoading } = useClientInvoices();
-  const { data: clients = [] } = useClientsArray();
+  const { data: clients = [] } = useClients();
   const cancelMut = useCancelClientInvoice();
   const markSent = useMarkInvoiceSent();
 

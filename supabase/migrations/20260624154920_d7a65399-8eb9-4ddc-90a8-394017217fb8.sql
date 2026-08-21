@@ -45,8 +45,7 @@ CREATE OR REPLACE FUNCTION public.search_client_portal_shipments(
   _has_pod boolean DEFAULT NULL, _has_occurrence boolean DEFAULT NULL,
   _limit integer DEFAULT 50, _offset integer DEFAULT 0
 )
-RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER
-  SET search_path = public SET search_path = 'public'
+RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = 'public'
 AS $function$
 DECLARE
   _client_ids uuid[]; _financial_client_ids uuid[];
@@ -141,8 +140,7 @@ $function$;
 
 -- get_client_portal_shipment_detail (DTOs explícitos)
 CREATE OR REPLACE FUNCTION public.get_client_portal_shipment_detail(_fiscal_document_id uuid)
-RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER
-  SET search_path = public SET search_path = 'public'
+RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = 'public'
 AS $function$
 DECLARE
   _fd public.fiscal_documents;
@@ -250,8 +248,7 @@ RETURNS TABLE(
   remitter text, recipient text, recipient_city text, recipient_state text,
   value numeric, weight_kg numeric, status text, load_id uuid, client_id uuid, has_pod boolean
 )
-LANGUAGE sql STABLE SECURITY DEFINER
-  SET search_path = public SET search_path = 'public'
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = 'public'
 AS $function$
   WITH allowed AS (SELECT unnest(public._portal_user_client_ids(_tenant_id)) AS client_id),
   financial AS (
@@ -293,8 +290,7 @@ RETURNS TABLE(
   receiver_name text, receiver_document text, receiver_role text,
   received_at timestamptz, validated_at timestamptz
 )
-LANGUAGE sql STABLE SECURITY DEFINER
-  SET search_path = public SET search_path = 'public'
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = 'public'
 AS $function$
   WITH allowed AS (SELECT unnest(public._portal_user_client_ids(_tenant_id)) AS client_id)
   SELECT pod.id, pod.fiscal_document_id, pod.load_id, fd.invoice_number,
@@ -317,8 +313,7 @@ CREATE OR REPLACE FUNCTION public.create_client_occurrence(
   _tenant_id uuid, _client_id uuid, _event_type text, _description text,
   _severity text DEFAULT 'medium', _load_id uuid DEFAULT NULL, _order_id uuid DEFAULT NULL
 )
-RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path = 'public'
+RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public'
 AS $function$
 DECLARE v_id uuid; v_ok boolean;
 BEGIN
@@ -359,8 +354,7 @@ $function$;
 CREATE OR REPLACE FUNCTION public.get_client_portal_summary(
   _tenant_id uuid, _start_date date DEFAULT NULL, _end_date date DEFAULT NULL
 )
-RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER
-  SET search_path = public SET search_path = 'public'
+RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = 'public'
 AS $function$
 DECLARE _client_ids uuid[]; _result jsonb;
 BEGIN

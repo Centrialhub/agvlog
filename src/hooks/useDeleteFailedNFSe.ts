@@ -1,4 +1,3 @@
-// guardrail:allow-direct-write
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/sonner';
@@ -27,8 +26,7 @@ export function useDeleteFailedNFSe() {
 
       // Retorna as NFs vinculadas
       const { error: releaseErr } = await (supabase as any)
-        // linter:allow-direct-write fiscal_documents legacy-code 2026-12-31
-      .from('fiscal_documents')
+        .from('fiscal_documents')
         .update({ nfse_emitted_at: null, nfse_emitted_document_id: null })
         .eq('nfse_emitted_document_id', nfseId)
         .eq('tenant_id', doc.tenant_id)

@@ -1,10 +1,10 @@
 import { useMemo } from 'react';
 import { useOrders, ORDER_STATUS_LABELS, OrderStatus } from '@/hooks/useOrders';
-import { useLoads, useLoadsArray, LOAD_STATUS_LABELS, LoadStatus } from '@/hooks/useLoads';
+import { useLoads, LOAD_STATUS_LABELS, LoadStatus } from '@/hooks/useLoads';
 import { useInventoryBalances } from '@/hooks/useInventory';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useIncidents, SEVERITY_LABELS, INCIDENT_STATUS_LABELS } from '@/hooks/useIncidents';
-import { useEmployees, useEmployeesArray } from '@/hooks/useEmployees';
+import { useEmployees } from '@/hooks/useEmployees';
 import { useMaintenanceOrders, MAINT_STATUS_LABELS } from '@/hooks/useMaintenanceOrders';
 import { useStockItems } from '@/hooks/useStock';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,11 +25,11 @@ const PIE_COLORS = ['hsl(var(--primary))', 'hsl(var(--destructive))', '#f59e0b',
 
 export default function OperationsDashboard() {
   const { data: orders = [] } = useOrders();
-  const { data: loadsData } = useLoadsArray(); const loads = (loadsData as any) || [];
+  const { data: loads = [] } = useLoads();
   const { data: balances = [] } = useInventoryBalances();
   const { data: vehicles = [] } = useVehicles();
   const { data: incidents = [] } = useIncidents();
-  const { data: employees = [] } = useEmployeesArray();
+  const { data: employees = [] } = useEmployees();
   const { data: maintenanceOrders = [] } = useMaintenanceOrders();
   const { data: stockItems = [] } = useStockItems();
   const navigate = useNavigate();

@@ -77,25 +77,16 @@ export function usePayables() {
 }
 
 export function useCreatePayable() {
+  const { currentTenant } = useTenant();
+  const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (values: Partial<Payable>) => {
-      // Allowlists explícitas para criação
-      const payload = {
-        supplier_name: values.supplier_name,
-        category: values.category,
-        description: values.description,
-        amount: values.amount,
-        due_date: values.due_date,
-        competence_date: values.competence_date,
-        document_number: values.document_number,
-        notes: values.notes,
-        receipt_url: values.receipt_url,
-        // Status forçado para pending na criação
-        status: 'pending'
-      };
-
-      const { data, error } = await supabase.from('payables').insert(payload as any).select().single();
+      const { data, error } = await supabase.from('payables').insert({
+        ...values,
+        tenant_id: currentTenant!.id,
+        created_by: user?.id,
+      } as any).select().single();
       if (error) throw error;
       return data;
     },
@@ -104,41 +95,22 @@ export function useCreatePayable() {
 }
 
 export function useUpdatePayable() {
+  const { user } = useAuth();
   const qc = useQueryClient();
-  const { currentTenant } = useTenant();
-
   return useMutation({
     mutationFn: async ({ id, ...values }: Partial<Payable> & { id: string }) => {
-      if (!currentTenant) throw new Error('Tenant não identificado');
-      
-      // Allowlists explícitas para atualização
-      const patch = {
-        supplier_name: values.supplier_name,
-        category: values.category,
-        description: values.description,
-        amount: values.amount,
-        due_date: values.due_date,
-        competence_date: values.competence_date,
-        document_number: values.document_number,
-        notes: values.notes,
-        receipt_url: values.receipt_url,
-        updated_at: new Date().toISOString()
-      };
-
-      const { data, error } = await supabase
-        .from('payables')
-        .update(patch as any)
-        .eq('id', id)
-        .eq('tenant_id', currentTenant.id)
-        .select()
-        .single();
-
+      const patch: any = { ...values, updated_at: new Date().toISOString() };
+      if (values.status === 'approved' && !values.approved_at) {
+        patch.approved_at = new Date().toISOString();
+        patch.approved_by = user?.id;
+      }
+      if (values.status === 'paid' && !values.paid_at) {
+        patch.paid_at = new Date().toISOString();
+      }
+      const { data, error } = await supabase.from('payables').update(patch).eq('id', id).select().single();
       if (error) throw error;
-      if (!data) throw new Error('Registro não encontrado ou acesso negado');
-      
       return data;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['payables'] }),
   });
 }
-

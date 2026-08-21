@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { useClients, useClientsArray, useUpdateClient, useCreateClient, Client } from '@/hooks/useClients';
+import { useClients, useUpdateClient, useCreateClient, Client } from '@/hooks/useClients';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
@@ -57,7 +57,7 @@ export default function ClientContactPicker({
   currentContact, currentAddress,
   onSelectClient, onApplyContact, onApplyAddress,
 }: ClientContactPickerProps) {
-  const { data: clients = [] } = useClientsArray();
+  const { data: clients = [] } = useClients();
   const updateClient = useUpdateClient();
   const createClient = useCreateClient();
   const { toast } = useToast();

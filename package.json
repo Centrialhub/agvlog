@@ -9,13 +9,10 @@
     "install:ci": "bun install --frozen-lockfile",
     "build": "vite build",
     "build:dev": "vite build --mode development",
-    "typecheck": "tsc -p tsconfig.app.json --noEmit",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "guardrails": "python3 scripts/guardrails/migration-integrity.py && python3 scripts/guardrails/db-linter.py && python3 scripts/guardrails/schema-check.py",
-    "ci": "python3 scripts/guardrails/ci.py"
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

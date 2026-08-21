@@ -24,8 +24,7 @@ export function useRecalculateInboundFreight() {
       const docs: any[] = [];
       for (let i = 0; i < docIds.length; i += chunk) {
         const { data, error } = await supabase
-          // linter:allow-direct-write fiscal_documents legacy-refactor 2026-12-31
-      .from('fiscal_documents')
+          .from('fiscal_documents')
           .select('id, client_id, recipient, recipient_state, recipient_city, weight_kg, pallet_count, value, freight_overridden')
           .eq('tenant_id', currentTenant.id)
           .eq('document_type', 'inbound')
@@ -70,10 +69,8 @@ export function useRecalculateInboundFreight() {
             continue; 
           }
 
-          // guardrail:allow-direct-write
           const { error: upErr } = await supabase
-            // linter:allow-direct-write fiscal_documents legacy-refactor 2026-12-31
-      .from('fiscal_documents')
+            .from('fiscal_documents')
             .update({
               freight_value: result.value,
               freight_value_original: result.value,

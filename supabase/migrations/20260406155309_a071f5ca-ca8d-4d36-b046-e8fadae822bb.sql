@@ -10,7 +10,6 @@ CREATE OR REPLACE FUNCTION public.sync_driver_vehicle_assignment()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
-  SET search_path = public
 SET search_path = 'public'
 AS $$
 BEGIN
@@ -59,4 +58,3 @@ CREATE TRIGGER sync_driver_vehicle_assignment
   AFTER UPDATE OF current_vehicle_id ON public.drivers
   FOR EACH ROW
   EXECUTE FUNCTION public.sync_driver_vehicle_assignment();
--- linter:allow-no-tenant legacy-migration 2026-12-31

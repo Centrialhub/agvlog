@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap, Polygon } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useFleetPositions, PositionLast } from '@/hooks/usePositions';
@@ -24,11 +24,9 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
 });
 
-function createVehicleIcon(state: MovementState, heading: number | null = null) {
+function createVehicleIcon(state: MovementState) {
   const color = stateColor(state);
   const opacity = state === 'offline' || state === 'unknown' ? '0.6' : '1';
-  const rotation = heading != null ? heading : 0;
-  
   return L.divIcon({
     className: 'custom-vehicle-marker',
     html: `<div style="
@@ -37,14 +35,11 @@ function createVehicleIcon(state: MovementState, heading: number | null = null) 
       box-shadow: 0 2px 8px rgba(0,0,0,0.3);
       display: flex; align-items: center; justify-content: center;
       opacity: ${opacity};
-      transform: rotate(${rotation}deg);
-      transition: transform 0.5s ease-in-out;
-    "><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg></div>`,
+    "><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg></div>`,
     iconSize: [32, 32],
     iconAnchor: [16, 16],
   });
 }
-
 
 function FitBounds({ positions }: { positions: { lat: number; lng: number }[] }) {
   const map = useMap();
@@ -110,17 +105,6 @@ function PipelineHealthBanner({ tenantId }: { tenantId: string }) {
 
 export default function FleetMap() {
   const { currentTenant } = useTenant();
-  const { data: geofences = [] } = useQuery({
-    queryKey: ['geofences', currentTenant?.id],
-    queryFn: async () => {
-      if (!currentTenant) return [];
-      const { data, error } = await supabase.from('geofences').select('*').eq('tenant_id', currentTenant.id).eq('enabled', true);
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!currentTenant,
-  });
-
   const { data: positions = [], isLoading: posLoading, refetch } = useFleetPositions();
   const { data: vehicles = [] } = useVehicles();
   const { data: vehicleStates = [] } = useFleetState();
@@ -333,35 +317,11 @@ export default function FleetMap() {
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           <FitBounds positions={withPosition as any} />
-          
-          {geofences.map(gf => {
-            const geom = gf.geometry as any;
-            if (geom.type === 'Polygon') {
-              const positions = geom.coordinates[0].map((coord: number[]) => [coord[1], coord[0]]);
-              return (
-                <Polygon 
-                  key={gf.id} 
-                  positions={positions} 
-                  pathOptions={{ 
-                    color: '#3b82f6', 
-                    fillColor: '#3b82f6', 
-                    fillOpacity: 0.2 
-                  }}
-                >
-
-                  <Popup><strong>{gf.name}</strong></Popup>
-                </Polygon>
-              );
-            }
-            return null;
-          })}
-
-          
           {withPosition.map(e => (
             <Marker
               key={e.vehicle.id}
               position={[e.lat!, e.lng!]}
-              icon={createVehicleIcon(e.state, e.heading)}
+              icon={createVehicleIcon(e.state)}
             >
               <Popup>
                 <div className="min-w-[180px]">

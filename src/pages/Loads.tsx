@@ -1,4 +1,3 @@
-// guardrail:allow-direct-write
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLoads, useDeleteLoad, useDeleteLoads, LOAD_STATUSES, LOAD_STATUS_LABELS, Load } from '@/hooks/useLoads';
@@ -66,26 +65,20 @@ export default function Loads() {
   const navigate = useNavigate();
   const { currentTenant } = useTenant();
   const { toast } = useToast();
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [datePreset, setDatePreset] = useState<DatePreset>('30');
-  const [customStart, setCustomStart] = useState('');
-  const [customEnd, setCustomEnd] = useState('');
-  const [advFilters, setAdvFilters] = useState<LoadAdvancedFiltersValue>(EMPTY_LOAD_ADVANCED_FILTERS);
-
-  const { data: loadsData, isLoading, refetch } = useLoads({ 
-    search, 
-    status: statusFilter === 'all' ? undefined : [statusFilter as any] 
-  });
-  const loads = loadsData?.items ?? [];
-  const totalCountServer = loadsData?.total_count ?? 0;
-
+  const { data: loads = [], isLoading, refetch } = useLoads();
   const { data: vehicles = [] } = useVehicles();
   const deleteOne = useDeleteLoad();
   const deleteBulk = useDeleteLoads();
   const holdMut = useHoldLoad();
   const unholdMut = useUnholdLoad();
+
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [datePreset, setDatePreset] = useState<DatePreset>('30');
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
   const [groupingOpen, setGroupingOpen] = useState(false);
+  const [advFilters, setAdvFilters] = useState<LoadAdvancedFiltersValue>(EMPTY_LOAD_ADVANCED_FILTERS);
 
   // Pagination
   const [page, setPage] = useState(1);

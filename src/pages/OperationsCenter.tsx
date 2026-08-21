@@ -95,7 +95,7 @@ const SEVERITY_COLORS: Record<string, string> = {
 };
 
 export default function OperationsCenter() {
-  const { currentTenant, memberships } = useTenant();
+  const { currentTenant } = useTenant();
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -278,23 +278,21 @@ export default function OperationsCenter() {
     enabled: !!currentTenant,
   });
 
-  // ── Dispatch Trips (Operational Workspace Read Model) ──
-  const { data: operationalWorkspace = [] } = useQuery({
-    queryKey: ['operational_workspace', currentTenant?.id],
+  // ── Dispatch Trips ──
+  const { data: activeTrips = [] } = useQuery({
+    queryKey: ['ops_trips', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return [];
-      const { data, error } = await supabase
-        .from('vw_operational_workspace')
-        .select('*')
-        .in('trip_status', ['planned', 'in_transit'])
+      const { data } = await supabase
+        .from('dispatch_trips')
+        .select('id, status, vehicle_id, driver_id, load_id, planned_start_at, actual_start_at')
+        .eq('tenant_id', currentTenant.id)
+        .in('status', ['planned', 'in_progress'])
         .limit(50);
-      if (error) throw error;
       return data || [];
     },
     enabled: !!currentTenant,
   });
-
-  const activeTrips = operationalWorkspace;
 
   // ── Fleet Map Data ──
   const stateMap = useMemo(() => {
@@ -381,8 +379,6 @@ export default function OperationsCenter() {
     };
   }, [loads, fiscalDocs, drivers, incidents, activeTrips]);
 
-  const isEmpty = stats?.nfeCount === 0 && stats?.activeLoads === 0 && fleetStats?.total === 0;
-
   // ── Chart Data ──
   const destChart = useMemo(() => {
     const activeLoads = loads.filter((l: any) => !['delivered'].includes(l.status));
@@ -447,11 +443,6 @@ export default function OperationsCenter() {
                 <h1 className="text-xl font-bold text-foreground">
                   {getGreeting()}, <span className="text-primary">{userName}</span>
                 </h1>
-                {isEmpty && memberships.length > 1 && (
-                  <Badge variant="outline" className="text-[10px] animate-pulse bg-warning/10 text-warning border-warning/20 border">
-                    Empresa vazia? Verifique o seletor lateral
-                  </Badge>
-                )}
               </div>
               <p className="text-sm text-muted-foreground mt-0.5 capitalize">
                 {brasiliaDate}

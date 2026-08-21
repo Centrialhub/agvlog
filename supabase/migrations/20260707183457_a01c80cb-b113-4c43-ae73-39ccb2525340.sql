@@ -34,8 +34,7 @@ CREATE OR REPLACE FUNCTION public.driver_create_expense(
   _paid_with_advance boolean DEFAULT false,
   _payment_source text DEFAULT 'driver',
   _reimbursable boolean DEFAULT NULL
-) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   v_tenant uuid; v_driver uuid; v_id uuid;
   v_reimbursable boolean;
@@ -92,8 +91,7 @@ GRANT EXECUTE ON FUNCTION public.driver_create_expense(
 
 -- 3) Sync triggers: settlements → obligations
 CREATE OR REPLACE FUNCTION public._tg_sync_obligations_from_settlement()
-RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE v_from date; v_to date;
 BEGIN
   IF NEW.status IN ('approved','paid','closed')
@@ -114,8 +112,7 @@ CREATE TRIGGER trg_sync_obligations_from_settlement
   FOR EACH ROW EXECUTE FUNCTION public._tg_sync_obligations_from_settlement();
 
 CREATE OR REPLACE FUNCTION public._tg_sync_obligations_from_settlement_payment()
-RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE v_s public.driver_settlements; v_from date; v_to date;
 BEGIN
   SELECT * INTO v_s FROM public.driver_settlements WHERE id = NEW.settlement_id;
@@ -134,8 +131,7 @@ CREATE TRIGGER trg_sync_obligations_from_settlement_payment
 
 -- 4) Trigger on driver_expenses approval → refresh company-paid obligations
 CREATE OR REPLACE FUNCTION public._tg_sync_obligations_from_expense()
-RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE v_from date; v_to date;
 BEGIN
   IF NEW.approval_status = 'approved'

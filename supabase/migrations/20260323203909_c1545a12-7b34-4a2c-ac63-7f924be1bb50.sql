@@ -4,4 +4,3 @@ SET
   speed = 0,
   source = COALESCE(source, '{}'::jsonb) || '{"speed_source": "inferred", "movement_state": "stopped"}'::jsonb
 WHERE speed IS NULL;
--- linter:allow-no-tenant legacy-migration 2026-12-31

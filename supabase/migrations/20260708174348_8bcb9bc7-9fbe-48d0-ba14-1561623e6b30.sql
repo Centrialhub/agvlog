@@ -106,8 +106,7 @@ FOR EACH ROW EXECUTE FUNCTION public.set_return_sheet_updated_at();
 
 CREATE OR REPLACE FUNCTION public.next_occurrence_return_sheet_number(
   _tenant_id uuid, _date date DEFAULT current_date
-) RETURNS text LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+) RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE _year integer := EXTRACT(YEAR FROM _date)::int; _next integer;
 BEGIN
   IF NOT public.is_tenant_member(_tenant_id) THEN
@@ -128,8 +127,7 @@ CREATE OR REPLACE FUNCTION public.generate_occurrence_return_sheet(
   _occurrence_id uuid,
   _regenerate boolean DEFAULT false,
   _regeneration_reason text DEFAULT NULL
-) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   _occ public.delivery_occurrences%ROWTYPE;
   _sheet_id uuid; _sheet_number text; _tenant uuid;
@@ -278,8 +276,7 @@ GRANT EXECUTE ON FUNCTION public.generate_occurrence_return_sheet(uuid, boolean,
 
 CREATE OR REPLACE FUNCTION public.cancel_occurrence_return_sheet(
   _return_sheet_id uuid, _reason text
-) RETURNS void LANGUAGE plpgsql SECURITY DEFINER
-  SET search_path = public SET search_path = public AS $$
+) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE _tenant uuid; _occ uuid;
 BEGIN
   IF _reason IS NULL OR length(trim(_reason)) = 0 THEN

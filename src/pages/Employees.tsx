@@ -1,7 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useEmployees, useEmployeesArray, useCreateEmployee, useUpdateEmployee, Employee, EMPLOYEE_STATUSES, EMPLOYEE_STATUS_LABELS } from '@/hooks/useEmployees';
-import { FeatureFlagGate } from '@/components/FeatureFlagGate';
-
+import { useEmployees, useCreateEmployee, useUpdateEmployee, Employee, EMPLOYEE_STATUSES, EMPLOYEE_STATUS_LABELS } from '@/hooks/useEmployees';
 import {
   useEmployeeContracts, useCreateEmployeeContract, useUpdateEmployeeContract,
   useEmployeeAdvances, useEmployeeIncidentActions,
@@ -26,7 +24,7 @@ import { toast } from '@/components/ui/sonner';
 import { format, differenceInDays, parseISO } from 'date-fns';
 
 export default function Employees() {
-  const { data: employees = [], isLoading } = useEmployeesArray();
+  const { data: employees = [], isLoading } = useEmployees();
   const createEmployee = useCreateEmployee();
   const updateEmployee = useUpdateEmployee();
   const [search, setSearch] = useState('');
@@ -87,7 +85,7 @@ export default function Employees() {
     payload.name = form.name;
     payload.status = form.status;
     try {
-      if (editing) await updateEmployee.mutateAsync({ id: editing.id, version: editing.version, ...payload });
+      if (editing) await updateEmployee.mutateAsync({ id: editing.id, ...payload });
       else await createEmployee.mutateAsync(payload);
       setDialogOpen(false);
       toast.success(editing ? 'Funcionário atualizado' : 'Funcionário cadastrado');
@@ -102,9 +100,7 @@ export default function Employees() {
   };
 
   return (
-    <FeatureFlagGate feature="HR_CORE">
     <div className="space-y-4">
-
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2"><Users className="h-5 w-5" /> Funcionários</h1>
@@ -240,8 +236,6 @@ export default function Employees() {
 
       <EmployeeDetailSheet employee={detailEmployee} onClose={() => setDetailEmployee(null)} />
     </div>
-    </FeatureFlagGate>
-
   );
 }
 
