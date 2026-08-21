@@ -48,3 +48,30 @@ rotas, corpos de `pg_cron`) e não foram alteradas.
 Migrations descrevem **schema e privilégios**. Qualquer correção de dados
 ligada a um tenant/usuário concreto vive em `scripts/ops/*.sql`, parametrizada
 e executada manualmente por um operador.
+
+## Correção: `20260820211500_portal_read_model.sql`
+
+A migration original referenciava colunas inexistentes em
+`public.fiscal_documents` (`invoice_date`, `total_value`, `total_weight_kg`,
+`issuer_id`, `sender_cnpj`) e declarava `SET search_path` duas vezes na função
+`get_portal_tracking_v3`, tornando o arquivo não executável em um
+`supabase db reset`.
+
+Correções aplicadas:
+
+1. `public.portal_shipment_read_model` recriada com as colunas reais
+   (`issue_date`, `value`, `weight_kg`, `client_id`, `remitter_cnpj`,
+   `recipient_cnpj`), `clients.company_name`/`clients.tax_id` como nome e
+   documento, joins de tenant explícitos e `security_invoker = true`.
+2. Nomes de saída estáveis (DTO): `id`, `invoice_number`, `invoice_series`,
+   `issue_date`, `value`, `weight_kg`, `client_id`, `client_name`,
+   `load_number`, `current_status`, `last_event_at`, `total_count`.
+3. `get_portal_tracking_v3` alinhada ao mesmo DTO, com um único
+   `SET search_path = public`.
+4. Autorização por linha via helpers do portal: `is_user_internal_role` ou
+   `_portal_user_client_ids`. Os parâmetros `p_client_ids` e `p_cnpjs` são
+   apenas filtros de refinamento e nunca concedem acesso.
+5. `EXECUTE` revogado de `PUBLIC` e concedido apenas a `authenticated`.
+6. `MANIFEST.sha256` (raiz e `supabase/migrations/`) atualizados.
+
+`CLIENT_PORTAL` permanece desativada; nenhuma flag foi alterada.
