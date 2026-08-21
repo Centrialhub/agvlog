@@ -212,7 +212,7 @@ export function useCteMonitor(filters: CteMonitorFilters) {
           source: (match ? 'hub' : 'draft') as any,
           hub_document_id: match?.hub_document_id ?? r.hub_document_id,
           emission_id: match?.emission_id ?? r.emission_id,
-          invoice_numbers: match?.invoice_numbers ?? r.invoice_numbers,
+          invoice_numbers: match?.invoice_number ?? r.invoice_numbers,
           sefaz_status: match ? mapOutboundStatus(match.status, match.sefaz_status, match.hub_document_id) : r.sefaz_status,
           sefaz_status_reason: match?.sefaz_message ?? r.sefaz_status_reason,
         } as CteMonitorRow;
