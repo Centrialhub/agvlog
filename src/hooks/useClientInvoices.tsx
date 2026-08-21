@@ -88,7 +88,6 @@ export function useEligibleCtes(clientId: string | null) {
         .eq('client_id', clientId!)
         .is('cancelled_at', null)
         .neq('status', 'cancelled')
-        .is('deleted_at', null)
         .order('issued_at', { ascending: false })
         .limit(500);
       if (error) throw error;
@@ -120,7 +119,6 @@ export function useEligibleNfse(clientId: string | null) {
         .eq('cliente_id', clientId!)
         .eq('cancelled', false)
         .neq('status', 'cancelled')
-        .is('deleted_at', null)
         .order('issue_date', { ascending: false })
         .limit(500);
       if (error) throw error;
