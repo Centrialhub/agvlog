@@ -372,8 +372,10 @@ export default function VehicleDetails() {
               <Card className="h-[500px] overflow-hidden">
                 <MapContainer center={positionLast ? [positionLast.lat, positionLast.lng] : [-14.235, -51.925]} zoom={positionLast ? 15 : 4} className="h-full w-full z-0">
                   <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                  <AutoFitMap position={positionLast ? [positionLast.lat, positionLast.lng] : null} />
                   {positionLast && <Marker position={[positionLast.lat, positionLast.lng]}><Popup><strong>{vehicle?.plate}</strong>{positionLast.speed != null && <br />}{positionLast.speed != null && `${Math.round(positionLast.speed)} km/h`}</Popup></Marker>}
                 </MapContainer>
+
               </Card>
             </div>
           </div>
@@ -388,8 +390,10 @@ export default function VehicleDetails() {
           <Card className="h-[500px] overflow-hidden">
             <MapContainer center={history.length > 0 ? [history[0].lat, history[0].lng] : positionLast ? [positionLast.lat, positionLast.lng] : [-14.235, -51.925]} zoom={history.length > 0 ? 13 : 4} className="h-full w-full z-0">
               <TileLayer attribution='&copy; OpenStreetMap' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+              <AutoFitMap positions={historyPath} />
               {historyPath.length > 1 && <Polyline positions={historyPath} color="hsl(215, 80%, 48%)" weight={3} opacity={0.8} />}
               {history.length > 0 && (<><Marker position={[history[0].lat, history[0].lng]}><Popup><strong>Início</strong><br />{format(new Date(history[0].captured_at), "HH:mm:ss")}</Popup></Marker><Marker position={[history[history.length - 1].lat, history[history.length - 1].lng]}><Popup><strong>Fim</strong><br />{format(new Date(history[history.length - 1].captured_at), "HH:mm:ss")}</Popup></Marker></>)}
+
               {/* Stop markers */}
               {(stops as any[]).map((s: any) => (
                 <CircleMarker key={s.id} center={[s.lat, s.lng]} radius={8} pathOptions={{ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.7 }}>
@@ -840,6 +844,20 @@ function MiniKPI({ icon, label, value, variant }: { icon: React.ReactNode; label
     </Card>
   );
 }
+
+function AutoFitMap({ position, positions }: { position?: [number, number] | null; positions?: [number, number][] }) {
+  const map = useMap();
+  useMemo(() => {
+    if (position) {
+      map.setView(position, 15);
+    } else if (positions && positions.length > 0) {
+      const bounds = L.latLngBounds(positions);
+      map.fitBounds(bounds, { padding: [20, 20] });
+    }
+  }, [position, positions, map]);
+  return null;
+}
+
 
 function SensorItem({ label, active, variant = 'default' }: { label: string; active: boolean; variant?: 'default' | 'destructive' }) {
   return (
