@@ -375,7 +375,7 @@ function ImportPanel({ tenantId, onDone }: { tenantId?: string; onDone: () => vo
 }
 
 function UnloadingTab() {
-  const { data: charges = [], isLoading } = useUnloadingCharges({});
+  const { data: charges = [], isLoading } = useUnloadingCharges('');
   return (
     <Card><CardContent className="p-0 overflow-auto">
       <Table>
