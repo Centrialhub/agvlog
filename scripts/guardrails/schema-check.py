@@ -346,18 +346,19 @@ def collect_events(content, base=0):
     """
     events = []
     for offset, stmt in split_statements(content, base):
-        m = DEF_RE.match(stmt)
+        masked = mask_dollar_bodies(stmt)
+        m = DEF_RE.search(masked)
         if m:
-            args_raw, _ = read_balanced_args(stmt, m.end() - 1)
+            args_raw, _ = read_balanced_args(masked, m.end() - 1)
             if args_raw is not None:
                 schema = (m.group(1) or "public").lower()
                 events.append(
                     (offset, "def", "CREATE FUNCTION", f"{schema}.{m.group(2).lower()}", args_raw)
                 )
             continue
-        m = ALTER_FUNC_RE.match(stmt)
+        m = ALTER_FUNC_RE.search(masked)
         if m:
-            args_raw, _ = read_balanced_args(stmt, m.end() - 1)
+            args_raw, _ = read_balanced_args(masked, m.end() - 1)
             if args_raw is not None:
                 schema = (m.group(1) or "public").lower()
                 events.append(
