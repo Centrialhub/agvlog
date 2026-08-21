@@ -128,7 +128,7 @@ export default function VehicleDetails() {
     queryKey: ['vehicle_alerts', currentTenant?.id, vehicleId],
     queryFn: async () => {
       if (!currentTenant || !vehicleId) return [];
-      const { data, error } = await supabase.from('alert_instances').select('*, alert_rules(rule_type)')
+      const { data, error } = await supabase.from('alert_instances').select('*, alert_rules(*)')
         .eq('tenant_id', currentTenant.id).eq('vehicle_id', vehicleId)
         .order('opened_at', { ascending: false }).limit(20);
       if (error) throw error;
@@ -192,6 +192,21 @@ export default function VehicleDetails() {
   });
 
   const movementState = vehicleState?.movement_state || 'unknown';
+  const { data: tripsCalculated } = useQuery({
+    queryKey: ['trips_calculated', vehicleId, historyDate],
+    queryFn: async () => {
+      if (!vehicleId) return null;
+      const { data, error } = await supabase.rpc('calculate_vehicle_trips_v1', {
+        _vehicle_id: vehicleId,
+        _start_at: `${historyDate}T00:00:00Z`,
+        _end_at: `${historyDate}T23:59:59Z`
+      });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!vehicleId,
+  });
+
   const isOnline = movementState === 'moving' || movementState === 'stopped' || movementState === 'idle';
   const isMoving = movementState === 'moving';
   const historyPath = useMemo(() => history.map((p: PositionRaw) => [p.lat, p.lng] as [number, number]), [history]);
