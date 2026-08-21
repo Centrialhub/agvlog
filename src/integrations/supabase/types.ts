@@ -15529,6 +15529,17 @@ export type Database = {
           suggested_action: string
         }[]
       }
+      audit_operational_congruence_v1: {
+        Args: { p_tenant_id: string }
+        Returns: {
+          domain: string
+          entity_id: string
+          entity_type: string
+          message: string
+          metadata: Json
+          severity: string
+        }[]
+      }
       build_fiscal_documents_deleted_recovery_dry_run: {
         Args: { _end_time: string; _start_time: string; _tenant_id?: string }
         Returns: {
