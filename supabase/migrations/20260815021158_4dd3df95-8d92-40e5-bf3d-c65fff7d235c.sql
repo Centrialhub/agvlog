@@ -1,6 +1,4 @@
-UPDATE fiscal_documents 
-SET supplier_id = '69575de8-a391-48ce-ae9f-7fd282272413', 
-    cte_emitted_at = NULL, 
-    nfse_emitted_at = NULL 
-WHERE invoice_number IN ('444798', '444797', '444796', '446083', '446072', '446071', '446070', '446069') 
-  AND tenant_id = '6e874e6e-5bca-486d-9928-bef0646989c4';
+-- Migration originalmente composta apenas de DML (dados de um tenant específico).
+-- O conteúdo foi movido para scripts/ops/seeds/20260815021158_4dd3df95-8d92-40e5-bf3d-c65fff7d235c.sql
+-- para manter o histórico de migrations reprodutível desde schema vazio.
+-- Nenhuma mudança de schema: intencionalmente sem instruções.
