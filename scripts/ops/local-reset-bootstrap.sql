@@ -135,3 +135,11 @@ BEGIN
   _parts := string_to_array(name, '/');
   RETURN _parts[array_length(_parts,1)];
 END $$;
+
+-- Publicação de realtime criada pela plataforma
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    CREATE PUBLICATION supabase_realtime;
+  END IF;
+END $$;
