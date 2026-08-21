@@ -28,18 +28,29 @@ export function useOperationalRoutes(filters: { search?: string; includeInactive
     queryKey: ['operational_routes', currentTenant?.id, filters],
     queryFn: async () => {
       if (!currentTenant) return { items: [], next_cursor: null, total_count: 0 };
-      const { data, error } = await supabase.rpc('list_operational_routes_v1', {
-        p_tenant_id: currentTenant.id,
-        p_search: filters.search || null,
-        p_include_inactive: filters.includeInactive || false,
-        p_limit: 1000,
-      });
+
+      let q = supabase
+        .from('operational_routes')
+        .select('*', { count: 'exact' })
+        .eq('tenant_id', currentTenant.id)
+        .order('name', { ascending: true })
+        .limit(1000);
+
+      if (filters.search) {
+        q = q.ilike('name', `%${filters.search}%`);
+      }
+
+      if (!filters.includeInactive) {
+        q = q.eq('active', true);
+      }
+
+      const { data, error, count } = await q;
       if (error) throw error;
-      const result = data as any;
+
       return {
-        items: (result.items || []) as OperationalRoute[],
-        next_cursor: result.next_cursor || null,
-        total_count: Number(result.total_count) || 0,
+        items: (data || []) as OperationalRoute[],
+        next_cursor: null,
+        total_count: Number(count) || (data || []).length,
       };
     },
     enabled: !!currentTenant,
