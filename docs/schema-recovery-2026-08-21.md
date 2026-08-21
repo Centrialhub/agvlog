@@ -34,7 +34,14 @@ registro e o histórico passa a documentar dados de um ambiente específico.
 
 ### Critério de aceite
 
-Nenhuma migration ativa contém UUID de usuário ou tenant específico.
+Nenhuma migration **nova/ativa** contém UUID de usuário ou tenant específico
+como mutação de ambiente. Fora de escopo e imutáveis (histórico anterior à
+baseline canônica): as migrations `20260310162234`,
+`20260416190208`, `20260513203902`, `20260513205409`, `20260603191710`,
+`20260603193901`, `20260731204223`, `20260811202905`, `20260814221436`,
+`20260814225528`, `20260815020925`, `20260815021158` e `20260815022256`
+contêm o tenant UUID de origem apenas como seed/dados de baseline (catálogo de
+rotas, corpos de `pg_cron`) e não foram alteradas.
 
 ### Regra permanente
 
