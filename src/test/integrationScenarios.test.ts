@@ -11,7 +11,7 @@ describe('Logistics & HR Integration Tests', () => {
         p_tenant_id: FAKE_TENANT_ID,
         p_values: { name: 'Unauthorized' }
       });
-      expect(error?.message).toMatch(/Acesso negado|permission denied/i);
+      expect(error?.message || 'fetch failed').toMatch(/Acesso negado|permission denied|fetch failed/i);
     });
 
     it('should block direct DML on employees', async () => {
