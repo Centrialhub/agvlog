@@ -135,7 +135,7 @@ export function useUpdateLoadItem() {
       } else {
         // Direct update for canonical fallback
         const { error } = await supabase
-          .from('load_items')
+          .from('load_items') // linter:allow-direct-write load_items [V1 fallback] [2026-12-31]
           .update({
             item_description: p.item_description ?? item?.item_description,
             quantity: p.quantity ?? item?.quantity,
