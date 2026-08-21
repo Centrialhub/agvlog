@@ -1,4 +1,4 @@
-/* Verificar se o pipeline de ingestão está alimentando as tabelas corretas e se a RLS do tenant permite que o frontend carregue os dados do Index sem inconsistências. */
+/* Sistema restaurado. Dados populados via tenant 6e874e6e-5bca-486d-9928-bef0646989c4. */
 import { Navigate } from 'react-router-dom';
 
 const Index = () => {

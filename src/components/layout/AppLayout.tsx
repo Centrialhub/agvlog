@@ -13,8 +13,9 @@ import {
   PackageCheck, AlertOctagon, Upload, TrendingUp, ChevronDown, Plug,
   Radio, Receipt, DollarSign, UserCog, Package, Wrench,
   Boxes, ClipboardCheck, ArrowRightLeft, Wallet, FileSearch, FileSpreadsheet,
-  PackageOpen, MonitorPlay, Sprout, Tag, ShieldCheck,
+  PackageOpen, MonitorPlay, Sprout, Tag, ShieldCheck, Check
 } from 'lucide-react';
+import { TenantSwitcher } from './TenantSwitcher';
 
 type NavLeaf = { label: string; href: string; icon: ReactNode; feature?: FeatureKey };
 type NavGroup = { label: string; icon: ReactNode; items: NavLeaf[]; feature?: FeatureKey };
@@ -212,6 +213,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           {!collapsed && (
             <span className="font-bold text-sm text-sidebar-primary-foreground tracking-tight truncate">{brandName}</span>
           )}
+        </div>
+        {/* Tenant Switcher */}
+        <div className="px-3 py-2">
+          <TenantSwitcher collapsed={collapsed} />
         </div>
 
         {/* Nav sections */}

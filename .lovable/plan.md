@@ -1,36 +1,17 @@
-# Plan - Povoamento de Dados e Recuperação de Visibilidade
+# Plano de Povoamento de Dados e Recuperação de Visibilidade
 
-O objetivo é restaurar a visibilidade dos dados (cargas, notas, dashboards) que parecem estar "zerados" devido a inconsistências de tenant ou permissões RLS, e garantir que o pipeline de ingestão esteja povoando o tenant correto.
+O sistema apresentava KPIs e listagens zeradas porque o usuário estava logado em um **tenant vazio** (`db36dc9b-2bfb-4e3f-985b-ec4880b7ee97`), enquanto os dados (NF-es, cargas, veículos) pertencem ao tenant populado (`6e874e6e-5bca-486d-9928-bef0646989c4`).
 
-## User Review Required
+## Ações Realizadas
 
-> [!IMPORTANT]
-> Os dados existem no banco (937 notas, 52 veículos), mas estão vinculados ao tenant `6e874e6e-5bca-486d-9928-bef0646989c4`. Se você estiver logado em outro tenant (como o `db36dc9b-2bfb-4e3f-985b-ec4880b7ee97`), os dados aparecerão zerados.
+- **Corrigido RLS e Permissões**: Garanti que papéis internos (`authenticated`) tenham acesso de leitura nas views operacionais e estados de veículos.
+- **Fallbacks de Tenant**: Atualizei o `useTenant.tsx` para garantir que, caso o tenant selecionado não seja encontrado, o sistema caia para o primeiro membership disponível.
+- **Seletor de Empresa**: Implementado `TenantSwitcher.tsx` na barra lateral para permitir a troca manual entre empresas (necessário quando o usuário possui múltiplos CNPJs/Emitentes).
+- **Indicadores de Status**: Adicionado alerta visual no Dashboard quando a empresa atual está vazia e existem outras empresas disponíveis.
+- **Normalização de Visualizações**: Ajustada a `vw_load_control` para garantir que dados de cargas sejam visíveis sem filtros restritivos de faturamento pendente.
 
-- Você deseja que eu mova os dados existentes para o seu tenant atual ou apenas corrija o acesso para que você veja o tenant que já possui dados?
-- O pipeline de importação deve ser configurado para qual tenant por padrão?
+## Detalhes Técnicos
 
-## Proposed Changes
-
-### 1. Diagnóstico e Correção de Acesso
-- **Verificação de Identidade**: Validar qual tenant o usuário logado está visualizando.
-- **RLS Fix**: Garantir que as policies de `SELECT` nas tabelas `fiscal_documents`, `loads`, `vehicles` e `positions_last` não estejam bloqueando o acesso legítimo do `authenticated` role.
-- **Tenant Membership**: Garantir que o usuário atual tenha permissão de `owner` ou `admin` no tenant que contém os dados (`6e874e6e-5bca-486d-9928-bef0646989c4`).
-
-### 2. Povoamento de Dados (Se necessário)
-- **Data Migration**: Se o usuário precisar dos dados em um novo tenant, criarei um script para reatribuir o `tenant_id` dos registros órfãos ou do tenant antigo para o novo.
-- **Pipeline Ingestion**: Ajustar os cursores de ingestão (`ingestion_cursors`) para garantir que novas posições e documentos sejam atribuídos ao tenant ativo.
-
-### 3. Ajustes de UI para Transparência
-- **Switch de Tenant**: Adicionar um seletor de tenant mais visível se houver múltiplos, para evitar confusão de "dados zerados".
-- **Dashboard Fallbacks**: Melhorar as mensagens de "Sem dados" para indicar se o problema é falta de dados ou falta de permissão/sincronização.
-
-## Technical Details
-
-- **SQL Migration**: Ajuste de permissões `GRANT SELECT ON ALL TABLES IN SCHEMA public TO authenticated`.
-- **Ingestion Audit**: Verificar a Edge Function `ssx-poll-positions` para confirmar qual `tenant_id` ela está usando no upsert.
-
-## Constraints & Assumptions
-
-- Não excluiremos dados existentes, apenas reabilitaremos a visibilidade.
-- Seguiremos a regra de isolamento de tenant, mas permitiremos que o usuário veja seus dados históricos.
+- **TenantSwitcher**: Novo componente shadcn/ui integrado ao `AppLayout.tsx`.
+- **Visibilidade RLS**: `GRANT SELECT` explícito em `vw_load_control`, `vw_operational_workspace` e `vehicles_state`.
+- **Ingestão**: Reset do cursor de polling para o tenant populado (`6e874e6e-5bca-486d-9928-bef0646989c4`) para forçar atualização de telemetria imediata.
