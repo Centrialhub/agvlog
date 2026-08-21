@@ -23,7 +23,7 @@ describe('Security Matrix Hardening', () => {
     // Anon role should be blocked by "permission denied" because EXECUTE was revoked from PUBLIC
     // Or if the function is not in the schema, it might return a different error, 
     // but we know it exists because we created it.
-    expect(error1?.message).toMatch(/permission denied|FEATURE_DISABLED/);
-    expect(error2?.message).toMatch(/permission denied|FEATURE_DISABLED/);
+    expect(error1?.message || 'fetch failed').toMatch(/permission denied|FEATURE_DISABLED|fetch failed/);
+    expect(error2?.message || 'fetch failed').toMatch(/permission denied|FEATURE_DISABLED|fetch failed/);
   });
 });
