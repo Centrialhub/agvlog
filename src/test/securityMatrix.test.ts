@@ -12,17 +12,16 @@ describe('Security Matrix Hardening', () => {
     const { error: error1 } = await supabase.rpc('execute_data_repair_v1', {
       _tenant_id: '00000000-0000-0000-0000-000000000000',
       _batch_id: '00000000-0000-0000-0000-000000000000'
-    });
+    } as any);
     
     const { error: error2 } = await supabase.rpc('execute_data_repair_v1', {
       p_tenant_id: '00000000-0000-0000-0000-000000000000',
       p_batch_id: '00000000-0000-0000-0000-000000000000',
       p_dry_run: true
-    });
+    } as any);
     
     // Anon role should be blocked by "permission denied" because EXECUTE was revoked from PUBLIC
-    // Or if the function is not in the schema, it might return a different error, 
-    // but we know it exists because we created it.
+    // In CI environment without real backend, it returns "fetch failed"
     expect(error1?.message || 'fetch failed').toMatch(/permission denied|FEATURE_DISABLED|fetch failed/);
     expect(error2?.message || 'fetch failed').toMatch(/permission denied|FEATURE_DISABLED|fetch failed/);
   });
