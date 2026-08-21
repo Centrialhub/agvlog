@@ -167,9 +167,8 @@ export default function Financial() {
     if (selectedClient !== 'all') count++;
     if (docType !== 'all') count++;
     if (expenseCategory !== 'all') count++;
-    if (selectedCostCenter !== 'all') count++;
     return count;
-  }, [dateFrom, dateTo, selectedClient, docType, expenseCategory, selectedCostCenter]);
+  }, [dateFrom, dateTo, selectedClient, docType, expenseCategory]);
 
   const clearFilters = () => {
     setDateFrom('');
