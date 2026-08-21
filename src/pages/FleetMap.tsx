@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap, Polygon } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useFleetPositions, PositionLast } from '@/hooks/usePositions';
@@ -110,6 +110,17 @@ function PipelineHealthBanner({ tenantId }: { tenantId: string }) {
 
 export default function FleetMap() {
   const { currentTenant } = useTenant();
+  const { data: geofences = [] } = useQuery({
+    queryKey: ['geofences', currentTenant?.id],
+    queryFn: async () => {
+      if (!currentTenant) return [];
+      const { data, error } = await supabase.from('geofences').select('*').eq('tenant_id', currentTenant.id).eq('enabled', true);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentTenant,
+  });
+
   const { data: positions = [], isLoading: posLoading, refetch } = useFleetPositions();
   const { data: vehicles = [] } = useVehicles();
   const { data: vehicleStates = [] } = useFleetState();
@@ -322,6 +333,28 @@ export default function FleetMap() {
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           <FitBounds positions={withPosition as any} />
+          
+          {geofences.map(gf => {
+            const geom = gf.geometry as any;
+            if (geom.type === 'Polygon') {
+              const positions = geom.coordinates[0].map((coord: number[]) => [coord[1], coord[0]]);
+              return (
+                <Polygon 
+                  key={gf.id} 
+                  positions={positions} 
+                  pathOptions={{ 
+                    color: gf.color || '#3b82f6', 
+                    fillColor: gf.color || '#3b82f6', 
+                    fillOpacity: 0.2 
+                  }}
+                >
+                  <Popup><strong>{gf.name}</strong></Popup>
+                </Polygon>
+              );
+            }
+            return null;
+          })}
+
           
           {withPosition.map(e => (
             <Marker
