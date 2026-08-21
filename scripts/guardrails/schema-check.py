@@ -21,6 +21,7 @@ import subprocess
 import sys
 
 MIGRATIONS_DIR = "supabase/migrations"
+LOCAL_RESET = "scripts/guardrails/local-db-reset.sh"
 
 TYPE_ALIASES = {
     "int": "integer",
