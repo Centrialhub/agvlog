@@ -177,7 +177,7 @@ export default function LoadRomaneioTabs({ load, documents, items, onSaved }: Pr
     queryFn: async () => {
       const { data } = await supabase
         .from('dispatch_stops')
-        .select('id, stop_order, destination, status, planned_at, arrival_at, clients(name)')
+        .select('id, stop_order, destination, status, planned_arrival_at, actual_arrival_at, clients(name)')
         .in('dispatch_trip_id', tripIds)
         .order('stop_order');
       return data || [];
