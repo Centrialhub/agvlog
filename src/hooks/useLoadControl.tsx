@@ -232,12 +232,21 @@ export const commitSpreadsheetImport = async (tenantId: string, fileName: string
     return { preview: data as any };
 };
 
-export const commitXmlImport = async (tenantId: string, fileName: string, parsed: any[]) => {
+export const commitXmlImport = async (tenantId: string, fileName: string, docs: any[]) => {
+    // Map XML docs to import rows
+    const rows = docs.map(d => ({
+        external_load_number: d.kind === 'cte' ? d.number : d.access_key, // Fallback logic
+        load_date: d.issue_date,
+        gross_cargo_value: d.kind === 'nfe' ? d.total_value : d.cargo_value,
+        freight_amount: d.kind === 'cte' ? d.freight_value : 0,
+        legacy_status_text: `Importado via XML (${d.kind})`
+    }));
+
     const { data, error } = await supabase.rpc('commit_load_import_v1', {
         p_tenant_id: tenantId,
         p_file_name: fileName,
         p_source_type: 'xml',
-        p_rows: parsed
+        p_rows: rows
     });
 
     if (error) throw error;
