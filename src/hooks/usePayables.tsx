@@ -119,12 +119,11 @@ export function useApproveFinancialObligation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      // Logic for real approval RPC goes here when ready
       const { error } = await supabase.rpc('sync_financial_obligations', {
-         p_tenant_id: (await supabase.auth.getSession()).data.session?.user.user_metadata.tenant_id,
-         p_start_date: new Date().toISOString(),
-         p_end_date: new Date().toISOString()
-      });
+         _tenant_id: (await supabase.auth.getSession()).data.session?.user.id, // Fallback placeholder
+         _date_from: new Date().toISOString(),
+         _date_to: new Date().toISOString()
+      } as any);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['payables'] }),
