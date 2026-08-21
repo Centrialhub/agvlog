@@ -1,4 +1,4 @@
-/* Criar uma tela de Fleet Map com Leaflet mostrando posições em tempo real e uma página de detalhes do veículo. */
+/* Crie a página de detalhes do veículo com histórico de posições, velocidade/heading quando disponíveis e indicação dos sensores detectados. */
 import { Navigate } from 'react-router-dom';
 
 const Index = () => {
