@@ -87,12 +87,13 @@ export function useCreateLoad() {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: async (load: Partial<Load>) => {
+    mutationFn: async (load: Partial<Load> & { idempotency_key?: string }) => {
       if (!currentTenant) throw new Error('Tenant not found');
       
       if (isFeatureEnabled('LOGISTICS_CONSOLIDATION_V2')) {
-        const { data, error } = await supabase.rpc('create_load_v1', {
+        const { data, error } = await supabase.rpc('create_load_v2', {
           p_tenant_id: currentTenant.id,
+          p_idempotency_key: load.idempotency_key || crypto.randomUUID(),
           p_vehicle_id: load.vehicle_id || null,
           p_driver_id: load.driver_id || null,
           p_origin: load.origin || '',
@@ -103,7 +104,7 @@ export function useCreateLoad() {
         });
 
         if (error) throw error;
-        return { id: data };
+        return { id: data as string };
       } else {
         const { data, error } = await supabase.rpc('create_load_with_next_number', {
           _tenant_id: currentTenant.id,
