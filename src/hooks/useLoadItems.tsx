@@ -120,7 +120,7 @@ export function useUpdateLoadItem() {
         .single();
       
       if (isFeatureEnabled('LOGISTICS_CONSOLIDATION_V2')) {
-        const { error } = await supabase.rpc('upsert_load_item_v1', {
+        const { error } = await supabase.rpc('upsert_load_item_v2', {
           p_tenant_id: currentTenant!.id,
           p_load_id: p.load_id,
           p_item_id: p.id,
