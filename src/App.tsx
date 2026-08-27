@@ -258,6 +258,7 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/auth" element={<AuthRoute />} />
+            <Route path="/set-password" element={<SetPassword />} />
 
             {/* Role-based home */}
             <Route path="/" element={<ProtectedRoute gate="any"><RoleRouter /></ProtectedRoute>} />
