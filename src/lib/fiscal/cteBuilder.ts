@@ -791,6 +791,9 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
         cbs: input.totals.cbs_value ?? undefined,
       },
       composicaoFrete: freightComposition,
+      // Reforma tributária (CBS/IBS) — informado pela prévia de emissão.
+      cbsIbs: input.cbsIbs || undefined,
+
       // Componentes do valor da prestação (DACTE) — FRETE PESO / SEGURO / ICMS em destaque.
       // `soma: false` (ICMS por fora) = destaque impresso sem somar ao valor a receber.
       componentes: componentes.map((c) => ({ nome: c.nome, valor: c.valor, soma: c.soma })),
