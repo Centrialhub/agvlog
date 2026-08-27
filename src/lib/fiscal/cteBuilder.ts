@@ -732,6 +732,10 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
       recebedor: serializeParty(input.recebedor),
 
       seguro: seguroCarga,
+      // Aliases compatíveis com versões diferentes do Hub Fiscal.
+      seguradora: seguroCarga,
+      seguros: seguroCarga ? [seguroCarga] : undefined,
+
       tomador: {
         tipo: TAKER_INDEX[input.takerRole],
         role: input.takerRole,
