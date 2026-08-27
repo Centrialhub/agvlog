@@ -1019,12 +1019,9 @@ function EditMemberDialog({
               Senha
             </p>
             <p className="text-xs text-muted-foreground">
-              Senhas são definidas exclusivamente pelo próprio usuário. Envie um link seguro para
-              que ele defina uma nova senha.
+              Senhas são definidas exclusivamente pelo próprio usuário, pelo link seguro recebido no
+              convite. Administradores não definem nem alteram senhas de terceiros.
             </p>
-            <Button variant="outline" size="sm" onClick={handleSendPasswordLink} disabled={loading}>
-              Enviar link de definição de senha
-            </Button>
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
