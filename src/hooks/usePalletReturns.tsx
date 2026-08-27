@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { validateUpload } from '@/lib/uploadPolicy';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
 
@@ -384,9 +385,9 @@ export function useAttachPalletProof() {
   return useMutation({
     mutationFn: async (args: { protocolId: string; file: File; receiverName?: string; receiverDocument?: string; signatureDate?: string }) => {
       if (!currentTenant) throw new Error('no_tenant');
-      if (!/^(application\/pdf|image\/)/.test(args.file.type)) throw new Error('invalid_file_type');
-      const path = `${currentTenant.id}/${args.protocolId}/${Date.now()}-${args.file.name}`;
-      const { error: upErr } = await supabase.storage.from('pallet-return-proofs').upload(path, args.file, { upsert: true });
+      const { contentType, safeName } = validateUpload(args.file, 'proof');
+      const path = `${currentTenant.id}/${args.protocolId}/${Date.now()}-${crypto.randomUUID()}-${safeName}`;
+      const { error: upErr } = await supabase.storage.from('pallet-return-proofs').upload(path, args.file, { upsert: true, contentType });
       if (upErr) throw upErr;
       const { error } = await rpc('update_pallet_return_status', {
         _protocol_id: args.protocolId,

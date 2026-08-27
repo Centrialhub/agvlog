@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { validateUpload } from '@/lib/uploadPolicy';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
 
@@ -173,11 +174,11 @@ export function useUploadSignedProof() {
       receiverDocument?: string | null;
     }) => {
       if (!currentTenant?.id) throw new Error('tenant');
-      const ext = params.file.name.split('.').pop() || 'pdf';
-      const path = `${currentTenant.id}/${params.returnSheetId}-${Date.now()}.${ext}`;
+      const { contentType, safeName } = validateUpload(params.file, 'proof');
+      const path = `${currentTenant.id}/${params.returnSheetId}-${Date.now()}-${crypto.randomUUID()}-${safeName}`;
       const up = await supabase.storage
         .from('occurrence-return-proofs')
-        .upload(path, params.file, { upsert: true, contentType: params.file.type });
+        .upload(path, params.file, { upsert: true, contentType });
       if (up.error) throw up.error;
       const { error } = await supabase
         .from('occurrence_return_sheets')

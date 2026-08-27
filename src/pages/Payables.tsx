@@ -19,6 +19,7 @@ import FiscalXmlUpload from '@/components/financial/FiscalXmlUpload';
 import PayablePaymentDialog from '@/components/financial/PayablePaymentDialog';
 import ManualExpenseDialog from '@/components/financial/ManualExpenseDialog';
 import { supabase } from '@/integrations/supabase/client';
+import { validateUpload } from '@/lib/uploadPolicy';
 import { useTenant } from '@/hooks/useTenant';
 import type { ParsedFiscalXml } from '@/lib/nfeXmlParser';
 
@@ -125,9 +126,9 @@ export default function Payables() {
 
   const uploadReceipt = async (file: File): Promise<string | null> => {
     if (!currentTenant) return null;
-    const ext = file.name.split('.').pop() || 'xml';
-    const path = `${currentTenant.id}/payables/${Date.now()}-${crypto.randomUUID()}.${ext}`;
-    const { error } = await supabase.storage.from('receipts').upload(path, file, { contentType: file.type || 'application/xml' });
+    const { contentType, safeName } = validateUpload(file, 'financial');
+    const path = `${currentTenant.id}/payables/${Date.now()}-${crypto.randomUUID()}-${safeName}`;
+    const { error } = await supabase.storage.from('receipts').upload(path, file, { contentType });
     if (error) throw error;
     return path;
   };
