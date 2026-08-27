@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.17"
+    PostgrestVersion: "14.4"
   }
   public: {
     Tables: {
@@ -5966,7 +5966,6 @@ export type Database = {
           client_load_number: string | null
           client_load_source: Json | null
           control_lot: string | null
-          cost_center: string | null
           created_at: string
           created_by: string | null
           cte_consignee_client_id: string | null
@@ -6015,8 +6014,6 @@ export type Database = {
           invoice_series: string | null
           is_duplicate: boolean
           issue_date: string | null
-          last_status_check_at: string | null
-          last_status_response: Json | null
           load_id: string | null
           nfse_emitted_at: string | null
           nfse_emitted_document_id: string | null
@@ -6042,7 +6039,6 @@ export type Database = {
           sefaz_status: string | null
           sefaz_status_code: string | null
           status: string
-          status_check_attempts: number
           supplier_id: string | null
           tenant_id: string
           updated_at: string
@@ -6059,7 +6055,6 @@ export type Database = {
           client_load_number?: string | null
           client_load_source?: Json | null
           control_lot?: string | null
-          cost_center?: string | null
           created_at?: string
           created_by?: string | null
           cte_consignee_client_id?: string | null
@@ -6108,8 +6103,6 @@ export type Database = {
           invoice_series?: string | null
           is_duplicate?: boolean
           issue_date?: string | null
-          last_status_check_at?: string | null
-          last_status_response?: Json | null
           load_id?: string | null
           nfse_emitted_at?: string | null
           nfse_emitted_document_id?: string | null
@@ -6135,7 +6128,6 @@ export type Database = {
           sefaz_status?: string | null
           sefaz_status_code?: string | null
           status?: string
-          status_check_attempts?: number
           supplier_id?: string | null
           tenant_id: string
           updated_at?: string
@@ -6152,7 +6144,6 @@ export type Database = {
           client_load_number?: string | null
           client_load_source?: Json | null
           control_lot?: string | null
-          cost_center?: string | null
           created_at?: string
           created_by?: string | null
           cte_consignee_client_id?: string | null
@@ -6201,8 +6192,6 @@ export type Database = {
           invoice_series?: string | null
           is_duplicate?: boolean
           issue_date?: string | null
-          last_status_check_at?: string | null
-          last_status_response?: Json | null
           load_id?: string | null
           nfse_emitted_at?: string | null
           nfse_emitted_document_id?: string | null
@@ -6228,7 +6217,6 @@ export type Database = {
           sefaz_status?: string | null
           sefaz_status_code?: string | null
           status?: string
-          status_check_attempts?: number
           supplier_id?: string | null
           tenant_id?: string
           updated_at?: string
@@ -6295,75 +6283,10 @@ export type Database = {
           },
         ]
       }
-      fiscal_poll_dead_letters: {
-        Row: {
-          attempt_count: number
-          context: Json
-          created_at: string
-          document_id: string
-          document_kind: string
-          document_number: string | null
-          first_seen_at: string
-          id: string
-          last_attempt_at: string
-          reason_code: string
-          resolution_notes: string | null
-          resolved_at: string | null
-          resolved_by: string | null
-          status: string
-          tenant_id: string
-          updated_at: string
-        }
-        Insert: {
-          attempt_count?: number
-          context?: Json
-          created_at?: string
-          document_id: string
-          document_kind: string
-          document_number?: string | null
-          first_seen_at: string
-          id?: string
-          last_attempt_at?: string
-          reason_code: string
-          resolution_notes?: string | null
-          resolved_at?: string | null
-          resolved_by?: string | null
-          status?: string
-          tenant_id: string
-          updated_at?: string
-        }
-        Update: {
-          attempt_count?: number
-          context?: Json
-          created_at?: string
-          document_id?: string
-          document_kind?: string
-          document_number?: string | null
-          first_seen_at?: string
-          id?: string
-          last_attempt_at?: string
-          reason_code?: string
-          resolution_notes?: string | null
-          resolved_at?: string | null
-          resolved_by?: string | null
-          status?: string
-          tenant_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "fiscal_poll_dead_letters_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       fiscal_webhook_inbox: {
         Row: {
-          attempt_count: number
-          created_at: string
+          attempt_count: number | null
+          created_at: string | null
           delivery_id: string
           emission_id: string | null
           event_timestamp: string
@@ -6375,11 +6298,11 @@ export type Database = {
           raw_payload: Json
           status: string
           tenant_id: string | null
-          updated_at: string
+          updated_at: string | null
         }
         Insert: {
-          attempt_count?: number
-          created_at?: string
+          attempt_count?: number | null
+          created_at?: string | null
           delivery_id: string
           emission_id?: string | null
           event_timestamp: string
@@ -6391,11 +6314,11 @@ export type Database = {
           raw_payload: Json
           status?: string
           tenant_id?: string | null
-          updated_at?: string
+          updated_at?: string | null
         }
         Update: {
-          attempt_count?: number
-          created_at?: string
+          attempt_count?: number | null
+          created_at?: string | null
           delivery_id?: string
           emission_id?: string | null
           event_timestamp?: string
@@ -6407,7 +6330,7 @@ export type Database = {
           raw_payload?: Json
           status?: string
           tenant_id?: string | null
-          updated_at?: string
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -9082,13 +9005,6 @@ export type Database = {
             columns: ["schedule_id"]
             isOneToOne: false
             referencedRelation: "maintenance_schedules"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "maintenance_orders_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicles"
             referencedColumns: ["id"]
           },
         ]
@@ -12990,64 +12906,7 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "receivables_client_id_fkey"
-            columns: ["client_id"]
-            isOneToOne: false
-            referencedRelation: "clients"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "receivables_client_invoice_id_fkey"
-            columns: ["client_invoice_id"]
-            isOneToOne: false
-            referencedRelation: "client_invoices"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "receivables_closing_report_id_fkey"
-            columns: ["closing_report_id"]
-            isOneToOne: false
-            referencedRelation: "closing_reports"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "receivables_fiscal_document_id_fkey"
-            columns: ["fiscal_document_id"]
-            isOneToOne: false
-            referencedRelation: "fiscal_documents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "receivables_load_id_fkey"
-            columns: ["load_id"]
-            isOneToOne: false
-            referencedRelation: "loads"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "receivables_load_id_fkey"
-            columns: ["load_id"]
-            isOneToOne: false
-            referencedRelation: "vw_load_control"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "receivables_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "orders"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "receivables_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       receivables_payments: {
         Row: {
@@ -15629,10 +15488,6 @@ export type Database = {
         Args: { _document_ids: string[]; _load_id: string; _tenant_id: string }
         Returns: Json
       }
-      assign_fiscal_documents_to_load_v2: {
-        Args: { _document_ids: string[]; _load_id: string; _tenant_id: string }
-        Returns: Json
-      }
       attach_loads_to_driver_settlement: {
         Args: { _load_ids: string[]; _settlement_id: string }
         Returns: undefined
@@ -15733,21 +15588,6 @@ export type Database = {
         Args: { p_tenant_id: string }
         Returns: undefined
       }
-      claim_fiscal_webhook_delivery_v1: {
-        Args: {
-          p_delivery_id: string
-          p_event_timestamp?: string
-          p_event_type: string
-          p_payload_hash?: string
-          p_raw_payload: Json
-        }
-        Returns: {
-          claimed: boolean
-          inbox_id: string
-          inbox_status: string
-          retry_after_seconds: number
-        }[]
-      }
       clear_reimport_batch_data:
         | { Args: { _tenant_id: string }; Returns: Json }
         | {
@@ -15779,16 +15619,6 @@ export type Database = {
           p_tenant_id: string
         }
         Returns: Json
-      }
-      complete_fiscal_webhook_delivery_v1: {
-        Args: {
-          p_emission_id?: string
-          p_error?: string
-          p_inbox_id: string
-          p_success: boolean
-          p_tenant_id?: string
-        }
-        Returns: boolean
       }
       count_points_in_geofence: {
         Args: { _geofence_id: string; _points: Json }
@@ -15982,10 +15812,6 @@ export type Database = {
         Args: { p_item_id: string; p_tenant_id: string }
         Returns: boolean
       }
-      delete_load_item_v3: {
-        Args: { p_item_id: string; p_tenant_id: string }
-        Returns: boolean
-      }
       delete_load_safely: {
         Args: { _load_id: string; _tenant_id: string }
         Returns: Json
@@ -16104,7 +15930,6 @@ export type Database = {
         Args: { _kind: string; _payload: Json; _trip_id: string }
         Returns: string
       }
-      driver_start_trip: { Args: { _trip_id: string }; Returns: Json }
       driver_update_stop_status: {
         Args: { _new_status: string; _reason?: string; _stop_id: string }
         Returns: Json
@@ -16226,16 +16051,6 @@ export type Database = {
         Args: { _client_id: string; _limit?: number; _tenant_id: string }
         Returns: Json
       }
-      get_current_memberships_v1: {
-        Args: never
-        Returns: {
-          plan_key: string
-          role: Database["public"]["Enums"]["app_role"]
-          tenant_id: string
-          tenant_name: string
-          timezone: string
-        }[]
-      }
       get_driver_workspace_v1: {
         Args: { p_driver_id: string; p_tenant_id: string }
         Returns: Json
@@ -16339,7 +16154,6 @@ export type Database = {
         }
         Returns: Json
       }
-      increment_hfe_sync: { Args: { p_id: string }; Returns: undefined }
       is_point_in_geofence: {
         Args: { _geofence_id: string; _lat: number; _lng: number }
         Returns: boolean
@@ -16700,17 +16514,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      log_pod_access_v2: {
-        Args: {
-          _actor_user_id: string
-          _fiscal_document_id: string
-          _pod_id: string
-          _source?: string
-          _success: boolean
-          _tenant_id: string
-        }
-        Returns: undefined
-      }
       mark_doccob_downloaded: {
         Args: { _export_id: string; _tenant_id: string }
         Returns: undefined
@@ -17039,10 +16842,6 @@ export type Database = {
         Args: { _document_ids: string[]; _load_id: string; _tenant_id: string }
         Returns: Json
       }
-      remove_fiscal_documents_from_load_v2: {
-        Args: { _document_ids: string[]; _load_id: string; _tenant_id: string }
-        Returns: Json
-      }
       reopen_closing_report: {
         Args: { _closing_report_id: string; _reason: string }
         Returns: undefined
@@ -17131,14 +16930,12 @@ export type Database = {
         }
         Returns: Json
       }
-      session_has_privileged_mfa_v1: {
-        Args: { p_tenant_id: string }
-        Returns: boolean
-      }
       settle_zero_driver_settlement: {
         Args: { _reason: string; _settlement_id: string }
         Returns: Json
       }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
       soft_delete_fiscal_document: {
         Args: { doc_id: string; user_id: string }
         Returns: undefined
@@ -17146,28 +16943,6 @@ export type Database = {
       stop_terminal_statuses: { Args: never; Returns: string[] }
       sync_financial_obligations: {
         Args: { _date_from?: string; _date_to?: string; _tenant_id: string }
-        Returns: Json
-      }
-      terminalize_fiscal_poll_v1: {
-        Args: {
-          p_attempt_count: number
-          p_context?: Json
-          p_document_id: string
-          p_document_kind: string
-          p_document_number: string
-          p_first_seen_at: string
-          p_reason_code: string
-          p_tenant_id: string
-        }
-        Returns: Json
-      }
-      transition_load_status_v1: {
-        Args: {
-          p_load_id: string
-          p_reason?: string
-          p_tenant_id: string
-          p_to_status: string
-        }
         Returns: Json
       }
       transition_stop_status_v1: {
@@ -17194,6 +16969,7 @@ export type Database = {
         }
         Returns: string
       }
+      unaccent: { Args: { "": string }; Returns: string }
       unhold_load: { Args: { _load_id: string }; Returns: undefined }
       unlink_fiscal_documents_from_load_v1: {
         Args: { _document_ids: string[]; _load_id: string; _tenant_id: string }
@@ -17439,28 +17215,7 @@ export type Database = {
         }
         Returns: string
       }
-      upsert_load_item_v3: {
-        Args: {
-          p_fiscal_document_id?: string
-          p_item_description?: string
-          p_item_id?: string
-          p_load_id?: string
-          p_notes?: string
-          p_order_id?: string
-          p_pallet_count?: number
-          p_quantity?: number
-          p_status?: string
-          p_tenant_id: string
-          p_volume_m3?: number
-          p_weight_kg?: number
-        }
-        Returns: string
-      }
       user_has_client_access: { Args: { _client_id: string }; Returns: boolean }
-      verify_agvlog_cron_secret: {
-        Args: { p_secret: string }
-        Returns: boolean
-      }
     }
     Enums: {
       app_role: "owner" | "admin" | "operator" | "client" | "driver"
