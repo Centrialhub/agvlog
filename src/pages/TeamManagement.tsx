@@ -937,7 +937,6 @@ function EditMemberDialog({
   const queryClient = useQueryClient();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
   // Reset form when member changes
@@ -946,7 +945,6 @@ function EditMemberDialog({
     if (member) {
       setFullName(member.profile_name || '');
       setEmail(member.profile_email || '');
-      setPassword('');
     }
   });
 
@@ -955,7 +953,6 @@ function EditMemberDialog({
     if (!v) {
       setFullName('');
       setEmail('');
-      setPassword('');
     }
     onOpenChange(v);
   };
@@ -970,9 +967,8 @@ function EditMemberDialog({
       };
       if (fullName.trim()) body.full_name = fullName.trim();
       if (email.trim()) body.email = email.trim();
-      if (password) body.password = password;
 
-      if (!body.full_name && !body.email && !body.password) {
+      if (!body.full_name && !body.email) {
         toast.info('Nenhuma alteração informada.');
         setLoading(false);
         return;
@@ -988,6 +984,20 @@ function EditMemberDialog({
     } catch (err: any) {
       toast.error(err.message || 'Erro ao atualizar conta');
     }
+    setLoading(false);
+  };
+
+  const handleSendPasswordLink = async () => {
+    if (!member?.profile_email) {
+      toast.error('Membro sem e-mail cadastrado.');
+      return;
+    }
+    setLoading(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(member.profile_email, {
+      redirectTo: `${window.location.origin}/set-password`,
+    });
+    if (error) toast.error(error.message);
+    else toast.success('Link para definição de senha enviado ao usuário.');
     setLoading(false);
   };
 
@@ -1021,31 +1031,28 @@ function EditMemberDialog({
             />
           </div>
 
-          <div className="space-y-2">
-            <Label className="flex items-center gap-1.5">
+          <div className="space-y-2 rounded-md bg-muted/50 p-3">
+            <p className="flex items-center gap-1.5 text-xs font-medium">
               <KeyRound className="h-3.5 w-3.5" />
-              Nova senha
-            </Label>
-            <Input
-              type="password"
-              placeholder="Deixe vazio para manter a atual"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-            />
-            {password && password.length < 6 && (
-              <p className="text-xs text-destructive">Mínimo 6 caracteres</p>
-            )}
+              Senha
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Senhas são definidas exclusivamente pelo próprio usuário. Envie um link seguro para
+              que ele defina uma nova senha.
+            </p>
+            <Button variant="outline" size="sm" onClick={handleSendPasswordLink} disabled={loading}>
+              Enviar link de definição de senha
+            </Button>
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => handleOpenChange(false)}>Cancelar</Button>
-            <Button
-              onClick={handleSave}
-              disabled={loading || (password.length > 0 && password.length < 6)}
-            >
+            <Button onClick={handleSave} disabled={loading}>
               {loading ? 'Salvando...' : 'Salvar alterações'}
             </Button>
           </div>
+        </div>
+
         </div>
       </DialogContent>
     </Dialog>
