@@ -737,7 +737,6 @@ function InviteDialog({
 }) {
   const queryClient = useQueryClient();
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [role, setRole] = useState<string>('operator');
   const [loading, setLoading] = useState(false);
@@ -745,27 +744,50 @@ function InviteDialog({
 
   const resetForm = () => {
     setEmail('');
-    setPassword('');
     setFullName('');
     setRole('operator');
     setUserId('');
   };
 
-  const handleCreateAccount = async () => {
-    if (!tenantId || !email || !password) return;
+  // One-time throwaway secret: never displayed, never stored and never usable —
+  // the invitee immediately defines their own password via /set-password.
+  const generateThrowawaySecret = () => {
+    const bytes = new Uint8Array(32);
+    crypto.getRandomValues(bytes);
+    return `Ax1${Array.from(bytes, b => b.toString(36)).join('')}`;
+  };
+
+  const handleInvite = async () => {
+    if (!tenantId || !email.includes('@')) return;
     setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('create-team-member', {
-        body: { tenant_id: tenantId, email, password, full_name: fullName || email, role },
+        body: {
+          tenant_id: tenantId,
+          email: email.trim(),
+          password: generateThrowawaySecret(),
+          full_name: fullName || email.trim(),
+          role,
+        },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      toast.success(`Conta criada com sucesso para ${data.email}`);
+
+      const { error: inviteError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${window.location.origin}/set-password`,
+      });
+      if (inviteError) {
+        toast.warning(
+          `Membro criado, mas o e-mail de convite falhou: ${inviteError.message}. Reenvie o convite.`
+        );
+      } else {
+        toast.success(`Convite enviado para ${email.trim()}`);
+      }
       queryClient.invalidateQueries({ queryKey: ['tenant_members'] });
       resetForm();
       onOpenChange(false);
     } catch (err: any) {
-      toast.error(err.message || 'Erro ao criar conta');
+      toast.error(err.message || 'Erro ao enviar convite');
     }
     setLoading(false);
   };
@@ -799,7 +821,7 @@ function InviteDialog({
     setLoading(false);
   };
 
-  const isCreateValid = email.includes('@') && password.length >= 6;
+  const isInviteValid = email.includes('@');
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -807,13 +829,13 @@ function InviteDialog({
         <DialogHeader>
           <DialogTitle>Adicionar Membro</DialogTitle>
           <DialogDescription>
-            Crie uma nova conta ou vincule um usuário existente à sua empresa.
+            Convide por e-mail ou vincule um usuário existente à sua empresa.
           </DialogDescription>
         </DialogHeader>
 
         <Tabs value={tab} onValueChange={(v) => setTab(v as 'create' | 'existing')}>
           <TabsList className="w-full">
-            <TabsTrigger value="create" className="flex-1"><UserPlus className="mr-1.5 h-3.5 w-3.5" />Criar conta</TabsTrigger>
+            <TabsTrigger value="create" className="flex-1"><UserPlus className="mr-1.5 h-3.5 w-3.5" />Convidar por e-mail</TabsTrigger>
             <TabsTrigger value="existing" className="flex-1"><Users className="mr-1.5 h-3.5 w-3.5" />Usuário existente</TabsTrigger>
           </TabsList>
 
@@ -825,11 +847,6 @@ function InviteDialog({
             <div className="space-y-2">
               <Label>E-mail *</Label>
               <Input type="email" placeholder="joao@empresa.com" value={email} onChange={e => setEmail(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>Senha *</Label>
-              <Input type="password" placeholder="Mínimo 6 caracteres" value={password} onChange={e => setPassword(e.target.value)} />
-              <p className="text-xs text-muted-foreground">O usuário poderá alterar a senha após o primeiro login.</p>
             </div>
             <div className="space-y-2">
               <Label>Papel</Label>
@@ -844,10 +861,17 @@ function InviteDialog({
               </Select>
             </div>
 
+            <div className="rounded-md bg-muted/50 p-3">
+              <p className="text-xs text-muted-foreground">
+                O convidado receberá um e-mail com link para definir a própria senha. O
+                administrador não define, visualiza nem altera senhas de terceiros.
+              </p>
+            </div>
+
             {role === 'driver' && drivers.length > 0 && (
               <div className="rounded-md bg-muted/50 p-3">
                 <p className="text-xs text-muted-foreground">
-                  <strong>Dica:</strong> Após criar a conta, vincule o usuário ao cadastro de motorista na página de Motoristas.
+                  <strong>Dica:</strong> Após o convite, vincule o usuário ao cadastro de motorista na página de Motoristas.
                 </p>
               </div>
             )}
@@ -861,11 +885,12 @@ function InviteDialog({
 
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-              <Button onClick={handleCreateAccount} disabled={loading || !isCreateValid}>
-                {loading ? 'Criando...' : 'Criar conta e adicionar'}
+              <Button onClick={handleInvite} disabled={loading || !isInviteValid}>
+                {loading ? 'Enviando...' : 'Enviar convite'}
               </Button>
             </div>
           </TabsContent>
+
 
           <TabsContent value="existing" className="space-y-4 mt-4">
             <div className="space-y-2">
