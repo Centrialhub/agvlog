@@ -25,12 +25,14 @@ export default function PrivilegedMfaGate({ children }: { children: React.ReactN
 
   const startEnrollment = useCallback(async () => {
     // Limpa fatores TOTP não verificados para evitar acúmulo
-    const { data: factors } = await supabase.auth.mfa.listFactors();
+    const { data: factors, error: factorsError } = await supabase.auth.mfa.listFactors();
+    if (factorsError) throw factorsError;
     const unverified = (factors?.all ?? []).filter(
       (f) => f.factor_type === 'totp' && f.status !== 'verified',
     );
     for (const f of unverified) {
-      await supabase.auth.mfa.unenroll({ factorId: f.id });
+      const { error: unenrollError } = await supabase.auth.mfa.unenroll({ factorId: f.id });
+      if (unenrollError) throw unenrollError;
     }
 
     const { data, error: enrollError } = await supabase.auth.mfa.enroll({
@@ -167,15 +169,16 @@ export default function PrivilegedMfaGate({ children }: { children: React.ReactN
                   id="mfa-enroll-code"
                   inputMode="numeric"
                   autoComplete="one-time-code"
+                  pattern="[0-9]{6}"
                   maxLength={6}
                   value={code}
-                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   placeholder="000000"
                 />
               </div>
               <Button
                 className="w-full"
-                disabled={submitting}
+                disabled={submitting || code.length !== 6}
                 onClick={() => submitCode(enrollData.factorId)}
               >
                 {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -192,15 +195,16 @@ export default function PrivilegedMfaGate({ children }: { children: React.ReactN
                   id="mfa-code"
                   inputMode="numeric"
                   autoComplete="one-time-code"
+                  pattern="[0-9]{6}"
                   maxLength={6}
                   value={code}
-                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   placeholder="000000"
                 />
               </div>
               <Button
                 className="w-full"
-                disabled={submitting}
+                disabled={submitting || code.length !== 6}
                 onClick={() => submitCode(verifiedFactorId)}
               >
                 {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
