@@ -662,6 +662,15 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
     cfop = fallback;
   }
 
+  // Grupo único do valor da prestação, exposto como vPrest e valorPrestacao.
+  const valorPrestacaoGrupo = {
+    vTPrest: totalServico,
+    vRec: totalServico,
+    Comp: componentes
+      .filter((component) => component.soma)
+      .map((component) => ({ xNome: component.nome, vComp: component.valor })),
+  };
+
 
   const payload: Record<string, unknown> = {
     emitterCnpj: digits(input.emitter?.cnpj) || undefined,
