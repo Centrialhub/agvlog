@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { validateUpload } from '@/lib/uploadPolicy';
 import { useTenant } from './useTenant';
 
 export const PAYMENT_METHODS = ['pix','boleto','ted','doc','dinheiro','cartao','debito_automatico','other'] as const;
@@ -168,9 +169,9 @@ export function useCreateManualExpense() {
 }
 
 export async function uploadPaymentAttachment(tenantId: string, kind: 'payable'|'receivable', file: File): Promise<string | null> {
-  const ext = file.name.split('.').pop() || 'bin';
-  const path = `${tenantId}/${kind}-payments/${Date.now()}-${crypto.randomUUID()}.${ext}`;
-  const { error } = await supabase.storage.from('receipts').upload(path, file, { contentType: file.type || 'application/octet-stream' });
+  const { contentType, safeName } = validateUpload(file, 'financial');
+  const path = `${tenantId}/${kind}-payments/${Date.now()}-${crypto.randomUUID()}-${safeName}`;
+  const { error } = await supabase.storage.from('receipts').upload(path, file, { contentType });
   if (error) throw error;
   return path;
 }

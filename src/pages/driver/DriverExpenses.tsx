@@ -15,6 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from '@/hooks/useTenant';
 import { useCurrentDriver, useActiveTrip } from '@/hooks/useCurrentDriver';
 import { useToast } from '@/hooks/use-toast';
+import { validateUpload } from '@/lib/uploadPolicy';
 
 const CATEGORIES = [
   { value: 'fuel', label: 'Combustível', icon: Fuel },
@@ -108,11 +109,11 @@ export default function DriverExpenses() {
 
       let receiptPath: string | null = null;
       if (receiptFile) {
-        const ext = receiptFile.name.split('.').pop() || 'jpg';
-        const path = `${currentTenant.id}/expenses/${trip.id}/${Date.now()}.${ext}`;
+        const { contentType, safeName } = validateUpload(receiptFile, 'image');
+        const path = `${currentTenant.id}/expenses/${trip.id}/${Date.now()}-${crypto.randomUUID()}-${safeName}`;
         const { error: uploadErr } = await supabase.storage
           .from('receipts')
-          .upload(path, receiptFile, { contentType: receiptFile.type });
+          .upload(path, receiptFile, { contentType });
         if (uploadErr) throw uploadErr;
         receiptPath = path;
       }

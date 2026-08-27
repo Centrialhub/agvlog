@@ -23,6 +23,7 @@ import {
 import { cn } from '@/lib/utils';
 import SignaturePad from '@/components/driver/SignaturePad';
 import { isStopTerminal } from '@/lib/status/stopStatus';
+import { validateUpload } from '@/lib/uploadPolicy';
 
 
 
@@ -289,9 +290,9 @@ export default function DriverDeliveries() {
       if (photos.length > 0) {
         const results = await Promise.allSettled(
           photos.map(async (photo) => {
-            const ext = (photo.name.split('.').pop() || 'jpg').toLowerCase();
-            const path = `${currentTenant!.id}/deliveries/${trip!.id}/${eventForm.stop.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-            const { error } = await supabase.storage.from('receipts').upload(path, photo, { contentType: photo.type });
+            const { contentType, safeName } = validateUpload(photo, 'image');
+            const path = `${currentTenant!.id}/deliveries/${trip!.id}/${eventForm.stop.id}/${Date.now()}-${crypto.randomUUID()}-${safeName}`;
+            const { error } = await supabase.storage.from('receipts').upload(path, photo, { contentType });
             if (error) throw error;
             return path;
           }),
