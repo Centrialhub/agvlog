@@ -749,14 +749,6 @@ function InviteDialog({
     setUserId('');
   };
 
-  // One-time throwaway secret: never displayed, never stored and never usable —
-  // the invitee immediately defines their own password via /set-password.
-  const generateThrowawaySecret = () => {
-    const bytes = new Uint8Array(32);
-    crypto.getRandomValues(bytes);
-    return `Ax1${Array.from(bytes, b => b.toString(36)).join('')}`;
-  };
-
   const handleInvite = async () => {
     if (!tenantId || !email.includes('@')) return;
     setLoading(true);
@@ -765,7 +757,6 @@ function InviteDialog({
         body: {
           tenant_id: tenantId,
           email: email.trim(),
-          password: generateThrowawaySecret(),
           full_name: fullName || email.trim(),
           role,
         },
@@ -773,16 +764,7 @@ function InviteDialog({
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
 
-      const { error: inviteError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: `${window.location.origin}/set-password`,
-      });
-      if (inviteError) {
-        toast.warning(
-          `Membro criado, mas o e-mail de convite falhou: ${inviteError.message}. Reenvie o convite.`
-        );
-      } else {
-        toast.success(`Convite enviado para ${email.trim()}`);
-      }
+      toast.success('Convite enviado');
       queryClient.invalidateQueries({ queryKey: ['tenant_members'] });
       resetForm();
       onOpenChange(false);
