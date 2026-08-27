@@ -793,13 +793,10 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
         natOp: input.nature,
         CFOP: cfop,
       },
-      vPrest: {
-        vTPrest: totalServico,
-        vRec: totalServico,
-        Comp: componentes
-          .filter((component) => component.soma)
-          .map((component) => ({ xNome: component.nome, vComp: component.valor })),
-      },
+      vPrest: valorPrestacaoGrupo,
+      // Alias compatível com versões do Hub que leem `valorPrestacao`.
+      valorPrestacao: valorPrestacaoGrupo,
+
       imp: icmsBlock
         ? {
             ICMS: {
