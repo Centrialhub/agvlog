@@ -11,6 +11,8 @@ import AppLayout from "@/components/layout/AppLayout";
 import DriverLayout from "@/components/layout/DriverLayout";
 import Auth from "@/pages/Auth";
 import SetPassword from "@/pages/SetPassword";
+import PrivilegedMfaGate from "@/components/auth/PrivilegedMfaGate";
+
 
 // Admin / Operations pages
 const OperationsCenter = lazy(() => import("@/pages/OperationsCenter"));
