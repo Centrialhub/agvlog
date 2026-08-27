@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { classifyTelemetryFreshness, summarizeTelemetryFreshness } from '@/lib/telemetryFreshness';
 
 export default function Dashboard() {
   const { currentTenant } = useTenant();
@@ -137,8 +138,17 @@ export default function Dashboard() {
     enabled: !!currentTenant,
   });
 
-  const onlineCount = fleetState.filter(s => s.movement_state === 'moving' || s.movement_state === 'stopped' || s.movement_state === 'idle').length;
-  const offlineCount = vehicleCount - onlineCount;
+  const activeFleetState = useMemo(() => {
+    const stateByVehicle = new Map(fleetState.map((state) => [state.vehicle_id, state]));
+    return vehiclesForChart.map((vehicle) => stateByVehicle.get(vehicle.id) ?? null);
+  }, [fleetState, vehiclesForChart]);
+  const telemetryStats = useMemo(
+    () => summarizeTelemetryFreshness(activeFleetState.map((state) => state?.last_position_at)),
+    [activeFleetState],
+  );
+  const onlineCount = telemetryStats.fresh + telemetryStats.stale;
+  const offlineCount = telemetryStats.offline;
+  const unknownCount = Math.max(telemetryStats.unknown, vehicleCount - telemetryStats.total);
 
   // Aggregate weekly data by day
   const dailyChartData = useMemo(() => {
@@ -175,7 +185,7 @@ export default function Dashboard() {
   // Offline vehicles from state engine
   const offlineVehicles = useMemo(() => {
     return fleetState
-      .filter(s => s.movement_state === 'offline')
+      .filter((s) => classifyTelemetryFreshness(s.last_position_at) === 'offline')
       .sort((a, b) => (a.last_position_at || '').localeCompare(b.last_position_at || ''))
       .slice(0, 5);
   }, [fleetState]);
@@ -192,8 +202,8 @@ export default function Dashboard() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <StatCard title="Veículos" value={vehicleCount} subtitle="Cadastrados" icon={<Truck className="h-5 w-5" />} onClick={() => navigate('/vehicles')} />
-        <StatCard title="Online" value={onlineCount} subtitle="< 10 min" icon={<TruckIcon className="h-5 w-5" />} variant="success" onClick={() => navigate('/fleet-map')} />
-        <StatCard title="Offline" value={offlineCount} subtitle="Sem atualização" icon={<Clock className="h-5 w-5" />} variant="destructive" onClick={() => navigate('/fleet-map')} />
+        <StatCard title="Online" value={onlineCount} subtitle={`≤ 25 min · ${telemetryStats.fresh} frescos`} icon={<TruckIcon className="h-5 w-5" />} variant="success" onClick={() => navigate('/fleet-map')} />
+        <StatCard title="Offline" value={offlineCount} subtitle={`> 25 min · ${unknownCount} sem dados`} icon={<Clock className="h-5 w-5" />} variant="destructive" onClick={() => navigate('/fleet-map')} />
         <StatCard title="Alertas" value={openAlerts} subtitle="Abertos" icon={<AlertTriangle className="h-5 w-5" />} variant="warning" onClick={() => navigate('/alerts')} />
         <StatCard title="Km hoje" value={todayMetrics ? Math.round(todayMetrics.km) : 0} subtitle="Via GPS" icon={<Route className="h-5 w-5" />} />
         <StatCard title="Viagens hoje" value={todayMetrics?.trips || 0} subtitle="Detectadas" icon={<MapPin className="h-5 w-5" />} />

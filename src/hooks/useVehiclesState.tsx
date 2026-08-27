@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTenant } from './useTenant';
+import { classifyTelemetryFreshness } from '@/lib/telemetryFreshness';
 
 export type MovementState = 'moving' | 'stopped' | 'idle' | 'offline' | 'unknown';
 
@@ -31,7 +32,12 @@ export function useFleetState() {
         .select('*')
         .eq('tenant_id', currentTenant.id);
       if (error) throw error;
-      return (data || []) as VehicleState[];
+      return ((data || []) as VehicleState[]).map((state) => {
+        const freshness = classifyTelemetryFreshness(state.last_position_at);
+        if (freshness === 'offline') return { ...state, movement_state: 'offline' as const };
+        if (freshness === 'unknown') return { ...state, movement_state: 'unknown' as const };
+        return state;
+      });
     },
     enabled: !!currentTenant,
     refetchInterval: 30000,
@@ -52,7 +58,12 @@ export function useVehicleState(vehicleId: string | null) {
         .eq('vehicle_id', vehicleId)
         .maybeSingle();
       if (error) throw error;
-      return data as VehicleState | null;
+      if (!data) return null;
+      const state = data as VehicleState;
+      const freshness = classifyTelemetryFreshness(state.last_position_at);
+      if (freshness === 'offline') return { ...state, movement_state: 'offline' as const };
+      if (freshness === 'unknown') return { ...state, movement_state: 'unknown' as const };
+      return state;
     },
     enabled: !!currentTenant && !!vehicleId,
     refetchInterval: 30000,

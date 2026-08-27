@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Activity, CheckCircle, XCircle, AlertTriangle, Clock, Truck, Radio, Database } from 'lucide-react';
+import { summarizeTelemetryFreshness } from '@/lib/telemetryFreshness';
 
 function formatTime(iso: string | null | undefined): string {
   if (!iso) return '—';
@@ -43,19 +44,19 @@ export default function IntegrationHealth() {
     queryKey: ['position_freshness', currentTenant?.id],
     queryFn: async () => {
       if (!currentTenant) return null;
-      const { data: positions } = await supabase
-        .from('positions_last').select('vehicle_id, captured_at')
-        .eq('tenant_id', currentTenant.id);
-      if (!positions) return { total: 0, fresh: 0, stale: 0, offline: 0 };
-      const now = Date.now();
-      let fresh = 0, offline = 0, stale = 0;
-      for (const p of positions) {
-        const age = now - new Date(p.captured_at).getTime();
-        if (age < 10 * 60 * 1000) fresh++;
-        else if (age < 30 * 60 * 1000) offline++;
-        else stale++;
-      }
-      return { total: positions.length, fresh, offline, stale };
+      const [vehiclesResult, positionsResult] = await Promise.all([
+        supabase.from('vehicles').select('id').eq('tenant_id', currentTenant.id).eq('active', true),
+        supabase.from('positions_last').select('vehicle_id, captured_at').eq('tenant_id', currentTenant.id),
+      ]);
+      if (vehiclesResult.error) throw vehiclesResult.error;
+      if (positionsResult.error) throw positionsResult.error;
+
+      const timestampByVehicle = new Map(
+        (positionsResult.data || []).map((position) => [position.vehicle_id, position.captured_at]),
+      );
+      return summarizeTelemetryFreshness(
+        (vehiclesResult.data || []).map((vehicle) => timestampByVehicle.get(vehicle.id) ?? null),
+      );
     },
     enabled: !!currentTenant && isAdmin,
     refetchInterval: 30000,
@@ -150,22 +151,26 @@ export default function IntegrationHealth() {
         </CardHeader>
         <CardContent>
           {positionStats ? (
-            <div className="grid grid-cols-4 gap-4 text-center">
+            <div className="grid grid-cols-2 gap-4 text-center sm:grid-cols-5">
               <div>
                 <div className="text-2xl font-bold">{positionStats.total}</div>
-                <div className="text-xs text-muted-foreground">Com posição</div>
+                <div className="text-xs text-muted-foreground">Veículos ativos</div>
               </div>
               <div>
                 <div className="text-2xl font-bold text-success">{positionStats.fresh}</div>
-                <div className="text-xs text-muted-foreground">Online (&lt;10m)</div>
+                <div className="text-xs text-muted-foreground">Fresco (≤10m)</div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-warning">{positionStats.offline}</div>
-                <div className="text-xs text-muted-foreground">Offline (10-30m)</div>
+                <div className="text-2xl font-bold text-warning">{positionStats.stale}</div>
+                <div className="text-xs text-muted-foreground">Atenção (10–25m)</div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-destructive">{positionStats.stale}</div>
-                <div className="text-xs text-muted-foreground">Stale (&gt;30m)</div>
+                <div className="text-2xl font-bold text-destructive">{positionStats.offline}</div>
+                <div className="text-xs text-muted-foreground">Offline (&gt;25m)</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-muted-foreground">{positionStats.unknown}</div>
+                <div className="text-xs text-muted-foreground">Sem dados</div>
               </div>
             </div>
           ) : (
