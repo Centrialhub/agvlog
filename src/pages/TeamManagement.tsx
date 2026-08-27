@@ -969,20 +969,6 @@ function EditMemberDialog({
     setLoading(false);
   };
 
-  const handleSendPasswordLink = async () => {
-    if (!member?.profile_email) {
-      toast.error('Membro sem e-mail cadastrado.');
-      return;
-    }
-    setLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(member.profile_email, {
-      redirectTo: `${window.location.origin}/set-password`,
-    });
-    if (error) toast.error(error.message);
-    else toast.success('Link para definição de senha enviado ao usuário.');
-    setLoading(false);
-  };
-
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-md">
