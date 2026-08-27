@@ -1052,8 +1052,6 @@ function EditMemberDialog({
             </Button>
           </div>
         </div>
-
-        </div>
       </DialogContent>
     </Dialog>
   );
