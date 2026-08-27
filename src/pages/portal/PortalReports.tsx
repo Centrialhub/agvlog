@@ -9,15 +9,12 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Loader2, Download, TruckIcon, AlertTriangle, ClipboardCheck, Clock } from 'lucide-react';
 import { PortalKpiCard } from '@/components/portal/PortalKpiCard';
+import { escapePortalCsvCell } from '@/lib/portalCsv';
 
-function downloadCsv(name: string, rows: Array<Record<string, any>>) {
+function downloadCsv(name: string, rows: Array<Record<string, unknown>>) {
   if (!rows.length) return;
   const headers = Object.keys(rows[0]);
-  const escape = (v: any) => {
-    const s = v == null ? '' : String(v);
-    return /[";\n,]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  };
-  const csv = [headers.join(','), ...rows.map((r) => headers.map((h) => escape(r[h])).join(','))].join('\n');
+  const csv = [headers.join(','), ...rows.map((r) => headers.map((h) => escapePortalCsvCell(r[h])).join(','))].join('\n');
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
