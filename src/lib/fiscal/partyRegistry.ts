@@ -216,10 +216,13 @@ export function fillPartyFieldsFromRegistry<T extends PartyFields>(
   const set = (key: string, value?: string | null) => {
     const v = (value ?? '') === null ? '' : String(value ?? '').trim();
     if (!v) return;
+    // Não cria propriedades que o formato recebido não declara.
+    if (!(key in next)) return;
     if (((next as any)[key] || '').trim()) return;
     (next as any)[key] = v;
     changed = true;
   };
+
   if (rem) {
     set('remitterName', rem.company_name || rem.legal_name);
     set('remitterCnpj', digitsOnly(rem.tax_id));

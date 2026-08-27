@@ -638,11 +638,15 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
     (inicio as { uf?: string } | undefined)?.uf || input.emitter?.address?.state || '',
   ).toUpperCase();
   const ufFim = String((fim as { uf?: string } | undefined)?.uf || '').toUpperCase();
-  const interstate = !!ufIni && !!ufFim && ufIni !== ufFim;
-  const cfopPrefix = interstate ? '6' : '5';
+  const trajectoryKnown = !!ufIni && !!ufFim;
+  const interstate = trajectoryKnown && ufIni !== ufFim;
   const rawCfop = digits(input.cfop || '');
   const isTransportCfop = (c: string) =>
     /^[56](3(5[1-9]|60)|932)$/.test(c);
+  // Só o trajeto completo autoriza a troca 5↔6. Com trajeto incompleto,
+  // preserva-se o prefixo informado pelo operador (preservação fiscal).
+  const informedPrefix = isTransportCfop(rawCfop) ? rawCfop[0] : '';
+  const cfopPrefix = trajectoryKnown ? (interstate ? '6' : '5') : (informedPrefix || '5');
   let cfop = rawCfop;
   if (cfop && isTransportCfop(cfop)) {
     if (cfop[0] !== cfopPrefix) {
@@ -657,6 +661,16 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
     }
     cfop = fallback;
   }
+
+  // Grupo único do valor da prestação, exposto como vPrest e valorPrestacao.
+  const valorPrestacaoGrupo = {
+    vTPrest: totalServico,
+    vRec: totalServico,
+    Comp: componentes
+      .filter((component) => component.soma)
+      .map((component) => ({ xNome: component.nome, vComp: component.valor })),
+  };
+
 
   const payload: Record<string, unknown> = {
     emitterCnpj: digits(input.emitter?.cnpj) || undefined,
@@ -727,6 +741,10 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
       recebedor: serializeParty(input.recebedor),
 
       seguro: seguroCarga,
+      // Aliases compatíveis com versões diferentes do Hub Fiscal.
+      seguradora: seguroCarga,
+      seguros: seguroCarga ? [seguroCarga] : undefined,
+
       tomador: {
         tipo: TAKER_INDEX[input.takerRole],
         role: input.takerRole,
@@ -773,6 +791,9 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
         cbs: input.totals.cbs_value ?? undefined,
       },
       composicaoFrete: freightComposition,
+      // Reforma tributária (CBS/IBS) — informado pela prévia de emissão.
+      cbsIbs: input.cbsIbs || undefined,
+
       // Componentes do valor da prestação (DACTE) — FRETE PESO / SEGURO / ICMS em destaque.
       // `soma: false` (ICMS por fora) = destaque impresso sem somar ao valor a receber.
       componentes: componentes.map((c) => ({ nome: c.nome, valor: c.valor, soma: c.soma })),
@@ -788,13 +809,10 @@ export function buildCtePayload(input: BuildCtePayloadInput): BuildCtePayloadRes
         natOp: input.nature,
         CFOP: cfop,
       },
-      vPrest: {
-        vTPrest: totalServico,
-        vRec: totalServico,
-        Comp: componentes
-          .filter((component) => component.soma)
-          .map((component) => ({ xNome: component.nome, vComp: component.valor })),
-      },
+      vPrest: valorPrestacaoGrupo,
+      // Alias compatível com versões do Hub que leem `valorPrestacao`.
+      valorPrestacao: valorPrestacaoGrupo,
+
       imp: icmsBlock
         ? {
             ICMS: {
