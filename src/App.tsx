@@ -10,6 +10,7 @@ import { TenantProvider, useTenant } from "@/hooks/useTenant";
 import AppLayout from "@/components/layout/AppLayout";
 import DriverLayout from "@/components/layout/DriverLayout";
 import Auth from "@/pages/Auth";
+import SetPassword from "@/pages/SetPassword";
 
 // Admin / Operations pages
 const OperationsCenter = lazy(() => import("@/pages/OperationsCenter"));
@@ -257,6 +258,7 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/auth" element={<AuthRoute />} />
+            <Route path="/set-password" element={<SetPassword />} />
 
             {/* Role-based home */}
             <Route path="/" element={<ProtectedRoute gate="any"><RoleRouter /></ProtectedRoute>} />
