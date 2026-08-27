@@ -197,14 +197,22 @@ function ProtectedContent({ children, gate }: { children: React.ReactNode; gate:
   }
 
   const Layout = isDriver ? DriverLayout : AppLayout;
+  const isPrivileged = currentRole === 'owner' || currentRole === 'admin';
 
-  return (
+  const content = (
     <Layout>
       <Suspense fallback={<PageLoader />}>
         {gate === 'internal' ? <RequireInternalRole>{children}</RequireInternalRole> : children}
       </Suspense>
     </Layout>
   );
+
+  if (isPrivileged) {
+    return <PrivilegedMfaGate>{content}</PrivilegedMfaGate>;
+  }
+
+  return content;
+
 }
 
 function DriverRoute({ children }: { children: React.ReactNode }) {
