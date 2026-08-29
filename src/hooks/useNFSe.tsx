@@ -4,7 +4,7 @@ import { NFSE_PROVIDER_CONFIG_SAFE_SELECT } from '@/integrations/supabase/select
 import type { Json, Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 import { useTenant } from './useTenant';
 import { useAuth } from './useAuth';
-import type { TenantEmitter } from './useEmitters';
+import type { HubFiscalEnvironment, TenantEmitter } from './useEmitters';
 import { toast } from '@/components/ui/sonner';
 import { hubFiscal, type HubResponse } from '@/lib/fiscal/hubFiscalClient';
 import { buildNFSeEmitPayload, type BuildNFSeInput } from '@/lib/fiscal/nfseBuilder';
@@ -321,7 +321,7 @@ export function useIssueNFSe() {
 
       // 2. Se há emitente com credencial Hub Fiscal, roteia pelo proxy.
       let hasHubCred = false;
-      let environment: 'sandbox' | 'production' = 'production';
+      let environment: HubFiscalEnvironment = 'production';
       if (emitter) {
         const { data: creds } = await supabase
           .from('hub_fiscal_credentials')
@@ -333,7 +333,9 @@ export function useIssueNFSe() {
           (creds || []).find((item) => item.doc_scope === 'nfse') ||
           (creds || []).find((item) => item.doc_scope === 'all');
         hasHubCred = Boolean(credential);
-        environment = credential?.environment === 'sandbox' ? 'sandbox' : 'production';
+        environment = credential?.environment === 'sandbox' || credential?.environment === 'homologation'
+          ? credential.environment
+          : 'production';
       }
 
       if (hasHubCred && emitter) {
