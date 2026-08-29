@@ -743,8 +743,7 @@ export default function RoutePlanning() {
           <div className="flex flex-col">
             <Label className="text-[10px] text-muted-foreground">Saída padrão</Label>
             <Input
-              type="datetime-local"
-              aria-label="Saída padrão do planejamento"
+              type="datetime-local" aria-label="Saída padrão do planejamento"
               value={globalStartAt}
               onChange={e => setGlobalStartAt(e.target.value)}
               className="h-9 w-48 text-xs"
@@ -912,8 +911,7 @@ export default function RoutePlanning() {
                         </SelectContent>
                       </Select>
                       <Input
-                        type="datetime-local"
-                        aria-label={`Saída planejada da rota ${route.name}`}
+                        type="datetime-local" aria-label={`Saída planejada da rota ${route.name}`}
                         value={route.planned_start_at || ''}
                         onChange={(e) => setRoutes(prev => prev.map(r => {
                           if (r.id !== route.id) return r;
