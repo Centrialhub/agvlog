@@ -4,6 +4,7 @@ import { requireIntegrationCapability } from '../_shared/capabilities.ts';
 
 const HUB_BASE = (Deno.env.get('HUB_FISCAL_BASE_URL') || '').trim().replace(/\/$/, '');
 const DEFAULT_HUB_KEY = Deno.env.get('HUB_FISCAL_API_KEY') || '';
+const HUB_API_VERSION = Deno.env.get('HUB_FISCAL_API_VERSION') || '2026-08-27';
 const MANAGERSAAS_BASE = (Deno.env.get('MANAGERSAAS_BASE_URL') || '').trim().replace(/\/$/, '');
 const MANAGERSAAS_GROUP = Deno.env.get('MANAGERSAAS_GROUP') || '';
 const MANAGERSAAS_AUTH = Deno.env.get('MANAGERSAAS_AUTH') || '';
@@ -37,7 +38,7 @@ type Action =
 interface ProxyRequest {
   action: Action;
   tenantId?: string;
-  type?: 'nfe' | 'nfce' | 'nfse' | 'cte' | 'mdfe';
+  type?: 'nfe' | 'nfce' | 'nfse' | 'cte' | 'mdfe' | 'nfcom';
   id?: string;          // hub document id
   emissionId?: string;  // local hub_fiscal_emissions.id
   query?: Record<string, string>;
@@ -84,6 +85,7 @@ async function callHub(method: string, path: string, qs?: Record<string, string>
       headers: {
         'Authorization': `Bearer ${key}`,
         'Content-Type': 'application/json',
+        'X-HubFiscal-Api-Version': HUB_API_VERSION,
       },
       body: requestBody,
     });
@@ -336,6 +338,12 @@ Deno.serve(async (req) => {
         ? pick(c => c.doc_scope === scope && c.environment === wantedEnv)
           || pick(c => c.doc_scope === 'all' && c.environment === wantedEnv)
         : pick(c => c.doc_scope === scope) || pick(c => c.doc_scope === 'all');
+      if (!match && DEFAULT_HUB_KEY) {
+        // O token global é uma configuração explícita do ambiente e é o
+        // fallback documentado na interface. Nunca o expomos ao cliente.
+        console.log('[hub-fiscal-proxy] falling back to default token', { emitter_id: emId, scope, wantedEnv });
+        return { token: DEFAULT_HUB_KEY, source: 'default', emitter_id: emId, scope_matched: null };
+      }
       if (!match) {
         console.log('[hub-fiscal-proxy] no credential for emitter', { emitter_id: emId, scope, wantedEnv });
         const err: any = new Error(
@@ -385,9 +393,22 @@ Deno.serve(async (req) => {
       case 'emit': {
         const type = payload.type;
         if (!type) return json(400, { success: false, error: { code: 'MISSING_TYPE' } });
+        const rawBody = (payload.body || {}) as Record<string, unknown>;
+        const stableLocalId = payload.fiscalDocumentId || payload.cteDocumentId || payload.nfseDocumentId;
+        const idIntegracao = String(
+          rawBody.idIntegracao || rawBody.externalId || payload.idIntegracao ||
+          (stableLocalId ? `agvlog-${type}-${stableLocalId}` : ''),
+        ).trim();
+        if (!idIntegracao) {
+          return json(400, {
+            success: false,
+            error: { code: 'MISSING_ID_INTEGRACAO', message: 'Informe idIntegracao ou externalId para emissão idempotente.' },
+          });
+        }
+        const bodyWithIntegration = { ...rawBody, idIntegracao };
         const body = type === 'cte'
-          ? normalizeCteEmissionBody(payload.body || {})
-          : (payload.body || {});
+          ? normalizeCteEmissionBody(bodyWithIntegration)
+          : bodyWithIntegration;
         const resolved = await resolveToken(type, payload.emitterId);
         console.log('[hub-fiscal-proxy] emit', { type, emitter_id: resolved.emitter_id, source: resolved.source });
         const { status, data } = await callHub('POST', '/hub_documents_emit', { type }, body, resolved.token);
@@ -417,7 +438,7 @@ Deno.serve(async (req) => {
           environment: (body as any).environment || 'sandbox',
           emitter_cnpj: (body as any).emitterCnpj || payload.emitterCnpj || null,
           external_id: (body as any).externalId || null,
-          id_integracao: doc.idIntegracao || (body as any)?.payload?.idIntegracao || (body as any).externalId || null,
+          id_integracao: doc.idIntegracao || (body as any).idIntegracao || (body as any)?.payload?.idIntegracao || (body as any).externalId || null,
           hub_document_id: doc.id || null,
           plugnotas_id: doc.plugnotasId || null,
           status: doc.status || (status >= 400 ? 'error' : 'processing'),
@@ -1120,3 +1141,4 @@ Deno.serve(async (req) => {
     return json(status, { success: false, error: { code, message: e?.message } });
   }
 });
+
