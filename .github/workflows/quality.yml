@@ -98,7 +98,11 @@ jobs:
           echo "AGVLOG_LOCAL_DB_URL=$DB_URL" >> "$GITHUB_ENV"
           E2E_PASSWORD="$(openssl rand -base64 24 | tr -d '\n' | tr '/+' '_-')Aa1"
           echo "::add-mask::$E2E_PASSWORD"
-          psql "$DB_URL" -v ON_ERROR_STOP=1 -v e2e_password="$E2E_PASSWORD" -c "UPDATE auth.users SET encrypted_password = crypt(:'e2e_password', gen_salt('bf')) WHERE email LIKE '%@agvlog-e2e.invalid';"
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -v e2e_password="$E2E_PASSWORD" <<'SQL'
+          UPDATE auth.users
+          SET encrypted_password = crypt(:'e2e_password', gen_salt('bf'))
+          WHERE email LIKE '%@agvlog-e2e.invalid';
+          SQL
           echo "E2E_PASSWORD=$E2E_PASSWORD" >> "$GITHUB_ENV"
 
       - name: Database lint
