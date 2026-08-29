@@ -19,7 +19,9 @@ sign_in_sign_ups = 10
 token_verifications = 10
 
 [auth.email]
-enable_signup = false
+# Keep the email/password provider active for invited users. Global self-signup
+# remains disabled by [auth].enable_signup above.
+enable_signup = true
 double_confirm_changes = true
 secure_password_change = true
 max_frequency = "1m"
