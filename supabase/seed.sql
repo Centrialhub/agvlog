@@ -328,7 +328,7 @@ values (
   '70000000-0000-4000-8000-000000000001',
   '80000000-0000-4000-8000-000000000001',
   '82000000-0000-4000-8000-000000000001',
-  'photo', 'validated', 'Recebedor Fixture', now(), now(), '{"fixture":true}',
+  'pod_photo', 'validated', 'Recebedor Fixture', now(), now(), '{"fixture":true}',
   encode(digest('agvlog-e2e-pod', 'sha256'), 'hex'), null
 )
 on conflict (id) do update set status = excluded.status, updated_at = now();
