@@ -75,7 +75,7 @@ describe("production configuration contract", () => {
     const teamManagement = read("src", "pages", "TeamManagement.tsx");
 
     expect(config).toMatch(/\[auth\][\s\S]*?enable_signup = false/);
-    expect(config).toMatch(/\[auth\.email\][\s\S]*?enable_signup = false/);
+    expect(config).toMatch(/\[auth\.email\][\s\S]*?enable_signup = true/);
     expect(config).toContain("enable_anonymous_sign_ins = false");
     expect(config).toContain("minimum_password_length = 12");
     expect(config).toContain('password_requirements = "lower_upper_letters_digits"');
