@@ -13,7 +13,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, RotateCw, Send } from 'lucide-react';
 import { toast } from '@/components/ui/sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { useEmitters, type TenantEmitter } from '@/hooks/useEmitters';
+import { useEmitters, type HubFiscalEnvironment, type TenantEmitter } from '@/hooks/useEmitters';
 import { useHubCredentials } from '@/hooks/useEmitters';
 import { useVehicles } from '@/hooks/useVehicles';
 import { useClients, type Client } from '@/hooks/useClients';
@@ -333,7 +333,7 @@ function groupToEditable(g: CteGroupPreview, defaultEmitterId: string): Editable
 function toBuildInput(
   e: EditableCte,
   emitter: TenantEmitter | null | undefined,
-  environment: 'sandbox' | 'production' = 'sandbox',
+  environment: HubFiscalEnvironment = 'sandbox',
   clients: Client[] = [],
 ): BuildCtePayloadInput {
   // Completa lacunas das partes com o cadastro local (CNPJ, IE, endereço).
@@ -755,8 +755,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
       null,
     [activeCreds],
   );
-  const activeEnvironment: 'sandbox' | 'production' =
-    activeCteCred?.environment === 'production' ? 'production' : 'sandbox';
+  const activeEnvironment: HubFiscalEnvironment = activeCteCred?.environment || 'sandbox';
 
   const validation = useMemo(() => {
     if (!active) return { ok: false, missing: [] as string[], warnings: [] as string[], consistencyError: false };
@@ -872,7 +871,7 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
     const errors: string[] = [];
     
     // Cache de credenciais por emitente para evitar lookups repetitivos
-    const credsCache: Record<string, { env: 'sandbox' | 'production' }> = {};
+    const credsCache: Record<string, { env: HubFiscalEnvironment }> = {};
 
     try {
       // Processamento em lote com limite de concorrência (5)
@@ -905,8 +904,11 @@ export function CteEmissionPreviewDialog({ open, onOpenChange, groups }: Props) 
                 (itCreds || []).find((credential) => credential.doc_scope === 'all') ||
                 null;
                 
+              const credentialEnvironment = itCred?.environment;
               credsCache[it.emitterId] = {
-                env: itCred?.environment === 'production' ? 'production' : 'sandbox'
+                env: credentialEnvironment === 'production' || credentialEnvironment === 'homologation'
+                  ? credentialEnvironment
+                  : 'sandbox',
               };
             }
 
