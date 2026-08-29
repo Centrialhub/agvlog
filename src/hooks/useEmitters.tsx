@@ -39,8 +39,8 @@ export interface TenantEmitter {
   updated_at: string;
 }
 
-export type HubFiscalDocumentScope = 'all' | 'nfse' | 'cte' | 'nfe' | 'nfce' | 'mdfe';
-export type HubFiscalEnvironment = 'sandbox' | 'production';
+export type HubFiscalDocumentScope = 'all' | 'nfse' | 'cte' | 'nfe' | 'nfce' | 'mdfe' | 'nfcom';
+export type HubFiscalEnvironment = 'sandbox' | 'homologation' | 'production';
 
 export interface HubFiscalCredential {
   id: string;
@@ -64,6 +64,7 @@ const HUB_FISCAL_DOCUMENT_SCOPES: readonly HubFiscalDocumentScope[] = [
   'nfe',
   'nfce',
   'mdfe',
+  'nfcom',
 ];
 
 function toDocumentScope(value: string): HubFiscalDocumentScope {
@@ -73,7 +74,8 @@ function toDocumentScope(value: string): HubFiscalDocumentScope {
 }
 
 function toEnvironment(value: string): HubFiscalEnvironment {
-  return value === 'production' ? 'production' : 'sandbox';
+  if (value === 'production' || value === 'homologation') return value;
+  return 'sandbox';
 }
 
 function errorMessage(error: unknown, fallback: string): string {
