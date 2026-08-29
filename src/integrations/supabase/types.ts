@@ -123,6 +123,96 @@ export type Database = {
           },
         ]
       }
+      application_error_events: {
+        Row: {
+          actor_fingerprint: string
+          client_family: string | null
+          component_stack: string | null
+          correlation_id: string
+          error_name: string
+          id: string
+          occurred_at: string
+          phase: string | null
+          received_at: string
+          release: string
+          route: string
+          safe_message: string
+          tenant_fingerprint: string | null
+        }
+        Insert: {
+          actor_fingerprint: string
+          client_family?: string | null
+          component_stack?: string | null
+          correlation_id: string
+          error_name: string
+          id?: string
+          occurred_at: string
+          phase?: string | null
+          received_at?: string
+          release: string
+          route: string
+          safe_message: string
+          tenant_fingerprint?: string | null
+        }
+        Update: {
+          actor_fingerprint?: string
+          client_family?: string | null
+          component_stack?: string | null
+          correlation_id?: string
+          error_name?: string
+          id?: string
+          occurred_at?: string
+          phase?: string | null
+          received_at?: string
+          release?: string
+          route?: string
+          safe_message?: string
+          tenant_fingerprint?: string | null
+        }
+        Relationships: []
+      }
+      application_web_vitals: {
+        Row: {
+          actor_fingerprint: string
+          correlation_id: string
+          id: string
+          metric_name: string
+          metric_value: number
+          occurred_at: string
+          rating: string
+          received_at: string
+          release: string
+          route: string
+          tenant_fingerprint: string | null
+        }
+        Insert: {
+          actor_fingerprint: string
+          correlation_id: string
+          id?: string
+          metric_name: string
+          metric_value: number
+          occurred_at: string
+          rating: string
+          received_at?: string
+          release: string
+          route: string
+          tenant_fingerprint?: string | null
+        }
+        Update: {
+          actor_fingerprint?: string
+          correlation_id?: string
+          id?: string
+          metric_name?: string
+          metric_value?: number
+          occurred_at?: string
+          rating?: string
+          received_at?: string
+          release?: string
+          route?: string
+          tenant_fingerprint?: string | null
+        }
+        Relationships: []
+      }
       asset_movements: {
         Row: {
           asset_id: string
@@ -13794,6 +13884,27 @@ export type Database = {
         }
         Relationships: []
       }
+      secure_upload_rate_events: {
+        Row: {
+          action: string
+          actor_fingerprint: string
+          id: number
+          occurred_at: string
+        }
+        Insert: {
+          action: string
+          actor_fingerprint: string
+          id?: never
+          occurred_at?: string
+        }
+        Update: {
+          action?: string
+          actor_fingerprint?: string
+          id?: never
+          occurred_at?: string
+        }
+        Relationships: []
+      }
       stock_items: {
         Row: {
           active: boolean | null
@@ -14180,6 +14291,8 @@ export type Database = {
           id: string
           notes: string | null
           tenant_id: string
+          updated_at: string
+          updated_by: string | null
         }
         Insert: {
           created_at?: string
@@ -14188,6 +14301,8 @@ export type Database = {
           id?: string
           notes?: string | null
           tenant_id: string
+          updated_at?: string
+          updated_by?: string | null
         }
         Update: {
           created_at?: string
@@ -14196,6 +14311,8 @@ export type Database = {
           id?: string
           notes?: string | null
           tenant_id?: string
+          updated_at?: string
+          updated_by?: string | null
         }
         Relationships: [
           {
@@ -15770,6 +15887,10 @@ export type Database = {
         Args: { _period_id: string }
         Returns: undefined
       }
+      assert_tenant_integration_capability_v1: {
+        Args: { _capability: string; _tenant_id: string }
+        Returns: undefined
+      }
       assign_fiscal_documents_to_load: {
         Args: { _document_ids: string[]; _load_id: string; _tenant_id: string }
         Returns: Json
@@ -15936,6 +16057,15 @@ export type Database = {
           p_inbox_id: string
           p_success: boolean
           p_tenant_id?: string
+        }
+        Returns: boolean
+      }
+      consume_secure_upload_quota_v1: {
+        Args: {
+          p_action: string
+          p_actor_fingerprint: string
+          p_max_requests: number
+          p_window_seconds: number
         }
         Returns: boolean
       }
@@ -16374,18 +16504,6 @@ export type Database = {
         Args: { _client_id: string; _limit?: number; _tenant_id: string }
         Returns: Json
       }
-      get_fiscal_document_summary_v1: {
-        Args: { _tenant_id: string }
-        Returns: {
-          inbound_count: number
-          outbound_count: number
-          pending_count: number
-          total_count: number
-          total_pallets: number
-          total_value: number
-          total_weight: number
-        }[]
-      }
       get_current_memberships_v1: {
         Args: never
         Returns: {
@@ -16399,6 +16517,18 @@ export type Database = {
       get_driver_workspace_v1: {
         Args: { p_driver_id: string; p_tenant_id: string }
         Returns: Json
+      }
+      get_fiscal_document_summary_v1: {
+        Args: { _tenant_id: string }
+        Returns: {
+          inbound_count: number
+          outbound_count: number
+          pending_count: number
+          total_count: number
+          total_pallets: number
+          total_value: number
+          total_weight: number
+        }[]
       }
       get_next_load_number_v1: {
         Args: { p_tenant_id: string }
@@ -16435,6 +16565,19 @@ export type Database = {
       get_public_shipment_status: {
         Args: { _fiscal_document_id: string }
         Returns: string
+      }
+      get_tenant_integration_capabilities_v1: {
+        Args: { _tenant_id: string }
+        Returns: {
+          fiscal_effective: boolean
+          fiscal_enabled: boolean
+          fiscal_kill_switch: boolean
+          fiscal_status: string
+          ssx_effective: boolean
+          ssx_enabled: boolean
+          ssx_kill_switch: boolean
+          ssx_status: string
+        }[]
       }
       get_user_client_access: {
         Args: { _tenant_id: string }
@@ -17079,6 +17222,8 @@ export type Database = {
         }
         Returns: undefined
       }
+      purge_application_error_events_v1: { Args: never; Returns: number }
+      purge_secure_upload_rate_events_v1: { Args: never; Returns: number }
       recalculate_load_totals: {
         Args: { p_load_id: string; p_tenant_id: string }
         Returns: undefined
