@@ -44,7 +44,7 @@ export interface CteEmitter {
   cnpj: string;
   ie?: string | null;
   name: string;
-  environment: 'sandbox' | 'production';
+  environment: 'sandbox' | 'homologation' | 'production';
   address?: CteParty['address'];
   /** Regime tributário cadastrado: 'simples' | 'presumido' | 'real' | 'mei'. */
   taxRegime?: string | null;
