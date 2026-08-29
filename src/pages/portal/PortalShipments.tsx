@@ -100,8 +100,8 @@ export default function PortalShipments() {
               className="pl-8 h-9 text-sm"
             />
           </div>
-          <Input type="date" value={startDate} onChange={(e) => { setPage(0); setStartDate(e.target.value); }} className="h-9 text-sm w-[140px]" />
-          <Input type="date" value={endDate} onChange={(e) => { setPage(0); setEndDate(e.target.value); }} className="h-9 text-sm w-[140px]" />
+          <Input type="date" aria-label="Data inicial das remessas" value={startDate} onChange={(e) => { setPage(0); setStartDate(e.target.value); }} className="h-9 text-sm w-[140px]" />
+          <Input type="date" aria-label="Data final das remessas" value={endDate} onChange={(e) => { setPage(0); setEndDate(e.target.value); }} className="h-9 text-sm w-[140px]" />
           <Input value={city} onChange={(e) => { setPage(0); setCity(e.target.value); }} placeholder="Cidade" className="h-9 text-sm w-[140px]" />
           <Input value={state} onChange={(e) => { setPage(0); setState(e.target.value.toUpperCase().slice(0,2)); }} placeholder="UF" className="h-9 text-sm w-[70px]" />
           {anyFilter && (

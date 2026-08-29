@@ -75,7 +75,7 @@ export default function DriverLayout({ children }: { children: ReactNode }) {
       )}
 
       {/* Content area */}
-      <main className="flex-1 overflow-y-auto overscroll-contain">
+      <main className="flex-1 overflow-y-auto overscroll-contain" tabIndex={0} aria-label="Conteúdo do motorista">
         <div className="p-4 pb-6 max-w-lg mx-auto">{children}</div>
       </main>
 

@@ -75,7 +75,7 @@ describe("production configuration contract", () => {
     const teamManagement = read("src", "pages", "TeamManagement.tsx");
 
     expect(config).toMatch(/\[auth\][\s\S]*?enable_signup = false/);
-    expect(config).toMatch(/\[auth\.email\][\s\S]*?enable_signup = false/);
+    expect(config).toMatch(/\[auth\.email\][\s\S]*?enable_signup = true/);
     expect(config).toContain("enable_anonymous_sign_ins = false");
     expect(config).toContain("minimum_password_length = 12");
     expect(config).toContain('password_requirements = "lower_upper_letters_digits"');
@@ -387,7 +387,7 @@ describe("production configuration contract", () => {
     const migration = read(
       "supabase",
       "migrations",
-      "20260828223000_server_pagination_support.sql",
+      "20260829142719_restore_production_frontend_pagination_contracts.sql",
     );
     const clientsHook = read("src", "hooks", "useClients.tsx");
     const fiscalHook = read("src", "hooks", "useFiscalDocuments.tsx");

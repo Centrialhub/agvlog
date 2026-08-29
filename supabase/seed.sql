@@ -7,7 +7,7 @@ begin;
 -- The production invite-only trigger is intentionally preserved in migrations.
 -- Local reset is the one narrow exception because a seed has no pre-existing
 -- inviter. Re-enable it immediately after inserting the fixture identities.
-alter table auth.users disable trigger enforce_invite_only_before_auth_user_created;
+set local session_replication_role = replica;
 
 insert into auth.users (
   instance_id,
@@ -44,7 +44,7 @@ set email = excluded.email,
     raw_user_meta_data = excluded.raw_user_meta_data,
     updated_at = now();
 
-alter table auth.users enable trigger enforce_invite_only_before_auth_user_created;
+set local session_replication_role = origin;
 
 insert into auth.identities (
   id,
@@ -101,7 +101,6 @@ values
   ('30000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', 'owner', true),
   ('30000000-0000-4000-8000-000000000002', '20000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000002', 'operator', true),
   ('30000000-0000-4000-8000-000000000003', '20000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000003', 'driver', true),
-  ('30000000-0000-4000-8000-000000000004', '20000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000004', 'client', true),
   ('30000000-0000-4000-8000-000000000005', '20000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000005', 'operator', true),
   ('30000000-0000-4000-8000-000000000006', '20000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000006', 'admin', true),
   ('30000000-0000-4000-8000-000000000007', '20000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000007', 'operator', true),
@@ -329,7 +328,7 @@ values (
   '70000000-0000-4000-8000-000000000001',
   '80000000-0000-4000-8000-000000000001',
   '82000000-0000-4000-8000-000000000001',
-  'photo', 'validated', 'Recebedor Fixture', now(), now(), '{"fixture":true}',
+  'pod_photo', 'validated', 'Recebedor Fixture', now(), now(), '{"fixture":true}',
   encode(digest('agvlog-e2e-pod', 'sha256'), 'hex'), null
 )
 on conflict (id) do update set status = excluded.status, updated_at = now();

@@ -9,5 +9,3 @@ drop policy if exists pallet_proof_update on storage.objects;
 drop policy if exists return_proof_insert on storage.objects;
 drop policy if exists return_proof_update on storage.objects;
 
-comment on schema storage is
-  'AGVLOG writes to receipts/proof buckets through secure-upload; browser INSERT/UPDATE policies are intentionally absent.';

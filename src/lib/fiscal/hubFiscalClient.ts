@@ -1,7 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
 
-export type HubDocType = 'nfe' | 'nfce' | 'nfse' | 'cte' | 'mdfe';
-export type HubEnvironment = 'sandbox' | 'production';
+export type HubDocType = 'nfe' | 'nfce' | 'nfse' | 'cte' | 'mdfe' | 'nfcom';
+export type HubEnvironment = 'sandbox' | 'homologation' | 'production';
 
 export interface HubDocument {
   id?: string;
@@ -196,13 +196,17 @@ export const hubFiscal = {
   },
 
   /** CT-e — Importa XML autorizado externamente. */
-  import(body: { emitterCnpj: string; environment: HubEnvironment; xmlBase64: string }, emitterId?: string) {
+  import(body: { emitterCnpj: string; environment: HubEnvironment; xmlBase64: string }, emitterId: string) {
     return invoke({ action: 'import', body, emitterId });
   },
 
   /** Diagnóstico: verifica qual credencial seria usada para um emitente/escopo. Não retorna o token. */
-  ping(emitterId: string | undefined, type: HubDocType | 'all' = 'all') {
-    return invoke({ action: 'ping', emitterId, type });
+  ping(
+    emitterId: string | undefined,
+    type: HubDocType | 'all' = 'all',
+    environment?: HubEnvironment,
+  ) {
+    return invoke({ action: 'ping', emitterId, type, environment });
   },
 
   /** Returns a Blob you can hand to URL.createObjectURL for download/preview. */

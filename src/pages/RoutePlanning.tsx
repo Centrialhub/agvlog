@@ -743,7 +743,7 @@ export default function RoutePlanning() {
           <div className="flex flex-col">
             <Label className="text-[10px] text-muted-foreground">Saída padrão</Label>
             <Input
-              type="datetime-local"
+              type="datetime-local" aria-label="Saída padrão do planejamento"
               value={globalStartAt}
               onChange={e => setGlobalStartAt(e.target.value)}
               className="h-9 w-48 text-xs"
@@ -790,7 +790,7 @@ export default function RoutePlanning() {
           </CardTitle>
           <div className="flex gap-2 flex-wrap pt-2">
             <Select value={filterDest} onValueChange={setFilterDest}>
-              <SelectTrigger className="w-48"><SelectValue placeholder="Destino" /></SelectTrigger>
+              <SelectTrigger className="w-48" aria-label="Filtrar cargas por destino"><SelectValue placeholder="Destino" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os destinos</SelectItem>
                 {destinations.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
@@ -798,7 +798,7 @@ export default function RoutePlanning() {
             </Select>
             {selectedLoads.size > 0 && routes.length > 0 && (
               <Select onValueChange={addToRoute}>
-                <SelectTrigger className="w-56"><SelectValue placeholder={`Adicionar ${selectedLoads.size} a rota...`} /></SelectTrigger>
+                <SelectTrigger className="w-56" aria-label="Adicionar cargas selecionadas a uma rota"><SelectValue placeholder={`Adicionar ${selectedLoads.size} a rota...`} /></SelectTrigger>
                 <SelectContent>
                   {routes.map(r => <SelectItem key={r.id} value={r.id}>{r.name} ({r.loads.length})</SelectItem>)}
                 </SelectContent>
@@ -828,7 +828,7 @@ export default function RoutePlanning() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-10">
-                    <Checkbox checked={selectedLoads.size === filteredLoads.length && filteredLoads.length > 0} onCheckedChange={selectAll} />
+                    <Checkbox aria-label="Selecionar todas as cargas visíveis" checked={selectedLoads.size === filteredLoads.length && filteredLoads.length > 0} onCheckedChange={selectAll} />
                   </TableHead>
                   <TableHead>Carga</TableHead>
                   <TableHead>Destino</TableHead>
@@ -844,7 +844,7 @@ export default function RoutePlanning() {
                   const totalValue = l.items.reduce((s, i) => s + (Number(i.fiscal_documents?.value) || 0), 0);
                   return (
                     <TableRow key={l.id} className={selectedLoads.has(l.id) ? 'bg-primary/5' : ''}>
-                      <TableCell><Checkbox checked={selectedLoads.has(l.id)} onCheckedChange={() => toggleLoad(l.id)} /></TableCell>
+                      <TableCell><Checkbox aria-label={`Selecionar carga ${l.load_number}`} checked={selectedLoads.has(l.id)} onCheckedChange={() => toggleLoad(l.id)} /></TableCell>
                       <TableCell className="font-medium text-sm">{l.load_number}</TableCell>
                       <TableCell><Badge variant="outline" className="text-xs">{l.destination || '—'}</Badge></TableCell>
                       <TableCell className="text-sm text-right">{l.items.length}</TableCell>
@@ -895,7 +895,7 @@ export default function RoutePlanning() {
                     </div>
                     <div className="flex items-center gap-2">
                       <Select value={route.vehicle_id || ''} onValueChange={v => setRoutes(prev => prev.map(r => r.id === route.id ? { ...r, vehicle_id: v } : r))}>
-                        <SelectTrigger className="w-40 h-8 text-xs"><SelectValue placeholder="Veículo" /></SelectTrigger>
+                        <SelectTrigger className="w-40 h-8 text-xs" aria-label={`Veículo da rota ${route.name}`}><SelectValue placeholder="Veículo" /></SelectTrigger>
                         <SelectContent>
                           {vehicles.filter(vehicleOption => vehicleOption.active).map((vehicleOption) => (
                             <SelectItem key={vehicleOption.id} value={vehicleOption.id}>{vehicleOption.plate} {vehicleOption.nickname ? `(${vehicleOption.nickname})` : ''}</SelectItem>
@@ -903,7 +903,7 @@ export default function RoutePlanning() {
                         </SelectContent>
                       </Select>
                       <Select value={route.driver_id || ''} onValueChange={v => setRoutes(prev => prev.map(r => r.id === route.id ? { ...r, driver_id: v } : r))}>
-                        <SelectTrigger className="w-40 h-8 text-xs"><SelectValue placeholder="Motorista" /></SelectTrigger>
+                        <SelectTrigger className="w-40 h-8 text-xs" aria-label={`Motorista da rota ${route.name}`}><SelectValue placeholder="Motorista" /></SelectTrigger>
                         <SelectContent>
                           {drivers.map((d) => (
                             <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
@@ -911,7 +911,7 @@ export default function RoutePlanning() {
                         </SelectContent>
                       </Select>
                       <Input
-                        type="datetime-local"
+                        type="datetime-local" aria-label={`Saída planejada da rota ${route.name}`}
                         value={route.planned_start_at || ''}
                         onChange={(e) => setRoutes(prev => prev.map(r => {
                           if (r.id !== route.id) return r;

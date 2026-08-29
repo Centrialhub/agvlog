@@ -146,29 +146,25 @@ begin
 end;
 $function$;
 
-drop policy if exists "Admins can manage feature policy" on public.tenant_feature_policy;
-drop policy if exists "Members can view feature policy" on public.tenant_feature_policy;
+-- Existing production RLS policies are already consolidated as agvlog_*.
+-- Keep them intact to avoid introducing permissive overlaps.
 
-create policy tenant_feature_policy_member_select
-on public.tenant_feature_policy
-for select to authenticated
-using (public.is_tenant_member(tenant_id));
-
-create policy tenant_feature_policy_admin_insert
-on public.tenant_feature_policy
-for insert to authenticated
-with check (public.is_tenant_admin(tenant_id));
-
-create policy tenant_feature_policy_admin_update
-on public.tenant_feature_policy
-for update to authenticated
-using (public.is_tenant_admin(tenant_id))
-with check (public.is_tenant_admin(tenant_id));
-
-create policy tenant_feature_policy_admin_delete
-on public.tenant_feature_policy
-for delete to authenticated
-using (public.is_tenant_admin(tenant_id));
+-- Enable Fiscal only for tenants that are already operationally configured.
+update public.tenant_feature_policy policy
+set enabled = true,
+    notes = 'Enabled during production readiness: active emitter and active Hub Fiscal credential',
+    updated_at = now()
+where policy.feature_key = 'fiscal_enabled'
+  and exists (
+    select 1
+    from public.tenant_emitters emitter
+    join public.hub_fiscal_credentials credential
+      on credential.tenant_id = emitter.tenant_id
+     and credential.emitter_id = emitter.id
+     and credential.enabled
+    where emitter.tenant_id = policy.tenant_id
+      and emitter.active
+  );
 
 revoke all on function public.seed_tenant_integration_capabilities_v1() from public, anon, authenticated;
 revoke all on function public.get_tenant_integration_capabilities_v1(uuid) from public, anon;
