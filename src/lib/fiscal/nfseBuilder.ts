@@ -122,7 +122,7 @@ interface NFSeEmitterAddress {
 
 interface NFSeEmitterExtras {
   endereco?: NFSeEmitterAddress | null;
-  metadata?: { environment?: 'sandbox' | 'production' } | null;
+  metadata?: { environment?: 'sandbox' | 'homologation' | 'production' } | null;
   telefone?: string | null;
   phone?: string | null;
   email?: string | null;
@@ -135,7 +135,7 @@ function isNFSeServiceItem(value: unknown): value is NFSeServiceItemInput {
 export interface BuildNFSeInput {
   doc: NFSeDocumentInput;       // row from nfse_documents (or the pending form payload)
   emitter: TenantEmitter | null;
-  environment?: 'sandbox' | 'production';
+  environment?: 'sandbox' | 'homologation' | 'production';
   callbackUrl?: string;
   /**
    * Nº da tentativa de envio (0 = primeira). O Hub Fiscal/PlugNotas deduplica
@@ -224,7 +224,7 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl, a
   const integrationId = attempt > 0 ? `${doc.id}-r${attempt}` : String(doc.id);
 
   const emitterCnpj = onlyDigits(emitter.cnpj);
-  const env: 'sandbox' | 'production' =
+  const env: 'sandbox' | 'homologation' | 'production' =
     environment || emitterDetails.metadata?.environment || 'production';
 
   const end = endRaw;
@@ -281,7 +281,7 @@ export function buildNFSeEmitPayload({ doc, emitter, environment, callbackUrl, a
     regimeEspecialTributacao: isSimples ? 1 : undefined, // 1 = Microempresa Municipal (Simples)
     optanteSimplesNacional: isSimples,
     regimeApuracaoSN: isSimples ? 1 : undefined, // 1 = Faturamento (Competência)
-    ambiente: env === 'sandbox' ? 'homologacao' : 'producao',
+    ambiente: env === 'production' ? 'producao' : 'homologacao',
 
     prestador: {
       cpfCnpj: emitterCnpj,
