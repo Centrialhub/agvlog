@@ -7,7 +7,7 @@ begin;
 -- The production invite-only trigger is intentionally preserved in migrations.
 -- Local reset is the one narrow exception because a seed has no pre-existing
 -- inviter. Re-enable it immediately after inserting the fixture identities.
-alter table auth.users disable trigger enforce_invite_only_before_auth_user_created;
+set local session_replication_role = replica;
 
 insert into auth.users (
   instance_id,
@@ -44,7 +44,7 @@ set email = excluded.email,
     raw_user_meta_data = excluded.raw_user_meta_data,
     updated_at = now();
 
-alter table auth.users enable trigger enforce_invite_only_before_auth_user_created;
+set local session_replication_role = origin;
 
 insert into auth.identities (
   id,
