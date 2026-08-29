@@ -4,11 +4,11 @@ import { expect, test } from "@playwright/test";
 import { accounts, fixtureIds } from "./fixtures/accounts";
 import { loginThroughUi, passwordToken } from "./fixtures/session";
 
-test("@critical fiscal route is enabled for configured launch tenants", async ({ page }) => {
+test("@critical fiscal route stays fail-closed for unconfigured fixture tenants", async ({ page }) => {
   await loginThroughUi(page, accounts.operator);
   await page.goto("/billing");
-  await expect(page.getByRole("heading", { name: /Faturamento \(CT-e \/ Conhecimento\)/ })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Integração em implantação" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Integração em implantação" })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText(/Nenhuma sincronização, emissão ou cancelamento será executado/)).toBeVisible();
 });
 
 test("@critical known cross-tenant IDs return no REST rows", async ({ request }) => {
@@ -25,14 +25,14 @@ test("@critical known cross-tenant IDs return no REST rows", async ({ request })
   }
 });
 
-test("auth and configured fiscal screen have no serious axe violations", async ({ page }) => {
+test("auth and fail-closed fixture screen have no serious axe violations", async ({ page }) => {
   await page.goto("/auth");
   const authResults = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
   expect(authResults.violations.filter((item) => ["serious", "critical"].includes(item.impact ?? ""))).toEqual([]);
 
   await loginThroughUi(page, accounts.operator);
   await page.goto("/billing");
-  await expect(page.getByRole("heading", { name: /Faturamento \(CT-e \/ Conhecimento\)/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Integração em implantação" })).toBeVisible({ timeout: 20_000 });
   const capabilityResults = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
   expect(capabilityResults.violations.filter((item) => ["serious", "critical"].includes(item.impact ?? ""))).toEqual([]);
 });
