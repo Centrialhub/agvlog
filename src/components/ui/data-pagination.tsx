@@ -19,7 +19,7 @@ export function DataPagination({
   end,
   onPageChange,
 }: DataPaginationProps) {
-  if (totalCount === 0 || pageCount <= 1) return null;
+  if (totalCount === 0) return null;
 
   return (
     <nav
