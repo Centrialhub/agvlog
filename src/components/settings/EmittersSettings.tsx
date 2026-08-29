@@ -202,7 +202,7 @@ function EmitterFormDialog({ initial, onClose }: { initial: Partial<TenantEmitte
     setTesting(true);
     setTestResult(null);
     try {
-      const res = await hubFiscal.ping(savedId, cred.doc_scope);
+      const res = await hubFiscal.ping(savedId, cred.doc_scope, cred.environment);
       if (res?.success) {
         setTestResult({
           ok: true,
@@ -303,6 +303,7 @@ function EmitterFormDialog({ initial, onClose }: { initial: Partial<TenantEmitte
                 <SelectItem value="nfe">NF-e</SelectItem>
                 <SelectItem value="nfce">NFC-e</SelectItem>
                 <SelectItem value="mdfe">MDF-e</SelectItem>
+                <SelectItem value="nfcom">NFCom</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -312,7 +313,8 @@ function EmitterFormDialog({ initial, onClose }: { initial: Partial<TenantEmitte
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="production">Produção</SelectItem>
-                <SelectItem value="sandbox">Homologação</SelectItem>
+                  <SelectItem value="homologation">Homologação</SelectItem>
+                  <SelectItem value="sandbox">Sandbox</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -485,6 +487,7 @@ function CredentialsDialog({ emitter, onClose }: { emitter: TenantEmitter; onClo
                   <SelectItem value="nfe">NF-e</SelectItem>
                   <SelectItem value="nfce">NFC-e</SelectItem>
                   <SelectItem value="mdfe">MDF-e</SelectItem>
+                <SelectItem value="nfcom">NFCom</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -494,7 +497,8 @@ function CredentialsDialog({ emitter, onClose }: { emitter: TenantEmitter; onClo
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="production">Produção</SelectItem>
-                  <SelectItem value="sandbox">Homologação</SelectItem>
+                  <SelectItem value="homologation">Homologação</SelectItem>
+                  <SelectItem value="sandbox">Sandbox</SelectItem>
                 </SelectContent>
               </Select>
             </div>
